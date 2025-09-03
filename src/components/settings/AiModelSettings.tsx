@@ -33,6 +33,8 @@ import { useProviderManagement, ProviderWithStatus } from '@/hooks/useProviderMa
 import { useProviderStore } from '@/store/providerStore';
 import { cn } from "@/lib/utils"; // Assuming cn is used somewhere or will be
 import { AddProvidersDialog } from './AddProvidersDialog';
+import { OpenAICompatibleProviders } from './OpenAICompatibleProviders';
+import { OpenAICompatibleHint } from './OpenAICompatibleHint';
 import { Button } from '@/components/ui/button';
 // duplicate import removed
 
@@ -60,6 +62,46 @@ export function AiModelSettings() {
     handleSingleProviderRefresh,
     handlePreferenceChange
   } = useProviderManagement();
+
+  // OpenAI兼容提示的显示状态
+  const [showOpenAIHint, setShowOpenAIHint] = React.useState(true);
+
+  // 检查是否应该显示OpenAI兼容提示
+  React.useEffect(() => {
+    const checkShouldShowHint = async () => {
+      try {
+        // 检查用户是否已经关闭过提示
+        const dismissed = localStorage.getItem('openai-compatible-hint-dismissed');
+        if (dismissed) {
+          setShowOpenAIHint(false);
+          return;
+        }
+
+        // 检查是否已经有自定义的OpenAI兼容提供商
+        const hasCustomOpenAIProviders = providers.some(p => 
+          p.isUserAdded && 
+          (p as any).strategy === 'openai-compatible'
+        );
+        
+        if (hasCustomOpenAIProviders) {
+          setShowOpenAIHint(false);
+        }
+      } catch (error) {
+        console.warn('Failed to check OpenAI hint status:', error);
+      }
+    };
+
+    checkShouldShowHint();
+  }, [providers]);
+
+  const handleDismissOpenAIHint = () => {
+    setShowOpenAIHint(false);
+    try {
+      localStorage.setItem('openai-compatible-hint-dismissed', 'true');
+    } catch (error) {
+      console.warn('Failed to save hint dismissal:', error);
+    }
+  };
 
   // 新增：失焦时保存/连接 API Key
   const handleDefaultApiKeyBlur = async (providerName: string) => {
@@ -213,6 +255,13 @@ export function AiModelSettings() {
         iconBgColor="from-purple-500 to-indigo-500"
       />
 
+      {/* OpenAI兼容服务提示 */}
+      {showOpenAIHint && (
+        <div className="mt-4">
+          <OpenAICompatibleHint onDismiss={handleDismissOpenAIHint} />
+        </div>
+      )}
+
       {/* 提示栏 */}
       {/* <InfoBanner id="ai_provider_tip" message="配置不同 AI 提供商的服务地址和 API 密钥" type="info" className="mt-3" /> */}
 
@@ -262,12 +311,28 @@ export function AiModelSettings() {
           >
             <RotateCcw className={cn("w-4 h-4", isRefreshing && 'animate-spin')} />
           </button>
+          
+          {/* OpenAI兼容服务快速添加 */}
+          <OpenAICompatibleProviders
+            trigger={
+              <Button variant="outline" size="sm">
+                + OpenAI兼容
+              </Button>
+            }
+            onProviderAdded={() => {
+              // 刷新提供商列表
+              setTimeout(() => {
+                handleGlobalRefresh();
+              }, 500);
+            }}
+          />
+          
           <AddProvidersDialog
-          trigger={
-            <Button variant="secondary" size="sm" className="ml-2">
-              管理提供商
-            </Button>
-          }
+            trigger={
+              <Button variant="secondary" size="sm">
+                管理提供商
+              </Button>
+            }
           />
         </div>
       </div>

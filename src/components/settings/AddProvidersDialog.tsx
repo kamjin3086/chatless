@@ -200,6 +200,46 @@ export function AddProvidersDialog({ trigger }: Props) {
     return `prov-${name}-${Date.now()}`;
   };
 
+  // 根据策略获取URL占位符
+  const getPlaceholderUrl = (strategy: CatalogStrategy): string => {
+    switch (strategy) {
+      case 'openai-compatible':
+        return 'https://api.example.com/v1';
+      case 'openai':
+        return 'https://api.openai.com/v1';
+      case 'anthropic':
+        return 'https://api.anthropic.com/v1';
+      case 'gemini':
+        return 'https://generativelanguage.googleapis.com/v1beta';
+      case 'deepseek':
+        return 'https://api.deepseek.com';
+      case 'ollama':
+        return 'http://localhost:11434';
+      default:
+        return 'https://api.example.com/v1';
+    }
+  };
+
+  // 根据策略获取URL提示信息
+  const getUrlHint = (strategy: CatalogStrategy): string => {
+    switch (strategy) {
+      case 'openai-compatible':
+        return '请输入支持OpenAI兼容接口的API服务地址，通常以 /v1 结尾';
+      case 'openai':
+        return 'OpenAI官方API地址，通常为 https://api.openai.com/v1';
+      case 'anthropic':
+        return 'Anthropic官方API地址，通常为 https://api.anthropic.com/v1';
+      case 'gemini':
+        return 'Google AI API地址，通常为 https://generativelanguage.googleapis.com/v1beta';
+      case 'deepseek':
+        return 'DeepSeek官方API地址，通常为 https://api.deepseek.com';
+      case 'ollama':
+        return '本地Ollama服务地址，默认为 http://localhost:11434';
+      default:
+        return '请输入API服务地址';
+    }
+  };
+
   // 更宽松的 ID 清洗：
   // - 转小写
   // - 非字母数字与 - 的字符替换为 -
@@ -223,9 +263,20 @@ export function AddProvidersDialog({ trigger }: Props) {
       toast.error('名称不支持中文', { description: '请使用英文、数字、空格或连字符 (-)' });
       return;
     }
-    if (url && !/^https?:\/\//i.test(url)) {
+    if (!url) {
+      toast.error('请填写服务地址', { description: '服务地址是必填项' });
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) {
       toast.error('无效的服务地址', { description: 'URL 必须以 http:// 或 https:// 开头' });
       return;
+    }
+    // 验证OpenAI兼容模式的URL格式
+    if (customStrategy === 'openai-compatible' && !url.includes('/v1')) {
+      const shouldContinue = confirm('检测到您的URL可能不包含 /v1 路径。\n\n大多数OpenAI兼容的API服务需要 /v1 路径（如：https://api.example.com/v1）。\n\n是否继续保存当前地址？');
+      if (!shouldContinue) {
+        return;
+      }
     }
     const baseId = sanitizeId(displayName);
     if (!baseId || baseId.length < 2) {
@@ -430,10 +481,13 @@ export function AddProvidersDialog({ trigger }: Props) {
               <div className="py-2 text-center text-xs text-gray-400">没有匹配的自定义提供商</div>
             )}
             {/* 自定义 Provider - 新增入口（打开子弹窗） */}
-            <div className="py-2 px-1">
+            <div className="py-2 px-1 space-y-2">
               <Button variant="soft" className="w-full" onClick={openAddModal}>
                 <Plus className="w-4 h-4" /> 添加自定义 Provider
               </Button>
+              <div className="text-xs text-center text-gray-500 px-2">
+                支持添加任何OpenAI兼容的API服务
+              </div>
             </div>
           </div>
           {/* 顶部触发器即可关闭，此处不再冗余“完成”按钮，简化界面 */}
@@ -467,8 +521,15 @@ export function AddProvidersDialog({ trigger }: Props) {
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">服务地址（可选）</label>
-                  <Input value={customUrl} onChange={(e)=>setCustomUrl(e.target.value)} placeholder="https://api.example.com/v1" />
+                  <label className="block text-xs text-gray-500 mb-1">服务地址</label>
+                  <Input 
+                    value={customUrl} 
+                    onChange={(e)=>setCustomUrl(e.target.value)} 
+                    placeholder={getPlaceholderUrl(customStrategy)}
+                  />
+                  <div className="mt-1 text-xs text-gray-500">
+                    {getUrlHint(customStrategy)}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">API 策略</label>
@@ -477,16 +538,65 @@ export function AddProvidersDialog({ trigger }: Props) {
                       <SelectValue placeholder="选择策略" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
-                      <SelectItem value="openai">OpenAI 官方</SelectItem>
-                      <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-                      <SelectItem value="gemini">Google AI (Gemini)</SelectItem>
-                      <SelectItem value="deepseek">DeepSeek</SelectItem>
-                      <SelectItem value="ollama">Ollama</SelectItem>
+                      <SelectItem value="openai-compatible">
+                        <div className="flex flex-col">
+                          <span>OpenAI 兼容</span>
+                          <span className="text-xs text-gray-500">支持大多数第三方API服务</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="openai">
+                        <div className="flex flex-col">
+                          <span>OpenAI 官方</span>
+                          <span className="text-xs text-gray-500">仅适用于OpenAI官方API</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="anthropic">
+                        <div className="flex flex-col">
+                          <span>Anthropic (Claude)</span>
+                          <span className="text-xs text-gray-500">Claude系列模型专用</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="gemini">
+                        <div className="flex flex-col">
+                          <span>Google AI (Gemini)</span>
+                          <span className="text-xs text-gray-500">Google Gemini模型专用</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="deepseek">
+                        <div className="flex flex-col">
+                          <span>DeepSeek</span>
+                          <span className="text-xs text-gray-500">DeepSeek模型专用</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="ollama">
+                        <div className="flex flex-col">
+                          <span>Ollama</span>
+                          <span className="text-xs text-gray-500">本地Ollama服务</span>
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
+                  {customStrategy === 'openai-compatible' && (
+                    <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+                      <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                        <div className="font-medium">OpenAI 兼容模式说明：</div>
+                        <div>• 支持标准的 /v1/chat/completions 接口</div>
+                        <div>• 适用于大多数第三方API服务商</div>
+                        <div>• 包括但不限于：302AI、OpenRouter、Groq、Mistral等</div>
+                        <div>• 如果不确定选择哪种策略，推荐使用此模式</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs text-gray-500">头像：将基于名称生成简约图案（稍后接入）</div>
+                <div className="text-xs text-gray-500 space-y-1">
+                  <div>• 头像：将基于名称生成简约图案</div>
+                  <div>• 保存后可在"AI模型设置"中配置API密钥和模型</div>
+                  {customStrategy === 'openai-compatible' && (
+                    <div className="text-blue-600 dark:text-blue-400">
+                      • OpenAI兼容模式支持大多数第三方API服务
+                    </div>
+                  )}
+                </div>
                 <div className="flex justify-end gap-2 mt-2">
                   <Button variant="dialogSecondary" onClick={()=>setCustomModalOpen(false)}>取消</Button>
                   <Button variant="dialogPrimary" onClick={isEditMode ? saveEditProvider : saveCustomProvider} disabled={isSavingCustom}>
