@@ -29,6 +29,8 @@ export interface StreamContext {
   thinkingStartTime: number;
   /** 当前FSM状态 */
   fsmState: 'RENDERING_BODY' | 'RENDERING_THINK' | 'TOOL_RUNNING' | 'TOOL_DONE';
+  /** 是否已从 provider 事件流中接收过 thinking_* 事件（用于避免对 content_token 再做一次 <think> 解析导致重复） */
+  hasProviderThinking?: boolean;
   /** 指令抑制阀（早阻断） */
   suppression?: {
     /** 为了早发现指令而保留的尾部缓冲（不会直接输出到UI） */

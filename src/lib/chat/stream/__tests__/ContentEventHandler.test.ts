@@ -96,9 +96,10 @@ describe('ContentEventHandler', () => {
 
     it('should handle non-string content by converting to string', () => {
       const context = createTestContext();
-      const event = { ...createContentTokenEvent(''), content: 123 };
-      
-      handler.handle(event, context);
+      // 该用例用于验证运行时健壮性：即使上游异常传入非字符串 content 也能被处理。
+      // 类型系统不允许这种构造，因此用 any 绕过类型约束。
+      const event = ({ ...(createContentTokenEvent('') as any), content: 123 } as any);
+      handler.handle(event as any, context);
 
       expect(context.content).toBe('123');
       const actions = store.getActions();

@@ -15,12 +15,6 @@ export function VersionedAssistantGroup({ versions, onEditMessage, onRetryMessag
   const sorted = useMemo(() => {
     const list = [...versions];
     list.sort((a, b) => (a.version_index ?? 0) - (b.version_index ?? 0));
-    console.log('[VersionedAssistantGroup] Sorted versions:', list.map(v => ({ 
-      id: v.id, 
-      version_index: v.version_index, 
-      content_length: v.content?.length || 0,
-      content_preview: v.content?.substring(0, 50)
-    })));
     return list;
   }, [versions]);
 
@@ -29,17 +23,10 @@ export function VersionedAssistantGroup({ versions, onEditMessage, onRetryMessag
   
   // 当版本数组变化时，自动切换到最新版本
   React.useEffect(() => {
-    console.log('[VersionedAssistantGroup] Setting index to latest:', sorted.length - 1);
     setIndex(sorted.length - 1);
   }, [sorted.length]);
 
   const current = sorted[Math.max(0, Math.min(index, sorted.length - 1))];
-  console.log('[VersionedAssistantGroup] Current version:', { 
-    index, 
-    currentId: current?.id, 
-    content_length: current?.content?.length || 0,
-    content_preview: current?.content?.substring(0, 50)
-  });
 
   const go = (delta: number) => {
     setIndex((i) => {

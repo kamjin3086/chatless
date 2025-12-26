@@ -3,6 +3,7 @@ import { createContentAppender } from './ContentAppender';
 import { handleToolCall } from './ToolCardService';
 import { trace } from '@/lib/debug/Trace';
 import { extractToolCallFromText } from '@/lib/chat/tool-call-cleanup';
+import { createToolInstructionSuppressor } from './toolInstructionSuppressor';
 
 export type AnyStreamEvent = {
   type: string;
@@ -40,78 +41,28 @@ export function createStreamEventDispatcher(opts: StreamEventDispatcherOptions):
   let pending: null | { server: string; tool: string; cardId: string } = null;
   let contentChars = 0;
   const eventCounts: Record<string, number> = Object.create(null);
-  // 抑制阀（追问链路也要启用，避免指令短暂暴露）
-  const suppression = { buffer: '', active: false, braceDepth: 0, seenJsonStart: false, guardWindow: 64 };
-  let suppressedAcc = '';
+  // 抑制阀（稳定版）：追问/降级链路也要启用，避免指令短暂暴露
+  const suppressor = createToolInstructionSuppressor({ guardWindow: 64, maxBuffer: 65536 });
   // 工具指令检测缓冲（用于函数式/GPT-OSS 变体的兜底识别）
   let detectBuf = '';
 
   function applySuppressionValveLocal(chunk: string): string {
-    suppression.buffer += chunk;
-    if (suppression.buffer.length > 2048) suppression.buffer = suppression.buffer.slice(-2048);
-
-    const triggerRegexes: RegExp[] = [
-      /<\|channel\|\>\s*commentary\s+to=/i,
-      /commentary\s+to=/i,
-      /(?:^|\s)to\s*=\s*[a-z0-9_.-]+/i,
-      /(?:^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{/i,
-      /<use_mcp_tool>/i,
-      /<tool_call>/i,
-    ];
-
-    if (!suppression.active) {
-      const text = suppression.buffer;
-      let hitIndex = -1;
-      for (const re of triggerRegexes) {
-        const m = re.exec(text);
-        if (m && (hitIndex === -1 || m.index < hitIndex)) hitIndex = m.index;
-      }
-      if (hitIndex >= 0) {
-        const visible = text.slice(0, hitIndex);
-        const suppressedTail = text.slice(hitIndex);
-        suppression.active = true;
-        suppression.braceDepth = 0;
-        suppression.seenJsonStart = false;
-        suppression.buffer = suppressedTail;
-        suppressedAcc = suppressedTail;
-        try { useChatStore.getState().dispatchMessageAction(opts.assistantMessageId, { type: 'TOOL_DETECTING_START' } as any); } catch { /* noop */ }
-        return visible;
-      }
-      if (text.length > suppression.guardWindow) {
-        const emit = text.slice(0, text.length - suppression.guardWindow);
-        suppression.buffer = text.slice(text.length - suppression.guardWindow);
-        return emit;
-      }
-      return '';
+    const up = suppressor.push(chunk);
+    if (up.started) {
+      try { useChatStore.getState().dispatchMessageAction(opts.assistantMessageId, { type: 'TOOL_DETECTING_START' } as any); } catch { /* noop */ }
     }
-
-    for (let i = 0; i < suppression.buffer.length; i++) {
-      const ch = suppression.buffer[i];
-      if (ch === '{') { suppression.seenJsonStart = true; suppression.braceDepth++; }
-      else if (ch === '}') { if (suppression.braceDepth > 0) suppression.braceDepth--; }
-      const isBoundary = /\n|;/.test(ch);
-      const done = (suppression.seenJsonStart && suppression.braceDepth === 0) || (!suppression.seenJsonStart && isBoundary);
-      if (done) {
-        const captured = suppressedAcc || suppression.buffer;
-        suppression.buffer = '';
-        suppression.active = false;
-        suppression.braceDepth = 0;
-        suppression.seenJsonStart = false;
-        try { useChatStore.getState().dispatchMessageAction(opts.assistantMessageId, { type: 'TOOL_DETECTING_END' } as any); } catch { /* noop */ }
-        // 在抑制结束时解析被吞掉的文本，直接触发工具卡插入
-        try {
-          const parsed = extractToolCallFromText(captured);
-          if (parsed && parsed.server && parsed.tool) {
-            void handleToolCallInternal({ server: parsed.server, tool: parsed.tool, arguments: parsed.args });
-          }
-        } catch { /* noop */ }
-        suppressedAcc = '';
-        return '';
-      }
+    if (up.ended) {
+      try { useChatStore.getState().dispatchMessageAction(opts.assistantMessageId, { type: 'TOOL_DETECTING_END' } as any); } catch { /* noop */ }
+      // 在抑制结束时解析被吞掉的文本，直接触发工具卡插入（兜底）
+      try {
+        const cap = up.captured || '';
+        const parsed = extractToolCallFromText(cap);
+        if (parsed && parsed.server && parsed.tool) {
+          void handleToolCallInternal({ server: parsed.server, tool: parsed.tool, arguments: parsed.args });
+        }
+      } catch { /* noop */ }
     }
-    // 抑制态持续：累积被吞的文本，供结束时解析
-    suppressedAcc += suppression.buffer;
-    return '';
+    return up.visible || '';
   }
 
   const handleToolCallInternal = async (parsed: any) => {
@@ -193,25 +144,19 @@ export function createStreamEventDispatcher(opts: StreamEventDispatcherOptions):
         //    - 若仍在抑制态：尝试解析被吞内容并触发工具卡；
         //    - 若未在抑制态但缓冲区仍有守护窗口的尾部：把这部分作为普通文本补齐输出，避免“尾巴丢字”。
         const stx = useChatStore.getState();
-        if (suppression.active) {
+        const flushed = suppressor.flush();
+        if (flushed.hadSuppression) {
           try {
-            const captured = suppressedAcc || suppression.buffer;
-            if (captured) {
-              const parsed = extractToolCallFromText(captured);
+            if (flushed.captured) {
+              const parsed = extractToolCallFromText(flushed.captured);
               if (parsed && parsed.server && parsed.tool) {
                 void handleToolCallInternal({ server: parsed.server, tool: parsed.tool, arguments: parsed.args });
               }
             }
           } catch { /* noop */ }
-          suppression.buffer = '';
-          suppressedAcc = '';
-          suppression.active = false;
-          suppression.braceDepth = 0;
-          suppression.seenJsonStart = false;
-        } else if (suppression.buffer) {
-          const tail = suppression.buffer;
-          suppression.buffer = '';
-          if (tail) {
+        } else if (flushed.tail) {
+          const tail = flushed.tail;
+          if (tail && tail.length > 0) {
             hadText = hadText || tail.trim().length > 0;
             appender.append(tail);
             stx.dispatchMessageAction(opts.assistantMessageId, { type: 'TOKEN_APPEND', chunk: tail } as any);

@@ -354,7 +354,7 @@ export default function ChatPage() {
           
           {/* 工具栏 - 超过3条消息时显示，且不在输入框区域时显示 */}
           <div 
-            className={`fixed right-6 md:right-6 bottom-34 md:bottom-40 z-40 transition-opacity duration-300 ${
+            className={`fixed right-6 md:right-8 bottom-38 md:bottom-48 z-40 transition-opacity duration-300 ${
               isInputAreaHovered ? 'opacity-0 pointer-events-none' : 'opacity-100'
             }`}
           >

@@ -38,6 +38,11 @@ class PerformanceMonitorClass {
   start(name: string, metadata?: Record<string, unknown>): void {
     if (!this.enabled) return;
 
+    // 抽样：避免高频事件（如 token/event 处理）撑爆内存或拖慢主线程
+    // 仅记录 1% 的高频事件，或针对非高频事件全量记录
+    const isHighFreq = name.includes('token') || name.includes('Event') || name.includes('dispatch');
+    if (isHighFreq && Math.random() > 0.01) return;
+
     this.metrics.set(name, {
       name,
       startTime: performance.now(),
@@ -53,7 +58,8 @@ class PerformanceMonitorClass {
 
     const metric = this.metrics.get(name);
     if (!metric) {
-      console.warn(`[PerformanceMonitor] Metric "${name}" not found`);
+      // 在抽样模式下，大部分事件没有 metric 是正常的，不应打印警告
+      // console.warn(`[PerformanceMonitor] Metric "${name}" not found`);
       return null;
     }
 

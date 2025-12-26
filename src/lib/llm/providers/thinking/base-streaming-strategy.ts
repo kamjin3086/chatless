@@ -58,6 +58,8 @@ export abstract class BaseStreamingStrategy implements ThinkingModeStrategy {
   protected contentGateActive: boolean = false;
   /** 被门控暂存的内容（等待完整闭合标签后解析） */
   protected gatedContentBuffer: string = '';
+  /** 门控缓冲区最大长度（超过此长度则认为不是工具调用，释放内容） */
+  private readonly MAX_GATED_BUFFER_LENGTH = 2000;
   
   /** 是否正在thinking模式 */
   protected isInThinkingMode: boolean = false;
@@ -183,7 +185,7 @@ export abstract class BaseStreamingStrategy implements ThinkingModeStrategy {
       events.push(...this.parseBufferedThinking());
     }
     
-    // 门控策略：一旦检测到工具调用起始（<use 或 <tool_），
+    // 门控策略：一旦检测到工具调用起始（<use_mcp_tool 或 <tool_call），
     // 暂停向UI发送content_token，直到检测到完整闭合标签为止
     let remaining = content;
     
@@ -191,7 +193,9 @@ export abstract class BaseStreamingStrategy implements ThinkingModeStrategy {
       this.gatedContentBuffer += remaining;
       remaining = '';
     } else {
-      const startIdx = remaining.search(/<use|<tool_/i);
+      // 修复：使用更精确的正则表达式，避免误匹配其他标签
+      // 只匹配完整的工具调用标签开始：<use_mcp_tool 或 <tool_call
+      const startIdx = remaining.search(/<use_mcp_tool|<tool_call/i);
       if (startIdx >= 0) {
         // 起始标记前的文本直接透传
         const head = remaining.slice(0, startIdx);
@@ -254,8 +258,12 @@ export abstract class BaseStreamingStrategy implements ThinkingModeStrategy {
   protected tryEmitToolCallFromGate(): StreamEvent[] {
     const events: StreamEvent[] = [];
     if (!this.contentGateActive) return events;
+    
+    // 检查是否找到闭合标签
     const closeMatch = this.gatedContentBuffer.match(/<\/use_mcp_tool>|<\/tool_call>/i);
-    if (!closeMatch || closeMatch.index === undefined) return events;
+    
+    if (closeMatch && closeMatch.index !== undefined) {
+      // 找到闭合标签，解析工具调用
     const endIdx = closeMatch.index + closeMatch[0].length;
     const chunk = this.gatedContentBuffer.slice(0, endIdx);
     const tail = this.gatedContentBuffer.slice(endIdx);
@@ -279,6 +287,14 @@ export abstract class BaseStreamingStrategy implements ThinkingModeStrategy {
     if (tail && tail.length > 0) {
       events.push(createStreamEvent.contentToken(tail));
     }
+    } else if (this.gatedContentBuffer.length > this.MAX_GATED_BUFFER_LENGTH) {
+      // 缓冲区过大，可能不是工具调用，释放内容
+      // 这避免了误匹配导致内容永久丢失
+      events.push(createStreamEvent.contentToken(this.gatedContentBuffer));
+      this.contentGateActive = false;
+      this.gatedContentBuffer = '';
+    }
+    
     return events;
   }
   

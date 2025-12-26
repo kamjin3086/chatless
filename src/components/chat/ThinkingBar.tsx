@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronRight, Timer, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MemoizedMarkdown } from './MemoizedMarkdown';
@@ -48,21 +48,56 @@ export const ThinkingBar = ({
   isActive = false,
 }: ThinkingBarProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  // 使用 ref 来存储上一次渲染的内容，避免不必要的重渲染
+  const [displayedContent, setDisplayedContent] = useState(thinkingContent);
+  const lastUpdateTimeRef = useRef(0);
+  const animationFrameRef = useRef<number | null>(null);
 
   // 格式化时长
   const formattedDuration = formatDuration(durationSeconds);
 
+  // 实施“平滑流式”渲染策略：
+  // 1. 使用 requestAnimationFrame + 节流 (30-50ms) 来更新内容
+  // 2. 这样既保证了实时感（比按行更流畅），又避免了 React 在高频 token 下的过载
+  useEffect(() => {
+    // 如果思考结束，立即显示最终完整内容
+    if (!isActive) {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      setDisplayedContent(thinkingContent);
+      return;
+    }
+
+    const update = () => {
+      const now = Date.now();
+      // 50ms 节流 (20fps)，人眼看着流畅，但对渲染性能压力小
+      if (now - lastUpdateTimeRef.current > 50) {
+        setDisplayedContent(thinkingContent);
+        lastUpdateTimeRef.current = now;
+      }
+      animationFrameRef.current = requestAnimationFrame(update);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(update);
+
+    return () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [thinkingContent, isActive]);
+
   // 判断是否有内容
-  const hasContent = thinkingContent.trim().length > 0;
+  const hasContent = displayedContent.trim().length > 0;
   
-  // 提取最后一行作为预览（思考中时只显示最新一行）
+  // 提取最后一行作为预览
+  // 优化：只查找最后一个换行符，避免整个 split 的开销
   const getLastLine = (text: string): string => {
     if (!text) return '';
-    const lines = text.split('\n').filter(line => line.trim().length > 0);
-    return lines[lines.length - 1] || '';
+    const lastIndex = text.lastIndexOf('\n');
+    if (lastIndex === -1) return text;
+    // 如果最后一行是空的（刚换行），显示上一行？不，还是显示空行光标效果比较好
+    return text.substring(lastIndex + 1);
   };
   
-  const displayText = isActive ? getLastLine(thinkingContent) : thinkingContent;
+  const displayText = isActive ? getLastLine(displayedContent) : thinkingContent;
 
   return (
     <div 
@@ -121,16 +156,15 @@ export const ThinkingBar = ({
           className={cn(
             "overflow-hidden transition-all duration-500 ease-in-out",
             isActive && !isExpanded && hasContent 
-              ? "mt-3 max-h-6 opacity-100" 
+              ? "mt-3 max-h-20 opacity-100" // 增加 max-h 以容纳可能的换行
               : "mt-0 max-h-0 opacity-0"
           )}
         >
-          <div className="text-sm text-slate-600/80 dark:text-slate-300/70 truncate pr-1">
-            <span key={displayText} className="animate-in fade-in-0 slide-in-from-right-2 duration-300">
-              {displayText}
-            </span>
+          <div className="text-sm text-slate-600/80 dark:text-slate-300/70 truncate pr-1 flex items-center">
+            {/* 使用 span 包裹内容，避免重排 */}
+            <span className="truncate">{displayText}</span>
             {isActive && (
-              <span className="inline-block w-0.5 h-4 bg-slate-400/60 dark:bg-slate-500/60 ml-0.5 animate-pulse align-middle" />
+              <span className="inline-block w-1.5 h-4 bg-blue-400/60 dark:bg-blue-500/60 ml-1 animate-pulse align-middle rounded-sm" />
             )}
           </div>
         </div>
@@ -140,7 +174,7 @@ export const ThinkingBar = ({
       {isExpanded && hasContent && (
         <div className="px-3.5 pb-3.5 text-sm border-t border-slate-200/50 dark:border-slate-700/50 pt-3 animate-in fade-in-0 slide-in-from-top-2 duration-200">
           <div className="markdown-content-area text-slate-700 dark:text-slate-300">
-            <MemoizedMarkdown content={thinkingContent} sizeOverride='small' />
+            <MemoizedMarkdown content={displayedContent} sizeOverride='small' />
           </div>
         </div>
       )}

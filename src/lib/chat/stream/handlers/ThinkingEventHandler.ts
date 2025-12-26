@@ -42,6 +42,7 @@ export class ThinkingEventHandler implements EventHandler {
         case 'thinking_start':
           context.thinkingStartTime = Date.now();
           context.fsmState = 'RENDERING_THINK';
+          context.hasProviderThinking = true;
           store.dispatchMessageAction(context.messageId, { type: 'THINK_START' });
           break;
 

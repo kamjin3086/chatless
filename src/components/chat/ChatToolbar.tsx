@@ -38,7 +38,7 @@ export function ChatToolbar({
 }: ChatToolbarProps) {
   const [showMessageList, setShowMessageList] = useState(false);
 
-  if (messages.length < 4) {
+  if (messages.length < 2) {
     return null;
   }
 

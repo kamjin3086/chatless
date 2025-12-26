@@ -648,6 +648,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
       dispatchMessageAction: (() => {
         const queues = new Map<string, any[]>();
         const scheduled = new Set<string>();
+        // 轻量定位缓存：减少每次 flush 时在 conversations/messages 中全量扫描的成本
+        // 注意：仅作为优化提示；若命中失败会自动回退为实时查找并更新缓存。
+        const locationCache = new Map<string, { conversationId: string; msgIdx: number }>();
         const scheduleFlush = (id: string) => {
           if (scheduled.has(id)) return;
           scheduled.add(id);
@@ -657,11 +660,39 @@ export const useChatStore = create<ChatState & ChatActions>()(
             scheduled.delete(id);
             const { initModel, reduce } = require('@/lib/chat/messageFsm');
             set(state => {
-              for (const conv of state.conversations) {
-                if (!Array.isArray(conv.messages)) continue;
-                const idx = conv.messages.findIndex(m => m.id === id);
-                if (idx === -1) continue;
-                const prevMsg: any = conv.messages[idx];
+              // 1) 快速定位会话与消息（优先走缓存）
+              let conv: any | undefined;
+              let idx = -1;
+              const cached = locationCache.get(id);
+              if (cached?.conversationId) {
+                conv = state.conversations.find((c: any) => c && c.id === cached.conversationId);
+                if (conv && Array.isArray(conv.messages)) {
+                  const probe = conv.messages[cached.msgIdx];
+                  if (probe && probe.id === id) {
+                    idx = cached.msgIdx;
+                  } else {
+                    idx = conv.messages.findIndex((m: any) => m && m.id === id);
+                    if (idx >= 0) locationCache.set(id, { conversationId: cached.conversationId, msgIdx: idx });
+                  }
+                }
+              }
+
+              // 2) 缓存未命中则回退查找一次并写回缓存
+              if (!conv || idx < 0) {
+                for (const c of state.conversations as any[]) {
+                  if (!c || !Array.isArray(c.messages)) continue;
+                  const found = c.messages.findIndex((m: any) => m && m.id === id);
+                  if (found >= 0) {
+                    conv = c;
+                    idx = found;
+                    try { locationCache.set(id, { conversationId: String(c.id), msgIdx: found }); } catch { /* noop */ }
+                    break;
+                  }
+                }
+              }
+              if (!conv || idx < 0) return;
+
+              const prevMsg: any = conv.messages[idx];
                 let model = initModel(prevMsg);
                 for (const a of actions) model = reduce(model, a);
                 // 仅在包含 TOOL_HIT 的批次里打印一次关键日志，避免流式期间噪音
@@ -691,13 +722,20 @@ export const useChatStore = create<ChatState & ChatActions>()(
                   trace('store', id, `segments updated fsm=${model.fsm}`, counts);
                 } catch { /* noop */ }
                 const nextMsg: any = { ...prevMsg, segments: model.segments, segments_vm: viewModel };
+                // ✅ 关键修复：一旦本轮收到了 STREAM_END，就应立即停止 UI 的“流式状态”
+                // 否则即使服务端已经结束，UI 仍可能因为动画/节流呈现出“还在逐字输出”的错觉。
+                // 注意：错误分支会把 status 改成 'error'，这里不覆盖非 loading 状态。
+                try {
+                  const ended = actions.some((a: any) => a && a.type === 'STREAM_END');
+                  if (ended && nextMsg.status === 'loading') {
+                    nextMsg.status = 'sent';
+                  }
+                } catch { /* noop */ }
                 const nextMessages: any[] = [...(conv.messages as any[])];
                 nextMessages[idx] = nextMsg;
                 (conv as any).messages = nextMessages;
                 conv.updated_at = Date.now();
                 // console.log('[FSM:flush.end]', { id, nextSegs: Array.isArray(nextMsg.segments)?nextMsg.segments.length:0, fsm: model.fsm });
-                break;
-              }
             });
 
             // 将包含 MCP 相关动作（TOOL_HIT/TOOL_RESULT/STREAM_END）导致的 segments 变更持久化到数据库
@@ -718,7 +756,25 @@ export const useChatStore = create<ChatState & ChatActions>()(
         };
         return (messageId: string, action: any) => {
           const list = queues.get(messageId) || [];
-          list.push(action);
+          // ✅ 关键优化：合并同类 append，避免产生大量 FSM reduce/action 堆积，导致 UI “追赶式逐字输出”
+          // - TOKEN_APPEND/THINK_APPEND 高频出现，合并后每一轮 flush 只处理更少 action
+          // - TOOL_DETECTING_START/END 也做简单去重，避免闪烁
+          try {
+            const last = list.length ? list[list.length - 1] : null;
+            if (action && last && action.type && last.type === action.type) {
+              if ((action.type === 'TOKEN_APPEND' || action.type === 'THINK_APPEND') && typeof action.chunk === 'string') {
+                last.chunk = String(last.chunk || '') + action.chunk;
+              } else if (action.type === 'TOOL_DETECTING_START' || action.type === 'TOOL_DETECTING_END') {
+                // 连续同类检测动作无需重复入队
+              } else {
+                list.push(action);
+              }
+            } else {
+              list.push(action);
+            }
+          } catch {
+            list.push(action);
+          }
           queues.set(messageId, list);
           scheduleFlush(messageId);
         };

@@ -37,7 +37,9 @@ export interface ResponseMetrics {
  * 流式响应日志记录器
  */
 export class StreamResponseLogger {
-  private static ENABLE_LOG = true;
+  // ⚠️ 默认关闭：完整响应（尤其是长文）输出到 console 会显著拖慢 UI，影响流式体验。
+  // 如需排查“输出被吞/分段/思考解析”等问题，可临时改为 true 或通过调用 logComplete 前手动开启。
+  private static ENABLE_LOG = false;
   private thinkingBuffer: string = '';
   private contentBuffer: string = '';
   private startTime: number = 0;

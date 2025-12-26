@@ -283,6 +283,60 @@ export const useScrollManagement = (
     }
   }, [messagesContainerRef, isNearBottom, shouldFollowOutput]);
 
+  /**
+   * ✅ 稳定跟随：流式期间（尤其是代码块渲染）会产生“二次布局变化”
+   * 
+   * 典型现象：
+   * - token 已经在继续追加，但渲染 Markdown（代码块/换行/字体度量）会在稍后重新排版，导致 scrollHeight 突增
+   * - Virtuoso 的 followOutput=auto 会认为用户“离开了底部”，从而停止跟随
+   *
+   * 解决思路：
+   * - 仅在 shouldFollowOutput 且用户未主动滚动时启用
+   * - 监听 DOM 变化（MutationObserver），在下一帧将滚动位置重新钉到底部
+   * - 采用 scrollTop 直接赋值（避免 smooth 造成追赶延迟）
+   */
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    if (!isLoading) return;
+
+    let rafId: number | null = null;
+    const stickToBottomIfNeeded = () => {
+      rafId = null;
+      if (!shouldFollowOutput) return;
+      if (isUserScrollingRef.current) return; // 用户主动查看历史时不打扰
+      // 只要用户处于“跟随模式”，就允许在布局变化后补一次到底部
+      const target = container.scrollHeight - container.clientHeight;
+      container.scrollTop = target;
+    };
+
+    const schedule = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(stickToBottomIfNeeded);
+    };
+
+    const mo = new MutationObserver(() => {
+      schedule();
+    });
+    try {
+      mo.observe(container, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    } catch {
+      // 某些环境下（极少）可能不允许 observe，忽略即可
+    }
+
+    return () => {
+      try { mo.disconnect(); } catch { /* noop */ }
+      if (rafId !== null) {
+        try { cancelAnimationFrame(rafId); } catch { /* noop */ }
+        rafId = null;
+      }
+    };
+  }, [messagesContainerRef, isLoading, shouldFollowOutput]);
+
   return {
     messageRefs,
     messagesEndRef,

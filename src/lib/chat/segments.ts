@@ -94,16 +94,9 @@ export function filterToolCallContent(text: string): string {
   out = out.replace(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/gi, '');
   out = out.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
   
-  // 2.1) 移除 GPT‑OSS 风格的工具调用指令
-  //      形如：<|channel|>commentary to=server[.tool] <|constrain|>json<|message|>{...}
-  out = out.replace(
-    /<\|channel\|\>\s*commentary[\s\S]*?<\|message\|\>\s*\{[\s\S]*?\}/gi,
-    ''
-  );
-  //      无标签变体：commentary to=server[.tool] json {...}
-  out = out.replace(/commentary\s+to=[^\n]+?\s+json\s*\{[\s\S]*?\}/gi, '');
-  //      极简变体：to=server[.tool] {...}
-  out = out.replace(/(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{[\s\S]*?\}/gi, '');
+  // 2.1) GPT‑OSS/函数式等变体的剥离不应在这里用“正则猜测”做（容易误伤普通文本）。
+  //      这些变体由上游的抑制阀（状态机）在流式阶段处理；
+  //      持久化清理由 cleanToolCallInstructions 负责。
   
   // 3) 移除JSON格式的工具调用（包含 "type":"tool_call"）
   out = out.replace(/\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/gi, '');
@@ -112,49 +105,22 @@ export function filterToolCallContent(text: string): string {
   // 这是防止用户看到指令文本的核心逻辑
   out = out.replace(/<use_mcp_tool>[\s\S]*$/i, '');
   out = out.replace(/<tool_call>[\s\S]*$/i, '');
-  // 4.1) GPT‑OSS 风格的未完成残片
-  out = out.replace(/<\|channel\|\>\s*commentary[\s\S]*$/i, '');
-  out = out.replace(/commentary\s+to=[^\n]*$/i, '');
-  // 4.1.1) 极简残片：以 "to=" 开头但未闭合 JSON
-  out = out.replace(/(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{?$/i, '');
-  // 清理单独残留的约束/消息标签
-  out = out.replace(/<\|constrain\|\>\s*json/gi, '');
-  out = out.replace(/<\|message\|\>/gi, '');
-
-  // 4.1) 进一步清除指令残片（当起始标签已被截断时）
-  // 情况：我们在之前的render周期已经把 `<use_mcp_tool>...` 起始处及其后续内容清空，
-  // 接下来流入的token可能是 `</server_name><tool_name>...` 这类“无起始标签”的尾部残片。
-  // 策略：当文本中不存在 `<use_mcp_tool>`/`<tool_call>` 起始标签，但出现了与工具指令相关的标签名时，
-  // 从最近一次出现这些标签名的位置开始截断，避免任何残片进入UI。
-  const hasStartTag = /<use_mcp_tool|<tool_call/i.test(out);
-  if (!hasStartTag) {
-    const residualMarkers = [
-      'server_name', 'tool_name', 'arguments',
-      '</server_name', '</tool_name', '</arguments',
-      '<server_name', '<tool_name', '<arguments',
-      'use_mcp_tool', 'tool_call'
-    ];
-    let residualIndex = -1;
-    for (const marker of residualMarkers) {
-      const idx = out.lastIndexOf(marker);
-      if (idx > residualIndex) residualIndex = idx;
-    }
-    // 仅当残片出现在文本靠近尾部时才截断，防止误伤
-    if (residualIndex !== -1 && residualIndex >= out.length - 80) {
-      out = out.substring(0, residualIndex);
-    }
-  }
+  // 4.1) 移除“猜测式尾部残片截断”——这是导致内容被莫名篡改的高风险点。
+  //      残片处理由上游抑制阀（状态机）解决，避免在纯文本层做启发式截断。
 
   // 4.2) 清理不完整的标签前缀（逐字符输出时常见）
   // 例如："<use", "<use_mcp_t", "</ser", "<tool_" 等落在文本尾部的半截标签
+  // ⚠️ 重要：必须避免移除单独的 "<"（会破坏正常的 HTML/代码片段）。
+  // 过去由于包含 "<think" 等标签，其前缀会覆盖到 "<"，导致 chunk 切分为 "<" + "head>" 时丢失 "<"。
+  // 这里仅针对“高度可识别”的工具调用/指令相关标签做尾部半截清理，并要求最短前缀长度≥4。
   const incompletePrefixes = [
     '<use_mcp_tool', '<tool_call', '</use_mcp_tool', '</tool_call',
     '<server_name', '</server_name', '<tool_name', '</tool_name',
-    '<arguments', '</arguments', '</think', '<think'
+    '<arguments', '</arguments'
   ];
+  const MIN_INCOMPLETE_PREFIX_LEN = 4; // 例如 "<use"、"<too"、"</to"；禁止触达单字符 "<"
   for (const tag of incompletePrefixes) {
-    // 如果文本以该tag的任意前缀结尾，则移除该前缀，避免闪烁
-    for (let len = tag.length; len > 0; len--) {
+    for (let len = tag.length; len >= MIN_INCOMPLETE_PREFIX_LEN; len--) {
       const prefix = tag.substring(0, len);
       if (out.endsWith(prefix)) {
         out = out.slice(0, -prefix.length);

@@ -78,15 +78,36 @@ export class StreamOrchestrator {
       onComplete: async () => {
         try {
           // 在完成前尝试冲刷抑制阀缓冲区中的尾部可见文本
+          // ✅ 稳定版：优先冲刷共享状态机（toolInstructionSuppressor）的 guardWindow 尾巴，避免短文本尾部“卡住不显示”
           try {
             const store = useChatStore.getState();
-            const s = (this.context as any).suppression as { buffer?: string; active?: boolean } | undefined;
-            if (store && s && !s.active && s.buffer && s.buffer.length > 0) {
-              const tail = s.buffer;
-              // 清空缓冲，避免重复输出
-              s.buffer = '';
-              // 将剩余文本作为普通 token 追加到段模型（由 segments 层做最终过滤）
-              store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: tail } as any);
+            const anyCtx = this.context as any;
+            const sup = anyCtx?._toolSuppressor as { flush?: () => { tail: string; captured?: string; hadSuppression: boolean } } | undefined;
+            if (store && sup?.flush) {
+              const flushed = sup.flush();
+              if (flushed?.tail) {
+                store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: flushed.tail } as any);
+              }
+            } else {
+              // 兼容旧实现：冲刷 context.suppression.buffer
+              const s = (this.context as any).suppression as { buffer?: string; active?: boolean } | undefined;
+              if (store && s && !s.active && s.buffer && s.buffer.length > 0) {
+                const tail = s.buffer;
+                s.buffer = '';
+                store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: tail } as any);
+              }
+            }
+
+            // 冲刷 inline thinking 解析器尾部（例如 <think> 未闭合时）
+            const inline = anyCtx?._inlineThinking as { flush?: () => Array<{ type: string; text?: string }> } | undefined;
+            if (store && inline?.flush) {
+              const evs = inline.flush();
+              for (const ev of evs || []) {
+                if (ev.type === 'text' && ev.text) store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: String(ev.text) } as any);
+                else if (ev.type === 'think_start') store.dispatchMessageAction(this.context.messageId, { type: 'THINK_START' } as any);
+                else if (ev.type === 'think_token' && ev.text) store.dispatchMessageAction(this.context.messageId, { type: 'THINK_APPEND', chunk: String(ev.text) } as any);
+                else if (ev.type === 'think_end') store.dispatchMessageAction(this.context.messageId, { type: 'THINK_END' } as any);
+              }
             }
           } catch { /* 忽略冲刷失败，不影响收尾 */ }
 
@@ -103,11 +124,32 @@ export class StreamOrchestrator {
           const store = useChatStore.getState();
           // 错误分支同样需要在结束前冲刷抑制阀缓冲，避免尾部文本丢失
           try {
-            const s = (this.context as any).suppression as { buffer?: string; active?: boolean } | undefined;
-            if (store && s && !s.active && s.buffer && s.buffer.length > 0) {
-              const tail = s.buffer;
-              s.buffer = '';
-              store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: tail } as any);
+            const anyCtx = this.context as any;
+            const sup = anyCtx?._toolSuppressor as { flush?: () => { tail: string; captured?: string; hadSuppression: boolean } } | undefined;
+            if (store && sup?.flush) {
+              const flushed = sup.flush();
+              if (flushed?.tail) {
+                store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: flushed.tail } as any);
+              }
+            } else {
+              const s = (this.context as any).suppression as { buffer?: string; active?: boolean } | undefined;
+              if (store && s && !s.active && s.buffer && s.buffer.length > 0) {
+                const tail = s.buffer;
+                s.buffer = '';
+                store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: tail } as any);
+              }
+            }
+
+            // 冲刷 inline thinking 解析器尾部
+            const inline = anyCtx?._inlineThinking as { flush?: () => Array<{ type: string; text?: string }> } | undefined;
+            if (store && inline?.flush) {
+              const evs = inline.flush();
+              for (const ev of evs || []) {
+                if (ev.type === 'text' && ev.text) store.dispatchMessageAction(this.context.messageId, { type: 'TOKEN_APPEND', chunk: String(ev.text) } as any);
+                else if (ev.type === 'think_start') store.dispatchMessageAction(this.context.messageId, { type: 'THINK_START' } as any);
+                else if (ev.type === 'think_token' && ev.text) store.dispatchMessageAction(this.context.messageId, { type: 'THINK_APPEND', chunk: String(ev.text) } as any);
+                else if (ev.type === 'think_end') store.dispatchMessageAction(this.context.messageId, { type: 'THINK_END' } as any);
+              }
             }
           } catch { /* noop */ }
           // 结束思考态（如仍在进行）

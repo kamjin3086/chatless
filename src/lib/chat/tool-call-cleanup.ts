@@ -24,10 +24,10 @@ export function cleanToolCallInstructions(text: string): string {
     ''
   );
 
-  // 0.1 移除缺少 JSON 体的“半截” GPT‑OSS 指令（例如仅有 header: "<|channel|>commentary to=...<|message|>"）
-  //      这类残片只会出现在流式拆包时的尾部，对用户没有任何显示意义。
+  // 0.1 移除缺少 JSON 体的“半截” GPT‑OSS 指令
+  // ⚠️ 仅在“落在文本尾部”时才清理，避免误删普通正文中偶然出现的类似片段。
   cleaned = cleaned.replace(
-    /<\|channel\|\>\s*commentary\s+to=[^\s]+[\s\S]*?(?:<\|message\|\>)?/gi,
+    /<\|channel\|\>\s*commentary\s+to=[^\s]+[\s\S]*?(?:<\|message\|\>)?\s*$/gi,
     ''
   );
 

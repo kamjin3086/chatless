@@ -190,6 +190,23 @@ pub async fn start_sse(
       }
     }
 
+    // ✅ 关键修复：连接自然结束时，可能存在最后一行没有以 '\n' 结尾（例如 "[DONE]"），
+    // 这会导致前端永远收不到收尾信号，从而出现“服务端已完成但前端还在加载/追赶输出”的现象。
+    // 在结束前补一次冲刷，确保最后一行也会被发出。
+    {
+      let line = line_buffer.trim().to_string();
+      if !line.is_empty() {
+        let payload = if let Some(data) = line.strip_prefix("data:") {
+          data.trim()
+        } else {
+          line.trim()
+        };
+        if !payload.is_empty() {
+          app.emit("sse-event", payload.to_string()).ok();
+        }
+      }
+    }
+
     // 连接自然结束
     app.emit("sse-status", "Connection closed.").ok();
   });

@@ -8,6 +8,7 @@ import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 // import { useMarkdownTheme } from '@/hooks/useMarkdownTheme';
 // import { getThemeStyles } from '@/lib/markdown/themes';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
+import { preprocessMarkdownForSafeRender } from './markdownPreprocess';
 
 interface MemoizedMarkdownProps {
   content: string;
@@ -30,11 +31,23 @@ export const MemoizedMarkdown = memo(({ content, className, sizeOverride }: Memo
 
   const { renderers, containerClass } = createMarkdownRenderers(effectiveSize, themeStyles);
 
-  // 处理"只有自定义HTML标签一行"的情况（如 </final_answer> 被当作 HTML 丢弃导致视觉缺行）
-  // 将整行仅包含的自定义标签转义成文本呈现
-  const sanitizedContent = content.replace(/^(<\/?[\w:-]+>)\s*$/gm, (_m, tag) =>
-    String(tag).replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-  );
+  // 处理“只有一行控制标签”的情况（如 </final_answer> 被当作 HTML 丢弃导致视觉缺行）
+  // ⚠️ 必须避免影响正常 HTML 代码（如 <head> / <body> 等），否则会造成内容被“莫名篡改”。
+  const ESCAPE_TAG_NAMES = new Set([
+    'final_answer',
+    'analysis',
+    'commentary',
+    'assistant',
+    'user',
+    'system',
+    'think',
+    'reasoning',
+  ]);
+  const sanitizedContent = content.replace(/^(<\/?)([\w:-]+)>\s*$/gm, (m, _prefix, tagName) => {
+    const name = String(tagName || '').toLowerCase();
+    if (!ESCAPE_TAG_NAMES.has(name)) return m;
+    return m.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  });
 
   // HTML 换行 <br> 预处理 → Markdown 硬换行
   function convertHtmlBreaksToMd(input: string): string {
@@ -138,11 +151,14 @@ export const MemoizedMarkdown = memo(({ content, className, sizeOverride }: Memo
     return out;
   }
 
-  const contentForRender = stabilizeStreamingMarkdown(convertHtmlBreaksToMd(sanitizedContent));
+  // 关键：禁止 raw HTML 作为 DOM 渲染，避免影响整体布局；并尽量将“完整 HTML 文件”包进代码块。
+  const safe = preprocessMarkdownForSafeRender(sanitizedContent, { wrapFullHtmlDocument: true });
+  const contentForRender = stabilizeStreamingMarkdown(convertHtmlBreaksToMd(safe));
 
   return (
     <div className={cn("whitespace-normal", containerClass, className)}>
-      <Streamdown components={renderers}>
+      {/* 关键：禁用 Streamdown 的交互控件/潜在 HTML 预览，确保只展示为 Markdown + 代码块，不执行/不渲染 HTML */}
+      <Streamdown components={renderers} controls={false} rehypePlugins={[]} remarkPlugins={[]}>
         {contentForRender}
       </Streamdown>
     </div>

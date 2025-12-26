@@ -237,24 +237,25 @@ export class SSEClient {
 
         this.isConnected = true;
 
+        const emitLine = (line: string) => {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) return;
+          // 处理 SSE 的 data 行，兼容 `data: xxx` 与 `data:xxx`
+          if (trimmedLine.startsWith('data:')) {
+            const data = trimmedLine.substring(5).trimStart();
+            if (this.isConnected && !this.stopping) callbacks.onData?.(data);
+            return;
+          }
+          // 非 data 行：直接透传（与 Tauri 端一致）
+          if (this.isConnected && !this.stopping) callbacks.onData?.(trimmedLine);
+        };
+
         const processBuffer = () => {
           const lines = buffer.split('\n');
           buffer = lines.pop() || ''; // 保留最后一个不完整的行
 
           for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (trimmedLine) {
-              // 处理SSE格式的数据 - 与Tauri端保持一致
-              if (trimmedLine.startsWith('data: ')) {
-                const data = trimmedLine.substring(6);
-                // 将[DONE]信号传递给业务层处理，与Tauri端保持一致
-                if (this.isConnected && !this.stopping) callbacks.onData?.(data);
-              } else {
-                // 对于非data:开头的行，直接作为数据传递（与Tauri端一致）
-                // 这包括直接的JSON数据和其他格式数据
-                if (this.isConnected && !this.stopping) callbacks.onData?.(trimmedLine);
-              }
-            }
+            emitLine(line);
           }
         };
 
@@ -265,6 +266,12 @@ export class SSEClient {
               
               if (done) {
                 console.debug(`[${debugTag}] Browser SSE stream completed`);
+                // ✅ 关键修复：流结束时，冲刷最后一行（可能没有 \n），否则 [DONE] 可能永远到不了上层
+                try {
+                  processBuffer();
+                  if (buffer.trim()) emitLine(buffer);
+                  buffer = '';
+                } catch { /* noop */ }
                 callbacks.onClose?.();
                 break;
               }
