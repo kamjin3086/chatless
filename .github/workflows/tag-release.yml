@@ -588,7 +588,7 @@ jobs:
                     
           ### macOS
           - [Apple Silicon](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless_${VERSION}_aarch64.dmg)
-          - [Intel 处理器](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless_${VERSION}_x64.dmg)
+          - [Intel 处理器（通过 Rosetta 2 运行）](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless_${VERSION}_aarch64.dmg)
 
           ### Linux
           - [Red Hat/CentOS/Fedora (.rpm)](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless-${VERSION}-1.x86_64.rpm)
@@ -662,7 +662,7 @@ jobs:
                     
           ### macOS
           - [Apple Silicon](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless_${VERSION}_aarch64.dmg)
-          - [Intel Processor](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless_${VERSION}_x64.dmg)
+          - [Intel Processor (run with Rosetta 2)](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless_${VERSION}_aarch64.dmg)
 
           ### Linux
           - [Red Hat/CentOS/Fedora (.rpm)](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Chatless-${VERSION}-1.x86_64.rpm)
@@ -681,7 +681,7 @@ jobs:
           ### macOS
           1. Choose version based on processor:
              - Apple Silicon (M1/M2/M3): Download aarch64.dmg
-             - Intel Processor: Download x64.dmg
+             - Intel Processor: Download aarch64.dmg (run with Rosetta 2)
           2. Double-click to open, drag to Applications folder
           3. Launch from Applications
           
