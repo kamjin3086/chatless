@@ -175,15 +175,18 @@ export const StreamingMarkdown = React.memo(function StreamingMarkdown({
   }
   const buffer = bufferRef.current;
 
-  // 更新缓冲器状态
-  buffer.update(content, isStreaming);
-
   // 使用 useSyncExternalStore 订阅显示内容
   const displayContent = useSyncExternalStore(
     buffer.subscribe,
     buffer.getSnapshot,
     buffer.getSnapshot // SSR fallback
   );
+
+  // 在 useEffect 中更新缓冲器状态，避免在渲染阶段触发状态更新
+  // 使用 useLayoutEffect 确保在浏览器绘制前更新
+  React.useLayoutEffect(() => {
+    buffer.update(content, isStreaming);
+  }, [buffer, content, isStreaming]);
 
   // 清理
   React.useEffect(() => {

@@ -54,27 +54,138 @@ export function filterToolInstructions(
   let result = text;
   const { mode, preserveNewlines = true } = options;
   
-  // 1. 应用所有完整模式进行过滤
+  // 1. 应用所有完整模式进行过滤（XML 和其他简单格式）
   for (const pattern of TOOL_INSTRUCTION_PATTERNS) {
     result = result.replace(pattern.completePattern, '');
   }
   
-  // 2. 对于 display 模式，额外清理未完成的片段
+  // 2. 清理 JSON 格式的工具调用（需要特殊处理嵌套）
+  result = cleanJsonToolCalls(result);
+  
+  // 3. 对于 display 模式，额外清理未完成的片段
   if (mode === 'display') {
     result = cleanIncompleteInstructions(result);
   }
   
-  // 3. 对于 persist 模式，额外清理 GPT-OSS 变体的半截指令
+  // 4. 对于 persist 模式，额外清理 GPT-OSS 变体的半截指令
   if (mode === 'persist') {
     result = cleanGptOssVariants(result);
   }
   
-  // 4. 清理多余空行（但保留 markdown 格式）
+  // 5. 清理多余空行（但保留 markdown 格式）
   if (!preserveNewlines) {
     result = result.replace(/\n\n\n+/g, '\n\n');
   }
   
   return result.trim();
+}
+
+/**
+ * 清理 JSON 格式的工具调用
+ * 
+ * 使用括号匹配算法正确处理嵌套 JSON，避免正则无法处理嵌套的问题。
+ * 
+ * 匹配特征：包含 "type":"tool_call" 或 "type": "tool_call" 的 JSON 对象或数组
+ */
+function cleanJsonToolCalls(text: string): string {
+  if (!text) return '';
+  
+  // 快速检测：是否包含 tool_call 特征
+  if (!/"type"\s*:\s*"tool_call"/i.test(text)) {
+    return text;
+  }
+  
+  let result = '';
+  let i = 0;
+  
+  while (i < text.length) {
+    // 处理 JSON 对象
+    if (text[i] === '{') {
+      const jsonEnd = findMatchingBrace(text, i, '{', '}');
+      
+      if (jsonEnd !== -1) {
+        const jsonStr = text.substring(i, jsonEnd + 1);
+        
+        // 检查这个 JSON 是否是工具调用
+        if (/"type"\s*:\s*"tool_call"/i.test(jsonStr)) {
+          // 跳过这个 JSON 对象
+          i = jsonEnd + 1;
+          continue;
+        }
+      }
+    }
+    
+    // 处理 JSON 数组（可能包含工具调用对象）
+    if (text[i] === '[') {
+      const arrayEnd = findMatchingBrace(text, i, '[', ']');
+      
+      if (arrayEnd !== -1) {
+        const arrayStr = text.substring(i, arrayEnd + 1);
+        
+        // 检查这个数组是否包含工具调用
+        if (/"type"\s*:\s*"tool_call"/i.test(arrayStr)) {
+          // 跳过整个数组
+          i = arrayEnd + 1;
+          continue;
+        }
+      }
+    }
+    
+    // 不是工具调用 JSON，保留字符
+    result += text[i];
+    i++;
+  }
+  
+  return result;
+}
+
+/**
+ * 找到匹配的右括号位置
+ * 
+ * @param text 文本
+ * @param start 左括号的位置
+ * @param openChar 左括号字符（'{' 或 '['）
+ * @param closeChar 右括号字符（'}' 或 ']'）
+ * @returns 匹配的右括号位置，或 -1 如果没找到
+ */
+function findMatchingBrace(text: string, start: number, openChar: string = '{', closeChar: string = '}'): number {
+  if (text[start] !== openChar) return -1;
+  
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    
+    if (char === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    
+    if (char === '"' && !escape) {
+      inString = !inString;
+      continue;
+    }
+    
+    if (inString) continue;
+    
+    if (char === openChar) {
+      depth++;
+    } else if (char === closeChar) {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  
+  return -1; // 未找到匹配的右括号
 }
 
 /**

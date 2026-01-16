@@ -296,7 +296,7 @@ export async function continueWithToolResult(params: {
   }
   
   // 构建第一次追问的系统消息（合并为单一长消息）
-  const followUpSystemMessages = buildFollowUpSystemMessages(
+  const followUpSystemMessages = await buildFollowUpSystemMessages(
     'first',
     originalUserContent,
     enabledServers,

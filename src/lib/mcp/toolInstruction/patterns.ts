@@ -128,12 +128,14 @@ export const TOOL_INSTRUCTION_PATTERNS: PatternDefinition[] = [
   },
   
   // 7. JSON 格式
-  {
-    id: 'json_tool_call',
-    completePattern: /\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/gi,
-    priority: 8,
-    description: 'JSON 格式：{ "type": "tool_call", ... }'
-  },
+  // ⚠️ 已禁用简单正则匹配，因为无法正确处理嵌套 JSON
+  // 使用专门的 JSON 清理函数替代（见 filter.ts 中的 cleanJsonToolCalls）
+  // {
+  //   id: 'json_tool_call',
+  //   completePattern: /\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/gi,
+  //   priority: 8,
+  //   description: 'JSON 格式：{ "type": "tool_call", ... }'
+  // },
   
   // 8. 内部标记
   {

@@ -51,20 +51,24 @@ function needsToolCallFilter(existingText: string, chunk: string): boolean {
     chunkLower.includes('</tool_call') ||
     chunk.includes('__tool_call_card__') ||
     chunkLower.includes('<|channel|>') ||
-    chunkLower.includes('commentary to=')
+    chunkLower.includes('commentary to=') ||
+    // JSON 格式工具调用检测
+    chunk.includes('"type"') && chunk.includes('tool_call')
   ) {
     return true;
   }
   
-  // 检测边界：尾部 20 字符 + chunk 组合（处理跨 chunk 的标签）
+  // 检测边界：尾部 30 字符 + chunk 组合（处理跨 chunk 的标签和 JSON）
   if (existingText.length > 0) {
-    const boundary = existingText.slice(-20) + chunk;
+    const boundary = existingText.slice(-30) + chunk;
     const boundaryLower = boundary.toLowerCase();
     if (
       boundaryLower.includes('<use_mcp_tool') ||
       boundaryLower.includes('<tool_call') ||
       boundaryLower.includes('</use_mcp_tool') ||
-      boundaryLower.includes('</tool_call')
+      boundaryLower.includes('</tool_call') ||
+      // JSON 格式检测
+      (boundary.includes('"type"') && boundary.includes('tool_call'))
     ) {
       return true;
     }
@@ -217,6 +221,22 @@ export function insertRunningCard(
   
   if (existingCardIndex !== -1) {
     console.warn(`[insertRunningCard] 卡片 ${card.id} 已存在，跳过插入`);
+    return out;
+  }
+  
+  // 防止重复：检查是否已存在相同 server+tool+args 的 running/pending_auth 卡片
+  // 这是关键的防重复逻辑，因为模型可能重复输出相同的工具调用指令
+  const argsStr = JSON.stringify(card.args || {});
+  const duplicateCard = out.find(s => 
+    s.kind === 'toolCard' && 
+    s.server === card.server && 
+    s.tool === card.tool && 
+    (s.status === 'running' || s.status === 'pending_auth') &&
+    JSON.stringify(s.args || {}) === argsStr
+  );
+  
+  if (duplicateCard) {
+    console.warn(`[insertRunningCard] 相同工具调用已存在: ${card.server}.${card.tool}，跳过插入`);
     return out;
   }
   
