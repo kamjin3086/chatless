@@ -193,7 +193,8 @@ impl EnvironmentSetup {
     false
   }
 
-  /// 检查工具的详细可用性
+  /// 检查工具的详细可用性（由 lib.rs 中的 Tauri 命令调用）
+  #[allow(dead_code)]
   pub fn check_tool_availability_detailed(&self, tool_name: &str) -> ToolAvailability {
     let paths: Vec<&str> = self.updated_path.split(PATH_SEPARATOR).collect();
 
@@ -217,7 +218,8 @@ impl EnvironmentSetup {
     }
   }
 
-  /// 执行完整的环境健康检查
+  /// 执行完整的环境健康检查（由 lib.rs 中的 Tauri 命令调用）
+  #[allow(dead_code)]
   pub fn perform_health_check(&self) -> EnvironmentHealth {
     let critical_tools = ["node", "npm", "npx"];
     let mut tools = Vec::new();
@@ -280,19 +282,22 @@ pub fn setup_environment() -> Result<(), Box<dyn std::error::Error>> {
   Ok(())
 }
 
-/// 获取环境健康状态
+/// 获取环境健康状态（由 lib.rs 中的 Tauri 命令调用）
+#[allow(dead_code)]
 pub fn get_environment_health() -> EnvironmentHealth {
   let env_setup = EnvironmentSetup::new();
   env_setup.perform_health_check()
 }
 
-/// 检查 MCP 服务是否可以正常运行
+/// 检查 MCP 服务是否可以正常运行（由 lib.rs 中的 Tauri 命令调用）
+#[allow(dead_code)]
 pub fn can_run_mcp_services() -> bool {
   let health = get_environment_health();
   health.overall_healthy
 }
 
-/// 专门检查 npx 是否可用
+/// 专门检查 npx 是否可用（由 lib.rs 中的 Tauri 命令调用）
+#[allow(dead_code)]
 pub fn check_npx_availability() -> ToolAvailability {
   let env_setup = EnvironmentSetup::new();
   env_setup.check_tool_availability_detailed("npx")

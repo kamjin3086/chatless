@@ -16,12 +16,19 @@ export class StorageUtil {
     return typeof window !== 'undefined';
   }
 
+  // 标记是否已输出过服务端上下文警告（避免重复日志）
+  private static hasLoggedServerContext = false;
+
   /**
    * 获取或创建Store实例
    */
   private static async getStore(storeName: string = this.DEFAULT_STORE): Promise<Store | null> {
     if (!this.isClientSide()) {
-      console.log('Running in server context, skipping storage operation');
+      // 仅在首次时输出一次警告，避免日志刷屏
+      if (!this.hasLoggedServerContext) {
+        this.hasLoggedServerContext = true;
+        console.debug('[Storage] 服务端上下文，存储操作已跳过');
+      }
       return null;
     }
 

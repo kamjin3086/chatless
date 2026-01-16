@@ -139,39 +139,78 @@ export function TauriApp({ children }: TauriAppProps) {
         await loadConversations();
         startupMonitor.endPhase('会话加载');
 
-        // MCP 服务器初始化：完全后台化，0 阻塞启动
-        // 使用 requestIdleCallback 在浏览器空闲时启动，确保不影响 UI 渲染和用户交互
+        // MCP 服务器初始化：极低优先级，确保不影响页面渲染
+        // 策略：等待页面完全稳定后（多次空闲检测 + 最小延迟）才开始启动
         try {
-          const startMcpInBackground = () => {
-            console.log('[TauriApp] 浏览器空闲，开始后台启动MCP服务...');
+          const startMcpInBackground = async () => {
+            console.log('[TauriApp] 页面稳定，开始后台启动MCP服务...');
             
-            // 使用 Promise 包装，完全异步化，不阻塞任何操作
-            Promise.resolve().then(async () => {
-              try {
-                await serverManager.init();
-                console.log('[TauriApp] MCP服务启动完成');
-              } catch (error) {
-                console.warn('[TauriApp] MCP服务启动失败:', error);
-              }
-            });
+            try {
+              await serverManager.init();
+              console.log('[TauriApp] MCP服务启动完成');
+            } catch (error) {
+              console.warn('[TauriApp] MCP服务启动失败:', error);
+            }
             
-            // 初始化MCP持久化缓存（独立的异步任务）
-            import('@/lib/mcp/persistentCache').then(({ persistentCache }) => {
-              persistentCache.init().then(() => {
-                console.log('[TauriApp] MCP持久化缓存已初始化');
-              }).catch(error => {
-                console.warn('[TauriApp] MCP持久化缓存初始化失败:', error);
-              });
-            });
+            // 初始化MCP持久化缓存
+            try {
+              const { persistentCache } = await import('@/lib/mcp/persistentCache');
+              await persistentCache.init();
+              console.log('[TauriApp] MCP持久化缓存已初始化');
+            } catch (error) {
+              console.warn('[TauriApp] MCP持久化缓存初始化失败:', error);
+            }
           };
           
-          // 优先使用 requestIdleCallback，在浏览器空闲时启动
-          // 如果不支持则回退到 setTimeout(0)，确保不阻塞任何操作
-          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-            (window as any).requestIdleCallback(startMcpInBackground, { timeout: 10000 });
+          // 智能延迟启动MCP：确保页面真正稳定后才启动
+          // 1. 等待 document 完全加载
+          // 2. 再等待多次 requestIdleCallback 确认浏览器真正空闲
+          // 3. 最少延迟 3 秒，避免与页面编译争抢资源
+          const waitForPageStable = () => {
+            const MIN_DELAY_MS = 3000; // 最少等待3秒
+            const startTime = Date.now();
+            
+            const scheduleWhenIdle = (idleCount: number) => {
+              // 需要连续 3 次空闲检测才启动（确保真正空闲）
+              if (idleCount >= 3) {
+                // 确保至少等待了 MIN_DELAY_MS
+                const elapsed = Date.now() - startTime;
+                if (elapsed < MIN_DELAY_MS) {
+                  setTimeout(() => startMcpInBackground(), MIN_DELAY_MS - elapsed);
+                } else {
+                  startMcpInBackground();
+                }
+                return;
+              }
+              
+              if ('requestIdleCallback' in window) {
+                (window as any).requestIdleCallback(
+                  (deadline: { didTimeout: boolean; timeRemaining: () => number }) => {
+                    // 只有在有足够空闲时间时才计数
+                    if (deadline.timeRemaining() > 10 || deadline.didTimeout) {
+                      scheduleWhenIdle(idleCount + 1);
+                    } else {
+                      // 空闲时间不够，重新等待
+                      scheduleWhenIdle(idleCount);
+                    }
+                  },
+                  { timeout: 5000 }
+                );
+              } else {
+                // 回退：简单的 setTimeout
+                setTimeout(() => scheduleWhenIdle(idleCount + 1), 1000);
+              }
+            };
+            
+            // 开始等待空闲
+            scheduleWhenIdle(0);
+          };
+          
+          // 等待 document 完成加载后再开始
+          if (document.readyState === 'complete') {
+            waitForPageStable();
           } else {
-            // 回退方案：使用 setTimeout(0) 在下一个事件循环中启动
-            setTimeout(startMcpInBackground, 0);
+            window.addEventListener('load', waitForPageStable, { once: true });
           }
         } catch { /* noop */ }
 

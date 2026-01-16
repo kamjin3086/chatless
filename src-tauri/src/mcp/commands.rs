@@ -19,11 +19,6 @@ use tokio::time::{timeout, Duration};
 use reqwest::Url;
 use std::net::IpAddr;
 
-// CommandExt 在 Windows 平台用于创建无窗口的子进程
-// 注意：实际使用在 CREATE_NO_WINDOW 常量和 creation_flags() 调用中
-#[cfg(windows)]
-use std::os::windows::process::CommandExt as _;
-
 // —— 工具：从 npx 参数中提取第一个包名（用于首次安装的预拉取） ——
 fn extract_npx_package(args: &Option<Vec<String>>) -> Option<String> {
   if let Some(a) = args {
