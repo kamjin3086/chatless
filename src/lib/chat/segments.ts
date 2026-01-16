@@ -50,10 +50,11 @@ function needsToolCallFilter(existingText: string, chunk: string): boolean {
     chunkLower.includes('</use_mcp_tool') ||
     chunkLower.includes('</tool_call') ||
     chunk.includes('__tool_call_card__') ||
-    chunkLower.includes('<|channel|>') ||
+    // GPT-OSS 模板标签（使用 <| 作为快速检测）
+    chunk.includes('<|') ||
     chunkLower.includes('commentary to=') ||
     // JSON 格式工具调用检测
-    chunk.includes('"type"') && chunk.includes('tool_call')
+    (chunk.includes('"type"') && chunk.includes('tool_call'))
   ) {
     return true;
   }
@@ -67,6 +68,8 @@ function needsToolCallFilter(existingText: string, chunk: string): boolean {
       boundaryLower.includes('<tool_call') ||
       boundaryLower.includes('</use_mcp_tool') ||
       boundaryLower.includes('</tool_call') ||
+      // GPT-OSS 模板标签
+      boundary.includes('<|') ||
       // JSON 格式检测
       (boundary.includes('"type"') && boundary.includes('tool_call'))
     ) {

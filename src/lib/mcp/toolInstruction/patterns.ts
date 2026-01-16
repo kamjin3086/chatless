@@ -33,6 +33,9 @@ export type ToolInstructionFormat =
   | 'xml_tool_call'
   | 'json_tool_call'
   | 'gpt_oss'
+  | 'gpt_oss_tags'
+  | 'gpt_oss_tool_call'
+  | 'gpt_oss_analysis'
   | 'commentary'
   | 'to_equals'
   | 'function_like'
@@ -79,69 +82,89 @@ export const TOOL_INSTRUCTION_PATTERNS: PatternDefinition[] = [
     description: '通用 XML 格式：<tool_call>...</tool_call>'
   },
   
-  // 2. GPT-OSS 格式
+  // 2. GPT-OSS 模板标签（需要剥离的内部结构标记）
+  // 常见标签: <|channel|>, <|message|>, <|end|>, <|thinking|>, <|constrain|> 等
   {
-    id: 'gpt_oss',
-    completePattern: /<\|channel\|>\s*commentary\s+to=[^\s]+[\s\S]*?<\|message\|>\s*\{[\s\S]*?\}/gi,
-    startPattern: /<\|channel\|>\s*commentary\s+to=[^\n{]{1,200}\{/i,
-    priority: 3,
-    description: 'GPT-OSS 格式：<|channel|>commentary to=... <|message|>{...}'
+    id: 'gpt_oss_tags',
+    // 匹配独立的模板标签（不含其他内容时）
+    completePattern: /<\|(?:channel|message|end|thinking|constrain|tool_calls?|function_calls?|assistant|user|system)\|>/gi,
+    priority: 2,
+    description: 'GPT-OSS 模板标签：<|channel|>, <|message|>, <|end|> 等'
   },
   
-  // 3. Commentary 格式（无特殊标签）
+  // 3. GPT-OSS 完整工具调用格式
+  {
+    id: 'gpt_oss_tool_call',
+    // 匹配: <|channel|>commentary to=xxx ... <|message|>{...} 或 <|channel|>commentary to=xxx ... {json}
+    completePattern: /<\|channel\|>\s*commentary\s+to=[^\s]+[\s\S]*?(?:<\|message\|>)?\s*\{[\s\S]*?\}(?:\s*<\|end\|>)?/gi,
+    startPattern: /<\|channel\|>\s*commentary\s+to=/i,
+    priority: 3,
+    description: 'GPT-OSS 工具调用格式：<|channel|>commentary to=... {json}'
+  },
+  
+  // 4. GPT-OSS analysis/thinking 块
+  {
+    id: 'gpt_oss_analysis',
+    // 匹配: <|channel|>analysis ... <|channel|>final 或类似结构
+    completePattern: /<\|channel\|>\s*analysis[\s\S]*?<\|channel\|>\s*(?:final|response)/gi,
+    priority: 4,
+    description: 'GPT-OSS analysis/thinking 块'
+  },
+  
+  // 5. Commentary 格式（无特殊标签）
   {
     id: 'commentary',
     completePattern: /commentary\s+to=[^\n]+?\s+json\s*\{[\s\S]*?\}/gi,
     startPattern: /commentary\s+to=[^\n{]{1,200}\{/i,
-    priority: 4,
+    priority: 5,
     description: 'Commentary 格式：commentary to=... json {...}'
   },
   
-  // 4. to= 格式
+  // 6. to= 格式
   // ⚠️ 移除 incompletePattern，避免误删 Markdown 链接中的文本
   {
     id: 'to_equals',
     completePattern: /(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{[\s\S]*?\}/gi,
     startPattern: /(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{/i,
     // incompletePattern 已移除，避免误删
-    priority: 5,
+    priority: 6,
     description: 'to= 格式：to=server.tool {...}'
   },
   
-  // 5. 函数式格式
+  // 7. 函数式格式
   // ⚠️ 移除 incompletePattern，避免误删如 "Socket.io" 这样的文本
   {
     id: 'function_like',
     completePattern: /(^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{[\s\S]*?\}/gi,
     startPattern: /(?:^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{/i,
     // incompletePattern 已移除，避免误删
-    priority: 6,
+    priority: 7,
     description: '函数式格式：server.tool {...}'
   },
   
-  // 6. 分隔符格式
+  // 8. 分隔符格式
   {
     id: 'separator_style',
     completePattern: /to\s*=\s*>+[a-z0-9_-]+>+[a-z0-9_-]+>+\s*{[\s\S]*?}>+/gi,
-    priority: 7,
+    priority: 8,
     description: '分隔符格式：to=>>server>>tool>>{...}>>'
   },
   
-  // 7. JSON 格式
+  // 9. JSON 格式
   // ⚠️ 已禁用简单正则匹配，因为无法正确处理嵌套 JSON
   // 使用专门的 JSON 清理函数替代（见 filter.ts 中的 cleanJsonToolCalls）
   // {
   //   id: 'json_tool_call',
   //   completePattern: /\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/gi,
-  //   priority: 8,
+  //   priority: 9,
   //   description: 'JSON 格式：{ "type": "tool_call", ... }'
   // },
   
-  // 8. 内部标记
+  // 10. 内部标记
   {
     id: 'internal_marker',
     completePattern: /\{[^}]*"__tool_call_card__"[^}]*\}/g,
-    priority: 9,
+    priority: 10,
     description: '内部工具卡片标记'
   }
 ];
@@ -153,18 +176,22 @@ export const TOOL_INSTRUCTION_PATTERNS: PatternDefinition[] = [
  * ⚠️ 重要：只包含 MCP 工具调用相关的标签，避免误删 HTML 标签
  */
 export const INCOMPLETE_TAG_PREFIXES = [
+  // MCP XML 格式
   '<use_mcp_tool', '<tool_call',
-  '</use_mcp_tool', '</tool_call'
+  '</use_mcp_tool', '</tool_call',
+  // GPT-OSS 模板标签（使用 <| 开头，可以安全匹配）
+  '<|channel|', '<|message|', '<|end|', '<|thinking|',
+  '<|constrain|', '<|tool_call', '<|function_call'
 ];
 
 /**
  * 最小不完整前缀长度
  * 
  * ⚠️ 重要：设置为较高值以避免误删
- * - 设为 8 可以避免误删 HTML 标签（如 <strong, <script 等）
- * - 只会匹配明确的 MCP 标签前缀
+ * - 设为 4 可以安全匹配 <| 开头的 GPT-OSS 标签
+ * - MCP 标签足够长，不会与 HTML 混淆
  */
-export const MIN_INCOMPLETE_PREFIX_LENGTH = 8;
+export const MIN_INCOMPLETE_PREFIX_LENGTH = 4;
 
 /**
  * 抑制器触发模式
@@ -192,7 +219,7 @@ export function getSuppressionTriggers(): SuppressionTrigger[] {
 }
 
 /**
- * 快速检测文本是否可能包含工具指令
+ * 快速检测文本是否可能包含工具指令或模板标签
  * 用于快速路径优化，避免不必要的正则匹配
  * 
  * ⚠️ 重要：这个函数决定了是否进入过滤流程
@@ -212,8 +239,9 @@ export function mightContainToolInstruction(text: string): boolean {
     lowerText.includes('</tool_call') ||
     // 内部标记
     text.includes('__tool_call_card__') ||
-    // GPT-OSS 格式
-    lowerText.includes('<|channel|>') ||
+    // GPT-OSS 模板标签（需要剥离的内部结构标记）
+    // 使用 <| 作为快速检测，而不是完整的 <|channel|>
+    text.includes('<|') ||
     lowerText.includes('commentary to=') ||
     // JSON 格式的工具调用（更严格的检测）
     /"type"\s*:\s*"tool_call"/i.test(text)

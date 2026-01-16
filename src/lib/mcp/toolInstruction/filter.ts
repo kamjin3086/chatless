@@ -191,12 +191,15 @@ function findMatchingBrace(text: string, start: number, openChar: string = '{', 
 /**
  * 清理未完成的指令片段（流式输出场景）
  * 
- * ⚠️ 重要：只清理明确的 MCP 工具调用指令，不要误删 HTML 内容
+ * ⚠️ 重要：只清理明确的 MCP 工具调用指令和 GPT-OSS 模板标签
  */
 function cleanIncompleteInstructions(text: string): string {
   if (!text) return '';
   
   let result = text;
+  
+  // 0. 首先清理独立出现的 GPT-OSS 模板标签（这些总是应该被移除）
+  result = result.replace(/<\|(?:channel|message|end|thinking|constrain|tool_calls?|function_calls?|assistant|user|system)\|>/gi, '');
   
   // 1. 只移除未完成的 MCP 工具调用 XML 指令块（use_mcp_tool 和 tool_call）
   // 不处理其他 XML 格式，避免误删 HTML
@@ -208,12 +211,13 @@ function cleanIncompleteInstructions(text: string): string {
     }
   }
   
-  // 2. 清理不完整的 MCP 标签前缀（只处理明确的 MCP 标签）
-  // 使用更严格的匹配，确保是 MCP 工具调用标签而非普通 HTML
+  // 2. 清理不完整的标签前缀（MCP 标签和 GPT-OSS 标签）
+  // GPT-OSS 标签使用 <| 开头，可以安全识别
   for (const tag of INCOMPLETE_TAG_PREFIXES) {
-    // 只有当前缀长度足够长（>= MIN_INCOMPLETE_PREFIX_LENGTH）时才处理
-    // 这样可以避免误删 <strong, <script 等 HTML 标签
-    for (let len = tag.length; len >= MIN_INCOMPLETE_PREFIX_LENGTH; len--) {
+    // 对于 GPT-OSS 标签（以 <| 开头），使用较短的前缀长度
+    // 对于 MCP 标签，使用较长的前缀长度避免误删 HTML
+    const minLen = tag.startsWith('<|') ? 2 : MIN_INCOMPLETE_PREFIX_LENGTH;
+    for (let len = tag.length; len >= minLen; len--) {
       const prefix = tag.substring(0, len);
       if (result.endsWith(prefix)) {
         result = result.slice(0, -prefix.length);
@@ -236,14 +240,17 @@ function cleanGptOssVariants(text: string): string {
   
   let result = text;
   
-  // 只处理明确包含 GPT-OSS 特征标签的内容
-  // 缺少 JSON 体的半截 GPT-OSS 指令（必须以 <|channel|> 开头）
+  // 1. 清理所有 GPT-OSS 模板标签（独立出现的）
+  // 这些标签是模型内部结构标记，不应该显示给用户
+  result = result.replace(/<\|(?:channel|message|end|thinking|constrain|tool_calls?|function_calls?|assistant|user|system)\|>/gi, '');
+  
+  // 2. 缺少 JSON 体的半截 GPT-OSS 指令
   result = result.replace(
-    /<\|channel\|>\s*commentary\s+to=[^\s]+[\s\S]*?(?:<\|message\|>)?\s*$/gi,
+    /commentary\s+to=[^\s]+[\s\S]*?(?:<\|message\|>)?\s*$/gi,
     ''
   );
   
-  // 无标签 GPT-OSS 变体（必须包含完整的 "commentary to=... json {...}" 结构）
+  // 3. 无标签 GPT-OSS 变体（必须包含完整的 "commentary to=... json {...}" 结构）
   result = result.replace(/commentary\s+to=[^\n]+?\s+json\s*\{[\s\S]*?\}/gi, '');
   
   // ⚠️ 移除以下激进的过滤规则，它们会误删正常内容：
