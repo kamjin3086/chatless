@@ -823,6 +823,15 @@ jobs:
       - name: Skip public release mirror (missing secrets)
         if: ${{ steps.check.outputs.has_secrets != 'true' }}
         run: echo "PUBLIC_RELEASE_TOKEN/PUBLIC_RELEASE_REPO not set, skipping mirror."
+      
+      # 必须先 checkout 仓库，否则 gh CLI 无法获取仓库信息
+      - name: Checkout repository
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+      
       - name: Download all artifacts
         if: ${{ steps.check.outputs.has_secrets == 'true' }}
         uses: actions/download-artifact@v4

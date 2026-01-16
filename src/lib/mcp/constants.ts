@@ -1,7 +1,12 @@
 export const LIST_TOOLS_TTL_MS = 60_000; // 1min 缓存，降低重复 listTools 开销
 export const LIST_TOOLS_TIMEOUT_MS = 5_000; // 单次 listTools 超时，从1.2秒增加到5秒，保障连接稳定性
-export const MCP_CONNECT_TIMEOUT_MS = 30_000; // MCP连接超时时间
-export const MCP_INIT_TIMEOUT_MS = 15_000; // MCP初始化超时时间（包括连接和工具列表获取）
+
+// MCP 连接超时配置
+// - 首次启动时使用较短超时，避免阻塞应用启动
+// - 用户手动连接或工具调用时使用较长超时，保障稳定性
+export const MCP_STARTUP_CONNECT_TIMEOUT_MS = 8_000; // 启动时连接超时：8秒，避免长时间阻塞
+export const MCP_CONNECT_TIMEOUT_MS = 20_000; // 正常连接超时：20秒
+export const MCP_INIT_TIMEOUT_MS = 10_000; // MCP初始化超时时间（包括连接和工具列表获取）
 export const MAX_TOOL_SIGNATURES = 6;
 export const MAX_TOOL_SUMMARY_PER_SERVER = 8;
 // 默认递归深度（可被设置页覆盖）
