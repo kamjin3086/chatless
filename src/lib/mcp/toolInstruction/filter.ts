@@ -79,21 +79,29 @@ export function filterToolInstructions(
 
 /**
  * 清理未完成的指令片段（流式输出场景）
+ * 
+ * ⚠️ 重要：只清理明确的 MCP 工具调用指令，不要误删 HTML 内容
  */
 function cleanIncompleteInstructions(text: string): string {
   if (!text) return '';
   
   let result = text;
   
-  // 1. 移除未完成的 XML 指令块
+  // 1. 只移除未完成的 MCP 工具调用 XML 指令块（use_mcp_tool 和 tool_call）
+  // 不处理其他 XML 格式，避免误删 HTML
   for (const pattern of TOOL_INSTRUCTION_PATTERNS) {
-    if (pattern.incompletePattern) {
+    // 只处理 MCP 相关的 XML 格式
+    if (pattern.incompletePattern && 
+        (pattern.id === 'xml_use_mcp_tool' || pattern.id === 'xml_tool_call')) {
       result = result.replace(pattern.incompletePattern, '');
     }
   }
   
-  // 2. 清理不完整的标签前缀
+  // 2. 清理不完整的 MCP 标签前缀（只处理明确的 MCP 标签）
+  // 使用更严格的匹配，确保是 MCP 工具调用标签而非普通 HTML
   for (const tag of INCOMPLETE_TAG_PREFIXES) {
+    // 只有当前缀长度足够长（>= MIN_INCOMPLETE_PREFIX_LENGTH）时才处理
+    // 这样可以避免误删 <strong, <script 等 HTML 标签
     for (let len = tag.length; len >= MIN_INCOMPLETE_PREFIX_LENGTH; len--) {
       const prefix = tag.substring(0, len);
       if (result.endsWith(prefix)) {
@@ -108,26 +116,28 @@ function cleanIncompleteInstructions(text: string): string {
 
 /**
  * 清理 GPT-OSS 变体的半截指令
+ * 
+ * ⚠️ 重要：只在 persist 模式下使用，且只处理明确的 GPT-OSS 格式
+ * 不要使用过于激进的正则，避免误删正常内容
  */
 function cleanGptOssVariants(text: string): string {
   if (!text) return '';
   
   let result = text;
   
-  // 缺少 JSON 体的半截 GPT-OSS 指令
+  // 只处理明确包含 GPT-OSS 特征标签的内容
+  // 缺少 JSON 体的半截 GPT-OSS 指令（必须以 <|channel|> 开头）
   result = result.replace(
     /<\|channel\|>\s*commentary\s+to=[^\s]+[\s\S]*?(?:<\|message\|>)?\s*$/gi,
     ''
   );
   
-  // 无标签 GPT-OSS 变体
+  // 无标签 GPT-OSS 变体（必须包含完整的 "commentary to=... json {...}" 结构）
   result = result.replace(/commentary\s+to=[^\n]+?\s+json\s*\{[\s\S]*?\}/gi, '');
   
-  // 极简变体残片
-  result = result.replace(/(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{?$/i, '');
-  
-  // 函数式变体残片
-  result = result.replace(/(?:^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{?$/i, '');
+  // ⚠️ 移除以下激进的过滤规则，它们会误删正常内容：
+  // - "to=server.tool" 可能匹配 URL 参数
+  // - "server.tool" 可能匹配如 "Socket.io" 这样的库名
   
   return result;
 }

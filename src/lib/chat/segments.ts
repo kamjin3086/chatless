@@ -36,30 +36,35 @@ export function ensureTextTail(segments: MessageSegment[], initialText: string):
  * 
  * 优化：不对整个文本进行特征检测，只检测：
  * 1. 新增的 chunk
- * 2. 尾部 30 字符（处理跨 chunk 的特征）
+ * 2. 尾部边界（处理跨 chunk 的特征）
+ * 
+ * ⚠️ 重要：只检测明确的 MCP 工具调用特征，避免对正常内容触发过滤
  */
 function needsToolCallFilter(existingText: string, chunk: string): boolean {
-  // 检测 chunk 本身
-  if (chunk.includes('<') || chunk.includes('{') || chunk.includes('_')) {
-    // 快速排除：没有可能的起始字符
-    const chunkLower = chunk.toLowerCase();
-    if (
-      chunkLower.includes('<use_mcp') ||
-      chunkLower.includes('<tool_c') ||
-      chunkLower.includes('"type"') ||
-      chunk.includes('__tool_call_card__')
-    ) {
-      return true;
-    }
+  const chunkLower = chunk.toLowerCase();
+  
+  // 检测 chunk 本身是否包含 MCP 工具调用特征
+  if (
+    chunkLower.includes('<use_mcp_tool') ||
+    chunkLower.includes('<tool_call') ||
+    chunkLower.includes('</use_mcp_tool') ||
+    chunkLower.includes('</tool_call') ||
+    chunk.includes('__tool_call_card__') ||
+    chunkLower.includes('<|channel|>') ||
+    chunkLower.includes('commentary to=')
+  ) {
+    return true;
   }
   
-  // 检测边界：尾部 30 字符 + chunk 组合
+  // 检测边界：尾部 20 字符 + chunk 组合（处理跨 chunk 的标签）
   if (existingText.length > 0) {
-    const boundary = existingText.slice(-30) + chunk;
+    const boundary = existingText.slice(-20) + chunk;
     const boundaryLower = boundary.toLowerCase();
     if (
-      boundaryLower.includes('<use_mcp') ||
-      boundaryLower.includes('<tool_c')
+      boundaryLower.includes('<use_mcp_tool') ||
+      boundaryLower.includes('<tool_call') ||
+      boundaryLower.includes('</use_mcp_tool') ||
+      boundaryLower.includes('</tool_call')
     ) {
       return true;
     }

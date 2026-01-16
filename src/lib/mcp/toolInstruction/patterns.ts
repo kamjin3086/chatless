@@ -98,21 +98,23 @@ export const TOOL_INSTRUCTION_PATTERNS: PatternDefinition[] = [
   },
   
   // 4. to= 格式
+  // ⚠️ 移除 incompletePattern，避免误删 Markdown 链接中的文本
   {
     id: 'to_equals',
     completePattern: /(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{[\s\S]*?\}/gi,
     startPattern: /(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{/i,
-    incompletePattern: /(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{?$/i,
+    // incompletePattern 已移除，避免误删
     priority: 5,
     description: 'to= 格式：to=server.tool {...}'
   },
   
   // 5. 函数式格式
+  // ⚠️ 移除 incompletePattern，避免误删如 "Socket.io" 这样的文本
   {
     id: 'function_like',
     completePattern: /(^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{[\s\S]*?\}/gi,
     startPattern: /(?:^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{/i,
-    incompletePattern: /(?:^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{?$/i,
+    // incompletePattern 已移除，避免误删
     priority: 6,
     description: '函数式格式：server.tool {...}'
   },
@@ -145,18 +147,22 @@ export const TOOL_INSTRUCTION_PATTERNS: PatternDefinition[] = [
 /**
  * 不完整标签前缀列表
  * 用于清理流式输出中的半截标签
+ * 
+ * ⚠️ 重要：只包含 MCP 工具调用相关的标签，避免误删 HTML 标签
  */
 export const INCOMPLETE_TAG_PREFIXES = [
-  '<use_mcp_tool', '<tool_call', '</use_mcp_tool', '</tool_call',
-  '<server_name', '</server_name', '<tool_name', '</tool_name',
-  '<arguments', '</arguments'
+  '<use_mcp_tool', '<tool_call',
+  '</use_mcp_tool', '</tool_call'
 ];
 
 /**
  * 最小不完整前缀长度
- * 避免误删单字符 "<"
+ * 
+ * ⚠️ 重要：设置为较高值以避免误删
+ * - 设为 8 可以避免误删 HTML 标签（如 <strong, <script 等）
+ * - 只会匹配明确的 MCP 标签前缀
  */
-export const MIN_INCOMPLETE_PREFIX_LENGTH = 4;
+export const MIN_INCOMPLETE_PREFIX_LENGTH = 8;
 
 /**
  * 抑制器触发模式
@@ -186,15 +192,29 @@ export function getSuppressionTriggers(): SuppressionTrigger[] {
 /**
  * 快速检测文本是否可能包含工具指令
  * 用于快速路径优化，避免不必要的正则匹配
+ * 
+ * ⚠️ 重要：这个函数决定了是否进入过滤流程
+ * 必须足够精确，避免对正常 HTML/Markdown 内容触发过滤
  */
 export function mightContainToolInstruction(text: string): boolean {
   if (!text) return false;
   
+  // 只检测明确的 MCP 工具调用特征，而非通用的 "<" 或 "{"
+  const lowerText = text.toLowerCase();
+  
   return (
-    text.includes('<') ||
-    text.includes('{') ||
-    /commentary\s+to=/i.test(text) ||
-    /(?:^|\s)to\s*=/i.test(text)
+    // MCP XML 格式
+    lowerText.includes('<use_mcp_tool') ||
+    lowerText.includes('<tool_call') ||
+    lowerText.includes('</use_mcp_tool') ||
+    lowerText.includes('</tool_call') ||
+    // 内部标记
+    text.includes('__tool_call_card__') ||
+    // GPT-OSS 格式
+    lowerText.includes('<|channel|>') ||
+    lowerText.includes('commentary to=') ||
+    // JSON 格式的工具调用（更严格的检测）
+    /"type"\s*:\s*"tool_call"/i.test(text)
   );
 }
 
