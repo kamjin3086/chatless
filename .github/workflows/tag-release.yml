@@ -607,7 +607,7 @@ jobs:
           ### macOS
           1. 根据处理器选择版本：
              - Apple Silicon (M1/M2/M3): 下载 aarch64.dmg
-             - Intel 处理器: 下载 x64.dmg
+             - Intel 处理器: 下载 aarch64.dmg 通过 Rosetta 2 运行
           2. 双击打开，拖拽到 Applications 文件夹
           3. 从 Applications 启动应用
           
