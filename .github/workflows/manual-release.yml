@@ -226,3 +226,58 @@ jobs:
             https://github.com/${{ github.repository }}/releases/download/updater/update.json
             https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/updater/update-proxy.json
         run: pnpm run update:verify
+
+  # ===========同步release到指定仓库的工作流===========
+  mirror-public-release:
+    needs: release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check public release secrets
+        id: check
+        env:
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ secrets.PUBLIC_RELEASE_REPO }}
+        run: |
+          if [ -n "$PUBLIC_RELEASE_TOKEN" ] && [ -n "$PUBLIC_RELEASE_REPO" ]; then
+            echo "has_secrets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_secrets=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+      - name: Skip public release mirror (missing secrets)
+        if: ${{ steps.check.outputs.has_secrets != 'true' }}
+        run: echo "PUBLIC_RELEASE_TOKEN/PUBLIC_RELEASE_REPO not set, skipping mirror."
+      - name: Download all artifacts
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      - name: Fetch release notes from private repo
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view v${{ github.event.inputs.version }} --json body -q .body > public_release_notes.md
+      - name: Create or update public release and upload assets
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ secrets.PUBLIC_RELEASE_REPO }}
+        run: |
+          set -e
+          TAG="v${{ github.event.inputs.version }}"
+          if gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$PUBLIC_RELEASE_REPO" --notes-file public_release_notes.md
+          else
+            gh release create "$TAG" --repo "$PUBLIC_RELEASE_REPO" --title "Release $TAG" --notes-file public_release_notes.md
+          fi
+          gh release upload "$TAG" \
+            artifacts/**/*.dmg \
+            artifacts/**/*.app.tar.gz \
+            artifacts/**/*.AppImage \
+            artifacts/**/*.deb \
+            artifacts/**/*.rpm \
+            artifacts/**/*.exe \
+            artifacts/**/*.msi \
+            artifacts/**/*.sig \
+            artifacts/**/*.sha256* \
+            --repo "$PUBLIC_RELEASE_REPO" --clobber
