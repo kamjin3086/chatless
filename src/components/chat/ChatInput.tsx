@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { Send, Image, Paperclip, Loader2, StopCircle, CornerDownLeft, Settings, Globe } from "lucide-react";
+import { Send, Image, Paperclip, Loader2, StopCircle, CornerDownLeft, Settings } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { AttachedDocumentView } from "./input/AttachedDocumentView";
 import { SelectedKnowledgeBaseView } from "./input/SelectedKnowledgeBaseView";
 import { SessionParametersDialog } from './SessionParametersDialog';
 import { McpQuickToggle } from './input/McpQuickToggle';
+import { WebSearchToggle } from './input/WebSearchToggle';
 import { McpMentionPanel } from './input/McpMentionPanel';
 import type { ModelParameters } from '@/types/model-params';
 import { createSafePreview } from '@/lib/utils/tokenBudget';
@@ -23,10 +24,7 @@ import { renderPromptContent } from '@/lib/prompt/render';
 import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
 import { useUiSession } from '@/store/uiSession';
 import { useWebSearchStore } from '@/store/webSearchStore';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
 import { useRouter } from 'next/navigation';
-import { listAllProviders, providerLabel, providerConfiguredMap } from '@/lib/websearch/registry';
 
 interface EditingMessageData {
   content: string;
@@ -957,81 +955,11 @@ export function ChatInput({
                onSelect={setSelectedKnowledgeBase}
                selectedKnowledgeBase={selectedKnowledgeBase}
             />
-            {/* 网络搜索：会话级提供商选择 + 全局开关 */}
-            <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={disabled || isLoading}
-                      className={cn(
-                        "h-8 w-8 shrink-0 rounded-lg transition-all",
-                        webSearch.isWebSearchEnabled ? "text-blue-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800" : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                      )}
-                      title="网络搜索"
-                    >
-                      <Globe className="w-5 h-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[220px]">
-                <DropdownMenuLabel>网络搜索</DropdownMenuLabel>
-                <div className="flex items-center justify-between px-2 py-1.5 text-xs">
-                  <span className="text-slate-600 dark:text-slate-300">启用此功能</span>
-                  <Switch
-                    size="sm"
-                    checked={webSearch.isWebSearchEnabled}
-                    onCheckedChange={(v)=> webSearch.toggleWebSearch(!!v)}
-                  />
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>会话提供商</DropdownMenuLabel>
-                {conversationId ? (
-                  (() => {
-                    const configured = providerConfiguredMap({
-                      apiKeyGoogle: webSearch.apiKeyGoogle,
-                      cseIdGoogle: webSearch.cseIdGoogle,
-                      apiKeyBing: webSearch.apiKeyBing,
-                      apiKeyOllama: webSearch.apiKeyOllama,
-                    });
-                    const current = webSearch.getConversationProvider(conversationId);
-                    const handleChange = (v: string) => {
-                      if ((configured as any)[v]) {
-                        webSearch.setConversationProvider(conversationId, v as any);
-                      }
-                    };
-                    return (
-                      <DropdownMenuRadioGroup
-                        value={current}
-                        onValueChange={handleChange}
-                      >
-                        {listAllProviders().map((p)=> {
-                          const ok = configured[p];
-                          return (
-                            <DropdownMenuRadioItem
-                              key={p}
-                              value={p}
-                              disabled={!ok}
-                              title={!ok ? '请先在设置中配置密钥后使用' : undefined}
-                            >
-                              {providerLabel(p)}
-                            </DropdownMenuRadioItem>
-                          );
-                        })}
-                      </DropdownMenuRadioGroup>
-                    );
-                  })()
-                ) : (
-                  <div className="px-3 py-2 text-[12px] text-slate-500">请先选择或创建一个会话</div>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>更多</DropdownMenuLabel>
-                <DropdownMenuRadioGroup value="go-settings">
-                  <DropdownMenuRadioItem value="go-settings" onClick={()=> router.push('/settings?tab=webSearch')}>
-                    前往设置
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* 网络搜索：使用统一的 ActionPanel 样式 */}
+            <WebSearchToggle 
+              conversationId={conversationId}
+              disabled={disabled || isLoading}
+            />
             {/* 会话参数设置按钮 */}
             <McpQuickToggle onInsertMention={(name)=>{
               // 在光标处插入 @name，并使用淡绿色高亮

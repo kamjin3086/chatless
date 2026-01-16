@@ -60,6 +60,11 @@ export function appendText(segments: MessageSegment[], chunk: string): MessageSe
 /**
  * 统一的内容过滤器（Segments层的核心职责）
  * 
+ * ## 重构说明
+ * 
+ * 此函数现在委托给 `@/lib/mcp/toolInstruction` 模块，
+ * 使用统一的模式定义进行过滤。
+ * 
  * ## 职责
  * 
  * 过滤掉所有不应该在UI中显示的内容：
@@ -68,68 +73,42 @@ export function appendText(segments: MessageSegment[], chunk: string): MessageSe
  * - JSON格式的工具调用
  * - 内部工具卡片标记
  * 
- * ## 设计原则
- * 
- * 1. **单一职责**: 这是segments层唯一的过滤入口
- * 2. **同步执行**: 不依赖动态导入，确保性能
- * 3. **保留格式**: 不修改markdown格式、换行符等
- * 
- * ## 使用场景
- * 
- * - `appendText`: 追加文本时过滤
- * - 外部模块: 需要过滤工具调用指令时使用
- * 
  * @param text 要过滤的原始文本
  * @returns 过滤后的文本
  */
 export function filterToolCallContent(text: string): string {
   if (!text) return '';
   
+  // 使用统一的工具指令过滤模块
+  // 延迟导入以避免循环依赖
+  try {
+    const { filterForDisplay } = require('@/lib/mcp/toolInstruction');
+    return filterForDisplay(text);
+  } catch {
+    // 降级：使用简化的本地过滤逻辑
+    return fallbackFilter(text);
+  }
+}
+
+/**
+ * 降级过滤函数（当模块加载失败时使用）
+ */
+function fallbackFilter(text: string): string {
   let out = text;
   
-  // 1) 移除内部注入的不可见JSON标记
+  // 移除内部标记
   out = out.replace(/\{[^}]*"__tool_call_card__"[^}]*\}/g, '');
   
-  // 2) 移除完整的工具调用指令块（XML 风格）
+  // 移除完整的 XML 指令块
   out = out.replace(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/gi, '');
   out = out.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
   
-  // 2.1) GPT‑OSS/函数式等变体的剥离不应在这里用“正则猜测”做（容易误伤普通文本）。
-  //      这些变体由上游的抑制阀（状态机）在流式阶段处理；
-  //      持久化清理由 cleanToolCallInstructions 负责。
-  
-  // 3) 移除JSON格式的工具调用（包含 "type":"tool_call"）
+  // 移除 JSON 格式的工具调用
   out = out.replace(/\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/gi, '');
   
-  // 4) 关键：移除未完成的指令片段（流式输出场景）
-  // 这是防止用户看到指令文本的核心逻辑
+  // 移除未完成的指令片段
   out = out.replace(/<use_mcp_tool>[\s\S]*$/i, '');
   out = out.replace(/<tool_call>[\s\S]*$/i, '');
-  // 4.1) 移除“猜测式尾部残片截断”——这是导致内容被莫名篡改的高风险点。
-  //      残片处理由上游抑制阀（状态机）解决，避免在纯文本层做启发式截断。
-
-  // 4.2) 清理不完整的标签前缀（逐字符输出时常见）
-  // 例如："<use", "<use_mcp_t", "</ser", "<tool_" 等落在文本尾部的半截标签
-  // ⚠️ 重要：必须避免移除单独的 "<"（会破坏正常的 HTML/代码片段）。
-  // 过去由于包含 "<think" 等标签，其前缀会覆盖到 "<"，导致 chunk 切分为 "<" + "head>" 时丢失 "<"。
-  // 这里仅针对“高度可识别”的工具调用/指令相关标签做尾部半截清理，并要求最短前缀长度≥4。
-  const incompletePrefixes = [
-    '<use_mcp_tool', '<tool_call', '</use_mcp_tool', '</tool_call',
-    '<server_name', '</server_name', '<tool_name', '</tool_name',
-    '<arguments', '</arguments'
-  ];
-  const MIN_INCOMPLETE_PREFIX_LEN = 4; // 例如 "<use"、"<too"、"</to"；禁止触达单字符 "<"
-  for (const tag of incompletePrefixes) {
-    for (let len = tag.length; len >= MIN_INCOMPLETE_PREFIX_LEN; len--) {
-      const prefix = tag.substring(0, len);
-      if (out.endsWith(prefix)) {
-        out = out.slice(0, -prefix.length);
-        break;
-      }
-    }
-  }
-  
-  // 保留原始markdown格式和换行符
   
   return out;
 }

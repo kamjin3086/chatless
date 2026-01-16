@@ -67,7 +67,3 @@ temp-*.md
 .private/**/*
 .private/**
 
-.cursor
-.cursor/*
-.cursorrules
-.cursor/**/*.mdc

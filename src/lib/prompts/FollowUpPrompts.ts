@@ -1,11 +1,19 @@
 /**
  * 追问阶段专用提示词
  * 
- * 设计原则：
+ * ## 重构说明
+ * 
+ * 此文件已重构为与 InjectionManager 集成。
+ * 保留原有的导出接口以确保向后兼容性。
+ * 
+ * ## 设计原则
+ * 
  * 1. 精简高效：追问阶段不需要重复所有初始调用的规则
  * 2. 聚焦目标：明确告知模型当前任务（基于工具结果回答）
  * 3. 减少干扰：避免提供过多工具调用指导，优先引导直接回答
  */
+
+import { injectFollowUpPrompts } from '@/lib/mcp/injection';
 
 /**
  * 第一次追问：工具执行完成后的初次追问
@@ -13,46 +21,35 @@
  * 
  * @param originalQuestion - 用户原始问题
  * @param hasError - 工具调用是否失败
- * @param enabledServers - 可用的服务器列表（用于在一个消息中提供工具上下文）
- * @param includeToolContext - 是否包含工具上下文
+ * @param enabledServers - 可用的服务器列表（向后兼容，新实现不使用）
+ * @param includeToolContext - 是否包含工具上下文（向后兼容，新实现不使用）
  */
 export function buildFirstFollowUpPrompt(
   originalQuestion: string, 
   hasError?: boolean,
-  enabledServers?: string[],
-  includeToolContext?: boolean
+  _enabledServers?: string[],
+  _includeToolContext?: boolean
 ): string {
   if (hasError) {
-    // 工具调用失败时的特殊提示
-    const toolInfo = includeToolContext && enabledServers && enabledServers.length > 0
-      ? `\n\n【可用工具】\n${enabledServers.join(', ')}\n\n【调用格式】\n<use_mcp_tool><server_name>...</server_name><tool_name>...</tool_name><arguments>{...}</arguments></use_mcp_tool>`
-      : '';
-    
-    return `工具调用遇到了问题。请基于错误信息处理：
+    return `工具调用遇到问题。请基于错误信息处理：
 
 【处理策略】：
-1. 如果是参数错误，请调整参数后重新调用该工具
-2. 如果是连接错误，请直接重试该工具（系统会自动重连）
-3. 如果是工具不可用，请尝试其他可用工具
-4. 如果无法通过工具解决，请基于已有知识回答用户
+1. 参数错误：调整参数后重新调用
+2. 连接错误：直接重试（系统会自动重连）
+3. 工具不可用：尝试其他工具
+4. 无法解决：基于已有知识回答
 
-用户问题：${originalQuestion}${toolInfo}`;
+用户问题：${originalQuestion}`;
   }
   
-  // 正常情况：工具成功返回结果
-  const toolInfo = includeToolContext && enabledServers && enabledServers.length > 0
-    ? `\n\n【备用选项】（仅在结果明显错误或完全不相关时使用）\n可用工具: ${enabledServers.join(', ')}`
-    : '';
-  
-  return `你现在需要基于工具调用结果，给用户一个完整的中文答案。
+  return `基于工具调用结果，给用户一个完整的中文答案。
 
-【核心任务】（最高优先级）：
-1. 工具已经返回了结果，你的任务是阅读和总结
+【核心任务】：
+1. 工具已返回结果，你的任务是阅读和总结
 2. 直接输出中文答案，不要输出工具调用指令
-3. 答案要简洁明了，以最少的字说明用户问的问题，不要直接重复工具调用结果
-4. 除非信息明显不足，一般不应再调用超过 1 次新的工具；如果多次尝试后仍有不确定之处，请说明局限并给出你能给出的最佳答案。
+3. 答案简洁明了
 
-用户问题：${originalQuestion}${toolInfo}`;
+用户问题：${originalQuestion}`;
 }
 
 /**
@@ -62,13 +59,12 @@ export function buildFirstFollowUpPrompt(
 export function buildSecondFollowUpPrompt(originalQuestion: string): string {
   return `【最终回答要求】
 
-工具调用结果已经提供，现在必须给出最终答案。
+工具调用结果已提供，现在必须给出最终答案。
 
-你的任务：
+任务：
 1. 阅读上面的工具调用结果
 2. 直接输出中文答案（不超过150字）
 3. 禁止输出任何工具调用指令
-4. 禁止说"我需要..."、"让我..."等规划性语言
 
 用户问题：${originalQuestion}
 
@@ -78,11 +74,12 @@ export function buildSecondFollowUpPrompt(originalQuestion: string): string {
 /**
  * 精简的工具描述（仅在真正需要时提供）
  * 只包含最核心的信息，用于第一次追问阶段
+ * 
+ * @deprecated 使用 InjectionManager 代替
  */
 export function buildMinimalToolContext(enabledServers: string[]): string[] {
   const messages: string[] = [];
   
-  // 只提供可用服务器列表，不提供详细的工具描述
   if (enabledServers.length > 0) {
     const list = enabledServers.length > 3 
       ? `${enabledServers.slice(0, 3).join(', ')} (+${enabledServers.length - 3} more)` 
@@ -90,7 +87,6 @@ export function buildMinimalToolContext(enabledServers: string[]): string[] {
     messages.push(`可用工具: ${list}`);
   }
   
-  // 只提供最简单的调用格式，不提供详细规则
   messages.push(`如需调用工具: <use_mcp_tool><server_name>...</server_name><tool_name>...</tool_name><arguments>{...}</arguments></use_mcp_tool>`);
   
   return messages;
@@ -99,54 +95,70 @@ export function buildMinimalToolContext(enabledServers: string[]): string[] {
 /**
  * 构建追问阶段的完整system消息
  * 
- * 优化策略：合并为单一长消息，减少LLM混淆
+ * 使用新的 InjectionManager 实现，保持接口兼容。
  * 
  * @param stage - 追问阶段：'first' | 'second'
  * @param originalQuestion - 用户原始问题
- * @param enabledServers - 可用的服务器列表
- * @param includeToolContext - 是否包含工具上下文（第二次追问不包含）
- * @param hasError - 工具调用是否失败（用于调整提示策略）
+ * @param enabledServers - 可用的服务器列表（向后兼容）
+ * @param includeToolContext - 是否包含工具上下文（向后兼容）
+ * @param hasError - 工具调用是否失败
  */
-export function buildFollowUpSystemMessages(
+export async function buildFollowUpSystemMessages(
   stage: 'first' | 'second',
   originalQuestion: string,
-  enabledServers: string[] = [],
-  includeToolContext: boolean = true,
+  _enabledServers: string[] = [],
+  _includeToolContext: boolean = true,
+  hasError?: boolean
+): Promise<Array<{ role: 'system'; content: string }>> {
+  // 使用新的注入管理器
+  const depth = stage === 'first' ? 1 : 2;
+  const result = await injectFollowUpPrompts(
+    originalQuestion,
+    hasError,
+    undefined, // conversationId 由调用方管理
+    depth
+  );
+  
+  return result.systemMessages;
+}
+
+/**
+ * 同步版本（向后兼容）
+ * 
+ * @deprecated 建议使用异步版本 buildFollowUpSystemMessages
+ */
+export function buildFollowUpSystemMessagesSync(
+  stage: 'first' | 'second',
+  originalQuestion: string,
+  _enabledServers: string[] = [],
+  _includeToolContext: boolean = true,
   hasError?: boolean
 ): Array<{ role: 'system'; content: string }> {
-  // 优化：将所有提示词合并为单一长消息
-  // 原因：减少system消息数量，避免优先级混淆，提高指令遵循率
-  
   const messages: Array<{ role: 'system'; content: string }> = [];
   
-  // 追问阶段也需要时间上下文，但使用简洁版本
+  // 简化的时间上下文
   try {
     const { buildSimpleTimeContext, isTimeRelatedQuery } = require('@/lib/prompts/TimeContext');
-    const isTimeRelated = isTimeRelatedQuery(originalQuestion);
-    if (isTimeRelated) {
-      const timeContext = buildSimpleTimeContext();
-      messages.push({ role: 'system', content: timeContext });
+    if (isTimeRelatedQuery(originalQuestion)) {
+      messages.push({ role: 'system', content: buildSimpleTimeContext() });
     }
   } catch {
-    // 忽略错误，时间上下文不是必需的
+    // 忽略错误
   }
   
   if (stage === 'first') {
-    // 第一次追问：合并核心任务和工具上下文到一个消息
-    const prompt = buildFirstFollowUpPrompt(
-      originalQuestion, 
-      hasError, 
-      enabledServers, 
-      includeToolContext
-    );
-    messages.push({ role: 'system', content: prompt });
-    return messages;
+    messages.push({ 
+      role: 'system', 
+      content: buildFirstFollowUpPrompt(originalQuestion, hasError) 
+    });
   } else {
-    // 第二次追问：保持简洁，只有强制回答指令
-    const prompt = buildSecondFollowUpPrompt(originalQuestion);
-    messages.push({ role: 'system', content: prompt });
-    return messages;
+    messages.push({ 
+      role: 'system', 
+      content: buildSecondFollowUpPrompt(originalQuestion) 
+    });
   }
+  
+  return messages;
 }
 
 /**
@@ -168,8 +180,7 @@ export function buildFollowUpSystemMessages(
  * 
  * | 阶段 | System消息数量 | 包含内容 |
  * |------|---------------|----------|
- * | 初始调用 | 10-20条 | 详细工具描述、完整规则、示例 |
- * | 第一次追问 | 2-3条 | 核心任务、最小化工具信息 |
+ * | 初始调用 | 3-5条 | 工具描述、协议规则 |
+ * | 第一次追问 | 1-2条 | 核心任务指令 |
  * | 第二次追问 | 1条 | 强制回答指令 |
  */
-

@@ -326,13 +326,23 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
 
   const panelWidth = Math.min(Math.max(rect.width || 600, 600), window.innerWidth * 0.9);
   
+  // 统一的面板样式（与 ActionPanel 保持一致）
+  const panelBaseStyle = cn(
+    // 基础
+    "fixed z-[9950] rounded-xl border overflow-hidden",
+    // 背景和模糊
+    "bg-white/95 dark:bg-gray-800/95 backdrop-blur-md",
+    // 阴影和边框
+    "shadow-lg ring-1 ring-black/5 dark:ring-white/10",
+    // 动画
+    "transition-all duration-200",
+    open ? "opacity-100 scale-100" : "opacity-0 scale-95"
+  );
+
   const panel = (
     <div
       ref={panelRef}
-      className={cn(
-        "fixed z-[2147483600] rounded-xl border border-slate-200/60 dark:border-slate-700/50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-2xl overflow-hidden transition-all duration-200",
-        open ? "opacity-100 scale-100" : "opacity-0 scale-95"
-      )}
+      className={panelBaseStyle}
       style={{ 
         width: panelWidth,
         left: Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8)), 
@@ -409,8 +419,8 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
           )}
         </ul>
       </ScrollArea>
-      {/* 底部控制区 */}
-      <div className="px-4 py-2 border-t border-slate-200/60 dark:border-slate-700/50 bg-gradient-to-r from-slate-50/50 to-gray-50/50 dark:from-slate-900/30 dark:to-gray-900/30 flex items-center text-[11px] text-slate-600 dark:text-slate-400 select-none gap-3">
+      {/* 底部控制区（统一样式） */}
+      <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/30 dark:bg-gray-900/30 flex items-center text-[11px] text-gray-600 dark:text-gray-400 select-none gap-3">
         <span className="px-2 py-1 rounded-md border border-amber-200/60 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 text-amber-700 dark:text-amber-300 text-xs font-mono font-semibold">/</span>
         <div className="flex-1 flex items-center justify-center overflow-hidden">
           <div key={hintIndex} className="flex items-center gap-2 transition-all duration-500 ease-out">

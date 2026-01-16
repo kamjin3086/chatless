@@ -1,6 +1,11 @@
 /**
  * 工具调用内容清理工具
  * 
+ * ## 重构说明
+ * 
+ * 此模块现在委托给 `@/lib/mcp/toolInstruction` 模块，
+ * 使用统一的模式定义进行清理。
+ * 
  * 负责从消息内容中移除工具调用指令，确保用户只看到工具卡片而不是原始指令
  */
 
@@ -15,52 +20,33 @@ import { WEB_SEARCH_SERVER_NAME } from "../mcp/nativeTools/webSearch";
 export function cleanToolCallInstructions(text: string): string {
   if (!text) return '';
   
+  // 使用统一的工具指令过滤模块
+  try {
+    const { filterForPersist } = require('@/lib/mcp/toolInstruction');
+    return filterForPersist(text);
+  } catch {
+    // 降级：使用简化的本地过滤逻辑
+    return fallbackClean(text);
+  }
+}
+
+/**
+ * 降级清理函数（当模块加载失败时使用）
+ */
+function fallbackClean(text: string): string {
   let cleaned = text;
   
-  // 0. 移除 GPT-OSS 风格的工具调用指令
-  //    形如：<|channel|>commentary to=web_search <|constrain|>json<|message|>{...}
-  cleaned = cleaned.replace(
-    /<\|channel\|\>\s*commentary\s+to=[^\s]+[\s\S]*?<\|message\|\>\s*\{[\s\S]*?\}/gi,
-    ''
-  );
-
-  // 0.1 移除缺少 JSON 体的“半截” GPT‑OSS 指令
-  // ⚠️ 仅在“落在文本尾部”时才清理，避免误删普通正文中偶然出现的类似片段。
-  cleaned = cleaned.replace(
-    /<\|channel\|\>\s*commentary\s+to=[^\s]+[\s\S]*?(?:<\|message\|\>)?\s*$/gi,
-    ''
-  );
-
-  // 1. 移除完整的 <use_mcp_tool> 块
+  // 移除完整的 XML 指令块
   cleaned = cleaned.replace(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/gi, '');
-  
-  // 2. 移除完整的 <tool_call> 块
   cleaned = cleaned.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
-  // 2.1 移除无标签 GPT‑OSS 变体：commentary to=... json {...}
-  cleaned = cleaned.replace(/commentary\s+to=[^\n]+?\s+json\s*\{[\s\S]*?\}/gi, '');
-  // 2.2 移除“>>”分隔符变体：to= >>server>>tool>>{...}>>
-  cleaned = cleaned.replace(/to\s*=\s*>+[a-z0-9_-]+>+[a-z0-9_-]+>+\s*\{[\s\S]*?\}>+/gi, '');
-  // 2.3 移除极简变体：to=server[.tool] {...}
-  cleaned = cleaned.replace(/(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{[\s\S]*?\}/gi, '');
-  // 2.4 移除“函数式变体”：如 "search.search {...}" 或 "filesystem.list_directory {...}"
-  //     为降低误杀，仅匹配紧跟着 JSON 左大括号的调用样式
-  cleaned = cleaned.replace(/(^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{[\s\S]*?\}/gi, '$1');
   
-  // 3. 移除 JSON 格式的工具调用
+  // 移除 JSON 格式的工具调用
   cleaned = cleaned.replace(/\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/gi, '');
   
-  // 4. 移除未完成的指令片段（流式输出中可能出现）
-  cleaned = cleaned.replace(/<use_mcp_tool>[\s\S]*$/i, '');
-  cleaned = cleaned.replace(/<tool_call>[\s\S]*$/i, '');
-  // 4.1 极简变体残片：以 "to=" 开头但未闭合 JSON
-  cleaned = cleaned.replace(/(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{?$/i, '');
-  // 4.2 函数式变体残片：以 "tool.method {" 结尾但未闭合
-  cleaned = cleaned.replace(/(?:^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{?$/i, '');
-  
-  // 5. 移除内部工具卡片标记
+  // 移除内部标记
   cleaned = cleaned.replace(/\{[^}]*"__tool_call_card__"[^}]*\}/g, '');
   
-  // 6. 清理多余的空行（但保留 markdown 格式）
+  // 清理多余空行
   cleaned = cleaned.replace(/\n\n\n+/g, '\n\n').trim();
   
   return cleaned;
