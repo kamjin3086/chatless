@@ -8,6 +8,15 @@ import { processOllamaRequest } from './request-patches';
 // 导入公共的浏览器兜底工具
 import { shouldUseBrowserRequest } from '@/lib/provider/browser-fallback-utils';
 
+/**
+ * 生成唯一请求 ID（用于追踪重复请求）
+ */
+function generateRequestId(): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 8);
+  return `req_${timestamp}_${random}`;
+}
+
 
 
 // 环境检测：只在开发环境中启用调试日志
@@ -166,11 +175,17 @@ export async function request<T = any>(inputUrl: string, opts: RequestOptions = 
   // 🔧 确保 body 被正确序列化为 JSON 字符串
   // Tauri HTTP 插件的 fetch 遵循 Web Fetch API，需要 body 是字符串
   if (methodUpper !== 'GET' && methodUpper !== 'HEAD' && options.body !== undefined) {
-    const body = options.body;
+    let body = options.body;
     // 如果 body 是对象（非字符串、非 null），需要序列化
     if (body !== null && typeof body === 'object' && typeof body !== 'string') {
       // 检查是否已经是 Tauri 特殊格式 { type: 'Json'|'Form'|'Text', payload: ... }
       if (!('type' in body && 'payload' in body)) {
+        // 🆔 为 LLM 请求添加唯一请求 ID（用于追踪重复请求）
+        // 只对包含 messages 字段的请求添加（chat completions 请求）
+        if ('messages' in body && Array.isArray((body as any).messages)) {
+          body = { ...body, __requestId: generateRequestId() };
+        }
+        
         // 普通对象，需要 JSON 序列化
         try {
           options.body = JSON.stringify(body);

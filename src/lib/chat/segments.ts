@@ -31,30 +31,77 @@ export function ensureTextTail(segments: MessageSegment[], initialText: string):
   return out;
 }
 
+/**
+ * 工具指令特征检测（仅检测增量部分 + 尾部边界）
+ * 
+ * 优化：不对整个文本进行特征检测，只检测：
+ * 1. 新增的 chunk
+ * 2. 尾部 30 字符（处理跨 chunk 的特征）
+ */
+function needsToolCallFilter(existingText: string, chunk: string): boolean {
+  // 检测 chunk 本身
+  if (chunk.includes('<') || chunk.includes('{') || chunk.includes('_')) {
+    // 快速排除：没有可能的起始字符
+    const chunkLower = chunk.toLowerCase();
+    if (
+      chunkLower.includes('<use_mcp') ||
+      chunkLower.includes('<tool_c') ||
+      chunkLower.includes('"type"') ||
+      chunk.includes('__tool_call_card__')
+    ) {
+      return true;
+    }
+  }
+  
+  // 检测边界：尾部 30 字符 + chunk 组合
+  if (existingText.length > 0) {
+    const boundary = existingText.slice(-30) + chunk;
+    const boundaryLower = boundary.toLowerCase();
+    if (
+      boundaryLower.includes('<use_mcp') ||
+      boundaryLower.includes('<tool_c')
+    ) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * 高性能文本追加：针对流式场景优化
+ * 
+ * 设计原则：
+ * 1. 最小化内存分配：复用现有对象引用
+ * 2. 延迟过滤：只在检测到工具指令特征时才过滤
+ * 3. 增量检测：只检测新增部分和边界
+ * 4. Immer 兼容：返回新数组引用以触发更新
+ */
 export function appendText(segments: MessageSegment[], chunk: string): MessageSegment[] {
   if (!chunk) return segments;
   
-  const out = [...segments];
+  const lastIdx = segments.length - 1;
   
-  // 获取或创建最后一个text segment
-  let lastText = '';
-  if (out.length === 0 || out[out.length - 1].kind !== 'text') {
-    // 创建新的text segment
-    out.push({ kind: 'text', text: '' });
+  // 快速路径：追加到现有 text segment
+  if (lastIdx >= 0 && segments[lastIdx].kind === 'text') {
+    const lastSegment = segments[lastIdx] as TextSegment;
+    const existingText = lastSegment.text || '';
+    const newText = existingText + chunk;
+    
+    // 增量特征检测（只检测 chunk 和边界）
+    const shouldFilter = needsToolCallFilter(existingText, chunk);
+    
+    // 创建浅拷贝（只拷贝数组壳，复用其他 segment 引用）
+    const out = segments.slice();
+    out[lastIdx] = {
+      kind: 'text',
+      text: shouldFilter ? filterToolCallContent(newText) : newText
+    };
+    return out;
   }
   
-  // 累积文本：先追加新chunk到原始文本
-  const lastSegment = out[out.length - 1] as TextSegment;
-  lastText = (lastSegment.text || '') + chunk;
-  
-  // 🔑 关键修复：对整个累积的文本进行过滤
-  // 这样可以确保未完成的工具调用指令片段被实时移除
-  const filtered = filterToolCallContent(lastText);
-  
-  // 更新text segment的内容为过滤后的文本
-  lastSegment.text = filtered;
-  
-  return out;
+  // 慢速路径：创建新 text segment
+  return [...segments, { kind: 'text', text: chunk }];
 }
 
 /**
@@ -113,17 +160,28 @@ function fallbackFilter(text: string): string {
   return out;
 }
 
+/**
+ * 高性能思考文本追加
+ * 使用同样的浅拷贝策略优化内存分配
+ */
 export function appendThinkText(segments: MessageSegment[], chunk: string): MessageSegment[] {
   if (!chunk) return segments;
-  const out = [...segments];
-  if (out.length === 0 || out[out.length - 1].kind !== 'think') {
-    // 创建新的think段，记录开始时间
-    out.push({ kind: 'think', text: chunk, startTime: Date.now() });
-  } else {
-    // 追加到现有think段
-    (out[out.length - 1] as ThinkSegment).text = ((out[out.length - 1] as ThinkSegment).text || '') + chunk;
+  
+  const lastIdx = segments.length - 1;
+  
+  if (lastIdx >= 0 && segments[lastIdx].kind === 'think') {
+    // 追加到现有 think segment
+    const lastSegment = segments[lastIdx] as ThinkSegment;
+    const out = segments.slice();
+    out[lastIdx] = {
+      ...lastSegment,
+      text: (lastSegment.text || '') + chunk
+    };
+    return out;
   }
-  return out;
+  
+  // 创建新的 think segment
+  return [...segments, { kind: 'think', text: chunk, startTime: Date.now() }];
 }
 
 /**

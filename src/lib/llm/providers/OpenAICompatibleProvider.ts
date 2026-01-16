@@ -183,7 +183,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
       const contentType = (resp.headers.get?.('Content-Type') || '').toLowerCase();
       if (contentType.includes('text/event-stream')) {
-        await this.startSSEFallback(url, apiKey || null, body, cb);
+        // 🔧 修复：直接使用当前响应的 body 流，而不是重新发起请求
+        // 之前的实现会调用 startSSEFallback 再次发送请求，导致服务端收到两个相同请求
+        await this.processSSEResponse(resp, cb);
         return;
       }
 
@@ -303,6 +305,111 @@ export class OpenAICompatibleProvider extends BaseProvider {
     } else if (cb.onToken) {
       const text = StreamEventAdapter.eventsToText(events);
       if (text.length > 0) cb.onToken(text);
+    }
+  }
+
+  /**
+   * 处理已有的 SSE 响应流（避免重新发起请求）
+   * 直接读取 Response.body 作为 SSE 流
+   */
+  private async processSSEResponse(resp: Response, cb: StreamCallbacks): Promise<void> {
+    // 重置策略状态
+    this.thinkingStrategy.reset();
+    
+    cb.onStart?.();
+    
+    const reader = resp.body?.getReader();
+    if (!reader) {
+      throw new Error('SSE response body reader not available');
+    }
+    
+    this.currentReader = reader;
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    
+    const processLine = (line: string) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) return;
+      
+      // 处理 SSE 的 data 行
+      let payload = trimmedLine;
+      if (trimmedLine.startsWith('data:')) {
+        payload = trimmedLine.substring(5).trim();
+      }
+      
+      if (!payload) return;
+      
+      if (payload === '[DONE]') {
+        const result = this.thinkingStrategy.processToken({ done: true });
+        this.dispatchEvents(result.events || [], cb, true);
+        cb.onComplete?.();
+        return;
+      }
+      
+      try {
+        const json = JSON.parse(payload);
+        const delta = json?.choices?.[0]?.delta ?? {};
+        const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
+        const contentPiece: string | undefined =
+          (typeof delta.content === 'string' ? delta.content : undefined) ||
+          (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
+        
+        let fullContent = '';
+        if (reasoningPiece) {
+          fullContent = `<think>${reasoningPiece}</think>`;
+        }
+        if (contentPiece) {
+          fullContent += contentPiece;
+        }
+        
+        if (fullContent) {
+          const result = this.thinkingStrategy.processToken({ content: fullContent, done: false });
+          this.dispatchEvents(result.events || [], cb);
+        }
+        
+        // 检查 finish_reason
+        const finishReason = json?.choices?.[0]?.finish_reason;
+        if (finishReason && finishReason !== 'null') {
+          const result = this.thinkingStrategy.processToken({ done: true });
+          this.dispatchEvents(result.events || [], cb, true);
+          cb.onComplete?.();
+        }
+      } catch (e) {
+        // JSON 解析失败，忽略
+      }
+    };
+    
+    try {
+      while (!this.aborted) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          // 处理缓冲区中剩余的内容
+          if (buffer.trim()) {
+            processLine(buffer);
+          }
+          const result = this.thinkingStrategy.processToken({ done: true });
+          this.dispatchEvents(result.events || [], cb, true);
+          cb.onComplete?.();
+          break;
+        }
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          processLine(line);
+        }
+      }
+    } catch (error: any) {
+      if (this.aborted) {
+        cb.onComplete?.();
+      } else {
+        cb.onError?.(error);
+      }
+    } finally {
+      this.currentReader = null;
     }
   }
 

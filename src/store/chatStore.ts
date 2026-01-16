@@ -651,15 +651,30 @@ export const useChatStore = create<ChatState & ChatActions>()(
         // 轻量定位缓存：减少每次 flush 时在 conversations/messages 中全量扫描的成本
         // 注意：仅作为优化提示；若命中失败会自动回退为实时查找并更新缓存。
         const locationCache = new Map<string, { conversationId: string; msgIdx: number }>();
-        const scheduleFlush = (id: string) => {
-          if (scheduled.has(id)) return;
-          scheduled.add(id);
-          queueMicrotask(() => {
-            const actions = queues.get(id) || [];
-            queues.set(id, []);
-            scheduled.delete(id);
-            const { initModel, reduce } = require('@/lib/chat/messageFsm');
-            set(state => {
+        
+        // 🔑 性能优化：使用 RAF 批处理替代 microtask
+        // 这样可以将一个渲染帧内的所有 token 合并为一次 store 更新
+        let rafId: number | null = null;
+        const pendingIds = new Set<string>();
+        
+        const flushAll = () => {
+          rafId = null;
+          const idsToFlush = Array.from(pendingIds);
+          pendingIds.clear();
+          
+          if (idsToFlush.length === 0) return;
+          
+          const { initModel, reduce } = require('@/lib/chat/messageFsm');
+          
+          // 单次 set 调用处理所有消息的更新
+          set(state => {
+            for (const id of idsToFlush) {
+              const actions = queues.get(id) || [];
+              queues.set(id, []);
+              scheduled.delete(id);
+              
+              if (actions.length === 0) continue;
+              
               // 1) 快速定位会话与消息（优先走缓存）
               let conv: any | undefined;
               let idx = -1;
@@ -690,70 +705,88 @@ export const useChatStore = create<ChatState & ChatActions>()(
                   }
                 }
               }
-              if (!conv || idx < 0) return;
+              if (!conv || idx < 0) continue;
 
               const prevMsg: any = conv.messages[idx];
-                let model = initModel(prevMsg);
-                for (const a of actions) model = reduce(model, a);
-                // 仅在包含 TOOL_HIT 的批次里打印一次关键日志，避免流式期间噪音
-                try {
-                  // 过去会把“工具卡片标记”以 JSON 行的形式注入到 content，作为持久化兜底。
-                  // 现在 segments 已在包含 TOOL_HIT/TOOL_RESULT/STREAM_END 的批次里持久化，
-                  // 注入 content 反而会导致 UI 在渲染周期中短暂显示这行 JSON，再被卡片替换，出现“闪现-消失”。
-                  // 因此这里不再向 content 注入任何工具标记，统一由 segments/viewModel 驱动 UI 与持久化。
-                  // 不对 content 做修改
-                } catch { /* noop */ }
-                // 关键：替换消息与数组引用，确保 React 依赖 conversation.messages 变化后重算 useMemo
-                // 生成只读 ViewModel 供 UI 使用
-                const vmItems = (model.segments || []).map((s:any) => ({ ...s }));
-                const viewModel = {
-                  items: vmItems,
-                  flags: {
-                    isThinking: (model.fsm === 'RENDERING_THINK'),
-                    isComplete: (model.fsm === 'COMPLETE'),
-                    hasToolCalls: vmItems.some((x:any)=>x && x.kind==='toolCard'),
-                    // 新增：正在识别工具调用（抑制阀激活时）
-                    isToolDetecting: !!model.detectingTool
-                  }
-                } as any;
-                try {
-                  const { trace } = require('@/lib/debug/Trace');
-                  const counts = vmItems.reduce((acc:any, s:any) => { acc[s.kind] = (acc[s.kind]||0)+1; return acc; }, {});
-                  trace('store', id, `segments updated fsm=${model.fsm}`, counts);
-                } catch { /* noop */ }
-                const nextMsg: any = { ...prevMsg, segments: model.segments, segments_vm: viewModel };
-                // ✅ 关键修复：一旦本轮收到了 STREAM_END，就应立即停止 UI 的“流式状态”
-                // 否则即使服务端已经结束，UI 仍可能因为动画/节流呈现出“还在逐字输出”的错觉。
-                // 注意：错误分支会把 status 改成 'error'，这里不覆盖非 loading 状态。
-                try {
-                  const ended = actions.some((a: any) => a && a.type === 'STREAM_END');
-                  if (ended && nextMsg.status === 'loading') {
-                    nextMsg.status = 'sent';
-                  }
-                } catch { /* noop */ }
-                const nextMessages: any[] = [...(conv.messages as any[])];
-                nextMessages[idx] = nextMsg;
-                (conv as any).messages = nextMessages;
-                conv.updated_at = Date.now();
-                // console.log('[FSM:flush.end]', { id, nextSegs: Array.isArray(nextMsg.segments)?nextMsg.segments.length:0, fsm: model.fsm });
-            });
-
-            // 将包含 MCP 相关动作（TOOL_HIT/TOOL_RESULT/STREAM_END）导致的 segments 变更持久化到数据库
-            try {
-              const shouldPersist = actions.some(a => a && (a.type === 'TOOL_HIT' || a.type === 'TOOL_RESULT' || a.type === 'STREAM_END'));
-              if (shouldPersist) {
-                const st = get();
-                const conv = st.conversations.find(c => Array.isArray((c as any).messages) && (c as any).messages.some((m:any)=>m.id===id));
-                const msg = conv ? (conv as any).messages.find((m:any)=>m.id===id) : undefined;
-                const segsToSave = msg?.segments;
-                if (Array.isArray(segsToSave)) {
-                  // 异步落库，不阻塞 UI
-                  void get().updateMessage(id, { segments: segsToSave });
+              let model = initModel(prevMsg);
+              for (const a of actions) model = reduce(model, a);
+              
+              // 生成只读 ViewModel 供 UI 使用
+              // 🔑 性能优化：避免不必要的深拷贝，segments 本身已经是不可变的
+              const segments = model.segments || [];
+              
+              // 一次遍历计算所有 flags（避免多次 some/filter）
+              let hasToolCalls = false;
+              for (let i = 0; i < segments.length; i++) {
+                if (segments[i]?.kind === 'toolCard') {
+                  hasToolCalls = true;
+                  break;
                 }
               }
-            } catch { /* noop */ }
+              
+              const viewModel = {
+                items: segments, // 直接引用，不拷贝
+                flags: {
+                  isThinking: (model.fsm === 'RENDERING_THINK'),
+                  isComplete: (model.fsm === 'COMPLETE'),
+                  hasToolCalls,
+                  isToolDetecting: !!model.detectingTool
+                }
+              } as any;
+              
+              const nextMsg: any = { ...prevMsg, segments: model.segments, segments_vm: viewModel };
+              
+              // 处理 STREAM_END
+              const ended = actions.some((a: any) => a && a.type === 'STREAM_END');
+              if (ended && nextMsg.status === 'loading') {
+                nextMsg.status = 'sent';
+              }
+              
+              const nextMessages: any[] = [...(conv.messages as any[])];
+              nextMessages[idx] = nextMsg;
+              (conv as any).messages = nextMessages;
+              conv.updated_at = Date.now();
+            }
           });
+          
+          // 持久化逻辑（在 set 之后执行）
+          for (const id of idsToFlush) {
+            const actions = queues.get(id) || [];
+            const shouldPersist = actions.some(a => a && (a.type === 'TOOL_HIT' || a.type === 'TOOL_RESULT' || a.type === 'STREAM_END'));
+            if (shouldPersist) {
+              // 延迟导入并执行持久化
+              void Promise.resolve().then(async () => {
+                try {
+                  const state = get();
+                  for (const c of state.conversations) {
+                    const msg = c.messages?.find((m: any) => m && m.id === id);
+                    if (msg && Array.isArray((msg as any).segments)) {
+                      const { getDatabaseService } = await import('@/lib/db');
+                      const dbService = getDatabaseService();
+                      if (dbService.isInitialized()) {
+                        const messageRepo = dbService.getMessageRepository();
+                        await messageRepo.update(id, { segments: JSON.stringify((msg as any).segments) as any });
+                      }
+                      break;
+                    }
+                  }
+                } catch { /* noop */ }
+              });
+            }
+          }
         };
+        
+        const scheduleFlush = (id: string) => {
+          if (scheduled.has(id)) return;
+          scheduled.add(id);
+          pendingIds.add(id);
+          
+          // 使用 RAF 调度，在下一个渲染帧统一处理
+          if (rafId === null) {
+            rafId = requestAnimationFrame(flushAll);
+          }
+        };
+        
         return (messageId: string, action: any) => {
           const list = queues.get(messageId) || [];
           // ✅ 关键优化：合并同类 append，避免产生大量 FSM reduce/action 堆积，导致 UI “追赶式逐字输出”

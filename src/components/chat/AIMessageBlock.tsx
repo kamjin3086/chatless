@@ -285,7 +285,7 @@ export function AIMessageBlock({
       return list;
     }
     return [];
-  }, [content, segments, state?.regularContent, viewModel?.items]);
+  }, [id, segments, viewModel?.items]); // 移除 content 和 state?.regularContent 依赖，它们不影响 segments 的结构
 
   // 计算当前处于“思考中”的 think 段索引：
   // 规则：从后往前找到第一个 type==='think' 且未结束的段（duration 为 undefined/null/0 视为未结束）。
