@@ -34,11 +34,7 @@ jobs:
           - os: ubuntu-22.04
             container: ubuntu:22.04
           - os: windows-2022
-          - os: macos-13
-            platform: macos
-            arch: x64
-            targets: x86_64-apple-darwin
-          - os: macos-14
+          - os: macos-15
             platform: macos
             arch: arm64
             targets: aarch64-apple-darwin
@@ -182,12 +178,7 @@ jobs:
             touch src-tauri/target/release/bundle/deb/Chatless_${VERSION}_amd64.deb
             touch src-tauri/target/release/bundle/rpm/Chatless-${VERSION}-1.x86_64.rpm
               ;;
-            "macos-13")
-              mkdir -p src-tauri/target/release/bundle/{macos,dmg}
-              touch src-tauri/target/release/bundle/macos/Chatless_${VERSION}_x64.app.tar.gz
-            touch src-tauri/target/release/bundle/dmg/Chatless_${VERSION}_x64.dmg
-              ;;
-            "macos-14")
+            "macos-15")
               mkdir -p src-tauri/target/release/bundle/{macos,dmg}
               touch src-tauri/target/release/bundle/macos/Chatless_${VERSION}_arm64.app.tar.gz
             touch src-tauri/target/release/bundle/dmg/Chatless_${VERSION}_aarch64.dmg
@@ -238,18 +229,8 @@ jobs:
             src-tauri/target/release/bundle/rpm/*.rpm
           retention-days: 7
 
-      - name: Upload macOS x64 artifacts
-        if: ${{ matrix.os == 'macos-13' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: chatless-macos-x64
-          path: |
-            src-tauri/target/release/bundle/macos/*x64.app.tar.gz
-            src-tauri/target/release/bundle/dmg/*x64.dmg
-          retention-days: 7
-
       - name: Upload macOS arm64 artifacts
-        if: ${{ matrix.os == 'macos-14' }}
+        if: ${{ matrix.os == 'macos-15' }}
         uses: actions/upload-artifact@v4
         with:
           name: chatless-macos-arm64
