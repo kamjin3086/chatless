@@ -1,7 +1,6 @@
-use log::{debug, info, warn, trace};
+use log::{info, warn, trace};
 use serde::Serialize;
 use std::env;
-use std::ffi::OsStr;
 use std::path::Path;
 
 // ── Cross-platform helpers ─────────────────────────────────────────────────
@@ -30,7 +29,8 @@ pub struct EnvironmentHealth {
 }
 
 pub struct EnvironmentSetup {
-  original_path: String,
+  #[allow(dead_code)]
+  original_path: String, // 保留用于调试和演示
   updated_path: String,
 }
 
@@ -316,7 +316,8 @@ mod tests {
   }
 }
 
-/// 演示函数：展示环境变量设置前后的差异
+/// 演示函数：展示环境变量设置前后的差异（用于调试）
+#[allow(dead_code)]
 pub fn demonstrate_environment_setup() -> Result<(), Box<dyn std::error::Error>> {
   println!("=== Environment Setup Demonstration ===");
 

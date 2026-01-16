@@ -139,12 +139,11 @@ export function TauriApp({ children }: TauriAppProps) {
         await loadConversations();
         startupMonitor.endPhase('会话加载');
 
-        // MCP 服务器初始化：延迟更长时间，完全在后台启动
+        // MCP 服务器初始化：完全后台化，0 阻塞启动
+        // 使用 requestIdleCallback 在浏览器空闲时启动，确保不影响 UI 渲染和用户交互
         try {
-          // 延迟5秒启动MCP服务，确保UI完全加载后再启动
-          // 这样可以避免MCP服务启动影响用户体验
-          setTimeout(() => {
-            console.log('[TauriApp] 开始后台启动MCP服务...');
+          const startMcpInBackground = () => {
+            console.log('[TauriApp] 浏览器空闲，开始后台启动MCP服务...');
             
             // 使用 Promise 包装，完全异步化，不阻塞任何操作
             Promise.resolve().then(async () => {
@@ -164,7 +163,16 @@ export function TauriApp({ children }: TauriAppProps) {
                 console.warn('[TauriApp] MCP持久化缓存初始化失败:', error);
               });
             });
-          }, 5000); // 延迟5秒启动
+          };
+          
+          // 优先使用 requestIdleCallback，在浏览器空闲时启动
+          // 如果不支持则回退到 setTimeout(0)，确保不阻塞任何操作
+          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            (window as any).requestIdleCallback(startMcpInBackground, { timeout: 10000 });
+          } else {
+            // 回退方案：使用 setTimeout(0) 在下一个事件循环中启动
+            setTimeout(startMcpInBackground, 0);
+          }
         } catch { /* noop */ }
 
         console.log('✅ [TauriApp] 应用初始化完成');

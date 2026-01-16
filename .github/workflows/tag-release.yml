@@ -874,20 +874,46 @@ jobs:
         run: |
           set -e
           TAG="${GITHUB_REF_NAME}"
+          
+          echo "=== 开始同步 Release $TAG 到公开仓库 $PUBLIC_RELEASE_REPO ==="
+          
+          # 创建或更新 Release
           if gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在，更新发布说明..."
             gh release edit "$TAG" --repo "$PUBLIC_RELEASE_REPO" --notes-file public_release_notes.md
           else
+            echo "创建新 Release $TAG..."
             gh release create "$TAG" --repo "$PUBLIC_RELEASE_REPO" --title "Release $TAG" --notes-file public_release_notes.md
           fi
-          gh release upload "$TAG" \
-            artifacts/**/*.dmg \
-            artifacts/**/*.app.tar.gz \
-            artifacts/**/*.AppImage \
-            artifacts/**/*.deb \
-            artifacts/**/*.rpm \
-            artifacts/**/*.exe \
-            artifacts/**/*.msi \
-            artifacts/**/*.sig \
-            artifacts/**/*.sha256* \
-            --repo "$PUBLIC_RELEASE_REPO" --clobber
+          
+          # 收集所有需要上传的文件
+          echo "=== 收集附件文件 ==="
+          UPLOAD_FILES=""
+          
+          # 逐类型收集文件，避免 glob 无匹配时报错
+          for pattern in "*.dmg" "*.app.tar.gz" "*.AppImage" "*.deb" "*.rpm" "*.exe" "*.msi" "*.sig" "*.sha256*"; do
+            found=$(find artifacts -name "$pattern" -type f 2>/dev/null || true)
+            if [ -n "$found" ]; then
+              echo "找到 $pattern 文件: $(echo "$found" | wc -l) 个"
+              UPLOAD_FILES="$UPLOAD_FILES $found"
+            else
+              echo "未找到 $pattern 文件，跳过"
+            fi
+          done
+          
+          if [ -z "$UPLOAD_FILES" ]; then
+            echo "::warning::未找到任何附件文件，跳过上传"
+            exit 0
+          fi
+          
+          echo "=== 上传 $(echo $UPLOAD_FILES | wc -w) 个附件到 Release ==="
+          # 逐个上传文件，确保失败时有明确的错误信息
+          for file in $UPLOAD_FILES; do
+            echo "上传: $file"
+            gh release upload "$TAG" "$file" --repo "$PUBLIC_RELEASE_REPO" --clobber || {
+              echo "::warning::上传失败: $file"
+            }
+          done
+          
+          echo "=== Release 同步完成 ==="
 

@@ -163,6 +163,25 @@ export async function request<T = any>(inputUrl: string, opts: RequestOptions = 
     };
   }
 
+  // 🔧 确保 body 被正确序列化为 JSON 字符串
+  // Tauri HTTP 插件的 fetch 遵循 Web Fetch API，需要 body 是字符串
+  if (methodUpper !== 'GET' && methodUpper !== 'HEAD' && options.body !== undefined) {
+    const body = options.body;
+    // 如果 body 是对象（非字符串、非 null），需要序列化
+    if (body !== null && typeof body === 'object' && typeof body !== 'string') {
+      // 检查是否已经是 Tauri 特殊格式 { type: 'Json'|'Form'|'Text', payload: ... }
+      if (!('type' in body && 'payload' in body)) {
+        // 普通对象，需要 JSON 序列化
+        try {
+          options.body = JSON.stringify(body);
+        } catch (e) {
+          console.error('[tauriFetch] Failed to stringify body:', e);
+          throw new Error(`Cannot serialize request body: ${e}`);
+        }
+      }
+    }
+  }
+
   // --- 日志策略：默认开发环境输出极简；仅当 verboseDebug=true 时输出详细 ---
   if (__DEV__) {
     const headers = (options.headers as Record<string, string>) || {};
@@ -450,7 +469,8 @@ export async function browserFetch<T = any>(url: string, options: RequestOptions
   // 适配 body
   if (method !== 'GET' && method !== 'HEAD') {
     const body: any = (options as any).body;
-    if (body && typeof body === 'object' && typeof body.type === 'string') {
+    if (body && typeof body === 'object' && typeof body.type === 'string' && 'payload' in body) {
+      // Tauri 特殊格式：{ type: 'Json'|'Form'|'Text', payload: ... }
       if (body.type === 'Json') {
         init.body = JSON.stringify(body.payload ?? {});
         init.headers = { ...((init.headers as Record<string, string>) || {}), 'Content-Type': 'application/json' };
@@ -465,6 +485,19 @@ export async function browserFetch<T = any>(url: string, options: RequestOptions
       }
     } else if (typeof body === 'string') {
       init.body = body;
+    } else if (body && typeof body === 'object') {
+      // 🔧 普通对象，需要 JSON 序列化
+      try {
+        init.body = JSON.stringify(body);
+        // 如果没有设置 Content-Type，添加 application/json
+        const headers = init.headers as Record<string, string> || {};
+        if (!Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
+          init.headers = { ...headers, 'Content-Type': 'application/json' };
+        }
+      } catch (e) {
+        console.error('[browserFetch] Failed to stringify body:', e);
+        throw new Error(`Cannot serialize request body: ${e}`);
+      }
     }
   }
 

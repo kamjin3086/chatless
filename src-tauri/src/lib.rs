@@ -98,7 +98,7 @@ pub fn run() {
     .setup(|app| {
       #[cfg(not(any(target_os = "android", target_os = "ios")))]
       {
-        app
+        let _ = app
           .handle()
           .plugin(tauri_plugin_window_state::Builder::default().build());
         // 主动恢复一次，确保未被其他初始化逻辑覆盖

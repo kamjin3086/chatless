@@ -20,6 +20,11 @@ const nextConfig = {
 
   // Configure assetPrefix or else the server won't properly resolve your assets.
   assetPrefix: isProd ? undefined : `http://${internalHost}:3000`,
+
+  // 覆盖 Next.js 默认的 serverExternalPackages 配置
+  // shiki 是 streamdown 的依赖，需要被打包而不是作为外部包
+  // 在 Tauri 静态导出模式下，所有包都应该被打包
+  serverExternalPackages: [],
 } satisfies NextConfig;
 
 export default nextConfig;
