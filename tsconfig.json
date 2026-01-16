@@ -32,6 +32,10 @@
   ],
   "exclude": [
     "node_modules",
-    // 说明：项目包含若干单测文件（主要用于回归与文档化），已通过添加 @types/jest 保证类型可用。
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
   ]
 }
