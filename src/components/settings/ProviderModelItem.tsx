@@ -65,12 +65,12 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
   }, [editingModelKey]);
 
   return (
-    <div className="group/item w-full flex items-center gap-1.5 pl-4 border-indigo-200/70 dark:border-indigo-700/70 py-0.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors rounded-md hover:ring-1 hover:ring-indigo-200/70 dark:hover:ring-indigo-700/50">
+    <div className="group/item w-full flex items-center gap-1 pl-2 py-0.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors rounded">
       {/* 左侧：模型名与能力标记 */}
-      <div className="flex flex-row items-center justify-start flex-auto min-w-0 pr-2 gap-1.5 text-[12px]">
+      <div className="flex flex-row items-center justify-start flex-auto min-w-0 pr-1 gap-1 text-[11px]">
         <button
           type="button"
-          className="text-left text-[12px] font-medium text-gray-700 dark:text-gray-300 truncate hover:bg-gray-100/60 dark:hover:bg-gray-800/60 rounded px-0.5"
+          className="text-left text-[11px] font-medium text-gray-700 dark:text-gray-300 truncate hover:bg-gray-100/60 dark:hover:bg-gray-800/60 rounded px-0.5"
           title={model.name}
           onClick={async()=>{ 
             try { 
@@ -91,9 +91,9 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
             { ok: !!caps.supportsVision, Icon: Camera, title: '支持视觉' },
           ];
           return (
-            <span className="inline-flex items-center gap-1 text-gray-400">
+            <span className="inline-flex items-center gap-0.5 text-gray-400">
               {items.filter(i=>i.ok).map((i, idx) => (
-                <i.Icon key={idx} className="w-3.5 h-3.5" title={i.title} />
+                <i.Icon key={idx} className="w-3 h-3" title={i.title} />
               ))}
             </span>
           );
@@ -108,7 +108,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
       </div>
 
       {/* 右侧：输入与菜单，整体右对齐 */}
-      <div className="ml-auto  mr-4 flex items-center gap-1">
+      <div className="ml-auto mr-2 flex items-center gap-0.5">
         {/* 健康检查：悬浮可见的小按钮 */}
         {(() => {
           const prompt = "Respond with only the word 'OK'";
@@ -204,65 +204,45 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
         {/* 先放菜单按钮 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400">
-              <MoreHorizontal className="w-4 h-4" />
+            <button className="h-4 w-4 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-400 dark:text-gray-500">
+              <MoreHorizontal className="w-3 h-3" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="bottom" align="end" className="w-72 p-1">
+          <DropdownMenuContent side="bottom" align="end" className="w-56 p-1">
             {/* 头部标题 */}
-            <div className="px-2 pt-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-2">
-                <Brain className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                <span className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">模型设置</span>
-              </div>
-              <div className="mt-1">
-                <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate block" title={model.label || model.name}>
-                  {model.label || model.name}
-                </span>
-              </div>
+            <div className="px-2 py-1.5 border-b border-gray-200/60 dark:border-gray-700/60">
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate block" title={model.label || model.name}>
+                {model.label || model.name}
+              </span>
             </div>
 
             {/* 参数设置 */}
             <DropdownMenuItem 
-              className="flex items-center gap-3 px-2.5 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md cursor-pointer" 
+              className="flex items-center gap-2 px-2 py-1.5 text-[11px] cursor-pointer" 
               onSelect={() => {
                 onOpenParameters(model.name, model.label);
               }}
             >
-              <div className="flex items-center justify-center w-7 h-7 bg-gray-100 dark:bg-gray-700 rounded-md">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[13px] font-medium">参数设置</span>
-                <span className="text-[11px] text-gray-500">调整模型参数</span>
-              </div>
+              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
+              <span>参数设置</span>
             </DropdownMenuItem>
 
             {/* 策略设置 */}
             {allowStrategyActions && (
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="flex items-center gap-3 px-2.5 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md cursor-pointer">
-                  <div className="flex items-center justify-center w-7 h-7 bg-blue-100 dark:bg-blue-900/50 rounded-md">
-                    <Workflow className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="flex flex-col flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[13px] font-medium">请求策略</span>
-                      {strategy && (
-                        <span className="px-2 py-0.5 text-[11px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full">
-                          {strategy}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                      {strategy ? '已设置自定义策略' : '使用默认策略'}
+                <DropdownMenuSubTrigger className="flex items-center gap-2 px-2 py-1.5 text-[11px] cursor-pointer">
+                  <Workflow className="w-3.5 h-3.5 text-gray-500" />
+                  <span className="flex-1">请求策略</span>
+                  {strategy && (
+                    <span className="px-1.5 py-0.5 text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded">
+                      {strategy}
                     </span>
-                  </div>
+                  )}
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-48">
+                <DropdownMenuSubContent className="w-44 p-1">
                   {/* 自动推断 */}
                   <DropdownMenuItem 
-                    className="flex items-center gap-2 px-3 py-2"
+                    className="flex items-center gap-2 px-2 py-1.5 text-[11px]"
                     onSelect={async(e: any) => {
                       e?.preventDefault?.();
                       try {
@@ -279,8 +259,8 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                       }
                     }}
                   >
-                    <Zap className="w-3.5 h-3.5 text-purple-600" />
-                    <span className="text-[13px]">自动推断</span>
+                    <Zap className="w-3 h-3 text-purple-500" />
+                    <span>自动推断</span>
                   </DropdownMenuItem>
                   
                   <DropdownMenuSeparator />
@@ -289,7 +269,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                   {['openai-compatible','openai-responses','openai','anthropic','gemini','deepseek'].map((s) => (
                     <DropdownMenuItem 
                       key={s}
-                      className={`flex items-center gap-2 px-3 py-2 ${strategy === s ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200' : ''}`}
+                      className={`flex items-center gap-2 px-2 py-1.5 text-[11px] ${strategy === s ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300' : ''}`}
                       onSelect={async(e: any) => {
                         e?.preventDefault?.();
                         try { 
@@ -303,8 +283,8 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                         }
                       }}
                     >
-                      <div className={`w-2 h-2 rounded-full ${strategy === s ? 'bg-blue-600' : 'bg-gray-300'}`} />
-                      <span className="text-[13px]">{s}</span>
+                      <div className={`w-1.5 h-1.5 rounded-full ${strategy === s ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                      <span>{s}</span>
                     </DropdownMenuItem>
                   ))}
                   
@@ -312,7 +292,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                   
                   {/* 清除策略 */}
                   <DropdownMenuItem 
-                    className="flex items-center gap-2 px-3 py-2 text-gray-600 dark:text-gray-400"
+                    className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-gray-500"
                     onSelect={async(e: any) => {
                       e?.preventDefault?.();
                       try { 
@@ -326,8 +306,8 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                       }
                     }}
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span className="text-[13px]">重置为默认</span>
+                    <RotateCcw className="w-3 h-3" />
+                    <span>重置为默认</span>
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
@@ -336,7 +316,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
             <DropdownMenuSeparator />
 
             {/* 重命名 */}
-            <div className="px-2 py-1">
+            <div className="px-1">
               {(() => {
                 const { ProviderRenameModelDialog } = require('./ProviderRenameModelDialog');
                 return (
@@ -351,22 +331,17 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem 
                       variant="destructive" 
-                      className="flex items-center gap-3 px-3 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md cursor-pointer text-red-600 dark:text-red-400" 
+                      className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-red-600 dark:text-red-400 cursor-pointer" 
                       onSelect={(e:any)=>e?.preventDefault?.()}
                     >
-                      <div className="flex items-center justify-center w-8 h-8 bg-red-100 dark:bg-red-900/50 rounded-md">
-                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">删除模型</span>
-                        <span className="text-xs text-red-500">永久删除此模型</span>
-                      </div>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>删除模型</span>
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>确认删除该模型？</AlertDialogTitle>
-                      <AlertDialogDescription>该操作仅删除本地配置中的“用户新增模型”条目，不会影响远端服务。</AlertDialogDescription>
+                      <AlertDialogDescription>该操作仅删除本地配置中的"用户新增模型"条目，不会影响远端服务。</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>取消</AlertDialogCancel>

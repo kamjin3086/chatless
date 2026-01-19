@@ -10,6 +10,12 @@ import { useAuthorizationStore } from '@/store/authorizationStore';
 import { WEB_SEARCH_SERVER_NAME } from './nativeTools/webSearch';
 import { filterToolCallContent } from '@/lib/chat/segments';
 
+// #region agent log
+const debugLog = (loc: string, msg: string, data: any) => {
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:loc,message:msg,data,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A-D'})}).catch(()=>{});
+};
+// #endregion
+
 // 防止重复调用的缓存
 const runningCalls = new Map<string, Promise<void>>();
 
@@ -209,6 +215,9 @@ export async function continueWithToolResult(params: {
   result: unknown;
 }) {
   const { assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, server, tool, result } = params;
+  // #region agent log
+  debugLog('ToolCallOrchestrator.ts:217', '工具执行完成,开始追问流程', { assistantMessageId, server, tool });
+  // #endregion
   const key = conversationId;
   const counterKey = `mcp-recursion-${key}`;
   // 简易递归限制（避免依赖外部模块）

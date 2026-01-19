@@ -933,12 +933,22 @@ export const VISION_MODEL_PATTERNS: readonly RegExp[] = [
   /vision/i,
   /gpt-4o(?:-[\w-]+)?/i,
   /gpt-4\.1(?:-[\w-]+)?/i,
+  /gpt-5(?:-[\w-]+)?/i,
   /gemini-1\.5/i,
   /gemini-2\./i,
   /llava/i,
   /vl(?:-[\w-]+)?$/i,
   /qwen2\.5-vl/i,
+  /qwen3-vl/i,
   /llama.*vision/i,
+  /claude-(?:opus|sonnet)-4/i,
+  /claude-3-(?:opus|sonnet|haiku)/i,
+  /claude-3-5-(?:sonnet|haiku)/i,
+  /claude-3-7-sonnet/i,
+  /pixtral/i,
+  /glm-4v/i,
+  /yi-vision/i,
+  /kimi-k2/i,
 ];
 
 // 嵌入模型
@@ -952,35 +962,52 @@ export const RERANK_MODEL_PATTERNS: readonly RegExp[] = [
   /rerank|re-rank|re-ranker|re-ranking|retriever/i,
 ];
 
-// 以“思考/推理”能力为导向的模型（总体）
+// 以"思考/推理"能力为导向的模型（总体）
 export const REASONING_MODEL_PATTERNS: readonly RegExp[] = [
   /^o\d+(?:-[\w-]+)?$/i,           // o1 / o3 / o4 家族
   /reasoning|reasoner|thinking/i,   // 名称包含 reasoning/think
   /-r\d+/i,                        // -r1 / -r2 类似标记
   /qwq(?:-[\w-]+)?/i,
   /grok-(?:3-mini|4)(?:-[\w-]+)?/i,
+  /grok-4/i,
 ];
 
-// 手动补充：一律视为“支持思考/推理”的模型（变体包含）
+// 手动补充：一律视为"支持思考/推理"的模型（变体包含）
 export const ALWAYS_THINKING_MODEL_PATTERNS: readonly RegExp[] = [
   /deepseek[-/ ]?r1/i,              // DeepSeek R1 全变体
   /deepseek\W*r1\W*distill/i,
   /gemini-2\.5-pro/i,              // Gemini 2.5 Pro
+  /gemini-2\.5-flash/i,            // Gemini 2.5 Flash (支持思考模式)
   /claude-.*\b(opus|sonnet)-4\b/i, // Claude Opus/Sonnet 4 系列
+  /claude-3-7-sonnet/i,            // Claude 3.7 Sonnet (支持扩展思考)
   /sonar-.*reason/i,                // Perplexity Sonar Reasoning 系列
+  /kimi-k2/i,                       // Kimi K2 (支持思考)
+  /step-1o/i,                       // Step 1o (推理模型)
+  /gpt-5/i,                         // GPT-5 系列 (假设支持)
 ];
 
 // 函数调用（工具调用）模型（宽松识别）
 export const FUNCTION_CALLING_MODEL_PATTERNS: readonly RegExp[] = [
   /gpt-4o(?:-[\w-]+)?/i,
   /gpt-4\.1(?:-[\w-]+)?/i,
+  /gpt-4\.5(?:-[\w-]+)?/i,
+  /gpt-5(?:-[\w-]+)?/i,
   /^o[134](?:-[\w-]+)?$/i,
   /claude/i,
   /qwen/i,
   /gemini/i,
   /grok-3|grok-4/i,
   /glm-4(?:\.|-|$)/i,
+  /glm-4\.5/i,
   /doubao/i,
+  /llama-3(?:\.\d+)?-(?:70b|405b)/i,
+  /llama-4/i,
+  /mistral-large/i,
+  /mixtral/i,
+  /deepseek-(?:chat|v3)/i,
+  /kimi-k2/i,
+  /moonshot/i,
+  /minimax/i,
 ];
 
 // 图像生成模型

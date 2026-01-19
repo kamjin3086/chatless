@@ -6,6 +6,12 @@ import { Message } from '@/types/chat';
 import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
 import FoldingLoader from '@/components/ui/FoldingLoader';
 
+// #region agent log
+const debugLog = (loc: string, msg: string, data: any) => {
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:loc,message:msg,data,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+};
+// #endregion
+
 interface ChatMessageListProps {
   chatId?: string;
   messages: Message[];
@@ -86,6 +92,12 @@ export function ChatMessageList({
 
     return items;
   }, [messages]);
+
+  // #region agent log
+  React.useEffect(() => {
+    debugLog('ChatMessageList.tsx:95', 'followOutput状态', { shouldFollowOutput, messagesLen: messages?.length, isLoading });
+  }, [shouldFollowOutput, messages?.length, isLoading]);
+  // #endregion
 
   if (messages.length === 0 && !isLoading) {
     return (

@@ -213,6 +213,8 @@ export function getSuppressionTriggers(): SuppressionTrigger[] {
     { pattern: /<tool_call>/i, mode: 'xml_tool_call' },
     { pattern: /<\|channel\|>\s*commentary\s+to=[^\n{]{1,200}\{/i, mode: 'json_like' },
     { pattern: /commentary\s+to=[^\n{]{1,200}\{/i, mode: 'json_like' },
+    // 新增：反向格式 json{...}commentary to=...
+    { pattern: /json\s*\{[^}]*\}\s*commentary\s+to=/i, mode: 'json_like' },
     { pattern: /(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{/i, mode: 'json_like' },
     { pattern: /(?:^|\s)[a-z0-9_]+\.[a-z0-9_]+\s*\{/i, mode: 'json_like' },
   ];
@@ -243,6 +245,8 @@ export function mightContainToolInstruction(text: string): boolean {
     // 使用 <| 作为快速检测，而不是完整的 <|channel|>
     text.includes('<|') ||
     lowerText.includes('commentary to=') ||
+    // 新增：反向格式 json{...}commentary to=...
+    (lowerText.includes('json') && lowerText.includes('commentary')) ||
     // JSON 格式的工具调用（更严格的检测）
     /"type"\s*:\s*"tool_call"/i.test(text)
   );

@@ -139,6 +139,19 @@ export function TauriApp({ children }: TauriAppProps) {
         await loadConversations();
         startupMonitor.endPhase('会话加载');
 
+        // 预编译关键路由：在初始化完成后立即触发 /chat 的编译
+        // 这样当用户导航到聊天页面时，编译已经在后台完成
+        try {
+          // 使用 fetch 预热路由编译，但不阻塞初始化流程
+          fetch('/chat', { method: 'GET', credentials: 'same-origin' })
+            .then(() => {
+              console.log('[TauriApp] /chat 路由预编译完成');
+            })
+            .catch(() => {
+              // 忽略预热失败，不影响应用启动
+            });
+        } catch { /* noop */ }
+
         // MCP 服务器初始化：极低优先级，确保不影响页面渲染
         // 策略：等待页面完全稳定后（多次空闲检测 + 最小延迟）才开始启动
         try {

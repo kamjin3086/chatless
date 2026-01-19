@@ -105,6 +105,10 @@ function ChatMessageComponent({
   const [isCopied, setIsCopied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const deleteMessage = useChatStore((s)=> s.deleteMessage);
+  
+  // 🔑 修复界面跳动：追踪消息是否已完成过首次入场动画
+  // 一旦消息已经"入场"过（有过内容），后续的追问流程不应再触发入场动画
+  const hasEnteredRef = React.useRef(false);
 
   if (DEBUG_CHAT_MESSAGE) { /* noop */ }
   
@@ -119,9 +123,35 @@ function ChatMessageComponent({
   // 生成期间不显示时间与模型，避免视觉抖动；完成后再显示
   const formattedTime = isStreaming ? '' : formatTimestamp(timestamp);
 
+  // 🔑 修复：检测消息是否已经有实质内容（segments 或 content）
+  // 如果已有内容，则标记为"已入场"，避免追问时重复触发入场动画
+  const hasContent = (Array.isArray(segments) && segments.length > 0) || (content && content.length > 0);
+  if (hasContent && !hasEnteredRef.current) {
+    hasEnteredRef.current = true;
+  }
   
-  // 仅对“正在生成/刚发送”的消息开启入场动画；历史消息不做入场动画，避免切换会话时整列表闪烁
-  const shouldAnimateEnter = isStreaming || status === 'sending' || status === 'pending';
+  // 🔑 修复界面抖动：检测是否有正在运行的工具调用
+  // 如果有工具卡片且状态为 'running'，则认为消息尚未完成，不应显示时间戳
+  const hasRunningToolCall = React.useMemo(() => {
+    if (!Array.isArray(segments)) return false;
+    return segments.some((seg: any) => 
+      seg && seg.kind === 'toolCard' && seg.status === 'running'
+    );
+  }, [segments]);
+  
+  // 🔑 检测 viewModel 中的 isComplete 标志
+  // 只有当 FSM 真正进入 COMPLETE 状态时，才认为消息完全结束
+  const isViewModelComplete = viewModel?.flags?.isComplete === true;
+  
+  // 🔑 决定是否显示时间戳：
+  // - 正在流式时不显示
+  // - 有正在运行的工具调用时不显示
+  // - FSM 未完成时不显示（即使 status 是 sent）
+  const shouldShowTimestamp = !isStreaming && !hasRunningToolCall && isViewModelComplete;
+  
+  // 仅对"正在生成/刚发送"的消息开启入场动画；历史消息不做入场动画，避免切换会话时整列表闪烁
+  // 🔑 修复：如果消息已经入场过，不再触发入场动画
+  const shouldAnimateEnter = !hasEnteredRef.current && (isStreaming || status === 'sending' || status === 'pending');
 
   const messageContent = useMemo(() => {
     if (DEBUG_CHAT_MESSAGE) { /* noop */ }
@@ -260,8 +290,8 @@ function ChatMessageComponent({
           </AlertDialogContent>
         </AlertDialog>
  
-        {/* 时间戳和模型信息：仅在非流式时显示，避免生成中抖动 */}
-        {!isStreaming && (formattedTime || (!isUser && model)) && (
+        {/* 时间戳和模型信息：仅在非流式且非追问阶段时显示，避免生成中抖动 */}
+        {shouldShowTimestamp && (formattedTime || (!isUser && model)) && (
           <div className={cn(
             "flex items-center justify-between flex-nowrap text-xs text-slate-500 dark:text-slate-400 ml-2 mt-1.5",
             isUser ? "self-end" : "self-start w-full"

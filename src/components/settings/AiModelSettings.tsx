@@ -281,7 +281,7 @@ export function AiModelSettings() {
             
             {/* 文本信息 */}
             <div className="flex-1 min-w-0">
-              <div className="font-medium truncate leading-tight text-sm">
+              <div className="font-medium truncate leading-tight text-xs">
                 {provider.displayName || provider.name}
               </div>
             </div>
@@ -323,7 +323,7 @@ export function AiModelSettings() {
       </div>
 
       {/* 主体：左侧列表 + 右侧详情 */}
-      <div className="grid grid-cols-[240px_minmax(0,1fr)] gap-3 flex-1 min-h-0 overflow-hidden">
+      <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2 flex-1 min-h-0 overflow-hidden">
         {/* 左侧 Provider 列表 */}
         <div className="flex flex-col bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/80 rounded-lg overflow-hidden shadow-sm">
           {/* 搜索栏 */}
@@ -339,7 +339,7 @@ export function AiModelSettings() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="px-2 h-7 text-[11px] text-slate-600 dark:text-slate-400 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 focus:outline-none transition-colors whitespace-nowrap"
+                  className="px-1.5 h-6 text-[10px] text-slate-600 dark:text-slate-400 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 focus:outline-none transition-colors whitespace-nowrap"
                   title="筛选状态"
                 >
                   {statusFilter === 'all' && '全部'}
@@ -348,11 +348,11 @@ export function AiModelSettings() {
                   {statusFilter === 'never_checked' && '未检查'}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-24">
-                <DropdownMenuItem onClick={() => setStatusFilter('all')} className="text-xs">全部</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('recently_checked')} className="text-xs">最近检查</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('needs_key')} className="text-xs">未配置密钥</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilter('never_checked')} className="text-xs">未检查过</DropdownMenuItem>
+              <DropdownMenuContent align="start" className="min-w-24 p-1">
+                <DropdownMenuItem onClick={() => setStatusFilter('all')} className="text-[11px] py-1.5">全部</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('recently_checked')} className="text-[11px] py-1.5">最近检查</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('needs_key')} className="text-[11px] py-1.5">未配置密钥</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('never_checked')} className="text-[11px] py-1.5">未检查过</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             

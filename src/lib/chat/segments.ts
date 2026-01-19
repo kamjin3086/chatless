@@ -54,14 +54,16 @@ function needsToolCallFilter(existingText: string, chunk: string): boolean {
     chunk.includes('<|') ||
     chunkLower.includes('commentary to=') ||
     // JSON 格式工具调用检测
-    (chunk.includes('"type"') && chunk.includes('tool_call'))
+    (chunk.includes('"type"') && chunk.includes('tool_call')) ||
+    // 新增：反向格式检测 json{...}commentary
+    (chunkLower.includes('json') && chunkLower.includes('commentary'))
   ) {
     return true;
   }
   
-  // 检测边界：尾部 30 字符 + chunk 组合（处理跨 chunk 的标签和 JSON）
+  // 检测边界：尾部 50 字符 + chunk 组合（处理跨 chunk 的标签和 JSON）
   if (existingText.length > 0) {
-    const boundary = existingText.slice(-30) + chunk;
+    const boundary = existingText.slice(-50) + chunk;
     const boundaryLower = boundary.toLowerCase();
     if (
       boundaryLower.includes('<use_mcp_tool') ||
@@ -71,7 +73,9 @@ function needsToolCallFilter(existingText: string, chunk: string): boolean {
       // GPT-OSS 模板标签
       boundary.includes('<|') ||
       // JSON 格式检测
-      (boundary.includes('"type"') && boundary.includes('tool_call'))
+      (boundary.includes('"type"') && boundary.includes('tool_call')) ||
+      // 新增：反向格式检测（跨chunk场景）
+      (boundaryLower.includes('json') && boundaryLower.includes('commentary'))
     ) {
       return true;
     }

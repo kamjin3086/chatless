@@ -305,65 +305,73 @@ export function ProviderModelList(props: ProviderModelListProps) {
   };
 
   return (
-    <div ref={rootRef} className="space-y-2.5">
+    <div ref={rootRef} className="space-y-1.5">
       {/* 紧凑工具栏 */}
-      <div className="flex items-center justify-between py-1.5 px-2.5 bg-slate-50/30 dark:bg-slate-900/10 rounded">
-        <div className="flex items-center gap-2">
-          {/* 能力筛选按钮组 - 去掉边框 */}
+      <div className="flex items-center justify-between py-1 px-2 bg-slate-50/30 dark:bg-slate-900/10 rounded">
+        <div className="flex items-center gap-1.5">
+          {/* 能力筛选按钮组 */}
           <div className="flex items-center gap-0.5">
             <button 
               type="button" 
               onClick={()=>setFilterThinking(v=>!v)} 
-              className={`p-1 h-6 w-6 rounded flex items-center justify-center transition-colors ${filterThinking? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
+              className={`p-0.5 h-5 w-5 rounded flex items-center justify-center transition-colors ${filterThinking? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
               title="仅显示支持思考的模型"
             >
-              <Brain className="w-3.5 h-3.5"/>
+              <Brain className="w-3 h-3"/>
             </button>
             <button 
               type="button" 
               onClick={()=>setFilterTools(v=>!v)} 
-              className={`p-1 h-6 w-6 rounded flex items-center justify-center transition-colors ${filterTools? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
+              className={`p-0.5 h-5 w-5 rounded flex items-center justify-center transition-colors ${filterTools? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
               title="仅显示支持工具调用的模型"
             >
-              <Workflow className="w-3.5 h-3.5"/>
+              <Workflow className="w-3 h-3"/>
             </button>
             <button 
               type="button" 
               onClick={()=>setFilterVision(v=>!v)} 
-              className={`p-1 h-6 w-6 rounded flex items-center justify-center transition-colors ${filterVision? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
+              className={`p-0.5 h-5 w-5 rounded flex items-center justify-center transition-colors ${filterVision? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
               title="仅显示支持视觉的模型"
             >
-              <Camera className="w-3.5 h-3.5"/>
+              <Camera className="w-3 h-3"/>
             </button>
           </div>
           {/* 搜索框 */}
-          <div ref={searchWrapRef} className="h-6 flex items-center">
+          <div ref={searchWrapRef} className="h-5 flex items-center">
             {searchOpen ? (
               <Input 
                 value={modelSearch} 
                 onChange={(e) => setModelSearch(e.target.value)} 
                 placeholder="筛选模型" 
-                className="h-6 text-xs w-40 rounded border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800" 
+                className="h-5 text-[11px] w-32 rounded border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800" 
                 autoFocus 
               />
             ) : (
               <button 
                 onClick={() => setSearchOpen(true)} 
-                className="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" 
+                className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" 
                 title="筛选模型"
               >
-                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                <svg className="w-3 h-3 text-slate-500 dark:text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
                 </svg>
               </button>
             )}
           </div>
+          {/* 刷新模型列表按钮 - 移到工具栏上方 */}
+          <button 
+            className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 transition-colors" 
+            onClick={refreshModels}
+            title="刷新模型列表"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </button>
         </div>
         <div className="flex items-center gap-1 md:flex-nowrap flex-wrap">
           {isMultiStrategyProvider && (
             <Button 
               variant="outline" 
-              className="h-6 px-2 text-[11px] rounded border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" 
+              className="h-5 px-1.5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" 
               onClick={()=>setBatchMode(v=>!v)}
             >
               {batchMode? '退出' : '批量'}
@@ -375,23 +383,23 @@ export function ProviderModelList(props: ProviderModelListProps) {
           {isMultiStrategyProvider && batchMode && (
             <>
               <Select value={batchStrategy} onValueChange={(v:any)=>{ if (v === '__clear__') { const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void clearBatch(); } return; } if (v === '__auto__') { void applyAutoInfer(); return; } setBatchStrategy(v); const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void applyBatch(v); } }}>
-                <SelectTrigger className="w-40 h-6 text-[11px] rounded border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder="选择策略"/></SelectTrigger>
-                <SelectContent className="rounded">
-                  <SelectItem value="__auto__" className="text-[11px] rounded">自动推断</SelectItem>
-                  <SelectItem value="openai-compatible" className="text-[11px] rounded">OpenAI Compatible</SelectItem>
-                  <SelectItem value="openai-responses" className="text-[11px] rounded">OpenAI Responses</SelectItem>
-                  <SelectItem value="openai" className="text-[11px] rounded">OpenAI Strict</SelectItem>
-                  <SelectItem value="anthropic" className="text-[11px] rounded">Anthropic</SelectItem>
-                  <SelectItem value="gemini" className="text-[11px] rounded">Gemini</SelectItem>
-                  <SelectItem value="deepseek" className="text-[11px] rounded">DeepSeek</SelectItem>
-                  <SelectItem value="__clear__" className="text-[11px] text-red-600 rounded">清除覆盖</SelectItem>
+                <SelectTrigger className="w-32 h-5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder="选择策略"/></SelectTrigger>
+                <SelectContent className="rounded min-w-[140px]">
+                  <SelectItem value="__auto__" className="text-[11px] py-1.5">自动推断</SelectItem>
+                  <SelectItem value="openai-compatible" className="text-[11px] py-1.5">OpenAI Compatible</SelectItem>
+                  <SelectItem value="openai-responses" className="text-[11px] py-1.5">OpenAI Responses</SelectItem>
+                  <SelectItem value="openai" className="text-[11px] py-1.5">OpenAI Strict</SelectItem>
+                  <SelectItem value="anthropic" className="text-[11px] py-1.5">Anthropic</SelectItem>
+                  <SelectItem value="gemini" className="text-[11px] py-1.5">Gemini</SelectItem>
+                  <SelectItem value="deepseek" className="text-[11px] py-1.5">DeepSeek</SelectItem>
+                  <SelectItem value="__clear__" className="text-[11px] py-1.5 text-red-600">清除覆盖</SelectItem>
                 </SelectContent>
               </Select>
-              <Button className="h-6 px-2 text-[11px] rounded bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/40 border border-blue-200/50 dark:border-blue-800/40 transition-colors" onClick={() => applyBatch()}>应用</Button>
-              <Button variant="secondary" className="h-6 px-2 text-[11px] rounded border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>清除</Button>
+              <Button className="h-5 px-1.5 text-[10px] rounded bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/40 border border-blue-200/50 dark:border-blue-800/40 transition-colors" onClick={() => applyBatch()}>应用</Button>
+              <Button variant="secondary" className="h-5 px-1.5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>清除</Button>
               <Button
                 variant="ghost"
-                className="h-6 px-2 text-[11px] rounded transition-colors"
+                className="h-5 px-1.5 text-[10px] rounded transition-colors"
                 onClick={() => {
                   const ids = modelsForDisplay.map(m => m.name);
                   const allChecked = ids.every(id => !!checked[id]);
@@ -413,14 +421,14 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   }
                 }}
               >
-                全选/反选
+                全选
               </Button>
             </>
           )}
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
         {modelsForDisplay && modelsForDisplay.length > 0 ? (
           (() => {
             const filtered = modelsForDisplay.filter((m) => {
@@ -456,9 +464,9 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   const list = groups.get(series) || [];
                   if (list.length === 0) return null;
                   return (
-                    <div key={series} className="mt-2">
-                      <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-50/50 dark:bg-slate-900/20 rounded-t border-x border-t border-slate-200/50 dark:border-slate-700/50">
-                        <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 tracking-wide">{series}</div>
+                    <div key={series} className="mt-1">
+                      <div className="flex items-center justify-between px-2 py-1 bg-slate-50/50 dark:bg-slate-900/20 rounded-t border-x border-t border-slate-200/50 dark:border-slate-700/50">
+                        <div className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 tracking-wide">{series}</div>
                         {batchMode && isMultiStrategyProvider ? (
                           (() => {
                             const groupIds = list.map(x => x.name);
@@ -467,7 +475,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                             return (
                               <button
                                 type="button"
-                                className="text-[10px] px-2 py-0.5 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 border border-slate-200/60 dark:border-slate-700/60 transition-colors"
+                                className="text-[9px] px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
                                 onClick={() => setAll(groupIds, next)}
                               >
                                 {allChecked ? '取消' : '全选'}
@@ -477,7 +485,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                         ) : null}
                         
                       </div>
-                      <div className="space-y-1 border-x border-b border-slate-200/50 dark:border-slate-700/50 rounded-b p-1.5 bg-white/40 dark:bg-slate-900/20">
+                      <div className="space-y-0 border-x border-b border-slate-200/50 dark:border-slate-700/50 rounded-b p-1 bg-white/40 dark:bg-slate-900/20">
                         {list.sort(compareModels).map(renderItem)}
                       </div>
                     </div>
@@ -485,18 +493,18 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 })}
                 
                 {/* 分页控件 - 移到底部 */}
-                <div className="flex items-center justify-between gap-2 text-[11px] px-2.5 py-1.5 mt-2 bg-slate-50/30 dark:bg-slate-900/10 rounded">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-600 dark:text-slate-400 font-medium text-[10px]">共 {total} 个</span>
+                <div className="flex items-center justify-between gap-2 text-[10px] px-2 py-1 mt-1 bg-slate-50/30 dark:bg-slate-900/10 rounded">
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 dark:text-slate-400">共 {total} 个</span>
                     {batchMode && isMultiStrategyProvider && (
                       (() => {
                         const ids = pageItems.map(x=>x.name);
                         const allChecked = ids.every(id => !!checked[id]);
                         const anyChecked = ids.some(id => !!checked[id]);
-                        const label = allChecked ? '取消本页' : (anyChecked ? '反选本页' : '全选本页');
+                        const label = allChecked ? '取消本页' : (anyChecked ? '反选' : '全选本页');
                         return (
                           <button
-                            className="px-2 py-0.5 text-[10px] border border-slate-200/70 dark:border-slate-700/70 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                            className="px-1.5 py-0.5 text-[9px] rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 transition-colors"
                             onClick={()=>{
                               if (allChecked) { setAll(ids, false); return; }
                               setChecked(prev => {
@@ -510,30 +518,23 @@ export function ProviderModelList(props: ProviderModelListProps) {
                       })()
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <button 
-                      className="w-6 h-6 flex items-center justify-center border border-slate-200/70 dark:border-slate-700/70 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400 transition-colors" 
+                      className="w-5 h-5 flex items-center justify-center rounded disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 transition-colors" 
                       disabled={safePage<=1} 
                       onClick={()=>setPage(p=>Math.max(1,p-1))}
                       title="上一页"
                     >
-                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <ChevronLeft className="w-3 h-3" />
                     </button>
-                    <span className="px-2 h-6 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/70 rounded text-slate-700 dark:text-slate-300 font-medium min-w-[40px] text-[10px]">{safePage}/{totalPages}</span>
+                    <span className="px-1.5 h-5 flex items-center justify-center text-slate-600 dark:text-slate-400 min-w-[32px]">{safePage}/{totalPages}</span>
                     <button 
-                      className="w-6 h-6 flex items-center justify-center border border-slate-200/70 dark:border-slate-700/70 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" 
+                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" 
                       disabled={safePage>=totalPages} 
                       onClick={()=>setPage(p=>Math.min(totalPages,p+1))}
                       title="下一页"
                     >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button 
-                      className="w-6 h-6 flex items-center justify-center border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400 transition-colors" 
-                      onClick={refreshModels}
-                      title="刷新模型列表"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
+                      <ChevronRight className="w-3 h-3" />
                     </button>
                   </div>
                 </div>

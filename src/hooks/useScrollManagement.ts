@@ -1,5 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// #region agent log
+const debugLog = (loc: string, msg: string, data: any) => {
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:loc,message:msg,data,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B-E'})}).catch(()=>{});
+};
+// #endregion
+
 // 滚动配置常量
 const SCROLL_BOTTOM_THRESHOLD = 100; // 接近底部的判定距离
 const USER_SCROLL_TIMEOUT = 1000; // 用户停止滚动后的超时时间
@@ -100,6 +106,9 @@ export const useScrollManagement = (
       } else if (shouldFollowOutput) {
         // 用户未手动滚动，自动跟随
         console.log('[Scroll] 自动跟随新消息');
+        // #region agent log
+        debugLog('useScrollManagement.ts:102', '触发自动滚动', { shouldFollowOutput, isUserScrolling: isUserScrollingRef.current, messageCount: messages?.length });
+        // #endregion
         requestAnimationFrame(() => {
           if (container && !isUserScrollingRef.current) {
             const target = container.scrollHeight - container.clientHeight;
@@ -337,6 +346,10 @@ export const useScrollManagement = (
     };
   }, [messagesContainerRef, isLoading, shouldFollowOutput]);
 
+  // 简化：直接返回计算值，不再使用基于时间的防抖
+  // 界面抖动的根本解决方案在 ChatMessage.tsx 中通过检测工具调用状态实现
+  const computedFollowOutput = shouldFollowOutput && (isLoading || contentChangeTimeoutRef.current !== null);
+
   return {
     messageRefs,
     messagesEndRef,
@@ -348,7 +361,6 @@ export const useScrollManagement = (
     isAtBottom: !showScrollToBottom,
     hasNewMessageWhileAway,
     // 导出给 Virtuoso 使用的 followOutput 状态
-    // 只有在应该自动跟随且正在加载或有内容变化时才跟随
-    shouldFollowOutput: shouldFollowOutput && (isLoading || contentChangeTimeoutRef.current !== null),
+    shouldFollowOutput: computedFollowOutput,
   };
 }; 

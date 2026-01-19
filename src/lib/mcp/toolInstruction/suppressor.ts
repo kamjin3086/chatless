@@ -66,13 +66,15 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
   let braceDepth = 0;
   let seenJsonStart = false;
   let captured = '';
+  let isReversedFormat = false; // 标记是否是反向格式 json{...}commentary
   
   /**
    * 查找最早的触发点
    */
-  const findEarliestTrigger = (text: string): null | { index: number; mode: SuppressionMode } => {
+  const findEarliestTrigger = (text: string): null | { index: number; mode: SuppressionMode; reversed?: boolean } => {
     let bestIdx = -1;
     let bestMode: SuppressionMode | undefined;
+    let reversed = false;
     
     for (const t of triggers) {
       const m = t.pattern.exec(text);
@@ -80,21 +82,24 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
       if (bestIdx === -1 || m.index < bestIdx) {
         bestIdx = m.index;
         bestMode = t.mode;
+        // 检测是否是反向格式（json{...}commentary）
+        reversed = /json\s*\{/i.test(m[0]);
       }
     }
     
     if (bestIdx === -1 || !bestMode) return null;
-    return { index: bestIdx, mode: bestMode };
+    return { index: bestIdx, mode: bestMode, reversed };
   };
   
   /**
    * 进入抑制状态
    */
-  const enterSuppression = (suppressedTail: string, m: SuppressionMode) => {
+  const enterSuppression = (suppressedTail: string, m: SuppressionMode, reversed = false) => {
     active = true;
     mode = m;
     braceDepth = 0;
     seenJsonStart = false;
+    isReversedFormat = reversed;
     buffer = suppressedTail;
     captured = suppressedTail;
   };
@@ -107,6 +112,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
     mode = undefined;
     braceDepth = 0;
     seenJsonStart = false;
+    isReversedFormat = false;
     buffer = tailAfter;
   };
   
@@ -143,6 +149,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
     }
     
     // json_like：以大括号闭合为结束条件
+    // 对于反向格式 json{...}commentary to=...，需要等到换行符才结束
     for (let i = 0; i < buffer.length; i++) {
       const ch = buffer[i];
       if (ch === '{') {
@@ -153,6 +160,19 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
       }
       
       const isBoundary = ch === '\n' || ch === ';';
+      
+      // 对于反向格式，只在换行符处结束，确保 commentary to=... 部分也被抑制
+      if (isReversedFormat) {
+        if (isBoundary) {
+          return { 
+            ended: true, 
+            tailAfter: buffer.slice(i + 1),
+            capturedEnded: buffer.slice(0, i + 1)
+          };
+        }
+        continue;
+      }
+      
       const done = (seenJsonStart && braceDepth === 0) || (!seenJsonStart && isBoundary);
       
       if (done) {
@@ -200,7 +220,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
         const before = buffer.slice(0, hit.index);
         const suppressedTail = buffer.slice(hit.index);
         visible += before;
-        enterSuppression(suppressedTail, hit.mode);
+        enterSuppression(suppressedTail, hit.mode, hit.reversed);
         started = true;
       } else {
         // 未命中：按 guardWindow 释放
@@ -252,6 +272,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
       mode = undefined;
       braceDepth = 0;
       seenJsonStart = false;
+      isReversedFormat = false;
       return { tail: '', captured: cap || undefined, hadSuppression: true };
     }
     

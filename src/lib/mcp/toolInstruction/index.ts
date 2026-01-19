@@ -85,3 +85,26 @@ export {
   extractToolCardMarker
 } from './marker';
 
+// 格式处理模块（新架构）
+export {
+  // 类型
+  type ParsedToolCall,
+  type ProcessResult,
+  type FormatHandler,
+  type CleanOptions,
+  type ToolCallFormat,
+  type FormatMetadata,
+  FORMAT_REGISTRY,
+  // 管道
+  ToolCallPipeline,
+  createPipeline,
+  getDefaultPipeline,
+  resetDefaultPipeline,
+  // 处理器
+  OpenAIHandler,
+  XMLHandler,
+  GptOssHandler,
+  JsonHandler,
+  SimpleHandler,
+} from './formats';
+

@@ -69,6 +69,9 @@ export function reduce(model: MessageModel, action: MessageAction): MessageModel
       return { ...model, detectingTool: false };
     }
     case 'TOOL_HIT': {
+      // #region agent log
+      debugLog('messageFsm.ts:71', 'TOOL_HIT处理', { id: model.id, prevFsm: model.fsm, server: action.server, tool: action.tool });
+      // #endregion
       // 在插入卡片前，先清理尾部text中的任何指令残片，避免已累计的半截标签被显示
       const cleanedTail = (() => {
         const segs = Array.isArray(model.segments) ? [...model.segments] : [];
@@ -90,9 +93,14 @@ export function reduce(model: MessageModel, action: MessageAction): MessageModel
       return { ...model, segments: next as any, fsm: 'TOOL_RUNNING', detectingTool: false };
     }
     case 'TOOL_RESULT': {
+      // #region agent log
+      debugLog('messageFsm.ts:93', 'TOOL_RESULT处理', { id: model.id, prevFsm: model.fsm, ok: action.ok, server: action.server, tool: action.tool });
+      // #endregion
       if (action.ok) {
         const next = updateCardStatus(model.segments, { id: action.cardId, server: action.server, tool: action.tool }, { status: 'success', resultPreview: action.resultPreview });
-        
+        // #region agent log
+        debugLog('messageFsm.ts:98', 'FSM状态变化 TOOL_RUNNING->TOOL_DONE', { id: model.id, newFsm: 'TOOL_DONE' });
+        // #endregion
         return { ...model, segments: next as any, fsm: 'TOOL_DONE' };
       }
       // 特殊处理：如果是等待授权状态，不改变 fsm

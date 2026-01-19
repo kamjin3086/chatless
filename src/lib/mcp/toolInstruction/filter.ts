@@ -5,6 +5,11 @@
  * 
  * 提供统一的工具指令过滤功能，确保用户界面不显示原始工具调用指令。
  * 
+ * ## 重构说明
+ * 
+ * 现在委托给 formats/pipeline 进行统一的格式处理，
+ * 同时保留部分特殊处理逻辑（如不完整片段清理）。
+ * 
  * ## 使用场景
  * 
  * - **display**: 用于 UI 显示，实时过滤流式输出
@@ -13,16 +18,22 @@
  * ## 设计原则
  * 
  * 1. **单一职责**: 只负责过滤/清理，不负责解析
- * 2. **模式统一**: 使用 patterns.ts 中定义的模式
+ * 2. **模式统一**: 使用 Pipeline 架构统一处理
  * 3. **保留格式**: 不修改 markdown 格式、换行符等
  */
 
 import { 
-  TOOL_INSTRUCTION_PATTERNS, 
   INCOMPLETE_TAG_PREFIXES, 
   MIN_INCOMPLETE_PREFIX_LENGTH,
   mightContainToolInstruction
 } from './patterns';
+import { getDefaultPipeline } from './formats';
+
+// 不完整标签的正则模式（用于流式清理）
+const INCOMPLETE_XML_PATTERNS = {
+  xml_use_mcp_tool: /<use_mcp_tool>[\s\S]*$/i,
+  xml_tool_call: /<tool_call>[\s\S]*$/i,
+};
 
 export type FilterMode = 'display' | 'persist';
 
@@ -54,25 +65,28 @@ export function filterToolInstructions(
   let result = text;
   const { mode, preserveNewlines = true } = options;
   
-  // 1. 应用所有完整模式进行过滤（XML 和其他简单格式）
-  for (const pattern of TOOL_INSTRUCTION_PATTERNS) {
-    result = result.replace(pattern.completePattern, '');
+  // 1. 使用 Pipeline 统一清理所有格式
+  try {
+    const pipeline = getDefaultPipeline();
+    const cleanResult = pipeline.clean(result, { mode, preserveNewlines });
+    result = cleanResult.text;
+  } catch (e) {
+    console.warn('[filterToolInstructions] Pipeline 清理失败，使用降级逻辑:', e);
+    // 降级：使用旧的清理逻辑
+    result = fallbackClean(result);
   }
   
-  // 2. 清理 JSON 格式的工具调用（需要特殊处理嵌套）
-  result = cleanJsonToolCalls(result);
-  
-  // 3. 对于 display 模式，额外清理未完成的片段
+  // 2. 对于 display 模式，额外清理未完成的片段
   if (mode === 'display') {
     result = cleanIncompleteInstructions(result);
   }
   
-  // 4. 对于 persist 模式，额外清理 GPT-OSS 变体的半截指令
+  // 3. 对于 persist 模式，额外清理 GPT-OSS 变体的半截指令
   if (mode === 'persist') {
     result = cleanGptOssVariants(result);
   }
   
-  // 5. 清理多余空行（但保留 markdown 格式）
+  // 4. 清理多余空行（但保留 markdown 格式）
   if (!preserveNewlines) {
     result = result.replace(/\n\n\n+/g, '\n\n');
   }
@@ -81,111 +95,25 @@ export function filterToolInstructions(
 }
 
 /**
- * 清理 JSON 格式的工具调用
- * 
- * 使用括号匹配算法正确处理嵌套 JSON，避免正则无法处理嵌套的问题。
- * 
- * 匹配特征：包含 "type":"tool_call" 或 "type": "tool_call" 的 JSON 对象或数组
+ * 降级清理函数（当 Pipeline 不可用时使用）
  */
-function cleanJsonToolCalls(text: string): string {
-  if (!text) return '';
+function fallbackClean(text: string): string {
+  let result = text;
   
-  // 快速检测：是否包含 tool_call 特征
-  if (!/"type"\s*:\s*"tool_call"/i.test(text)) {
-    return text;
-  }
+  // 移除完整的 XML 指令块
+  result = result.replace(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/gi, '');
+  result = result.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '');
   
-  let result = '';
-  let i = 0;
+  // 移除 JSON 格式的工具调用
+  result = result.replace(/\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/gi, '');
   
-  while (i < text.length) {
-    // 处理 JSON 对象
-    if (text[i] === '{') {
-      const jsonEnd = findMatchingBrace(text, i, '{', '}');
-      
-      if (jsonEnd !== -1) {
-        const jsonStr = text.substring(i, jsonEnd + 1);
-        
-        // 检查这个 JSON 是否是工具调用
-        if (/"type"\s*:\s*"tool_call"/i.test(jsonStr)) {
-          // 跳过这个 JSON 对象
-          i = jsonEnd + 1;
-          continue;
-        }
-      }
-    }
-    
-    // 处理 JSON 数组（可能包含工具调用对象）
-    if (text[i] === '[') {
-      const arrayEnd = findMatchingBrace(text, i, '[', ']');
-      
-      if (arrayEnd !== -1) {
-        const arrayStr = text.substring(i, arrayEnd + 1);
-        
-        // 检查这个数组是否包含工具调用
-        if (/"type"\s*:\s*"tool_call"/i.test(arrayStr)) {
-          // 跳过整个数组
-          i = arrayEnd + 1;
-          continue;
-        }
-      }
-    }
-    
-    // 不是工具调用 JSON，保留字符
-    result += text[i];
-    i++;
-  }
+  // 移除内部标记
+  result = result.replace(/\{[^}]*"__tool_call_card__"[^}]*\}/g, '');
+  
+  // 移除 GPT-OSS 模板标签
+  result = result.replace(/<\|(?:channel|message|end|thinking|constrain|tool_calls?|function_calls?|assistant|user|system)\|>/gi, '');
   
   return result;
-}
-
-/**
- * 找到匹配的右括号位置
- * 
- * @param text 文本
- * @param start 左括号的位置
- * @param openChar 左括号字符（'{' 或 '['）
- * @param closeChar 右括号字符（'}' 或 ']'）
- * @returns 匹配的右括号位置，或 -1 如果没找到
- */
-function findMatchingBrace(text: string, start: number, openChar: string = '{', closeChar: string = '}'): number {
-  if (text[start] !== openChar) return -1;
-  
-  let depth = 0;
-  let inString = false;
-  let escape = false;
-  
-  for (let i = start; i < text.length; i++) {
-    const char = text[i];
-    
-    if (escape) {
-      escape = false;
-      continue;
-    }
-    
-    if (char === '\\' && inString) {
-      escape = true;
-      continue;
-    }
-    
-    if (char === '"' && !escape) {
-      inString = !inString;
-      continue;
-    }
-    
-    if (inString) continue;
-    
-    if (char === openChar) {
-      depth++;
-    } else if (char === closeChar) {
-      depth--;
-      if (depth === 0) {
-        return i;
-      }
-    }
-  }
-  
-  return -1; // 未找到匹配的右括号
 }
 
 /**
@@ -201,21 +129,12 @@ function cleanIncompleteInstructions(text: string): string {
   // 0. 首先清理独立出现的 GPT-OSS 模板标签（这些总是应该被移除）
   result = result.replace(/<\|(?:channel|message|end|thinking|constrain|tool_calls?|function_calls?|assistant|user|system)\|>/gi, '');
   
-  // 1. 只移除未完成的 MCP 工具调用 XML 指令块（use_mcp_tool 和 tool_call）
-  // 不处理其他 XML 格式，避免误删 HTML
-  for (const pattern of TOOL_INSTRUCTION_PATTERNS) {
-    // 只处理 MCP 相关的 XML 格式
-    if (pattern.incompletePattern && 
-        (pattern.id === 'xml_use_mcp_tool' || pattern.id === 'xml_tool_call')) {
-      result = result.replace(pattern.incompletePattern, '');
-    }
-  }
+  // 1. 只移除未完成的 MCP 工具调用 XML 指令块
+  result = result.replace(INCOMPLETE_XML_PATTERNS.xml_use_mcp_tool, '');
+  result = result.replace(INCOMPLETE_XML_PATTERNS.xml_tool_call, '');
   
   // 2. 清理不完整的标签前缀（MCP 标签和 GPT-OSS 标签）
-  // GPT-OSS 标签使用 <| 开头，可以安全识别
   for (const tag of INCOMPLETE_TAG_PREFIXES) {
-    // 对于 GPT-OSS 标签（以 <| 开头），使用较短的前缀长度
-    // 对于 MCP 标签，使用较长的前缀长度避免误删 HTML
     const minLen = tag.startsWith('<|') ? 2 : MIN_INCOMPLETE_PREFIX_LENGTH;
     for (let len = tag.length; len >= minLen; len--) {
       const prefix = tag.substring(0, len);

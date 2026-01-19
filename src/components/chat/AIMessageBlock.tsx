@@ -7,6 +7,12 @@ import { ThinkingBar } from '@/components/chat/ThinkingBar';
 import FoldingLoader from '../ui/FoldingLoader';
 import { ToolCallCard } from '@/components/chat/ToolCallCard';
 import { filterToolCallContent } from '@/lib/chat/segments';
+
+// #region agent log
+const debugLog = (loc: string, msg: string, data: any) => {
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:loc,message:msg,data,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C-E'})}).catch(()=>{});
+};
+// #endregion
 // 采用成熟图片查看组件：yet-another-react-lightbox（需安装依赖）
 // pnpm add yet-another-react-lightbox yet-another-react-lightbox/plugins/zoom yet-another-react-lightbox/plugins/fullscreen yet-another-react-lightbox/plugins/rotate yet-another-react-lightbox/plugins/download
 import Lightbox from 'yet-another-react-lightbox';
@@ -237,6 +243,12 @@ export function AIMessageBlock({
 
   // 检查是否没有任何内容（初始加载状态）—— segments 路径下以 segments 是否为空为准
   const hasNoContent = isStreaming && (!Array.isArray(segments) || segments.length === 0) && !content;
+
+  // #region agent log
+  useEffect(() => {
+    debugLog('AIMessageBlock.tsx:250', 'AIMessageBlock渲染状态', { id, isStreaming, hasNoContent, segmentsLen: segments?.length || 0, contentLen: content?.length || 0, viewModelFlags: viewModel?.flags });
+  }, [id, isStreaming, hasNoContent, segments?.length, content?.length, viewModel?.flags]);
+  // #endregion
 
   // 从 segments 中提取思考内容，替代旧的 MessageStreamParser 机制
   const thinkTextFromSegments = useMemo(() => {
