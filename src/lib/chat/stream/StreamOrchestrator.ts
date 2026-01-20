@@ -348,12 +348,26 @@ export class StreamOrchestrator {
     // 派发流结束动作
     store.dispatchMessageAction(this.context.messageId, { type: 'STREAM_END' });
 
-    // 持久化消息
+    // 持久化消息 - 包含 segments
+    // 关键修复：同步 contentToPersist 到最后一个 text segment
+    // 因为 contentToPersist 是完整的流式内容，而 segments 中的 text 可能没有完全同步
+    const segmentsToPersist = msg?.segments ? [...msg.segments] : [];
+    if (contentToPersist && segmentsToPersist.length > 0) {
+      // 找到最后一个 text segment 并更新其内容
+      const lastTextIdx = segmentsToPersist.map((s: any) => s.kind).lastIndexOf('text');
+      if (lastTextIdx >= 0) {
+        segmentsToPersist[lastTextIdx] = { kind: 'text', text: contentToPersist };
+      } else {
+        // 如果没有 text segment，创建一个
+        segmentsToPersist.push({ kind: 'text', text: contentToPersist });
+      }
+    }
     await store.updateMessage(this.context.messageId, {
       content: contentToPersist,
       status: 'sent',
       thinking_start_time: this.context.thinkingStartTime || undefined,
       thinking_duration,
+      segments: segmentsToPersist, // 关键：保存同步后的 segments
     });
 
     // 通知UI更新完成
