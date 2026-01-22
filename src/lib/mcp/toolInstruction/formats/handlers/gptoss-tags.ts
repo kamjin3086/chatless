@@ -239,6 +239,28 @@ export class GptOssTagHandler implements FormatHandler {
 
     let cleaned = text;
     const removedFragments: string[] = [];
+
+    // ============================================================
+    // 0. 保护 Markdown fenced code blocks（避免误伤示例代码）
+    // ============================================================
+    // 运行证据：模型在正常回答中会输出 ```xml ... <use_mcp_tool> ... ``` 示例，
+    // 若我们在这里移除 XML 标签，会导致代码块“被掏空/乱码”（误伤）。
+    const fencedBlocks: string[] = [];
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, (match) => {
+      const idx = fencedBlocks.length;
+      fencedBlocks.push(match);
+      return `__CHATLESS_FENCED_BLOCK_${idx}__`;
+    });
+
+    // 0.2 保护 Markdown inline code（支持 1 个或多个反引号：`...` / ``...`` / ```...```），避免误伤行内示例
+    // 运行证据：模型可能用双反引号包裹 `<use_mcp_tool>`（例如：``<use_mcp_tool>``），
+    // 若我们移除其中的标签，会导致 ```` 断裂。
+    const inlineCodes: string[] = [];
+    cleaned = cleaned.replace(/(`+)([^`\n]*?)\1/g, (match) => {
+      const idx = inlineCodes.length;
+      inlineCodes.push(match);
+      return `__CHATLESS_INLINE_CODE_${idx}__`;
+    });
     
     // #region agent log
     fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gptoss-tags.ts:H2-input',message:'清理器输入',data:{inputLen:text.length,inputSample:text.slice(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
@@ -403,6 +425,24 @@ export class GptOssTagHandler implements FormatHandler {
     // 4.3 清理行首行尾的空白
     cleaned = cleaned.trim();
 
+    // ============================================================
+    // 6. 恢复 fenced code blocks
+    // ============================================================
+    if (fencedBlocks.length > 0) {
+      cleaned = cleaned.replace(/__CHATLESS_FENCED_BLOCK_(\d+)__/g, (_m, n) => {
+        const idx = Number(n);
+        return Number.isFinite(idx) && fencedBlocks[idx] ? fencedBlocks[idx] : '';
+      });
+    }
+
+    // 6.2 恢复 inline code
+    if (inlineCodes.length > 0) {
+      cleaned = cleaned.replace(/__CHATLESS_INLINE_CODE_(\d+)__/g, (_m, n) => {
+        const idx = Number(n);
+        return Number.isFinite(idx) && inlineCodes[idx] ? inlineCodes[idx] : '';
+      });
+    }
+
     // #region agent log
     fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gptoss-tags.ts:H2-output',message:'清理器输出',data:{outputLen:cleaned.length,removedCount:removedFragments.length,outputSample:cleaned.slice(0,200),removedSamples:removedFragments.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
     // #endregion
@@ -417,6 +457,22 @@ export class GptOssTagHandler implements FormatHandler {
 
   cleanIncomplete(text: string): string {
     let result = text;
+
+    // 保护 fenced code blocks（允许未闭合，避免流式时误伤）
+    const fencedBlocks: string[] = [];
+    result = result.replace(/```[\s\S]*?(?:```|$)/g, (match) => {
+      const idx = fencedBlocks.length;
+      fencedBlocks.push(match);
+      return `__CHATLESS_FENCED_BLOCK_${idx}__`;
+    });
+
+    // 保护 inline code（支持 1+ 反引号，允许未闭合）
+    const inlineCodes: string[] = [];
+    result = result.replace(/(`+)([^`\n]*?)(\1|$)/g, (match) => {
+      const idx = inlineCodes.length;
+      inlineCodes.push(match);
+      return `__CHATLESS_INLINE_CODE_${idx}__`;
+    });
 
     // ============================================================
     // 1. 移除不完整的 Commentary 指令
@@ -486,6 +542,22 @@ export class GptOssTagHandler implements FormatHandler {
         result.endsWith('</com') || result.endsWith('</co') ||
         result.endsWith('</c') || result.endsWith('</')) {
       result = result.slice(0, result.lastIndexOf('<'));
+    }
+
+    // 恢复 fenced code blocks
+    if (fencedBlocks.length > 0) {
+      result = result.replace(/__CHATLESS_FENCED_BLOCK_(\d+)__/g, (_m, n) => {
+        const idx = Number(n);
+        return Number.isFinite(idx) && fencedBlocks[idx] ? fencedBlocks[idx] : '';
+      });
+    }
+
+    // 恢复 inline code
+    if (inlineCodes.length > 0) {
+      result = result.replace(/__CHATLESS_INLINE_CODE_(\d+)__/g, (_m, n) => {
+        const idx = Number(n);
+        return Number.isFinite(idx) && inlineCodes[idx] ? inlineCodes[idx] : '';
+      });
     }
 
     return result;

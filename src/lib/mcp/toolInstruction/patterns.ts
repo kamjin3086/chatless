@@ -244,7 +244,10 @@ export function mightContainToolInstruction(text: string): boolean {
     // GPT-OSS 模板标签（需要剥离的内部结构标记）
     // 使用 <| 作为快速检测，而不是完整的 <|channel|>
     text.includes('<|') ||
+    // GPT-OSS 工具调用常见前缀（流式拆包时可能只有 "commentary" 片段）
     lowerText.includes('commentary to=') ||
+    lowerText.includes('tool_name=') ||
+    /commentary\s*$/.test(lowerText) ||
     // 新增：反向格式 json{...}commentary to=...
     (lowerText.includes('json') && lowerText.includes('commentary')) ||
     // JSON 格式的工具调用（更严格的检测）

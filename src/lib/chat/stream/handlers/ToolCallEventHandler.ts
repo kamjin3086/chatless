@@ -106,16 +106,11 @@ export class ToolCallEventHandler implements EventHandler {
     debugLog('ToolCallEventHandler.ts:handle:toolInfo', 'Extracted tool info', { server, tool, args, contextMessageId: context.messageId, toolCallKey: lockResult.key }, 'H1');
     // #endregion
 
-    // 防止重复执行（context 级别的备用检查）
-    if (context.toolStarted) {
-      console.debug('[ToolCallHandler] Tool already started, skipping duplicate call');
-      return;
-    }
-
     let cardId: string | undefined;
 
     try {
-      // 标记工具已启动
+      // 标记“本条消息已启动过工具”（用于 StreamOrchestrator.handleComplete skipFallback）
+      // 注意：不能用它来阻断后续 tool_call，否则同一条消息内的多工具调用会被丢弃（例如多城市天气）。
       context.toolStarted = true;
 
       // 注意：不需要清理 context.content

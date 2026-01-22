@@ -15,10 +15,9 @@
 
 import { getSkillManager } from './SkillManager';
 import { parseSkillMd } from './SkillMdParser';
-import { executeSkillAction, executeSkillActions, getSkillOrchestrator } from './SkillOrchestrator';
+import { executeSkillAction, executeSkillActions } from './SkillOrchestrator';
 import type { 
   SkillIndexEntry, 
-  SkillAction, 
   SkillActionResult,
   SkillExecutionContext,
   SkillParameterValues,
@@ -79,7 +78,32 @@ async function getSkillInstructions(skillId: string): Promise<string> {
     return `Error: Skill "${skillId}" not found or has no content`;
   }
 
-  return content;
+  // 为模型附加一段“不可见的执行规则提示”（仍然会出现在 tool card 中，但不会污染正常聊天内容）
+  const parsed = parseSkillMd(content);
+  const actionsCount = parsed.actions.length;
+  const actionIdsPreview = parsed.actions.slice(0, 12).map(a => a.id);
+
+  // #region agent log
+  debugLog(
+    'skillTools.ts:getSkillInstructions:actionsMeta',
+    'Skill instructions actions meta',
+    { skillId, actionsCount, actionIdsPreview },
+    'H15-action-guard'
+  );
+  // #endregion
+
+  const guidance = [
+    '',
+    '---',
+    '[system] tool-usage-guard:',
+    `- actionsCount=${actionsCount}`,
+    actionsCount === 0
+      ? '- 本技能未定义可执行 actions：不要调用 run_skill_action（会必然失败）；如需继续，请调用 run_all_skill_actions 获取 instruction 输出，或按 SKILL.md 指令自行拆解为可审批动作。'
+      : '- 本技能已定义 actions：绝对不要凭空猜 actionId；必须先调用 list_skill_actions，并且只使用其返回的 id 字段。',
+    actionIdsPreview.length > 0 ? `- actionIdsPreview=${actionIdsPreview.join(', ')}` : '- actionIdsPreview=(none)',
+  ].join('\n');
+
+  return `${content}${guidance}`;
 }
 
 /**
@@ -190,6 +214,23 @@ async function listSkillActions(skillId: string): Promise<{
     requiresApproval: action.requiresApproval,
   }));
 
+  // #region agent log
+  debugLog(
+    'skillTools.ts:listSkillActions:parsed',
+    'Parsed skill actions',
+    {
+      skillId,
+      skillName: skill.name,
+      skillPath: skill.path,
+      skillMdLen: (skill.skillMdContent || '').length,
+      actionsCount: parseResult.actions.length,
+      firstActionId: parseResult.actions[0]?.id,
+      frontmatterHasActions: Array.isArray((parseResult.frontmatter as any)?.actions),
+    },
+    'H14-actions'
+  );
+  // #endregion
+
   return {
     skillId,
     skillName: skill.name,
@@ -237,6 +278,46 @@ async function runSkillAction(
   }
 
   try {
+    // 先验证 actionId 是否存在，避免模型猜测导致“Action not found”反复循环
+    const manager = getSkillManager();
+    const skill = await manager.getSkill(skillId);
+    if (!skill) {
+      return { success: false, message: `Error: Skill "${skillId}" not found` };
+    }
+
+    const parsed = parseSkillMd(skill.skillMdContent || '');
+    const actionIds = parsed.actions.map(a => a.id);
+    const hasActions = actionIds.length > 0;
+    const hasActionId = actionIds.includes(actionId);
+
+    // #region agent log
+    debugLog(
+      'skillTools.ts:runSkillAction:validate',
+      'Validate skill actionId',
+      { skillId, actionId, hasActions, actionsCount: actionIds.length, hasActionId, actionIdsPreview: actionIds.slice(0, 12) },
+      'H15-action-guard'
+    );
+    // #endregion
+
+    if (!hasActions) {
+      return {
+        success: false,
+        message:
+          `Skill "${skillId}" has no defined actions. Do NOT call run_skill_action. ` +
+          `Next: call skills.run_all_skill_actions (instruction-based), or call skills.get_skill_instructions and follow it.`,
+      };
+    }
+
+    if (!hasActionId) {
+      return {
+        success: false,
+        message:
+          `Action not found: ${actionId}. Do NOT guess actionId. ` +
+          `Next: call skills.list_skill_actions to get valid ids. ` +
+          `Valid action ids (preview): ${actionIds.slice(0, 12).join(', ') || '(none)'}`,
+      };
+    }
+
     const context: SkillExecutionContext = {
       conversationId: conversationId || `conv-${Date.now()}`,
       messageId: messageId || `msg-${Date.now()}`,
@@ -281,6 +362,8 @@ async function runAllSkillActions(
   success: boolean;
   results: SkillActionResult[];
   message: string;
+  mode?: 'actions' | 'instruction';
+  executedActions?: boolean;
 }> {
   if (!skillId) {
     return {
@@ -301,13 +384,39 @@ async function runAllSkillActions(
 
     const results = await executeSkillActions(skillId, context, parameters);
     const allSuccess = results.every(r => r.success);
+    const instructionOnly = results.length === 1 && results[0]?.actionId === 'instruction';
+    const mode: 'actions' | 'instruction' = instructionOnly ? 'instruction' : 'actions';
+    const executedActions = !instructionOnly;
     
+    // #region agent log
+    debugLog(
+      'skillTools.ts:runAllSkillActions:result',
+      'Executed all skill actions',
+      {
+        skillId,
+        resultsCount: results.length,
+        allSuccess,
+        mode,
+        executedActions,
+        firstResultActionId: results[0]?.actionId,
+        firstResultStatus: results[0]?.status,
+        firstResultHasOutput: Boolean(results[0]?.output || results[0]?.stdout),
+        firstResultOutputLen: ((results[0]?.output as string) || (results[0]?.stdout as string) || '').length,
+      },
+      'H14-actions'
+    );
+    // #endregion
+
     return {
       success: allSuccess,
       results,
-      message: allSuccess 
-        ? `All ${results.length} actions executed successfully`
-        : `${results.filter(r => r.success).length}/${results.length} actions succeeded`,
+      mode,
+      executedActions,
+      message: instructionOnly
+        ? 'No executable actions were run. Tool returned instruction-only content (guidance), not file creation.'
+        : (allSuccess
+            ? `All ${results.length} actions executed successfully`
+            : `${results.filter(r => r.success).length}/${results.length} actions succeeded`),
     };
   } catch (error) {
     return {

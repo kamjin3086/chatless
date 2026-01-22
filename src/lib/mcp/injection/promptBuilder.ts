@@ -158,7 +158,7 @@ export async function buildInitialPrompt(
   return {
     systemMessages: messages,
     enabledServers: allEnabled,
-    hasToolInfo: toolInfoParts.length > 0 || (nativeTools && nativeTools.length > 0),
+    hasToolInfo: toolInfoParts.length > 0 || (Array.isArray(nativeTools) && nativeTools.length > 0),
     useNativeTools,
     nativeTools,
     toolCallStrategy: toolStrategy,
@@ -188,8 +188,8 @@ export async function buildFollowUpPrompt(
   const depth = context.toolCallDepth ?? 1;
   const originalQuestion = context.originalQuestion || context.userContent;
   
-  if (depth >= 2 || context.hasToolError === false) {
-    // 第二次追问或明确成功：强制回答
+  if (depth >= 2) {
+    // 第二次追问：强制回答（到达预算/深度上限）
     messages.push({
       role: 'system',
       content: buildForcedAnswerPrompt(originalQuestion)
@@ -414,16 +414,18 @@ function buildFirstFollowUpPrompt(originalQuestion: string, hasError?: boolean):
 用户问题：${originalQuestion}`;
   }
   
-  return `工具调用已完成，请基于返回的结果回答用户问题。
+  return `工具调用已完成。请基于返回的结果回答用户问题；如果信息不足，允许继续调用工具进行补充/纠错，但必须遵守预算与停止条件。
 
 【核心要求】：
 1. 阅读上面的工具调用结果
-2. 直接输出中文答案，简洁明了
-3. 不要再输出任何工具调用指令
+2. 如果已经足够回答：直接给出最终中文答案，简洁明了
+3. 如果仍不足以回答：继续调用工具获取缺失信息（允许补充/重试）
 
-【禁止行为】：
-- 禁止输出 <use_mcp_tool> 或任何工具调用标签
-- 禁止重复调用已经执行过的工具
+【工具调用规则（通用）】：
+- 只为“缺失/不确定/需要纠错”的信息调用工具，避免无意义探索
+- 允许一次输出多个工具调用用于并行补齐（但总数≤3），每个调用参数必须具体且互不重复
+- 如果需要重试同一工具：必须改变参数/查询以纠错（不要原样重复）
+- 工具预算：最多再补充 2 轮工具调用；若仍不足，请明确说明缺口并给出你能给出的最佳答案
 
 用户问题：${originalQuestion}`;
 }

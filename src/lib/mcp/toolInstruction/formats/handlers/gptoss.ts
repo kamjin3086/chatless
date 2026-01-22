@@ -59,7 +59,17 @@ export class GptOssHandler implements FormatHandler {
   // 匹配带 <json> 标签的格式：commentary to=server.tool><json>{"arg":"value"}></json>
   // GPT-OSS 有时使用 <json> 标签包裹参数
   private readonly commentaryWithJsonTagPattern = 
-    /commentary\s+to=([a-zA-Z0-9_.]+)><json>(\{[^}]*\})><\/json>/gi;
+    /commentary\s+to=([a-zA-Z0-9_.]+)>\s*<json>\s*(\{[\s\S]*?\})\s*<\/json>/gi;
+
+  // 匹配带 tool_name= 的变体：
+  // 例如：commentary to=web_search tool_name=search code{"query":"..."}
+  private readonly commentaryWithToolNamePattern =
+    /commentary\s+to=([a-zA-Z0-9_.]+)\s+tool_name\s*=\s*([a-zA-Z0-9_.-]+)\s+(?:json|code)?\s*(\{[\s\S]*?\})/gi;
+
+  // 匹配“无 <|channel|> 但带 <|constrain|>json<|message|>”的变体：
+  // 例如：commentary to=web_search.search <|constrain|>json<|message|>{"query":"..."}
+  private readonly commentaryConstrainMessagePattern =
+    /commentary\s+to=([^\s<>]+)[\s\S]*?<\|message\|>\s*(\{[\s\S]*?\})(?:\s*<\|(?:end|call)\|>)?/gi;
   
   // 匹配混合格式：commentary to=use_mcp_tool><server_name>...</use_mcp_tool>
   // 这是模型混淆 GPT-OSS 和 XML 格式时产生的
@@ -296,6 +306,72 @@ export class GptOssHandler implements FormatHandler {
         });
       }
     }
+
+    // 4. 解析带 tool_name= 的变体：commentary to=server tool_name=tool code{...}
+    const toolNamePattern = new RegExp(this.commentaryWithToolNamePattern.source, 'gi');
+    while ((match = toolNamePattern.exec(text)) !== null) {
+      const server = match[1].trim();
+      const tool = match[2].trim();
+      const argsStr = match[3];
+
+      if (!server || !tool) continue;
+
+      let args: Record<string, unknown> | undefined;
+      if (argsStr) {
+        try {
+          args = JSON.parse(argsStr);
+        } catch { /* ignore */ }
+      }
+
+      // 避免重复
+      const isDuplicate = results.some(r => r.startIndex === match!.index || (r.server === server && r.tool === tool));
+      if (!isDuplicate) {
+        results.push({
+          server,
+          tool,
+          args,
+          rawText: match[0],
+          startIndex: match.index,
+          endIndex: match.index + match[0].length,
+          format: 'gpt_oss_commentary',
+          confidence: 0.86,
+        });
+      }
+    }
+
+    // 5. 解析带 <|message|> 的变体（常见于 <|constrain|>json<|message|> 拆包）
+    // 例如：commentary to=web_search.search <|constrain|>json<|message|>{"query":"..."}
+    const constrainPattern = new RegExp(this.commentaryConstrainMessagePattern.source, 'gi');
+    while ((match = constrainPattern.exec(text)) !== null) {
+      const target = match[1].trim();
+      const argsStr = match[2];
+
+      const parsed = this.parseTarget(target);
+      if (!parsed) continue;
+
+      const { server, tool } = parsed;
+
+      let args: Record<string, unknown> | undefined;
+      if (argsStr) {
+        try {
+          args = JSON.parse(argsStr);
+        } catch { /* ignore */ }
+      }
+
+      const isDuplicate = results.some(r => r.startIndex === match!.index || (r.server === server && r.tool === tool));
+      if (!isDuplicate) {
+        results.push({
+          server,
+          tool,
+          args,
+          rawText: match[0],
+          startIndex: match.index,
+          endIndex: match.index + match[0].length,
+          format: 'gpt_oss_commentary',
+          confidence: 0.84,
+        });
+      }
+    }
     
     return results;
   }
@@ -328,8 +404,11 @@ export class GptOssHandler implements FormatHandler {
       return { server, tool };
     }
     
-    // 只有服务器名的情况不再返回 default，而是返回 null
-    // 因为没有工具名的情况通常表示解析不完整
+    // 兼容：某些 GPT-OSS 变体只输出 server（缺 tool）
+    // 目前只对 web_search 兜底为 search，避免误把其他 server-only 文本解析为工具调用。
+    if (cleaned === 'web_search') {
+      return { server: 'web_search', tool: 'search' };
+    }
     return null;
   }
 

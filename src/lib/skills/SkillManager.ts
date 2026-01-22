@@ -530,8 +530,8 @@ export class SkillManager {
   async openSkillsFolder(): Promise<void> {
     try {
       const basePath = await this.getSkillsBasePath();
-      const { open } = await import('@tauri-apps/plugin-opener');
-      await open(basePath);
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(basePath);
     } catch (error) {
       console.error(`[SkillManager] Failed to open skills folder:`, error);
       throw error;
@@ -686,6 +686,15 @@ ${skillList}
 </use_mcp_tool>
 \`\`\`
 
+**4. 执行技能全部动作：**
+\`\`\`xml
+<use_mcp_tool>
+<server_name>skills</server_name>
+<tool_name>run_all_skill_actions</tool_name>
+<arguments>{"skillId": "技能ID"}</arguments>
+</use_mcp_tool>
+\`\`\`
+
 ### 动作执行说明
 
 技能可以定义多种类型的动作：
@@ -704,9 +713,10 @@ ${skillList}
 1. **检测关键词**：如果用户消息包含 ${skillIds} 等关键词，**立即**调用 \`get_skill_instructions\`
 2. **禁止 web_search**：对于已安装的技能，**绝对不要**使用 web_search 搜索相关信息
 3. **获取技能指令**：调用 \`get_skill_instructions\` 获取详细操作说明
-4. **查看可用动作**：如果技能定义了动作，调用 \`list_skill_actions\` 查看可用动作
-5. **执行动作**：使用 \`run_skill_action\` 执行具体动作，或按照技能指令操作
-6. **示例**：用户说"创建一个docx文档" → 立即调用 \`get_skill_instructions\` 获取 docx 技能指令`;
+4. **查看可用动作（必做）**：若要执行动作，必须先调用 \`list_skill_actions\`
+5. **绝不猜 actionId**：只能使用 \`list_skill_actions\` 返回的 \`id\` 字段作为 \`actionId\`，绝对不要凭空猜测
+6. **执行动作**：调用 \`run_skill_action\`；或调用 \`run_all_skill_actions\` 执行全部动作；若技能无 actions，则按 SKILL.md 指令自行拆解为可审批动作
+7. **示例**：用户说"创建一个docx文档" → 立即调用 \`get_skill_instructions\`，再调用 \`list_skill_actions\`，最后执行 \`run_skill_action\`（不要猜 actionId）`;
   }
 
   /**
