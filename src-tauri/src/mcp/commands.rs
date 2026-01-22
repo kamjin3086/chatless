@@ -13,11 +13,11 @@ use rmcp::{
   },
 };
 // use std::sync::Arc; // no longer needed after using with_uri
+use reqwest::Url;
+use std::net::IpAddr;
 use tauri::State;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
-use reqwest::Url;
-use std::net::IpAddr;
 
 // —— 工具：从 npx 参数中提取第一个包名（用于首次安装的预拉取） ——
 fn extract_npx_package(args: &Option<Vec<String>>) -> Option<String> {
@@ -483,7 +483,9 @@ pub async fn mcp_connect(
       // —— 代理选择策略：若 use_proxy=true 且 proxy_url 存在，且目标非本地/私网，则使用带代理客户端；否则使用浏览器化客户端 ——
       let should_use_proxy = {
         let enabled = config.use_proxy.unwrap_or(false) && config.proxy_url.is_some();
-        if !enabled { false } else {
+        if !enabled {
+          false
+        } else {
           match Url::parse(&base) {
             Ok(u) => {
               let host = u.host_str().unwrap_or_default();
@@ -580,13 +582,15 @@ pub async fn mcp_connect(
       // —— 代理选择（同上） ——
       let should_use_proxy = {
         let enabled = config.use_proxy.unwrap_or(false) && config.proxy_url.is_some();
-        if !enabled { false } else {
+        if !enabled {
+          false
+        } else {
           match Url::parse(&base) {
             Ok(u) => {
               let host = u.host_str().unwrap_or_default();
               is_local_or_private(host) == false
             }
-            Err(_) => false
+            Err(_) => false,
           }
         }
       };

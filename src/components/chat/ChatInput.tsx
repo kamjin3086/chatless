@@ -14,6 +14,8 @@ import { SessionParametersDialog } from './SessionParametersDialog';
 import { McpQuickToggle } from './input/McpQuickToggle';
 import { WebSearchToggle } from './input/WebSearchToggle';
 import { McpMentionPanel } from './input/McpMentionPanel';
+import { SkillMentionPanel } from './input/SkillMentionPanel';
+import type { Skill } from '@/lib/skills/types';
 import type { ModelParameters } from '@/types/model-params';
 import { createSafePreview } from '@/lib/utils/tokenBudget';
 import { getCurrentKnowledgeBaseConfig } from '@/lib/knowledgeBaseConfig';
@@ -318,6 +320,7 @@ export function ChatInput({
   const [overlayFontSize, setOverlayFontSize] = useState<string>('');
   const [overlayLineHeight, setOverlayLineHeight] = useState<string>('');
   const [mentionOpen, setMentionOpen] = useState<boolean>(false);
+  const [skillMentionOpen, setSkillMentionOpen] = useState<boolean>(false);
   const [textareaScroll, setTextareaScroll] = useState<number>(0);
   const overlayRef = useRef<HTMLDivElement>(null);
   
@@ -359,9 +362,10 @@ export function ChatInput({
     };
   }, [resizing]);
 
-  // 是否需要覆盖层渲染（/ 指令或 @ 提示）
+  // 是否需要覆盖层渲染（/ 指令、@ 提示或 # 技能引用）
   const hasSlashOverlay = useMemo(() => !!parseLeadingSlash(inputValue), [inputValue]);
   const hasMentionOverlay = useMemo(() => /@([a-zA-Z0-9_-]{1,64})/g.test(inputValue), [inputValue]);
+  const hasSkillMentionOverlay = useMemo(() => /#([a-zA-Z0-9_-]{1,64})/g.test(inputValue), [inputValue]);
 
   // 用渲染结果替换 /指令与其变量片段；若存在 “| ”，会将其后的内容以换行附加在渲染结果后
   const replaceSlashWithRendered = (text: string, rendered: string): string => {
@@ -396,6 +400,8 @@ export function ChatInput({
     setIsPanelOpen(open);
     // @ 提示：当末尾形如 @xxx 时打开 MCP 引用面板（允许字母数字和 - _）
     setMentionOpen(/@([a-zA-Z0-9_-]*)$/.test(val));
+    // # 提示：当末尾形如 #xxx 时打开技能引用面板
+    setSkillMentionOpen(/#([a-zA-Z0-9_-]*)$/.test(val));
   }, [inputValue]);
 
   // 当进入编辑模式时，预填充内容
@@ -556,9 +562,11 @@ export function ChatInput({
     if (e.key === "Enter" && !e.shiftKey) {
       // 1) 若 @ 面板打开，回车只代入选择，不发送（由面板自身处理 onSelect）
       if (mentionOpen) { e.preventDefault(); return; }
-      // 2) 若 / 面板打开，也不直接发送
+      // 2) 若 # 技能面板打开，回车只代入选择，不发送
+      if (skillMentionOpen) { e.preventDefault(); return; }
+      // 3) 若 / 面板打开，也不直接发送
       if (isPanelOpen) { e.preventDefault(); return; }
-      // 3) 正常发送
+      // 4) 正常发送
       e.preventDefault();
       handleSend();
     }
@@ -856,23 +864,37 @@ export function ChatInput({
             为避免重影，textarea 在有 /指令 时使用 text-transparent，仅显示插入符。 */}
         {(() => {
           const parsed = parseLeadingSlash(inputValue);
-          // 高亮 @mcp 引用（淡绿色） + 兼容 / 指令高亮
+          // 高亮 @mcp 引用（淡绿色）和 #skill 引用（淡紫色）+ 兼容 / 指令高亮
           const mentionRe = /@([a-zA-Z0-9_-]{1,64})/g;
+          const skillRe = /#([a-zA-Z0-9_-]{1,64})/g;
           const renderMentions = (text: string) => {
             const parts: React.ReactNode[] = [];
-            let last = 0; let m: RegExpExecArray | null;
-            mentionRe.lastIndex = 0; // 重置正则表达式的lastIndex，避免错位
+            let last = 0;
+            // 合并 @ 和 # 的匹配，按位置排序
+            const allMatches: { index: number; text: string; type: 'mcp' | 'skill' }[] = [];
+            mentionRe.lastIndex = 0;
+            skillRe.lastIndex = 0;
+            let m: RegExpExecArray | null;
             while ((m = mentionRe.exec(text))) {
-              const i = m.index;
-              if (i > last) parts.push(text.slice(last, i));
-              // 使用box-shadow实现高亮效果，不使用padding避免字符错位
-              parts.push(<span key={i} className="bg-emerald-100/80 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300" style={{ fontFeatureSettings: '"liga" 0, "clig" 0', display: 'inline', boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.15)', borderRadius: '2px' }}>{m[0]}</span>);
-              last = i + m[0].length;
+              allMatches.push({ index: m.index, text: m[0], type: 'mcp' });
+            }
+            while ((m = skillRe.exec(text))) {
+              allMatches.push({ index: m.index, text: m[0], type: 'skill' });
+            }
+            allMatches.sort((a, b) => a.index - b.index);
+            for (const match of allMatches) {
+              if (match.index > last) parts.push(text.slice(last, match.index));
+              if (match.type === 'mcp') {
+                parts.push(<span key={match.index} className="bg-emerald-100/80 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300" style={{ fontFeatureSettings: '"liga" 0, "clig" 0', display: 'inline', boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.15)', borderRadius: '2px' }}>{match.text}</span>);
+              } else {
+                parts.push(<span key={match.index} className="bg-violet-100/80 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300" style={{ fontFeatureSettings: '"liga" 0, "clig" 0', display: 'inline', boxShadow: '0 0 0 2px rgba(139, 92, 246, 0.15)', borderRadius: '2px' }}>{match.text}</span>);
+              }
+              last = match.index + match.text.length;
             }
             if (last < text.length) parts.push(text.slice(last));
             return parts;
           };
-          if (!parsed && hasMentionOverlay) {
+          if (!parsed && (hasMentionOverlay || hasSkillMentionOverlay)) {
             // 无 / 指令时，仅做 @ 提示的淡绿色高亮（严格对齐：不添加任何额外字符/空格）
             return (
               <div ref={overlayRef} className="absolute inset-px pointer-events-none select-none overflow-hidden">
@@ -903,10 +925,10 @@ export function ChatInput({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="开始对话吧… 输入 / 可快速调用提示词 输入 @ 可指定MCP服务"
+          placeholder="开始对话吧… 输入 / 调用提示词 @ 指定MCP # 引用技能"
           className={cn(
             "relative z-[1] w-full pl-8 sm:pl-10 pr-32 sm:pr-36 py-[10px] pb-10 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[66px] placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:text-gray-400/80 dark:placeholder:text-gray-400/70",
-            (hasSlashOverlay || hasMentionOverlay) ? "text-transparent caret-gray-900 dark:caret-gray-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-gray-900 dark:text-gray-100 tabular-nums"
+            (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-gray-900 dark:caret-gray-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-gray-900 dark:text-gray-100 tabular-nums"
           )}
           style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }}
           rows={3}
@@ -924,6 +946,20 @@ export function ChatInput({
             setMentionOpen(false);
           }}
           onClose={()=>setMentionOpen(false)}
+        />
+        <SkillMentionPanel
+          open={skillMentionOpen}
+          anchorRef={textareaRef as any}
+          filterQuery={(inputValue.match(/#([a-zA-Z0-9_-]*)$/)?.[1] || '')}
+          onSelect={(skill: Skill)=>{
+            const el = textareaRef.current; if (!el) return;
+            // 将 #query 替换为 #skill-id，保留技能引用
+            const next = inputValue.replace(/#([a-zA-Z0-9_-]*)$/, `#${skill.id} `);
+            setInputValue(next);
+            setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
+            setSkillMentionOpen(false);
+          }}
+          onClose={()=>setSkillMentionOpen(false)}
         />
         <div className="absolute left-2 sm:left-3 bottom-4 z-[2] flex items-center gap-1.5 sm:gap-2">
           

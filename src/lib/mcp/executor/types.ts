@@ -13,7 +13,6 @@ export interface ToolCallParams {
   server: string;
   tool: string;
   args?: Record<string, unknown>;
-  _runningMarker: string; // 兼容旧参数（未使用）
   provider: string;
   model: string;
   historyForLlm: LlmMessage[];

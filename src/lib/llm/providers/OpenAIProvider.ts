@@ -3,6 +3,14 @@ import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
+import { createStreamEvent } from '../types/stream-events';
+import { 
+  type ToolDefinition, 
+  type ToolCallOptions,
+  toOpenAITools, 
+  toOpenAIToolChoice,
+  parseToolArguments 
+} from '../types/tool-schema';
 
 export class OpenAIProvider extends BaseProvider {
   private sseClient: SSEClient;
@@ -68,7 +76,7 @@ export class OpenAIProvider extends BaseProvider {
     if (!apiKey) {
       const err = new Error('NO_KEY');
       (err as any).code = 'NO_KEY';
-      (err as any).userMessage = '未配置 API 密钥，请在“设置 → 模型与Provider”中为当前 Provider 或模型配置密钥';
+      (err as any).userMessage = '未配置 API 密钥，请在"设置 → 模型与Provider"中为当前 Provider 或模型配置密钥';
       cb.onError?.(err);
       return;
     }
@@ -76,7 +84,14 @@ export class OpenAIProvider extends BaseProvider {
     const url = `${this.baseUrl.replace(/\/$/, '')}/chat/completions`;
     // 将通用选项映射为 OpenAI 字段（snake_case）
     // 过滤掉扩展字段，避免把 mcpServers/extensions 传到不支持的后端
-    const { extensions: _extensions, mcpServers: _mcpServers, ...restOpts } = (opts as any) || {};
+    const { 
+      extensions: _extensions, 
+      mcpServers: _mcpServers,
+      tools: toolDefs,
+      toolChoice,
+      parallelToolCalls,
+      ...restOpts 
+    } = (opts as any) || {};
     const mapped: any = { ...restOpts };
     const o: any = opts as any;
     if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
@@ -88,16 +103,40 @@ export class OpenAIProvider extends BaseProvider {
     if (o.presencePenalty !== undefined && mapped.presence_penalty === undefined) mapped.presence_penalty = o.presencePenalty;
     if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
 
-    const body = {
+    // 构建请求体
+    const body: Record<string, unknown> = {
       model,
       messages: messages.map(m => ({ role: m.role, content: m.content })),
       stream: true,
       ...mapped,
     };
+    
+    // 添加原生工具调用支持（如果提供了工具定义）
+    if (toolDefs && Array.isArray(toolDefs) && toolDefs.length > 0) {
+      body.tools = toOpenAITools(toolDefs as ToolDefinition[]);
+      
+      if (toolChoice) {
+        body.tool_choice = toOpenAIToolChoice(toolChoice);
+      }
+      
+      if (parallelToolCalls !== undefined) {
+        body.parallel_tool_calls = parallelToolCalls;
+      }
+      
+      // 启用流式工具调用增量返回
+      body.stream_options = { include_usage: true };
+    }
 
     try {
       this.aborted = false;
       this.thinkingStrategy.reset(); // 重置策略状态
+      
+      // 工具调用增量状态
+      const toolCallState: Map<number, {
+        id: string;
+        name: string;
+        arguments: string;
+      }> = new Map();
       
       await this.sseClient.startConnection(
         {
@@ -120,13 +159,39 @@ export class OpenAIProvider extends BaseProvider {
             const jsonStr = rawData.substring(5).trim();
             if (!jsonStr) return;
             if (jsonStr === '[DONE]') {
+              // 完成前，发送所有累积的工具调用
+              this.emitPendingToolCalls(toolCallState, cb);
               cb.onComplete?.();
               this.sseClient.stopConnection();
               return;
             }
             try {
               const json = JSON.parse(jsonStr);
-              const token = json?.choices?.[0]?.delta?.content;
+              const delta = json?.choices?.[0]?.delta;
+              
+              // 处理工具调用增量
+              if (delta?.tool_calls) {
+                for (const tc of delta.tool_calls) {
+                  const index = tc.index ?? 0;
+                  
+                  if (!toolCallState.has(index)) {
+                    toolCallState.set(index, {
+                      id: tc.id || `call_${index}`,
+                      name: tc.function?.name || '',
+                      arguments: tc.function?.arguments || '',
+                    });
+                  } else {
+                    const state = toolCallState.get(index)!;
+                    if (tc.id) state.id = tc.id;
+                    if (tc.function?.name) state.name += tc.function.name;
+                    if (tc.function?.arguments) state.arguments += tc.function.arguments;
+                  }
+                }
+                // 不返回，继续处理可能的内容
+              }
+              
+              // 处理普通内容
+              const token = delta?.content;
               if (!token) return;
               
               // 使用策略处理token，得到结构化事件
@@ -155,6 +220,50 @@ export class OpenAIProvider extends BaseProvider {
     } catch (error: any) {
       console.error('[OpenAIProvider] SSE connection failed:', error);
       cb.onError?.(error);
+    }
+  }
+
+  /**
+   * 发送累积的工具调用事件
+   */
+  private emitPendingToolCalls(
+    toolCallState: Map<number, { id: string; name: string; arguments: string }>,
+    cb: StreamCallbacks
+  ): void {
+    if (toolCallState.size === 0) return;
+    
+    for (const [, tc] of toolCallState) {
+      if (!tc.name) continue;
+      
+      // 解析服务器和工具名称（格式: server__tool 或 server.tool 或直接工具名）
+      let serverName = 'default';
+      let toolName = tc.name;
+      
+      if (tc.name.includes('__')) {
+        const parts = tc.name.split('__');
+        serverName = parts[0];
+        toolName = parts.slice(1).join('__');
+      } else if (tc.name.includes('.')) {
+        const parts = tc.name.split('.');
+        serverName = parts[0];
+        toolName = parts.slice(1).join('.');
+      }
+      
+      // 解析参数
+      const args = parseToolArguments(tc.arguments);
+      
+      // 发送工具调用事件
+      if (cb.onEvent) {
+        const toolEvent = createStreamEvent.toolCall(
+          tc.id,
+          {
+            serverName,
+            toolName,
+            arguments: tc.arguments,
+          }
+        );
+        cb.onEvent(toolEvent);
+      }
     }
   }
 

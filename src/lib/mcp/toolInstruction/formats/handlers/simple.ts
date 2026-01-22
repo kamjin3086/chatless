@@ -76,7 +76,11 @@ export class SimpleHandler implements FormatHandler {
       const target = match[1].trim();
       const argsStr = match[2];
       
-      const { server, tool } = this.parseTarget(target);
+      const parsed = this.parseTarget(target);
+      // 跳过无法解析的目标
+      if (!parsed) continue;
+      
+      const { server, tool } = parsed;
       
       let args: Record<string, unknown> | undefined;
       if (argsStr) {
@@ -206,16 +210,30 @@ export class SimpleHandler implements FormatHandler {
 
   /**
    * 解析 target 字符串为 server.tool
+   * 返回 null 如果无法解析
    */
-  private parseTarget(target: string): { server: string; tool: string } {
-    if (!target) return { server: 'unknown', tool: 'unknown' };
+  private parseTarget(target: string): { server: string; tool: string } | null {
+    if (!target) return null;
+    
+    // 过滤掉包含 use_mcp_tool 或 > 的错误格式
+    if (target.includes('use_mcp_tool') || target.includes('>')) {
+      return null;
+    }
     
     if (target.includes('.')) {
       const parts = target.split('.');
-      return { server: parts[0], tool: parts.slice(1).join('.') };
+      const server = parts[0];
+      const tool = parts.slice(1).join('.');
+      
+      // 确保 server 和 tool 都非空
+      if (!server || !tool) return null;
+      
+      return { server, tool };
     }
     
-    return { server: target, tool: 'default' };
+    // 只有 server 没有 tool 的情况不再返回 default
+    // 而是返回 null，因为这种情况通常是误匹配
+    return null;
   }
 
   clean(text: string, _options?: CleanOptions): ProcessResult {

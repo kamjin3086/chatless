@@ -37,6 +37,7 @@ reqwest = { version = "0.12", features = ["stream", "json", "gzip", "brotli", "d
 futures-util = "0.3"
 tokio = { version = "1", features = ["full"] }
 lazy_static = "1"
+regex = "1"
 image = { version = "0.25", default-features = false, features = ["png", "ico", "jpeg"] }
 scraper = "0.19"
 urlencoding = "2"
@@ -81,6 +82,7 @@ tauri-plugin-process = "2"
 tauri-plugin-os = "2"
 readability = "0.3.0"
 kuchiki = "0.8"
+tauri-plugin-shell = "2"
 
 # 仅在Windows平台添加windows依赖
 [target.'cfg(target_os = "windows")'.dependencies]

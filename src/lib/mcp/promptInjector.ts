@@ -11,16 +11,24 @@
  * 1. 使用分层意图检测策略，减少误判
  * 2. 将多条 system 消息合并为少数消息，提高指令清晰度
  * 3. 统一初始调用和追问阶段的注入逻辑
+ * 4. 支持原生工具调用 API
  */
 
 import { InjectionManager } from './injection';
+import type { InjectionResult as FullInjectionResult, NativeToolDefinition } from './injection/types';
 
 /**
- * 注入结果类型（保持向后兼容）
+ * 注入结果类型（扩展版，支持原生工具调用）
  */
-export type InjectionResult = {
-  systemMessages: Array<{ role: 'system'; content: string }>
-};
+export interface InjectionResult {
+  systemMessages: Array<{ role: 'system'; content: string }>;
+  /** 是否应该使用原生工具调用 API */
+  useNativeTools?: boolean;
+  /** 原生工具定义列表（当 useNativeTools=true 时使用） */
+  nativeTools?: NativeToolDefinition[];
+  /** 启用的服务器列表 */
+  enabledServers?: string[];
+}
 
 /**
  * 构建 MCP 系统注入
@@ -28,31 +36,38 @@ export type InjectionResult = {
  * @param content 用户消息内容
  * @param currentConversationId 当前会话 ID
  * @param providerName Provider 名称
- * @returns 注入的 system 消息列表
+ * @param modelName 模型名称（用于检测工具调用能力）
+ * @returns 注入的 system 消息列表和工具定义
  * 
  * @example
  * ```typescript
- * const { systemMessages } = await buildMcpSystemInjections(
+ * const { systemMessages, useNativeTools, nativeTools } = await buildMcpSystemInjections(
  *   userMessage,
  *   conversationId,
- *   'openai'
+ *   'openai',
+ *   'gpt-4'
  * );
  * ```
  */
 export async function buildMcpSystemInjections(
   content: string, 
   currentConversationId?: string, 
-  providerName?: string
+  providerName?: string,
+  modelName?: string
 ): Promise<InjectionResult> {
   const result = await InjectionManager.inject({
     userContent: content,
     conversationId: currentConversationId,
     phase: 'initial',
-    providerName
+    providerName,
+    modelName
   });
   
   return {
-    systemMessages: result.systemMessages
+    systemMessages: result.systemMessages,
+    useNativeTools: result.useNativeTools,
+    nativeTools: result.nativeTools,
+    enabledServers: result.enabledServers,
   };
 }
 

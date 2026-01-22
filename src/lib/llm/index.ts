@@ -222,3 +222,7 @@ export function cancelStream() {
 
 export { ProviderRegistry, PROVIDER_ORDER };
 
+// 工具调用配置
+export * from './config';
+export * from './types';
+

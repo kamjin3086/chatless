@@ -215,9 +215,9 @@ impl HttpClientManager {
 
     // Accept headers - 模拟浏览器的接受能力
     headers.insert(
-            ACCEPT, 
-            HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-        );
+        ACCEPT,
+        HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"),
+    );
     headers.insert(
       ACCEPT_LANGUAGE,
       HeaderValue::from_static("en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"),
@@ -269,9 +269,9 @@ impl HttpClientManager {
 
     // 使用更常见的User-Agent，避免过于新的版本号
     headers.insert(
-            USER_AGENT, 
-            HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
-        );
+        USER_AGENT,
+        HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"),
+    );
 
     // 简化的Accept头，避免过于复杂的值
     headers.insert(

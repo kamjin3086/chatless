@@ -36,6 +36,10 @@ export class XMLHandler implements FormatHandler {
   private readonly useMcpToolPattern = /<use_mcp_tool>([\s\S]*?)<\/use_mcp_tool>/gi;
   private readonly toolCallPattern = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
   private readonly functionPattern = /<function=([^>]+)>([\s\S]*?)<\/function>/gi;
+  
+  // 无开始标签模式（处理模型混淆时直接输出内容的情况）
+  // 例如: <server_name>docx</server_name>...<arguments>...</arguments></use_mcp_tool>
+  private readonly noOpenTagPattern = /<server_name>\s*([^<]+)\s*<\/server_name>\s*<tool_name>\s*([^<]+)\s*<\/tool_name>\s*<arguments>\s*([\s\S]*?)\s*<\/arguments>\s*<\/use_mcp_tool>/gi;
 
   // 不完整模式
   private readonly incompleteUseMcpTool = /<use_mcp_tool>[\s\S]*$/i;
@@ -61,11 +65,50 @@ export class XMLHandler implements FormatHandler {
     // 解析 use_mcp_tool
     results.push(...this.parseUseMcpTool(text));
     
+    // 解析无开始标签的 use_mcp_tool（模型混淆情况）
+    results.push(...this.parseNoOpenTag(text));
+    
     // 解析 tool_call
     results.push(...this.parseToolCall(text));
     
     // 解析 function
     results.push(...this.parseFunction(text));
+    
+    return results;
+  }
+  
+  /**
+   * 解析无开始标签的 use_mcp_tool 格式
+   * 处理模型直接输出 <server_name>...</server_name>...</use_mcp_tool> 的情况
+   */
+  private parseNoOpenTag(text: string): ParsedToolCall[] {
+    const results: ParsedToolCall[] = [];
+    const pattern = new RegExp(this.noOpenTagPattern.source, 'gi');
+    let match;
+    
+    while ((match = pattern.exec(text)) !== null) {
+      const server = match[1].trim();
+      const tool = match[2].trim();
+      const argsStr = match[3].trim();
+      
+      let args: Record<string, unknown> | undefined;
+      if (argsStr) {
+        try {
+          args = JSON.parse(argsStr);
+        } catch { /* ignore */ }
+      }
+      
+      results.push({
+        server,
+        tool,
+        args,
+        rawText: match[0],
+        startIndex: match.index,
+        endIndex: match.index + match[0].length,
+        format: 'xml_use_mcp_tool',
+        confidence: 0.92, // 略低于完整格式
+      });
+    }
     
     return results;
   }
@@ -202,6 +245,12 @@ export class XMLHandler implements FormatHandler {
 
     // 移除完整的 use_mcp_tool
     cleaned = cleaned.replace(this.useMcpToolPattern, (match) => {
+      removedFragments.push(match);
+      return '';
+    });
+    
+    // 移除无开始标签的 use_mcp_tool
+    cleaned = cleaned.replace(this.noOpenTagPattern, (match) => {
       removedFragments.push(match);
       return '';
     });

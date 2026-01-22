@@ -17,6 +17,9 @@ pub mod mcp;
 #[path = "web_search/mod.rs"]
 pub mod web_search;
 
+#[path = "sandbox/mod.rs"]
+pub mod sandbox;
+
 #[tauri::command]
 fn exit(app: tauri::AppHandle, code: i32) {
   #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -93,6 +96,7 @@ fn generate_embedding_command(texts: Vec<String>) -> Result<Vec<Vec<f32>>, Strin
 
 pub fn run() {
   let _builder = tauri::Builder::default()
+    .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_process::init())
     .setup(|app| {
@@ -103,7 +107,7 @@ pub fn run() {
           .plugin(tauri_plugin_window_state::Builder::default().build());
         // 主动恢复一次，确保未被其他初始化逻辑覆盖
         {
-          use tauri_plugin_window_state::{WindowExt, StateFlags};
+          use tauri_plugin_window_state::{StateFlags, WindowExt};
           if let Some(win) = app.get_webview_window("main") {
             let _ = win.restore_state(StateFlags::all());
           }
@@ -121,12 +125,12 @@ pub fn run() {
             "libonnxruntime.so"
           };
 
-          match app_handle
-            .path()
-            .resolve(lib_name, BaseDirectory::Resource)
-          {
+          match app_handle.path().resolve(lib_name, BaseDirectory::Resource) {
             Ok(resource_path) => {
-              println!("[ORT] Background init: attempting to load {lib_name} from: {:?}", resource_path);
+              println!(
+                "[ORT] Background init: attempting to load {lib_name} from: {:?}",
+                resource_path
+              );
               if resource_path.exists() {
                 if let Err(e) = ort::init_from(resource_path.to_string_lossy().as_ref()).commit() {
                   eprintln!("[WARN] ORT background init failed: {}", e);
@@ -234,12 +238,15 @@ pub fn run() {
       http_client::get_http_client_info,
       http_client::test_http_client,
       http_client::compare_http_clients,
-      http_request::send_http_request
-      ,
+      http_request::send_http_request,
       // —— Native Web Search ——
       web_search::commands::native_web_search,
       web_search::commands::native_web_fetch,
-      web_search::commands::duckrush_search_api
+      web_search::commands::duckrush_search_api,
+      // —— Sandbox Commands ——
+      sandbox::commands::run_safe_shell,
+      sandbox::commands::validate_command,
+      sandbox::commands::check_runtime_environment
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

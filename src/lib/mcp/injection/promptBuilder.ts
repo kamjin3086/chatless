@@ -12,15 +12,29 @@
  * 3. **避免重复**: 追问阶段不重复注入已有的工具描述
  */
 
-import type { InjectionContext, InjectionResult, InjectionSignals } from './types';
+import type { InjectionContext, InjectionResult, InjectionSignals, NativeToolDefinition } from './types';
 import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { persistentCache } from '../persistentCache';
 import { getConnectedServers, getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
 import { useWebSearchStore } from '@/store/webSearchStore';
+import { getSkillManager } from '@/lib/skills';
+import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 
 /**
  * 构建初始调用阶段的提示词
+ * 
+ * ## 条件降级策略
+ * 
+ * 1. 如果 Provider/模型支持原生工具调用 API：
+ *    - 不注入详细的工具描述到 System Prompt
+ *    - 工具定义通过 API 的 tools 参数传递
+ *    - 返回 useNativeTools: true
+ * 
+ * 2. 如果不支持原生工具调用：
+ *    - 注入完整的工具描述到 System Prompt
+ *    - 依赖正则解析提取工具调用
+ *    - 返回 useNativeTools: false
  */
 export async function buildInitialPrompt(
   context: InjectionContext,
@@ -28,6 +42,12 @@ export async function buildInitialPrompt(
 ): Promise<InjectionResult> {
   const messages: Array<{ role: 'system'; content: string }> = [];
   const enabledServers: string[] = [];
+  
+  // 检测是否应该使用原生工具调用
+  const providerName = context.providerName || '';
+  const modelName = context.modelName || '';
+  const useNativeTools = shouldUseNativeToolCalls(providerName, modelName);
+  const toolStrategy = getToolCallStrategy(providerName, modelName);
   
   // 1. 时间上下文（高优先级）
   await injectTimeContext(messages, context.userContent, signals.isTimeRelated);
@@ -61,46 +81,61 @@ export async function buildInitialPrompt(
   
   enabledServers.push(...enabled);
   
-  // 4. 构建工具信息（合并为单条消息）
+  // 4. 构建工具信息（仅在不支持原生工具调用时注入）
   const toolInfoParts: string[] = [];
   
-  // 4.1 构建工具列表
-  const hasExplicitMention = signals.hasExplicitMention && signals.mentionedServers.length > 0;
-  
-  if (hasExplicitMention) {
-    // @mention 模式：详细的工具描述
-    await buildDetailedToolInfo(toolInfoParts, signals.mentionedServers, globalEnabled, context);
-  } else {
-    // 普通模式：简洁的工具列表
-    await buildSimpleToolInfo(toolInfoParts, enabled.slice(0, 3), context);
-  }
-  
-  // 4.2 添加网络搜索工具
-  if (signals.webSearchEnabled) {
-    await buildWebSearchToolInfo(toolInfoParts, context);
-  }
-  
-  // 5. 合并工具信息为单条消息
-  if (toolInfoParts.length > 0) {
-    messages.push({ 
-      role: 'system', 
-      content: toolInfoParts.join('\n\n') 
+  // 只有在不支持原生工具调用时，才注入工具描述到 System Prompt
+  if (!useNativeTools) {
+    // 4.1 构建工具列表
+    const hasExplicitMention = signals.hasExplicitMention && signals.mentionedServers.length > 0;
+    
+    if (hasExplicitMention) {
+      // @mention 模式：详细的工具描述
+      await buildDetailedToolInfo(toolInfoParts, signals.mentionedServers, globalEnabled, context);
+    } else {
+      // 普通模式：简洁的工具列表
+      await buildSimpleToolInfo(toolInfoParts, enabled.slice(0, 3), context);
+    }
+    
+    // 4.2 添加网络搜索工具
+    if (signals.webSearchEnabled) {
+      await buildWebSearchToolInfo(toolInfoParts, context);
+    }
+    
+    // 5. 合并工具信息为单条消息
+    if (toolInfoParts.length > 0) {
+      messages.push({ 
+        role: 'system', 
+        content: toolInfoParts.join('\n\n') 
+      });
+    }
+    
+    // 6. 协议规则（仅在使用 Prompt 注入时需要）
+    const protocolParts: string[] = [
+      MCPPrompts.protocolRules,
+      MCPPrompts.decisionPolicy,
+      MCPPrompts.outputContract
+    ];
+    
+    messages.push({
+      role: 'system',
+      content: protocolParts.join('\n\n')
     });
   }
   
-  // 6. 协议规则（单条消息）
-  const protocolParts: string[] = [
-    MCPPrompts.protocolRules,
-    MCPPrompts.decisionPolicy,
-    MCPPrompts.outputContract
-  ];
+  // 5. 构建原生工具定义（当 useNativeTools 时）
+  let nativeTools: InjectionResult['nativeTools'] = undefined;
+  if (useNativeTools) {
+    nativeTools = await buildNativeToolDefinitions(enabled, signals.webSearchEnabled);
+    
+    // 使用原生工具调用时，只注入简化的协议说明
+    messages.push({
+      role: 'system',
+      content: `你可以通过工具调用来获取信息或执行操作。系统会自动处理工具调用和结果返回。`
+    });
+  }
   
-  messages.push({
-    role: 'system',
-    content: protocolParts.join('\n\n')
-  });
-  
-  // 7. 启用服务器声明
+  // 6. 启用服务器声明
   const allEnabled = signals.webSearchEnabled 
     ? [...enabled, WEB_SEARCH_SERVER_NAME]
     : enabled;
@@ -112,15 +147,21 @@ export async function buildInitialPrompt(
     }
   }
   
-  // 8. 网络搜索策略（如果启用）
+  // 7. 网络搜索策略（如果启用）
   if (signals.webSearchEnabled) {
     messages.push({ role: 'system', content: MCPPrompts.webSearchPolicy });
   }
   
+  // 8. Skills 索引注入（渐进式披露）
+  await injectSkillsIndex(messages);
+  
   return {
     systemMessages: messages,
     enabledServers: allEnabled,
-    hasToolInfo: toolInfoParts.length > 0
+    hasToolInfo: toolInfoParts.length > 0 || (nativeTools && nativeTools.length > 0),
+    useNativeTools,
+    nativeTools,
+    toolCallStrategy: toolStrategy,
   };
 }
 
@@ -232,6 +273,58 @@ async function buildDetailedToolInfo(
       parts.push(`Tools@${server}: (error)`);
     }
   }
+}
+
+/**
+ * 构建原生工具定义（用于传递给 LLM API 的 tools 参数）
+ */
+async function buildNativeToolDefinitions(
+  servers: string[],
+  webSearchEnabled: boolean
+): Promise<NativeToolDefinition[]> {
+  const tools: NativeToolDefinition[] = [];
+  const TOOL_LIMIT = 20; // 原生工具调用的限制
+
+  // 1. 添加 MCP 服务器的工具
+  for (const server of servers) {
+    try {
+      const serverTools = await persistentCache.getToolsWithCache(server);
+      if (!Array.isArray(serverTools)) continue;
+
+      for (const tool of serverTools.slice(0, TOOL_LIMIT)) {
+        if (!tool?.name) continue;
+        
+        // 使用 server__toolname 格式以便解析
+        tools.push({
+          name: `${server}__${tool.name}`,
+          description: tool.description || `Tool ${tool.name} from ${server}`,
+          parameters: tool.inputSchema || { type: 'object' },
+        });
+      }
+    } catch {
+      // 忽略单个服务器的错误
+    }
+  }
+
+  // 2. 添加网络搜索工具
+  if (webSearchEnabled) {
+    tools.push({
+      name: `${WEB_SEARCH_SERVER_NAME}__search`,
+      description: '在互联网上搜索实时信息',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: '搜索关键词',
+          },
+        },
+        required: ['query'],
+      },
+    });
+  }
+
+  return tools;
 }
 
 /**
@@ -351,5 +444,42 @@ function buildForcedAnswerPrompt(originalQuestion: string): string {
 用户问题：${originalQuestion}
 
 现在直接回答（不要调用任何工具）：`;
+}
+
+// ================================
+// Skills 渐进式披露相关函数
+// ================================
+
+/**
+ * 注入 Skills 索引到系统消息
+ * 
+ * 实现渐进式披露策略：
+ * - 仅注入技能索引（名称 + 简短描述），约 100 tokens/skill
+ * - AI 需要详细说明时，通过 get_skill_instructions 工具获取
+ * - 可节省约 70-75% 的 Token 消耗
+ */
+async function injectSkillsIndex(
+  messages: Array<{ role: 'system'; content: string }>
+): Promise<void> {
+  try {
+    const manager = getSkillManager();
+    
+    // 确保 manager 已初始化
+    await manager.initialize();
+    
+    // 获取技能索引提示词
+    const skillsPrompt = manager.buildSkillIndexPrompt();
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:injectSkillsIndex',message:'Skills prompt generated',data:{hasPrompt:!!skillsPrompt,promptPreview:skillsPrompt?.slice(0,300)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H9'})}).catch(()=>{});
+    // #endregion
+    
+    if (skillsPrompt) {
+      messages.push({ role: 'system', content: skillsPrompt });
+    }
+  } catch (error) {
+    console.warn('[PromptBuilder] Skills 索引注入失败:', error);
+    // 不阻塞主流程
+  }
 }
 

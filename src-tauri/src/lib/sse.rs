@@ -10,11 +10,11 @@ use rmcp::{
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
-use std::time::Duration;
 
 lazy_static! {
     // 可选：如果需要本地测试服务器，这里保留子进程句柄
@@ -76,7 +76,10 @@ pub async fn start_sse(
       Ok(client) => client,
       Err(e) => {
         app
-          .emit("sse-error", format!("Failed to build HTTP client with proxy: {}", e))
+          .emit(
+            "sse-error",
+            format!("Failed to build HTTP client with proxy: {}", e),
+          )
           .ok();
         return Err(format!("Failed to build HTTP client with proxy: {}", e));
       }

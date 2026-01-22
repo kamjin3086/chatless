@@ -16,6 +16,7 @@
 
 import type { InjectionSignals, InjectionDecision } from './types';
 import { useWebSearchStore } from '@/store/webSearchStore';
+import { getSkillManager, type SkillIndexEntry } from '@/lib/skills';
 
 /**
  * @mention 正则表达式
@@ -130,5 +131,140 @@ export function makeInjectionDecision(signals: InjectionSignals): InjectionDecis
 export function detectAndDecide(content: string, conversationId?: string): InjectionDecision {
   const signals = detectIntentSignals(content, conversationId);
   return makeInjectionDecision(signals);
+}
+
+// ================================
+// Skills 意图检测相关函数
+// ================================
+
+/**
+ * 技能触发结果
+ */
+export interface SkillTriggerResult {
+  /** 触发的技能 ID 列表 */
+  triggeredSkillIds: string[];
+  /** 是否有触发 */
+  hasTriggered: boolean;
+  /** 触发的技能详情 */
+  triggeredSkills: SkillIndexEntry[];
+}
+
+/**
+ * 检测用户输入是否触发特定技能
+ * 
+ * 通过检查用户输入中是否包含技能的触发关键词来判断
+ * 
+ * @param userContent - 用户输入内容
+ * @returns 触发结果
+ */
+export function detectSkillTriggers(userContent: string): SkillTriggerResult {
+  try {
+    const manager = getSkillManager();
+    const skillIndex = manager.getSkillIndex();
+    
+    if (skillIndex.length === 0) {
+      return {
+        triggeredSkillIds: [],
+        hasTriggered: false,
+        triggeredSkills: [],
+      };
+    }
+    
+    const contentLower = userContent.toLowerCase();
+    const triggeredSkills: SkillIndexEntry[] = [];
+    
+    for (const skill of skillIndex) {
+      // 检查技能名称
+      if (contentLower.includes(skill.name.toLowerCase())) {
+        triggeredSkills.push(skill);
+        continue;
+      }
+      
+      // 检查触发关键词
+      if (skill.triggers && skill.triggers.length > 0) {
+        const isTriggered = skill.triggers.some(trigger => 
+          contentLower.includes(trigger.toLowerCase())
+        );
+        if (isTriggered) {
+          triggeredSkills.push(skill);
+        }
+      }
+    }
+    
+    return {
+      triggeredSkillIds: triggeredSkills.map(s => s.id),
+      hasTriggered: triggeredSkills.length > 0,
+      triggeredSkills,
+    };
+  } catch (error) {
+    console.warn('[IntentDetector] 技能触发检测失败:', error);
+    return {
+      triggeredSkillIds: [],
+      hasTriggered: false,
+      triggeredSkills: [],
+    };
+  }
+}
+
+/**
+ * 检测是否使用 @skill 语法显式调用技能
+ * 
+ * 支持格式：
+ * - @skill:skill-id
+ * - @skill skill-id
+ * 
+ * @param content - 用户输入内容
+ * @returns 匹配的技能 ID 列表
+ */
+export function detectExplicitSkillMention(content: string): string[] {
+  const skillMentionPatterns = [
+    /@skill[:\s]([a-zA-Z0-9_-]+)/gi,  // @skill:id 或 @skill id
+    /\[\[skill:([a-zA-Z0-9_-]+)\]\]/gi,  // [[skill:id]]
+  ];
+  
+  const mentionedSkills: string[] = [];
+  
+  for (const pattern of skillMentionPatterns) {
+    const matches = content.matchAll(pattern);
+    for (const match of matches) {
+      const skillId = match[1];
+      if (skillId && !mentionedSkills.includes(skillId)) {
+        mentionedSkills.push(skillId);
+      }
+    }
+  }
+  
+  return mentionedSkills;
+}
+
+/**
+ * 综合检测技能意图
+ * 
+ * 优先级：
+ * 1. 显式 @skill:id 调用
+ * 2. 关键词触发
+ * 
+ * @param content - 用户输入内容
+ */
+export function detectSkillIntent(content: string): {
+  explicitMentions: string[];
+  triggerMatches: SkillTriggerResult;
+  shouldPreloadSkill: boolean;
+  skillIdsToPreload: string[];
+} {
+  const explicitMentions = detectExplicitSkillMention(content);
+  const triggerMatches = detectSkillTriggers(content);
+  
+  // 合并需要预加载的技能
+  const skillIdsToPreload = [
+    ...new Set([...explicitMentions, ...triggerMatches.triggeredSkillIds])
+  ];
+  
+  return {
+    explicitMentions,
+    triggerMatches,
+    shouldPreloadSkill: skillIdsToPreload.length > 0,
+    skillIdsToPreload,
+  };
 }
 

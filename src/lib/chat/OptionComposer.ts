@@ -36,6 +36,35 @@ export async function composeChatOptions(
     // ignore mcp fetch errors
   }
 
+  // 3) 原生工具调用支持
+  try {
+    const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
+    const injection = await buildMcpSystemInjections(userContent, conversationId || undefined, provider, model);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:H1',message:'injection result',data:{useNativeTools:injection.useNativeTools,nativeToolsCount:injection.nativeTools?.length||0,provider,model},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+    
+    if (injection.useNativeTools && injection.nativeTools && injection.nativeTools.length > 0) {
+      // 转换为 ToolDefinition 格式
+      (refined as any).tools = injection.nativeTools.map((t: any) => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      }));
+      (refined as any).toolChoice = 'auto';
+      (refined as any).__useNativeTools = true;
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:H1-enabled',message:'原生工具调用已启用',data:{toolCount:injection.nativeTools.length,toolNames:injection.nativeTools.slice(0,5).map((t:any)=>t.name)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+      
+      console.debug('[OptionComposer] 启用原生工具调用，工具数量:', injection.nativeTools.length);
+    }
+  } catch (e) {
+    console.warn('[OptionComposer] 获取原生工具定义失败:', e);
+  }
+
   return refined;
 }
 

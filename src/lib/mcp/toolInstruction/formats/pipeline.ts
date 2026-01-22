@@ -89,11 +89,27 @@ export class ToolCallPipeline {
   }
 
   /**
-   * 解析并返回第一个（最高置信度）工具调用
+   * 解析并返回第一个（最高置信度且有效）工具调用
+   * 
+   * 过滤掉无效的解析结果（server/tool 为 unknown 或包含错误格式标记）
    */
   parseFirst(text: string): ParsedToolCall | null {
     const all = this.parseAll(text);
-    return all.length > 0 ? all[0] : null;
+    
+    // 过滤无效结果
+    const valid = all.filter(call => {
+      const isValidServer = call.server && 
+        call.server !== 'unknown' && 
+        !call.server.includes('use_mcp_tool') && 
+        !call.server.includes('>');
+      const isValidTool = call.tool && 
+        call.tool !== 'unknown' && 
+        call.tool !== 'default';
+      
+      return isValidServer && isValidTool;
+    });
+    
+    return valid.length > 0 ? valid[0] : null;
   }
 
   /**
@@ -202,6 +218,17 @@ export function resetDefaultPipeline(): void {
  * 注册所有内置处理器（同步）
  * 
  * 使用同步导入确保首次调用时处理器已注册
+ * 
+ * ## 处理器说明（按 priority 排序）
+ * 
+ * - OpenAIHandler (priority=1): 处理 OpenAI 原生 function_call/tool_calls 格式
+ * - XMLHandler (priority=5): 处理 MCP 标准 XML 格式 (<use_mcp_tool>, <tool_call>)
+ * - GptOssHandler (priority=6): **解析** GPT-OSS commentary to= 格式
+ * - JsonHandler (priority=10): 处理 JSON 格式工具调用
+ * - GptOssTagHandler (priority=15): **清理** GPT-OSS 模板标签（在解析之后）
+ * 
+ * ⚠️ 重要：GptOssHandler 必须在 GptOssTagHandler 之前运行！
+ * 否则 commentary to= 格式会在被解析之前就被清理掉。
  */
 function registerBuiltinHandlers(pipeline: ToolCallPipeline): void {
   // 同步导入所有处理器
@@ -216,14 +243,14 @@ function registerBuiltinHandlers(pipeline: ToolCallPipeline): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { JsonHandler } = require('./handlers/json');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { SimpleHandler } = require('./handlers/simple');
+    const { GptOssTagHandler } = require('./handlers/gptoss-tags');
     
     pipeline.registerAll([
       new OpenAIHandler(),
       new XMLHandler(),
-      new GptOssHandler(),
+      new GptOssHandler(),    // 解析 commentary to= 格式
       new JsonHandler(),
-      new SimpleHandler(),
+      new GptOssTagHandler(), // 清理 GPT-OSS 标签（在解析之后）
     ]);
   } catch (e) {
     console.warn('[ToolCallPipeline] 处理器加载失败:', e);

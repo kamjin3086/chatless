@@ -1,4 +1,4 @@
-use log::{info, warn, trace};
+use log::{info, trace, warn};
 use serde::Serialize;
 use std::env;
 use std::path::Path;

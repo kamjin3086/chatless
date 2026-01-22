@@ -6,11 +6,28 @@
  * - 清理内容中的工具调用指令
  * - 创建工具卡片
  * - 触发工具执行
+ * 
+ * ## 去重机制
+ * 
+ * 流式处理中，同一个工具调用指令可能被多次检测到（因为每个 delta 都会被独立解析）。
+ * 为防止重复执行，维护一个全局的 Set 来跟踪已处理的工具调用。
+ * 
+ * Key 格式: `${messageId}:${server}.${tool}:${JSON.stringify(args)}`
  */
 
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import type { EventHandler, StreamContext } from '../types';
 import { useChatStore } from '@/store/chatStore';
+import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+
+// #region agent log
+const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
+  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
+}
+// #endregion
+
+const coordinator = ToolCallCoordinator.getInstance();
 
 export class ToolCallEventHandler implements EventHandler {
   canHandle(event: StreamEvent): boolean {
@@ -23,9 +40,16 @@ export class ToolCallEventHandler implements EventHandler {
       return;
     }
     
+    // #region agent log
+    debugLog('ToolCallEventHandler.ts:handle:entry', 'ToolCallHandler invoked', { eventType: event.type, parsed: event.parsed, contextMessageId: context?.messageId }, 'H1');
+    // #endregion
+    
     // 输入验证
     if (!event || !event.parsed) {
       console.warn('[ToolCallHandler] Invalid event: missing parsed data');
+      // #region agent log
+      debugLog('ToolCallEventHandler.ts:handle:invalid', 'Invalid event - missing parsed data', { event }, 'H2');
+      // #endregion
       return;
     }
 
@@ -47,12 +71,42 @@ export class ToolCallEventHandler implements EventHandler {
       }
     }
 
-    if (!server || !tool) {
-      console.warn('[ToolCallHandler] Invalid tool call: missing server or tool name');
+    // 过滤无效工具调用：空值、unknown、包含错误格式标记
+    const isInvalidServer = !server || server === 'unknown' || server.includes('use_mcp_tool') || server.includes('>');
+    const isInvalidTool = !tool || tool === 'unknown' || tool === 'default';
+    
+    if (isInvalidServer || isInvalidTool) {
+      console.warn('[ToolCallHandler] Invalid tool call: invalid server or tool name', { server, tool });
+      // #region agent log
+      debugLog('ToolCallEventHandler.ts:handle:invalid', 'Invalid tool call filtered', { server, tool, isInvalidServer, isInvalidTool, parsed: event.parsed }, 'H6');
+      // #endregion
       return;
     }
+    
+    // ============================================================
+    // 关键：全局工具调用去重（协调器）
+    // ============================================================
+    const lockResult = coordinator.tryAcquireToolCallLock({
+      messageId: context.messageId,
+      server,
+      tool,
+      args,
+      source: 'event',
+    });
 
-    // 防止重复执行
+    if (!lockResult.acquired) {
+      // #region agent log
+      debugLog('ToolCallEventHandler.ts:handle:dedupe', 'Duplicate tool call skipped (coordinator)', { toolCallKey: lockResult.key }, 'H7-dedupe');
+      // #endregion
+      console.debug('[ToolCallHandler] 跳过重复工具调用 (协调器):', lockResult.key);
+      return;
+    }
+    
+    // #region agent log
+    debugLog('ToolCallEventHandler.ts:handle:toolInfo', 'Extracted tool info', { server, tool, args, contextMessageId: context.messageId, toolCallKey: lockResult.key }, 'H1');
+    // #endregion
+
+    // 防止重复执行（context 级别的备用检查）
     if (context.toolStarted) {
       console.debug('[ToolCallHandler] Tool already started, skipping duplicate call');
       return;
@@ -64,19 +118,14 @@ export class ToolCallEventHandler implements EventHandler {
       // 标记工具已启动
       context.toolStarted = true;
 
-      // 动态导入工具函数
-      const { createToolCardMarker } = 
-        await import('@/lib/chat/tool-call-cleanup');
-
       // 注意：不需要清理 context.content
       // 原因：
       // 1. context.content 保留原始内容（包括指令）用于解析
       // 2. UI渲染的内容已经在 segments 层过滤了
       // 3. 这是线性委派的优势：各层职责清晰，不需要重复处理
       
-      // 创建工具卡片标记
+      // 创建工具卡片ID
       cardId = crypto.randomUUID();
-      const marker = createToolCardMarker(cardId, server, tool, args, context.messageId);
 
       // 更新FSM状态
       context.fsmState = 'TOOL_RUNNING';
@@ -109,12 +158,12 @@ export class ToolCallEventHandler implements EventHandler {
           server,
           tool,
           args,
-          _runningMarker: marker,
           provider: context.metadata.provider,
           model: context.metadata.model,
           historyForLlm: context.metadata.historyForLlm as any,
           originalUserContent: context.metadata.originalUserContent,
           cardId,
+          lockKey: lockResult.key,
         });
       } catch (executeError) {
         console.error('[ToolCallHandler] Tool execution failed:', executeError);

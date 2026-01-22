@@ -1,7 +1,7 @@
 'use client';
 
 import { SidebarNavButton } from '@/components/ui/SidebarNavButton';
-import { Wrench } from "lucide-react";
+import { Wrench, Sparkles } from "lucide-react";
 import { 
   HomeIcon, 
   ChatIcon, 
@@ -12,6 +12,11 @@ import {
   SettingsIcon,
   BookmarkIcon,
 } from '@/components/icons/SidebarIcons';
+
+// Skills 图标组件
+const SkillsIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <Sparkles {...props} />
+);
 import { shouldShowDevTools } from '@/lib/utils/environment';
 import { useEffect, useState } from 'react';
 import { DockHoverScaler } from '@/components/ui/DockHoverScaler';
@@ -23,6 +28,7 @@ const baseNavItems = [
   { href: '/prompts', label: '提示词库', icon: BookmarkIcon },
   { href: '/resources', label: '知识资源', icon: FolderIcon },
   { href: '/knowledge', label: '知识库', icon: DatabaseIcon },
+  { href: '/skills', label: '技能', icon: SkillsIcon },
   { href: '/history', label: '历史记录', icon: HistoryIcon },
   { href: '/analytics', label: '数据统计', icon: AnalyticsIcon },
   { href: '/settings', label: '设置', icon: SettingsIcon },

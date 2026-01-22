@@ -1,3 +1,5 @@
+import { ToolCallDetector } from '@/lib/mcp/ToolCallDetector';
+
 export type ToolCallStatus = 'running' | 'success' | 'error' | 'pending_auth';
 
 export interface TextSegment { kind: 'text'; text: string }
@@ -32,56 +34,14 @@ export function ensureTextTail(segments: MessageSegment[], initialText: string):
 }
 
 /**
- * 工具指令特征检测（仅检测增量部分 + 尾部边界）
+ * 工具指令特征检测（委托给统一的 ToolCallDetector）
  * 
- * 优化：不对整个文本进行特征检测，只检测：
- * 1. 新增的 chunk
- * 2. 尾部边界（处理跨 chunk 的特征）
- * 
- * ⚠️ 重要：只检测明确的 MCP 工具调用特征，避免对正常内容触发过滤
+ * 使用 ToolCallDetector 的边界检测功能，
+ * 统一所有工具调用检测逻辑。
  */
 function needsToolCallFilter(existingText: string, chunk: string): boolean {
-  const chunkLower = chunk.toLowerCase();
-  
-  // 检测 chunk 本身是否包含 MCP 工具调用特征
-  if (
-    chunkLower.includes('<use_mcp_tool') ||
-    chunkLower.includes('<tool_call') ||
-    chunkLower.includes('</use_mcp_tool') ||
-    chunkLower.includes('</tool_call') ||
-    chunk.includes('__tool_call_card__') ||
-    // GPT-OSS 模板标签（使用 <| 作为快速检测）
-    chunk.includes('<|') ||
-    chunkLower.includes('commentary to=') ||
-    // JSON 格式工具调用检测
-    (chunk.includes('"type"') && chunk.includes('tool_call')) ||
-    // 新增：反向格式检测 json{...}commentary
-    (chunkLower.includes('json') && chunkLower.includes('commentary'))
-  ) {
-    return true;
-  }
-  
-  // 检测边界：尾部 50 字符 + chunk 组合（处理跨 chunk 的标签和 JSON）
-  if (existingText.length > 0) {
-    const boundary = existingText.slice(-50) + chunk;
-    const boundaryLower = boundary.toLowerCase();
-    if (
-      boundaryLower.includes('<use_mcp_tool') ||
-      boundaryLower.includes('<tool_call') ||
-      boundaryLower.includes('</use_mcp_tool') ||
-      boundaryLower.includes('</tool_call') ||
-      // GPT-OSS 模板标签
-      boundary.includes('<|') ||
-      // JSON 格式检测
-      (boundary.includes('"type"') && boundary.includes('tool_call')) ||
-      // 新增：反向格式检测（跨chunk场景）
-      (boundaryLower.includes('json') && boundaryLower.includes('commentary'))
-    ) {
-      return true;
-    }
-  }
-  
-  return false;
+  const detector = ToolCallDetector.getInstance();
+  return detector.detectAtBoundary(existingText, chunk);
 }
 
 /**

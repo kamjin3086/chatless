@@ -9,9 +9,20 @@ import { shouldAutoAuthorize } from './authorizationConfig';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { WEB_SEARCH_SERVER_NAME } from './nativeTools/webSearch';
 import { filterToolCallContent } from '@/lib/chat/segments';
+import { ToolCallCoordinator } from './ToolCallCoordinator';
+
+// #region agent log
+const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
+  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
+}
+// #endregion
 
 // 防止重复调用的缓存
 const runningCalls = new Map<string, Promise<void>>();
+
+// 全局协调器
+const coordinator = ToolCallCoordinator.getInstance();
 
 export async function executeToolCall(params: {
   assistantMessageId: string;
@@ -19,22 +30,60 @@ export async function executeToolCall(params: {
   server: string;
   tool: string;
   args?: Record<string, unknown>;
-  _runningMarker: string; // 兼容旧参数（未使用）
   provider: string;
   model: string;
   historyForLlm: LlmMessage[];
   originalUserContent: string;
   cardId?: string;
+  lockKey?: string;
 }): Promise<void> {
-  const { assistantMessageId, conversationId, server, tool, args, _runningMarker, provider, model, historyForLlm, originalUserContent, cardId } = params;
+  const { assistantMessageId, conversationId, server, tool, args, provider, model, historyForLlm, originalUserContent, cardId, lockKey } = params;
   
-  // 防重复调用：使用消息ID+工具+参数作为键
-  const callKey = `${assistantMessageId}:${server}.${tool}:${JSON.stringify(args || {})}`;
+  // 过滤无效/错误解析的工具调用（提前检查，减少日志噪音）
+  const isInvalidServer = !server || server === 'unknown' || server.includes('use_mcp_tool') || server.includes('>');
+  const isInvalidTool = !tool || tool === 'unknown';
+  if (isInvalidServer || isInvalidTool) {
+    // #region agent log
+    debugLog('ToolCallOrchestrator.ts:executeToolCall:invalid', 'Skipping invalid tool call', { server, tool, isInvalidServer, isInvalidTool }, 'H2');
+    // #endregion
+    return;
+  }
+  
+  // 防重复调用：使用统一协调器
+  const lockResult = lockKey
+    ? { acquired: true, key: lockKey }
+    : coordinator.tryAcquireToolCallLock({
+        messageId: assistantMessageId,
+        server,
+        tool,
+        args,
+        cardId,
+        source: 'execute',
+      });
+
+  if (!lockResult.acquired) {
+    console.log(`[MCP-DEBUG] 跳过重复调用(coordinator): ${lockResult.key}`);
+    // #region agent log
+    debugLog('ToolCallOrchestrator.ts:executeToolCall:coordinatorSkip', 'Skipping duplicate call via coordinator', { callKey: lockResult.key }, 'H4');
+    // #endregion
+    return;
+  }
+
+  const callKey = lockResult.key;
+
+  // 检查已有的 Promise
   const existingCall = runningCalls.get(callKey);
   if (existingCall) {
-    console.log(`[MCP-DEBUG] 跳过重复调用: ${callKey}`);
+    console.log(`[MCP-DEBUG] 跳过重复调用(running): ${callKey}`);
+    // #region agent log
+    debugLog('ToolCallOrchestrator.ts:executeToolCall:duplicate', 'Skipping duplicate call', { callKey }, 'H4');
+    // #endregion
     return existingCall;
   }
+  
+  // #region agent log
+  debugLog('ToolCallOrchestrator.ts:executeToolCall:entry', 'Tool call orchestrator entry', { server, tool, args, cardId, messageId: assistantMessageId }, 'H1');
+  // #endregion
 
   const DEBUG_MCP = false;
   if (DEBUG_MCP) { try { console.log('[MCP-ORCH] start', assistantMessageId, server, tool); } catch { /* noop */ } }
@@ -46,6 +95,7 @@ export async function executeToolCall(params: {
     const msg0: any = conv0?.messages.find(m => m.id === assistantMessageId);
     // 若用户已停止（被标记为 error），则不再继续后续链路
     if (!msg0 || msg0.status === 'error') {
+      coordinator.markToolCallComplete(callKey, 'failed');
       return;
     }
     // 确保 loading 状态维持期间停止按钮可见
@@ -137,7 +187,6 @@ export async function executeToolCall(params: {
             server,
             tool: effectiveTool,
             args: effectiveArgs,
-            _runningMarker: '', // 兼容旧参数（未使用）
             provider,
             model,
             historyForLlm,
@@ -151,10 +200,73 @@ export async function executeToolCall(params: {
         console.error('[WEB_SEARCH] executor error:', e);
       } finally {
         runningCalls.delete(callKey);
+        coordinator.markToolCallComplete(callKey, 'completed');
       }
     })();
     runningCalls.set(callKey, executeNative);
     return executeNative;
+  }
+
+  // —— Skill 工具拦截 ——
+  // 检查是否为 skill 内置工具（如 get_skill_instructions）
+  // 支持两种调用方式：
+  // 1. server='skills', tool='get_skill_instructions'
+  // 2. 直接 tool='get_skill_instructions'
+  const { isSkillTool, executeSkillTool } = await import('@/lib/skills/skillTools');
+  const isSkillServer = server === 'skills' || server === 'skill';
+  if (isSkillServer || isSkillTool(effectiveTool)) {
+    const executeSkill = (async () => {
+      try {
+        // #region agent log
+        debugLog('ToolCallOrchestrator.ts:executeToolCall:skillTool', 'Executing skill tool', { tool: effectiveTool, args: effectiveArgs }, 'H5');
+        // #endregion
+        
+        // 执行 skill 工具
+        const result = await executeSkillTool(effectiveTool, effectiveArgs);
+        
+        // 更新工具卡片为成功状态
+        const st = useChatStore.getState();
+        const effectiveCardId = cardId || crypto.randomUUID();
+        st.dispatchMessageAction(assistantMessageId, {
+          type: 'TOOL_RESULT',
+          server: server || 'skills',
+          tool: effectiveTool,
+          ok: true,
+          data: result,
+          cardId: effectiveCardId,
+        });
+        
+        // 继续对话，让 AI 处理 skill 指令的结果
+        await continueWithToolResult({
+          assistantMessageId,
+          provider,
+          model,
+          conversationId,
+          historyForLlm,
+          originalUserContent,
+          server: server || 'skills',
+          tool: effectiveTool,
+          result,
+        });
+      } catch (e) {
+        console.error('[SKILL] tool error:', e);
+        const st = useChatStore.getState();
+        const effectiveCardId = cardId || crypto.randomUUID();
+        st.dispatchMessageAction(assistantMessageId, {
+          type: 'TOOL_RESULT',
+          server: server || 'skills',
+          tool: effectiveTool,
+          ok: false,
+          errorMessage: e instanceof Error ? e.message : 'Skill tool execution failed',
+          cardId: effectiveCardId,
+        });
+      } finally {
+        runningCalls.delete(callKey);
+        coordinator.markToolCallComplete(callKey, 'completed');
+      }
+    })();
+    runningCalls.set(callKey, executeSkill);
+    return executeSkill;
   }
 
   // —— MCP工具执行：使用McpToolExecutor ——
@@ -165,7 +277,6 @@ export async function executeToolCall(params: {
     server,
     tool: effectiveTool,
     args: effectiveArgs,
-    _runningMarker: '', // 兼容旧参数（未使用）
     provider,
     model,
     historyForLlm,
@@ -181,6 +292,7 @@ export async function executeToolCall(params: {
       console.error('[MCP] executor error:', e);
     } finally {
       runningCalls.delete(callKey);
+      coordinator.markToolCallComplete(callKey, 'completed');
     }
   })();
   
@@ -209,6 +321,20 @@ export async function continueWithToolResult(params: {
   result: unknown;
 }) {
   const { assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, server, tool, result } = params;
+  
+  // Fallback 去重：同一消息在短时间内只允许一个 follow-up 流程
+  if (!coordinator.tryAcquireFollowupLock(assistantMessageId)) {
+    // #region agent log
+    debugLog('ToolCallOrchestrator.ts:continueWithToolResult:debounced', 'Skipping fallback (coordinator debounced)', { 
+      assistantMessageId, 
+      server,
+      tool 
+    }, 'H6');
+    // #endregion
+    console.log(`[MCP-DEBUG] 跳过重复 fallback: ${assistantMessageId}`);
+    return;
+  }
+  
   const key = conversationId;
   const counterKey = `mcp-recursion-${key}`;
   // 简易递归限制（避免依赖外部模块）
@@ -280,6 +406,25 @@ export async function continueWithToolResult(params: {
   // 将工程化的补充说明拼接到消息末尾，保留真实结果文本
   nextUserMsg.content = `${nextUserMsg.content}\n\n—— 追加说明 ——\n${instruction}\n\n（注意：上述JSON/文本只作为事实依据，不要直接回显给用户）`;
 
+  // #region agent log
+  try {
+    const userMessages = historyForLlm.filter((m: any) => m.role === 'user');
+    const contentCounts = new Map<string, number>();
+    for (const msg of userMessages) {
+      const content = String(msg.content || '');
+      contentCounts.set(content, (contentCounts.get(content) || 0) + 1);
+    }
+    const duplicateUserCount = Array.from(contentCounts.values()).filter((c) => c > 1).length;
+    const nextUserDupCount = contentCounts.get(String(nextUserMsg.content || '')) || 0;
+    debugLog('ToolCallOrchestrator.ts:continueWithToolResult:historyStats', 'History user message stats', {
+      assistantMessageId,
+      userMessageCount: userMessages.length,
+      duplicateUserCount,
+      nextUserDupCount,
+    }, 'H8');
+  } catch { /* noop */ }
+  // #endregion
+
   const _st = useChatStore.getState();
   // 继续在同一条 assistant 消息中流式续写，不新建消息
 
@@ -309,6 +454,23 @@ export async function continueWithToolResult(params: {
     ...historyForLlm.filter((m:any)=>m.role!=='user' || m.content!==originalUserContent),
     nextUserMsg as any
   ];
+
+  // #region agent log
+  try {
+    const followUserMessages = followHistory.filter((m: any) => m.role === 'user');
+    const counts = new Map<string, number>();
+    for (const msg of followUserMessages) {
+      const content = String(msg.content || '');
+      counts.set(content, (counts.get(content) || 0) + 1);
+    }
+    const duplicateFollowUsers = Array.from(counts.values()).filter((c) => c > 1).length;
+    debugLog('ToolCallOrchestrator.ts:continueWithToolResult:followHistoryStats', 'Follow-up history stats', {
+      assistantMessageId,
+      followUserCount: followUserMessages.length,
+      duplicateFollowUsers,
+    }, 'H8');
+  } catch { /* noop */ }
+  // #endregion
 
   // 追问阶段开始前再次确保状态为 loading（覆盖上游可能的 sent）
   try {

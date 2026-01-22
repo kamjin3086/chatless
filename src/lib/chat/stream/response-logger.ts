@@ -100,6 +100,46 @@ export class StreamResponseLogger {
    * 输出完整的响应日志
    */
   logComplete(messageId: string): void {
+    // 始终记录“摘要级”信息到 debug log（不输出完整原文，避免性能问题）
+    // #region agent log
+    try {
+      const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+      const metrics = this.getMetrics();
+      const tail = (this.contentBuffer || '').slice(-800);
+      const head = (this.contentBuffer || '').slice(0, 200);
+      const simpleHash = (() => {
+        // 轻量 hash：避免引入依赖；仅用于对照“同一份原文”是否被改写/截断
+        let h = 2166136261;
+        const s = this.contentBuffer || '';
+        for (let i = 0; i < s.length; i++) {
+          h ^= s.charCodeAt(i);
+          h = Math.imul(h, 16777619);
+        }
+        return (h >>> 0).toString(16);
+      })();
+      fetch(DEBUG_LOG_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'response-logger.ts:logComplete',
+          message: 'LLM response snapshot',
+          data: {
+            messageId,
+            provider: this.provider,
+            model: this.model,
+            metrics,
+            contentHash: simpleHash,
+            contentHead: head,
+            contentTail: tail,
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'H11',
+        }),
+      }).catch(() => {});
+    } catch { /* noop */ }
+    // #endregion
+
     if (!StreamResponseLogger.ENABLE_LOG) return;
     const metrics = this.getMetrics();
     

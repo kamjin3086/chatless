@@ -25,9 +25,9 @@
 import { 
   INCOMPLETE_TAG_PREFIXES, 
   MIN_INCOMPLETE_PREFIX_LENGTH,
-  mightContainToolInstruction
 } from './patterns';
 import { getDefaultPipeline } from './formats';
+import { ToolCallDetector } from '../ToolCallDetector';
 
 // 不完整标签的正则模式（用于流式清理）
 const INCOMPLETE_XML_PATTERNS = {
@@ -57,8 +57,9 @@ export function filterToolInstructions(
 ): string {
   if (!text) return '';
   
-  // 快速路径：如果不包含任何工具指令特征，直接返回
-  if (!mightContainToolInstruction(text)) {
+  // 快速路径：使用统一的 ToolCallDetector 进行检测
+  const detector = ToolCallDetector.getInstance();
+  if (!detector.mightContainToolCall(text)) {
     return text;
   }
   
@@ -127,7 +128,16 @@ function cleanIncompleteInstructions(text: string): string {
   let result = text;
   
   // 0. 首先清理独立出现的 GPT-OSS 模板标签（这些总是应该被移除）
-  result = result.replace(/<\|(?:channel|message|end|thinking|constrain|tool_calls?|function_calls?|assistant|user|system)\|>/gi, '');
+  result = result.replace(/<\|(?:channel|message|end|thinking|constrain|tool_calls?|function_calls?|assistant|user|system|start|call|final|response)\|>/gi, '');
+  
+  // 0.1 清理独立出现的 "commentary" 关键字（GPT-OSS 遗留片段）
+  // 这通常是 "commentary to=..." 指令被部分清理后留下的
+  result = result.replace(/^\s*commentary\s*$/gm, '');
+  result = result.replace(/\s+commentary\s+$/g, ' ');
+  result = result.replace(/^commentary\s+/g, '');
+  
+  // 0.2 清理不完整的 commentary to= 指令（未完成的流式输出）
+  result = result.replace(/commentary\s+to=[^\s<>]+[\s\S]*$/gi, '');
   
   // 1. 只移除未完成的 MCP 工具调用 XML 指令块
   result = result.replace(INCOMPLETE_XML_PATTERNS.xml_use_mcp_tool, '');

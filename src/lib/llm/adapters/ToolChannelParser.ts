@@ -1,6 +1,7 @@
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '@/lib/llm/types/stream-events';
 import { cleanToolCallInstructions, extractToolCallFromText } from '@/lib/chat/tool-call-cleanup';
+import { ToolCallDetector } from '@/lib/mcp/ToolCallDetector';
 
 /**
  * 工具通道解析器
@@ -28,13 +29,9 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
 
     const raw = ev.content || '';
 
-    // 快速路径：不包含任何指令特征时，直接透传
-    if (
-      !raw.includes('commentary to=') &&
-      !raw.includes('<use_mcp_tool>') &&
-      !raw.includes('<tool_call>') &&
-      !/"type"\s*:\s*"tool_call"/i.test(raw)
-    ) {
+    // 快速路径：使用统一的 ToolCallDetector 检测
+    const detector = ToolCallDetector.getInstance();
+    if (!detector.mightContainToolCall(raw)) {
       out.push(ev);
       continue;
     }

@@ -4,7 +4,13 @@ import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
+import { createStreamEvent } from '../types/stream-events';
 import { rewriteEventsWithToolCalls } from '../adapters/ToolChannelParser';
+import { 
+  type ToolDefinition, 
+  toOpenAITools, 
+  toOpenAIToolChoice 
+} from '../types/tool-schema';
 
 /**
  * OpenAI 兼容 Provider（宽松解析版）
@@ -107,7 +113,14 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     const url = `${this.baseUrl.replace(/\/$/, '')}/chat/completions`;
     // 过滤扩展字段（例如 mcpServers/extensions），只保留通用参数
-    const { extensions: _extensions, mcpServers: _mcpServers, ...restOpts } = (opts as any) || {};
+    const { 
+      extensions: _extensions, 
+      mcpServers: _mcpServers,
+      tools: toolDefs,
+      toolChoice,
+      parallelToolCalls,
+      ...restOpts 
+    } = (opts as any) || {};
     const mapped: any = { ...restOpts };
     const o: any = opts as any;
     if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
@@ -121,11 +134,49 @@ export class OpenAICompatibleProvider extends BaseProvider {
       mapped.presence_penalty = o.presencePenalty;
     if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
 
-    const body = {
+    const body: Record<string, unknown> = {
       model,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       stream: true,
       ...mapped,
+    };
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H3-body',message:'请求体构建',data:{model,hasToolDefs:!!(toolDefs&&toolDefs.length),toolDefsCount:toolDefs?.length||0,messageCount:messages.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
+    
+    // 添加原生工具调用支持（如果提供了工具定义）
+    if (toolDefs && Array.isArray(toolDefs) && toolDefs.length > 0) {
+      body.tools = toOpenAITools(toolDefs as ToolDefinition[]);
+      
+      if (toolChoice) {
+        body.tool_choice = toOpenAIToolChoice(toolChoice);
+      }
+      
+      if (parallelToolCalls !== undefined) {
+        body.parallel_tool_calls = parallelToolCalls;
+      }
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H3-tools',message:'原生工具已添加到请求',data:{toolCount:(body.tools as any[])?.length||0},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
+    }
+
+    // 防止重复触发完成回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、reader.done 等多条完成分支
+    let didComplete = false;
+    const completeOnce = (reason: string, data?: Record<string, unknown>) => {
+      const already = didComplete;
+      if (didComplete) {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H5-completeOnce:dup',message:'onComplete duplicate suppressed',data:{reason,...(data||{}),already},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
+        return;
+      }
+      didComplete = true;
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H5-completeOnce',message:'onComplete fired',data:{reason,...(data||{})},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
+      cb.onComplete?.();
     };
 
     try {
@@ -196,15 +247,49 @@ export class OpenAICompatibleProvider extends BaseProvider {
       this.currentReader = reader;
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
-      // —— 诊断：统计信息（便于判断是否“模型无输出”还是“解析丢失”）——
+      // —— 诊断：统计信息（便于判断是否"模型无输出"还是"解析丢失"）——
       let rawLineCount = 0;
       let parsedOkCount = 0;
       let contentEmittedChars = 0;
       const lastPayloadSamples: string[] = [];
+      
+      // 工具调用增量状态
+      const toolCallState: Map<number, {
+        id: string;
+        name: string;
+        arguments: string;
+      }> = new Map();
+      
       const processDelta = (json: any) => {
         if (!json) return;
         // 1) 先提取内容（包含最终 message.content），避免因 finish_reason 过早 return 丢失末帧内容
         const delta = json?.choices?.[0]?.delta ?? {};
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H4-delta',message:'处理delta',data:{hasToolCalls:!!delta?.tool_calls,hasContent:!!delta?.content,contentLen:delta?.content?.length||0,contentSample:(delta?.content||'').slice(0,100),finishReason:json?.choices?.[0]?.finish_reason},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+        // #endregion
+        
+        // 处理工具调用增量
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index ?? 0;
+            
+            if (!toolCallState.has(index)) {
+              toolCallState.set(index, {
+                id: tc.id || `call_${index}`,
+                name: tc.function?.name || '',
+                arguments: tc.function?.arguments || '',
+              });
+            } else {
+              const state = toolCallState.get(index)!;
+              if (tc.id) state.id = tc.id;
+              if (tc.function?.name) state.name += tc.function.name;
+              if (tc.function?.arguments) state.arguments += tc.function.arguments;
+            }
+          }
+          // 不返回，继续处理可能的内容
+        }
+        
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
         const contentPiece: string | undefined =
           (typeof delta.content === 'string' ? delta.content : undefined) ||
@@ -217,14 +302,26 @@ export class OpenAICompatibleProvider extends BaseProvider {
           const result = this.thinkingStrategy.processToken({ content: fullContent, done: false });
           parsedOkCount++;
           contentEmittedChars += fullContent.length;
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H4-dispatch',message:'派发内容事件',data:{contentLen:fullContent.length,eventsCount:result.events?.length||0},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+          // #endregion
+          
           this.dispatchEvents(result.events || [], cb);
         }
         // 2) 再处理结束信号
         const isDone = json === '[DONE]' || json?.done === true || !!json?.choices?.[0]?.finish_reason;
         if (isDone) {
+          // 完成前，发送所有累积的工具调用
+          this.emitPendingToolCalls(toolCallState, cb);
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H5-complete',message:'流完成',data:{rawLineCount,parsedOkCount,contentEmittedChars,toolCallsCount:toolCallState.size},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+          // #endregion
+          
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          cb.onComplete?.();
+          completeOnce('finish_reason_or_done', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
           // —— 诊断输出：NDJSON 模式统计 —— 
           try {
             console.debug('[OpenAICompatibleProvider] NDJSON complete', {
@@ -232,8 +329,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
               parsedOkCount,
               contentEmittedChars,
               lastPayloadSamples,
+              toolCallsEmitted: toolCallState.size,
             });
           } catch { /* noop */ }
+          return;
         }
       };
 
@@ -252,7 +351,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           }
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          cb.onComplete?.();
+          completeOnce('reader_done', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
           break;
         }
         buffer += decoder.decode(value, { stream: true });
@@ -271,8 +370,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
                   cb.onToken(text);
                 }
               }
-              
-              cb.onComplete?.();
+              completeOnce('line_DONE', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
             } 
             continue; 
           }
@@ -295,7 +393,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
    * - 先通过 ToolChannelParser 剥离工具指令 → 生成 tool_call 事件
    * - 再将纯净的事件流交给上层回调（优先 onEvent，降级 onToken）
    */
-  private dispatchEvents(rawEvents: StreamEvent[] | undefined, cb: StreamCallbacks, isDone: boolean = false) {
+  private dispatchEvents(rawEvents: StreamEvent[] | undefined, cb: StreamCallbacks, _isDone: boolean = false) {
     if (!rawEvents || rawEvents.length === 0) return;
     const events = rewriteEventsWithToolCalls(rawEvents);
     if (!events.length) return;
@@ -374,7 +472,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           this.dispatchEvents(result.events || [], cb, true);
           cb.onComplete?.();
         }
-      } catch (e) {
+      } catch {
         // JSON 解析失败，忽略
       }
     };
@@ -486,6 +584,47 @@ export class OpenAICompatibleProvider extends BaseProvider {
     } catch (error) {
       console.error('[OpenAICompatibleProvider] SSE fallback failed:', error);
       cb.onError?.(error as any);
+    }
+  }
+
+  /**
+   * 发送累积的工具调用事件
+   */
+  private emitPendingToolCalls(
+    toolCallState: Map<number, { id: string; name: string; arguments: string }>,
+    cb: StreamCallbacks
+  ): void {
+    if (toolCallState.size === 0) return;
+    
+    for (const [, tc] of toolCallState) {
+      if (!tc.name) continue;
+      
+      // 解析服务器和工具名称（格式: server__tool 或 server.tool 或直接工具名）
+      let serverName = 'default';
+      let toolName = tc.name;
+      
+      if (tc.name.includes('__')) {
+        const parts = tc.name.split('__');
+        serverName = parts[0];
+        toolName = parts.slice(1).join('__');
+      } else if (tc.name.includes('.')) {
+        const parts = tc.name.split('.');
+        serverName = parts[0];
+        toolName = parts.slice(1).join('.');
+      }
+      
+      // 发送工具调用事件
+      if (cb.onEvent) {
+        const toolEvent = createStreamEvent.toolCall(
+          tc.id,
+          {
+            serverName,
+            toolName,
+            arguments: tc.arguments,
+          }
+        );
+        cb.onEvent(toolEvent);
+      }
     }
   }
 

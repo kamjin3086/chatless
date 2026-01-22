@@ -8,9 +8,8 @@
  * 1. **格式处理器 (FormatHandler)**: 每种格式一个处理器
  *    - OpenAIHandler: OpenAI function_call 和 tool_calls
  *    - XMLHandler: MCP XML 格式
- *    - GptOssHandler: GPT-OSS 通道和模板标签
  *    - JsonHandler: JSON 格式工具调用
- *    - SimpleHandler: 简化格式（to=, server.tool）
+ *    - GptOssTagHandler: GPT-OSS 模板标签清理
  * 
  * 2. **处理管道 (ToolCallPipeline)**: 串联所有处理器
  *    - 按优先级顺序执行
@@ -58,8 +57,10 @@ export {
 export {
   OpenAIHandler,
   XMLHandler,
-  GptOssHandler,
   JsonHandler,
+  GptOssTagHandler,
+  // 已弃用，保留向后兼容
+  GptOssHandler,
   SimpleHandler,
 } from './handlers';
 

@@ -3,6 +3,12 @@ import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
+import { createStreamEvent } from '../types/stream-events';
+import { 
+  type ToolDefinition, 
+  toAnthropicTools, 
+  toAnthropicToolChoice,
+} from '../types/tool-schema';
 
 /**
  * Anthropic Claude Provider (v1 REST API)
@@ -75,7 +81,13 @@ export class AnthropicProvider extends BaseProvider {
     const endpoint = `${this.baseUrl.replace(/\/$/, '')}/messages`;
     // 过滤扩展字段，避免把 mcpServers/extensions 传入
     const o: any = options || {};
-    const { extensions: _extensions, mcpServers: _mcpServers, ...restOpts } = o;
+    const { 
+      extensions: _extensions, 
+      mcpServers: _mcpServers,
+      tools: toolDefs,
+      toolChoice,
+      ...restOpts 
+    } = o;
     const mapped: any = { ...restOpts };
     if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
     if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;
@@ -84,15 +96,32 @@ export class AnthropicProvider extends BaseProvider {
     if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;
     if (o.minP !== undefined && mapped.min_p === undefined) mapped.min_p = o.minP;
 
-    const body = {
+    const body: Record<string, unknown> = {
       model,
       messages,
       stream: true,
       ...mapped,
     };
+    
+    // 添加原生工具调用支持（如果提供了工具定义）
+    if (toolDefs && Array.isArray(toolDefs) && toolDefs.length > 0) {
+      body.tools = toAnthropicTools(toolDefs as ToolDefinition[]);
+      
+      if (toolChoice) {
+        body.tool_choice = toAnthropicToolChoice(toolChoice);
+      }
+    }
 
     // 重置策略状态
     this.thinkingStrategy.reset();
+    
+    // 工具调用状态追踪
+    const toolCallState: Map<number, {
+      id: string;
+      name: string;
+      input: string;
+    }> = new Map();
+    let currentToolIndex = 0;
     
     try {
       await this.sseClient.startConnection(
@@ -119,8 +148,32 @@ export class AnthropicProvider extends BaseProvider {
               for (const part of parts) {
                 if (part.startsWith('{')) {
                   const json = JSON.parse(part);
+                  
+                  // 处理内容块开始（可能是工具调用）
+                  if (json.type === 'content_block_start') {
+                    const contentBlock = json.content_block;
+                    if (contentBlock?.type === 'tool_use') {
+                      toolCallState.set(json.index, {
+                        id: contentBlock.id || `tool_${json.index}`,
+                        name: contentBlock.name || '',
+                        input: '',
+                      });
+                      currentToolIndex = json.index;
+                    }
+                  }
+                  
+                  // 处理内容块增量
                   if (json.type === 'content_block_delta') {
-                    const token = json.delta?.text;
+                    const delta = json.delta;
+                    
+                    // 处理工具输入增量
+                    if (delta?.type === 'input_json_delta' && toolCallState.has(json.index)) {
+                      const state = toolCallState.get(json.index)!;
+                      state.input += delta.partial_json || '';
+                    }
+                    
+                    // 处理文本内容
+                    const token = delta?.text;
                     if (token) {
                       const result = this.thinkingStrategy.processToken({
                         content: token,
@@ -139,7 +192,28 @@ export class AnthropicProvider extends BaseProvider {
                         }
                       }
                     }
-                  } else if (json.type === 'message_stop') {
+                  }
+                  
+                  // 处理内容块结束
+                  if (json.type === 'content_block_stop') {
+                    // 发送累积的工具调用
+                    const tc = toolCallState.get(json.index);
+                    if (tc && tc.name) {
+                      this.emitToolCall(tc, callbacks);
+                      toolCallState.delete(json.index);
+                    }
+                  }
+                  
+                  // 处理消息结束
+                  if (json.type === 'message_stop') {
+                    // 发送所有剩余的工具调用
+                    for (const [, tc] of toolCallState) {
+                      if (tc.name) {
+                        this.emitToolCall(tc, callbacks);
+                      }
+                    }
+                    toolCallState.clear();
+                    
                     const result = this.thinkingStrategy.processToken({ done: true });
                     if (callbacks.onEvent && result.events && result.events.length > 0) {
                       result.events.forEach(event => callbacks.onEvent!(event));
@@ -150,7 +224,6 @@ export class AnthropicProvider extends BaseProvider {
                       }
                     }
                     
-                    // 打印完整响应（用于调试）
                     callbacks.onComplete?.();
                     this.sseClient.stopConnection();
                   }
@@ -165,6 +238,41 @@ export class AnthropicProvider extends BaseProvider {
     } catch (error: any) {
       console.error('[AnthropicProvider] SSE connection failed:', error);
       callbacks.onError?.(error);
+    }
+  }
+
+  /**
+   * 发送工具调用事件
+   */
+  private emitToolCall(
+    tc: { id: string; name: string; input: string },
+    callbacks: StreamCallbacks
+  ): void {
+    // 解析服务器和工具名称
+    let serverName = 'default';
+    let toolName = tc.name;
+    
+    if (tc.name.includes('__')) {
+      const parts = tc.name.split('__');
+      serverName = parts[0];
+      toolName = parts.slice(1).join('__');
+    } else if (tc.name.includes('.')) {
+      const parts = tc.name.split('.');
+      serverName = parts[0];
+      toolName = parts.slice(1).join('.');
+    }
+    
+    // 发送工具调用事件
+    if (callbacks.onEvent) {
+      const toolEvent = createStreamEvent.toolCall(
+        tc.id,
+        {
+          serverName,
+          toolName,
+          arguments: tc.input,
+        }
+      );
+      callbacks.onEvent(toolEvent);
     }
   }
 

@@ -22,6 +22,7 @@ import type {
   CleanOptions,
   ToolCallFormat 
 } from '../types';
+import { parsePartialJson } from '@/lib/utils/partialJsonParser';
 
 export class JsonHandler implements FormatHandler {
   readonly id: ToolCallFormat = 'json_tool_call';
@@ -86,17 +87,16 @@ export class JsonHandler implements FormatHandler {
           
           // 只处理可能是工具调用的 JSON
           if (this.mightBeToolCall(raw)) {
-            try {
-              const json = JSON.parse(raw);
-              if (typeof json === 'object' && json !== null) {
-                results.push({
-                  json: json as Record<string, unknown>,
-                  raw,
-                  startIndex: i,
-                  endIndex: endIndex + 1,
-                });
-              }
-            } catch { /* ignore invalid JSON */ }
+            // 使用增量 JSON 解析器，支持不完整 JSON
+            const json = parsePartialJson<Record<string, unknown>>(raw);
+            if (json && typeof json === 'object') {
+              results.push({
+                json,
+                raw,
+                startIndex: i,
+                endIndex: endIndex + 1,
+              });
+            }
           }
           
           i = endIndex + 1;

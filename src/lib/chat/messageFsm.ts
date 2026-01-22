@@ -24,7 +24,33 @@ export interface MessageModel {
 
 export function initModel(msg: Message): MessageModel {
   const segs = Array.isArray(msg.segments) ? msg.segments : [];
-  return { segments: segs, fsm: 'RENDERING_BODY', id: msg.id, detectingTool: false };
+  // 从已有 segments 推断 FSM，避免在 flush/reduce 时把工具运行态“重置”为 RENDERING_BODY
+  // 否则会出现：工具卡片已插入但 STREAM_END 仍把消息判定为 COMPLETE/sent，造成 UI 状态错乱。
+  let hasToolRunning = false;
+  let hasToolError = false;
+  let hasToolSuccess = false;
+  for (const s of segs as any[]) {
+    if (s?.kind !== 'toolCard') continue;
+    const st = String(s?.status || '');
+    if (st === 'running' || st === 'pending_auth') hasToolRunning = true;
+    else if (st === 'error') hasToolError = true;
+    else if (st === 'success') hasToolSuccess = true;
+  }
+
+  let fsm: FsmState = 'RENDERING_BODY';
+  const last: any = segs.length ? (segs as any[])[segs.length - 1] : undefined;
+  if (last?.kind === 'think') fsm = 'RENDERING_THINK';
+
+  if (hasToolRunning) fsm = 'TOOL_RUNNING';
+  else if (hasToolError) fsm = 'TOOL_ERROR';
+  else if (hasToolSuccess) fsm = 'TOOL_DONE';
+
+  const streamEnded = !!(msg as any)._streamEnded;
+  if (streamEnded && fsm !== 'TOOL_RUNNING' && fsm !== 'TOOL_ERROR') {
+    fsm = 'COMPLETE';
+  }
+
+  return { segments: segs, fsm, id: msg.id, detectingTool: false };
 }
 
 export function reduce(model: MessageModel, action: MessageAction): MessageModel {

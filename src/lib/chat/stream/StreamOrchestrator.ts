@@ -17,6 +17,14 @@ import { ToolCallEventHandler } from './handlers/ToolCallEventHandler';
 import { StreamResponseLogger } from './response-logger';
 import { useChatStore } from '@/store/chatStore';
 import { cleanToolCallInstructions } from '@/lib/chat/tool-call-cleanup';
+import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+
+// #region agent log
+const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
+  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
+}
+// #endregion
 
 /**
  * 流式处理编排器
@@ -26,6 +34,8 @@ export class StreamOrchestrator {
   private handlers: EventHandler[];
   private config: StreamOrchestratorConfig;
   private responseLogger: StreamResponseLogger;
+  private coordinator = ToolCallCoordinator.getInstance();
+  private didHandleComplete = false;
 
   constructor(config: StreamOrchestratorConfig) {
     this.config = config;
@@ -277,6 +287,19 @@ export class StreamOrchestrator {
    * 处理流完成
    */
   private async handleComplete(): Promise<void> {
+    if (this.didHandleComplete) {
+      debugLog('StreamOrchestrator.ts:handleComplete:dup', 'Handle complete suppressed (already ran)', {
+        messageId: this.context.messageId,
+        conversationId: this.context.conversationId,
+        toolStarted: this.context.toolStarted,
+        contentLength: (this.context.content || '').length,
+      }, 'H1');
+      return;
+    }
+    this.didHandleComplete = true;
+
+    // 注意：useChatStore.getState() 返回的是“快照对象”；
+    // handleComplete 内部会 dispatchMessageAction（会更新 store），因此不能长期复用同一个快照读取 segments。
     const store = useChatStore.getState();
     
     // 导入清理工具
@@ -294,6 +317,16 @@ export class StreamOrchestrator {
     // 保存原始内容用于兜底解析
     const originalContent = contentToPersist;
 
+    // #region agent log
+    debugLog('StreamOrchestrator.ts:handleComplete:entry', 'Handle complete entry', {
+      messageId: this.context.messageId,
+      conversationId: this.context.conversationId,
+      toolStarted: this.context.toolStarted,
+      hadCardMarker,
+      contentLength: originalContent?.length || 0,
+    }, 'H1');
+    // #endregion
+
     // 兜底：如果本轮流式过程中没有显式触发工具调用（context.toolStarted 仍为 false），
     //       但最终内容中包含工具调用指令，则尝试在收尾阶段解析一次。
     //
@@ -307,34 +340,87 @@ export class StreamOrchestrator {
     //   不再关心历史 segments 中是否已经存在旧卡片。
     if (!this.context.toolStarted) {
       const parsed = extractToolCallFromText(originalContent);
+
+      // #region agent log
+      debugLog('StreamOrchestrator.ts:handleComplete:fallbackParsed', 'Fallback parsed tool call', {
+        messageId: this.context.messageId,
+        hasParsed: !!parsed,
+        server: parsed?.server,
+        tool: parsed?.tool,
+      }, 'H2');
+      // #endregion
       
       if (parsed && parsed.server && parsed.tool) {
-        // 创建工具卡（通过状态机），但不再把标记注入到 content，避免正文出现 JSON 残片
-        const cardId = crypto.randomUUID();
-        store.dispatchMessageAction(this.context.messageId, { 
-          type: 'TOOL_HIT', 
-          server: parsed.server, 
-          tool: parsed.tool, 
-          args: parsed.args, 
-          cardId 
-        });
-        
-        // 兜底路径启动工具执行
-        const { executeToolCall } = await import('@/lib/mcp/ToolCallOrchestrator');
-        void executeToolCall({
-          assistantMessageId: this.context.messageId,
-          conversationId: this.context.conversationId,
+        const lockResult = this.coordinator.tryAcquireToolCallLock({
+          messageId: this.context.messageId,
           server: parsed.server,
           tool: parsed.tool,
           args: parsed.args,
-          _runningMarker: '', // 不再使用 content 注入的运行中标记
-          provider: this.config.provider,
-          model: this.config.model,
-          historyForLlm: this.config.historyForLlm as any,
-          originalUserContent: this.config.originalUserContent,
-          cardId,
+          source: 'fallback',
         });
+
+        // #region agent log
+        debugLog('StreamOrchestrator.ts:handleComplete:fallbackLock', 'Fallback lock attempt', {
+          messageId: this.context.messageId,
+          acquired: lockResult.acquired,
+          toolCallKey: lockResult.key,
+        }, 'H2');
+        // #endregion
+
+        if (!lockResult.acquired) {
+          // 重要：不要 return。
+          // fallback 只是一条补救路径；若锁未获取成功，说明该工具调用已在其他路径处理中。
+          // 此处仍需继续 handleComplete 的收尾流程（STREAM_END/持久化），否则会导致消息一直 loading。
+          // #region agent log
+          debugLog('StreamOrchestrator.ts:handleComplete:fallbackLockSkip', 'Fallback lock not acquired; skip execute but continue finalize', {
+            messageId: this.context.messageId,
+            toolCallKey: lockResult.key,
+          }, 'H13');
+          // #endregion
+        } else {
+          // 创建工具卡（通过状态机），但不再把标记注入到 content，避免正文出现 JSON 残片
+          const cardId = crypto.randomUUID();
+          this.context.toolStarted = true;
+          store.dispatchMessageAction(this.context.messageId, { 
+            type: 'TOOL_HIT', 
+            server: parsed.server, 
+            tool: parsed.tool, 
+            args: parsed.args, 
+            cardId 
+          });
+          
+          // 兜底路径启动工具执行
+          const { executeToolCall } = await import('@/lib/mcp/ToolCallOrchestrator');
+          // #region agent log
+          debugLog('StreamOrchestrator.ts:handleComplete:fallbackExecute', 'Fallback execute tool call', {
+            messageId: this.context.messageId,
+            server: parsed.server,
+            tool: parsed.tool,
+            cardId,
+          }, 'H2');
+          // #endregion
+          void executeToolCall({
+            assistantMessageId: this.context.messageId,
+            conversationId: this.context.conversationId,
+            server: parsed.server,
+            tool: parsed.tool,
+            args: parsed.args,
+            provider: this.config.provider,
+            model: this.config.model,
+            historyForLlm: this.config.historyForLlm as any,
+            originalUserContent: this.config.originalUserContent,
+            cardId,
+            lockKey: lockResult.key,
+          });
+        }
       }
+    } else {
+      // #region agent log
+      debugLog('StreamOrchestrator.ts:handleComplete:skipFallback', 'Skip fallback due to toolStarted', {
+        messageId: this.context.messageId,
+        toolStarted: this.context.toolStarted,
+      }, 'H3');
+      // #endregion
     }
 
     // 最终清理：移除所有工具调用指令
@@ -348,10 +434,30 @@ export class StreamOrchestrator {
     // 派发流结束动作
     store.dispatchMessageAction(this.context.messageId, { type: 'STREAM_END' });
 
+    // 关键：重新获取最新快照，避免读到 dispatch 前的旧 state（会导致 segCount=0 并把空 segments 持久化回去）
+    const fresh = useChatStore.getState();
+    const conv2 = fresh.conversations.find(c => c.id === this.context.conversationId);
+    const msg2: any = conv2?.messages.find(m => m.id === this.context.messageId);
+    const segsFresh = Array.isArray(msg2?.segments) ? msg2.segments : [];
+    const toolCardsFresh = segsFresh.filter((s: any) => s?.kind === 'toolCard');
+
+    // #region agent log
+    try {
+      debugLog('StreamOrchestrator.ts:handleComplete:beforePersist', 'Before persist updateMessage', {
+        messageId: this.context.messageId,
+        hasMsg: !!msg2,
+        segCount: segsFresh.length,
+        toolCardCount: toolCardsFresh.length,
+        toolCardIds: toolCardsFresh.map((t: any) => t.id).slice(0, 5),
+        lastKinds: segsFresh.slice(-5).map((s: any) => s?.kind),
+        currentStatus: msg2?.status,
+      }, 'H10');
+    } catch { /* noop */ }
+    // #endregion
+
     // 持久化消息 - 包含 segments
-    // 关键修复：同步 contentToPersist 到最后一个 text segment
-    // 因为 contentToPersist 是完整的流式内容，而 segments 中的 text 可能没有完全同步
-    const segmentsToPersist = msg?.segments ? [...msg.segments] : [];
+    // 关键修复：使用 fresh state 的 segments 作为基准（而不是 handleComplete 入口处的旧快照 msg）
+    const segmentsToPersist = segsFresh ? [...segsFresh] : [];
     if (contentToPersist && segmentsToPersist.length > 0) {
       // 找到最后一个 text segment 并更新其内容
       const lastTextIdx = segmentsToPersist.map((s: any) => s.kind).lastIndexOf('text');
@@ -362,13 +468,33 @@ export class StreamOrchestrator {
         segmentsToPersist.push({ kind: 'text', text: contentToPersist });
       }
     }
+
+    // 不要在这里强行覆盖为 sent：流可能结束但工具仍在运行，消息状态由 chatStore 的 FSM 决定更准确
+    const statusToPersist = (msg2 && typeof msg2.status === 'string') ? msg2.status : 'sent';
     await store.updateMessage(this.context.messageId, {
       content: contentToPersist,
-      status: 'sent',
+      status: statusToPersist,
       thinking_start_time: this.context.thinkingStartTime || undefined,
       thinking_duration,
       segments: segmentsToPersist, // 关键：保存同步后的 segments
     });
+
+    // #region agent log
+    try {
+      const st3 = useChatStore.getState();
+      const conv3 = st3.conversations.find(c => c.id === this.context.conversationId);
+      const msg3: any = conv3?.messages.find(m => m.id === this.context.messageId);
+      const segs3 = Array.isArray(msg3?.segments) ? msg3.segments : [];
+      const toolCards3 = segs3.filter((s: any) => s?.kind === 'toolCard');
+      debugLog('StreamOrchestrator.ts:handleComplete:afterPersist', 'After persist updateMessage', {
+        messageId: this.context.messageId,
+        segCount: segs3.length,
+        toolCardCount: toolCards3.length,
+        toolCardIds: toolCards3.map((t: any) => t.id).slice(0, 5),
+        lastKinds: segs3.slice(-5).map((s: any) => s?.kind),
+      }, 'H10');
+    } catch { /* noop */ }
+    // #endregion
 
     // 通知UI更新完成
     this.config.onUIUpdate?.(contentToPersist);

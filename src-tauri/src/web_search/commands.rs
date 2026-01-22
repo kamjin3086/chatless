@@ -13,25 +13,25 @@ const DEFAULT_FETCH_MAX_LINKS: usize = 50;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WebSearchRequest {
-  pub provider: String,       // "google" | "bing" | "custom_scrape" | "ollama" | "duckduckgo"
-  pub query: String,          // 搜索关键词
-  pub api_key: Option<String>,// provider 对应的 key（google/bing）
+  pub provider: String, // "google" | "bing" | "custom_scrape" | "ollama" | "duckduckgo"
+  pub query: String,    // 搜索关键词
+  pub api_key: Option<String>, // provider 对应的 key（google/bing）
   pub cse_id: Option<String>, // google 的 CSE ID
   // —— 可选高级参数（按提供商适配，不一定全部生效） ——
-  pub limit: Option<usize>,             // 结果条数（用于 ddg/custom）
-  pub kl: Option<String>,               // ddg 区域/语言参数（如 us-en）
-  pub accept_language: Option<String>,  // 请求 Accept-Language 头
-  pub safe: Option<bool>,               // ddg 安全搜索
-  pub site: Option<String>,             // ddg site 限定
-  pub max_results: Option<i32>,         // ollama 专用
+  pub limit: Option<usize>,            // 结果条数（用于 ddg/custom）
+  pub kl: Option<String>,              // ddg 区域/语言参数（如 us-en）
+  pub accept_language: Option<String>, // 请求 Accept-Language 头
+  pub safe: Option<bool>,              // ddg 安全搜索
+  pub site: Option<String>,            // ddg site 限定
+  pub max_results: Option<i32>,        // ollama 专用
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WebFetchRequest {
-  pub provider: String,       // 目前主要支持 "ollama"
-  pub url: String,            // 要抓取的网页地址
-  pub api_key: Option<String>,// ollama 的 API Key
+  pub provider: String,        // 目前主要支持 "ollama"
+  pub url: String,             // 要抓取的网页地址
+  pub api_key: Option<String>, // ollama 的 API Key
   pub max_links: Option<usize>,
   pub max_content_chars: Option<usize>,
   pub use_readability: Option<bool>,
@@ -53,7 +53,11 @@ pub struct WebFetchResult {
 
 #[tauri::command]
 pub async fn native_web_search(request: WebSearchRequest) -> Result<Vec<WebSearchResult>, String> {
-  log::info!("[WEB_SEARCH] provider={} query={}", request.provider, request.query);
+  log::info!(
+    "[WEB_SEARCH] provider={} query={}",
+    request.provider,
+    request.query
+  );
   let client = http_client::get_browser_like_client() // 统一走“浏览器头”客户端，兼容更多场景
     .map_err(|e| format!("init http client failed: {}", e))?;
   let client_ref: &Client = &client;
@@ -72,7 +76,11 @@ pub async fn native_web_search(request: WebSearchRequest) -> Result<Vec<WebSearc
 
 #[tauri::command]
 pub async fn native_web_fetch(request: WebFetchRequest) -> Result<WebFetchResult, String> {
-  log::info!("[WEB_FETCH] provider={} url={}", request.provider, request.url);
+  log::info!(
+    "[WEB_FETCH] provider={} url={}",
+    request.provider,
+    request.url
+  );
   let client = http_client::get_browser_like_client()
     .map_err(|e| format!("init http client failed: {}", e))?;
   let client_ref: &Client = &client;
@@ -84,14 +92,26 @@ pub async fn native_web_fetch(request: WebFetchRequest) -> Result<WebFetchResult
   }
 }
 
-async fn call_google_search(client: &Client, request: WebSearchRequest) -> Result<Vec<WebSearchResult>, String> {
-  let api_key = request.api_key.ok_or_else(|| "Google API Key is missing".to_string())?;
-  let cse_id = request.cse_id.ok_or_else(|| "Google CSE ID is missing".to_string())?;
+async fn call_google_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
+  let api_key = request
+    .api_key
+    .ok_or_else(|| "Google API Key is missing".to_string())?;
+  let cse_id = request
+    .cse_id
+    .ok_or_else(|| "Google CSE ID is missing".to_string())?;
   let url = format!(
     "https://www.googleapis.com/customsearch/v1?key={}&cx={}&q={}",
-    api_key, cse_id, encode(&request.query)
+    api_key,
+    cse_id,
+    encode(&request.query)
   );
-  log::info!("[WEB_SEARCH][google] GET {}", "https://www.googleapis.com/customsearch/v1?...");
+  log::info!(
+    "[WEB_SEARCH][google] GET {}",
+    "https://www.googleapis.com/customsearch/v1?..."
+  );
   let res = client
     .get(url)
     .header("Accept", "application/json")
@@ -99,16 +119,32 @@ async fn call_google_search(client: &Client, request: WebSearchRequest) -> Resul
     .await
     .map_err(|e| format!("http error: {}", e))?;
   let status = res.status();
-  let text = res.text().await.map_err(|e| format!("read body failed: {}", e))?;
-  log::info!("[WEB_SEARCH][google] status={} body_head={}", status, sample_for_log(&text));
-  let resp: serde_json::Value = serde_json::from_str(&text)
-    .map_err(|e| format!("decode json failed: {}; body_head={}", e, sample_for_log(&text)))?;
+  let text = res
+    .text()
+    .await
+    .map_err(|e| format!("read body failed: {}", e))?;
+  log::info!(
+    "[WEB_SEARCH][google] status={} body_head={}",
+    status,
+    sample_for_log(&text)
+  );
+  let resp: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+    format!(
+      "decode json failed: {}; body_head={}",
+      e,
+      sample_for_log(&text)
+    )
+  })?;
 
   // 优化错误提示：Google 返回 { "error": { code, message, errors: [...] } }
   if let Some(err) = resp.get("error") {
     let code = err.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
-    let msg = err.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
-    let reason = err.get("errors")
+    let msg = err
+      .get("message")
+      .and_then(|m| m.as_str())
+      .unwrap_or("Unknown error");
+    let reason = err
+      .get("errors")
       .and_then(|a| a.as_array())
       .and_then(|arr| arr.get(0))
       .and_then(|o| o.get("reason"))
@@ -118,7 +154,11 @@ async fn call_google_search(client: &Client, request: WebSearchRequest) -> Resul
       "Google API 错误 (code {}): {}{}",
       code,
       msg,
-      if reason.is_empty() { "".to_string() } else { format!(" (reason: {})", reason) }
+      if reason.is_empty() {
+        "".to_string()
+      } else {
+        format!(" (reason: {})", reason)
+      }
     ));
   }
 
@@ -152,8 +192,13 @@ async fn call_google_search(client: &Client, request: WebSearchRequest) -> Resul
   Ok(results)
 }
 
-async fn call_ollama_fetch(client: &Client, request: WebFetchRequest) -> Result<WebFetchResult, String> {
-  let api_key = request.api_key.ok_or_else(|| "Ollama API Key is missing".to_string())?;
+async fn call_ollama_fetch(
+  client: &Client,
+  request: WebFetchRequest,
+) -> Result<WebFetchResult, String> {
+  let api_key = request
+    .api_key
+    .ok_or_else(|| "Ollama API Key is missing".to_string())?;
   let url = "https://ollama.com/api/web_fetch";
   let payload = serde_json::json!({
     "url": request.url
@@ -169,21 +214,54 @@ async fn call_ollama_fetch(client: &Client, request: WebFetchRequest) -> Result<
     .await
     .map_err(|e| format!("http error: {}", e))?;
   let status = res.status();
-  let text = res.text().await.map_err(|e| format!("read body failed: {}", e))?;
-  log::info!("[WEB_FETCH][ollama] status={} body_head={}", status, sample_for_log(&text));
-  let resp: serde_json::Value = serde_json::from_str(&text)
-    .map_err(|e| format!("decode json failed: {}; body_head={}", e, sample_for_log(&text)))?;
+  let text = res
+    .text()
+    .await
+    .map_err(|e| format!("read body failed: {}", e))?;
+  log::info!(
+    "[WEB_FETCH][ollama] status={} body_head={}",
+    status,
+    sample_for_log(&text)
+  );
+  let resp: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+    format!(
+      "decode json failed: {}; body_head={}",
+      e,
+      sample_for_log(&text)
+    )
+  })?;
 
-  let title = resp.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string();
-  let content = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-  let links: Vec<String> = resp.get("links")
+  let title = resp
+    .get("title")
+    .and_then(|v| v.as_str())
+    .unwrap_or("")
+    .to_string();
+  let content = resp
+    .get("content")
+    .and_then(|v| v.as_str())
+    .unwrap_or("")
+    .to_string();
+  let links: Vec<String> = resp
+    .get("links")
     .and_then(|v| v.as_array())
-    .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+    .map(|arr| {
+      arr
+        .iter()
+        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+        .collect()
+    })
     .unwrap_or_default();
-  Ok(WebFetchResult { title, content, links })
+  Ok(WebFetchResult {
+    title,
+    content,
+    links,
+  })
 }
 
-async fn call_basic_fetch(client: &Client, request: WebFetchRequest) -> Result<WebFetchResult, String> {
+async fn call_basic_fetch(
+  client: &Client,
+  request: WebFetchRequest,
+) -> Result<WebFetchResult, String> {
   // 兼容性降级：直接 GET 网页并尝试提取标题，正文以纯文本截断返回
   log::info!("[WEB_FETCH][basic] GET {}", request.url);
   let body = client
@@ -196,28 +274,43 @@ async fn call_basic_fetch(client: &Client, request: WebFetchRequest) -> Result<W
     .map_err(|e| format!("read body failed: {}", e))?;
   let document = Html::parse_document(&body);
   let title_sel = Selector::parse("title").map_err(|e| e.to_string())?;
-  let mut title = document.select(&title_sel).next().map(|n| n.text().collect::<String>().trim().to_string()).unwrap_or_default();
+  let mut title = document
+    .select(&title_sel)
+    .next()
+    .map(|n| n.text().collect::<String>().trim().to_string())
+    .unwrap_or_default();
   // 可读性提取（默认启用），失败时回退到纯文本
   let use_readability = request.use_readability.unwrap_or(true);
   let mut content = if use_readability {
     match extract_readable_text(&body, &request.url) {
-      Some((t, c)) => { if !t.trim().is_empty() { title = t; } c },
-      None => html2text::from_read(body.as_bytes(), 80)
+      Some((t, c)) => {
+        if !t.trim().is_empty() {
+          title = t;
+        }
+        c
+      }
+      None => html2text::from_read(body.as_bytes(), 80),
     }
   } else {
     html2text::from_read(body.as_bytes(), 80)
   };
   // 截断正文
-  let maxc = request.max_content_chars.unwrap_or(DEFAULT_FETCH_MAX_CONTENT_CHARS);
+  let maxc = request
+    .max_content_chars
+    .unwrap_or(DEFAULT_FETCH_MAX_CONTENT_CHARS);
   let len = content.chars().count();
-  if len > maxc { content = content.chars().take(maxc).collect(); }
+  if len > maxc {
+    content = content.chars().take(maxc).collect();
+  }
   // 抽取链接（相对转绝对），限制数量
   let max_links = request.max_links.unwrap_or(DEFAULT_FETCH_MAX_LINKS);
   let base = Url::parse(&request.url).ok();
   let link_sel = Selector::parse("a").map_err(|e| e.to_string())?;
   let mut links: Vec<String> = Vec::new();
   for a in document.select(&link_sel) {
-    if links.len() >= max_links { break; }
+    if links.len() >= max_links {
+      break;
+    }
     if let Some(href) = a.value().attr("href") {
       if let Some(base_url) = &base {
         if let Ok(abs) = base_url.join(href) {
@@ -228,7 +321,11 @@ async fn call_basic_fetch(client: &Client, request: WebFetchRequest) -> Result<W
       links.push(href.to_string());
     }
   }
-  Ok(WebFetchResult { title, content, links })
+  Ok(WebFetchResult {
+    title,
+    content,
+    links,
+  })
 }
 
 // —— 可读性正文提取（基于 readability::extractor，输入为 Reader + Url）——
@@ -239,15 +336,24 @@ fn extract_readable_text(html: &str, page_url: &str) -> Option<(String, String)>
   match readability::extractor::extract(&mut cursor, &url) {
     Ok(product) => {
       let title = product.title;
-      let text = if !product.text.trim().is_empty() { product.text } else { product.content };
+      let text = if !product.text.trim().is_empty() {
+        product.text
+      } else {
+        product.content
+      };
       Some((title, text))
     }
     Err(_) => None,
   }
 }
 
-async fn call_bing_search(client: &Client, request: WebSearchRequest) -> Result<Vec<WebSearchResult>, String> {
-  let api_key = request.api_key.ok_or_else(|| "Bing API Key is missing".to_string())?;
+async fn call_bing_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
+  let api_key = request
+    .api_key
+    .ok_or_else(|| "Bing API Key is missing".to_string())?;
   let url = "https://api.bing.microsoft.com/v7.0/search";
   log::info!("[WEB_SEARCH][bing] GET {}", url);
   let res = client
@@ -259,10 +365,22 @@ async fn call_bing_search(client: &Client, request: WebSearchRequest) -> Result<
     .await
     .map_err(|e| format!("http error: {}", e))?;
   let status = res.status();
-  let text = res.text().await.map_err(|e| format!("read body failed: {}", e))?;
-  log::info!("[WEB_SEARCH][bing] status={} body_head={}", status, sample_for_log(&text));
-  let resp: serde_json::Value = serde_json::from_str(&text)
-    .map_err(|e| format!("decode json failed: {}; body_head={}", e, sample_for_log(&text)))?;
+  let text = res
+    .text()
+    .await
+    .map_err(|e| format!("read body failed: {}", e))?;
+  log::info!(
+    "[WEB_SEARCH][bing] status={} body_head={}",
+    status,
+    sample_for_log(&text)
+  );
+  let resp: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+    format!(
+      "decode json failed: {}; body_head={}",
+      e,
+      sample_for_log(&text)
+    )
+  })?;
 
   let items = resp
     .get("webPages")
@@ -292,20 +410,37 @@ async fn call_bing_search(client: &Client, request: WebSearchRequest) -> Result<
 /// 说明：当前实现沿用基于 https://html.duckduckgo.com 的解析逻辑，与 `custom_scrape` 一致。
 /// 这样可在无需额外密钥的情况下提供稳定可用的结果。
 /// 若后续需要切换为 duckduckgo crate，可在此处替换为 crate 的调用与结果映射。
-async fn call_duckduckgo_search(client: &Client, request: WebSearchRequest) -> Result<Vec<WebSearchResult>, String> {
+async fn call_duckduckgo_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
   call_custom_scraper(client, request).await
 }
 
-async fn call_custom_scraper(client: &Client, request: WebSearchRequest) -> Result<Vec<WebSearchResult>, String> {
+async fn call_custom_scraper(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
   // 构建 DDG URL（支持 site/kl/kp 等）
   let mut q = request.query.clone();
-  if let Some(site) = request.site.as_ref().filter(|s| !s.trim().is_empty()) { q = format!("site:{} {}", site.trim(), q); }
+  if let Some(site) = request.site.as_ref().filter(|s| !s.trim().is_empty()) {
+    q = format!("site:{} {}", site.trim(), q);
+  }
   let mut url = format!("https://html.duckduckgo.com/html/?q={}", encode(&q));
-  if let Some(kl) = request.kl.as_ref().filter(|s| !s.trim().is_empty()) { url.push_str(&format!("&kl={}", encode(kl))); }
-  if let Some(safe) = request.safe { let kp = if safe { "1" } else { "-2" }; url.push_str(&format!("&kp={}", kp)); }
+  if let Some(kl) = request.kl.as_ref().filter(|s| !s.trim().is_empty()) {
+    url.push_str(&format!("&kl={}", encode(kl)));
+  }
+  if let Some(safe) = request.safe {
+    let kp = if safe { "1" } else { "-2" };
+    url.push_str(&format!("&kp={}", kp));
+  }
   log::info!("[WEB_SEARCH][scrape] GET {}", url);
   let mut req = client.get(url);
-  if let Some(lang) = request.accept_language.as_ref().filter(|s| !s.trim().is_empty()) {
+  if let Some(lang) = request
+    .accept_language
+    .as_ref()
+    .filter(|s| !s.trim().is_empty())
+  {
     req = req.header("Accept-Language", lang);
   }
   let body = req
@@ -319,7 +454,8 @@ async fn call_custom_scraper(client: &Client, request: WebSearchRequest) -> Resu
 
   let document = Html::parse_document(&body);
   let result_selector = Selector::parse("div.result").map_err(|e| e.to_string())?;
-  let title_selector = Selector::parse("h2.result__title > a.result__a").map_err(|e| e.to_string())?;
+  let title_selector =
+    Selector::parse("h2.result__title > a.result__a").map_err(|e| e.to_string())?;
   let snippet_selector = Selector::parse("a.result__snippet").map_err(|e| e.to_string())?;
   let url_selector = Selector::parse("a.result__url").map_err(|e| e.to_string())?;
 
@@ -327,16 +463,38 @@ async fn call_custom_scraper(client: &Client, request: WebSearchRequest) -> Resu
   let results: Vec<WebSearchResult> = document
     .select(&result_selector)
     .filter_map(|el| {
-      let title = el.select(&title_selector).next()?.text().collect::<String>().trim().to_string();
-      let snippet = el.select(&snippet_selector).next()?.text().collect::<String>().trim().to_string();
-      let raw = el.select(&url_selector).next()?.value().attr("href")?.trim().to_string();
+      let title = el
+        .select(&title_selector)
+        .next()?
+        .text()
+        .collect::<String>()
+        .trim()
+        .to_string();
+      let snippet = el
+        .select(&snippet_selector)
+        .next()?
+        .text()
+        .collect::<String>()
+        .trim()
+        .to_string();
+      let raw = el
+        .select(&url_selector)
+        .next()?
+        .value()
+        .attr("href")?
+        .trim()
+        .to_string();
       let url = match Url::parse(&raw) {
         Ok(parsed) => {
           if let Some((_, v)) = parsed.query_pairs().find(|(k, _)| k == "uddg") {
-            urlencoding::decode(v.as_ref()).map(|d| d.into_owned()).unwrap_or_else(|_| v.into_owned())
-          } else { raw }
-        },
-        Err(_) => raw
+            urlencoding::decode(v.as_ref())
+              .map(|d| d.into_owned())
+              .unwrap_or_else(|_| v.into_owned())
+          } else {
+            raw
+          }
+        }
+        Err(_) => raw,
       };
       Some(WebSearchResult {
         source_title: title,
@@ -350,8 +508,13 @@ async fn call_custom_scraper(client: &Client, request: WebSearchRequest) -> Resu
   Ok(results)
 }
 
-async fn call_ollama_search(client: &Client, request: WebSearchRequest) -> Result<Vec<WebSearchResult>, String> {
-  let api_key = request.api_key.ok_or_else(|| "Ollama API Key is missing".to_string())?;
+async fn call_ollama_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
+  let api_key = request
+    .api_key
+    .ok_or_else(|| "Ollama API Key is missing".to_string())?;
   let url = "https://ollama.com/api/web_search";
   let payload = serde_json::json!({
     "query": request.query,
@@ -368,22 +531,45 @@ async fn call_ollama_search(client: &Client, request: WebSearchRequest) -> Resul
     .await
     .map_err(|e| format!("http error: {}", e))?;
   let status = res.status();
-  let text = res.text().await.map_err(|e| format!("read body failed: {}", e))?;
-  log::info!("[WEB_SEARCH][ollama] status={} body_head={}", status, sample_for_log(&text));
-  let resp: serde_json::Value = serde_json::from_str(&text)
-    .map_err(|e| format!("decode json failed: {}; body_head={}", e, sample_for_log(&text)))?;
+  let text = res
+    .text()
+    .await
+    .map_err(|e| format!("read body failed: {}", e))?;
+  log::info!(
+    "[WEB_SEARCH][ollama] status={} body_head={}",
+    status,
+    sample_for_log(&text)
+  );
+  let resp: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+    format!(
+      "decode json failed: {}; body_head={}",
+      e,
+      sample_for_log(&text)
+    )
+  })?;
 
-  let items = resp.get("results").and_then(|i| i.as_array()).ok_or_else(|| "No results found in Ollama response".to_string())?;
-  let results: Vec<WebSearchResult> = items.iter().filter_map(|item| {
-    let title = item.get("title")?.as_str()?;
-    let url = item.get("url")?.as_str()?;
-    let content = item.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
-    Some(WebSearchResult {
-      source_title: title.to_string(),
-      url: url.to_string(),
-      snippet: content,
+  let items = resp
+    .get("results")
+    .and_then(|i| i.as_array())
+    .ok_or_else(|| "No results found in Ollama response".to_string())?;
+  let results: Vec<WebSearchResult> = items
+    .iter()
+    .filter_map(|item| {
+      let title = item.get("title")?.as_str()?;
+      let url = item.get("url")?.as_str()?;
+      let content = item
+        .get("content")
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+      Some(WebSearchResult {
+        source_title: title.to_string(),
+        url: url.to_string(),
+        snippet: content,
+      })
     })
-  }).take(5).collect();
+    .take(5)
+    .collect();
 
   Ok(results)
 }
@@ -430,34 +616,40 @@ pub struct DuckrushResponse {
 pub async fn duckrush_search_api(query: String) -> Result<DuckrushResponse, String> {
   let client = http_client::get_browser_like_client()
     .map_err(|e| format!("init http client failed: {}", e))?;
-  let results = call_duckduckgo_search(&client, WebSearchRequest {
-    provider: "duckduckgo".to_string(),
-    query: query.clone(),
-    api_key: None,
-    cse_id: None,
-    limit: Some(5),
-    kl: None,
-    accept_language: None,
-    safe: None,
-    site: None,
-    max_results: None,
-  }).await?;
+  let results = call_duckduckgo_search(
+    &client,
+    WebSearchRequest {
+      provider: "duckduckgo".to_string(),
+      query: query.clone(),
+      api_key: None,
+      cse_id: None,
+      limit: Some(5),
+      kl: None,
+      accept_language: None,
+      safe: None,
+      site: None,
+      max_results: None,
+    },
+  )
+  .await?;
 
   let now_ms = (std::time::SystemTime::now()
     .duration_since(std::time::UNIX_EPOCH)
-    .unwrap_or_else(|_| std::time::Duration::from_millis(0))
-  ).as_millis() as i64;
+    .unwrap_or_else(|_| std::time::Duration::from_millis(0)))
+  .as_millis() as i64;
 
-  let items: Vec<DuckrushItem> = results.into_iter().enumerate().map(|(i, r)| {
-    DuckrushItem {
+  let items: Vec<DuckrushItem> = results
+    .into_iter()
+    .enumerate()
+    .map(|(i, r)| DuckrushItem {
       title: r.source_title,
       url: r.url,
       description: r.snippet,
       search_engine: "DuckDuckGo".to_string(),
       rank: (i as i32) + 1,
       timestamp: now_ms,
-    }
-  }).collect();
+    })
+    .collect();
 
   Ok(DuckrushResponse {
     code: 0,
@@ -465,5 +657,3 @@ pub async fn duckrush_search_api(query: String) -> Result<DuckrushResponse, Stri
     data: DuckrushData { results: items },
   })
 }
-
-

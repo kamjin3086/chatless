@@ -656,6 +656,13 @@ export const useChatStore = create<ChatState & ChatActions>()(
         // 这样可以将一个渲染帧内的所有 token 合并为一次 store 更新
         let rafId: number | null = null;
         const pendingIds = new Set<string>();
+
+        // #region agent log
+        const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+        const debugLog = (location: string, message: string, data?: unknown, hypothesisId?: string) => {
+          fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
+        };
+        // #endregion
         
         const flushAll = () => {
           rafId = null;
@@ -663,13 +670,26 @@ export const useChatStore = create<ChatState & ChatActions>()(
           pendingIds.clear();
           
           if (idsToFlush.length === 0) return;
+
+          // #region agent log
+          try {
+            debugLog('chatStore.ts:dispatchMessageAction:flushAll:ids', 'flushAll idsToFlush', { idsToFlush, count: idsToFlush.length }, 'H12');
+          } catch { /* noop */ }
+          // #endregion
           
           const { initModel, reduce } = require('@/lib/chat/messageFsm');
+
+          // 保留快照，避免后续清空队列导致 shouldPersist 误判
+          const persistFlags = new Map<string, boolean>();
           
           // 单次 set 调用处理所有消息的更新
           set(state => {
             for (const id of idsToFlush) {
               const actions = queues.get(id) || [];
+              // 注意：这里 actions 会在下面被清空，但持久化判断需要用“清空前”的快照
+              const shouldPersist = actions.some(a => a && (a.type === 'TOOL_HIT' || a.type === 'TOOL_RESULT' || a.type === 'STREAM_END'));
+              persistFlags.set(id, shouldPersist);
+
               queues.set(id, []);
               scheduled.delete(id);
               
@@ -736,11 +756,36 @@ export const useChatStore = create<ChatState & ChatActions>()(
               
               const nextMsg: any = { ...prevMsg, segments: model.segments, segments_vm: viewModel };
               
-              // 处理 STREAM_END
+              // 处理 STREAM_END：
+              // 只有在不处于工具运行态时，才把 loading -> sent。
+              // 否则会出现：流结束(仅输出工具指令) => sent，然后工具执行又把它改回 loading，造成“看着像没结束”。
               const ended = actions.some((a: any) => a && a.type === 'STREAM_END');
-              if (ended && nextMsg.status === 'loading') {
-                nextMsg.status = 'sent';
+              // 持久标记：该消息的“LLM 流已结束”（即使当时工具仍在运行，状态仍保持 loading）
+              const prevStreamEnded = !!(prevMsg as any)._streamEnded;
+              const streamEnded = prevStreamEnded || ended;
+              (nextMsg as any)._streamEnded = streamEnded;
+
+              // 当流已结束，且工具也不再处于 TOOL_RUNNING，则把消息最终状态落为 sent/error
+              if (nextMsg.status === 'loading' && streamEnded && model.fsm !== 'TOOL_RUNNING') {
+                nextMsg.status = (model.fsm === 'TOOL_ERROR') ? 'error' : 'sent';
               }
+
+              // #region agent log
+              try {
+                const types = actions.map((a: any) => a?.type).filter(Boolean);
+                debugLog('chatStore.ts:flushAll:status', 'Post-reduce status snapshot', {
+                  messageId: id,
+                  prevStatus: prevMsg?.status,
+                  nextStatus: nextMsg?.status,
+                  ended,
+                  streamEnded,
+                  fsm: model.fsm,
+                  actionTypes: types,
+                  segCount: Array.isArray(nextMsg.segments) ? nextMsg.segments.length : 0,
+                  toolCardCount: Array.isArray(nextMsg.segments) ? nextMsg.segments.filter((s: any) => s?.kind === 'toolCard').length : 0,
+                }, 'H12');
+              } catch { /* noop */ }
+              // #endregion
               
               const nextMessages: any[] = [...(conv.messages as any[])];
               nextMessages[idx] = nextMsg;
@@ -751,9 +796,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
           
           // 持久化逻辑（在 set 之后执行）
           for (const id of idsToFlush) {
-            const actions = queues.get(id) || [];
-            const shouldPersist = actions.some(a => a && (a.type === 'TOOL_HIT' || a.type === 'TOOL_RESULT' || a.type === 'STREAM_END'));
-            if (shouldPersist) {
+            if (persistFlags.get(id)) {
               // 延迟导入并执行持久化
               void Promise.resolve().then(async () => {
                 try {
@@ -809,6 +852,31 @@ export const useChatStore = create<ChatState & ChatActions>()(
             list.push(action);
           }
           queues.set(messageId, list);
+
+          // 屏障事件：立即 flush，避免 StreamOrchestrator.handleComplete 读到旧 segments 快照导致“卡片一闪而过”
+          const t = action?.type;
+          if (t === 'TOOL_HIT' || t === 'TOOL_RESULT' || t === 'STREAM_END') {
+            // #region agent log
+            try {
+              debugLog('chatStore.ts:dispatchMessageAction:barrier', 'Barrier action flush now', { messageId, type: t, queueLen: list.length }, 'H12');
+            } catch { /* noop */ }
+            // #endregion
+            if (rafId != null) {
+              try { cancelAnimationFrame(rafId); } catch { /* noop */ }
+              rafId = null;
+            }
+            scheduled.delete(messageId);
+            // 关键修复：确保当前消息进入 flushAll 的处理集合
+            pendingIds.add(messageId);
+            // #region agent log
+            try {
+              debugLog('chatStore.ts:dispatchMessageAction:barrier:enqueue', 'Barrier enqueue pendingIds', { messageId, type: t }, 'H12');
+            } catch { /* noop */ }
+            // #endregion
+            flushAll();
+            return;
+          }
+
           scheduleFlush(messageId);
         };
       })(),

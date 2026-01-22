@@ -103,8 +103,10 @@ export {
   // 处理器
   OpenAIHandler,
   XMLHandler,
-  GptOssHandler,
   JsonHandler,
+  GptOssTagHandler,
+  // 已弃用，保留向后兼容
+  GptOssHandler,
   SimpleHandler,
 } from './formats';
 

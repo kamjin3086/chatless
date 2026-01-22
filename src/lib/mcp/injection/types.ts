@@ -67,8 +67,23 @@ export interface InjectionContext {
   hasToolError?: boolean;
   /** Provider 名称 */
   providerName?: string;
+  /** 模型名称 */
+  modelName?: string;
   /** 工具调用深度 */
   toolCallDepth?: number;
+}
+
+/**
+ * 原生工具定义（用于传递给 LLM API）
+ */
+export interface NativeToolDefinition {
+  name: string;
+  description: string;
+  parameters?: {
+    type: 'object';
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
 }
 
 /**
@@ -81,6 +96,25 @@ export interface InjectionResult {
   enabledServers: string[];
   /** 是否注入了工具信息 */
   hasToolInfo: boolean;
+  /** 是否应该使用原生工具调用 API */
+  useNativeTools?: boolean;
+  /** 原生工具定义列表（当 useNativeTools=true 时使用） */
+  nativeTools?: NativeToolDefinition[];
+  /** 工具调用策略详情 */
+  toolCallStrategy?: {
+    /** 是否使用原生工具调用 */
+    useNative: boolean;
+    /** 是否使用 Prompt 注入 */
+    usePromptInjection: boolean;
+    /** 最大工具数量 */
+    maxTools: number;
+    /** 是否支持并行工具调用 */
+    parallelToolCalls: boolean;
+    /** 是否支持流式工具调用返回 */
+    streamingToolCalls: boolean;
+    /** 备注 */
+    note?: string;
+  };
 }
 
 /**
