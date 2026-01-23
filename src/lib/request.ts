@@ -8,8 +8,73 @@ import { processOllamaRequest } from './request-patches';
 // 导入公共的浏览器兜底工具
 import { shouldUseBrowserRequest } from '@/lib/provider/browser-fallback-utils';
 
+// #region agent log
+const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+function postDebug(location: string, message: string, data?: unknown, hypothesisId?: string) {
+  fetch(DEBUG_LOG_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'http-trace',
+      hypothesisId,
+    }),
+  }).catch(() => {});
+}
 
+function redactHeaders(headers: Record<string, any> | undefined): Record<string, any> | undefined {
+  if (!headers || typeof headers !== 'object') return headers;
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    const lk = k.toLowerCase();
+    if (lk.includes('authorization') || lk.includes('cookie') || lk.includes('api-key') || lk.includes('x-api-key')) {
+      out[k] = '<redacted>';
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
 
+function prettyJsonMaybe(body: any): { pretty?: string; len?: number; kind: string } {
+  try {
+    if (body === undefined) return { kind: 'undefined' };
+    if (body === null) return { kind: 'null', pretty: 'null', len: 4 };
+    if (typeof body === 'string') {
+      const trimmed = body.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        const obj = JSON.parse(trimmed);
+        const pretty = JSON.stringify(obj, null, 2);
+        return { kind: 'json-string', pretty: pretty.slice(0, 12000), len: pretty.length };
+      }
+      return { kind: 'string', pretty: body.slice(0, 12000), len: body.length };
+    }
+    if (typeof body === 'object') {
+      const pretty = JSON.stringify(body, null, 2);
+      return { kind: 'object', pretty: pretty.slice(0, 12000), len: pretty.length };
+    }
+    const s = String(body);
+    return { kind: typeof body, pretty: s.slice(0, 12000), len: s.length };
+  } catch {
+    return { kind: typeof body };
+  }
+}
+
+function pushHttpTrace(entry: any) {
+  try {
+    if (typeof window !== 'undefined') {
+      const w: any = window as any;
+      const arr = Array.isArray(w.__CHATLESS_HTTP_TRACE__) ? w.__CHATLESS_HTTP_TRACE__ : [];
+      arr.push(entry);
+      w.__CHATLESS_HTTP_TRACE__ = arr.slice(-50);
+    }
+  } catch { /* noop */ }
+}
+// #endregion
 
 // 环境检测：只在开发环境中启用调试日志
 const __DEV__ = isDevelopmentEnvironment();
@@ -167,7 +232,7 @@ export async function request<T = any>(inputUrl: string, opts: RequestOptions = 
   // 🔧 确保 body 被正确序列化为 JSON 字符串
   // Tauri HTTP 插件的 fetch 遵循 Web Fetch API，需要 body 是字符串
   if (methodUpper !== 'GET' && methodUpper !== 'HEAD' && options.body !== undefined) {
-    let body = options.body;
+    const body = options.body;
     // 如果 body 是对象（非字符串、非 null），需要序列化
     if (body !== null && typeof body === 'object' && typeof body !== 'string') {
       // 检查是否已经是 Tauri 特殊格式 { type: 'Json'|'Form'|'Text', payload: ... }
@@ -177,11 +242,32 @@ export async function request<T = any>(inputUrl: string, opts: RequestOptions = 
           options.body = JSON.stringify(body);
         } catch (e) {
           console.error('[tauriFetch] Failed to stringify body:', e);
-          throw new Error(`Cannot serialize request body: ${e}`);
+          throw new Error(`Cannot serialize request body: ${String(e)}`);
         }
       }
     }
   }
+
+  // #region agent log
+  // 根源级请求追踪：记录最终发出的 URL / method / headers(脱敏) / body(pretty)
+  // 用于证明：是否“提示词里真的包含 <use_mcp_tool>”、是否存在“隐藏渠道请求”
+  try {
+    const hdr = redactHeaders(options.headers as any);
+    const bodyInfo = prettyJsonMaybe((options as any).body);
+    const entry = {
+      kind: 'tauriFetch',
+      url,
+      method: options.method || 'GET',
+      headers: hdr,
+      bodyKind: bodyInfo.kind,
+      bodyLen: bodyInfo.len,
+      bodyPretty: bodyInfo.pretty,
+      debugTag: options.debugTag || null,
+    };
+    pushHttpTrace(entry);
+    postDebug('request.ts:H_HTTP:req', 'HTTP request (tauriFetch root trace)', entry, 'H_HTTP');
+  } catch { /* noop */ }
+  // #endregion
 
   // --- 日志策略：默认开发环境输出极简；仅当 verboseDebug=true 时输出详细 ---
   if (__DEV__) {
@@ -263,6 +349,20 @@ export async function request<T = any>(inputUrl: string, opts: RequestOptions = 
           console.log(`${tag}[tauriFetch] <- ${status || 'unknown'} ${statusText || ''}`);
         }
       }
+
+      // #region agent log
+      try {
+        const ct = (resp.headers.get?.('content-type') || '').toLowerCase();
+        const entry = {
+          kind: 'tauriFetch',
+          url,
+          status: (resp as any).status ?? (resp as any).statusCode,
+          contentType: ct,
+        };
+        pushHttpTrace({ ...entry, phase: 'response' });
+        postDebug('request.ts:H_HTTP:resp', 'HTTP response meta (tauriFetch)', entry, 'H_HTTP');
+      } catch { /* noop */ }
+      // #endregion
       
       // 如果 status >= 500 且还有重试机会，进行重试
       if (!isOk && status && status >= 500 && attempt < maxAttempts - 1) {
@@ -497,10 +597,29 @@ export async function browserFetch<T = any>(url: string, options: RequestOptions
         }
       } catch (e) {
         console.error('[browserFetch] Failed to stringify body:', e);
-        throw new Error(`Cannot serialize request body: ${e}`);
+        throw new Error(`Cannot serialize request body: ${String(e)}`);
       }
     }
   }
+
+  // #region agent log
+  try {
+    const hdr = redactHeaders(init.headers as any);
+    const bodyInfo = prettyJsonMaybe((init as any).body);
+    const entry = {
+      kind: 'browserFetch',
+      url,
+      method,
+      headers: hdr,
+      bodyKind: bodyInfo.kind,
+      bodyLen: bodyInfo.len,
+      bodyPretty: bodyInfo.pretty,
+      debugTag: (options as any).debugTag || null,
+    };
+    pushHttpTrace(entry);
+    postDebug('request.ts:H_HTTP:req', 'HTTP request (browserFetch root trace)', entry, 'H_HTTP');
+  } catch { /* noop */ }
+  // #endregion
 
   if (__DEV__ && options.verboseDebug) {
     const tag = options.debugTag ? `[${options.debugTag}]` : '';

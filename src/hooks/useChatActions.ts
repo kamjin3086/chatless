@@ -220,6 +220,20 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   ): Promise<LlmMessage[]> => {
     const hb = new HistoryBuilder();
     
+    // 0. 注入当前时间（永远置顶），帮助模型理解“今天/最新/现在”等时间语义，并提升实时信息查询准确性
+    try {
+      const wsMod: any = await import('@/store/webSearchStore').catch(() => null);
+      const webSearchEnabled = !!wsMod?.useWebSearchStore?.getState?.().isWebSearchEnabled;
+      const { buildTimeContextMessage, isTimeRelatedQuery } = await import('@/lib/prompts/TimeContext');
+      const includeInSearch = webSearchEnabled || isTimeRelatedQuery(userContent);
+      const timeMsg = buildTimeContextMessage(includeInSearch);
+      if (timeMsg && timeMsg.trim()) hb.addSystem(timeMsg);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useChatActions.ts:buildLlmHistory:time',message:'Injected time system message',data:{conversationId,webSearchEnabled,includeInSearch,preview:(timeMsg||'').slice(0,120)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_time'})}).catch(()=>{});
+      // #endregion
+    } catch { /* ignore */ }
+    
     // 1. 添加系统提示词
     try {
       const conv = useChatStore.getState().conversations.find((c: any) => c.id === conversationId);
@@ -236,7 +250,12 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       try {
         const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
         const injection = await buildMcpSystemInjections(userContent, conversationId);
-        for (const m of injection.systemMessages) hb.addSystem((m as any).content);
+        for (const m of injection.systemMessages) {
+          const c = String((m as any).content || '');
+          // 避免重复注入时间（因为我们已经在顶部注入了）
+          if (c.startsWith('【当前时间】') || c.startsWith('当前时间：')) continue;
+          hb.addSystem(c);
+        }
       } catch { /* 忽略MCP注入失败 */ }
     } catch { /* 忽略系统提示构建失败 */ }
     
@@ -766,6 +785,18 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         excludeMessagesAfterIndex: userIdx, // 只取到 user 消息为止，不包含后续的 assistant 消息
       }
     );
+
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useChatActions.ts:handleRetryMessage:history',message:'Retry buildLlmHistory done',data:{conversationId:conv.id,userIdx,historyLen:Array.isArray(historyForLlm)?historyForLlm.length:undefined},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_REROLL'})}).catch(()=>{});
+    // #endregion
+
+    // 重新生成时增加轻微扰动，降低“逐字复读”的概率（不影响工具调用链路）
+    try {
+      (historyForLlm as any).unshift({
+        role: 'system',
+        content: `【重试生成】这是同一问题的重新生成版本。请避免复用上一版本的句子组织方式与措辞；如果内容相同也要换一种表达方式。\nnonce=${Date.now()}`,
+      });
+    } catch { /* noop */ }
 
     // 选择 provider/model 与参数
     const modelToUse = conv.model_id;

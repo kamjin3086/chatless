@@ -179,6 +179,9 @@ export const INCOMPLETE_TAG_PREFIXES = [
   // MCP XML 格式
   '<use_mcp_tool', '<tool_call',
   '</use_mcp_tool', '</tool_call',
+  // MCP XML 内部字段（偶发：模型在拆包/格式错误时会直接吐出这些半截标签）
+  '<server_name', '<tool_name', '<arguments',
+  '</server_name', '</tool_name', '</arguments',
   // GPT-OSS 模板标签（使用 <| 开头，可以安全匹配）
   '<|channel|', '<|message|', '<|end|', '<|thinking|',
   '<|constrain|', '<|tool_call', '<|function_call'
@@ -209,8 +212,9 @@ export interface SuppressionTrigger {
  */
 export function getSuppressionTriggers(): SuppressionTrigger[] {
   return [
-    { pattern: /<use_mcp_tool>/i, mode: 'xml_use_mcp_tool' },
-    { pattern: /<tool_call>/i, mode: 'xml_tool_call' },
+    // ⚠️ 关键：不要要求必须出现 '>'，因为流式拆包常见 "<use_mcp_tool" / "<tool_call" 半截
+    { pattern: /<use_mcp_tool\b/i, mode: 'xml_use_mcp_tool' },
+    { pattern: /<tool_call\b/i, mode: 'xml_tool_call' },
     { pattern: /<\|channel\|>\s*commentary\s+to=[^\n{]{1,200}\{/i, mode: 'json_like' },
     { pattern: /commentary\s+to=[^\n{]{1,200}\{/i, mode: 'json_like' },
     // 新增：反向格式 json{...}commentary to=...

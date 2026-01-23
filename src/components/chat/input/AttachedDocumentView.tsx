@@ -82,7 +82,7 @@ export function AttachedDocumentView({ document, onRemove, className, onIndexed 
         <span className="text-xs text-slate-400 shrink-0">
           {formatFileSize(document.fileSize)}
         </span>
-      </div>
+        </div>
 
       {/* 大文档提示 */}
       {showIndexHint && (
@@ -99,16 +99,16 @@ export function AttachedDocumentView({ document, onRemove, className, onIndexed 
           )}
           <span>索引</span>
         </button>
-      )}
+          )}
 
       {/* 移除按钮 */}
       <button
-        onClick={onRemove}
+          onClick={onRemove}
         className="shrink-0 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
         title="移除"
-      >
-        <X className="w-3.5 h-3.5" />
+        >
+          <X className="w-3.5 h-3.5" />
       </button>
     </div>
   );
-}
+} 

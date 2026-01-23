@@ -39,7 +39,7 @@ export function buildFirstFollowUpPrompt(
 3. 工具不可用：尝试其他工具
 4. 无法解决：基于已有知识回答
 
-【重要】如果需要重试工具调用，只输出 1 个 <use_mcp_tool> 标签，然后停止。
+【重要】如果需要重试工具调用，请使用原生 tool_calls/函数调用机制；不要在正文输出任何 <use_mcp_tool>/<tool_call> 标签。
 
 用户问题：${originalQuestion}`;
   }
@@ -52,7 +52,7 @@ export function buildFirstFollowUpPrompt(
 3. 不要再输出任何工具调用指令
 
 【禁止行为】：
-- 禁止输出 <use_mcp_tool> 或任何工具调用标签
+- 禁止在正文输出 <use_mcp_tool>/<tool_call> 或任何“伪工具调用”指令
 - 禁止重复调用已经执行过的工具
 
 用户问题：${originalQuestion}`;
@@ -70,7 +70,7 @@ export function buildSecondFollowUpPrompt(originalQuestion: string): string {
 强制要求：
 1. 阅读上面的工具调用结果，总结关键信息
 2. 直接输出中文答案
-3. 绝对禁止输出 <use_mcp_tool> 或任何工具调用指令
+3. 绝对禁止输出 <use_mcp_tool>/<tool_call> 或任何工具调用指令
 
 用户问题：${originalQuestion}
 
@@ -93,7 +93,7 @@ export function buildMinimalToolContext(enabledServers: string[]): string[] {
     messages.push(`可用工具: ${list}`);
   }
   
-  messages.push(`如需调用工具: <use_mcp_tool><server_name>...</server_name><tool_name>...</tool_name><arguments>{...}</arguments></use_mcp_tool>`);
+  // Native-only：不再向模型注入任何 XML 工具调用示例，避免模型把示例当作正文输出。
   
   return messages;
 }

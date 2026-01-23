@@ -161,6 +161,31 @@ export class OpenAICompatibleProvider extends BaseProvider {
       // #endregion
     }
 
+    // DevTools：打印完整请求体（不包含 Authorization 等敏感 header）
+    // #region agent log
+    try {
+      const json = JSON.stringify(body);
+      // 在浏览器 DevTools 中可直接查看 window.__CHATLESS_LAST_LLM_REQUEST__
+      if (typeof window !== 'undefined') {
+        (window as any).__CHATLESS_LAST_LLM_REQUEST__ = body;
+      }
+      // DevTools：开发环境默认开启（排障刚需）；生产环境默认关闭，但可用 window.__CHATLESS_DEBUG_REQUESTS__ 强制开启
+      const force = (typeof window !== 'undefined' && (window as any).__CHATLESS_DEBUG_REQUESTS__ === true);
+      const isDevByEnv =
+        (typeof process !== 'undefined' && (process as any).env?.NODE_ENV === 'development');
+      const isDevByHost =
+        (typeof window !== 'undefined' &&
+          (window.location?.hostname === 'localhost' || window.location?.hostname === '127.0.0.1'));
+      const shouldConsoleLog = force || isDevByEnv || isDevByHost;
+      if (shouldConsoleLog) {
+        console.debug('[LLM REQUEST] /chat/completions', body);
+      }
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H3-body-full',message:'请求体(预览)',data:{url,bodySize:json.length,bodyPreview:json.slice(0,6000)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_req'})}).catch(()=>{});
+    } catch {
+      // ignore
+    }
+    // #endregion
+
     // 防止重复触发完成回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、reader.done 等多条完成分支
     let didComplete = false;
     const completeOnce = (reason: string, data?: Record<string, unknown>) => {
@@ -232,6 +257,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
 
       const contentType = (resp.headers.get?.('Content-Type') || '').toLowerCase();
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H_stream:contentType',message:'响应Content-Type判定',data:{contentType,isSSE:contentType.includes('text/event-stream')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_stream'})}).catch(()=>{});
+      // #endregion
+      
       if (contentType.includes('text/event-stream')) {
         // 🔧 修复：直接使用当前响应的 body 流，而不是重新发起请求
         // 之前的实现会调用 startSSEFallback 再次发送请求，导致服务端收到两个相同请求
@@ -265,7 +295,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const delta = json?.choices?.[0]?.delta ?? {};
         
         // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H4-delta',message:'处理delta',data:{hasToolCalls:!!delta?.tool_calls,hasContent:!!delta?.content,contentLen:delta?.content?.length||0,contentSample:(delta?.content||'').slice(0,100),finishReason:json?.choices?.[0]?.finish_reason},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H4-delta',message:'处理delta',data:{hasToolCalls:!!delta?.tool_calls,hasContent:!!delta?.content,contentLen:delta?.content?.length||0,contentSample:(delta?.content||'').slice(0,100),containsToolCallTag:typeof delta?.content==='string' ? /<tool_call>/i.test(delta.content) : false,finishReason:json?.choices?.[0]?.finish_reason},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_stream'})}).catch(()=>{});
         // #endregion
         
         // 处理工具调用增量
@@ -398,6 +428,13 @@ export class OpenAICompatibleProvider extends BaseProvider {
     if (!cb.onEvent) {
       throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
     }
+    // #region agent log
+    try {
+      const toolCallEvents = events.filter((e) => e.type === 'tool_call').length;
+      const contentEvents = events.filter((e) => e.type === 'content_token').length;
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H_rewrite',message:'rewriteEventsWithToolCalls 结果',data:{rawEventsCount:rawEvents.length,eventsCount:events.length,toolCallEvents,contentEvents},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_parse'})}).catch(()=>{});
+    } catch { /* ignore */ }
+    // #endregion
       for (const ev of events) cb.onEvent(ev);
   }
 
@@ -410,6 +447,18 @@ export class OpenAICompatibleProvider extends BaseProvider {
     this.thinkingStrategy.reset();
     
     cb.onStart?.();
+
+    // SSE 工具调用增量状态（LM Studio/OpenAI compat streaming：delta.tool_calls 分块发送，需要累积）
+    const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
+    let didComplete = false;
+    const completeOnce = (reason: string, data?: Record<string, unknown>) => {
+      if (didComplete) return;
+      didComplete = true;
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H_stream:sseComplete',message:'SSE completeOnce fired',data:{reason,...(data||{})},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_stream'})}).catch(()=>{});
+      // #endregion
+      cb.onComplete?.();
+    };
     
     const reader = resp.body?.getReader();
     if (!reader) {
@@ -433,15 +482,42 @@ export class OpenAICompatibleProvider extends BaseProvider {
       if (!payload) return;
       
       if (payload === '[DONE]') {
+        // 完成前，发送所有累积的工具调用
+        this.emitPendingToolCalls(toolCallState, cb);
         const result = this.thinkingStrategy.processToken({ done: true });
         this.dispatchEvents(result.events || [], cb, true);
-        cb.onComplete?.();
+        completeOnce('DONE', { toolCallsCount: toolCallState.size });
         return;
       }
       
       try {
         const json = JSON.parse(payload);
         const delta = json?.choices?.[0]?.delta ?? {};
+        const finishReason = json?.choices?.[0]?.finish_reason;
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H_stream:sseDelta',message:'SSE delta观测',data:{hasToolCalls:!!delta?.tool_calls,hasContent:!!delta?.content,contentSample:typeof delta?.content==='string' ? delta.content.slice(0,120) : null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_stream'})}).catch(()=>{});
+        // #endregion
+        
+        // SSE：累积 tool_calls（LM Studio 文档 Streaming）
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index ?? 0;
+            if (!toolCallState.has(index)) {
+              toolCallState.set(index, {
+                id: tc.id || `call_${index}`,
+                name: tc.function?.name || '',
+                arguments: tc.function?.arguments || '',
+              });
+            } else {
+              const state = toolCallState.get(index)!;
+              if (tc.id) state.id = tc.id;
+              if (tc.function?.name) state.name += tc.function.name;
+              if (tc.function?.arguments) state.arguments += tc.function.arguments;
+            }
+          }
+        }
+        
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
         const contentPiece: string | undefined =
           (typeof delta.content === 'string' ? delta.content : undefined) ||
@@ -459,13 +535,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
           const result = this.thinkingStrategy.processToken({ content: fullContent, done: false });
           this.dispatchEvents(result.events || [], cb);
         }
-        
-        // 检查 finish_reason
-        const finishReason = json?.choices?.[0]?.finish_reason;
+        // 检查 finish_reason：完成前同样冲刷工具调用
         if (finishReason && finishReason !== 'null') {
+          this.emitPendingToolCalls(toolCallState, cb);
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          cb.onComplete?.();
+          completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
         }
       } catch {
         // JSON 解析失败，忽略
@@ -481,9 +556,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
           if (buffer.trim()) {
             processLine(buffer);
           }
+          // reader done：确保发射累积工具调用
+          this.emitPendingToolCalls(toolCallState, cb);
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          cb.onComplete?.();
+          completeOnce('reader_done', { toolCallsCount: toolCallState.size });
           break;
         }
         
@@ -497,7 +574,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
     } catch (error: any) {
       if (this.aborted) {
-        cb.onComplete?.();
+        completeOnce('aborted', { toolCallsCount: toolCallState.size });
       } else {
         cb.onError?.(error);
       }
@@ -516,6 +593,18 @@ export class OpenAICompatibleProvider extends BaseProvider {
     this.thinkingStrategy.reset();
     
     try {
+      // SSE fallback 工具调用增量状态（与 processSSEResponse 保持一致）
+      const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
+      let didComplete = false;
+      const completeOnce = (reason: string, data?: Record<string, unknown>) => {
+        if (didComplete) return;
+        didComplete = true;
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OpenAICompatibleProvider.ts:H_stream:sseFallbackComplete',message:'SSE fallback completeOnce fired',data:{reason,...(data||{})},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_stream'})}).catch(()=>{});
+        // #endregion
+        cb.onComplete?.();
+      };
+      
       await this.sseClient.startConnection(
         {
           url,
@@ -537,15 +626,37 @@ export class OpenAICompatibleProvider extends BaseProvider {
             const payload = rawData.startsWith('data:') ? rawData.substring(5).trim() : rawData.trim();
             if (!payload) return;
             if (payload === '[DONE]') {
+              this.emitPendingToolCalls(toolCallState, cb);
               const result = this.thinkingStrategy.processToken({ done: true });
               this.dispatchEvents(result.events || [], cb, true);
-              cb.onComplete?.();
+              completeOnce('DONE', { toolCallsCount: toolCallState.size });
               this.sseClient.stopConnection();
               return;
             }
             try {
               const json = JSON.parse(payload);
               const delta = json?.choices?.[0]?.delta ?? {};
+              const finishReason = json?.choices?.[0]?.finish_reason;
+              
+              // SSE fallback：累积 tool_calls
+              if (delta?.tool_calls) {
+                for (const tc of delta.tool_calls) {
+                  const index = tc.index ?? 0;
+                  if (!toolCallState.has(index)) {
+                    toolCallState.set(index, {
+                      id: tc.id || `call_${index}`,
+                      name: tc.function?.name || '',
+                      arguments: tc.function?.arguments || '',
+                    });
+                  } else {
+                    const state = toolCallState.get(index)!;
+                    if (tc.id) state.id = tc.id;
+                    if (tc.function?.name) state.name += tc.function.name;
+                    if (tc.function?.arguments) state.arguments += tc.function.arguments;
+                  }
+                }
+              }
+              
               const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
               const contentPiece: string | undefined =
                 (typeof delta.content === 'string' ? delta.content : undefined) ||
@@ -566,6 +677,14 @@ export class OpenAICompatibleProvider extends BaseProvider {
                   done: false
                 });
                 this.dispatchEvents(result.events || [], cb);
+              }
+              
+              if (finishReason && finishReason !== 'null') {
+                this.emitPendingToolCalls(toolCallState, cb);
+                const result = this.thinkingStrategy.processToken({ done: true });
+                this.dispatchEvents(result.events || [], cb, true);
+                completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
+                this.sseClient.stopConnection();
               }
             } catch (err) {
               console.warn('[OpenAICompatibleProvider] JSON parse error', err);

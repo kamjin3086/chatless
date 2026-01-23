@@ -35,9 +35,9 @@ export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuer
 
   // 预热服务器
   const preheatServer = async (name: string) => {
-    try {
-      const { serverManager } = await import('@/lib/mcp/ServerManager');
-      if (serverManager.isServerConnected(name)) return;
+      try {
+        const { serverManager } = await import('@/lib/mcp/ServerManager');
+        if (serverManager.isServerConnected(name)) return;
       
       toast.info(`正在连接 ${name}…`, { duration: 1200 });
       const { getAllConfiguredServersWithStatus } = await import('@/lib/mcp/chatIntegration');
@@ -158,7 +158,7 @@ export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuer
   if (!open || !pos) return null;
 
   const panel = (
-    <div
+    <div 
       style={{ position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, zIndex: 9999 }}
       className={panelContainerClass}
     >
@@ -167,7 +167,7 @@ export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuer
         <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
           @ MCP 服务器
         </span>
-        <button
+        <button 
           className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
           onMouseDown={(e) => { e.preventDefault(); window.location.assign('/settings?tab=mcpServers'); }}
           title="管理 MCP"
@@ -179,8 +179,8 @@ export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuer
       {/* 列表 */}
       <ul className={panelListClass}>
         {items.map((it, idx) => (
-          <li
-            key={it.name}
+          <li 
+            key={it.name} 
             onMouseDown={(e) => {
               e.preventDefault();
               if (it.allowed) {
@@ -207,18 +207,18 @@ export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuer
               </span>
               {!it.connected && it.allowed && (
                 <span className="text-[10px] text-slate-400">未连接</span>
-              )}
-              {!it.allowed && (
+                )}
+                {!it.allowed && (
                 <span className="text-[10px] text-slate-400">未启用</span>
-              )}
+                )}
             </div>
             
             {/* 工具预览 */}
             {toolsPreview[it.name] && toolsPreview[it.name].length > 0 && (
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {toolsPreview[it.name].map((tool, i) => (
-                  <span
-                    key={i}
+                  <span 
+                    key={i} 
                     className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono"
                   >
                     {tool}

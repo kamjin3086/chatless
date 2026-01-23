@@ -38,41 +38,87 @@ export async function composeChatOptions(
   }
 
   // 3) 原生工具调用支持
-  try {
-    const { buildMcpSystemInjections, needsMcpInjection } = await import('@/lib/mcp/promptInjector');
-    const st = useChatStore.getState();
-    const conv: any =
-      conversationId ? st.conversations.find((c: any) => c.id === conversationId) : null;
-    const toolMode: 'chat' | 'agent' =
-      (conv?.tool_mode as any) || (st as any).sessionToolMode || 'chat';
-    const hasExplicitMention = /@([a-zA-Z0-9_-]{1,64})/.test(userContent);
-
-    // 决策策略：
-    // - agent：总是允许注入 tools（并强制注入，使模型即使面对“你好”也能调用工具）
-    // - chat：默认不注入；但允许显式 @server 触发（用户明确想用工具时）
-    const shouldInject =
-      toolMode === 'agent' ? true : (hasExplicitMention ? true : needsMcpInjection(userContent, conversationId || undefined));
-    if (!shouldInject) {
-      // 普通聊天：不注入 tools（让不支持 tools 的模型也能正常对话）
+  // 规则（明确区分）：
+  // - chat 模式：仅允许 web_search（且仅当用户开启网络搜索）
+  // - agent 模式：允许注入全部工具（skills + mcp + web_search）
+    const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
+  const wsMod: any = await import('@/store/webSearchStore').catch(() => null);
+  const webSearchEnabled = !!wsMod?.useWebSearchStore?.getState?.().isWebSearchEnabled;
+  const st = useChatStore.getState();
+  const conv: any =
+    conversationId ? st.conversations.find((c: any) => c.id === conversationId) : null;
+  const toolMode: 'chat' | 'agent' =
+    (conv?.tool_mode as any) || (st as any).sessionToolMode || 'chat';
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:mode',message:'composeChatOptions mode decision',data:{provider,model,toolMode,webSearchEnabled,conversationId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_mode'})}).catch(()=>{});
+  // #endregion
+  
+  if (toolMode === 'chat') {
+    if (!webSearchEnabled) {
       return refined;
     }
-    const injection = await buildMcpSystemInjections(
-      userContent,
-      conversationId || undefined,
-      provider,
-      model,
-      { forceInject: toolMode === 'agent' }
-    );
+    
+    const { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOL_SCHEMA, WEB_FETCH_TOOL_SCHEMA } = await import('@/lib/mcp/nativeTools/webSearch');
+    const { shouldUseNativeToolCalls } = await import('@/lib/llm/types/tool-capability');
+    const useNativeTools = shouldUseNativeToolCalls(provider, model);
+    if (!useNativeTools) {
+      throw new Error(`Chat mode web_search requires native tool calling. Unsupported provider/model: ${provider}/${model}`);
+    }
+    
+    const normalizeParams = (p: any): { type: 'object'; properties: Record<string, unknown>; required: string[] } => {
+      if (!p || typeof p !== 'object') return { type: 'object', properties: {}, required: [] };
+      const props = (p as any).properties;
+      const req = (p as any).required;
+      return {
+        type: 'object',
+        properties: (props && typeof props === 'object') ? props : {},
+        required: Array.isArray(req) ? req : [],
+      };
+    };
+    
+    const tools = [
+      {
+        name: `${WEB_SEARCH_SERVER_NAME}__${WEB_SEARCH_TOOL_SCHEMA.name}`,
+        description: WEB_SEARCH_TOOL_SCHEMA.description,
+        parameters: normalizeParams((WEB_SEARCH_TOOL_SCHEMA as any)?.input_schema?.schema),
+      },
+      {
+        name: `${WEB_SEARCH_SERVER_NAME}__${WEB_FETCH_TOOL_SCHEMA.name}`,
+        description: WEB_FETCH_TOOL_SCHEMA.description,
+        parameters: normalizeParams((WEB_FETCH_TOOL_SCHEMA as any)?.input_schema?.schema),
+      },
+    ];
+    
+    (refined as any).tools = tools;
+    (refined as any).toolChoice = 'auto';
+    (refined as any).__useNativeTools = true;
     
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:H1',message:'injection result',data:{useNativeTools:injection.useNativeTools,nativeToolsCount:injection.nativeTools?.length||0,provider,model},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:chat-websearch-only',message:'Chat mode: enabled web_search tools only',data:{toolNames:tools.map(t=>t.name)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_mode'})}).catch(()=>{});
     // #endregion
     
-    if (!injection.useNativeTools) {
-      throw new Error(`Native tool calling is required. Unsupported provider/model: ${provider}/${model}`);
-    }
+    return refined;
+  }
+  
+  // toolMode === 'agent'：注入全部工具
+  const injection = await buildMcpSystemInjections(
+    userContent,
+    conversationId || undefined,
+    provider,
+    model,
+    { forceInject: true }
+  );
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:H1',message:'injection result',data:{useNativeTools:injection.useNativeTools,nativeToolsCount:injection.nativeTools?.length||0,provider,model},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  
+  if (!injection.useNativeTools) {
+    throw new Error(`Native tool calling is required. Unsupported provider/model: ${provider}/${model}`);
+  }
 
-    if (injection.nativeTools && injection.nativeTools.length > 0) {
+  if (injection.nativeTools && injection.nativeTools.length > 0) {
       // 转换为 ToolDefinition 格式
       (refined as any).tools = injection.nativeTools.map((t: any) => ({
         name: t.name,
@@ -87,10 +133,6 @@ export async function composeChatOptions(
       // #endregion
       
       console.debug('[OptionComposer] 启用原生工具调用，工具数量:', injection.nativeTools.length);
-    }
-  } catch (e) {
-    // Native-only：这里的失败应中断发送流程，由上层提示用户更换 provider/model
-    throw e;
   }
 
   return refined;

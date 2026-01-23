@@ -145,6 +145,7 @@ export class McpToolExecutor {
             originalUserContent: this.params.originalUserContent,
             server,
             tool: this.effectiveTool,
+            args: this.effectiveArgs || {},
             result: {
               error: 'TOOL_NOT_FOUND',
               message: hint,
@@ -241,6 +242,7 @@ export class McpToolExecutor {
         originalUserContent: this.params.originalUserContent,
         server,
         tool: this.effectiveTool,
+        args: this.effectiveArgs || {},
         result: {
           error: 'AUTHORIZATION_DENIED',
           message: '用户拒绝了此工具调用。这可能是因为用户认为此调用不合理或参数有误。请考虑用户的反馈，调整你的方法或询问用户的具体需求。',
@@ -289,6 +291,7 @@ export class McpToolExecutor {
           originalUserContent: this.params.originalUserContent,
           server,
           tool: this.params.tool,
+          args: this.effectiveArgs || {},
           result: recent,
         });
 
@@ -360,6 +363,7 @@ export class McpToolExecutor {
       originalUserContent: this.params.originalUserContent,
       server,
       tool: this.params.tool,
+      args: this.effectiveArgs || {},
       result,
     });
   }
@@ -422,6 +426,7 @@ export class McpToolExecutor {
         originalUserContent: this.params.originalUserContent,
         server,
         tool: this.effectiveTool,
+        args: this.effectiveArgs || {},
         result: {
           error: 'CALL_TOOL_FAILED',
           message: err,

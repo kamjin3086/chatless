@@ -16,7 +16,7 @@ import { ContentEventHandler } from './handlers/ContentEventHandler';
 import { ToolCallEventHandler } from './handlers/ToolCallEventHandler';
 import { StreamResponseLogger } from './response-logger';
 import { useChatStore } from '@/store/chatStore';
-import { cleanToolCallInstructions } from '@/lib/chat/tool-call-cleanup';
+import { cleanToolCallInstructionsForDisplay } from '@/lib/chat/tool-call-cleanup';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 
 // #region agent log
@@ -219,7 +219,8 @@ export class StreamOrchestrator {
                 contentToPersist = (error as any)?.userMessage || (error?.message || '请求失败');
               }
               // 关键修复：错误分支也要清理工具指令，避免在卡片失败时把原始指令“回灌”到正文
-              try { contentToPersist = cleanToolCallInstructions(String(contentToPersist)); } catch { /* noop */ }
+              // display 版本会额外清理流式输出的半截标签尾巴（如 "<use_mcp_tool"）
+              try { contentToPersist = cleanToolCallInstructionsForDisplay(String(contentToPersist)); } catch { /* noop */ }
               void store.updateMessage(this.context.messageId, {
                 status: 'error',
                 content: contentToPersist,
@@ -233,7 +234,7 @@ export class StreamOrchestrator {
             if (!contentToPersist || String(contentToPersist).trim().length === 0) {
               contentToPersist = (error as any)?.userMessage || (error?.message || '请求失败');
             }
-            try { contentToPersist = cleanToolCallInstructions(String(contentToPersist)); } catch { /* noop */ }
+            try { contentToPersist = cleanToolCallInstructionsForDisplay(String(contentToPersist)); } catch { /* noop */ }
             void store.updateMessage(this.context.messageId, {
               status: 'error',
               content: contentToPersist,
@@ -303,8 +304,7 @@ export class StreamOrchestrator {
     const store = useChatStore.getState();
     
     // 导入清理工具
-    const { cleanToolCallInstructions } =
-      await import('@/lib/chat/tool-call-cleanup');
+    // 已在模块顶层导入 cleanToolCallInstructionsForDisplay（避免运行期动态导入带来的时序差异）
 
     // 获取当前消息
     const conv = store.conversations.find(c => c.id === this.context.conversationId);
@@ -330,8 +330,8 @@ export class StreamOrchestrator {
     // Native-only + Event-only：不再允许“收尾阶段从文本中兜底解析并执行工具”。
     // 工具执行只能由结构化 tool_call 事件触发（ToolCallEventHandler）。
 
-    // 最终清理：移除所有工具调用指令
-    contentToPersist = cleanToolCallInstructions(contentToPersist);
+    // 最终清理：移除所有工具调用指令（display 版本会额外清理半截尾巴）
+    contentToPersist = cleanToolCallInstructionsForDisplay(contentToPersist);
 
     // 计算思考时长
     const thinking_duration = this.context.thinkingStartTime > 0
@@ -420,6 +420,24 @@ export class StreamOrchestrator {
         } = await import('@/lib/chat/TitleGenerator');
         const { generateTitle } = await import('@/lib/chat/TitleService');
         if (shouldGenerateTitleAfterAssistantComplete(conv)) {
+          // 若本条消息仍处于工具链路中（存在 running/pending_auth 工具卡片），则延后标题生成：
+          // - 避免与主模型并发抢占资源（性能抖动）
+          // - 避免在工具未闭环时过早触发额外请求（用户观感“抢跑”）
+          try {
+            const msgNow: any = conv.messages?.find((m: any) => m.id === this.context.messageId);
+            const segsNow = Array.isArray(msgNow?.segments) ? msgNow.segments : [];
+            const toolCardsNow = segsNow.filter((s: any) => s?.kind === 'toolCard');
+            const hasBlockingTool = toolCardsNow.some((t: any) => t?.status === 'running' || t?.status === 'pending_auth');
+            if (hasBlockingTool) {
+              // #region agent log
+              debugLog('StreamOrchestrator.ts:title:defer', 'Defer title generation because tools still running', {
+                messageId: this.context.messageId,
+                toolCardCount: toolCardsNow.length,
+              }, 'H_TITLE');
+              // #endregion
+              return;
+            }
+          } catch { /* noop */ }
           const seed = extractFirstUserMessageSeed(conv);
           if (seed && seed.trim()) {
             const gen = await generateTitle(this.config.provider, this.config.model, seed, { maxLength: 24, language: 'zh' });

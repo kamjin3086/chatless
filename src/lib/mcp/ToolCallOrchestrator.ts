@@ -25,6 +25,39 @@ const runningCalls = new Map<string, Promise<void>>();
 // 全局协调器
 const coordinator = ToolCallCoordinator.getInstance();
 
+// ============================================================
+// 多工具批处理（同一条 assistant 消息内的多次工具调用）
+// - 问题：每个 TOOL_RESULT 都会尝试触发 follow-up，但 follow-up 锁会让后续结果被抛弃
+// - 方案：缓存本批次 tool results，等全部完成后触发一次 follow-up，并合并结果喂给模型
+// ============================================================
+type BufferedToolResult = {
+  cardIdOrKey: string;
+  server: string;
+  tool: string;
+  args?: Record<string, unknown>;
+  result: unknown;
+};
+
+const bufferedResultsByMessage = new Map<string, Map<string, BufferedToolResult>>();
+const processedToolCardIdsByMessage = new Map<string, Set<string>>();
+// 记录“本条 assistant message 实际启动了多少个 toolCard（去重后）”，用于稳健 gate：
+// 避免依赖 UI segments 状态时序导致提前触发 follow-up（只喂到 1 条结果）。
+const expectedToolCardIdsByMessage = new Map<string, Set<string>>();
+
+function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'symbol') return value.toString();
+  if (typeof value === 'function') return '[function]';
+  if (typeof value !== 'object') return '[unknown]';
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  const parts = keys.map((k) => `${k}:${stableStringify(obj[k])}`);
+  return `{${parts.join(',')}}`;
+}
+
 export async function executeToolCall(params: {
   assistantMessageId: string;
   conversationId: string;
@@ -87,6 +120,17 @@ export async function executeToolCall(params: {
   // #region agent log
   debugLog('ToolCallOrchestrator.ts:executeToolCall:entry', 'Tool call orchestrator entry', { server, tool, args, cardId, messageId: assistantMessageId }, 'H1');
   // #endregion
+
+  // 记账：本 message 实际启动的 toolCard（用于 multi-tool gate）
+  // 注意：这里用 cardId（若存在）作为唯一键，确保 expectedCount 稳定。
+  try {
+    const id = String(cardId || callKey || callId || '');
+    if (id) {
+      const set = expectedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
+      set.add(id);
+      expectedToolCardIdsByMessage.set(assistantMessageId, set);
+    }
+  } catch { /* noop */ }
 
   const DEBUG_MCP = false;
   if (DEBUG_MCP) { try { console.log('[MCP-ORCH] start', assistantMessageId, server, tool); } catch { /* noop */ } }
@@ -160,6 +204,7 @@ export async function executeToolCall(params: {
               originalUserContent,
               server,
               tool: effectiveTool,
+              args: effectiveArgs,
               result: {
                 error: 'AUTHORIZATION_DENIED',
                 message: '用户拒绝了此工具调用。这可能是因为用户认为此调用不合理或参数有误。'
@@ -176,7 +221,7 @@ export async function executeToolCall(params: {
             const st = useChatStore.getState();
             const resultPreview = typeof recent === 'string' ? recent.slice(0, 12000) : JSON.stringify(recent).slice(0, 12000);
             st.dispatchMessageAction(assistantMessageId, { type: 'TOOL_RESULT', server, tool: effectiveTool, ok: true, resultPreview, cardId });
-            await continueWithToolResult({ assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, server, tool: effectiveTool, result: recent });
+            await continueWithToolResult({ assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, server, tool: effectiveTool, args: effectiveArgs, result: recent });
             return;
           }
         }
@@ -249,6 +294,7 @@ export async function executeToolCall(params: {
           originalUserContent,
           server: server || 'skills',
           tool: effectiveTool,
+          args: effectiveArgs,
           result,
         });
       } catch (e) {
@@ -379,9 +425,10 @@ export async function continueWithToolResult(params: {
   originalUserContent: string;
   server: string;
   tool: string;
+  args?: Record<string, unknown>;
   result: unknown;
 }) {
-  const { assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, server, tool, result } = params;
+  const { assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, server, tool, args, result } = params;
 
   // #region agent log
   debugLog(
@@ -405,6 +452,61 @@ export async function continueWithToolResult(params: {
   const counterKey = `mcp-recursion-${key}`;
   // 注意：follow-up 锁与递归计数要在“确认真的要进入追问”之后再获取/递增。
   // 否则“并行工具批次中的中间 TOOL_RESULT”会提前消耗预算并把真正的追问 debounced 掉。
+
+  // ========= 多工具批处理：先缓存本次工具结果（用于合并多查询）=========
+  let matchedCardId: string | undefined;
+  try {
+    const st0 = useChatStore.getState();
+    const conv0 = st0.conversations.find((c) => c.id === conversationId);
+    const msg0: any = conv0?.messages.find((m) => m.id === assistantMessageId);
+    const segs0 = Array.isArray(msg0?.segments) ? msg0.segments : [];
+    const toolCards0 = segs0.filter((s: any) => s?.kind === 'toolCard');
+    const argsKey = stableStringify(args || {});
+    const hit = toolCards0.find(
+      (c: any) => c?.server === server && c?.tool === tool && stableStringify(c?.args || {}) === argsKey
+    );
+    if (hit?.id) matchedCardId = String(hit.id);
+  } catch { /* noop */ }
+
+  const bufKey = matchedCardId || `${server}.${tool}:${stableStringify(args || {})}`;
+  let buf = bufferedResultsByMessage.get(assistantMessageId);
+  if (!buf) {
+    buf = new Map();
+    bufferedResultsByMessage.set(assistantMessageId, buf);
+  }
+  buf.set(bufKey, { cardIdOrKey: bufKey, server, tool, args, result });
+
+  // #region agent log
+  debugLog(
+    'ToolCallOrchestrator.ts:continueWithToolResult:multiBuffer',
+    'Buffered tool result for multi-tool batch',
+    { assistantMessageId, bufKey, matchedCardId: matchedCardId || null, bufferedCount: buf.size },
+    'H_MULTI'
+  );
+  // #endregion
+  // ========= /多工具批处理 =========
+
+  // ========= 关键：稳健 gate（expectedCount vs bufferedCount）=========
+  // 避免“第一条 TOOL_RESULT 抢 follow-up 锁并提前发起追问”，导致只喂到 1 条结果。
+  try {
+    const expected = expectedToolCardIdsByMessage.get(assistantMessageId);
+    const expectedCount = expected ? expected.size : 0;
+    const bufferedCount = buf.size;
+    const shouldGate = expectedCount > 1;
+    const shouldProceed = !shouldGate || bufferedCount >= expectedCount;
+
+    // #region agent log
+    debugLog(
+      'ToolCallOrchestrator.ts:continueWithToolResult:gateCheck',
+      'Gate check before follow-up (expected vs buffered)',
+      { assistantMessageId, expectedCount, bufferedCount, shouldGate, shouldProceed },
+      'H_MULTI'
+    );
+    // #endregion
+
+    if (!shouldProceed) return;
+  } catch { /* noop */ }
+  // ========= /稳健 gate =========
 
   // 根据结果类型生成精准的追问提示
   const isError = typeof result === 'object' && result && (result as any).error;
@@ -478,10 +580,131 @@ export async function continueWithToolResult(params: {
   })();
 
   // 构造“包含真实结果”的追问消息（避免模型凭空猜测）
+  // 多工具：把同批次所有结果合并成多个 user 消息（后续会 collapse 成一个“工具结果汇总”）
   const { toolResultToNextMessage } = await import('@/lib/mcp/providerAdapters');
-  const nextUserMsg = toolResultToNextMessage(provider as any, server, tool, result, originalUserContent);
-  // 将工程化的补充说明拼接到消息末尾，保留真实结果文本
-  nextUserMsg.content = `${nextUserMsg.content}\n\n—— 追加说明 ——\n${instruction}\n\n（注意：上述JSON/文本只作为事实依据，不要直接回显给用户）`;
+  const bufNow = bufferedResultsByMessage.get(assistantMessageId);
+  const processedSet = processedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
+
+  const orderedBatch: BufferedToolResult[] = (() => {
+    try {
+      const st = useChatStore.getState();
+      const conv = st.conversations.find((c) => c.id === conversationId);
+      const msg: any = conv?.messages.find((m) => m.id === assistantMessageId);
+      const segs = Array.isArray(msg?.segments) ? msg.segments : [];
+      const toolCards = segs.filter((s: any) => s?.kind === 'toolCard');
+      const pendingTerminal = toolCards.filter(
+        (c: any) =>
+          c?.id &&
+          !processedSet.has(String(c.id)) &&
+          (c?.status === 'success' || c?.status === 'error')
+      );
+      // 关键：不要因为 toolCard 状态/渲染时序问题而“只取到部分 terminalCards”，导致漏喂工具结果。
+      // 正确策略：以 bufNow 中已缓冲的结果为准（全量），仅在排序上尽量贴合 toolCards 顺序。
+      const all = bufNow ? Array.from(bufNow.values()) : [];
+      if (all.length === 0) return [];
+
+      const order: BufferedToolResult[] = [];
+      const used = new Set<string>();
+      // 1) 优先按 pendingTerminal（成功/失败的卡片）顺序排列
+      for (const c of pendingTerminal) {
+        const id = String(c.id);
+        const hit = bufNow?.get(id);
+        if (hit) {
+          order.push(hit);
+          used.add(hit.cardIdOrKey);
+        }
+      }
+      // 2) 再补齐其它已缓冲但未出现在 pendingTerminal 的结果（避免丢条）
+      for (const it of all) {
+        if (used.has(it.cardIdOrKey)) continue;
+        order.push(it);
+        used.add(it.cardIdOrKey);
+      }
+
+      // #region agent log
+      debugLog(
+        'ToolCallOrchestrator.ts:continueWithToolResult:batchAssemble',
+        'Assembled batch for follow-up (no-drop)',
+        {
+          assistantMessageId,
+          bufferedCount: all.length,
+          terminalCardCount: pendingTerminal.length,
+          orderedCount: order.length,
+          dropped: all.length - order.length,
+        },
+        'H_MULTI'
+      );
+      // #endregion
+
+      return order;
+    } catch {
+      return bufNow ? Array.from(bufNow.values()) : [];
+    }
+  })();
+
+  const batch = orderedBatch.length > 0 ? orderedBatch : [{ cardIdOrKey: bufKey, server, tool, args, result }];
+
+  // #region agent log
+  try {
+    const queries = batch.map((b: any) => {
+      const q = (b?.args as any)?.query;
+      return typeof q === 'string' ? q.slice(0, 80) : undefined;
+    });
+    debugLog(
+      'ToolCallOrchestrator.ts:continueWithToolResult:batchComputed',
+      'Batch computed for follow-up user messages',
+      {
+        assistantMessageId,
+        batchLen: batch.length,
+        batchKeys: batch.map((b: any) => String(b?.cardIdOrKey)).slice(0, 12),
+        batchQueries: queries.filter(Boolean),
+      },
+      'H_MULTI'
+    );
+  } catch { /* noop */ }
+  // #endregion
+
+  const nextUserMsgs = batch.map((it) => {
+    const msg = toolResultToNextMessage(provider as any, it.server, it.tool, it.result, originalUserContent) as any;
+    msg.content = `${msg.content}\n\n—— 追加说明 ——\n${instruction}\n\n（注意：上述JSON/文本只作为事实依据，不要直接回显给用户）`;
+    return msg as LlmMessage;
+  });
+
+  // #region agent log
+  try {
+    debugLog(
+      'ToolCallOrchestrator.ts:continueWithToolResult:nextUserMsgs',
+      'Built follow-up user messages from batch',
+      {
+        assistantMessageId,
+        nextUserMsgsLen: nextUserMsgs.length,
+        headSamples: nextUserMsgs.map((m: any) => String(m?.content || '').slice(0, 60)),
+      },
+      'H_MULTI'
+    );
+  } catch { /* noop */ }
+  // #endregion
+
+  // 为了确保“多工具结果不漏喂”，follow-up 统一使用“单条合并 user message”
+  //（避免依赖多条 user message + collapse 的时序/构造差异导致只喂到最后一条）
+  const mergedNextUserMsg = (() => {
+    try {
+      const pieces = batch.map((it, idx) => {
+        const label = typeof (it as any)?.args?.query === 'string' ? String((it as any).args.query) : `${it.server}.${it.tool}`;
+        const m = toolResultToNextMessage(provider as any, it.server, it.tool, it.result, undefined) as any;
+        const extracted = extractToolResultMessage(String(m?.content || ''));
+        const payload = (extracted?.payload || String(m?.content || '')).replace(/\n{4,}/g, '\n\n').slice(0, 1200);
+        return `【${idx + 1}/${batch.length}】${label}\n${payload}`;
+      });
+      const merged = `用户原始问题：${originalUserContent}\n\n【工具结果汇总】共 ${batch.length} 次调用（仅保留必要片段）\n\n${pieces.join('\n\n---\n\n')}\n\n—— 追加说明 ——\n${instruction}\n\n（注意：上述JSON/文本只作为事实依据，不要直接回显给用户）`;
+      return { role: 'user', content: merged } as any;
+    } catch {
+      // 兜底：至少保证有一条 user message
+      return nextUserMsgs[nextUserMsgs.length - 1] as any;
+    }
+  })();
+
+  const nextUserMsg = mergedNextUserMsg as any;
 
   // #region agent log
   try {
@@ -534,14 +757,34 @@ export async function continueWithToolResult(params: {
     const convGate = stGate.conversations.find(c => c.id === conversationId);
     const msgGate: any = convGate?.messages.find(m => m.id === assistantMessageId);
     const segs = Array.isArray(msgGate?.segments) ? msgGate.segments : [];
-    const runningTools = segs.filter((s: any) => s?.kind === 'toolCard' && s?.data?.status === 'running');
+    const toolCards = segs.filter((s: any) => s?.kind === 'toolCard');
+    const processed = processedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
+    const pendingCards = toolCards.filter((c: any) => c?.id && !processed.has(String(c.id)));
+    const runningTools = pendingCards.filter((s: any) => s?.status === 'running' || s?.status === 'pending_auth');
+    const terminalCards = pendingCards.filter((s: any) => s?.status === 'success' || s?.status === 'error');
+    const bufferedCount = bufferedResultsByMessage.get(assistantMessageId)?.size || 0;
+
     if (runningTools.length > 0) {
       // #region agent log
       debugLog(
         'ToolCallOrchestrator.ts:continueWithToolResult:batchGate',
         'Skip follow-up because tools still running for this message',
-        { assistantMessageId, runningToolCardCount: runningTools.length, server, tool },
-        'H-BATCH'
+        { assistantMessageId, runningToolCardCount: runningTools.length, pendingToolCardCount: pendingCards.length, terminalToolCardCount: terminalCards.length, bufferedCount, server, tool },
+        'H_MULTI'
+      );
+      // #endregion
+      return;
+    }
+
+    // 多工具：必须等本批次所有 pending cards 的结果都进入 buffer 后再进入 follow-up
+    // 这能避免“只拿到一部分结果就追问”，从而最终只回答部分城市。
+    if (pendingCards.length > 1 && bufferedCount < pendingCards.length) {
+      // #region agent log
+      debugLog(
+        'ToolCallOrchestrator.ts:continueWithToolResult:batchGate',
+        'Skip follow-up because not all tool results are buffered yet',
+        { assistantMessageId, pendingToolCardCount: pendingCards.length, terminalToolCardCount: terminalCards.length, bufferedCount, server, tool },
+        'H_MULTI'
       );
       // #endregion
       return;
@@ -591,6 +834,39 @@ export async function continueWithToolResult(params: {
   }
   (globalThis as any)[counterKey] = current + 1;
   // ========= /通用 follow-up 锁 + 递归预算 =========
+  
+  // ========= 多工具批处理：确认进入 follow-up 后再提交本批次（避免提前清 buffer）=========
+  try {
+    const st = useChatStore.getState();
+    const conv = st.conversations.find((c) => c.id === conversationId);
+    const msg: any = conv?.messages.find((m) => m.id === assistantMessageId);
+    const segs = Array.isArray(msg?.segments) ? msg.segments : [];
+    const toolCards = segs.filter((s: any) => s?.kind === 'toolCard');
+    const processed = processedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
+    const pendingCards = toolCards.filter((c: any) => c?.id && !processed.has(String(c.id)));
+    const pendingIds = pendingCards.map((c: any) => String(c.id));
+
+    // 标记已处理
+    for (const id of pendingIds) processed.add(id);
+    processedToolCardIdsByMessage.set(assistantMessageId, processed);
+
+    // 清理 buffer：只删掉已处理的 key（id 优先，否则 fallback key）
+    const bufNow = bufferedResultsByMessage.get(assistantMessageId);
+    if (bufNow) {
+      for (const id of pendingIds) bufNow.delete(id);
+      if (bufNow.size === 0) bufferedResultsByMessage.delete(assistantMessageId);
+    }
+
+    // #region agent log
+    debugLog(
+      'ToolCallOrchestrator.ts:continueWithToolResult:multiBatchCommit',
+      'Committed multi-tool batch (post-lock)',
+      { assistantMessageId, committedCount: pendingIds.length },
+      'H_MULTI'
+    );
+    // #endregion
+  } catch { /* noop */ }
+  // ========= /多工具批处理 =========
 
   const followHistory: LlmMessage[] = [
     ...followUpSystemMessages as any,
@@ -598,6 +874,26 @@ export async function continueWithToolResult(params: {
     nextUserMsg as any
   ];
   const compactFollowHistory = collapseToolResultUserMessages(followHistory);
+
+  // #region agent log
+  try {
+    const compactUsers = (compactFollowHistory || []).filter((m: any) => m?.role === 'user');
+    const lastUser = compactUsers.length ? String(compactUsers[compactUsers.length - 1]?.content || '') : '';
+    debugLog(
+      'ToolCallOrchestrator.ts:continueWithToolResult:compactHistory',
+      'Compact follow-up history stats',
+      {
+        assistantMessageId,
+        followHistoryLen: followHistory.length,
+        compactLen: (compactFollowHistory || []).length,
+        compactUserCount: compactUsers.length,
+        hasMergedToolSummary: lastUser.includes('【工具结果汇总】'),
+        lastUserHead: lastUser.slice(0, 80),
+      },
+      'H_MULTI'
+    );
+  } catch { /* noop */ }
+  // #endregion
 
   // #region agent log
   try {

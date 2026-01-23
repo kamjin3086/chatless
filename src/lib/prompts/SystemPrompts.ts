@@ -15,9 +15,7 @@ export const MCPPrompts = {
     '外部工具调用规则：',
     '• 仅在必须时调用（无法凭知识回答、用户明确请求操作）',
     '• 优先使用用户@提及的服务器工具',
-    '• 【关键】需要调用工具时，直接在回复正文中输出完整的工具调用标签，不要只在思考中描述计划',
-    '• 调用格式：<use_mcp_tool><server_name>[服务器名]</server_name><tool_name>[工具名]</tool_name><arguments>[JSON参数]</arguments></use_mcp_tool>',
-    '• 示例：<use_mcp_tool><server_name>filesystem</server_name><tool_name>list_directory</tool_name><arguments>{"path":"."}</arguments></use_mcp_tool>',
+    '• 【关键】需要调用工具时，必须使用模型原生的 tool_calls/函数调用机制；不要在正文输出任何 XML/标签格式的“伪工具调用”。',
     '• 【严格限制】每次回复只能输出 1 个工具调用标签，不要重复输出相同的调用',
     '• 输出标签外禁止任何解释性文字（思考过程除外）；在调用完成后，再输出最终中文答案',
     '• 工具结果不足以回答时，等待系统提供结果后再决定下一步',
@@ -46,8 +44,8 @@ export const MCPPrompts = {
 
   outputContract: [
     '输出契约：',
-    '• 当需要调用工具时，正文只输出 1 个 <use_mcp_tool> 标签，然后立即停止输出，等待系统返回结果；',
-    '• 绝对禁止在同一次回复中输出多个工具调用标签或重复输出相同的调用；',
+    '• 当需要调用工具时：只通过原生 tool_calls 发起调用，不要在正文输出任何工具调用标签/指令；',
+    '• 绝对禁止在同一次回复中输出多个工具调用或重复输出相同的调用；',
     '• 当给出最终答案时，正文只输出中文答案（≤ 300 字），可含必要的列表，不要再展示调用标签或指令；',
     '• 禁止编造 Server 或工具名，Server 只能在系统提供的"已启用 Server"中择一。'
   ].join(' '),

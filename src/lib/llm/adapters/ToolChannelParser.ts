@@ -1,6 +1,6 @@
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '@/lib/llm/types/stream-events';
-import { cleanToolCallInstructions, extractToolCallFromText, extractToolCallsFromText } from '@/lib/chat/tool-call-cleanup';
+import { cleanToolCallInstructionsForDisplay, extractToolCallFromText, extractToolCallsFromText } from '@/lib/chat/tool-call-cleanup';
 import { ToolCallDetector } from '@/lib/mcp/ToolCallDetector';
 import { createToolInstructionSuppressor } from '@/lib/mcp/toolInstruction/suppressor';
 
@@ -211,7 +211,8 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
 
     // 尝试解析为工具调用
     const parsed = extractToolCallFromText(visible);
-    const cleaned = cleanToolCallInstructions(visible);
+    // UI/流式：必须用 display 清理，避免 "<use_mcp_tool" 等半截标签漏到正文
+    const cleaned = cleanToolCallInstructionsForDisplay(visible);
 
     // #region agent log
     debugLog(

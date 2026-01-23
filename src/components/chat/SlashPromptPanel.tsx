@@ -71,9 +71,9 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
     }
     
     if (Object.keys(inlineVars).length === 0 && rest) {
-      const hasDelim = /[|｜]/.test(rest);
+        const hasDelim = /[|｜]/.test(rest);
       const positional = hasDelim ? rest.split(/[|｜]/g).map(s => s.trim()).filter(Boolean) : [rest];
-      setPendingVars({ __positional: positional });
+        setPendingVars({ __positional: positional });
     } else {
       setPendingVars(inlineVars);
     }
@@ -92,7 +92,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
       text = q.replace(tagMatch[0], '').trim();
     }
     
-    const parts = text.split(/\s+/);
+      const parts = text.split(/\s+/);
     const token = parts[0].replace(/^\//, '');
     
     const list = prompts
@@ -147,7 +147,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
         const useApply = e.altKey || e.metaKey;
         if (useApply) {
           onSelect(p.id, { action: 'apply', mode: e.shiftKey ? 'oneOff' : 'permanent' });
-        } else {
+    } else {
           onSelect(p.id, { action: 'fill' });
         }
       }
@@ -246,42 +246,42 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
               className={cn(panelItemClass, isActive && panelItemActiveClass)}
               onMouseEnter={() => { setHoverId(p.id); setActiveIndex(idx); }}
               onMouseDown={(e) => {
-                e.preventDefault();
+                    e.preventDefault();
                 try {
-                  const ev = new CustomEvent('prompt-inline-vars', { detail: pendingVars });
+                    const ev = new CustomEvent('prompt-inline-vars', { detail: pendingVars });
                   window.dispatchEvent(ev);
                 } catch { /* ignore */ }
-                onSelect(p.id, { action: 'fill' });
-              }}
-            >
+                    onSelect(p.id, { action: 'fill' });
+                  }}
+              >
               {/* 标题行 */}
-              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-sm text-slate-700 dark:text-slate-200 truncate">
                   {p.name}
                 </span>
                 <span className="shrink-0 px-1.5 py-0.5 rounded text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50">
                   /{(p as any).shortcuts?.[0] || p.name[0]?.toLowerCase() || ''}
-                </span>
-              </div>
+                  </span>
+                </div>
               
               {/* 展开预览 */}
               {isActive && (
                 <div className="mt-2 space-y-1.5">
-                  {p.tags && p.tags.length > 0 && (
+                    {p.tags && p.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {p.tags.slice(0, 4).map((t) => (
                         <span key={t} className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   <div className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 whitespace-pre-wrap">
                     {renderHighlighted(p.content || '', values)}
+                    </div>
                   </div>
-                </div>
-              )}
-            </li>
+                )}
+              </li>
           );
         })}
         
@@ -289,8 +289,8 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
           <li className="px-3 py-4 text-center text-sm text-slate-500">
             没有匹配的提示词
           </li>
-        )}
-      </ul>
+          )}
+        </ul>
 
       {/* 底部 */}
       <div className={cn(panelFooterClass, "flex items-center justify-between")}>

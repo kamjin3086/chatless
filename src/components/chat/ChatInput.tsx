@@ -556,6 +556,10 @@ export function ChatInput({
       } catch { /* noop */ }
     }
     
+    // 规则（明确区分）：
+    // - chat -> agent 只能通过：手动切换，或在 @/# 面板中“选择”了 MCP/Skill（见面板 onSelect）
+    // - 仅输入文本中包含 @xxx / #xxx 不触发自动切换
+
     if (attachedImages.length > 0) {
       const imagesData = attachedImages.map(img => img.base64Data);
       onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData });
@@ -1000,6 +1004,13 @@ export function ChatInput({
             setInputValue(next);
             setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
             setMentionOpen(false);
+            // 显式使用 @mcp：自动切到 agent（仅此情形）
+            try {
+              const convId = currentConvId || conversationId || '';
+              if (convId && currentToolMode === 'chat') {
+                void setConversationToolMode?.(convId, 'agent');
+              }
+            } catch { /* ignore */ }
           }}
           onClose={()=>setMentionOpen(false)}
         />
@@ -1014,6 +1025,13 @@ export function ChatInput({
             setInputValue(next);
             setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
             setSkillMentionOpen(false);
+            // 显式使用 #skill：自动切到 agent（仅此情形）
+            try {
+              const convId = currentConvId || conversationId || '';
+              if (convId && currentToolMode === 'chat') {
+                void setConversationToolMode?.(convId, 'agent');
+              }
+            } catch { /* ignore */ }
           }}
           onClose={()=>setSkillMentionOpen(false)}
         />

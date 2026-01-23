@@ -10,6 +10,7 @@
  */
 
 import { 
+  filterForDisplay,
   filterForPersist, 
   detectToolInstruction,
   getDefaultPipeline 
@@ -48,6 +49,34 @@ export function cleanToolCallInstructions(text: string): string {
     debugLog(
       'tool-call-cleanup.ts:H2-clean',
       'cleanToolCallInstructions (persist) applied',
+      {
+        rawLen: text.length,
+        cleanedLen: cleaned.length,
+        cleanedIsEmptyAfterTrim: cleaned.trim().length === 0,
+        rawSample: text.slice(0, 240),
+        cleanedSample: cleaned.slice(0, 240),
+      },
+      'H2'
+    );
+  }
+  // #endregion
+  return cleaned;
+}
+
+/**
+ * 清理文本中的工具调用指令（用于 UI 显示/流式输出）
+ *
+ * 与 cleanToolCallInstructions（persist）不同：
+ * - display 模式会额外清理流式输出时的“半截标签尾巴”（如 "<use_mcp_tool"）
+ */
+export function cleanToolCallInstructionsForDisplay(text: string): string {
+  if (!text) return '';
+  const cleaned = filterForDisplay(text);
+  // #region agent log
+  if (/\b(web_search|eb_search)\b/i.test(text) || /commentary\s+to=/i.test(text) || /<use_mcp_tool|<tool_call/i.test(text)) {
+    debugLog(
+      'tool-call-cleanup.ts:H2-clean-display',
+      'cleanToolCallInstructionsForDisplay applied',
       {
         rawLen: text.length,
         cleanedLen: cleaned.length,

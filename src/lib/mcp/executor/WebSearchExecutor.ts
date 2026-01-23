@@ -36,15 +36,9 @@ export class WebSearchExecutor {
    */
   async execute(): Promise<void> {
     const {
-      assistantMessageId,
       conversationId,
-      server,
       tool: originalTool,
       args,
-      provider,
-      model,
-      historyForLlm,
-      originalUserContent,
       cardId,
     } = this.params;
 
@@ -178,6 +172,7 @@ export class WebSearchExecutor {
         originalUserContent,
         server,
         tool,
+        args: args || {},
         result: {
           error: 'AUTHORIZATION_DENIED',
           message: '用户拒绝了此工具调用。这可能是因为用户认为此调用不合理或参数有误。',
@@ -226,6 +221,7 @@ export class WebSearchExecutor {
           originalUserContent,
           server,
           tool,
+          args: args || {},
           result: recent,
         });
         
@@ -330,6 +326,7 @@ export class WebSearchExecutor {
         originalUserContent,
         server,
         tool,
+        args: (this.params.args as any) || {},
         result: { error: 'WEB_SEARCH_CREDENTIALS_MISSING', message: msg },
       });
 
@@ -347,8 +344,6 @@ export class WebSearchExecutor {
     query: string,
     url: string
   ): Promise<boolean> {
-    const { assistantMessageId, server, conversationId, provider, model, historyForLlm, originalUserContent, cardId } = this.params;
-
     if (tool === 'search') {
       if (!query || !query.trim()) {
         return await this.handleMissingQueryParam();
@@ -408,6 +403,7 @@ export class WebSearchExecutor {
       originalUserContent,
       server,
       tool,
+      args: (this.params.args as any) || {},
       result: { error: 'MISSING_REQUIRED_ARGUMENT', message: 'query is required', schemaHint },
     });
 
@@ -460,6 +456,7 @@ export class WebSearchExecutor {
       originalUserContent,
       server,
       tool,
+      args: (this.params.args as any) || {},
       result: { error: 'MISSING_REQUIRED_ARGUMENT', message: 'url is required', schemaHint },
     });
 
@@ -609,6 +606,7 @@ export class WebSearchExecutor {
       originalUserContent,
       server,
       tool,
+      args,
       result,
     });
   }
@@ -657,6 +655,7 @@ export class WebSearchExecutor {
       originalUserContent,
       server,
       tool,
+      args,
       result: { error: 'CALL_TOOL_FAILED', message: err, schemaHint: hint },
     });
   }
