@@ -53,14 +53,16 @@ export async function buildMcpSystemInjections(
   content: string, 
   currentConversationId?: string, 
   providerName?: string,
-  modelName?: string
+  modelName?: string,
+  options?: { forceInject?: boolean }
 ): Promise<InjectionResult> {
   const result = await InjectionManager.inject({
     userContent: content,
     conversationId: currentConversationId,
     phase: 'initial',
     providerName,
-    modelName
+    modelName,
+    forceInject: options?.forceInject,
   });
   
   return {

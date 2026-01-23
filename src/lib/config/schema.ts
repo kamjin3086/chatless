@@ -20,6 +20,7 @@ export const DATABASE_SCHEMA = {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       model_id TEXT NOT NULL,
+      tool_mode TEXT DEFAULT 'chat',
       is_important BOOLEAN DEFAULT 0,
       is_favorite BOOLEAN DEFAULT 0
     )

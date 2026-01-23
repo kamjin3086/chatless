@@ -116,16 +116,12 @@ export class DeepSeekProvider extends BaseProvider {
             // DeepSeek 与 OpenAI 一样, 以 "[DONE]" 结束
             if (rawData.trim() === '[DONE]') {
               const result = this.thinkingStrategy.processToken({ done: true });
-              // 优先使用onEvent
-              if (cb.onEvent && result.events && result.events.length > 0) {
-                result.events.forEach(event => cb.onEvent!(event));
+              // Native-only Agent：必须使用结构化事件（onEvent），不允许降级回文本
+              if (!cb.onEvent) {
+                throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
               }
-              // 降级到onToken
-              else if (cb.onToken && result.events && result.events.length > 0) {
-                const text = StreamEventAdapter.eventsToText(result.events);
-                if (text.length > 0) {
-                  cb.onToken(text);
-                }
+              if (result.events && result.events.length > 0) {
+                result.events.forEach(event => cb.onEvent!(event));
               }
               
               // 打印完整响应（用于调试）
@@ -148,24 +144,15 @@ export class DeepSeekProvider extends BaseProvider {
                   done: false
                 });
                 
-                // 优先使用onEvent（直接传递结构化事件）
-                if (cb.onEvent && result.events && result.events.length > 0) {
-                  result.events.forEach(event => cb.onEvent!(event));
+                if (!cb.onEvent) {
+                  throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
                 }
-                // 降级：使用onToken（转换为文本，兼容旧代码）
-                else if (cb.onToken && result.events && result.events.length > 0) {
-                  const text = StreamEventAdapter.eventsToText(result.events);
-                  if (text.length > 0) {
-                    cb.onToken(text);
-                  }
+                if (result.events && result.events.length > 0) {
+                  result.events.forEach(event => cb.onEvent!(event));
                 }
               }
             } catch (err) {
-              // 无法解析 JSON, 直接回传原始数据
-              console.warn('[DeepSeekProvider] Failed to parse SSE chunk, fallback to raw:', err);
-              if (cb.onToken) {
-                cb.onToken(rawData);
-              }
+              console.warn('[DeepSeekProvider] Failed to parse SSE chunk:', err);
             }
           }
         }

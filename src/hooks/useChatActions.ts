@@ -597,19 +597,16 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         const composed = await composeChatOptions(effectiveProvider, modelToUse, baseOptions, currentConversationId || null, content);
         const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
         await gateway.stream(historyForLlm, streamCallbacks);
-      } catch {
-        // 回退策略：尽量保证仍可发送
-        try {
-          let fallbackOpts: Record<string, any> = {};
-          if (sessionParameters) fallbackOpts = ModelParametersService.convertToChatOptions(sessionParameters);
-          const composed = await composeChatOptions(effectiveProvider, modelToUse, fallbackOpts, currentConversationId || null, content);
-          const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
-          await gateway.stream(historyForLlm, streamCallbacks);
-        } catch {
-          const composed = await composeChatOptions(effectiveProvider, modelToUse, {}, currentConversationId || null, content);
-          const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
-          await gateway.stream(historyForLlm, streamCallbacks);
-        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        void updateMessage(assistantMessageId, {
+          status: 'error',
+          content: `发送失败：${msg}`,
+        });
+        toast.error('发送失败', {
+          description: msg,
+        });
+        return;
       }
     } else {
        // 未选择模型

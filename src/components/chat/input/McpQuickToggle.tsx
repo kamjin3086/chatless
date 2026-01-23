@@ -3,15 +3,13 @@
 /**
  * MCP 服务器快速切换组件
  * 
- * ## 重构说明
- * 
- * 使用统一的 ActionPanel 组件实现，保持样式一致性。
+ * 与 WebSearchToggle 保持一致的体验，使用绿色系标识
  */
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plug, Settings, RotateCcw, Loader2 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Plug, Settings, Check, RotateCcw, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   getEnabledConfiguredServers,
@@ -20,15 +18,20 @@ import {
   setGlobalEnabledServers,
 } from "@/lib/mcp/chatIntegration";
 import Link from "next/link";
-import { McpToolListTip } from "@/components/mcp/McpToolListTip";
 import {
   ActionPanel,
   ActionPanelTrigger,
   ActionPanelContent,
   ActionPanelHeader,
   ActionPanelList,
+  ActionPanelItem,
+  ActionPanelDivider,
+  ActionPanelFooter,
   ActionPanelEmpty,
 } from "@/components/ui/action-panel";
+
+// MCP 全局开关状态
+let mcpGlobalEnabled = true;
 
 interface McpQuickToggleProps {
   onInsertMention?: (name: string) => void;
@@ -39,8 +42,8 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
   const [all, setAll] = useState<string[]>([]);
   const [connected, setConnected] = useState<string[]>([]);
   const [enabled, setEnabled] = useState<string[]>([]);
+  const [globalEnabled, setGlobalEnabled] = useState(mcpGlobalEnabled);
   const [busy, setBusy] = useState<string | null>(null);
-  const [toolsMap, setToolsMap] = useState<Record<string, any[]>>({});
 
   // 加载服务器列表
   useEffect(() => {
@@ -58,33 +61,14 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
     })();
   }, []);
 
-  // 打开时预取工具列表
+  // 刷新连接状态
   useEffect(() => {
-    if (!open) return;
-    (async () => {
-      try {
-        const { persistentCache } = await import("@/lib/mcp/persistentCache");
-        for (const name of connected) {
-          if (!toolsMap[name]) {
-            try {
-              const tools = await persistentCache.getToolsWithCache(name);
-              setToolsMap((prev) => ({
-                ...prev,
-                [name]: Array.isArray(tools) ? tools : [],
-              }));
-            } catch {
-              /* ignore single server error */
-            }
-          }
-        }
-      } catch {
-        /* noop */
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, connected.length]);
+    if (open) {
+      getConnectedServers().then(setConnected);
+    }
+  }, [open]);
 
-  const toggle = async (name: string) => {
+  const toggleServer = async (name: string) => {
     const next = enabled.includes(name)
       ? enabled.filter((n) => n !== name)
       : [...enabled, name];
@@ -92,37 +76,31 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
     await setGlobalEnabledServers(next);
   };
 
-  const handleConnect = async (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleGlobal = (v: boolean) => {
+    setGlobalEnabled(v);
+    mcpGlobalEnabled = v;
+  };
+
+  const handleConnect = async (name: string) => {
     try {
       setBusy(name);
       const { serverManager } = await import("@/lib/mcp/ServerManager");
       const { Store } = await import("@tauri-apps/plugin-store");
       const store = await Store.load("mcp_servers.json");
-      const list =
-        (await store.get<Array<{ name: string; config: any }>>("servers")) ||
-        [];
+      const list = (await store.get<Array<{ name: string; config: any }>>("servers")) || [];
       const item = list.find((s) => s.name === name);
       if (item) {
         await serverManager.startServer(item.name, item.config);
         setConnected(await getConnectedServers());
       }
-    } catch (e) {
-      void e;
+    } catch {
+      // ignore
     }
     setBusy(null);
   };
 
-  const headerAction = (
-    <Link
-      href="/settings?tab=mcpServers"
-      onClick={() => setOpen(false)}
-      className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
-      title="前往 MCP 服务器设置"
-    >
-      <Settings className="w-3.5 h-3.5" />
-    </Link>
-  );
+  const hasConnected = connected.length > 0;
+  const isActive = globalEnabled && hasConnected;
 
   return (
     <ActionPanel open={open} onOpenChange={setOpen}>
@@ -130,152 +108,119 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"
-          title="启用的 MCP"
+          className={cn(
+            "h-8 w-8 shrink-0 rounded-lg transition-all duration-150",
+            isActive
+              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          )}
+          title="MCP 服务器"
         >
           <Plug className="w-4 h-4" />
         </Button>
       </ActionPanelTrigger>
 
-      <ActionPanelContent width="lg" maxHeight="20rem">
+      <ActionPanelContent width="md" maxHeight="20rem">
         <ActionPanelHeader
           title="MCP 服务器"
           subtitle={`${connected.length}/${all.length} 已连接`}
-          icon={<Plug className="w-4 h-4" />}
-          action={headerAction}
+          icon={<Plug className={cn("w-4 h-4", isActive ? "text-emerald-500" : "text-slate-400")} />}
+          action={
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "text-[11px]",
+                globalEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
+              )}>
+                {globalEnabled ? "已启用" : "已禁用"}
+              </span>
+              <Switch
+                size="sm"
+                checked={globalEnabled}
+                onCheckedChange={toggleGlobal}
+              />
+            </div>
+          }
         />
 
-        <ActionPanelList maxHeight="14rem" className="mt-2">
+        <ActionPanelDivider />
+
+        <ActionPanelList maxHeight="12rem">
           {all.length === 0 ? (
             <ActionPanelEmpty
-              icon={<Plug className="w-8 h-8" />}
-              title="暂无配置的 MCP 服务器"
-              description="前往设置页面添加服务器"
+              icon={<Plug className="w-6 h-6 text-slate-300" />}
+              title="暂无配置的服务器"
+              description="前往设置页面添加"
             />
           ) : (
-            all.map((name) => (
-              <ServerItem
-                key={name}
-                name={name}
-                isConnected={connected.includes(name)}
-                isEnabled={enabled.includes(name)}
-                isBusy={busy === name}
-                tools={toolsMap[name]}
-                onToggle={() => toggle(name)}
-                onConnect={(e) => handleConnect(name, e)}
-                onInsertMention={() => {
-                  onInsertMention?.(name);
-                  setOpen(false);
-                }}
-              />
-            ))
+            all.map((name) => {
+              const isConnected = connected.includes(name);
+              const isEnabled = enabled.includes(name);
+              const isBusy = busy === name;
+
+              return (
+                <ActionPanelItem
+                  key={name}
+                  icon={
+                    <div className={cn(
+                      "w-2 h-2 rounded-full",
+                      isConnected ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                    )} />
+                  }
+                  title={name}
+                  description={isConnected ? "已连接" : "未连接"}
+                  selected={isEnabled}
+                  suffix={
+                    <div className="flex items-center gap-1">
+                      {!isConnected && (
+                        <button
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleConnect(name);
+                          }}
+                          title="连接"
+                        >
+                          {isBusy ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+                      {isConnected && onInsertMention && (
+                        <button
+                          className="px-1.5 py-0.5 rounded text-[10px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onInsertMention(name);
+                            setOpen(false);
+                          }}
+                          title="插入 @引用"
+                        >
+                          @引用
+                        </button>
+                      )}
+                      {isEnabled && <Check className="w-4 h-4 text-emerald-500" />}
+                    </div>
+                  }
+                  onClick={() => toggleServer(name)}
+                />
+              );
+            })
           )}
         </ActionPanelList>
+
+        <ActionPanelFooter>
+          <Link
+            href="/settings?tab=mcpServers"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            管理服务器
+          </Link>
+        </ActionPanelFooter>
       </ActionPanelContent>
     </ActionPanel>
-  );
-}
-
-// 服务器列表项
-interface ServerItemProps {
-  name: string;
-  isConnected: boolean;
-  isEnabled: boolean;
-  isBusy: boolean;
-  tools?: any[];
-  onToggle: () => void;
-  onConnect: (e: React.MouseEvent) => void;
-  onInsertMention: () => void;
-}
-
-function ServerItem({
-  name,
-  isConnected,
-  isEnabled,
-  isBusy,
-  tools,
-  onToggle,
-  onConnect,
-  onInsertMention,
-}: ServerItemProps) {
-  return (
-    <div
-      className={cn(
-        "group flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm",
-        isConnected
-          ? "hover:bg-gray-50 dark:hover:bg-gray-700/50"
-          : "opacity-75"
-      )}
-    >
-      <label className="flex items-center gap-2 flex-1 cursor-pointer">
-        <Checkbox
-          checked={isEnabled}
-          onCheckedChange={onToggle}
-          className="h-4 w-4"
-        />
-        <span className="truncate font-medium text-gray-700 dark:text-gray-200">
-          {name}
-        </span>
-
-        {/* 工具数量提示 */}
-        {isConnected && Array.isArray(tools) && tools.length > 0 && (
-          <McpToolListTip toolCount={tools.length} tools={tools}>
-            <span className="ml-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md cursor-help text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700">
-              <svg
-                className="w-2.5 h-2.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              {tools.length}
-            </span>
-          </McpToolListTip>
-        )}
-
-        {/* 未连接标签 */}
-        {!isConnected && (
-          <span className="ml-auto text-[10px] text-gray-400">未连接</span>
-        )}
-      </label>
-
-      {/* 连接按钮 */}
-      {!isConnected && (
-        <button
-          className="ml-1 inline-flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-2 py-0.5 transition-colors"
-          title="尝试连接该服务器"
-          onClick={onConnect}
-        >
-          {isBusy ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <RotateCcw className="w-3.5 h-3.5" />
-          )}
-        </button>
-      )}
-
-      {/* @ 引用按钮 */}
-      {isConnected && (
-        <button
-          className="ml-2 text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-2 py-0.5 opacity-0 group-hover:opacity-100 transition-all"
-          title="在输入框插入 @ 引用"
-          onClick={onInsertMention}
-        >
-          @ 引用
-        </button>
-      )}
-    </div>
   );
 }

@@ -75,24 +75,24 @@ export class InjectionManager {
   ): Promise<InjectionResult> {
     // 做出注入决策
     const decision = makeInjectionDecision(signals);
-    
-    // 如果不需要注入，只返回时间上下文
-    if (!decision.shouldInject) {
+
+    // 普通对话默认不注入工具（避免所有请求都携带 tools，导致“不支持 tools 的模型”连正常聊天都无法进行）
+    if (!context.forceInject && !decision.shouldInject) {
       const messages: Array<{ role: 'system'; content: string }> = [];
-      
-      // 即使不注入 MCP，也注入时间上下文
+
+      // 即使不注入 MCP/Skills，也注入时间上下文（必要时）
       try {
         const { buildTimeContextMessage, isTimeRelatedQuery } = await import('@/lib/prompts/TimeContext');
         const isTimeRelated = isTimeRelatedQuery(context.userContent);
         messages.push({ role: 'system', content: buildTimeContextMessage(isTimeRelated) });
       } catch {
-        // 忽略错误
+        // ignore
       }
-      
+
       return { systemMessages: messages, enabledServers: [], hasToolInfo: false };
     }
-    
-    // 构建初始提示词
+
+    // 构建初始提示词（按需注入工具与 skills 目录）
     const result = await buildInitialPrompt(context, signals);
     
     // 更新会话状态

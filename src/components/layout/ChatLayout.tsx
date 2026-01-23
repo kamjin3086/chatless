@@ -12,6 +12,7 @@ import { useChatStore } from "@/store/chatStore";
 import { Message, Conversation } from "@/types/chat";
 import { SidebarContext } from "@/contexts/SidebarContext";
 import { SearchInput } from '@/components/ui/search-input';
+import { FloatingSkillApprovalPanel } from '@/components/skills/SkillApprovalPanel';
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -392,6 +393,9 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             {children}
           </div>
         </main>
+
+        {/* 全局审批浮层：用于 Skills/Sandbox 高风险动作的 Human-in-the-loop 确认 */}
+        <FloatingSkillApprovalPanel />
       </div>
     </SidebarContext.Provider>
   );

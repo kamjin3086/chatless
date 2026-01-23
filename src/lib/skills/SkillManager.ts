@@ -659,41 +659,19 @@ ${skillList}
 
 ### 技能工具调用方式
 
-**1. 获取技能说明（必须首先调用）：**
-\`\`\`xml
-<use_mcp_tool>
-<server_name>skills</server_name>
-<tool_name>get_skill_instructions</tool_name>
-<arguments>{"skillId": "技能ID"}</arguments>
-</use_mcp_tool>
-\`\`\`
+**Native tool calling（必须使用结构化 tools 调用，不要输出任何 XML/标签文本）：**
 
-**2. 查看技能可用动作：**
-\`\`\`xml
-<use_mcp_tool>
-<server_name>skills</server_name>
-<tool_name>list_skill_actions</tool_name>
-<arguments>{"skillId": "技能ID"}</arguments>
-</use_mcp_tool>
-\`\`\`
+1) 获取技能说明（必须首先调用）：\`skills__get_skill_instructions\`
+   - 参数：\`{ "skillId": "技能ID" }\`
 
-**3. 执行特定动作：**
-\`\`\`xml
-<use_mcp_tool>
-<server_name>skills</server_name>
-<tool_name>run_skill_action</tool_name>
-<arguments>{"skillId": "技能ID", "actionId": "动作ID"}</arguments>
-</use_mcp_tool>
-\`\`\`
+2) 查看技能可用动作：\`skills__list_skill_actions\`
+   - 参数：\`{ "skillId": "技能ID" }\`
 
-**4. 执行技能全部动作：**
-\`\`\`xml
-<use_mcp_tool>
-<server_name>skills</server_name>
-<tool_name>run_all_skill_actions</tool_name>
-<arguments>{"skillId": "技能ID"}</arguments>
-</use_mcp_tool>
-\`\`\`
+3) 执行特定动作：\`skills__run_skill_action\`
+   - 参数：\`{ "skillId": "技能ID", "actionId": "动作ID", "parameters": { ...可选 } }\`
+
+4) 执行技能全部动作：\`skills__run_all_skill_actions\`
+   - 参数：\`{ "skillId": "技能ID", "parameters": { ...可选 } }\`
 
 ### 动作执行说明
 
@@ -703,6 +681,10 @@ ${skillList}
 - **file**: 文件读写操作
 - **mcp_tool**: 调用其他 MCP 工具
 - **instruction**: 纯文本指令
+
+⚠️ **重要语义**：
+- Skills 本质是“文件夹能力包（SKILL.md 指南 + 可执行 actions/脚本）”，不是数学意义的 run()。
+- 若某 Skill **没有定义 actions**，\`skills__run_all_skill_actions\` 可能返回 **instruction-only 指南**，这不代表已生成/已创建任何文件；你需要据此生成可审批的动作计划或先问用户澄清。
 
 高风险动作会等待用户确认，用户可以：
 - 直接批准执行

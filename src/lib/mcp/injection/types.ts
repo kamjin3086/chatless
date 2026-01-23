@@ -61,6 +61,8 @@ export interface InjectionContext {
   conversationId?: string;
   /** 当前阶段 */
   phase: InjectionPhase;
+  /** 强制注入工具（用于用户显式开启 Agent/Tools 模式） */
+  forceInject?: boolean;
   /** 原始用户问题（追问阶段使用） */
   originalQuestion?: string;
   /** 工具调用是否有错误（追问阶段使用） */

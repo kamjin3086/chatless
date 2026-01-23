@@ -200,16 +200,12 @@ export class OpenAIProvider extends BaseProvider {
                 done: false
               });
               
-              // 优先使用onEvent（直接传递结构化事件）
-              if (cb.onEvent && result.events && result.events.length > 0) {
-                result.events.forEach(event => cb.onEvent!(event));
+              // Native-only Agent：必须使用结构化事件（onEvent），不允许降级回文本
+              if (!cb.onEvent) {
+                throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
               }
-              // 降级：使用onToken（转换为文本，兼容旧代码）
-              else if (cb.onToken && result.events && result.events.length > 0) {
-                const text = StreamEventAdapter.eventsToText(result.events);
-                if (text.length > 0) {
-                  cb.onToken(text);
-                }
+              if (result.events && result.events.length > 0) {
+                result.events.forEach(event => cb.onEvent!(event));
               }
             } catch (err) {
               console.warn('[OpenAIProvider] JSON parse error', err);

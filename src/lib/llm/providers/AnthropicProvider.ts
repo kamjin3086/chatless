@@ -2,7 +2,6 @@ import { BaseProvider, CheckResult, StreamCallbacks, LlmMessage } from './BasePr
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
-import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
 import { createStreamEvent } from '../types/stream-events';
 import { 
   type ToolDefinition, 
@@ -121,7 +120,7 @@ export class AnthropicProvider extends BaseProvider {
       name: string;
       input: string;
     }> = new Map();
-    let currentToolIndex = 0;
+    // Native tool calling：工具调用由 tool_use 块显式提供，不需要额外的“当前工具索引”状态
     
     try {
       await this.sseClient.startConnection(
@@ -158,7 +157,6 @@ export class AnthropicProvider extends BaseProvider {
                         name: contentBlock.name || '',
                         input: '',
                       });
-                      currentToolIndex = json.index;
                     }
                   }
                   
@@ -180,16 +178,12 @@ export class AnthropicProvider extends BaseProvider {
                         done: false
                       });
                       
-                      // 优先使用onEvent（直接传递结构化事件）
-                      if (callbacks.onEvent && result.events && result.events.length > 0) {
-                        result.events.forEach(event => callbacks.onEvent!(event));
+                      // Native-only Agent：必须使用结构化事件（onEvent），不允许降级回文本
+                      if (!callbacks.onEvent) {
+                        throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
                       }
-                      // 降级：使用onToken（转换为文本，兼容旧代码）
-                      else if (callbacks.onToken && result.events && result.events.length > 0) {
-                        const text = StreamEventAdapter.eventsToText(result.events);
-                        if (text.length > 0) {
-                          callbacks.onToken(text);
-                        }
+                      if (result.events && result.events.length > 0) {
+                        result.events.forEach(event => callbacks.onEvent!(event));
                       }
                     }
                   }
@@ -215,13 +209,11 @@ export class AnthropicProvider extends BaseProvider {
                     toolCallState.clear();
                     
                     const result = this.thinkingStrategy.processToken({ done: true });
-                    if (callbacks.onEvent && result.events && result.events.length > 0) {
+                    if (!callbacks.onEvent) {
+                      throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
+                    }
+                    if (result.events && result.events.length > 0) {
                       result.events.forEach(event => callbacks.onEvent!(event));
-                    } else if (callbacks.onToken && result.events && result.events.length > 0) {
-                      const text = StreamEventAdapter.eventsToText(result.events);
-                      if (text.length > 0) {
-                        callbacks.onToken(text);
-                      }
                     }
                     
                     callbacks.onComplete?.();

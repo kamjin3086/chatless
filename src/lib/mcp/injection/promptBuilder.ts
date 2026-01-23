@@ -17,7 +17,7 @@ import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { persistentCache } from '../persistentCache';
 import { getConnectedServers, getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
-import { useWebSearchStore } from '@/store/webSearchStore';
+import { skillTools } from '@/lib/skills/skillTools';
 import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 
@@ -48,6 +48,13 @@ export async function buildInitialPrompt(
   const modelName = context.modelName || '';
   const useNativeTools = shouldUseNativeToolCalls(providerName, modelName);
   const toolStrategy = getToolCallStrategy(providerName, modelName);
+
+  // Native-only：不再支持 Prompt 注入 + 文本解析工具调用
+  if (!useNativeTools) {
+    throw new Error(
+      `Native tool calling is required but not supported by provider/model: ${providerName}/${modelName || 'unknown'}`
+    );
+  }
   
   // 1. 时间上下文（高优先级）
   await injectTimeContext(messages, context.userContent, signals.isTimeRelated);
@@ -84,56 +91,14 @@ export async function buildInitialPrompt(
   // 4. 构建工具信息（仅在不支持原生工具调用时注入）
   const toolInfoParts: string[] = [];
   
-  // 只有在不支持原生工具调用时，才注入工具描述到 System Prompt
-  if (!useNativeTools) {
-    // 4.1 构建工具列表
-    const hasExplicitMention = signals.hasExplicitMention && signals.mentionedServers.length > 0;
-    
-    if (hasExplicitMention) {
-      // @mention 模式：详细的工具描述
-      await buildDetailedToolInfo(toolInfoParts, signals.mentionedServers, globalEnabled, context);
-    } else {
-      // 普通模式：简洁的工具列表
-      await buildSimpleToolInfo(toolInfoParts, enabled.slice(0, 3), context);
-    }
-    
-    // 4.2 添加网络搜索工具
-    if (signals.webSearchEnabled) {
-      await buildWebSearchToolInfo(toolInfoParts, context);
-    }
-    
-    // 5. 合并工具信息为单条消息
-    if (toolInfoParts.length > 0) {
-      messages.push({ 
-        role: 'system', 
-        content: toolInfoParts.join('\n\n') 
-      });
-    }
-    
-    // 6. 协议规则（仅在使用 Prompt 注入时需要）
-    const protocolParts: string[] = [
-      MCPPrompts.protocolRules,
-      MCPPrompts.decisionPolicy,
-      MCPPrompts.outputContract
-    ];
-    
-    messages.push({
-      role: 'system',
-      content: protocolParts.join('\n\n')
-    });
-  }
-  
-  // 5. 构建原生工具定义（当 useNativeTools 时）
-  let nativeTools: InjectionResult['nativeTools'] = undefined;
-  if (useNativeTools) {
-    nativeTools = await buildNativeToolDefinitions(enabled, signals.webSearchEnabled);
-    
-    // 使用原生工具调用时，只注入简化的协议说明
-    messages.push({
-      role: 'system',
-      content: `你可以通过工具调用来获取信息或执行操作。系统会自动处理工具调用和结果返回。`
-    });
-  }
+  // 构建原生工具定义（Native-only）
+  const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions(enabled, signals.webSearchEnabled);
+
+  // 使用原生工具调用时，只注入简化的协议说明
+  messages.push({
+    role: 'system',
+    content: `你可以通过工具调用来获取信息或执行操作。必须使用结构化 tool calling；不要输出任何 XML/标签格式的工具指令文本。`
+  });
   
   // 6. 启用服务器声明
   const allEnabled = signals.webSearchEnabled 
@@ -226,54 +191,7 @@ async function injectTimeContext(
   }
 }
 
-/**
- * 构建详细的工具信息（@mention 模式）
- */
-async function buildDetailedToolInfo(
-  parts: string[],
-  mentionedServers: string[],
-  globalEnabled: string[],
-  _context: InjectionContext
-): Promise<void> {
-  const DETAIL_LIMIT = 10;
-  
-  for (const server of mentionedServers) {
-    if (!globalEnabled.includes(server)) continue;
-    
-    try {
-      const tools = await persistentCache.getToolsWithCache(server);
-      
-      if (!Array.isArray(tools) || tools.length === 0) {
-        parts.push(`Tools@${server}: (connecting)`);
-        continue;
-      }
-      
-      const names = tools.map((t: { name?: string }) => t?.name).filter(Boolean);
-      parts.push(`Tools@${server}: ${names.join(', ')}`);
-      
-      // 详细描述
-      const detailLines: string[] = [`ToolsDesc@${server}:`];
-      const subset = tools.slice(0, DETAIL_LIMIT);
-      
-      for (const t of subset) {
-        const nm = String(t?.name || '');
-        const desc = t?.description ? String(t.description) : '';
-        const schema = (t?.inputSchema?.schema || t?.inputSchema || t?.input_schema?.schema || t?.input_schema) as Record<string, unknown>;
-        const req: string[] = Array.isArray(schema?.required) ? schema.required as string[] : [];
-        const props: Record<string, Record<string, unknown>> = (schema?.properties || {}) as Record<string, Record<string, unknown>>;
-        const optional = Object.keys(props).filter(k => !req.includes(k));
-        
-        detailLines.push(`• ${nm}${desc ? ` - ${desc}` : ''}`);
-        detailLines.push(`   required: ${req.length ? req.join(', ') : '(none)'}`);
-        if (optional.length) detailLines.push(`   optional: ${optional.join(', ')}`);
-      }
-      
-      parts.push(detailLines.join('\n'));
-    } catch {
-      parts.push(`Tools@${server}: (error)`);
-    }
-  }
-}
+// Native-only：不再通过 System Prompt 注入“文本工具协议”，因此不再构建文本化工具说明（@mention/简洁模式）。
 
 /**
  * 构建原生工具定义（用于传递给 LLM API 的 tools 参数）
@@ -284,6 +202,45 @@ async function buildNativeToolDefinitions(
 ): Promise<NativeToolDefinition[]> {
   const tools: NativeToolDefinition[] = [];
   const TOOL_LIMIT = 20; // 原生工具调用的限制
+
+  const normalizeParams = (p: any): { type: 'object'; properties: Record<string, unknown>; required: string[] } => {
+    // 一些 OpenAI-compat 后端会严格要求 parameters.properties 存在；否则会 400
+    if (!p || typeof p !== 'object') {
+      return { type: 'object', properties: {}, required: [] };
+    }
+    const props = (p as any).properties;
+    const req = (p as any).required;
+    return {
+      type: 'object',
+      properties: (props && typeof props === 'object') ? props : {},
+      required: Array.isArray(req) ? req : [],
+    };
+  };
+
+  // 0. Skills（本地能力包）：永远可用，不依赖 MCP 连接状态
+  for (const t of skillTools) {
+    // tool.name 在 skillTools 中是裸名（如 get_skill_instructions），这里统一加 server 前缀以便解析
+    tools.push({
+      name: `skills__${t.name}`,
+      description: t.description || `Skill tool ${t.name}`,
+      parameters: normalizeParams(
+        t.parameters
+          ? {
+              type: 'object',
+              properties: Object.fromEntries(
+                Object.entries(t.parameters).map(([k, v]) => [
+                  k,
+                  { type: v.type, description: v.description },
+                ])
+              ),
+              required: Object.entries(t.parameters)
+                .filter(([, v]) => v.required)
+                .map(([k]) => k),
+            }
+          : { type: 'object' }
+      ),
+    });
+  }
 
   // 1. 添加 MCP 服务器的工具
   for (const server of servers) {
@@ -298,7 +255,7 @@ async function buildNativeToolDefinitions(
         tools.push({
           name: `${server}__${tool.name}`,
           description: tool.description || `Tool ${tool.name} from ${server}`,
-          parameters: tool.inputSchema || { type: 'object' },
+          parameters: normalizeParams(tool.inputSchema || { type: 'object' }),
         });
       }
     } catch {
@@ -311,7 +268,7 @@ async function buildNativeToolDefinitions(
     tools.push({
       name: `${WEB_SEARCH_SERVER_NAME}__search`,
       description: '在互联网上搜索实时信息',
-      parameters: {
+      parameters: normalizeParams({
         type: 'object',
         properties: {
           query: {
@@ -320,81 +277,14 @@ async function buildNativeToolDefinitions(
           },
         },
         required: ['query'],
-      },
+      }),
     });
   }
 
   return tools;
 }
 
-/**
- * 构建简洁的工具信息（普通模式）
- */
-async function buildSimpleToolInfo(
-  parts: string[],
-  servers: string[],
-  _context: InjectionContext
-): Promise<void> {
-  const TOOL_LIMIT = 8;
-  
-  for (const server of servers) {
-    try {
-      const tools = await persistentCache.getToolsWithCache(server);
-      if (!Array.isArray(tools) || tools.length === 0) continue;
-      
-      const names = tools
-        .map((t: { name?: string }) => t?.name)
-        .filter(Boolean)
-        .slice(0, TOOL_LIMIT);
-      
-      if (names.length > 0) {
-        parts.push(`Tools@${server}: ${names.join(', ')}`);
-      }
-    } catch {
-      // 忽略错误
-    }
-  }
-}
-
-/**
- * 构建网络搜索工具信息
- */
-async function buildWebSearchToolInfo(
-  parts: string[],
-  context: InjectionContext
-): Promise<void> {
-  // 获取 provider 信息
-  let providerId = '';
-  try {
-    const s = useWebSearchStore.getState();
-    providerId = context.conversationId 
-      ? s.getConversationProvider(context.conversationId) 
-      : s.provider;
-  } catch {
-    // 忽略错误
-  }
-  
-  const hasWebFetch = providerId === 'ollama' || providerId === 'duckduckgo';
-  const toolNames = hasWebFetch ? 'search, fetch' : 'search';
-  
-  const lines: string[] = [
-    `Tools@${WEB_SEARCH_SERVER_NAME}: ${toolNames}`,
-    `ToolsDesc@${WEB_SEARCH_SERVER_NAME}:`,
-    `• search - 在互联网上搜索实时信息`,
-    `   required: query`,
-    `   example: {"query":"北京今天的天气"}`
-  ];
-  
-  if (hasWebFetch) {
-    lines.push(
-      `• fetch - 抓取指定网页内容`,
-      `   required: url`,
-      `   example: {"url":"https://example.com"}`
-    );
-  }
-  
-  parts.push(lines.join('\n'));
-}
+// Native-only：WebSearch 以原生 tool schema 暴露（见 buildNativeToolDefinitions），无需文本描述注入。
 
 /**
  * 构建第一次追问提示词
@@ -409,7 +299,7 @@ function buildFirstFollowUpPrompt(originalQuestion: string, hasError?: boolean):
 3. 工具不可用：尝试其他工具
 4. 无法解决：基于已有知识回答
 
-【重要】如果需要重试工具调用，只输出 1 个 <use_mcp_tool> 标签，然后停止。
+【重要】如果需要重试工具调用，只进行 1 次结构化工具调用（tool_call），然后停止。
 
 用户问题：${originalQuestion}`;
   }

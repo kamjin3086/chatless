@@ -35,10 +35,11 @@ export async function executeToolCall(params: {
   model: string;
   historyForLlm: LlmMessage[];
   originalUserContent: string;
+  callId?: string;
   cardId?: string;
   lockKey?: string;
 }): Promise<void> {
-  const { assistantMessageId, conversationId, server, tool, args, provider, model, historyForLlm, originalUserContent, cardId, lockKey } = params;
+  const { assistantMessageId, conversationId, server, tool, args, provider, model, historyForLlm, originalUserContent, callId, cardId, lockKey } = params;
   
   // 过滤无效/错误解析的工具调用（提前检查，减少日志噪音）
   const isInvalidServer = !server || server === 'unknown' || server.includes('use_mcp_tool') || server.includes('>');
@@ -58,6 +59,7 @@ export async function executeToolCall(params: {
         server,
         tool,
         args,
+        callId,
         cardId,
         source: 'execute',
       });
@@ -799,7 +801,17 @@ export async function continueWithToolResult(params: {
   );
   // #endregion
 
-  await streamChat(provider, model, compactFollowHistory as any, callbacks, {});
+  // Native-only + Event-only：追问轮也必须携带 tools（skills + mcp + web_search），否则模型无法继续调用工具。
+  // 复用与主聊天一致的 composeChatOptions（内部会强制 nativeTools，并附带 mcpServers）。
+  const { composeChatOptions } = await import('@/lib/chat/OptionComposer');
+  const followupOpts = await composeChatOptions(
+    provider,
+    model,
+    {},
+    conversationId || null,
+    String(nextUserMsg.content || '')
+  );
+  await streamChat(provider, model, compactFollowHistory as any, callbacks, followupOpts);
 }
 
 /**
@@ -1036,7 +1048,15 @@ async function runSecondFollowUpRound(args: {
   );
   // #endregion
 
-  await streamChat(provider, model, compactNudgeHistory as any, callbacks2, {});
+  const { composeChatOptions } = await import('@/lib/chat/OptionComposer');
+  const nudgeOpts = await composeChatOptions(
+    provider,
+    model,
+    {},
+    conversationId || null,
+    String(compactNudgeHistory?.[compactNudgeHistory.length - 1]?.content || '')
+  );
+  await streamChat(provider, model, compactNudgeHistory as any, callbacks2, nudgeOpts);
 }
 
 /**

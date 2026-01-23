@@ -1,20 +1,23 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { Send, Image, Paperclip, Loader2, StopCircle, CornerDownLeft, Settings } from "lucide-react";
+import { Send, StopCircle, CornerDownLeft } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
-import { KnowledgeBaseSelector } from "./input/KnowledgeBaseSelector";
 import { AttachedDocumentView } from "./input/AttachedDocumentView";
 import { SelectedKnowledgeBaseView } from "./input/SelectedKnowledgeBaseView";
 import { SessionParametersDialog } from './SessionParametersDialog';
-import { McpQuickToggle } from './input/McpQuickToggle';
-import { WebSearchToggle } from './input/WebSearchToggle';
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
+import { ChatModeSelector, type ChatMode } from './input/ChatModeSelector';
+import { AttachmentMenu } from './input/AttachmentMenu';
+import { MoreOptionsMenu } from './input/MoreOptionsMenu';
+import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
+import { WebSearchToggle } from './input/WebSearchToggle';
+import { McpQuickToggle } from './input/McpQuickToggle';
 import type { Skill } from '@/lib/skills/types';
 import type { ModelParameters } from '@/types/model-params';
 import { createSafePreview } from '@/lib/utils/tokenBudget';
@@ -27,6 +30,11 @@ import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
 import { useUiSession } from '@/store/uiSession';
 import { useWebSearchStore } from '@/store/webSearchStore';
 import { useRouter } from 'next/navigation';
+import {
+  getEnabledConfiguredServers,
+  getConnectedServers,
+  getGlobalEnabledServers,
+} from "@/lib/mcp/chatIntegration";
 
 interface EditingMessageData {
   content: string;
@@ -113,11 +121,59 @@ export function ChatInput({
 
   // 知识库选择相关状态
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState<KnowledgeBase | null>(null);
+  const [allKnowledgeBases, setAllKnowledgeBases] = useState<KnowledgeBase[]>([]);
+  
+  // 加载知识库列表
+  useEffect(() => {
+    (async () => {
+      try {
+        await KnowledgeService.initDb();
+        const kbs = await KnowledgeService.getAllKnowledgeBases();
+        setAllKnowledgeBases(kbs);
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+  
+  // 知识库选项（用于上拉选择）
+  const knowledgeBaseOptions = useMemo(() => 
+    allKnowledgeBases.map(kb => ({ id: kb.id, label: kb.name })),
+    [allKnowledgeBases]
+  );
   
   // 会话参数设置弹窗状态
   const [sessionParametersDialogOpen, setSessionParametersDialogOpen] = useState(false);
+  
   const webSearch = useWebSearchStore();
   const router = useRouter();
+  const setConversationToolMode = useChatStore((s: any) => s.setConversationToolMode);
+  const currentToolMode = useChatStore((s: any) => {
+    const id = s.currentConversationId;
+    const conv = id ? s.conversations.find((c: any) => c.id === id) : null;
+    return (conv?.tool_mode as ('chat'|'agent') | undefined) || s.sessionToolMode || 'chat';
+  });
+  
+  // MCP 服务器状态
+  const [mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
+    all: [],
+    connected: [],
+    enabled: [],
+  });
+  
+  // 加载 MCP 服务器状态
+  useEffect(() => {
+    (async () => {
+      try {
+        const all = await getEnabledConfiguredServers();
+        const connected = await getConnectedServers();
+        const enabled = await getGlobalEnabledServers() || all;
+        setMcpServers({ all, connected, enabled });
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // —— 输入框高度控制：默认自适应，支持顶部拖拽，最大不超过视口 40% ——
@@ -961,70 +1017,59 @@ export function ChatInput({
           }}
           onClose={()=>setSkillMentionOpen(false)}
         />
-        <div className="absolute left-2 sm:left-3 bottom-4 z-[2] flex items-center gap-1.5 sm:gap-2">
-          
-          <Button
-                  variant="ghost"
-                  size="icon"
-                  title="上传图片"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={disabled || isLoading}
-                  className="h-6 w-6 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 shrink-0"
-                >
-                  <Image className="w-5 h-5" />
-                </Button>
-            <Button
-                  variant="ghost"
-                  size="icon"
-                  title="附加文档"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={disabled || isLoading || !!attachedDocument}
-                  className="h-8 w-8 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 shrink-0 rounded-lg transition-all"
-                >
-                  {isParsingDocument ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Paperclip className="w-5 h-5" />
-                  )}
-                </Button>
-            <KnowledgeBaseSelector 
-               onSelect={setSelectedKnowledgeBase}
-               selectedKnowledgeBase={selectedKnowledgeBase}
-            />
-            {/* 网络搜索：使用统一的 ActionPanel 样式 */}
-            <WebSearchToggle 
-              conversationId={conversationId}
-              disabled={disabled || isLoading}
-            />
-            {/* 会话参数设置按钮 */}
-            <McpQuickToggle onInsertMention={(name)=>{
-              // 在光标处插入 @name，并使用淡绿色高亮
+        {/* 左下角工具栏：模式切换 + 附件 + 搜索 + MCP + 更多 */}
+        <div className="absolute left-2 sm:left-3 bottom-3 z-[2] flex items-center gap-1">
+          {/* 模式选择器 */}
+          <ChatModeSelector
+            mode={currentToolMode as ChatMode}
+            onModeChange={(mode) => {
+              void setConversationToolMode?.(conversationId || '', mode);
+            }}
+            disabled={disabled || isLoading}
+          />
+
+          {/* 附件菜单 */}
+          <AttachmentMenu
+            disabled={disabled || isLoading}
+            isParsingDocument={isParsingDocument}
+            hasDocument={!!attachedDocument}
+            selectedKnowledgeBase={selectedKnowledgeBase}
+            onPickImage={() => imageInputRef.current?.click()}
+            onPickDocument={() => fileInputRef.current?.click()}
+            onSelectKnowledgeBase={setSelectedKnowledgeBase}
+          />
+
+          {/* 网络搜索 */}
+          <WebSearchToggle
+            conversationId={conversationId}
+            disabled={disabled || isLoading}
+          />
+
+          {/* MCP 服务器 */}
+          <McpQuickToggle
+            onInsertMention={(name) => {
               const el = textareaRef.current;
               if (!el) return;
               const start = el.selectionStart || 0;
               const end = el.selectionEnd || 0;
-              const mention = `@${name} `; // 末尾加空格，避免粘连
+              const mention = `@${name} `;
               const next = inputValue.slice(0, start) + mention + inputValue.slice(end);
               setInputValue(next);
-              // 将光标移到插入后
               setTimeout(() => { el.selectionStart = el.selectionEnd = start + mention.length; el.focus(); }, 0);
-            }} />
-            {providerName && modelId && conversationId && (
-              <Button
-              variant="ghost"
-              size="icon"
-              title="会话参数设置"
-              onClick={() => setSessionParametersDialogOpen(true)}
+            }}
+          />
+
+          {/* 更多选项（会话参数） */}
+          {providerName && modelId && conversationId && (
+            <MoreOptionsMenu
               disabled={disabled || isLoading}
-              className={cn(
-                "h-8 w-8 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 shrink-0 rounded-lg transition-all",
-                currentSessionParameters && "text-blue-500 hover:text-blue-600"
-              )}
-            >
-              <Settings className="w-5 h-5" />
-            </Button>
-            )}
-         
+              hasSessionParameters={!!currentSessionParameters}
+              canEditSessionParameters={true}
+              onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
+            />
+          )}
+
+          {/* 隐藏的文件输入 */}
           <input
             type="file"
             ref={imageInputRef}
@@ -1083,6 +1128,38 @@ export function ChatInput({
         </div>
       </div>
 
+      {/* 已启用能力标签条 */}
+      <ActiveCapabilitiesBar
+        webSearchEnabled={webSearch.isWebSearchEnabled}
+        webSearchProvider={conversationId ? webSearch.getConversationProvider(conversationId) : webSearch.provider}
+        webSearchProviders={[
+          { id: 'google', label: 'Google', disabled: !(webSearch.apiKeyGoogle && webSearch.cseIdGoogle) },
+          { id: 'bing', label: 'Bing', disabled: !webSearch.apiKeyBing },
+          { id: 'duckduckgo', label: 'DuckDuckGo' },
+          { id: 'ollama', label: 'Ollama Web', disabled: !webSearch.apiKeyOllama },
+        ]}
+        onDisableWebSearch={() => webSearch.toggleWebSearch(false)}
+        onSelectWebSearchProvider={(id) => {
+          if (conversationId) {
+            webSearch.setConversationProvider(conversationId, id as any);
+          }
+        }}
+        selectedKnowledgeBase={selectedKnowledgeBase}
+        availableKnowledgeBases={knowledgeBaseOptions}
+        onRemoveKnowledgeBase={() => setSelectedKnowledgeBase(null)}
+        onSelectKnowledgeBase={(id) => {
+          const kb = allKnowledgeBases.find(k => k.id === id);
+          if (kb) setSelectedKnowledgeBase(kb);
+        }}
+        enabledMcpServers={mcpServers.enabled.filter(s => mcpServers.connected.includes(s))}
+        onClickMcp={() => {
+          // McpQuickToggle 面板在工具栏中已有
+        }}
+        hasSessionParameters={!!currentSessionParameters}
+        onClickSessionParameters={() => setSessionParametersDialogOpen(true)}
+      />
+
+
       {/* 会话参数设置弹窗 */}
       {providerName && modelId && conversationId && (
         <SessionParametersDialog
@@ -1096,7 +1173,6 @@ export function ChatInput({
           currentParameters={currentSessionParameters}
         />
       )}
-      {/* 已移除“应用范围”弹窗，选择即应用 */}
     </div>
   );
 } 

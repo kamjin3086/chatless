@@ -213,16 +213,11 @@ export class GoogleAIProvider extends BaseProvider {
                         done: false
                       });
                       
-                      // 优先使用onEvent（直接传递结构化事件）
-                      if (cb.onEvent && result.events && result.events.length > 0) {
-                        result.events.forEach(event => cb.onEvent!(event));
+                      if (!cb.onEvent) {
+                        throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
                       }
-                      // 降级：使用onToken（转换为文本，兼容旧代码）
-                      else if (cb.onToken && result.events && result.events.length > 0) {
-                        const text = StreamEventAdapter.eventsToText(result.events);
-                        if (text.length > 0) {
-                          cb.onToken(text);
-                        }
+                      if (result.events && result.events.length > 0) {
+                        result.events.forEach(event => cb.onEvent!(event));
                       }
                     }
                     // 提取内联图片（image generation 返回 inlineData）
@@ -238,13 +233,11 @@ export class GoogleAIProvider extends BaseProvider {
                 if (candidate.finishReason === 'STOP') {
                   console.log('[GoogleAIProvider] Stream completed (finishReason: STOP)');
                   const result = this.thinkingStrategy.processToken({ done: true });
-                  if (cb.onEvent && result.events && result.events.length > 0) {
+                  if (!cb.onEvent) {
+                    throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
+                  }
+                  if (result.events && result.events.length > 0) {
                     result.events.forEach(event => cb.onEvent!(event));
-                  } else if (cb.onToken && result.events && result.events.length > 0) {
-                    const text = StreamEventAdapter.eventsToText(result.events);
-                    if (text.length > 0) {
-                      cb.onToken(text);
-                    }
                   }
                   
                   cb.onComplete?.();

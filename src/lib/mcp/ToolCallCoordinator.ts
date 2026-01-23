@@ -61,8 +61,13 @@ export class ToolCallCoordinator {
     messageId: string,
     server: string,
     tool: string,
-    args?: Record<string, unknown>
+    args?: Record<string, unknown>,
+    callId?: string
   ): string {
+    if (callId && typeof callId === 'string' && callId.trim().length > 0) {
+      // Native tool calling 下，优先使用 provider 返回的 tool_call_id 作为幂等键（避免 args 片段/顺序差异导致重复执行）
+      return `${messageId}:${server}.${tool}:callId=${callId.trim()}`;
+    }
     return `${messageId}:${server}.${tool}:${stableStringify(args || {})}`;
   }
 
@@ -71,11 +76,12 @@ export class ToolCallCoordinator {
     server: string;
     tool: string;
     args?: Record<string, unknown>;
+    callId?: string;
     cardId?: string;
     source?: ToolCallLock['source'];
   }): AcquireResult {
-    const { messageId, server, tool, args, cardId, source } = params;
-    const key = this.buildToolCallKey(messageId, server, tool, args);
+    const { messageId, server, tool, args, callId, cardId, source } = params;
+    const key = this.buildToolCallKey(messageId, server, tool, args, callId);
     const now = Date.now();
     const existing = this.toolCallLocks.get(key);
 

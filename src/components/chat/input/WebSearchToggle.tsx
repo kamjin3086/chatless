@@ -3,9 +3,8 @@
 /**
  * 网络搜索快速切换组件
  * 
- * ## 设计说明
- * 
- * 使用统一的 ActionPanel 组件实现，提供网络搜索开关和提供商选择。
+ * 使用统一的 ActionPanel 组件实现，提供网络搜索开关和提供商选择
+ * 启用时显示蓝色高亮
  */
 
 import { useState } from "react";
@@ -60,7 +59,7 @@ function providerConfiguredMap(config: ProviderConfig): Record<string, boolean> 
   return {
     google: !!(config.apiKeyGoogle && config.cseIdGoogle),
     bing: !!config.apiKeyBing,
-    duckduckgo: true, // DuckDuckGo 不需要 API Key
+    duckduckgo: true,
     ollama: !!config.apiKeyOllama,
   };
 }
@@ -101,6 +100,8 @@ export function WebSearchToggle({
     router.push("/settings?tab=webSearch");
   };
 
+  const isEnabled = webSearch.isWebSearchEnabled;
+
   return (
     <ActionPanel open={open} onOpenChange={setOpen}>
       <ActionPanelTrigger>
@@ -109,29 +110,32 @@ export function WebSearchToggle({
           size="icon"
           disabled={disabled}
           className={cn(
-            "h-8 w-8 shrink-0 rounded-lg transition-all",
-            webSearch.isWebSearchEnabled
-              ? "text-blue-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800"
-              : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            "h-8 w-8 shrink-0 rounded-lg transition-all duration-150",
+            isEnabled
+              ? "bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/50"
+              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           )}
           title="网络搜索"
         >
-          <Globe className="w-5 h-5" />
+          <Globe className="w-4 h-4" />
         </Button>
       </ActionPanelTrigger>
 
       <ActionPanelContent width="md" maxHeight="20rem">
         <ActionPanelHeader
           title="网络搜索"
-          icon={<Globe className="w-4 h-4 text-blue-500" />}
+          icon={<Globe className={cn("w-4 h-4", isEnabled ? "text-sky-500" : "text-slate-400")} />}
           action={
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-gray-500">
-                {webSearch.isWebSearchEnabled ? "已启用" : "已禁用"}
+              <span className={cn(
+                "text-[11px]",
+                isEnabled ? "text-sky-600 dark:text-sky-400" : "text-slate-400"
+              )}>
+                {isEnabled ? "已启用" : "已禁用"}
               </span>
               <Switch
                 size="sm"
-                checked={webSearch.isWebSearchEnabled}
+                checked={isEnabled}
                 onCheckedChange={(v) => webSearch.toggleWebSearch(!!v)}
               />
             </div>
@@ -140,8 +144,8 @@ export function WebSearchToggle({
 
         <ActionPanelDivider />
 
-        <div className="px-2 py-1.5">
-          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+        <div className="px-3 py-2">
+          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
             搜索提供商
           </p>
         </div>
@@ -158,20 +162,20 @@ export function WebSearchToggle({
                   title={providerLabel(provider)}
                   description={
                     !isConfigured
-                      ? "未配置 - 请在设置中添加密钥"
+                      ? "未配置"
                       : provider === "duckduckgo"
-                      ? "无需 API 密钥"
+                      ? "免费使用"
                       : "已配置"
                   }
                   selected={isSelected}
                   disabled={!isConfigured}
-                  suffix={isSelected ? <Check className="w-4 h-4 text-blue-500" /> : null}
+                  suffix={isSelected ? <Check className="w-4 h-4 text-sky-500" /> : null}
                   onClick={() => handleProviderChange(provider)}
                 />
               );
             })
           ) : (
-            <div className="px-3 py-4 text-center text-[12px] text-gray-500">
+            <div className="px-3 py-4 text-center text-[12px] text-slate-400">
               请先选择或创建一个会话
             </div>
           )}
@@ -180,15 +184,14 @@ export function WebSearchToggle({
         <ActionPanelFooter>
           <button
             onClick={handleGoToSettings}
-            className="inline-flex items-center gap-1.5 text-[11px] text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />
             配置密钥
-            <ExternalLink className="w-3 h-3" />
+            <ExternalLink className="w-3 h-3 opacity-60" />
           </button>
         </ActionPanelFooter>
       </ActionPanelContent>
     </ActionPanel>
   );
 }
-

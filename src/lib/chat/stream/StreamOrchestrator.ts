@@ -303,7 +303,7 @@ export class StreamOrchestrator {
     const store = useChatStore.getState();
     
     // 导入清理工具
-    const { cleanToolCallInstructions, extractToolCallFromText } = 
+    const { cleanToolCallInstructions } =
       await import('@/lib/chat/tool-call-cleanup');
 
     // 获取当前消息
@@ -314,7 +314,7 @@ export class StreamOrchestrator {
     const hadCardMarker = !!(msg?.content && msg.content.includes('"__tool_call_card__"'));
     let contentToPersist = hadCardMarker ? (msg?.content || this.context.content) : this.context.content;
     
-    // 保存原始内容用于兜底解析
+    // 保存原始内容用于日志/清理参考
     const originalContent = contentToPersist;
 
     // #region agent log
@@ -327,101 +327,8 @@ export class StreamOrchestrator {
     }, 'H1');
     // #endregion
 
-    // 兜底：如果本轮流式过程中没有显式触发工具调用（context.toolStarted 仍为 false），
-    //       但最终内容中包含工具调用指令，则尝试在收尾阶段解析一次。
-    //
-    // 说明：
-    // - 早期实现为了避免重复，只在“完全没有工具卡片”的情况下才触发兜底；
-    // - 这会导致一个问题：同一条 AI 消息在前一轮已经插入过工具卡片时，
-    //   后续追问轮中新增的工具调用（例如先 search 再 fetch README）无法再通过兜底路径被解析，
-    //   从而第二张卡片永远不会被创建。
-    // - 现在改为仅根据本轮是否触发过工具调用来决定是否兜底：
-    //   只要本轮未触发（toolStarted=false），就允许针对本轮累积的 content 再做一次解析，
-    //   不再关心历史 segments 中是否已经存在旧卡片。
-    if (!this.context.toolStarted) {
-      const parsed = extractToolCallFromText(originalContent);
-
-      // #region agent log
-      debugLog('StreamOrchestrator.ts:handleComplete:fallbackParsed', 'Fallback parsed tool call', {
-        messageId: this.context.messageId,
-        hasParsed: !!parsed,
-        server: parsed?.server,
-        tool: parsed?.tool,
-      }, 'H2');
-      // #endregion
-      
-      if (parsed && parsed.server && parsed.tool) {
-        const lockResult = this.coordinator.tryAcquireToolCallLock({
-          messageId: this.context.messageId,
-          server: parsed.server,
-          tool: parsed.tool,
-          args: parsed.args,
-          source: 'fallback',
-        });
-
-        // #region agent log
-        debugLog('StreamOrchestrator.ts:handleComplete:fallbackLock', 'Fallback lock attempt', {
-          messageId: this.context.messageId,
-          acquired: lockResult.acquired,
-          toolCallKey: lockResult.key,
-        }, 'H2');
-        // #endregion
-
-        if (!lockResult.acquired) {
-          // 重要：不要 return。
-          // fallback 只是一条补救路径；若锁未获取成功，说明该工具调用已在其他路径处理中。
-          // 此处仍需继续 handleComplete 的收尾流程（STREAM_END/持久化），否则会导致消息一直 loading。
-          // #region agent log
-          debugLog('StreamOrchestrator.ts:handleComplete:fallbackLockSkip', 'Fallback lock not acquired; skip execute but continue finalize', {
-            messageId: this.context.messageId,
-            toolCallKey: lockResult.key,
-          }, 'H13');
-          // #endregion
-        } else {
-          // 创建工具卡（通过状态机），但不再把标记注入到 content，避免正文出现 JSON 残片
-          const cardId = crypto.randomUUID();
-          this.context.toolStarted = true;
-          store.dispatchMessageAction(this.context.messageId, { 
-            type: 'TOOL_HIT', 
-            server: parsed.server, 
-            tool: parsed.tool, 
-            args: parsed.args, 
-            cardId 
-          });
-          
-          // 兜底路径启动工具执行
-          const { executeToolCall } = await import('@/lib/mcp/ToolCallOrchestrator');
-          // #region agent log
-          debugLog('StreamOrchestrator.ts:handleComplete:fallbackExecute', 'Fallback execute tool call', {
-            messageId: this.context.messageId,
-            server: parsed.server,
-            tool: parsed.tool,
-            cardId,
-          }, 'H2');
-          // #endregion
-          void executeToolCall({
-            assistantMessageId: this.context.messageId,
-            conversationId: this.context.conversationId,
-            server: parsed.server,
-            tool: parsed.tool,
-            args: parsed.args,
-            provider: this.config.provider,
-            model: this.config.model,
-            historyForLlm: this.config.historyForLlm as any,
-            originalUserContent: this.config.originalUserContent,
-            cardId,
-            lockKey: lockResult.key,
-          });
-        }
-      }
-    } else {
-      // #region agent log
-      debugLog('StreamOrchestrator.ts:handleComplete:skipFallback', 'Skip fallback due to toolStarted', {
-        messageId: this.context.messageId,
-        toolStarted: this.context.toolStarted,
-      }, 'H3');
-      // #endregion
-    }
+    // Native-only + Event-only：不再允许“收尾阶段从文本中兜底解析并执行工具”。
+    // 工具执行只能由结构化 tool_call 事件触发（ToolCallEventHandler）。
 
     // 最终清理：移除所有工具调用指令
     contentToPersist = cleanToolCallInstructions(contentToPersist);

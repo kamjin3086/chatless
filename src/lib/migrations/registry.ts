@@ -6,6 +6,7 @@ import { migration_004 } from './scripts/004_add_prompt_shortcuts';
 import { migration_005 } from './scripts/005_add_message_segments';
 import { migration_006 } from './scripts/006_add_core_indexes';
 import { migration_007 } from './scripts/007_add_message_versioning';
+import { migration_008 } from './scripts/008_add_conversation_tool_mode';
 // 合并到 v2 后，这里不再注册 v3/v4
 /**
  * 迁移注册器
@@ -32,6 +33,7 @@ export class MigrationRegistry {
     this.register(migration_005);
     this.register(migration_006);
     this.register(migration_007);
+    this.register(migration_008);
     // v3+v4 已合并到 v2，无需注册
   }
 

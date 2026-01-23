@@ -86,11 +86,21 @@ export class ToolCallEventHandler implements EventHandler {
     // ============================================================
     // 关键：全局工具调用去重（协调器）
     // ============================================================
+    const rawCallId = typeof event.toolCall === 'string' ? event.toolCall : '';
+    const normalizedCallId =
+      rawCallId && rawCallId.length <= 256 && !/\s/.test(rawCallId) ? rawCallId : undefined;
+    const stableCardId =
+      normalizedCallId
+        ? `tc_${normalizedCallId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 96)}`
+        : crypto.randomUUID();
+
     const lockResult = coordinator.tryAcquireToolCallLock({
       messageId: context.messageId,
       server,
       tool,
       args,
+      callId: normalizedCallId,
+      cardId: stableCardId,
       source: 'event',
     });
 
@@ -120,7 +130,7 @@ export class ToolCallEventHandler implements EventHandler {
       // 3. 这是线性委派的优势：各层职责清晰，不需要重复处理
       
       // 创建工具卡片ID
-      cardId = crypto.randomUUID();
+      cardId = stableCardId;
 
       // 更新FSM状态
       context.fsmState = 'TOOL_RUNNING';
@@ -157,6 +167,7 @@ export class ToolCallEventHandler implements EventHandler {
           model: context.metadata.model,
           historyForLlm: context.metadata.historyForLlm as any,
           originalUserContent: context.metadata.originalUserContent,
+          callId: normalizedCallId,
           cardId,
           lockKey: lockResult.key,
         });

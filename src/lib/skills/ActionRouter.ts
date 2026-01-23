@@ -380,20 +380,17 @@ class McpBridgeExecutor implements IActionExecutor {
       const { executeToolCall } = await import('@/lib/mcp/ToolCallOrchestrator');
       
       // 调用 MCP 工具
-      await executeToolCall(
-        action.mcpServer,
-        action.mcpTool,
-        action.mcpArgs || {},
-        context.messageId,
-        undefined, // cardId
-        {
-          provider: 'openai', // 默认
-          model: 'gpt-4',
-          conversationId: context.conversationId,
-          historyForLlm: [],
-          originalUserContent: context.userContent,
-        }
-      );
+      await executeToolCall({
+        assistantMessageId: context.messageId,
+        conversationId: context.conversationId,
+        server: action.mcpServer,
+        tool: action.mcpTool,
+        args: action.mcpArgs || {},
+        provider: 'openai', // 默认（Skill Action 执行器通常不走 LLM，后续可从外部注入真实 provider/model）
+        model: 'gpt-4',
+        historyForLlm: [],
+        originalUserContent: context.userContent,
+      });
 
       // 注意：MCP 执行是异步的，这里只表示调用已发起
       return {
