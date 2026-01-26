@@ -16,24 +16,6 @@ import {
   getDefaultPipeline 
 } from "../mcp/toolInstruction";
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-      sessionId: 'debug-session',
-      runId: 'weather-leakage',
-      hypothesisId,
-    }),
-  }).catch(() => {});
-}
-// #endregion
 
 /**
  * 清理文本中的所有工具调用指令
@@ -44,22 +26,7 @@ function debugLog(location: string, message: string, data?: unknown, hypothesisI
 export function cleanToolCallInstructions(text: string): string {
   if (!text) return '';
   const cleaned = filterForPersist(text);
-  // #region agent log
-  if (/\b(web_search|eb_search)\b/i.test(text) || /commentary\s+to=/i.test(text) || /<use_mcp_tool|<tool_call/i.test(text)) {
-    debugLog(
-      'tool-call-cleanup.ts:H2-clean',
-      'cleanToolCallInstructions (persist) applied',
-      {
-        rawLen: text.length,
-        cleanedLen: cleaned.length,
-        cleanedIsEmptyAfterTrim: cleaned.trim().length === 0,
-        rawSample: text.slice(0, 240),
-        cleanedSample: cleaned.slice(0, 240),
-      },
-      'H2'
-    );
-  }
-  // #endregion
+
   return cleaned;
 }
 
@@ -72,22 +39,7 @@ export function cleanToolCallInstructions(text: string): string {
 export function cleanToolCallInstructionsForDisplay(text: string): string {
   if (!text) return '';
   const cleaned = filterForDisplay(text);
-  // #region agent log
-  if (/\b(web_search|eb_search)\b/i.test(text) || /commentary\s+to=/i.test(text) || /<use_mcp_tool|<tool_call/i.test(text)) {
-    debugLog(
-      'tool-call-cleanup.ts:H2-clean-display',
-      'cleanToolCallInstructionsForDisplay applied',
-      {
-        rawLen: text.length,
-        cleanedLen: cleaned.length,
-        cleanedIsEmptyAfterTrim: cleaned.trim().length === 0,
-        rawSample: text.slice(0, 240),
-        cleanedSample: cleaned.slice(0, 240),
-      },
-      'H2'
-    );
-  }
-  // #endregion
+
   return cleaned;
 }
 
@@ -110,21 +62,7 @@ export function extractToolCallFromText(
     const parsed = pipeline.parseFirst(text);
     
     if (parsed) {
-      // #region agent log
-      if (/\b(web_search|eb_search)\b/i.test(text) || /commentary\s+to=/i.test(text) || /<use_mcp_tool|<tool_call/i.test(text)) {
-        debugLog(
-          'tool-call-cleanup.ts:H1-parseFirst',
-          'pipeline.parseFirst succeeded',
-          {
-            server: parsed.server,
-            tool: parsed.tool,
-            hasArgs: !!parsed.args,
-            rawSample: text.slice(0, 240),
-          },
-          'H1'
-        );
-      }
-      // #endregion
+
       return {
         server: parsed.server,
         tool: parsed.tool,
@@ -137,14 +75,7 @@ export function extractToolCallFromText(
     // 降级：使用旧的检测器
     const result = detectToolInstruction(text);
     if (result.detected && result.server && result.tool) {
-      // #region agent log
-      debugLog(
-        'tool-call-cleanup.ts:H1-fallback',
-        'detectToolInstruction fallback succeeded',
-        { server: result.server, tool: result.tool, hasArgs: !!result.args, rawSample: text.slice(0, 240) },
-        'H1'
-      );
-      // #endregion
+
       return {
         server: result.server,
         tool: result.tool,
@@ -152,17 +83,7 @@ export function extractToolCallFromText(
       };
     }
   }
-  
-  // #region agent log
-  if (/\b(web_search|eb_search)\b/i.test(text) || /commentary\s+to=/i.test(text) || /<use_mcp_tool|<tool_call/i.test(text)) {
-    debugLog(
-      'tool-call-cleanup.ts:H3-noParse',
-      'No tool call parsed from text',
-      { rawLen: text.length, rawSample: text.slice(0, 240) },
-      'H3'
-    );
-  }
-  // #endregion
+
   return null;
 }
 
@@ -193,22 +114,6 @@ export function extractToolCallsFromText(
       return true;
     });
 
-    // #region agent log
-    if (/\b(web_search|eb_search)\b/i.test(text) || /commentary\s+to=/i.test(text) || /<use_mcp_tool|<tool_call/i.test(text)) {
-      debugLog(
-        'tool-call-cleanup.ts:H1-parseAll',
-        'pipeline.parseAll extracted calls',
-        {
-          rawLen: text.length,
-          parsedCount: parsedAll.length,
-          validCount: valid.length,
-          validPreview: valid.slice(0, 6),
-          rawSample: text.slice(0, 240),
-        },
-        'H1'
-      );
-    }
-    // #endregion
 
     const stableArgsKey = (args: any) => {
       if (!args || typeof args !== 'object') return '';
@@ -267,4 +172,3 @@ export function createToolCardMarker(
     }
   });
 }
-

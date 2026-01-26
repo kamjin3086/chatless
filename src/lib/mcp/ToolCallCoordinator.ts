@@ -1,12 +1,6 @@
 // Centralized tool call coordination to avoid duplicate executions
 // and overlapping follow-up streams.
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
-}
-// #endregion
 
 type ToolCallStatus = 'running' | 'completed' | 'failed';
 
@@ -86,13 +80,7 @@ export class ToolCallCoordinator {
     const existing = this.toolCallLocks.get(key);
 
     if (existing && now - existing.timestamp < TOOL_CALL_TTL_MS) {
-      // #region agent log
-      debugLog('ToolCallCoordinator.ts:tryAcquireToolCallLock:reject', 'Tool call lock rejected', {
-        key,
-        existingStatus: existing.status,
-        ageMs: now - existing.timestamp,
-      }, 'H4');
-      // #endregion
+
       return { acquired: false, key, existing };
     }
 
@@ -103,12 +91,6 @@ export class ToolCallCoordinator {
       source,
     });
 
-    // #region agent log
-    debugLog('ToolCallCoordinator.ts:tryAcquireToolCallLock:acquire', 'Tool call lock acquired', {
-      key,
-      source,
-    }, 'H4');
-    // #endregion
 
     this.cleanupToolCallLocks(now);
     return { acquired: true, key };
@@ -124,12 +106,6 @@ export class ToolCallCoordinator {
       source: existing?.source,
     });
 
-    // #region agent log
-    debugLog('ToolCallCoordinator.ts:markToolCallComplete', 'Tool call lock marked complete', {
-      key,
-      status,
-    }, 'H4');
-    // #endregion
 
     this.cleanupToolCallLocks(now);
   }
@@ -138,22 +114,12 @@ export class ToolCallCoordinator {
     const now = Date.now();
     const last = this.followupLocks.get(messageId);
     if (last && now - last < windowMs) {
-      // #region agent log
-      debugLog('ToolCallCoordinator.ts:tryAcquireFollowupLock:reject', 'Follow-up lock rejected', {
-        messageId,
-        ageMs: now - last,
-      }, 'H6');
-      // #endregion
+
       return false;
     }
     this.followupLocks.set(messageId, now);
     this.cleanupFollowupLocks(now);
 
-    // #region agent log
-    debugLog('ToolCallCoordinator.ts:tryAcquireFollowupLock:acquire', 'Follow-up lock acquired', {
-      messageId,
-    }, 'H6');
-    // #endregion
     return true;
   }
 
@@ -174,4 +140,3 @@ export class ToolCallCoordinator {
     }
   }
 }
-

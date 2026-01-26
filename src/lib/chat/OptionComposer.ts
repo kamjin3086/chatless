@@ -49,10 +49,7 @@ export async function composeChatOptions(
     conversationId ? st.conversations.find((c: any) => c.id === conversationId) : null;
   const toolMode: 'chat' | 'agent' =
     (conv?.tool_mode as any) || (st as any).sessionToolMode || 'chat';
-  
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:mode',message:'composeChatOptions mode decision',data:{provider,model,toolMode,webSearchEnabled,conversationId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_mode'})}).catch(()=>{});
-  // #endregion
+
   
   if (toolMode === 'chat') {
     if (!webSearchEnabled) {
@@ -93,10 +90,7 @@ export async function composeChatOptions(
     (refined as any).tools = tools;
     (refined as any).toolChoice = 'auto';
     (refined as any).__useNativeTools = true;
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:chat-websearch-only',message:'Chat mode: enabled web_search tools only',data:{toolNames:tools.map(t=>t.name)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_mode'})}).catch(()=>{});
-    // #endregion
+
     
     return refined;
   }
@@ -109,10 +103,7 @@ export async function composeChatOptions(
     model,
     { forceInject: true }
   );
-  
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:H1',message:'injection result',data:{useNativeTools:injection.useNativeTools,nativeToolsCount:injection.nativeTools?.length||0,provider,model},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
+
   
   if (!injection.useNativeTools) {
     throw new Error(`Native tool calling is required. Unsupported provider/model: ${provider}/${model}`);
@@ -127,15 +118,10 @@ export async function composeChatOptions(
       }));
       (refined as any).toolChoice = 'auto';
       (refined as any).__useNativeTools = true;
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'OptionComposer.ts:H1-enabled',message:'原生工具调用已启用',data:{toolCount:injection.nativeTools.length,toolNames:injection.nativeTools.slice(0,5).map((t:any)=>t.name)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
+
       
       console.debug('[OptionComposer] 启用原生工具调用，工具数量:', injection.nativeTools.length);
   }
 
   return refined;
 }
-
-

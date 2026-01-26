@@ -4,24 +4,6 @@ import { cleanToolCallInstructionsForDisplay, extractToolCallFromText, extractTo
 import { ToolCallDetector } from '@/lib/mcp/ToolCallDetector';
 import { createToolInstructionSuppressor } from '@/lib/mcp/toolInstruction/suppressor';
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-      sessionId: 'debug-session',
-      runId: 'weather-leakage',
-      hypothesisId,
-    }),
-  }).catch(() => {});
-}
-// #endregion
 
 // ============================================================
 // 工具指令“跨 chunk”抑制/捕获（用于 GPT-OSS 拆包场景）
@@ -105,14 +87,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
       try {
         const parsedAll = extractToolCallsFromText(up.captured);
         if (parsedAll.length > 0) {
-          // #region agent log
-          debugLog(
-            'ToolChannelParser.ts:H4-toolEvent',
-            'Emitted tool_call event (from suppressor capture)',
-            { count: parsedAll.length, first: parsedAll[0] },
-            'H4'
-          );
-          // #endregion
+
           for (const parsed of parsedAll) {
             out.push(
               createStreamEvent.toolCall(up.captured, {
@@ -152,14 +127,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
       try {
         const parsedAll = extractToolCallsFromText(detectBuf);
         if (parsedAll.length > 0) {
-          // #region agent log
-          debugLog(
-            'ToolChannelParser.ts:H4-toolEvent',
-            'Emitted tool_call event (from detectBuf)',
-            { count: parsedAll.length, first: parsedAll[0] },
-            'H4'
-          );
-          // #endregion
+
           for (const p of parsedAll) {
             out.push(
               createStreamEvent.toolCall(detectBuf, {
@@ -193,40 +161,12 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
       continue;
     }
 
-    // #region agent log
-    debugLog(
-      'ToolChannelParser.ts:H1-mightContain',
-      'Detected possible tool instruction in content_token',
-      {
-        rawLen: visible.length,
-        rawSample: visible.slice(0, 240),
-        hasEbSearch: /\beb_search\b/i.test(visible),
-        hasWebSearch: /\bweb_search\b/i.test(visible),
-        hasCommentary: /commentary\s+to=/i.test(visible),
-        hasXml: /<use_mcp_tool|<tool_call/i.test(visible),
-      },
-      'H1'
-    );
-    // #endregion
 
     // 尝试解析为工具调用
     const parsed = extractToolCallFromText(visible);
     // UI/流式：必须用 display 清理，避免 "<use_mcp_tool" 等半截标签漏到正文
     const cleaned = cleanToolCallInstructionsForDisplay(visible);
 
-    // #region agent log
-    debugLog(
-      'ToolChannelParser.ts:H2-parsed-cleaned',
-      'Parsed+cleaned result for token',
-      {
-        parsed: parsed ? { server: parsed.server, tool: parsed.tool, hasArgs: !!parsed.args } : null,
-        cleanedLen: cleaned.length,
-        cleanedIsEmptyAfterTrim: cleaned.trim().length === 0,
-        cleanedSample: cleaned.slice(0, 240),
-      },
-      'H2'
-    );
-    // #endregion
 
     // 若解析失败，仅输出清理过的文本
     if (!parsed || !parsed.server || !parsed.tool) {
@@ -234,18 +174,6 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
         out.push({ ...ev, content: cleaned });
       }
 
-      // #region agent log
-      debugLog(
-        'ToolChannelParser.ts:H3-parseFailed',
-        'Tool parse failed; emitting cleaned text only (or dropping if empty)',
-        {
-          dropped: !(cleaned && cleaned.trim().length > 0),
-        rawSample: visible.slice(0, 240),
-          cleanedSample: cleaned.slice(0, 240),
-        },
-        'H3'
-      );
-      // #endregion
       continue;
     }
 
@@ -265,18 +193,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
     );
     out.push(toolEvent);
 
-    // #region agent log
-    debugLog(
-      'ToolChannelParser.ts:H4-toolEvent',
-      'Emitted tool_call event',
-      { server: parsed.server, tool: parsed.tool, hasArgs: !!parsed.args },
-      'H4'
-    );
-    // #endregion
   }
 
   return out;
 }
-
-
-

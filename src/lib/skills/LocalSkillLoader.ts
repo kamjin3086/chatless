@@ -7,6 +7,7 @@
 
 import type { Skill, ISkillLoader, SkillDependency } from './types';
 import { parseSkillMd, extractDependencies, extractTitleFromContent, extractDescriptionFromContent } from './SkillMdParser';
+import { inferOriginKind, sha256Hex } from './integrity';
 
 /**
  * 默认本地技能目录名
@@ -180,6 +181,8 @@ export class LocalSkillLoader implements ISkillLoader {
 
       const frontmatter = parseResult.frontmatter;
       const dependencies = extractDependencies(frontmatter);
+      const actionTypes = parseResult.actions.map((a) => a.type);
+      const skillMdSha256 = await sha256Hex(content);
 
       // 构建技能对象
       const skill: Skill = {
@@ -190,7 +193,16 @@ export class LocalSkillLoader implements ISkillLoader {
         source: 'local',
         status: this.determineStatus(dependencies),
         path: skillPath,
+        origin: {
+          kind: inferOriginKind(undefined, 'local'),
+          repoUrl: undefined,
+        },
+        integrity: {
+          skillMdSha256: skillMdSha256 || undefined,
+        },
         skillMdContent: content,
+        actionCount: parseResult.actions.length,
+        actionTypes,
         dependencies,
         enabled: true, // 本地技能默认启用
         installedAt: Date.now(),

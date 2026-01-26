@@ -261,10 +261,7 @@ export class GptOssTagHandler implements FormatHandler {
       inlineCodes.push(match);
       return `__CHATLESS_INLINE_CODE_${idx}__`;
     });
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gptoss-tags.ts:H2-input',message:'清理器输入',data:{inputLen:text.length,inputSample:text.slice(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
+
 
     // ============================================================
     // 阶段 1: 移除 Harmony 格式的完整结构
@@ -443,9 +440,6 @@ export class GptOssTagHandler implements FormatHandler {
       });
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gptoss-tags.ts:H2-output',message:'清理器输出',data:{outputLen:cleaned.length,removedCount:removedFragments.length,outputSample:cleaned.slice(0,200),removedSamples:removedFragments.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
 
     return {
       text: cleaned,
@@ -587,4 +581,3 @@ export class GptOssTagHandler implements FormatHandler {
     return results;
   }
 }
-

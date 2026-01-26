@@ -22,12 +22,6 @@ import { incrementFailCount, buildConciseGuideText } from '../utils/FailureTrack
 import { ensureServerConnected } from './ConnectionManager';
 import type { ToolCallParams } from './types';
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
-}
-// #endregion
 
 const DEBUG_MCP = false;
 
@@ -53,9 +47,6 @@ export class McpToolExecutor {
   async execute(): Promise<void> {
     const { server } = this.params;
 
-    // #region agent log
-    debugLog('McpToolExecutor.ts:execute:entry', 'MCP tool execution started', { server, tool: this.effectiveTool, args: this.effectiveArgs }, 'H1');
-    // #endregion
 
     try {
       // 降噪：仅输出一条简要日志
@@ -175,9 +166,6 @@ export class McpToolExecutor {
     const autoAuth = await shouldAutoAuthorize(server);
     console.debug(`[MCP-AUTH] 授权检查: ${server}.${this.effectiveTool}, auto=${autoAuth}`);
 
-    // #region agent log
-    debugLog('McpToolExecutor.ts:checkAuth', 'Authorization check', { server, tool: this.effectiveTool, autoAuth }, 'H5');
-    // #endregion
 
     if (autoAuth) {
       return true;
@@ -506,4 +494,3 @@ export class McpToolExecutor {
     return combinedHint;
   }
 }
-

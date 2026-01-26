@@ -79,6 +79,17 @@ export class ProcessSandbox extends BaseSandboxExecutor {
         command: 'echo test',
         workingDir: null,
       });
+
+      // 默认工作目录白名单（生产环境）：限制在 appDataDir 之下
+      // - dev/非 tauri 环境不会走到这里
+      // - 具体 action 的 workingDir 仍会被 validatePath 进一步校验
+      try {
+        const { appDataDir } = await import('@tauri-apps/api/path');
+        const appData = await appDataDir();
+        this.commandValidator.updateConfig({ allowedWorkingDirs: [appData] });
+      } catch {
+        // ignore
+      }
       
       this.isInitialized = true;
       return true;

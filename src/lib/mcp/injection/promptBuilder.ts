@@ -15,6 +15,8 @@
 import type { InjectionContext, InjectionResult, InjectionSignals, NativeToolDefinition } from './types';
 import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
+import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from '@/lib/mcp/nativeTools/filesystem';
+import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nativeTools/shellExecutor';
 import { persistentCache } from '../persistentCache';
 import { getConnectedServers, getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
 import { skillTools } from '@/lib/skills/skillTools';
@@ -101,9 +103,12 @@ export async function buildInitialPrompt(
   });
   
   // 6. 启用服务器声明
-  const allEnabled = signals.webSearchEnabled 
-    ? [...enabled, WEB_SEARCH_SERVER_NAME]
-    : enabled;
+  const allEnabled = [
+    ...enabled,
+    ...(signals.webSearchEnabled ? [WEB_SEARCH_SERVER_NAME] : []),
+    FILESYSTEM_SERVER_NAME,
+    SHELL_EXECUTOR_SERVER_NAME,
+  ];
   
   if (allEnabled.length > 0) {
     const serversLine = MCPPrompts.buildEnabledServersLine(allEnabled);
@@ -281,6 +286,24 @@ async function buildNativeToolDefinitions(
     });
   }
 
+  // 3. 添加 Filesystem 基础工具（让 LLM 能读写文件、列目录）
+  for (const fsTool of FILESYSTEM_TOOLS) {
+    tools.push({
+      name: `${FILESYSTEM_SERVER_NAME}__${fsTool.name}`,
+      description: fsTool.description || `Filesystem tool ${fsTool.name}`,
+      parameters: normalizeParams(fsTool.input_schema?.schema || { type: 'object' }),
+    });
+  }
+
+  // 4. 添加 Shell Executor 工具（让 LLM 能执行命令/脚本）
+  for (const shellTool of SHELL_EXECUTOR_TOOLS) {
+    tools.push({
+      name: `${SHELL_EXECUTOR_SERVER_NAME}__${shellTool.name}`,
+      description: shellTool.description || `Shell tool ${shellTool.name}`,
+      parameters: normalizeParams(shellTool.input_schema?.schema || { type: 'object' }),
+    });
+  }
+
   return tools;
 }
 
@@ -361,10 +384,7 @@ async function injectSkillsIndex(
     
     // 获取技能索引提示词
     const skillsPrompt = manager.buildSkillIndexPrompt();
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:injectSkillsIndex',message:'Skills prompt generated',data:{hasPrompt:!!skillsPrompt,promptPreview:skillsPrompt?.slice(0,300)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H9'})}).catch(()=>{});
-    // #endregion
+
     
     if (skillsPrompt) {
       messages.push({ role: 'system', content: skillsPrompt });
@@ -374,4 +394,3 @@ async function injectSkillsIndex(
     // 不阻塞主流程
   }
 }
-

@@ -60,6 +60,26 @@ export interface SkillFrontmatter {
 }
 
 /**
+ * Skill 来源/审计信息（用于第三方 skills 治理）
+ */
+export interface SkillOriginInfo {
+  /** 技能来源类型（用于默认信任/执行策略） */
+  kind: 'official' | 'third_party' | 'local' | 'unknown';
+  /** 关联仓库 URL（如果可用） */
+  repoUrl?: string;
+}
+
+/**
+ * Skill 完整性信息（用于变更检测与审计）
+ */
+export interface SkillIntegrityInfo {
+  /** SKILL.md 的 sha256（hex），用于检测内容变化 */
+  skillMdSha256?: string;
+  /** 远程仓库/目录的 sha（若远端提供） */
+  remoteSha?: string;
+}
+
+/**
  * 技能数据模型
  */
 export interface Skill {
@@ -79,8 +99,15 @@ export interface Skill {
   path?: string;
   /** 远程仓库 URL */
   repoUrl?: string;
+  /** 来源/审计信息 */
+  origin?: SkillOriginInfo;
+  /** 完整性信息 */
+  integrity?: SkillIntegrityInfo;
   /** SKILL.md 完整内容 */
   skillMdContent?: string;
+  /** 解析出的 action 概览（用于编排/安全策略与 UI 展示） */
+  actionCount?: number;
+  actionTypes?: SkillActionType[];
   /** 依赖项 */
   dependencies?: SkillDependency[];
   /** 是否启用 */
@@ -137,10 +164,14 @@ export interface RemoteSkillInfo {
   id: string;
   /** 目录路径 */
   path: string;
+  /** GitHub content sha（用于粗粒度变更检测） */
+  sha?: string;
   /** SKILL.md 的 raw URL */
   skillMdUrl: string;
   /** 仓库 URL */
   repoUrl: string;
+  /** SKILL.md 的 download_url（若 API 提供） */
+  skillMdDownloadUrl?: string;
   /** 最后更新时间 */
   updatedAt?: string;
 }

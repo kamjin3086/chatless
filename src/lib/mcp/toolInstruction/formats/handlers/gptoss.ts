@@ -100,10 +100,7 @@ export class GptOssHandler implements FormatHandler {
 
   parse(text: string): ParsedToolCall[] {
     const results: ParsedToolCall[] = [];
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gptoss.ts:parse:entry',message:'GptOssHandler 解析开始',data:{textLen:text.length,textSample:text.slice(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6-parse'})}).catch(()=>{});
-    // #endregion
+
     
     // 首先检查混合格式（commentary to=use_mcp_tool>...）
     // 这种格式优先级最高，因为它是模型格式混淆的结果
@@ -114,10 +111,7 @@ export class GptOssHandler implements FormatHandler {
     
     // 解析简化的 commentary
     results.push(...this.parseCommentary(text));
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gptoss.ts:parse:exit',message:'GptOssHandler 解析完成',data:{resultsCount:results.length,results:results.map(r=>({server:r.server,tool:r.tool,args:r.args}))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6-parse'})}).catch(()=>{});
-    // #endregion
+
     
     return results;
   }
@@ -517,4 +511,3 @@ export class GptOssHandler implements FormatHandler {
     return result;
   }
 }
-

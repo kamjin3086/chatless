@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatToolbar } from '@/components/chat/ChatToolbar';
-import { ScrollToBottomButton } from '@/components/chat/ScrollToBottomButton';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
 import type { Message } from "@/types/chat";
 import { useChatStore } from "@/store/chatStore";
@@ -13,6 +12,8 @@ import { useSearchParams } from 'next/navigation';
 import { ChatInitializing } from '@/components/chat/ChatInitializing';
 import { EmptyChatView } from '@/components/chat/EmptyChatView';
 import { ChatMessageList } from '@/components/chat/ChatMessageList';
+import { FloatingSkillApprovalPanel } from '@/components/skills/SkillApprovalPanel';
+import { FloatingSkillExecutionPlanPanel } from '@/components/skills/SkillExecutionPlanPanel';
 
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { useChatActions } from '@/hooks/useChatActions';
@@ -116,7 +117,7 @@ export default function ChatPage() {
     handleScrollToTop,
     handleScrollToBottom,
     ensureBottomIfNear,
-    showScrollToBottom,
+    showScrollToBottom: _showScrollToBottom,
     hasNewMessageWhileAway,
     shouldFollowOutput
   } = useScrollManagement(
@@ -393,6 +394,10 @@ export default function ChatPage() {
           </div>
         </main>
       </div>
+
+      {/* Skills 审批与计划面板（浮动） */}
+      <FloatingSkillExecutionPlanPanel />
+      <FloatingSkillApprovalPanel />
     </div>
   );
 }

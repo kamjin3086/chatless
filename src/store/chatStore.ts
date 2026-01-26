@@ -673,12 +673,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
         let rafId: number | null = null;
         const pendingIds = new Set<string>();
 
-        // #region agent log
-        const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-        const debugLog = (location: string, message: string, data?: unknown, hypothesisId?: string) => {
-          fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
-        };
-        // #endregion
         
         const flushAll = () => {
           rafId = null;
@@ -687,11 +681,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
           
           if (idsToFlush.length === 0) return;
 
-          // #region agent log
-          try {
-            debugLog('chatStore.ts:dispatchMessageAction:flushAll:ids', 'flushAll idsToFlush', { idsToFlush, count: idsToFlush.length }, 'H12');
-          } catch { /* noop */ }
-          // #endregion
           
           const { initModel, reduce } = require('@/lib/chat/messageFsm');
 
@@ -786,22 +775,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
                 nextMsg.status = (model.fsm === 'TOOL_ERROR') ? 'error' : 'sent';
               }
 
-              // #region agent log
-              try {
-                const types = actions.map((a: any) => a?.type).filter(Boolean);
-                debugLog('chatStore.ts:flushAll:status', 'Post-reduce status snapshot', {
-                  messageId: id,
-                  prevStatus: prevMsg?.status,
-                  nextStatus: nextMsg?.status,
-                  ended,
-                  streamEnded,
-                  fsm: model.fsm,
-                  actionTypes: types,
-                  segCount: Array.isArray(nextMsg.segments) ? nextMsg.segments.length : 0,
-                  toolCardCount: Array.isArray(nextMsg.segments) ? nextMsg.segments.filter((s: any) => s?.kind === 'toolCard').length : 0,
-                }, 'H12');
-              } catch { /* noop */ }
-              // #endregion
               
               const nextMessages: any[] = [...(conv.messages as any[])];
               nextMessages[idx] = nextMsg;
@@ -872,11 +845,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
           // 屏障事件：立即 flush，避免 StreamOrchestrator.handleComplete 读到旧 segments 快照导致“卡片一闪而过”
           const t = action?.type;
           if (t === 'TOOL_HIT' || t === 'TOOL_RESULT' || t === 'STREAM_END') {
-            // #region agent log
-            try {
-              debugLog('chatStore.ts:dispatchMessageAction:barrier', 'Barrier action flush now', { messageId, type: t, queueLen: list.length }, 'H12');
-            } catch { /* noop */ }
-            // #endregion
+
             if (rafId != null) {
               try { cancelAnimationFrame(rafId); } catch { /* noop */ }
               rafId = null;
@@ -884,11 +853,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
             scheduled.delete(messageId);
             // 关键修复：确保当前消息进入 flushAll 的处理集合
             pendingIds.add(messageId);
-            // #region agent log
-            try {
-              debugLog('chatStore.ts:dispatchMessageAction:barrier:enqueue', 'Barrier enqueue pendingIds', { messageId, type: t }, 'H12');
-            } catch { /* noop */ }
-            // #endregion
+
             flushAll();
             return;
           }
@@ -1336,4 +1301,4 @@ export const useChatStore = create<ChatState & ChatActions>()(
       }),
     }
   )
-); 
+);

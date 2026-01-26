@@ -425,10 +425,7 @@ export function detectCapability(
   // 1. 检查模型特定配置
   if (modelName) {
     const modelConfig = getModelConfig(modelName);
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'tool-call-config.ts:detectCapability',message:'检测模型配置',data:{modelName,hasModelConfig:!!modelConfig,modelCapability:modelConfig?.capability,overrideProvider:modelConfig?.overrideProvider},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1-fix'})}).catch(()=>{});
-    // #endregion
+
     
     if (modelConfig && modelConfig.overrideProvider) {
       return {
@@ -485,4 +482,3 @@ export function getAllProviderConfigs(): ProviderToolCallConfig[] {
 export function getAllModelConfigs(): ModelToolCallConfig[] {
   return [...MODEL_CONFIGS];
 }
-

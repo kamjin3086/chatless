@@ -7,6 +7,7 @@
 
 import type { Skill, ISkillLoader, RemoteSkillInfo } from './types';
 import { parseSkillMd, extractDependencies, extractTitleFromContent, extractDescriptionFromContent } from './SkillMdParser';
+import { inferOriginKind, sha256Hex } from './integrity';
 
 /**
  * Anthropic Skills 仓库信息
@@ -122,7 +123,9 @@ export class RemoteSkillLoader implements ISkillLoader {
       const skillInfos: RemoteSkillInfo[] = skillDirs.map(dir => ({
         id: dir.name,
         path: dir.path,
+        sha: dir.sha,
         skillMdUrl: `${this.config.rawUrl}/${dir.path}/SKILL.md`,
+        skillMdDownloadUrl: dir.download_url || undefined,
         repoUrl: `${this.config.repoUrl}/tree/${ANTHROPIC_SKILLS_REPO.branch}/${dir.path}`,
       }));
 
@@ -247,6 +250,8 @@ export class RemoteSkillLoader implements ISkillLoader {
     const parseResult = parseSkillMd(content);
     const frontmatter = parseResult.frontmatter;
     const dependencies = extractDependencies(frontmatter);
+    const actionTypes = parseResult.actions.map((a) => a.type);
+    const skillMdSha256 = await sha256Hex(content);
 
     // 构建技能对象
     const skill: Skill = {
@@ -257,7 +262,17 @@ export class RemoteSkillLoader implements ISkillLoader {
       source: 'remote',
       status: 'not_installed', // 远程技能默认未安装
       repoUrl: info.repoUrl,
+      origin: {
+        kind: inferOriginKind(info.repoUrl, 'remote'),
+        repoUrl: info.repoUrl,
+      },
+      integrity: {
+        remoteSha: info.sha,
+        skillMdSha256: skillMdSha256 || undefined,
+      },
       skillMdContent: content,
+      actionCount: parseResult.actions.length,
+      actionTypes,
       dependencies,
       enabled: false, // 远程技能默认未启用
       author: frontmatter?.author,

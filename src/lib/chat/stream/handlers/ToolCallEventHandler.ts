@@ -20,12 +20,6 @@ import type { EventHandler, StreamContext } from '../types';
 import { useChatStore } from '@/store/chatStore';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
-}
-// #endregion
 
 const coordinator = ToolCallCoordinator.getInstance();
 
@@ -39,18 +33,13 @@ export class ToolCallEventHandler implements EventHandler {
     if (event.type !== 'tool_call') {
       return;
     }
-    
-    // #region agent log
-    debugLog('ToolCallEventHandler.ts:handle:entry', 'ToolCallHandler invoked', { eventType: event.type, parsed: event.parsed, contextMessageId: context?.messageId }, 'H1');
-    // #endregion
-    
+
+      
     // 输入验证
     if (!event || !event.parsed) {
+
       console.warn('[ToolCallHandler] Invalid event: missing parsed data');
-      // #region agent log
-      debugLog('ToolCallEventHandler.ts:handle:invalid', 'Invalid event - missing parsed data', { event }, 'H2');
-      // #endregion
-      return;
+          return;
     }
 
     if (!context || !context.messageId || !context.conversationId) {
@@ -61,6 +50,7 @@ export class ToolCallEventHandler implements EventHandler {
     const parsed = event.parsed || {};
     const server = parsed.serverName || '';
     const tool = parsed.toolName || '';
+
     // arguments是JSON字符串，需要解析为对象
     let args: Record<string, unknown> | undefined = undefined;
     if (parsed.arguments) {
@@ -76,11 +66,9 @@ export class ToolCallEventHandler implements EventHandler {
     const isInvalidTool = !tool || tool === 'unknown' || tool === 'default';
     
     if (isInvalidServer || isInvalidTool) {
+
       console.warn('[ToolCallHandler] Invalid tool call: invalid server or tool name', { server, tool });
-      // #region agent log
-      debugLog('ToolCallEventHandler.ts:handle:invalid', 'Invalid tool call filtered', { server, tool, isInvalidServer, isInvalidTool, parsed: event.parsed }, 'H6');
-      // #endregion
-      return;
+          return;
     }
     
     // ============================================================
@@ -104,18 +92,14 @@ export class ToolCallEventHandler implements EventHandler {
       source: 'event',
     });
 
+
     if (!lockResult.acquired) {
-      // #region agent log
-      debugLog('ToolCallEventHandler.ts:handle:dedupe', 'Duplicate tool call skipped (coordinator)', { toolCallKey: lockResult.key }, 'H7-dedupe');
-      // #endregion
-      console.debug('[ToolCallHandler] 跳过重复工具调用 (协调器):', lockResult.key);
+
+          console.debug('[ToolCallHandler] 跳过重复工具调用 (协调器):', lockResult.key);
       return;
     }
     
-    // #region agent log
-    debugLog('ToolCallEventHandler.ts:handle:toolInfo', 'Extracted tool info', { server, tool, args, contextMessageId: context.messageId, toolCallKey: lockResult.key }, 'H1');
-    // #endregion
-
+  
     let cardId: string | undefined;
 
     try {
@@ -219,4 +203,3 @@ export class ToolCallEventHandler implements EventHandler {
     }
   }
 }
-

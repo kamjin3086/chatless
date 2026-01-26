@@ -8,6 +8,7 @@ import type { Skill, SkillManagerConfig, SkillInstallOptions, SkillIndexEntry } 
 import { LocalSkillLoader, createLocalSkillLoader } from './LocalSkillLoader';
 import { RemoteSkillLoader, createRemoteSkillLoader } from './RemoteSkillLoader';
 import { useSkillStore } from '@/store/skillStore';
+import { inferOriginKind } from './integrity';
 
 /**
  * 技能管理器
@@ -126,6 +127,14 @@ export class SkillManager {
           status: 'installed',
           // 保留远程信息
           repoUrl: existing.repoUrl,
+          origin: {
+            kind: inferOriginKind(existing.repoUrl, 'remote'),
+            repoUrl: existing.repoUrl,
+          },
+          integrity: {
+            remoteSha: existing.integrity?.remoteSha,
+            skillMdSha256: skill.integrity?.skillMdSha256,
+          },
         });
       } else {
         skillMap.set(skill.id, skill);
@@ -672,6 +681,13 @@ ${skillList}
 
 4) 执行技能全部动作：\`skills__run_all_skill_actions\`
    - 参数：\`{ "skillId": "技能ID", "parameters": { ...可选 } }\`
+
+5) 提交“可执行计划”（仅用于 instruction-only skills）：\`skills__submit_execution_plan\`
+   - 参数：\`{ "planJson": "严格JSON字符串" }\`
+   - 说明：只提交计划，不执行任何命令
+
+6) 执行已提交的计划：\`skills__execute_execution_plan\`
+   - 参数：\`{ "planId": "submit_execution_plan 返回的 planId" }\`
 
 ### 动作执行说明
 

@@ -218,9 +218,11 @@ export class SkillOrchestrator {
     const needsApproval = action.requiresApproval !== false && 
                           authStore.needsApproval(action);
 
+    let finalResolvedCommand = resolvedCommand;
+
     if (needsApproval) {
       // 等待用户审批
-      const approved = await this.waitForApproval(
+      const approval = await this.waitForApproval(
         plan.skillId,
         plan.skillName,
         action,
@@ -229,7 +231,7 @@ export class SkillOrchestrator {
         resolvedArgs
       );
 
-      if (!approved) {
+      if (!approval.approved) {
         const result: SkillActionResult = {
           actionId: action.id,
           success: false,
@@ -239,13 +241,20 @@ export class SkillOrchestrator {
         };
         return result;
       }
+
+      // 支持用户在审批阶段修改命令（仅影响本次执行）
+      if (approval.modifiedCommand) {
+        // 注意：此处只替换 command，不自动重写 args
+        // UI 侧目前只提供对 command 的编辑入口。
+        finalResolvedCommand = approval.modifiedCommand;
+      }
     }
 
     // 执行动作
     const result = await this.router.execute(
       action,
       context,
-      resolvedCommand,
+      finalResolvedCommand,
       resolvedArgs
     );
 
@@ -269,7 +278,7 @@ export class SkillOrchestrator {
     context: SkillActionExecutionContext,
     resolvedCommand?: string,
     resolvedArgs?: string[]
-  ): Promise<boolean> {
+  ): Promise<{ approved: boolean; modifiedCommand?: string }> {
     return new Promise((resolve) => {
       const authStore = useSkillAuthStore.getState();
       
@@ -277,10 +286,10 @@ export class SkillOrchestrator {
       const cachedChoice = authStore.getChoice(skillId, action.id);
       if (cachedChoice) {
         if (cachedChoice.action === 'allow_always') {
-          resolve(true);
+          resolve({ approved: true });
           return;
         } else if (cachedChoice.action === 'deny_always') {
-          resolve(false);
+          resolve({ approved: false });
           return;
         }
       }
@@ -303,11 +312,11 @@ export class SkillOrchestrator {
           resolvedCommand,
           resolvedArgs,
           timeoutMs: this.config.approvalTimeout,
-          onApprove: () => resolve(true),
-          onReject: () => resolve(false),
+          onApprove: () => resolve({ approved: true }),
+          onReject: () => resolve({ approved: false }),
           onModify: (modified) => {
             // 修改后执行也视为批准
-            resolve(true);
+            resolve({ approved: true, modifiedCommand: modified });
           },
         }
       );
@@ -322,7 +331,7 @@ export class SkillOrchestrator {
       setTimeout(() => {
         if (authStore.hasPendingAction(pendingAction.id)) {
           authStore.removePendingAction(pendingAction.id);
-          resolve(false);
+          resolve({ approved: false });
         }
       }, this.config.approvalTimeout);
     });

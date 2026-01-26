@@ -228,10 +228,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       const includeInSearch = webSearchEnabled || isTimeRelatedQuery(userContent);
       const timeMsg = buildTimeContextMessage(includeInSearch);
       if (timeMsg && timeMsg.trim()) hb.addSystem(timeMsg);
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useChatActions.ts:buildLlmHistory:time',message:'Injected time system message',data:{conversationId,webSearchEnabled,includeInSearch,preview:(timeMsg||'').slice(0,120)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_time'})}).catch(()=>{});
-      // #endregion
+
     } catch { /* ignore */ }
     
     // 1. 添加系统提示词
@@ -786,9 +783,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       }
     );
 
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useChatActions.ts:handleRetryMessage:history',message:'Retry buildLlmHistory done',data:{conversationId:conv.id,userIdx,historyLen:Array.isArray(historyForLlm)?historyForLlm.length:undefined},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H_REROLL'})}).catch(()=>{});
-    // #endregion
 
     // 重新生成时增加轻微扰动，降低“逐字复读”的概率（不影响工具调用链路）
     try {
@@ -957,4 +951,4 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     tokenCount,
     setScrollToBottomCallback,
   };
-}; 
+};

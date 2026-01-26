@@ -1,6 +1,7 @@
 // 仅保留必要调试输出，不禁用全局 no-console
 import { useChatStore } from '@/store/chatStore';
 import { streamChat } from '@/lib/llm';
+import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
 import { mcpCallHistory } from './callHistory';
 import type { Message as LlmMessage, StreamCallbacks } from '@/lib/llm/types';
 import { DEFAULT_MAX_TOOL_RECURSION_DEPTH } from './constants';
@@ -12,12 +13,6 @@ import { filterToolCallContent } from '@/lib/chat/segments';
 import { ToolCallCoordinator } from './ToolCallCoordinator';
 import { filterForDisplay, filterToolInstructions } from '@/lib/mcp/toolInstruction';
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
-}
-// #endregion
 
 // 防止重复调用的缓存
 const runningCalls = new Map<string, Promise<void>>();
@@ -78,10 +73,7 @@ export async function executeToolCall(params: {
   const isInvalidServer = !server || server === 'unknown' || server.includes('use_mcp_tool') || server.includes('>');
   const isInvalidTool = !tool || tool === 'unknown';
   if (isInvalidServer || isInvalidTool) {
-    // #region agent log
-    debugLog('ToolCallOrchestrator.ts:executeToolCall:invalid', 'Skipping invalid tool call', { server, tool, isInvalidServer, isInvalidTool }, 'H2');
-    // #endregion
-    return;
+      return;
   }
   
   // 防重复调用：使用统一协调器
@@ -99,10 +91,7 @@ export async function executeToolCall(params: {
 
   if (!lockResult.acquired) {
     console.log(`[MCP-DEBUG] 跳过重复调用(coordinator): ${lockResult.key}`);
-    // #region agent log
-    debugLog('ToolCallOrchestrator.ts:executeToolCall:coordinatorSkip', 'Skipping duplicate call via coordinator', { callKey: lockResult.key }, 'H4');
-    // #endregion
-    return;
+      return;
   }
 
   const callKey = lockResult.key;
@@ -111,15 +100,9 @@ export async function executeToolCall(params: {
   const existingCall = runningCalls.get(callKey);
   if (existingCall) {
     console.log(`[MCP-DEBUG] 跳过重复调用(running): ${callKey}`);
-    // #region agent log
-    debugLog('ToolCallOrchestrator.ts:executeToolCall:duplicate', 'Skipping duplicate call', { callKey }, 'H4');
-    // #endregion
-    return existingCall;
+      return existingCall;
   }
   
-  // #region agent log
-  debugLog('ToolCallOrchestrator.ts:executeToolCall:entry', 'Tool call orchestrator entry', { server, tool, args, cardId, messageId: assistantMessageId }, 'H1');
-  // #endregion
 
   // 记账：本 message 实际启动的 toolCard（用于 multi-tool gate）
   // 注意：这里用 cardId（若存在）作为唯一键，确保 expectedCount 稳定。
@@ -265,10 +248,7 @@ export async function executeToolCall(params: {
   if (isSkillServer || isSkillTool(effectiveTool)) {
     const executeSkill = (async () => {
       try {
-        // #region agent log
-        debugLog('ToolCallOrchestrator.ts:executeToolCall:skillTool', 'Executing skill tool', { tool: effectiveTool, args: effectiveArgs }, 'H5');
-        // #endregion
-        
+              
         // 执行 skill 工具
         const result = await executeSkillTool(effectiveTool, effectiveArgs);
         
@@ -404,14 +384,6 @@ function collapseToolResultUserMessages(history: LlmMessage[]): LlmMessage[] {
   });
   const merged = `【工具结果汇总】共 ${toolPieces.length} 次调用（仅保留必要片段）\n\n${parts.join('\n\n---\n\n')}`;
 
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:collapseToolResultUserMessages',
-    'Collapsed tool-result user messages',
-    { before: history.length, after: out.length + 1, toolPieces: toolPieces.length },
-    'H-MERGE'
-  );
-  // #endregion
 
   return [...out, { role: 'user', content: merged } as any];
 }
@@ -430,23 +402,6 @@ export async function continueWithToolResult(params: {
 }) {
   const { assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, server, tool, args, result } = params;
 
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:continueWithToolResult:entry',
-    'continueWithToolResult entered',
-    {
-      assistantMessageId,
-      conversationId,
-      provider,
-      model,
-      server,
-      tool,
-      resultType: result === null ? 'null' : Array.isArray(result) ? 'array' : typeof result,
-      resultArrayLen: Array.isArray(result) ? result.length : undefined,
-    },
-    'H-A'
-  );
-  // #endregion
   
   const key = conversationId;
   const counterKey = `mcp-recursion-${key}`;
@@ -476,14 +431,6 @@ export async function continueWithToolResult(params: {
   }
   buf.set(bufKey, { cardIdOrKey: bufKey, server, tool, args, result });
 
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:continueWithToolResult:multiBuffer',
-    'Buffered tool result for multi-tool batch',
-    { assistantMessageId, bufKey, matchedCardId: matchedCardId || null, bufferedCount: buf.size },
-    'H_MULTI'
-  );
-  // #endregion
   // ========= /多工具批处理 =========
 
   // ========= 关键：稳健 gate（expectedCount vs bufferedCount）=========
@@ -495,15 +442,7 @@ export async function continueWithToolResult(params: {
     const shouldGate = expectedCount > 1;
     const shouldProceed = !shouldGate || bufferedCount >= expectedCount;
 
-    // #region agent log
-    debugLog(
-      'ToolCallOrchestrator.ts:continueWithToolResult:gateCheck',
-      'Gate check before follow-up (expected vs buffered)',
-      { assistantMessageId, expectedCount, bufferedCount, shouldGate, shouldProceed },
-      'H_MULTI'
-    );
-    // #endregion
-
+  
     if (!shouldProceed) return;
   } catch { /* noop */ }
   // ========= /稳健 gate =========
@@ -528,7 +467,12 @@ export async function continueWithToolResult(params: {
   } else if (isEmptyResult) {
     instruction = '上述调用返回空结果，可能需要调整参数或使用其他工具获取信息。';
   } else if (hasValidData) {
-    instruction = '上述调用已返回结果，请基于结果回答用户问题。';
+    // 特殊处理：list_available_skills 工具返回后，添加明确引导
+    if (server === 'skills' && tool === 'list_available_skills') {
+      instruction = '已获取技能列表。下一步：调用 skills.get_skill_instructions({skillId: "技能ID"}) 获取使用指南（从列表中选择合适的技能ID）。';
+        } else {
+      instruction = '上述调用已返回结果，请基于结果回答用户问题。';
+    }
   } else {
     instruction = '请基于上述结果回答用户问题，如信息不足可继续调用相关工具。';
   }
@@ -553,844 +497,80 @@ export async function continueWithToolResult(params: {
 
   if (isSkillInstructionOnly) {
     instruction =
-      '【重要】上述 skills.run_all_skill_actions 返回的是“instruction-only 指南”，并未执行任何脚本/命令/文件写入。' +
-      '你不得声称“已生成/已创建”任何文件。你只能：' +
-      '1) 向用户说明当前技能缺少可执行 actions；2) 提出可执行的下一步方案（例如先 list_skill_actions 或由你生成可审批的 shell/script/file 动作计划并等待用户审批）。';
-    // #region agent log
-    debugLog(
-      'ToolCallOrchestrator.ts:continueWithToolResult:skillInstructionOnly',
-      'Instruction-only skill result guard applied',
-      { assistantMessageId, server, tool },
-      'H16-grounded'
-    );
-    // #endregion
-  }
-
-  // 二显一策略：只把摘要用于提示，不在正文回显原始JSON，以免与卡片重复
-  const _followSummary = (() => {
-    try {
-      const obj = typeof result === 'string' ? JSON.parse(result) : result as any;
-      if (obj && typeof obj === 'object') {
-        const keys = Object.keys(obj).slice(0, 8);
-        return `键: ${keys.join(', ')} (长度≈${JSON.stringify(obj).length})`;
-      }
-    } catch { /* ignore */ }
-    const s = (typeof result === 'string' ? result : JSON.stringify(result ?? {})).replace(/\s+/g,' ').slice(0, 300);
-    return `${s}${s.length>=300?'…':''}`;
-  })();
-
-  // 构造“包含真实结果”的追问消息（避免模型凭空猜测）
-  // 多工具：把同批次所有结果合并成多个 user 消息（后续会 collapse 成一个“工具结果汇总”）
-  const { toolResultToNextMessage } = await import('@/lib/mcp/providerAdapters');
-  const bufNow = bufferedResultsByMessage.get(assistantMessageId);
-  const processedSet = processedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
-
-  const orderedBatch: BufferedToolResult[] = (() => {
-    try {
-      const st = useChatStore.getState();
-      const conv = st.conversations.find((c) => c.id === conversationId);
-      const msg: any = conv?.messages.find((m) => m.id === assistantMessageId);
-      const segs = Array.isArray(msg?.segments) ? msg.segments : [];
-      const toolCards = segs.filter((s: any) => s?.kind === 'toolCard');
-      const pendingTerminal = toolCards.filter(
-        (c: any) =>
-          c?.id &&
-          !processedSet.has(String(c.id)) &&
-          (c?.status === 'success' || c?.status === 'error')
-      );
-      // 关键：不要因为 toolCard 状态/渲染时序问题而“只取到部分 terminalCards”，导致漏喂工具结果。
-      // 正确策略：以 bufNow 中已缓冲的结果为准（全量），仅在排序上尽量贴合 toolCards 顺序。
-      const all = bufNow ? Array.from(bufNow.values()) : [];
-      if (all.length === 0) return [];
-
-      const order: BufferedToolResult[] = [];
-      const used = new Set<string>();
-      // 1) 优先按 pendingTerminal（成功/失败的卡片）顺序排列
-      for (const c of pendingTerminal) {
-        const id = String(c.id);
-        const hit = bufNow?.get(id);
-        if (hit) {
-          order.push(hit);
-          used.add(hit.cardIdOrKey);
-        }
-      }
-      // 2) 再补齐其它已缓冲但未出现在 pendingTerminal 的结果（避免丢条）
-      for (const it of all) {
-        if (used.has(it.cardIdOrKey)) continue;
-        order.push(it);
-        used.add(it.cardIdOrKey);
-      }
-
-      // #region agent log
-      debugLog(
-        'ToolCallOrchestrator.ts:continueWithToolResult:batchAssemble',
-        'Assembled batch for follow-up (no-drop)',
-        {
-          assistantMessageId,
-          bufferedCount: all.length,
-          terminalCardCount: pendingTerminal.length,
-          orderedCount: order.length,
-          dropped: all.length - order.length,
-        },
-        'H_MULTI'
-      );
-      // #endregion
-
-      return order;
-    } catch {
-      return bufNow ? Array.from(bufNow.values()) : [];
+      '[IMPORTANT] instruction-only skill returned guidance only (no execution). Do NOT claim file created. ' +
+      'New Strategy: Call filesystem.read_file / filesystem.write_file / shell_executor.execute_command step by step. ' +
+      'Example: read_file -> write_file -> execute_command. FORBIDDEN: submit_execution_plan or run_skill_action';
     }
-  })();
 
-  const batch = orderedBatch.length > 0 ? orderedBatch : [{ cardIdOrKey: bufKey, server, tool, args, result }];
-
-  // #region agent log
-  try {
-    const queries = batch.map((b: any) => {
-      const q = (b?.args as any)?.query;
-      return typeof q === 'string' ? q.slice(0, 80) : undefined;
-    });
-    debugLog(
-      'ToolCallOrchestrator.ts:continueWithToolResult:batchComputed',
-      'Batch computed for follow-up user messages',
-      {
-        assistantMessageId,
-        batchLen: batch.length,
-        batchKeys: batch.map((b: any) => String(b?.cardIdOrKey)).slice(0, 12),
-        batchQueries: queries.filter(Boolean),
-      },
-      'H_MULTI'
-    );
-  } catch { /* noop */ }
-  // #endregion
-
-  const nextUserMsgs = batch.map((it) => {
-    const msg = toolResultToNextMessage(provider as any, it.server, it.tool, it.result, originalUserContent) as any;
-    msg.content = `${msg.content}\n\n—— 追加说明 ——\n${instruction}\n\n（注意：上述JSON/文本只作为事实依据，不要直接回显给用户）`;
-    return msg as LlmMessage;
-  });
-
-  // #region agent log
-  try {
-    debugLog(
-      'ToolCallOrchestrator.ts:continueWithToolResult:nextUserMsgs',
-      'Built follow-up user messages from batch',
-      {
-        assistantMessageId,
-        nextUserMsgsLen: nextUserMsgs.length,
-        headSamples: nextUserMsgs.map((m: any) => String(m?.content || '').slice(0, 60)),
-      },
-      'H_MULTI'
-    );
-  } catch { /* noop */ }
-  // #endregion
-
-  // 为了确保“多工具结果不漏喂”，follow-up 统一使用“单条合并 user message”
-  //（避免依赖多条 user message + collapse 的时序/构造差异导致只喂到最后一条）
-  const mergedNextUserMsg = (() => {
-    try {
-      const pieces = batch.map((it, idx) => {
-        const label = typeof (it as any)?.args?.query === 'string' ? String((it as any).args.query) : `${it.server}.${it.tool}`;
-        const m = toolResultToNextMessage(provider as any, it.server, it.tool, it.result, undefined) as any;
-        const extracted = extractToolResultMessage(String(m?.content || ''));
-        const payload = (extracted?.payload || String(m?.content || '')).replace(/\n{4,}/g, '\n\n').slice(0, 1200);
-        return `【${idx + 1}/${batch.length}】${label}\n${payload}`;
-      });
-      const merged = `用户原始问题：${originalUserContent}\n\n【工具结果汇总】共 ${batch.length} 次调用（仅保留必要片段）\n\n${pieces.join('\n\n---\n\n')}\n\n—— 追加说明 ——\n${instruction}\n\n（注意：上述JSON/文本只作为事实依据，不要直接回显给用户）`;
-      return { role: 'user', content: merged } as any;
-    } catch {
-      // 兜底：至少保证有一条 user message
-      return nextUserMsgs[nextUserMsgs.length - 1] as any;
-    }
-  })();
-
-  const nextUserMsg = mergedNextUserMsg as any;
-
-  // #region agent log
-  try {
-    const userMessages = historyForLlm.filter((m: any) => m.role === 'user');
-    const contentCounts = new Map<string, number>();
-    for (const msg of userMessages) {
-      const content = String(msg.content || '');
-      contentCounts.set(content, (contentCounts.get(content) || 0) + 1);
-    }
-    const duplicateUserCount = Array.from(contentCounts.values()).filter((c) => c > 1).length;
-    const nextUserDupCount = contentCounts.get(String(nextUserMsg.content || '')) || 0;
-    debugLog('ToolCallOrchestrator.ts:continueWithToolResult:historyStats', 'History user message stats', {
-      assistantMessageId,
-      userMessageCount: userMessages.length,
-      duplicateUserCount,
-      nextUserDupCount,
-    }, 'H8');
-  } catch { /* noop */ }
-  // #endregion
-
-  const _st = useChatStore.getState();
-  // 继续在同一条 assistant 消息中流式续写，不新建消息
-
-  // 使用优化后的追问提示词模块
-  const { buildFollowUpSystemMessages } = await import('@/lib/prompts/FollowUpPrompts');
-  const { getConnectedServers } = await import('./chatIntegration');
+  // ========= 修复：真正触发follow-up LLM调用 =========
+  // 问题：之前只计算了instruction，但从未使用
+  // 修复：将工具结果和instruction传递给LLM，触发follow-up
   
-  // 获取已连接的服务器列表（用于工具上下文）
-  let enabledServers: string[] = [];
-  try {
-    enabledServers = await getConnectedServers();
-  } catch (e) {
-    console.warn('[continueWithToolResult] 获取服务器列表失败:', e);
-  }
-  
-  // 构建第一次追问的系统消息（合并为单一长消息）
-  const followUpSystemMessages = await buildFollowUpSystemMessages(
-    'first',
-    originalUserContent,
-    enabledServers,
-    true, // 包含工具上下文
-    isError // 是否有错误
-  );
+  // 构建工具结果消息
+  const toolResultContent = `【工具调用结果】
+工具: ${server}.${tool}
+结果:
+${JSON.stringify(result, null, 2)}
 
-  // ========= 关键：批处理 gate（防止“工具→追问→工具”循环）=========
-  // 若当前消息仍存在 running 的工具卡片，说明还在执行工具批次中：
-  // 不应该在每个 TOOL_RESULT 后都触发一次 follow-up，否则模型很容易继续发起更多 web_search，形成自激振荡。
-  try {
-    const stGate = useChatStore.getState();
-    const convGate = stGate.conversations.find(c => c.id === conversationId);
-    const msgGate: any = convGate?.messages.find(m => m.id === assistantMessageId);
-    const segs = Array.isArray(msgGate?.segments) ? msgGate.segments : [];
-    const toolCards = segs.filter((s: any) => s?.kind === 'toolCard');
-    const processed = processedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
-    const pendingCards = toolCards.filter((c: any) => c?.id && !processed.has(String(c.id)));
-    const runningTools = pendingCards.filter((s: any) => s?.status === 'running' || s?.status === 'pending_auth');
-    const terminalCards = pendingCards.filter((s: any) => s?.status === 'success' || s?.status === 'error');
-    const bufferedCount = bufferedResultsByMessage.get(assistantMessageId)?.size || 0;
+${instruction}`;
 
-    if (runningTools.length > 0) {
-      // #region agent log
-      debugLog(
-        'ToolCallOrchestrator.ts:continueWithToolResult:batchGate',
-        'Skip follow-up because tools still running for this message',
-        { assistantMessageId, runningToolCardCount: runningTools.length, pendingToolCardCount: pendingCards.length, terminalToolCardCount: terminalCards.length, bufferedCount, server, tool },
-        'H_MULTI'
-      );
-      // #endregion
-      return;
-    }
+  // 获取最新的对话历史
+  const store = useChatStore.getState();
+  const conversation = store.conversations.find(c => c.id === conversationId);
+  const currentHistory = conversation?.messages
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content || ''
+    })) || [];
 
-    // 多工具：必须等本批次所有 pending cards 的结果都进入 buffer 后再进入 follow-up
-    // 这能避免“只拿到一部分结果就追问”，从而最终只回答部分城市。
-    if (pendingCards.length > 1 && bufferedCount < pendingCards.length) {
-      // #region agent log
-      debugLog(
-        'ToolCallOrchestrator.ts:continueWithToolResult:batchGate',
-        'Skip follow-up because not all tool results are buffered yet',
-        { assistantMessageId, pendingToolCardCount: pendingCards.length, terminalToolCardCount: terminalCards.length, bufferedCount, server, tool },
-        'H_MULTI'
-      );
-      // #endregion
-      return;
-    }
-  } catch { /* noop */ }
-  // ========= /批处理 gate =========
-
-  // ========= 通用 follow-up 锁 + 递归预算（在确认进入追问后）=========
-  if (!coordinator.tryAcquireFollowupLock(assistantMessageId)) {
-    // #region agent log
-    debugLog('ToolCallOrchestrator.ts:continueWithToolResult:debounced', 'Skipping follow-up (coordinator debounced)', {
-      assistantMessageId,
-      server,
-      tool,
-    }, 'H6');
-    // #endregion
-    return;
-  }
-
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:continueWithToolResult:followupLockAcquired',
-    'Follow-up lock acquired; will proceed',
-    { assistantMessageId, server, tool },
-    'H-B'
-  );
-  // #endregion
-
-  const current = (globalThis as any)[counterKey] || 0;
-  let maxDepth = DEFAULT_MAX_TOOL_RECURSION_DEPTH;
-  try {
-    const val = await StorageUtil.getItem<number | 'infinite'>('max_tool_recursion_depth', DEFAULT_MAX_TOOL_RECURSION_DEPTH, 'mcp-settings.json');
-    if (val === 'infinite') maxDepth = Number.POSITIVE_INFINITY;
-    else if (typeof val === 'number' && val >= 2 && val <= 15) maxDepth = val;
-  } catch { /* use default */ }
-  if (current >= maxDepth) {
-    (globalThis as any)[counterKey] = 0;
-    // #region agent log
-    debugLog(
-      'ToolCallOrchestrator.ts:continueWithToolResult:recursionLimit',
-      'Recursion limit hit; aborting follow-up',
-      { assistantMessageId, conversationId, currentDepth: current, maxDepth },
-      'H-E'
-    );
-    // #endregion
-    return;
-  }
-  (globalThis as any)[counterKey] = current + 1;
-  // ========= /通用 follow-up 锁 + 递归预算 =========
-  
-  // ========= 多工具批处理：确认进入 follow-up 后再提交本批次（避免提前清 buffer）=========
-  try {
-    const st = useChatStore.getState();
-    const conv = st.conversations.find((c) => c.id === conversationId);
-    const msg: any = conv?.messages.find((m) => m.id === assistantMessageId);
-    const segs = Array.isArray(msg?.segments) ? msg.segments : [];
-    const toolCards = segs.filter((s: any) => s?.kind === 'toolCard');
-    const processed = processedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
-    const pendingCards = toolCards.filter((c: any) => c?.id && !processed.has(String(c.id)));
-    const pendingIds = pendingCards.map((c: any) => String(c.id));
-
-    // 标记已处理
-    for (const id of pendingIds) processed.add(id);
-    processedToolCardIdsByMessage.set(assistantMessageId, processed);
-
-    // 清理 buffer：只删掉已处理的 key（id 优先，否则 fallback key）
-    const bufNow = bufferedResultsByMessage.get(assistantMessageId);
-    if (bufNow) {
-      for (const id of pendingIds) bufNow.delete(id);
-      if (bufNow.size === 0) bufferedResultsByMessage.delete(assistantMessageId);
-    }
-
-    // #region agent log
-    debugLog(
-      'ToolCallOrchestrator.ts:continueWithToolResult:multiBatchCommit',
-      'Committed multi-tool batch (post-lock)',
-      { assistantMessageId, committedCount: pendingIds.length },
-      'H_MULTI'
-    );
-    // #endregion
-  } catch { /* noop */ }
-  // ========= /多工具批处理 =========
-
-  const followHistory: LlmMessage[] = [
-    ...followUpSystemMessages as any,
-    ...historyForLlm.filter((m:any)=>m.role!=='user' || m.content!==originalUserContent),
-    nextUserMsg as any
-  ];
-  const compactFollowHistory = collapseToolResultUserMessages(followHistory);
-
-  // #region agent log
-  try {
-    const compactUsers = (compactFollowHistory || []).filter((m: any) => m?.role === 'user');
-    const lastUser = compactUsers.length ? String(compactUsers[compactUsers.length - 1]?.content || '') : '';
-    debugLog(
-      'ToolCallOrchestrator.ts:continueWithToolResult:compactHistory',
-      'Compact follow-up history stats',
-      {
-        assistantMessageId,
-        followHistoryLen: followHistory.length,
-        compactLen: (compactFollowHistory || []).length,
-        compactUserCount: compactUsers.length,
-        hasMergedToolSummary: lastUser.includes('【工具结果汇总】'),
-        lastUserHead: lastUser.slice(0, 80),
-      },
-      'H_MULTI'
-    );
-  } catch { /* noop */ }
-  // #endregion
-
-  // #region agent log
-  try {
-    const followUserMessages = followHistory.filter((m: any) => m.role === 'user');
-    const counts = new Map<string, number>();
-    for (const msg of followUserMessages) {
-      const content = String(msg.content || '');
-      counts.set(content, (counts.get(content) || 0) + 1);
-    }
-    const duplicateFollowUsers = Array.from(counts.values()).filter((c) => c > 1).length;
-    debugLog('ToolCallOrchestrator.ts:continueWithToolResult:followHistoryStats', 'Follow-up history stats', {
-      assistantMessageId,
-      followUserCount: followUserMessages.length,
-      duplicateFollowUsers,
-    }, 'H8');
-  } catch { /* noop */ }
-  // #endregion
-
-  // 追问阶段开始前再次确保状态为 loading（覆盖上游可能的 sent）
-  try {
-    const stPre = useChatStore.getState();
-    const convPre = stPre.conversations.find(c => c.id === conversationId);
-    const msgPre: any = convPre?.messages.find(m => m.id === assistantMessageId);
-    // 若用户已停止（被标记为 error），直接跳过追问阶段
-    if (!msgPre || msgPre.status === 'error') {
-      (globalThis as any)[counterKey] = 0;
-      return;
-    }
-    void stPre.updateMessage(assistantMessageId, { status: 'loading' });
-  } catch { /* noop */ }
-
-  // 使用统一的 StreamOrchestrator + ToolChannelParser 管线处理第一次追问
-  const { StreamOrchestrator } = await import('@/lib/chat/stream');
-  const { StreamResponseLogger } = await import('@/lib/chat/stream/response-logger');
-
-  const orchestrator = new StreamOrchestrator({
-    messageId: assistantMessageId,
-    conversationId,
-    provider,
-    model,
-    originalUserContent,
-    historyForLlm: followHistory as any,
-    onUIUpdate: () => {},
-    onError: (err) => {
-      // Orchestrator 内部已做基础收尾，这里只做额外保护
-      try {
-        const stErr = useChatStore.getState();
-        void stErr.updateMessage(assistantMessageId, { status: 'error', content: err.message, error: true } as any);
-      } catch { /* noop */ }
-      (globalThis as any)[counterKey] = 0;
-    },
-  });
-
-  const baseCallbacks = orchestrator.createCallbacks();
-  const respLogger = new StreamResponseLogger(provider, model);
-  let hadTextThisRound = false;
-  let firstFollowupCompletedOnce = false;
-
-  const callbacks: StreamCallbacks = {
-    ...baseCallbacks,
-    onStart: () => {
-      baseCallbacks.onStart?.();
-    },
-    onEvent: (event: any) => {
-      // 记录到响应日志
-      if (event?.type === 'thinking_token' && event.content) {
-        respLogger.appendThinking(String(event.content));
-      } else if (event?.type === 'thinking_end') {
-        respLogger.endThinking();
-      } else if (event?.type === 'content_token' && event.content) {
-        const txt = String(event.content);
-        respLogger.appendContent(txt);
-        // 关键：只在“严格过滤掉工具指令/模板残片后”的可见文本存在时，才认为本轮产生了有效正文
-        // 原因：GPT-OSS 经常输出半截 "<|ch" / "<|channel|>" 等残片；
-        // 若仅用 filterToolCallContent，会误判为“有正文”，从而跳过 second follow-up，导致“工具跑完但没后续回答”。
-        const visible = filterForDisplay(filterToolCallContent(txt));
-        const trimmed = visible.trim();
-        const isOnlyOssTagFragment = trimmed.startsWith('<|') || /^<\|\w{0,20}$/i.test(trimmed);
-        if (trimmed.length > 0 && !isOnlyOssTagFragment) {
-          hadTextThisRound = true;
-        }
-      }
-      baseCallbacks.onEvent?.(event);
-    },
-    onToken: baseCallbacks.onToken,
-    onComplete: async () => {
-      if (firstFollowupCompletedOnce) {
-        // #region agent log
-        debugLog(
-          'ToolCallOrchestrator.ts:continueWithToolResult:firstFollowup:onComplete:dup',
-          'First follow-up onComplete suppressed (duplicate)',
-          { assistantMessageId },
-          'H-D'
-        );
-        // #endregion
-        return;
-      }
-      firstFollowupCompletedOnce = true;
-      const st = useChatStore.getState();
-      try {
-        // 先让 Orchestrator 做完正式收尾（包括 STREAM_END 与内容清理）
-        await baseCallbacks.onComplete?.();
-      } finally {
-        // 基于“最终落库内容”再算一遍是否有正文（避免 token 过程被 commentary 残片误判）
-        try {
-          const st2 = useChatStore.getState();
-          const conv2 = st2.conversations.find((c) => c.id === conversationId);
-          const msg2: any = conv2?.messages.find((m: any) => m.id === assistantMessageId);
-          const finalText = String(msg2?.content || '');
-          const visibleFinal = filterToolInstructions(finalText, { mode: 'display' }).trim();
-          if (visibleFinal.length === 0) {
-            hadTextThisRound = false;
-          }
-        } catch { /* noop */ }
-
-        // #region agent log
-        debugLog(
-          'ToolCallOrchestrator.ts:continueWithToolResult:firstFollowup:onComplete',
-          'First follow-up onComplete fired',
-          { assistantMessageId, hadTextThisRound },
-          'H-D'
-        );
-        // #endregion
-        try {
-          respLogger.logComplete(assistantMessageId);
-        } catch (e) {
-          console.error('[continueWithToolResult] First follow-up respLogger.logComplete error:', e);
-        }
-
-        // 调试：输出本轮追问的整体情况
-        try {
-          const conv = st.conversations.find((c) => c.id === conversationId);
-          const msg: any = conv?.messages.find((m: any) => m.id === assistantMessageId);
-          const finalContent = msg?.content || '';
-          const segments = Array.isArray(msg?.segments) ? msg.segments : [];
-          const textSegments = segments.filter((s: any) => s.kind === 'text');
-          console.debug('[FollowUp/First] stream complete', {
-            messageId: assistantMessageId,
-            hadTextThisRound,
-            contentLength: finalContent.length,
-            segmentsCount: segments.length,
-            textSegmentsCount: textSegments.length,
-            contentPreview: finalContent.substring(0, 50),
-          });
-        } catch { /* noop */ }
-
-        // 若本轮没有任何正文输出，则进入第二次“催促式”追问
-        if (!hadTextThisRound) {
-          await runSecondFollowUpRound({
-            assistantMessageId,
-            provider,
-            model,
-            conversationId,
-            originalUserContent,
-            followHistory,
-            result,
-            server,
-            counterKey,
-          });
-        } else {
-          await finishRecursionAndMaybeGenerateTitle({
-            provider,
-            model,
-            conversationId,
-            counterKey,
-          });
-        }
-      }
-    },
-    onError: (err: Error) => {
-      // #region agent log
-      debugLog(
-        'ToolCallOrchestrator.ts:continueWithToolResult:firstFollowup:onError',
-        'First follow-up onError fired',
-        { assistantMessageId, message: err?.message },
-        'H-C'
-      );
-      // #endregion
-      baseCallbacks.onError?.(err);
-      try {
-        const stErr = useChatStore.getState();
-        void stErr.updateMessage(assistantMessageId, { status: 'error', content: err.message, error: true } as any);
-      } catch { /* noop */ }
-      (globalThis as any)[counterKey] = 0;
-    },
-  } as any;
-
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:continueWithToolResult:streamChat:start',
-    'Starting follow-up streamChat',
-    {
-      assistantMessageId,
-      provider,
-      model,
-      followHistoryLen: Array.isArray(followHistory) ? followHistory.length : undefined,
-      originalUserContentLen: String(originalUserContent || '').length,
-      toolContext: `${server}.${tool}`,
-    },
-    'H-C'
-  );
-  // #endregion
-
-  // Native-only + Event-only：追问轮也必须携带 tools（skills + mcp + web_search），否则模型无法继续调用工具。
-  // 复用与主聊天一致的 composeChatOptions（内部会强制 nativeTools，并附带 mcpServers）。
-  const { composeChatOptions } = await import('@/lib/chat/OptionComposer');
-  const followupOpts = await composeChatOptions(
-    provider,
-    model,
-    {},
-    conversationId || null,
-    String(nextUserMsg.content || '')
-  );
-  await streamChat(provider, model, compactFollowHistory as any, callbacks, followupOpts);
-}
-
-/**
- * 第二次“催促式”追问：当第一次追问没有任何正文输出时触发。
- * 仍然复用统一的 StreamOrchestrator + ToolChannelParser 管线。
- */
-async function runSecondFollowUpRound(args: {
-  assistantMessageId: string;
-  provider: string;
-  model: string;
-  conversationId: string;
-  originalUserContent: string;
-  followHistory: LlmMessage[];
-  result: unknown;
-  server: string;
-  counterKey: string;
-}) {
-  const {
-    assistantMessageId,
-    provider,
-    model,
-    conversationId,
-    originalUserContent,
-    followHistory,
-    result,
-    server,
-    counterKey,
-  } = args;
-
-  const { buildFollowUpSystemMessages } = await import('@/lib/prompts/FollowUpPrompts');
-
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:runSecondFollowUpRound:entry',
-    'Second follow-up round entered',
-    { assistantMessageId, conversationId, provider, model, server },
-    'H-S2'
-  );
-  // #endregion
-
-  // 第二次追问只保留用户消息，过滤掉第一次追问的所有 system 消息
-  let secondFollowUpMessages: Array<{ role: 'system'; content: string }> = [];
-  try {
-    secondFollowUpMessages = await buildFollowUpSystemMessages(
-      'second',
-      originalUserContent,
-      [], // 第二次追问不提供工具上下文
-      false // 不包含工具上下文
-    );
-  } catch {
-    // 兜底：避免第二轮因 system prompt 构建失败而“直接断流”
-    try {
-      const { buildFollowUpSystemMessagesSync } = await import('@/lib/prompts/FollowUpPrompts');
-      secondFollowUpMessages = buildFollowUpSystemMessagesSync('second', originalUserContent, [], false);
-    } catch { /* noop */ }
-  }
-
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:runSecondFollowUpRound:systemMessagesReady',
-    'Second follow-up system messages ready',
-    { assistantMessageId, count: secondFollowUpMessages.length },
-    'H-S2'
-  );
-  // #endregion
-
-  const nudgeHistory: LlmMessage[] = [
-    ...secondFollowUpMessages as any,
-    // 只保留 followHistory 中的 user 消息（工具结果）
-    ...followHistory.filter((m: any) => m.role === 'user'),
+  // 添加工具结果作为新的user消息
+  const followUpMessages: LlmMessage[] = [
+    ...currentHistory,
     {
       role: 'user',
-      content: `请基于上述所有工具调用结果，分析并回答用户的原始问题。
-
-请根据实际情况灵活处理：
-1. 如果工具结果正常且足够，请直接给出完整的中文答案
-2. 如果工具结果异常或不足，请继续调用相关工具
-3. 如果需要调用工具，请使用 <use_mcp_tool><server_name>...</server_name><tool_name>...</tool_name><arguments>{...}</arguments></use_mcp_tool> 格式
-4. 确保最终能够完整回答用户的原始问题`,
-    } as any,
-  ];
-  const compactNudgeHistory = collapseToolResultUserMessages(nudgeHistory);
-
-  const { StreamOrchestrator } = await import('@/lib/chat/stream');
-  const { StreamResponseLogger } = await import('@/lib/chat/stream/response-logger');
-
-  const stPre = useChatStore.getState();
-  try {
-    void stPre.updateMessage(assistantMessageId, { status: 'loading' });
-  } catch { /* noop */ }
-
-  const orchestrator = new StreamOrchestrator({
-    messageId: assistantMessageId,
-    conversationId,
-    provider,
-    model,
-    originalUserContent,
-    historyForLlm: nudgeHistory as any,
-    onUIUpdate: () => {},
-    onError: (err) => {
-      try {
-        const stErr = useChatStore.getState();
-        void stErr.updateMessage(assistantMessageId, { status: 'error', content: err.message, error: true } as any);
-      } catch { /* noop */ }
-      (globalThis as any)[counterKey] = 0;
-    },
-  });
-
-  const baseCallbacks = orchestrator.createCallbacks();
-  const respLogger2 = new StreamResponseLogger(provider, model);
-  let hadTextSecondRound = false;
-  let secondFollowupCompletedOnce = false;
-
-  const callbacks2: StreamCallbacks = {
-    ...baseCallbacks,
-    onStart: () => {
-      baseCallbacks.onStart?.();
-    },
-    onEvent: (event: any) => {
-      if (event?.type === 'thinking_token' && event.content) {
-        respLogger2.appendThinking(String(event.content));
-      } else if (event?.type === 'thinking_end') {
-        respLogger2.endThinking();
-      } else if (event?.type === 'content_token' && event.content) {
-        const txt = String(event.content);
-        respLogger2.appendContent(txt);
-        // 同样基于过滤后的“可见文本”判断是否有正文输出
-        const visible = filterForDisplay(filterToolCallContent(txt));
-        const trimmed = visible.trim();
-        const isOnlyOssTagFragment = trimmed.startsWith('<|') || /^<\|\w{0,20}$/i.test(trimmed);
-        if (trimmed.length > 0 && !isOnlyOssTagFragment) {
-          hadTextSecondRound = true;
-        }
-      }
-      baseCallbacks.onEvent?.(event);
-    },
-    onToken: baseCallbacks.onToken,
-    onComplete: async () => {
-      if (secondFollowupCompletedOnce) {
-        // #region agent log
-        debugLog(
-          'ToolCallOrchestrator.ts:runSecondFollowUpRound:onComplete:dup',
-          'Second follow-up onComplete suppressed (duplicate)',
-          { assistantMessageId },
-          'H-S2'
-        );
-        // #endregion
-        return;
-      }
-      secondFollowupCompletedOnce = true;
-      const st = useChatStore.getState();
-      try {
-        await baseCallbacks.onComplete?.();
-      } finally {
-        // #region agent log
-        debugLog(
-          'ToolCallOrchestrator.ts:runSecondFollowUpRound:onComplete',
-          'Second follow-up onComplete fired',
-          { assistantMessageId, hadTextSecondRound },
-          'H-S2'
-        );
-        // #endregion
-        try {
-          respLogger2.logComplete(assistantMessageId);
-        } catch (e) {
-          console.error('[continueWithToolResult] Second follow-up respLogger.logComplete error:', e);
-        }
-
-        const conv = st.conversations.find((c) => c.id === conversationId);
-        const msg: any = conv?.messages.find((m: any) => m.id === assistantMessageId);
-        let content2 = msg?.content || '';
-        const segments2 = Array.isArray(msg?.segments) ? msg.segments : [];
-        const textSegments2 = segments2.filter((s: any) => s.kind === 'text');
-
-        try {
-          console.debug('[FollowUp/Second] stream complete', {
-            messageId: assistantMessageId,
-            hadTextSecondRound,
-            contentLength: content2.length,
-            segmentsCount: segments2.length,
-            textSegmentsCount: textSegments2.length,
-            contentPreview: content2.substring(0, 50),
-          });
-        } catch { /* noop */ }
-
-        // 若追问仍无任何正文，则使用结果生成一个最小可读的回退文本，避免界面空白
-        if (!hadTextSecondRound) {
-          try {
-            if (server === WEB_SEARCH_SERVER_NAME && Array.isArray(result) && result.length > 0) {
-              const items: any[] = Array.isArray(result) ? result.slice(0, 5) : [];
-              const lines = items.map((it, i: number) => {
-                const t = (it?.source_title || it?.title || '').toString().trim();
-                const u = (it?.url || '').toString().trim();
-                return `${i + 1}. ${t}${u ? ` - ${u}` : ''}`;
-              });
-              const fallbackText = `根据网络搜索的结果，供参考：\n${lines.join('\n')}\n\n需要我基于这些链接进一步总结或继续检索吗？`;
-              try {
-                st.appendTextToMessageSegments(assistantMessageId, fallbackText);
-              } catch { /* noop */ }
-              content2 = ((msg?.content || '') + fallbackText).trim();
-            }
-          } catch { /* noop */ }
-        }
-
-        try {
-          void st.updateMessage(assistantMessageId, { status: 'sent', content: content2 });
-          st.dispatchMessageAction(assistantMessageId, { type: 'STREAM_END' } as any);
-        } catch { /* noop */ }
-
-        await finishRecursionAndMaybeGenerateTitle({
-          provider,
-          model,
-          conversationId,
-          counterKey,
-        });
-      }
-    },
-    onError: (err: Error) => {
-      baseCallbacks.onError?.(err);
-      try {
-        const stErr = useChatStore.getState();
-        void stErr.updateMessage(assistantMessageId, { status: 'error', content: err.message, error: true } as any);
-      } catch { /* noop */ }
-      (globalThis as any)[counterKey] = 0;
-    },
-  } as any;
-
-  // #region agent log
-  debugLog(
-    'ToolCallOrchestrator.ts:runSecondFollowUpRound:streamChat:start',
-    'Starting second follow-up streamChat',
-    { assistantMessageId, nudgeHistoryLen: nudgeHistory.length },
-    'H-S2'
-  );
-  // #endregion
-
-  const { composeChatOptions } = await import('@/lib/chat/OptionComposer');
-  const nudgeOpts = await composeChatOptions(
-    provider,
-    model,
-    {},
-    conversationId || null,
-    String(compactNudgeHistory?.[compactNudgeHistory.length - 1]?.content || '')
-  );
-  await streamChat(provider, model, compactNudgeHistory as any, callbacks2, nudgeOpts);
-}
-
-/**
- * 递归链结束时的统一收尾：重置递归计数，并在合适时机生成会话标题。
- */
-async function finishRecursionAndMaybeGenerateTitle(args: {
-  provider: string;
-  model: string;
-  conversationId: string;
-  counterKey: string;
-}) {
-  const { provider, model, conversationId, counterKey } = args;
-  (globalThis as any)[counterKey] = 0;
-
-  try {
-    const state = useChatStore.getState();
-    const conv = state.conversations.find((c) => c.id === conversationId);
-    if (!conv) return;
-
-    const {
-      shouldGenerateTitleAfterAssistantComplete,
-      extractFirstUserMessageSeed,
-      isDefaultTitle,
-    } = await import('@/lib/chat/TitleGenerator');
-    const { generateTitle } = await import('@/lib/chat/TitleService');
-
-    if (!shouldGenerateTitleAfterAssistantComplete(conv)) return;
-    const seed = extractFirstUserMessageSeed(conv);
-    if (!seed || !seed.trim()) return;
-
-    const gen = await generateTitle(provider, model, seed, { maxLength: 24, language: 'zh' });
-    const st2 = useChatStore.getState();
-    const conv2 = st2.conversations.find((c) => c.id === conversationId);
-    if (conv2 && isDefaultTitle(conv2.title) && gen && gen.trim()) {
-      void st2.renameConversation(String(conversationId), gen.trim());
+      content: toolResultContent
     }
-  } catch {
-    // 忽略标题生成中的非致命错误
-  }
-}
+  ];
 
+
+  // 调用LLM API（follow-up）
+  try {
+
+    
+    // 使用StreamOrchestrator处理完整的事件流（包括tool_call等）
+    const orchestrator = new StreamOrchestrator({
+      messageId: assistantMessageId,
+      conversationId,
+      provider,
+      model,
+      originalUserContent: toolResultContent,
+      historyForLlm: followUpMessages,
+      onUIUpdate: (_updatedContent) => {
+        // Follow-up场景不需要UI更新
+      },
+      onError: (error) => {
+
+        console.error('[continueWithToolResult] Follow-up failed:', error);
+        store.updateMessage(assistantMessageId, { status: 'error' });
+      },
+    });
+    
+    const streamCallbacks = orchestrator.createCallbacks();
+
+    
+    await streamChat(
+      provider,
+      model,
+      followUpMessages,
+      streamCallbacks,
+      { conversationId, messageId: assistantMessageId }
+    );
+
+  } catch (error) {
+
+    console.error('[continueWithToolResult] Failed to trigger follow-up:', error);
+    // 即使follow-up失败，也不抛出错误，避免影响工具执行流程
+  }
+  // ========= /修复 =========
+}

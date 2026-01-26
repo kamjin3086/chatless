@@ -21,14 +21,12 @@ import type {
   SkillActionResult,
   SkillExecutionContext,
   SkillParameterValues,
+  SkillAction,
 } from './types';
+import { useSkillExecutionPlanStore } from '@/store/skillExecutionPlanStore';
+import { useSkillContextStore } from '@/store/skillContextStore';
+import { getProcessSandbox } from './sandbox';
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
-}
-// #endregion
 
 /**
  * 技能工具参数类型
@@ -54,9 +52,19 @@ export interface SkillToolDefinition {
  * 
  * 返回已启用技能的简要列表，用于让 AI 了解有哪些技能可用
  */
-async function listAvailableSkills(): Promise<SkillIndexEntry[]> {
+async function listAvailableSkills(): Promise<{
+  skills: SkillIndexEntry[];
+  nextStep: string;
+}> {
   const manager = getSkillManager();
-  return manager.getSkillIndex();
+  const skills = manager.getSkillIndex();
+  
+  return {
+    skills,
+    nextStep: skills.length > 0
+      ? `✅ 找到 ${skills.length} 个技能。下一步：调用 skills.get_skill_instructions({skillId: "技能ID"}) 获取使用指南。`
+      : '❌ 未找到可用技能。',
+  };
 }
 
 /**
@@ -67,41 +75,65 @@ async function listAvailableSkills(): Promise<SkillIndexEntry[]> {
  * @param skillId - 技能 ID
  */
 async function getSkillInstructions(skillId: string): Promise<string> {
+
+  
   if (!skillId) {
     return 'Error: skillId is required';
   }
 
   const manager = getSkillManager();
+  const skill = await manager.getSkill(skillId);
   const content = await manager.getSkillPromptContent(skillId);
   
   if (!content) {
+
     return `Error: Skill "${skillId}" not found or has no content`;
   }
 
   // 为模型附加一段“不可见的执行规则提示”（仍然会出现在 tool card 中，但不会污染正常聊天内容）
   const parsed = parseSkillMd(content);
   const actionsCount = parsed.actions.length;
-  const actionIdsPreview = parsed.actions.slice(0, 12).map(a => a.id);
 
-  // #region agent log
-  debugLog(
-    'skillTools.ts:getSkillInstructions:actionsMeta',
-    'Skill instructions actions meta',
-    { skillId, actionsCount, actionIdsPreview },
-    'H15-action-guard'
-  );
-  // #endregion
+
+  // 列出skill目录资源
+  let resourceFiles: string[] = [];
+  try {
+    if (skill!.path) {
+      const { readDir } = await import('@tauri-apps/plugin-fs');
+      const entries = await readDir(skill!.path);
+      resourceFiles = entries.filter((e: any) => !e.isDirectory && e.name !== 'SKILL.md').map((e: any) => e.name).slice(0, 20);
+    }
+  } catch {
+    // ignore
+  }
+
+  const skillPath = skill!.path || '(unknown)';
 
   const guidance = [
     '',
     '---',
-    '[system] tool-usage-guard:',
-    `- actionsCount=${actionsCount}`,
+    `[system] Skill工作目录: ${skillPath}`,
+    resourceFiles.length > 0 ? `可用资源: ${resourceFiles.join(', ')}` : '可用资源: (none)',
+    '',
     actionsCount === 0
-      ? '- 本技能未定义可执行 actions：不要调用 run_skill_action（会必然失败）；如需继续，请调用 run_all_skill_actions 获取 instruction 输出，或按 SKILL.md 指令自行拆解为可审批动作。'
-      : '- 本技能已定义 actions：绝对不要凭空猜 actionId；必须先调用 list_skill_actions，并且只使用其返回的 id 字段。',
-    actionIdsPreview.length > 0 ? `- actionIdsPreview=${actionIdsPreview.join(', ')}` : '- actionIdsPreview=(none)',
+      ? `【instruction-only】无预定义actions，请自学自编自执行：
+→ 用filesystem.read_file读资源（"${skillPath}/文件名"）
+→ 用filesystem.write_file写脚本（"${skillPath}/脚本.py或.js"）
+→ 用shell_executor.execute_command执行（workingDir:"${skillPath}"）
+🚫禁止调用run_skill_action或submit_execution_plan或口头声称已完成`
+      : `【action-based】有${actionsCount}个actions，推荐：list_skill_actions→run_skill_action`,
   ].join('\n');
+
+  // 保存 skill 上下文供后续 filesystem/shell_executor 使用
+  try {
+    useSkillContextStore.getState().setContext('global', {
+      skillPath,
+      resourceFiles,
+      actionCount: actionsCount,
+    });
+  } catch {
+    // ignore
+  }
 
   return `${content}${guidance}`;
 }
@@ -214,22 +246,6 @@ async function listSkillActions(skillId: string): Promise<{
     requiresApproval: action.requiresApproval,
   }));
 
-  // #region agent log
-  debugLog(
-    'skillTools.ts:listSkillActions:parsed',
-    'Parsed skill actions',
-    {
-      skillId,
-      skillName: skill.name,
-      skillPath: skill.path,
-      skillMdLen: (skill.skillMdContent || '').length,
-      actionsCount: parseResult.actions.length,
-      firstActionId: parseResult.actions[0]?.id,
-      frontmatterHasActions: Array.isArray((parseResult.frontmatter as any)?.actions),
-    },
-    'H14-actions'
-  );
-  // #endregion
 
   return {
     skillId,
@@ -290,15 +306,7 @@ async function runSkillAction(
     const hasActions = actionIds.length > 0;
     const hasActionId = actionIds.includes(actionId);
 
-    // #region agent log
-    debugLog(
-      'skillTools.ts:runSkillAction:validate',
-      'Validate skill actionId',
-      { skillId, actionId, hasActions, actionsCount: actionIds.length, hasActionId, actionIdsPreview: actionIds.slice(0, 12) },
-      'H15-action-guard'
-    );
-    // #endregion
-
+  
     if (!hasActions) {
       return {
         success: false,
@@ -388,25 +396,7 @@ async function runAllSkillActions(
     const mode: 'actions' | 'instruction' = instructionOnly ? 'instruction' : 'actions';
     const executedActions = !instructionOnly;
     
-    // #region agent log
-    debugLog(
-      'skillTools.ts:runAllSkillActions:result',
-      'Executed all skill actions',
-      {
-        skillId,
-        resultsCount: results.length,
-        allSuccess,
-        mode,
-        executedActions,
-        firstResultActionId: results[0]?.actionId,
-        firstResultStatus: results[0]?.status,
-        firstResultHasOutput: Boolean(results[0]?.output || results[0]?.stdout),
-        firstResultOutputLen: ((results[0]?.output as string) || (results[0]?.stdout as string) || '').length,
-      },
-      'H14-actions'
-    );
-    // #endregion
-
+  
     return {
       success: allSuccess,
       results,
@@ -435,12 +425,12 @@ async function runAllSkillActions(
 export const skillTools: SkillToolDefinition[] = [
   {
     name: 'list_available_skills',
-    description: '获取所有已启用技能的简要列表。返回每个技能的 ID、名称、简短描述和触发关键词。使用此工具了解有哪些技能可用。',
+    description: '获取所有已启用技能的简要列表。返回每个技能的 ID、名称、简短描述和触发关键词，以及下一步操作提示。使用此工具了解有哪些技能可用。',
     handler: async () => listAvailableSkills(),
   },
   {
     name: 'get_skill_instructions',
-    description: '获取特定技能的完整使用说明。当你确定需要使用某个技能来完成任务时，调用此工具获取详细的操作指南。',
+    description: '获取特定技能的完整使用说明。当你从 list_available_skills 中确定需要使用某个技能来完成任务时，立即调用此工具获取详细的操作指南和可用资源。【必须先调用此工具才能继续】',
     parameters: {
       skillId: {
         type: 'string',
@@ -570,22 +560,13 @@ export async function executeSkillTool(
   toolName: string,
   params: Record<string, unknown>
 ): Promise<unknown> {
-  // #region agent log
-  debugLog('skillTools.ts:executeSkillTool:entry', 'Executing skill tool', { toolName, params }, 'H5');
-  // #endregion
   
   const tool = skillTools.find(t => t.name === toolName);
   if (!tool) {
-    // #region agent log
-    debugLog('skillTools.ts:executeSkillTool:notFound', 'Skill tool not found', { toolName, availableTools: skillTools.map(t => t.name) }, 'H5');
-    // #endregion
-    throw new Error(`Unknown skill tool: ${toolName}`);
+      throw new Error(`Unknown skill tool: ${toolName}`);
   }
 
   const result = await tool.handler(params);
-  // #region agent log
-  debugLog('skillTools.ts:executeSkillTool:result', 'Skill tool executed', { toolName, resultPreview: typeof result === 'string' ? result.slice(0, 200) : JSON.stringify(result).slice(0, 200) }, 'H5');
-  // #endregion
   return result;
 }
 
@@ -595,4 +576,3 @@ export async function executeSkillTool(
 export function isSkillTool(toolName: string): boolean {
   return skillTools.some(t => t.name === toolName);
 }
-

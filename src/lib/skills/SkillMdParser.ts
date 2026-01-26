@@ -274,10 +274,32 @@ function parseRawAction(raw: Record<string, any>): SkillAction | null {
   }
 
   const id = raw.id || `action-${Date.now()}`;
-  const type = parseActionType(raw.type);
+  const type = inferActionType(raw);
   
   if (!type) {
     return null;
+  }
+
+  // --------- 安全校验：禁止路径遍历/绝对路径（第三方 skills 需最小权限） ---------
+  const isUnsafePath = (p: unknown): boolean => {
+    if (typeof p !== 'string') return false;
+    const s = p.trim();
+    if (!s) return false;
+    // 绝对路径（POSIX /..., Windows C:\..., UNC \\server\share）
+    if (s.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(s) || s.startsWith('\\\\')) return true;
+    // 路径遍历
+    if (/\.\.[\\/]/.test(s)) return true;
+    return false;
+  };
+
+  if (isUnsafePath(raw.scriptPath || raw.script_path)) {
+    return null;
+  }
+  const fo0 = raw.fileOperation || raw.file_operation;
+  if (fo0 && typeof fo0 === 'object') {
+    if (isUnsafePath((fo0 as any).path) || isUnsafePath((fo0 as any).destination)) {
+      return null;
+    }
   }
 
   const action: SkillAction = {
@@ -325,15 +347,27 @@ function parseRawAction(raw: Record<string, any>): SkillAction | null {
 }
 
 /**
- * 解析动作类型
+ * 推断动作类型（优先尊重 raw.type；否则按字段推断）
  */
-function parseActionType(type: string | undefined): SkillActionType | null {
+function inferActionType(raw: Record<string, any>): SkillActionType | null {
   const validTypes: SkillActionType[] = ['shell', 'script', 'file', 'mcp_tool', 'instruction', 'composite'];
-  if (type && validTypes.includes(type as SkillActionType)) {
-    return type as SkillActionType;
+  const explicit = raw.type ? String(raw.type).trim() : '';
+  if (explicit) {
+    if (validTypes.includes(explicit as SkillActionType)) {
+      return explicit as SkillActionType;
+    }
+    // 明确指定但不合法，直接拒绝
+    return null;
   }
-  // 默认类型根据其他字段推断
-  return 'shell';
+
+  // 根据字段推断（缺省时避免误判为 shell）
+  if (raw.mcpServer || raw.mcp_server || raw.mcpTool || raw.mcp_tool) return 'mcp_tool';
+  if (raw.fileOperation || raw.file_operation) return 'file';
+  if (raw.scriptPath || raw.script_path || raw.scriptContent || raw.script_content || raw.runtime) return 'script';
+  if (raw.instruction) return 'instruction';
+  if (raw.subActions || raw.sub_actions) return 'composite';
+  if (raw.command || raw.args) return 'shell';
+  return null;
 }
 
 /**
