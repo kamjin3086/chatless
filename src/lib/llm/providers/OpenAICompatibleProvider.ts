@@ -135,7 +135,18 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     const body: Record<string, unknown> = {
       model,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: messages.map((m) => {
+        const anyMsg: any = m as any;
+        const msg: any = { role: m.role, content: m.content };
+        if (m.role === 'tool') {
+          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
+          if (anyMsg.name) msg.name = anyMsg.name;
+        }
+        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
+          msg.tool_calls = anyMsg.tool_calls;
+        }
+        return msg;
+      }),
       stream: true,
       ...mapped,
     };
@@ -160,8 +171,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     // 防止重复触发完成回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、reader.done 等多条完成分支
     let didComplete = false;
-    const completeOnce = (reason: string, data?: Record<string, unknown>) => {
-      const already = didComplete;
+    const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
       if (didComplete) {
 
         return;
@@ -401,7 +411,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     // SSE 工具调用增量状态（LM Studio/OpenAI compat streaming：delta.tool_calls 分块发送，需要累积）
     const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
     let didComplete = false;
-    const completeOnce = (reason: string, data?: Record<string, unknown>) => {
+    const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
       if (didComplete) return;
       didComplete = true;
 
@@ -541,7 +551,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       // SSE fallback 工具调用增量状态（与 processSSEResponse 保持一致）
       const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
       let didComplete = false;
-      const completeOnce = (reason: string, data?: Record<string, unknown>) => {
+      const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
         if (didComplete) return;
         didComplete = true;
 

@@ -2,14 +2,11 @@ import { BaseProvider, CheckResult, LlmMessage, StreamCallbacks } from './BasePr
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
-import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
 import { createStreamEvent } from '../types/stream-events';
 import { 
   type ToolDefinition, 
-  type ToolCallOptions,
   toOpenAITools, 
   toOpenAIToolChoice,
-  parseToolArguments 
 } from '../types/tool-schema';
 
 export class OpenAIProvider extends BaseProvider {
@@ -106,7 +103,18 @@ export class OpenAIProvider extends BaseProvider {
     // 构建请求体
     const body: Record<string, unknown> = {
       model,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      messages: messages.map(m => {
+        const anyMsg: any = m as any;
+        const msg: any = { role: m.role, content: m.content };
+        if (m.role === 'tool') {
+          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
+          if (anyMsg.name) msg.name = anyMsg.name;
+        }
+        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
+          msg.tool_calls = anyMsg.tool_calls;
+        }
+        return msg;
+      }),
       stream: true,
       ...mapped,
     };
@@ -246,8 +254,6 @@ export class OpenAIProvider extends BaseProvider {
       }
       
       // 解析参数
-      const args = parseToolArguments(tc.arguments);
-      
       // 发送工具调用事件
       if (cb.onEvent) {
         const toolEvent = createStreamEvent.toolCall(

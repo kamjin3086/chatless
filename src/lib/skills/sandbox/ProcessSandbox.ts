@@ -173,6 +173,7 @@ export class ProcessSandbox extends BaseSandboxExecutor {
 
       const tauriResult = await invoke<TauriShellResult>('run_safe_shell', {
         options: {
+          execution_id: execContext.executionId,
           command: options.command,
           args: options.args || [],
           working_dir: options.workingDir,
@@ -229,8 +230,12 @@ export class ProcessSandbox extends BaseSandboxExecutor {
     const cancelled = await super.cancel(executionId);
     if (cancelled) {
       // 通知 Tauri 后端取消（如果支持）
-      // 目前后端使用超时机制，暂不支持主动取消
-      console.info(`[ProcessSandbox] Cancelled execution: ${executionId}`);
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('cancel_safe_shell', { execution_id: executionId });
+      } catch {
+        // ignore
+      }
     }
     return cancelled;
   }

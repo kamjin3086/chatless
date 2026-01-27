@@ -20,6 +20,9 @@ import { usePromptStore } from '@/store/promptStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { performanceMonitor } from '@/lib/performance/PerformanceMonitor';
 import { StreamOrchestrator } from '@/lib/chat/stream';
+import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+import { useAuthorizationStore } from '@/store/authorizationStore';
+import { getProcessSandbox } from '@/lib/skills/sandbox';
 // 动态导入 Title 相关函数，避免静态未用告警
 
 // type StoreMessage = any;
@@ -62,7 +65,30 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   const lastActivityTimeRef = useRef<number>(Date.now());
   const [isStale, setIsStale] = useState(false);
   
-  const isLoading = isGenerating && !isStale;
+  // isGenerating 只代表“LLM SSE 正在流式输出”；工具阶段（running/pending_auth）也应视为“agent 正在运行”
+  const hasBlockingTool = useChatStore((state) => {
+    try {
+      const cid = state.currentConversationId;
+      const conv: any = cid ? state.conversations.find((c: any) => c.id === cid) : null;
+      const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m: any = msgs[i];
+        if (!m || m.role !== 'assistant') continue;
+        // 只看还在“运行链路”的 assistant 气泡
+        if (m.status !== 'loading') continue;
+        const segs: any[] = Array.isArray(m.segments) ? m.segments : [];
+        for (const s of segs) {
+          if (s?.kind === 'toolCard' && (s.status === 'running' || s.status === 'pending_auth')) return true;
+        }
+        return false;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  });
+
+  const isLoading = (isGenerating && !isStale) || hasBlockingTool;
 
   // 优化的流式更新状态管理
   const currentContentRef = useRef<string>('');
@@ -90,6 +116,9 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   
   // 防抖状态引用移除，保持最小必要状态
   const debouncedTokenUpdateRef = useRef<NodeJS.Timeout | null>(null);
+
+  // stop 二次确认：第一次 stop 停生成/链路；短时间内再次 stop 则尝试强制取消正在运行的工具
+  const stopArmRef = useRef<{ messageId: string; armedAt: number } | null>(null);
 
   const navigateToSettings = useCallback((tab: string = 'localModels') => {
     router.push(`/settings?tab=${tab}`);
@@ -678,6 +707,84 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         .pop();
       
       if (lastAssistantMessage && lastAssistantMessage.status === 'loading') {
+        // 二次点击 stop：尝试强制取消正在执行的工具（best-effort）
+        const now = Date.now();
+        const armed = stopArmRef.current;
+        const secondClick =
+          !!armed &&
+          armed.messageId === lastAssistantMessage.id &&
+          now - armed.armedAt < 6000;
+
+        // 停止不仅要停 SSE，还要停止整个 agent loop（阻止后续 follow-up / tool 链路继续推进）
+        try {
+          ToolCallCoordinator.getInstance().cancelMessage(lastAssistantMessage.id);
+        } catch {
+          // ignore
+        }
+        try {
+          useAuthorizationStore.getState().rejectAuthorizationsByMessageId(lastAssistantMessage.id);
+        } catch {
+          // ignore
+        }
+
+        // 若有运行中的 shell 工具，首次 stop 仅“上锁”，提示二次确认；二次 stop 才真正 cancel
+        try {
+          const st = useChatStore.getState();
+          const conv = st.conversations.find((c) => c.id === currentConversationId);
+          const msg: any = conv?.messages.find((m) => m.id === lastAssistantMessage.id);
+          const segs: any[] = Array.isArray(msg?.segments) ? msg.segments : [];
+          const runningShellCards = segs.filter(
+            (s) =>
+              s?.kind === 'toolCard' &&
+              s?.server === 'shell_executor' &&
+              s?.id &&
+              s?.status === 'running'
+          );
+
+          if (runningShellCards.length > 0) {
+            if (!secondClick) {
+              stopArmRef.current = { messageId: lastAssistantMessage.id, armedAt: now };
+              toast.info('已停止生成', {
+                description: '检测到有正在执行的命令。若需强制中止工具执行，请在 6 秒内再次点击停止按钮。',
+              });
+            } else {
+              stopArmRef.current = null;
+              void (async () => {
+                try {
+                  const sandbox = getProcessSandbox();
+                  for (const card of runningShellCards) {
+                    const executionId = `shell:${lastAssistantMessage.id}:${String(card.id)}`;
+                    try {
+                      await sandbox.cancel(executionId);
+                    } catch {
+                      // ignore
+                    }
+                    try {
+                      st.dispatchMessageAction(lastAssistantMessage.id, {
+                        type: 'TOOL_RESULT',
+                        server: String(card.server),
+                        tool: String(card.tool),
+                        ok: false,
+                        errorMessage: '用户中止',
+                        cardId: String(card.id),
+                      } as any);
+                    } catch {
+                      // ignore
+                    }
+                  }
+                } catch {
+                  // ignore
+                }
+              })();
+              toast.info('已请求中止工具', { description: '已发送取消请求（best-effort）。' });
+            }
+          } else {
+            stopArmRef.current = null;
+          }
+        } catch {
+          stopArmRef.current = null;
+        }
+
         const thinking_duration = lastAssistantMessage.thinking_start_time 
           ? Math.floor((Date.now() - lastAssistantMessage.thinking_start_time) / 1000)
           : 0;

@@ -1,5 +1,6 @@
 import { tauriFetch } from '@/lib/request';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
+import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
 
 /**
  * 通用消息结构，后续可移到独立 types 文件
@@ -8,6 +9,10 @@ export interface LlmMessage {
   role: 'user' | 'assistant' | 'system' | string;
   content: string;
   images?: string[];
+  // —— ChatCompletions tool calling (OpenAI-compatible) ——
+  tool_call_id?: string;
+  tool_calls?: ToolCallRequest[];
+  name?: string;
 }
 
 export interface CheckResult {

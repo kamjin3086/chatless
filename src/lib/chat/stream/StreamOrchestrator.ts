@@ -19,6 +19,12 @@ import { useChatStore } from '@/store/chatStore';
 import { cleanToolCallInstructionsForDisplay } from '@/lib/chat/tool-call-cleanup';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 
+// #region agent log
+const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
+  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
+}
+// #endregion
 
 /**
  * 流式处理编排器
@@ -71,11 +77,9 @@ export class StreamOrchestrator {
       },
 
       onEvent: async (event: StreamEvent) => {
-
         try {
           await this.handleEvent(event);
         } catch (error) {
-
           console.error('[StreamOrchestrator] 处理事件失败:', error);
           this.config.onError?.(error instanceof Error ? error : new Error(String(error)));
         }
@@ -250,16 +254,31 @@ export class StreamOrchestrator {
    * 处理单个事件
    */
   private async handleEvent(event: StreamEvent): Promise<void> {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'StreamOrchestrator.ts:256',message:'handleEvent called',data:{eventType:event.type,handlersCount:this.handlers.length,messageId:this.context.messageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+    
     // 记录到响应日志（非侵入式）
     this.logEventToResponse(event);
     
     // 找到合适的处理器
+    let handlerFound = false;
     for (const handler of this.handlers) {
       if (handler.canHandle(event)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'StreamOrchestrator.ts:268',message:'Handler found for event',data:{eventType:event.type,handlerName:handler.constructor.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
         await handler.handle(event, this.context);
+        handlerFound = true;
         break; // 每个事件只由一个处理器处理
       }
     }
+    
+    // #region agent log
+    if (!handlerFound) {
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'StreamOrchestrator.ts:279',message:'No handler found for event',data:{eventType:event.type,handlersCount:this.handlers.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
+    }
+    // #endregion
   }
 
   /**
@@ -313,6 +332,15 @@ export class StreamOrchestrator {
     // 保存原始内容用于日志/清理参考
     const originalContent = contentToPersist;
 
+    // #region agent log
+    debugLog('StreamOrchestrator.ts:handleComplete:entry', 'Handle complete entry', {
+      messageId: this.context.messageId,
+      conversationId: this.context.conversationId,
+      toolStarted: this.context.toolStarted,
+      hadCardMarker,
+      contentLength: originalContent?.length || 0,
+    }, 'H1');
+    // #endregion
 
     // Native-only + Event-only：不再允许“收尾阶段从文本中兜底解析并执行工具”。
     // 工具执行只能由结构化 tool_call 事件触发（ToolCallEventHandler）。
@@ -335,6 +363,19 @@ export class StreamOrchestrator {
     const segsFresh = Array.isArray(msg2?.segments) ? msg2.segments : [];
     const toolCardsFresh = segsFresh.filter((s: any) => s?.kind === 'toolCard');
 
+    // #region agent log
+    try {
+      debugLog('StreamOrchestrator.ts:handleComplete:beforePersist', 'Before persist updateMessage', {
+        messageId: this.context.messageId,
+        hasMsg: !!msg2,
+        segCount: segsFresh.length,
+        toolCardCount: toolCardsFresh.length,
+        toolCardIds: toolCardsFresh.map((t: any) => t.id).slice(0, 5),
+        lastKinds: segsFresh.slice(-5).map((s: any) => s?.kind),
+        currentStatus: msg2?.status,
+      }, 'H10');
+    } catch { /* noop */ }
+    // #endregion
 
     // 持久化消息 - 包含 segments
     // 关键修复：使用 fresh state 的 segments 作为基准（而不是 handleComplete 入口处的旧快照 msg）
@@ -360,6 +401,22 @@ export class StreamOrchestrator {
       segments: segmentsToPersist, // 关键：保存同步后的 segments
     });
 
+    // #region agent log
+    try {
+      const st3 = useChatStore.getState();
+      const conv3 = st3.conversations.find(c => c.id === this.context.conversationId);
+      const msg3: any = conv3?.messages.find(m => m.id === this.context.messageId);
+      const segs3 = Array.isArray(msg3?.segments) ? msg3.segments : [];
+      const toolCards3 = segs3.filter((s: any) => s?.kind === 'toolCard');
+      debugLog('StreamOrchestrator.ts:handleComplete:afterPersist', 'After persist updateMessage', {
+        messageId: this.context.messageId,
+        segCount: segs3.length,
+        toolCardCount: toolCards3.length,
+        toolCardIds: toolCards3.map((t: any) => t.id).slice(0, 5),
+        lastKinds: segs3.slice(-5).map((s: any) => s?.kind),
+      }, 'H10');
+    } catch { /* noop */ }
+    // #endregion
 
     // 通知UI更新完成
     this.config.onUIUpdate?.(contentToPersist);
@@ -387,7 +444,12 @@ export class StreamOrchestrator {
             const toolCardsNow = segsNow.filter((s: any) => s?.kind === 'toolCard');
             const hasBlockingTool = toolCardsNow.some((t: any) => t?.status === 'running' || t?.status === 'pending_auth');
             if (hasBlockingTool) {
-
+              // #region agent log
+              debugLog('StreamOrchestrator.ts:title:defer', 'Defer title generation because tools still running', {
+                messageId: this.context.messageId,
+                toolCardCount: toolCardsNow.length,
+              }, 'H_TITLE');
+              // #endregion
               return;
             }
           } catch { /* noop */ }
@@ -426,3 +488,4 @@ export class StreamOrchestrator {
     };
   }
 }
+

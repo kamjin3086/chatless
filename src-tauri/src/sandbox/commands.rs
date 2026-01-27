@@ -12,6 +12,14 @@ use tauri::Manager;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
+use std::sync::{Arc, Mutex};
+
+use lazy_static::lazy_static;
+
+lazy_static! {
+  static ref RUNNING_SHELLS: Mutex<HashMap<String, Arc<tokio::sync::Mutex<tokio::process::Child>>>> =
+    Mutex::new(HashMap::new());
+}
 
 /// Shell 执行结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +41,8 @@ pub struct ShellResult {
 /// 执行选项
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteOptions {
+  /// 前端传入的执行ID（用于 cancel）
+  pub execution_id: Option<String>,
   /// 要执行的命令
   pub command: String,
   /// 命令参数
@@ -57,6 +67,30 @@ fn default_timeout() -> u64 {
 
 fn default_max_output() -> usize {
   1024 * 1024 // 1MB
+}
+
+/// 取消正在运行的 shell 命令（best-effort）
+#[tauri::command]
+pub async fn cancel_safe_shell(execution_id: String) -> Result<bool, String> {
+  let id = execution_id.trim().to_string();
+  if id.is_empty() {
+    return Ok(false);
+  }
+
+  let handle = {
+    let mut map = RUNNING_SHELLS
+      .lock()
+      .map_err(|_| "RUNNING_SHELLS lock poisoned".to_string())?;
+    map.remove(&id)
+  };
+
+  if let Some(child_arc) = handle {
+    let mut child = child_arc.lock().await;
+    let _ = child.kill().await;
+    return Ok(true);
+  }
+
+  Ok(false)
 }
 
 /// 安全执行 shell 命令
@@ -154,11 +188,22 @@ pub async fn run_safe_shell(
   );
 
   // 启动进程
-  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let child = Arc::new(tokio::sync::Mutex::new(child));
+
+  // 注册到全局 map（用于 cancel）
+  let exec_id = options.execution_id.clone().unwrap_or_default();
+  if !exec_id.trim().is_empty() {
+    if let Ok(mut map) = RUNNING_SHELLS.lock() {
+      map.insert(exec_id.clone(), child.clone());
+    }
+  }
 
   // 获取输出流
-  let stdout = child.stdout.take();
-  let stderr = child.stderr.take();
+  let (stdout, stderr) = {
+    let mut guard = child.lock().await;
+    (guard.stdout.take(), guard.stderr.take())
+  };
 
   // 异步读取输出
   let max_output = options.max_output_size;
@@ -203,11 +248,15 @@ pub async fn run_safe_shell(
 
   // 等待命令完成（带超时）
   let timeout_duration = Duration::from_millis(options.timeout_ms);
-  let wait_result = timeout(timeout_duration, child.wait()).await;
+  let wait_result = timeout(timeout_duration, async {
+    let mut guard = child.lock().await;
+    guard.wait().await
+  })
+  .await;
 
   let duration_ms = start_time.elapsed().as_millis() as u64;
 
-  match wait_result {
+  let result = match wait_result {
     Ok(Ok(status)) => {
       let stdout = stdout_handle.await.unwrap_or_default();
       let stderr = stderr_handle.await.unwrap_or_default();
@@ -246,7 +295,10 @@ pub async fn run_safe_shell(
     Err(_) => {
       // 超时，尝试终止进程
       log::warn!("[Sandbox] Command timed out after {}ms", options.timeout_ms);
-      let _ = child.kill().await;
+      {
+        let mut guard = child.lock().await;
+        let _ = guard.kill().await;
+      }
 
       Ok(ShellResult {
         success: false,
@@ -257,7 +309,16 @@ pub async fn run_safe_shell(
         error: Some(format!("命令执行超时 ({}ms)", options.timeout_ms)),
       })
     }
+  };
+
+  // 清理全局 map（无论成功/失败/超时，都尽力移除）
+  if !exec_id.trim().is_empty() {
+    if let Ok(mut map) = RUNNING_SHELLS.lock() {
+      map.remove(&exec_id);
+    }
   }
+
+  result
 }
 
 /// 校验命令（不执行）

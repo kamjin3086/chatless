@@ -21,14 +21,15 @@ interface ToolCallCardProps {
   cardId?: string; // 用于授权管理
 }
 
-export function ToolCallCard({ server, tool, status, args, resultPreview, errorMessage, schemaHint, cardId }: ToolCallCardProps) {
+export function ToolCallCard({ server, tool, status, args, resultPreview, errorMessage, schemaHint, messageId, cardId }: ToolCallCardProps) {
   // 默认不用展开所有状态的卡片
   const [open, setOpen] = React.useState(false);
   const { approveAuthorization, rejectAuthorization, hasPendingAuthorization } = useAuthorizationStore();
   
   // 检查是否有待授权请求
-  // 当 errorMessage 是 'pending_auth' 时，也视为等待授权状态
-  const isPendingAuth = status === 'pending_auth' || errorMessage === 'pending_auth' || (cardId && hasPendingAuthorization(cardId));
+  // 关键：以 status 为准；避免 errorMessage 残留导致“审批完成但 UI 仍像待审批”
+  const authKey = cardId && messageId ? `${messageId}:${cardId}` : undefined;
+  const isPendingAuth = status === 'pending_auth' || (!!authKey && hasPendingAuthorization(authKey));
 
   // 当状态变化时，确保卡片保持展开
   // React.useEffect(() => {
@@ -39,24 +40,25 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   
   // 处理授权批准
   const handleApprove = React.useCallback(() => {
-    if (cardId) {
-      approveAuthorization(cardId);
+    if (authKey) {
+      approveAuthorization(authKey);
     }
-  }, [cardId, approveAuthorization]);
+  }, [authKey, approveAuthorization]);
   
   // 处理授权拒绝
   const handleReject = React.useCallback(() => {
-    if (cardId) {
-      rejectAuthorization(cardId);
+    if (authKey) {
+      rejectAuthorization(authKey);
     }
-  }, [cardId, rejectAuthorization]);
+  }, [authKey, rejectAuthorization]);
   
   return (
     <div className={cn(
       // 柔和的边框和配色，统一视觉风格
       'w-full rounded-lg border-[1.5px] text-sm overflow-hidden transition-all duration-300 cursor-pointer',
       status === 'error' ? 'border-red-300/50 bg-red-50/40 dark:border-red-800/50 dark:bg-red-950/20 hover:bg-red-50/60 dark:hover:bg-red-950/30' :
-      isPendingAuth ? 'border-yellow-300/50 bg-yellow-50/40 dark:border-yellow-800/50 dark:bg-yellow-950/20 hover:bg-yellow-50/60 dark:hover:bg-yellow-950/30' :
+      // 待审批：用更“中性/提示态”的配色，避免看起来像报错
+      isPendingAuth ? 'border-indigo-300/50 bg-indigo-50/35 dark:border-indigo-800/50 dark:bg-indigo-950/20 hover:bg-indigo-50/55 dark:hover:bg-indigo-950/30' :
       status === 'running' ? 'border-blue-300/50 bg-blue-50/40 dark:border-blue-800/50 dark:bg-blue-950/20 hover:bg-blue-50/60 dark:hover:bg-blue-950/30' :
       'border-slate-300/40 bg-slate-50/40 dark:border-slate-700/40 dark:bg-slate-800/40 hover:bg-slate-50/60 dark:hover:bg-slate-800/60'
     )}
@@ -92,8 +94,8 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
               <span className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">取消</span>
             </button>
             <div className="relative flex items-center justify-center w-2 h-2" title="等待授权">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500 shadow-sm" />
+              <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500 shadow-sm" />
             </div>
           </div>
         )}

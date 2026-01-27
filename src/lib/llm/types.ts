@@ -1,12 +1,19 @@
+import type { ToolCallRequest } from './types/tool-schema';
+import type { StreamEvent } from './types/stream-events';
+
+export type ChatRole = 'user' | 'assistant' | 'system' | 'tool' | 'developer';
+
 export interface Message {
-  role: 'user' | 'assistant' | 'system';
+  role: ChatRole;
   content: string;
   id?: string;
   images?: string[]; // base64 Data URLs
   error?: boolean; // Added for UI error display
+  // —— ChatCompletions tool calling (OpenAI-compatible) ——
+  tool_call_id?: string;
+  tool_calls?: ToolCallRequest[];
+  name?: string;
 }
-
-import type { StreamEvent } from './types/stream-events';
 
 export interface StreamCallbacks {
   /**

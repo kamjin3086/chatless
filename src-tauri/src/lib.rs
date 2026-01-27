@@ -245,6 +245,7 @@ pub fn run() {
       web_search::commands::duckrush_search_api,
       // —— Sandbox Commands ——
       sandbox::commands::run_safe_shell,
+      sandbox::commands::cancel_safe_shell,
       sandbox::commands::validate_command,
       sandbox::commands::check_runtime_environment
     ])

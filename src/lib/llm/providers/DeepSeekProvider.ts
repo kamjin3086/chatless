@@ -75,7 +75,18 @@ export class DeepSeekProvider extends BaseProvider {
     const body = {
       model,
       stream: true,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: messages.map((m) => {
+        const anyMsg: any = m as any;
+        const msg: any = { role: m.role, content: m.content };
+        if (m.role === 'tool') {
+          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
+          if (anyMsg.name) msg.name = anyMsg.name;
+        }
+        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
+          msg.tool_calls = anyMsg.tool_calls;
+        }
+        return msg;
+      }),
       ...mapped,
     };
 

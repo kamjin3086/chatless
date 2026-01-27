@@ -27,6 +27,12 @@ import { useSkillExecutionPlanStore } from '@/store/skillExecutionPlanStore';
 import { useSkillContextStore } from '@/store/skillContextStore';
 import { getProcessSandbox } from './sandbox';
 
+// #region agent log
+const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
+function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
+  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
+}
+// #endregion
 
 /**
  * 技能工具参数类型
@@ -75,7 +81,9 @@ async function listAvailableSkills(): Promise<{
  * @param skillId - 技能 ID
  */
 async function getSkillInstructions(skillId: string): Promise<string> {
-
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'skillTools.ts:83',message:'getSkillInstructions called',data:{skillId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
   
   if (!skillId) {
     return 'Error: skillId is required';
@@ -86,7 +94,9 @@ async function getSkillInstructions(skillId: string): Promise<string> {
   const content = await manager.getSkillPromptContent(skillId);
   
   if (!content) {
-
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'skillTools.ts:96',message:'Skill not found or no content',data:{skillId,hasSkill:!!skill,hasContent:!!content},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
     return `Error: Skill "${skillId}" not found or has no content`;
   }
 
@@ -94,6 +104,14 @@ async function getSkillInstructions(skillId: string): Promise<string> {
   const parsed = parseSkillMd(content);
   const actionsCount = parsed.actions.length;
 
+  // #region agent log
+  debugLog(
+    'skillTools.ts:getSkillInstructions:actionsMeta',
+    'Skill instructions actions meta',
+    { skillId, actionsCount, skillPath: skill!.path },
+    'H15-action-guard'
+  );
+  // #endregion
 
   // 列出skill目录资源
   let resourceFiles: string[] = [];
@@ -135,6 +153,10 @@ async function getSkillInstructions(skillId: string): Promise<string> {
     // ignore
   }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'skillTools.ts:157',message:'getSkillInstructions returning',data:{skillId,contentLength:content.length,guidanceLength:guidance.length,hasResourceFiles:resourceFiles.length>0,actionsCount},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  
   return `${content}${guidance}`;
 }
 
@@ -246,6 +268,22 @@ async function listSkillActions(skillId: string): Promise<{
     requiresApproval: action.requiresApproval,
   }));
 
+  // #region agent log
+  debugLog(
+    'skillTools.ts:listSkillActions:parsed',
+    'Parsed skill actions',
+    {
+      skillId,
+      skillName: skill.name,
+      skillPath: skill.path,
+      skillMdLen: (skill.skillMdContent || '').length,
+      actionsCount: parseResult.actions.length,
+      firstActionId: parseResult.actions[0]?.id,
+      frontmatterHasActions: Array.isArray((parseResult.frontmatter as any)?.actions),
+    },
+    'H14-actions'
+  );
+  // #endregion
 
   return {
     skillId,
@@ -306,7 +344,15 @@ async function runSkillAction(
     const hasActions = actionIds.length > 0;
     const hasActionId = actionIds.includes(actionId);
 
-  
+    // #region agent log
+    debugLog(
+      'skillTools.ts:runSkillAction:validate',
+      'Validate skill actionId',
+      { skillId, actionId, hasActions, actionsCount: actionIds.length, hasActionId, actionIdsPreview: actionIds.slice(0, 12) },
+      'H15-action-guard'
+    );
+    // #endregion
+
     if (!hasActions) {
       return {
         success: false,
@@ -396,7 +442,25 @@ async function runAllSkillActions(
     const mode: 'actions' | 'instruction' = instructionOnly ? 'instruction' : 'actions';
     const executedActions = !instructionOnly;
     
-  
+    // #region agent log
+    debugLog(
+      'skillTools.ts:runAllSkillActions:result',
+      'Executed all skill actions',
+      {
+        skillId,
+        resultsCount: results.length,
+        allSuccess,
+        mode,
+        executedActions,
+        firstResultActionId: results[0]?.actionId,
+        firstResultStatus: results[0]?.status,
+        firstResultHasOutput: Boolean(results[0]?.output || results[0]?.stdout),
+        firstResultOutputLen: ((results[0]?.output as string) || (results[0]?.stdout as string) || '').length,
+      },
+      'H14-actions'
+    );
+    // #endregion
+
     return {
       success: allSuccess,
       results,
@@ -560,13 +624,22 @@ export async function executeSkillTool(
   toolName: string,
   params: Record<string, unknown>
 ): Promise<unknown> {
+  // #region agent log
+  debugLog('skillTools.ts:executeSkillTool:entry', 'Executing skill tool', { toolName, params }, 'H5');
+  // #endregion
   
   const tool = skillTools.find(t => t.name === toolName);
   if (!tool) {
-      throw new Error(`Unknown skill tool: ${toolName}`);
+    // #region agent log
+    debugLog('skillTools.ts:executeSkillTool:notFound', 'Skill tool not found', { toolName, availableTools: skillTools.map(t => t.name) }, 'H5');
+    // #endregion
+    throw new Error(`Unknown skill tool: ${toolName}`);
   }
 
   const result = await tool.handler(params);
+  // #region agent log
+  debugLog('skillTools.ts:executeSkillTool:result', 'Skill tool executed', { toolName, resultPreview: typeof result === 'string' ? result.slice(0, 200) : JSON.stringify(result).slice(0, 200) }, 'H5');
+  // #endregion
   return result;
 }
 
@@ -576,3 +649,4 @@ export async function executeSkillTool(
 export function isSkillTool(toolName: string): boolean {
   return skillTools.some(t => t.name === toolName);
 }
+

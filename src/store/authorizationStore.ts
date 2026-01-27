@@ -36,6 +36,9 @@ interface AuthorizationState {
   
   // 检查是否有待授权请求
   hasPendingAuthorization: (id: string) => boolean;
+
+  // 按 messageId 批量拒绝（用于 stop/取消链路）
+  rejectAuthorizationsByMessageId: (messageId: string) => void;
 }
 
 export const useAuthorizationStore = create<AuthorizationState>((set, get) => ({
@@ -79,6 +82,31 @@ export const useAuthorizationStore = create<AuthorizationState>((set, get) => ({
   
   hasPendingAuthorization: (id) => {
     return get().pendingAuthorizations.has(id);
+  },
+
+  rejectAuthorizationsByMessageId: (messageId) => {
+    const mids = String(messageId || '').trim();
+    if (!mids) return;
+
+    const toReject: PendingAuthorization[] = [];
+    for (const auth of get().pendingAuthorizations.values()) {
+      if (auth?.messageId === mids) toReject.push(auth);
+    }
+    if (toReject.length === 0) return;
+
+    // 先回调，再一次性清理，避免回调中再次读写造成迭代问题
+    for (const auth of toReject) {
+      try {
+        auth.onReject();
+      } catch {
+        // ignore
+      }
+    }
+    set((state) => {
+      const newMap = new Map(state.pendingAuthorizations);
+      for (const auth of toReject) newMap.delete(auth.id);
+      return { pendingAuthorizations: newMap };
+    });
   },
 }));
 

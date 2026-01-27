@@ -43,12 +43,26 @@ export class ToolCallCoordinator {
 
   private toolCallLocks = new Map<string, ToolCallLock>();
   private followupLocks = new Map<string, number>();
+  private cancelledMessages = new Map<string, number>();
 
   static getInstance(): ToolCallCoordinator {
     if (!ToolCallCoordinator.instance) {
       ToolCallCoordinator.instance = new ToolCallCoordinator();
     }
     return ToolCallCoordinator.instance;
+  }
+
+  cancelMessage(messageId: string): void {
+    const id = String(messageId || '').trim();
+    if (!id) return;
+    this.cancelledMessages.set(id, Date.now());
+    this.cleanupCancelledMessages(Date.now());
+  }
+
+  isMessageCancelled(messageId: string): boolean {
+    const id = String(messageId || '').trim();
+    if (!id) return false;
+    return this.cancelledMessages.has(id);
   }
 
   private buildToolCallKey(
@@ -137,6 +151,15 @@ export class ToolCallCoordinator {
     const cutoff = now - 60000;
     for (const [key, ts] of this.followupLocks.entries()) {
       if (ts < cutoff) this.followupLocks.delete(key);
+    }
+  }
+
+  private cleanupCancelledMessages(now: number): void {
+    if (this.cancelledMessages.size < 200) return;
+    // 取消标记保留更久一些，避免 stop 后短时间内又被 follow-up 触发
+    const cutoff = now - 5 * 60 * 1000;
+    for (const [key, ts] of this.cancelledMessages.entries()) {
+      if (ts < cutoff) this.cancelledMessages.delete(key);
     }
   }
 }

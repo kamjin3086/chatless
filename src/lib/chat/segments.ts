@@ -225,7 +225,12 @@ export function updateCardStatus(
     if (idOk && s.server === match.server && s.tool === match.tool && (s.status === 'running' || s.status === 'pending_auth')) {
       // 特殊处理：如果 errorMessage 是 'pending_auth'，状态应该是 'pending_auth' 而不是 'error'
       if (to.errorMessage === 'pending_auth') {
-        return { ...s, status: 'pending_auth', errorMessage: to.errorMessage } as ToolCardSegment;
+        // 进入审批态：清理旧结果/提示，避免看起来像“错误卡片”
+        return { ...s, status: 'pending_auth', errorMessage: to.errorMessage, resultPreview: undefined, schemaHint: undefined } as ToolCardSegment;
+      }
+      // 成功：清理 errorMessage/schemaHint，避免 UI 仍按 pending/error 渲染
+      if (to.status === 'success') {
+        return { ...s, ...to, errorMessage: undefined, schemaHint: undefined } as ToolCardSegment;
       }
       return { ...s, ...to } as ToolCardSegment;
     }

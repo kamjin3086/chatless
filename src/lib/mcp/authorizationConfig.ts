@@ -130,7 +130,7 @@ export async function shouldAutoAuthorize(serverName: string): Promise<boolean> 
     // 对高敏感度服务强制要求人工确认（除非为该服务显式开启）
     const name = (serverName || '').toLowerCase().trim();
     const isSensitive =
-      name === 'filesystem' || name === 'file-system' || name === 'fs';
+      name === 'filesystem' || name === 'file-system' || name === 'fs' || name === 'shell_executor' || name === 'shell-executor';
     if (isSensitive) {
       return false;
     }

@@ -20,6 +20,8 @@ import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nati
 import { persistentCache } from '../persistentCache';
 import { getConnectedServers, getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
 import { skillTools } from '@/lib/skills/skillTools';
+import { SKILLS_FS_SERVER_NAME, skillFileTools } from '@/lib/skills/skillFileTools';
+import { USER_FS_SERVER_NAME, userFsTools } from '@/lib/userFs/userFsTools';
 import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 
@@ -247,6 +249,54 @@ async function buildNativeToolDefinitions(
     });
   }
 
+  // 0.1 Skills 文件系统（skills_fs）：仅用于读取/修改 skill 包内容
+  for (const t of skillFileTools) {
+    tools.push({
+      name: `${SKILLS_FS_SERVER_NAME}__${t.name}`,
+      description: t.description || `Skill FS tool ${t.name}`,
+      parameters: normalizeParams(
+        t.parameters
+          ? {
+              type: 'object',
+              properties: Object.fromEntries(
+                Object.entries(t.parameters).map(([k, v]) => [
+                  k,
+                  { type: v.type, description: v.description },
+                ])
+              ),
+              required: Object.entries(t.parameters)
+                .filter(([, v]) => v.required)
+                .map(([k]) => k),
+            }
+          : { type: 'object' }
+      ),
+    });
+  }
+
+  // 0.2 用户授权文件系统（user_fs）：仅允许访问用户已授权目录（alias）
+  for (const t of userFsTools) {
+    tools.push({
+      name: `${USER_FS_SERVER_NAME}__${t.name}`,
+      description: t.description || `User FS tool ${t.name}`,
+      parameters: normalizeParams(
+        t.parameters
+          ? {
+              type: 'object',
+              properties: Object.fromEntries(
+                Object.entries(t.parameters).map(([k, v]) => [
+                  k,
+                  { type: v.type, description: v.description },
+                ])
+              ),
+              required: Object.entries(t.parameters)
+                .filter(([, v]) => v.required)
+                .map(([k]) => k),
+            }
+          : { type: 'object' }
+      ),
+    });
+  }
+
   // 1. 添加 MCP 服务器的工具
   for (const server of servers) {
     try {
@@ -291,7 +341,7 @@ async function buildNativeToolDefinitions(
     tools.push({
       name: `${FILESYSTEM_SERVER_NAME}__${fsTool.name}`,
       description: fsTool.description || `Filesystem tool ${fsTool.name}`,
-      parameters: normalizeParams(fsTool.input_schema?.schema || { type: 'object' }),
+      parameters: normalizeParams((fsTool as any).input_schema?.schema || { type: 'object' }),
     });
   }
 
@@ -300,7 +350,7 @@ async function buildNativeToolDefinitions(
     tools.push({
       name: `${SHELL_EXECUTOR_SERVER_NAME}__${shellTool.name}`,
       description: shellTool.description || `Shell tool ${shellTool.name}`,
-      parameters: normalizeParams(shellTool.input_schema?.schema || { type: 'object' }),
+      parameters: normalizeParams((shellTool as any).input_schema?.schema || { type: 'object' }),
     });
   }
 
@@ -384,7 +434,10 @@ async function injectSkillsIndex(
     
     // 获取技能索引提示词
     const skillsPrompt = manager.buildSkillIndexPrompt();
-
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:injectSkillsIndex',message:'Skills prompt generated',data:{hasPrompt:!!skillsPrompt,promptPreview:skillsPrompt?.slice(0,300)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H9'})}).catch(()=>{});
+    // #endregion
     
     if (skillsPrompt) {
       messages.push({ role: 'system', content: skillsPrompt });
@@ -394,3 +447,4 @@ async function injectSkillsIndex(
     // 不阻塞主流程
   }
 }
+
