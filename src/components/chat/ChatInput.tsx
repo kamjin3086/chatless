@@ -31,6 +31,10 @@ import { useUiSession } from '@/store/uiSession';
 import { useWebSearchStore } from '@/store/webSearchStore';
 import { useRouter } from 'next/navigation';
 import {
+  hasInlineReferences,
+  renderInlineReferencesForOverlay,
+} from './input/inlineReferenceHighlight';
+import {
   getEnabledConfiguredServers,
   getConnectedServers,
   getGlobalEnabledServers,
@@ -90,7 +94,7 @@ interface ChatInputProps {
 
 export function ChatInput({
   onSendMessage,
-  onImageUpload,
+  onImageUpload: _onImageUpload,
   onFileUpload,
   isLoading = false,
   disabled = false,
@@ -145,8 +149,8 @@ export function ChatInput({
   // 会话参数设置弹窗状态
   const [sessionParametersDialogOpen, setSessionParametersDialogOpen] = useState(false);
   
-  const webSearch = useWebSearchStore();
-  const router = useRouter();
+  const _webSearch = useWebSearchStore();
+  const _router = useRouter();
   const setConversationToolMode = useChatStore((s: any) => s.setConversationToolMode);
   const currentToolMode = useChatStore((s: any) => {
     const id = s.currentConversationId;
@@ -155,7 +159,7 @@ export function ChatInput({
   });
   
   // MCP 服务器状态
-  const [mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
+  const [_mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
     all: [],
     connected: [],
     enabled: [],
@@ -420,8 +424,10 @@ export function ChatInput({
 
   // 是否需要覆盖层渲染（/ 指令、@ 提示或 # 技能引用）
   const hasSlashOverlay = useMemo(() => !!parseLeadingSlash(inputValue), [inputValue]);
-  const hasMentionOverlay = useMemo(() => /@([a-zA-Z0-9_-]{1,64})/g.test(inputValue), [inputValue]);
-  const hasSkillMentionOverlay = useMemo(() => /#([a-zA-Z0-9_-]{1,64})/g.test(inputValue), [inputValue]);
+  const { mcp: hasMentionOverlay, skill: hasSkillMentionOverlay } = useMemo(
+    () => hasInlineReferences(inputValue),
+    [inputValue]
+  );
 
   // 用渲染结果替换 /指令与其变量片段；若存在 “| ”，会将其后的内容以换行附加在渲染结果后
   const replaceSlashWithRendered = (text: string, rendered: string): string => {
@@ -924,42 +930,28 @@ export function ChatInput({
             为避免重影，textarea 在有 /指令 时使用 text-transparent，仅显示插入符。 */}
         {(() => {
           const parsed = parseLeadingSlash(inputValue);
-          // 高亮 @mcp 引用（淡绿色）和 #skill 引用（淡紫色）+ 兼容 / 指令高亮
-          const mentionRe = /@([a-zA-Z0-9_-]{1,64})/g;
-          const skillRe = /#([a-zA-Z0-9_-]{1,64})/g;
-          const renderMentions = (text: string) => {
-            const parts: React.ReactNode[] = [];
-            let last = 0;
-            // 合并 @ 和 # 的匹配，按位置排序
-            const allMatches: { index: number; text: string; type: 'mcp' | 'skill' }[] = [];
-            mentionRe.lastIndex = 0;
-            skillRe.lastIndex = 0;
-            let m: RegExpExecArray | null;
-            while ((m = mentionRe.exec(text))) {
-              allMatches.push({ index: m.index, text: m[0], type: 'mcp' });
-            }
-            while ((m = skillRe.exec(text))) {
-              allMatches.push({ index: m.index, text: m[0], type: 'skill' });
-            }
-            allMatches.sort((a, b) => a.index - b.index);
-            for (const match of allMatches) {
-              if (match.index > last) parts.push(text.slice(last, match.index));
-              if (match.type === 'mcp') {
-                parts.push(<span key={match.index} className="bg-emerald-100/80 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300" style={{ fontFeatureSettings: '"liga" 0, "clig" 0', display: 'inline', boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.15)', borderRadius: '2px' }}>{match.text}</span>);
-              } else {
-                parts.push(<span key={match.index} className="bg-violet-100/80 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300" style={{ fontFeatureSettings: '"liga" 0, "clig" 0', display: 'inline', boxShadow: '0 0 0 2px rgba(139, 92, 246, 0.15)', borderRadius: '2px' }}>{match.text}</span>);
-              }
-              last = match.index + match.text.length;
-            }
-            if (last < text.length) parts.push(text.slice(last));
-            return parts;
-          };
+          const overlayNeedsTailNewline = /\r?\n$/.test(inputValue);
           if (!parsed && (hasMentionOverlay || hasSkillMentionOverlay)) {
             // 无 / 指令时，仅做 @ 提示的淡绿色高亮（严格对齐：不添加任何额外字符/空格）
             return (
-              <div ref={overlayRef} className="absolute inset-px pointer-events-none select-none overflow-hidden">
-                <div className="pl-8 sm:pl-10 pr-32 sm:pr-36 py-[10px] pb-10 whitespace-pre-wrap text-sm sm:text-base tabular-nums" style={{ fontFamily: overlayFont || undefined, fontSize: overlayFontSize || undefined, lineHeight: overlayLineHeight || undefined, letterSpacing: 'normal', wordBreak: 'break-word', transform: `translateY(-${textareaScroll}px)` }}>
-                  {renderMentions(inputValue)}
+              <div ref={overlayRef} className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+                <div
+                  className={cn(
+                    "pl-8 sm:pl-10 pr-32 sm:pr-36 py-[10px] pb-10 whitespace-pre-wrap text-sm sm:text-base tabular-nums",
+                    // 关键：当文本以换行结尾时，pre-wrap 往往不渲染“最后的空行高度”，
+                    // 用伪元素仅在该场景补一个换行（不改原文、不影响复制/发送）
+                    overlayNeedsTailNewline ? "after:content-['\\A'] after:whitespace-pre" : ""
+                  )}
+                  style={{
+                    fontFamily: overlayFont || undefined,
+                    fontSize: overlayFontSize || undefined,
+                    lineHeight: overlayLineHeight || undefined,
+                    letterSpacing: 'normal',
+                    wordBreak: 'break-word',
+                    transform: `translateY(-${textareaScroll}px)`,
+                  }}
+                >
+                  {renderInlineReferencesForOverlay(inputValue)}
                 </div>
               </div>
             );
@@ -968,14 +960,27 @@ export function ChatInput({
           const { leadingSpace, token, prefixRaw, hasDelimiter, postRaw, delimiterRaw } = parsed;
           const prefixText = `/${token}${prefixRaw}${hasDelimiter ? delimiterRaw : ''}`;
           return (
-            <div ref={overlayRef} className="absolute inset-px pointer-events-none select-none overflow-hidden">
-              <div className="pl-8 sm:pl-10 pr-32 sm:pr-36 py-[10px] pb-10 whitespace-pre-wrap text-sm sm:text-base tabular-nums" style={{ fontFamily: overlayFont || undefined, fontSize: overlayFontSize || undefined, lineHeight: overlayLineHeight || undefined, letterSpacing: 'normal', wordBreak: 'break-word', transform: `translateY(-${textareaScroll}px)` }}>
+            <div ref={overlayRef} className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+              <div
+                className={cn(
+                  "pl-8 sm:pl-10 pr-32 sm:pr-36 py-[10px] pb-10 whitespace-pre-wrap text-sm sm:text-base tabular-nums",
+                  overlayNeedsTailNewline ? "after:content-['\\A'] after:whitespace-pre" : ""
+                )}
+                style={{
+                  fontFamily: overlayFont || undefined,
+                  fontSize: overlayFontSize || undefined,
+                  lineHeight: overlayLineHeight || undefined,
+                  letterSpacing: 'normal',
+                  wordBreak: 'break-word',
+                  transform: `translateY(-${textareaScroll}px)`,
+                }}
+              >
                 {/* 保留前导空格 */}
                 {leadingSpace}
                 {/* 高亮整段 /token + 变量 + 可选" | "，保持与原文本完全一致，避免光标错位 */}
                 <span className="bg-amber-100/90 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200" style={{ fontFeatureSettings: '"liga" 0, "clig" 0', fontFamily: overlayFont || undefined, fontSize: overlayFontSize || undefined, lineHeight: overlayLineHeight || undefined, display: 'inline', boxShadow: '0 0 0 3px rgba(251, 191, 36, 0.2)', borderRadius: '2px' }}>{prefixText}</span>
                 {/* 竖线后的普通文本按原样展示（不高亮）*/}
-                {hasDelimiter && postRaw ? <>{renderMentions(postRaw)}</> : null}
+                {hasDelimiter && postRaw ? <>{renderInlineReferencesForOverlay(postRaw)}</> : null}
               </div>
             </div>
           );
@@ -1055,6 +1060,7 @@ export function ChatInput({
             onPickImage={() => imageInputRef.current?.click()}
             onPickDocument={() => fileInputRef.current?.click()}
             onSelectKnowledgeBase={setSelectedKnowledgeBase}
+            conversationId={conversationId}
           />
 
           {/* 网络搜索 */}
@@ -1117,16 +1123,25 @@ export function ChatInput({
               </span>
             )}
             {isLoading ? (
-             <Button
-                variant="ghost"
-                size="icon"
-                onClick={onStopGeneration}
-                className="h-8 w-8 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-full"
-                title="停止生成"
-             >
-                <StopCircle className="w-5 h-5" />
-             </Button>
-          ) : (
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 select-none">
+                  <span className="relative inline-flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                  </span>
+                  Agent 运行中
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onStopGeneration}
+                  className="h-8 w-8 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-full"
+                  title="停止（停止生成/停止工具链路）"
+                >
+                  <StopCircle className="w-5 h-5" />
+                </Button>
+              </div>
+            ) : (
             <>
               <Button
                 variant="ghost"
@@ -1148,20 +1163,8 @@ export function ChatInput({
 
       {/* 已启用能力标签条 */}
       <ActiveCapabilitiesBar
-        webSearchEnabled={webSearch.isWebSearchEnabled}
-        webSearchProvider={conversationId ? webSearch.getConversationProvider(conversationId) : webSearch.provider}
-        webSearchProviders={[
-          { id: 'google', label: 'Google', disabled: !(webSearch.apiKeyGoogle && webSearch.cseIdGoogle) },
-          { id: 'bing', label: 'Bing', disabled: !webSearch.apiKeyBing },
-          { id: 'duckduckgo', label: 'DuckDuckGo' },
-          { id: 'ollama', label: 'Ollama Web', disabled: !webSearch.apiKeyOllama },
-        ]}
-        onDisableWebSearch={() => webSearch.toggleWebSearch(false)}
-        onSelectWebSearchProvider={(id) => {
-          if (conversationId) {
-            webSearch.setConversationProvider(conversationId, id as any);
-          }
-        }}
+        // 状态栏仅展示“附加内容”，搜索/MCP 入口在输入框按钮处
+        webSearchEnabled={false}
         selectedKnowledgeBase={selectedKnowledgeBase}
         availableKnowledgeBases={knowledgeBaseOptions}
         onRemoveKnowledgeBase={() => setSelectedKnowledgeBase(null)}
@@ -1169,10 +1172,7 @@ export function ChatInput({
           const kb = allKnowledgeBases.find(k => k.id === id);
           if (kb) setSelectedKnowledgeBase(kb);
         }}
-        enabledMcpServers={mcpServers.enabled.filter(s => mcpServers.connected.includes(s))}
-        onClickMcp={() => {
-          // McpQuickToggle 面板在工具栏中已有
-        }}
+        enabledMcpServers={[]}
         hasSessionParameters={!!currentSessionParameters}
         onClickSessionParameters={() => setSessionParametersDialogOpen(true)}
       />

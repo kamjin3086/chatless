@@ -5,9 +5,16 @@ import { cn } from '@/lib/utils';
 import { Check, X, Globe } from 'lucide-react';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { useAuthorizationStore } from '@/store/authorizationStore';
+import { useChatStore } from '@/store/chatStore';
+import { toast } from '@/components/ui/sonner';
+import { resumeToolCallFromCard } from '@/lib/mcp/approval/resumeToolFromCard';
+import { presentToolCard } from './toolCardPresentation';
+import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+import { getProcessSandbox } from '@/lib/skills/sandbox';
+import { continueAfterToolCardAction } from '@/lib/mcp/approval/continueToolAfterCardAction';
 // 不再在卡片内部触发重试逻辑
 
-type ToolCallStatus = 'success' | 'error' | 'running' | 'pending_auth';
+type ToolCallStatus = 'success' | 'error' | 'running' | 'pending_auth' | 'stopped';
 
 interface ToolCallCardProps {
   server: string;
@@ -22,8 +29,7 @@ interface ToolCallCardProps {
 }
 
 export function ToolCallCard({ server, tool, status, args, resultPreview, errorMessage, schemaHint, messageId, cardId }: ToolCallCardProps) {
-  // 默认不用展开所有状态的卡片
-  const [open, setOpen] = React.useState(false);
+  const presentation = React.useMemo(() => presentToolCard({ server, tool, args }), [server, tool, args]);
   const { approveAuthorization, rejectAuthorization, hasPendingAuthorization } = useAuthorizationStore();
   
   // 检查是否有待授权请求
@@ -31,127 +37,307 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   const authKey = cardId && messageId ? `${messageId}:${cardId}` : undefined;
   const isPendingAuth = status === 'pending_auth' || (!!authKey && hasPendingAuthorization(authKey));
 
-  // 当状态变化时，确保卡片保持展开
-  // React.useEffect(() => {
-  //   if (status === 'error' || status === 'success') {
-  //     setOpen(true);
-  //   }
-  // }, [status]);
+  // 重要：工具卡片**永远不默认展开详情**。预览区（两行）足够让用户做审批判断；点击卡片才展开详情。
+  const [open, setOpen] = React.useState<boolean>(false);
+
+  const rememberHint =
+    isPendingAuth && String(server || '').toLowerCase() === 'filesystem' && presentation.kind === 'path'
+      ? '确认后会记住该目录，后续更顺畅'
+      : isPendingAuth && String(server || '').toLowerCase() === 'shell_executor' && typeof (args as any)?.workingDir === 'string' && String((args as any).workingDir).trim()
+        ? '确认后会记住该工作目录，减少重复确认'
+        : undefined;
   
   // 处理授权批准
   const handleApprove = React.useCallback(() => {
-    if (authKey) {
-      approveAuthorization(authKey);
+    if (!authKey || !messageId || !cardId) return;
+
+    // 立即 UI 反馈：变为 running（避免“点了没反应/延迟”）
+    try {
+      useChatStore.getState().dispatchMessageAction(messageId, {
+        type: 'TOOL_HIT',
+        server,
+        tool,
+        args,
+        cardId,
+      });
+    } catch {
+      // ignore
     }
-  }, [authKey, approveAuthorization]);
+
+    const ok = approveAuthorization(authKey);
+    if (!ok) {
+      // 残留/恢复会话：pending 授权不在 store 中。我们用 preApprove + 恢复执行保证点击有结果。
+      toast.info('审批已接收', { description: '正在尝试从会话状态恢复并继续执行…' });
+      void resumeToolCallFromCard({
+        assistantMessageId: messageId,
+        cardId,
+        server,
+        tool,
+        args,
+      }).catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        toast.error('恢复执行失败', { description: msg });
+        try {
+          useChatStore.getState().dispatchMessageAction(messageId, {
+            type: 'TOOL_RESULT',
+            server,
+            tool,
+            ok: false,
+            errorMessage: `审批已过期，且恢复执行失败：${msg}`,
+            cardId,
+          } as any);
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }, [authKey, messageId, cardId, server, tool, args, approveAuthorization]);
   
   // 处理授权拒绝
   const handleReject = React.useCallback(() => {
-    if (authKey) {
-      rejectAuthorization(authKey);
+    if (!authKey || !messageId || !cardId) return;
+
+    // 立即 UI 反馈：标记为拒绝
+    try {
+      useChatStore.getState().dispatchMessageAction(messageId, {
+        type: 'TOOL_RESULT',
+        server,
+        tool,
+        ok: false,
+        errorMessage: '用户拒绝',
+        cardId,
+      } as any);
+    } catch {
+      // ignore
     }
-  }, [authKey, rejectAuthorization]);
+
+    const ok = rejectAuthorization(authKey);
+    if (!ok) {
+      toast.info('已拒绝', { description: '该审批记录已不在队列中（可能是恢复会话的残留卡片）。' });
+    }
+  }, [authKey, messageId, cardId, server, tool, rejectAuthorization]);
+
+  const handleStopRunning = React.useCallback(() => {
+    if (!messageId || !cardId) return;
+    const coord = ToolCallCoordinator.getInstance();
+    coord.cancelToolCard(messageId, cardId);
+
+    // best-effort: 如果是 shell_executor，尝试取消后端执行
+    if (String(server || '').toLowerCase() === 'shell_executor') {
+      try {
+        const sandbox = getProcessSandbox();
+        const executionId = `shell:${messageId}:${String(cardId)}`;
+        void sandbox.cancel(executionId);
+      } catch {
+        // ignore
+      }
+    }
+
+    try {
+      useChatStore.getState().dispatchMessageAction(messageId, {
+        type: 'TOOL_RESULT',
+        server,
+        tool,
+        ok: false,
+        errorMessage: 'stopped',
+        cardId,
+      } as any);
+    } catch {
+      // ignore
+    }
+    toast.info('已停止该步骤', { description: '该工具已标记为停止（best-effort 取消执行）。' });
+  }, [messageId, cardId, server, tool]);
+
+  const handleSkipRunning = React.useCallback(() => {
+    if (!messageId || !cardId) return;
+    const coord = ToolCallCoordinator.getInstance();
+    coord.cancelToolCard(messageId, cardId);
+
+    try {
+      useChatStore.getState().dispatchMessageAction(messageId, {
+        type: 'TOOL_RESULT',
+        server,
+        tool,
+        ok: false,
+        errorMessage: 'skipped',
+        cardId,
+      } as any);
+    } catch {
+      // ignore
+    }
+
+    toast.info('已跳过该步骤', { description: '将继续后续步骤（忽略该工具的最终输出）。' });
+    void continueAfterToolCardAction({
+      assistantMessageId: messageId,
+      cardId,
+      server,
+      tool,
+      args,
+      result: { skipped: true, reason: 'USER_SKIPPED' },
+    }).catch(() => {});
+  }, [messageId, cardId, server, tool, args]);
   
   return (
-    <div className={cn(
-      // 柔和的边框和配色，统一视觉风格
-      'w-full rounded-lg border-[1.5px] text-sm overflow-hidden transition-all duration-300 cursor-pointer',
-      status === 'error' ? 'border-red-300/50 bg-red-50/40 dark:border-red-800/50 dark:bg-red-950/20 hover:bg-red-50/60 dark:hover:bg-red-950/30' :
-      // 待审批：用更“中性/提示态”的配色，避免看起来像报错
-      isPendingAuth ? 'border-indigo-300/50 bg-indigo-50/35 dark:border-indigo-800/50 dark:bg-indigo-950/20 hover:bg-indigo-50/55 dark:hover:bg-indigo-950/30' :
-      status === 'running' ? 'border-blue-300/50 bg-blue-50/40 dark:border-blue-800/50 dark:bg-blue-950/20 hover:bg-blue-50/60 dark:hover:bg-blue-950/30' :
-      'border-slate-300/40 bg-slate-50/40 dark:border-slate-700/40 dark:bg-slate-800/40 hover:bg-slate-50/60 dark:hover:bg-slate-800/60'
-    )}
-      onClick={()=>setOpen(o=>!o)}
+    <div
+      className={cn(
+        // 更“列表项”风格：弱化卡片边框、降低高度与字号
+        'w-full overflow-hidden rounded-md bg-slate-50/30 dark:bg-slate-900/10',
+        'transition-colors cursor-pointer hover:bg-slate-50/60 dark:hover:bg-slate-900/20'
+      )}
+      onClick={() => setOpen((o) => !o)}
     >
-      <div className="px-3.5 py-2.5 flex items-center gap-2.5 border-b border-slate-200/40 dark:border-slate-700/40 bg-white/20 dark:bg-slate-900/10">
-        {/* server 图标：web_search 使用地球图标，更直观；其他保持 @ 标识 */}
-        {server === WEB_SEARCH_SERVER_NAME ? (
-          <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-        ) : (
-          <span className="px-2 py-0.5 rounded text-slate-600 dark:text-slate-400 text-[11px] font-semibold bg-slate-100/60 dark:bg-slate-800/60">@</span>
-        )}
-        <span className="font-semibold truncate text-slate-800 dark:text-slate-200">{server}</span>
-        <span className="text-slate-400 dark:text-slate-600">·</span>
-        <span className="font-mono text-[12px] truncate text-slate-700 dark:text-slate-300 font-medium">{tool}</span>
-        {/* 授权按钮：仅在等待授权时显示 */}
-        {isPendingAuth && (
-          <div className="ml-auto flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+      {/* 紧凑两行摘要 */}
+      <div className="px-3 py-2 flex items-start gap-2 min-w-0">
+        {/* 左侧：状态点 */}
+        <div className="mt-1">
+          {isPendingAuth ? (
+            <div className="relative flex items-center justify-center w-2 h-2" title="等待授权">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+            </div>
+          ) : status === 'running' ? (
+            <div className="relative flex items-center justify-center w-2 h-2" title="调用中...">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            </div>
+          ) : status === 'stopped' ? (
+            <div title="已停止">
+              <span className="inline-flex rounded-full h-2 w-2 bg-slate-400 dark:bg-slate-500" />
+            </div>
+          ) : status === 'success' ? (
+            <div title="调用成功">
+              <Check className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+            </div>
+          ) : (
+            <div title="调用失败">
+              <X className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+            </div>
+          )}
+        </div>
+
+        {/* 中间：两行文本（尽量用户友好，不暴露技术字段） */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            {server === WEB_SEARCH_SERVER_NAME ? (
+              <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+            ) : null}
+            <span className="text-[12px] font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {presentation.titleLine}
+            </span>
+          </div>
+
+          {presentation.detailLineFull ? (
+            <div
+              className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300 truncate"
+              title={presentation.detailLineFull}
+            >
+              <span className="text-slate-400 dark:text-slate-500">
+                {presentation.detailLineLabel ? `${presentation.detailLineLabel}: ` : ''}
+              </span>
+              <span className={cn(
+                presentation.kind === 'shell' ? 'font-mono' : undefined
+              )}>
+                {presentation.detailLineFull}
+              </span>
+            </div>
+          ) : null}
+        </div>
+
+        {/* 右侧：审批按钮（仅 pending_auth） */}
+        {isPendingAuth ? (
+          <div className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleApprove}
-              className="flex items-center gap-0.5 px-2 py-1 rounded-md bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md active:scale-95"
-              title="授权执行"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition-colors active:scale-95"
+              title={rememberHint ? `确认并继续执行（${rememberHint}）` : '确认并继续执行'}
             >
               <Check className="w-3.5 h-3.5 text-white" />
-              <span className="text-[11px] text-white font-semibold">确认</span>
+              确认
             </button>
             <button
               onClick={handleReject}
-              className="flex items-center gap-0.5 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md active:scale-95"
-              title="拒绝执行"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 transition-colors active:scale-95"
+              title="取消执行"
             >
-              <X className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
-              <span className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">取消</span>
+              <X className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+              取消
             </button>
-            <div className="relative flex items-center justify-center w-2 h-2" title="等待授权">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500 shadow-sm" />
-            </div>
           </div>
-        )}
-        {/* 状态指示器：执行中用蓝色点，成功用对号，失败用X */}
-        {!isPendingAuth && (
-          <div className="ml-auto flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            {/* 执行中：蓝色圆点动画 */}
-            {status === 'running' && (
-              <div className="relative flex items-center justify-center w-2 h-2" title="调用中...">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-              </div>
-            )}
-            {/* 成功：绿色对号 */}
-            {status === 'success' && (
-              <div title="调用成功">
-                <Check className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-              </div>
-            )}
-            {/* 失败：红色X */}
-            {status === 'error' && (
-              <div title="调用失败">
-                <X className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-              </div>
-            )}
+        ) : null}
+
+        {/* 右侧：运行中可跳过/停止 */}
+        {!isPendingAuth && status === 'running' ? (
+          <div className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={handleStopRunning}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 transition-colors active:scale-95"
+              title="停止该工具（best-effort）"
+            >
+              停止
+            </button>
+            <button
+              onClick={handleSkipRunning}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/70 hover:bg-white dark:bg-slate-900/30 dark:hover:bg-slate-900/40 text-[11px] font-semibold text-slate-600 dark:text-slate-300 transition-colors active:scale-95 border border-slate-200/60 dark:border-slate-700/60"
+              title="跳过等待该工具，继续后续步骤"
+            >
+              跳过
+            </button>
           </div>
-        )}
+        ) : null}
       </div>
-      {/* 参数显示：所有状态下都显示（running/success/error） */}
-      {open && args && Object.keys(args).length > 0 && (
-        <div className="px-3.5 py-2.5 text-[12px] text-slate-700 dark:text-slate-300">
-          <div className="mb-1.5 font-semibold text-slate-800 dark:text-slate-200">参数</div>
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-slate-100/50 dark:bg-slate-900/30 rounded-lg p-2.5 border border-slate-200/50 dark:border-slate-800/50">{JSON.stringify(args, null, 2)}</pre>
-        </div>
-      )}
-      {/* 结果显示：仅成功状态显示 */}
-      {open && status === 'success' && resultPreview && (
-        <div className="px-3.5 py-2.5 text-[12px] text-slate-700 dark:text-slate-300 border-t border-slate-200/70 dark:border-slate-800/70">
-          <div className="mb-1.5 font-semibold text-slate-800 dark:text-slate-200">结果</div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-slate-100/50 dark:bg-slate-900/30 rounded-lg p-2.5 border border-slate-200/50 dark:border-slate-800/50">{resultPreview}</pre>
-        </div>
-      )}
-      {open && status === 'error' && (
-        <div className="px-3.5 py-2.5 text-[12px] text-red-800 dark:text-red-300">
-          <div className="mb-1.5 font-semibold flex items-center gap-2">
-            <span>错误信息</span>
-            <span className="text-[10px] px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-md font-semibold shadow-sm">自动重试中...</span>
+
+      {/* 可展开详情区：参数/结果/错误 */}
+      {open && (
+        <div className="px-3 pb-2.5 pt-0.5 space-y-2">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            工具：<span className="font-mono">{server}.{tool}</span>
           </div>
-          <div className="max-h-32 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-red-50/70 dark:bg-red-950/30 rounded-lg p-2.5 border border-red-200/70 dark:border-red-900/50">
-            {errorMessage || '未知错误'}
-          </div>
-          {schemaHint && (
-            <div className="mt-3 text-[12px] text-slate-700 dark:text-slate-300">
-              <div className="mb-1.5 font-semibold text-slate-800 dark:text-slate-200">修复建议</div>
-              <div className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-slate-100/50 dark:bg-slate-900/30 rounded-lg p-2.5 border border-slate-200/50 dark:border-slate-800/50">
-                {schemaHint}
+          {rememberHint ? (
+            <div className="text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="font-semibold">提示：</span>
+              {rememberHint}
+            </div>
+          ) : null}
+          {args && Object.keys(args).length > 0 && (
+            <div className="text-[12px] text-slate-700 dark:text-slate-300">
+              <div className="mb-1 font-semibold text-slate-800 dark:text-slate-200">参数</div>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-slate-100/60 dark:bg-slate-900/30 rounded-md p-2 border border-slate-200/60 dark:border-slate-800/60">
+                {JSON.stringify(args, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {status === 'success' && resultPreview && (
+            <div className="text-[12px] text-slate-700 dark:text-slate-300">
+              <div className="mb-1 font-semibold text-slate-800 dark:text-slate-200">结果</div>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-slate-100/60 dark:bg-slate-900/30 rounded-md p-2 border border-slate-200/60 dark:border-slate-800/60">
+                {resultPreview}
+              </pre>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="text-[12px] text-red-800 dark:text-red-300">
+              <div className="mb-1 font-semibold">错误信息</div>
+              <div className="max-h-32 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-red-50/70 dark:bg-red-950/30 rounded-md p-2 border border-red-200/70 dark:border-red-900/50">
+                {errorMessage || '未知错误'}
+              </div>
+              {schemaHint && (
+                <div className="mt-2 text-[12px] text-slate-700 dark:text-slate-300">
+                  <div className="mb-1 font-semibold text-slate-800 dark:text-slate-200">修复建议</div>
+                  <div className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[12px] bg-slate-100/60 dark:bg-slate-900/30 rounded-md p-2 border border-slate-200/60 dark:border-slate-800/60">
+                    {schemaHint}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {status === 'stopped' && (
+            <div className="text-[12px] text-slate-700 dark:text-slate-300">
+              <div className="mb-1 font-semibold">已停止</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                {errorMessage === 'skipped' ? '已跳过该步骤，忽略该工具输出。' : '用户已停止该步骤。'}
               </div>
             </div>
           )}

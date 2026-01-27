@@ -1,3 +1,4 @@
+import { FilesystemAdapter } from './FilesystemAdapter';
 import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
 import { SkillsFsAdapter } from './SkillsFsAdapter';
@@ -15,11 +16,13 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new SkillsToolAdapter(),
     new SkillsFsAdapter(),
     new UserFsAdapter(),
+    new FilesystemAdapter(),
     new ShellExecutorAdapter(),
     new McpAdapter(),
   ];
 }
 
+export { FilesystemAdapter } from './FilesystemAdapter';
 export { McpAdapter } from './McpAdapter';
 export { ShellExecutorAdapter } from './ShellExecutorAdapter';
 export { SkillsFsAdapter } from './SkillsFsAdapter';

@@ -8,6 +8,8 @@
  */
 
 import { useFileSystemAuthStore, type AuthorizedDirectory, type FileOp } from '@/store/fileSystemAuthStore';
+import { useChatStore } from '@/store/chatStore';
+import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
 
 function assertSafeRelativePath(p: string): void {
   const path = String(p || '').trim().replace(/\\/g, '/');
@@ -24,7 +26,25 @@ export async function ensureUserFsLoaded(): Promise<void> {
 
 export function listAuthorizedDirectories(): Array<Pick<AuthorizedDirectory, 'id' | 'alias' | 'path' | 'permissions'>> {
   const st = useFileSystemAuthStore.getState();
-  return st.directories.map((d) => ({ id: d.id, alias: d.alias, path: d.path, permissions: d.permissions }));
+  const base = st.directories.map((d) => ({ id: d.id, alias: d.alias, path: d.path, permissions: d.permissions }));
+
+  // 会话级工作目录（临时授权）：@WorkDir
+  try {
+    const cid = useChatStore.getState().currentConversationId || '';
+    const wd = cid ? useConversationAttachmentStore.getState().getWorkingDir(cid) : undefined;
+    if (wd) {
+      base.unshift({
+        id: `session:${cid}:workdir`,
+        alias: 'WorkDir',
+        path: wd,
+        permissions: { read: true, write: true, create: true, delete: false },
+      });
+    }
+  } catch {
+    // ignore
+  }
+
+  return base;
 }
 
 function resolveAliasPath(aliasPath: string): { dir: AuthorizedDirectory; relative: string } {
@@ -44,6 +64,23 @@ function resolveAliasPath(aliasPath: string): { dir: AuthorizedDirectory; relati
   const st = useFileSystemAuthStore.getState();
   const dir = st.getByAlias(alias);
   if (!dir) {
+    // 会话临时工作目录：@WorkDir/...
+    const a = alias.toLowerCase();
+    if (a === 'workdir') {
+      const cid = useChatStore.getState().currentConversationId || '';
+      const wd = cid ? useConversationAttachmentStore.getState().getWorkingDir(cid) : undefined;
+      if (wd) {
+        const sessionDir: AuthorizedDirectory = {
+          id: `session:${cid}:workdir`,
+          alias: 'WorkDir',
+          path: wd,
+          permissions: { read: true, write: true, create: true, delete: false },
+          authorizedAt: Date.now(),
+        };
+        return { dir: sessionDir, relative };
+      }
+      throw new Error('WorkDir 未附加。请在输入框“+”里附加工作目录后再使用 @WorkDir/...');
+    }
     throw new Error(`Alias "@${alias}" is not authorized. Ask user to authorize it in Settings -> 安全.`);
   }
 
@@ -57,6 +94,20 @@ function assertPermission(dir: AuthorizedDirectory, op: FileOp): void {
 export async function readUserFile(aliasPath: string, maxLines?: number): Promise<string> {
   await ensureUserFsLoaded();
   const { dir, relative } = resolveAliasPath(aliasPath);
+
+  // UX 自愈：若目录已允许 write/create/delete，但 read 被关闭，会导致“写得了读不了”的反直觉体验。
+  // 在这种情况下，自动补齐 read 权限并持久化。
+  if (!dir.permissions?.read && (dir.permissions?.write || dir.permissions?.create || dir.permissions?.delete)) {
+    try {
+      const st = useFileSystemAuthStore.getState();
+      await st.updateDirectory(dir.id, { permissions: { ...dir.permissions, read: true } });
+      // 使用就地对象的副本，确保后续校验通过
+      (dir.permissions as any).read = true;
+    } catch {
+      // ignore
+    }
+  }
+
   assertPermission(dir, 'read');
 
   const { join } = await import('@tauri-apps/api/path');

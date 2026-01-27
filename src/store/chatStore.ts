@@ -359,6 +359,16 @@ export const useChatStore = create<ChatState & ChatActions>()(
           throw error;
         }
 
+        // 自动创建会话工作区并注入 @WorkDir（默认 AppData/workspaces/<conversationId>）
+        try {
+          const { ensureConversationWorkspace } = await import('@/lib/agentWorkspace/workspaceService');
+          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+          const ws = await ensureConversationWorkspace(newConversation.id);
+          useConversationAttachmentStore.getState().setWorkingDir(newConversation.id, ws.root);
+        } catch (e) {
+          console.warn('[CREATE-CONVERSATION] init workspace failed:', e);
+        }
+
         return newConversation.id;
       },
 
@@ -369,6 +379,22 @@ export const useChatStore = create<ChatState & ChatActions>()(
           const conv = get().conversations.find(c => c.id === id);
           if (conv?.tool_mode) set({ sessionToolMode: conv.tool_mode });
         } catch { /* noop */ }
+
+        // 切换会话时确保 @WorkDir 存在（attachment store 非持久化，需懒创建）
+        void (async () => {
+          try {
+            const cid = String(id || '').trim();
+            if (!cid) return;
+            const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+            const existing = useConversationAttachmentStore.getState().getWorkingDir(cid);
+            if (existing) return;
+            const { ensureConversationWorkspace } = await import('@/lib/agentWorkspace/workspaceService');
+            const ws = await ensureConversationWorkspace(cid);
+            useConversationAttachmentStore.getState().setWorkingDir(cid, ws.root);
+          } catch {
+            // ignore
+          }
+        })();
       },
 
       addMessage: async (messageData) => {

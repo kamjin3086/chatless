@@ -46,7 +46,7 @@ export interface Message {
         server: string;
         tool: string;
         args?: Record<string, unknown>;
-        status: 'running' | 'success' | 'error';
+        status: 'running' | 'success' | 'error' | 'pending_auth' | 'stopped';
         resultPreview?: string;
         errorMessage?: string;
         schemaHint?: string;
@@ -65,7 +65,7 @@ export interface Message {
 }
 
 // —— 渲染只读模型 ——
-export type VmToolStatus = 'running' | 'success' | 'error';
+export type VmToolStatus = 'running' | 'success' | 'error' | 'pending_auth' | 'stopped';
 
 export interface VmTextSegment { kind: 'text'; text: string }
 export interface VmThinkSegment { kind: 'think'; text: string }

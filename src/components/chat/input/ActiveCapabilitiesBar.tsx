@@ -8,7 +8,7 @@
  */
 
 import { useState, useRef } from "react";
-import { X, Globe, Database, Plug, Settings } from "lucide-react";
+import { X, Database, Plug, Settings } from "lucide-react";
 import type { KnowledgeBase } from "@/lib/knowledgeService";
 import { QuickSelectPopover, type QuickSelectOption } from "./QuickSelectPopover";
 import { cn } from "@/lib/utils";
@@ -37,11 +37,11 @@ interface ActiveCapabilitiesBarProps {
 }
 
 export function ActiveCapabilitiesBar({
-  webSearchEnabled,
-  webSearchProvider,
-  webSearchProviders = [],
-  onDisableWebSearch,
-  onSelectWebSearchProvider,
+  webSearchEnabled: _webSearchEnabled,
+  webSearchProvider: _webSearchProvider,
+  webSearchProviders: _webSearchProviders = [],
+  onDisableWebSearch: _onDisableWebSearch,
+  onSelectWebSearchProvider: _onSelectWebSearchProvider,
   selectedKnowledgeBase,
   availableKnowledgeBases = [],
   onRemoveKnowledgeBase,
@@ -52,14 +52,13 @@ export function ActiveCapabilitiesBar({
   onClickSessionParameters,
 }: ActiveCapabilitiesBarProps) {
   // 上拉状态
-  const [webSearchPopoverOpen, setWebSearchPopoverOpen] = useState(false);
   const [knowledgeBasePopoverOpen, setKnowledgeBasePopoverOpen] = useState(false);
   
   // 锚点元素
-  const webSearchRef = useRef<HTMLButtonElement>(null);
   const knowledgeBaseRef = useRef<HTMLButtonElement>(null);
 
-  const hasAny = webSearchEnabled || selectedKnowledgeBase || enabledMcpServers.length > 0 || hasSessionParameters;
+  // 简化：状态栏仅展示“已附加内容”（不展示“已启用”文案与过多技术项）
+  const hasAny = selectedKnowledgeBase || enabledMcpServers.length > 0 || hasSessionParameters;
 
   if (!hasAny) {
     return null;
@@ -71,33 +70,7 @@ export function ActiveCapabilitiesBar({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 px-2 py-1.5">
-        <span className="text-[10px] text-slate-400 dark:text-slate-500">
-          已启用:
-        </span>
-
-        {/* 网络搜索标签 - 蓝色系 */}
-        {webSearchEnabled && (
-          <button
-            ref={webSearchRef}
-            onClick={() => setWebSearchPopoverOpen(true)}
-            className={cn(
-              tagBase,
-              "bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400",
-              "hover:bg-sky-100 dark:hover:bg-sky-900/50",
-              "border border-sky-200/50 dark:border-sky-800/50"
-            )}
-          >
-            <Globe className="w-3 h-3" />
-            <span>{webSearchProvider || "搜索"}</span>
-            <X
-              className="w-3 h-3 opacity-40 group-hover:opacity-100 hover:text-sky-700 dark:hover:text-sky-300"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDisableWebSearch?.();
-              }}
-            />
-          </button>
-        )}
+        {/* 网络搜索不在状态栏显示：入口在输入框按钮处 */}
 
         {/* 知识库标签 - 紫色系 */}
         {selectedKnowledgeBase && (
@@ -156,18 +129,7 @@ export function ActiveCapabilitiesBar({
         )}
       </div>
 
-      {/* 网络搜索上拉选择 */}
-      <QuickSelectPopover
-        open={webSearchPopoverOpen}
-        onOpenChange={setWebSearchPopoverOpen}
-        anchorEl={webSearchRef.current}
-        options={webSearchProviders}
-        selectedId={webSearchProvider}
-        onSelect={(id) => onSelectWebSearchProvider?.(id)}
-        title="选择搜索引擎"
-        emptyText="暂无可用搜索"
-        accentColor="sky"
-      />
+      {/* 网络搜索上拉选择：已移除（入口统一在输入框按钮/面板中） */}
 
       {/* 知识库上拉选择 */}
       <QuickSelectPopover

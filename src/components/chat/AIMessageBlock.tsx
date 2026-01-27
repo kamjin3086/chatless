@@ -30,7 +30,7 @@ interface AIMessageBlockProps {
     | { kind: 'text'; text: string }
     | { kind: 'think'; text: string }
     | { kind: 'image'; mimeType: string; data: string }
-    | { kind: 'toolCard'; id: string; server: string; tool: string; args?: Record<string, unknown>; status: 'running' | 'success' | 'error'; resultPreview?: string; errorMessage?: string; schemaHint?: string; messageId: string }
+    | { kind: 'toolCard'; id: string; server: string; tool: string; args?: Record<string, unknown>; status: 'running' | 'success' | 'error' | 'pending_auth' | 'stopped'; resultPreview?: string; errorMessage?: string; schemaHint?: string; messageId: string }
   >;
   // 只读视图模型（优先级最高）
   viewModel?: {

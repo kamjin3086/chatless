@@ -6,21 +6,10 @@ import type { GuidanceRule } from './types';
  * 设计原则：
  * - 规则必须可组合、可替换（避免在 orchestrator 里写 if/else 补丁）
  * - 指引必须“动作化”：要么继续调用具体工具，要么直接给出最终答复
- * - 不在这里硬编码 OS 路径/环境（交给 user_fs / skills_fs 的工具约束去表达）
+ * - 不在这里硬编码 OS 路径/环境（交给 filesystem 的 allowlist 约束去表达）
  */
 export const DEFAULT_GUIDANCE_RULES: GuidanceRule[] = [
-  // skills_fs：skillId 伪造/误用纠错（资源名被当成 skillId）
-  {
-    id: 'skills_fs_invalid_skill_id_fix',
-    priority: 950,
-    match: { server: 'skills_fs', kind: 'tool_error', resultIncludes: ['Invalid skillId'] },
-    guidance: () =>
-      [
-        'skills_fs 调用失败：skillId 不合法（很可能把资源文件名当成了 skillId）。',
-        '规则：skillId 必须严格来自 skills.list_available_skills 的返回 id（例如 docx）。',
-        '下一步：调用 skills.list_available_skills 获取合法 id，然后用同一个 resourcePath 重试 skills_fs.read_skill_resource（skillId 换成合法的）。',
-      ].join('\n'),
-  },
+  // skills_fs 相关规则已废弃：文件系统统一为 filesystem
 
   // 连接问题：允许直接重试同一工具
   {
@@ -70,7 +59,7 @@ export const DEFAULT_GUIDANCE_RULES: GuidanceRule[] = [
       if (looksInstructionOnly) {
         return [
           '已获取技能使用指南（instruction-only，无预定义 actions）。',
-          '下一步：使用 skills_fs.list_skill_resources / skills_fs.read_skill_resource（如需示例/模板），然后使用 user_fs.* 在用户授权目录内创建/修改文件，必要时用 shell_executor 执行命令。',
+          '下一步：如需模板/示例，按指南继续调用 skills 工具获取；文件创建/修改统一使用 filesystem 在白名单目录内完成，必要时用 shell_executor 执行命令。',
           '禁止：不要重复调用 list_available_skills / get_skill_instructions。',
         ].join('\n');
       }
@@ -84,7 +73,7 @@ export const DEFAULT_GUIDANCE_RULES: GuidanceRule[] = [
     priority: 640,
     match: { server: 'skills', tool: 'run_all_skill_actions', kind: 'success', resultIncludes: ['"actionId":"instruction"'] },
     guidance: () =>
-      'skill 返回的是“仅指南（未执行）”。禁止声称已创建文件/已运行命令。请按指南逐步调用 skills_fs/user_fs/shell_executor 完成真实操作。',
+      'skill 返回的是“仅指南（未执行）”。禁止声称已创建文件/已运行命令。请按指南逐步调用 filesystem / shell_executor 完成真实操作。',
   },
 
   // filesystem（MCP fs）：写入成功后，应该直接收敛回答
@@ -92,8 +81,28 @@ export const DEFAULT_GUIDANCE_RULES: GuidanceRule[] = [
     id: 'mcp_filesystem_write_success_finish',
     priority: 600,
     match: { server: 'filesystem', tool: 'write_file', kind: 'success', resultIncludes: ['File written successfully'] },
-    guidance: () =>
-      '文件写入成功。现在请直接向用户说明已完成（包含文件路径/下一步建议），不要再调用任何工具。',
+    guidance: (ctx) => {
+      const path = typeof (ctx.args as any)?.path === 'string' ? String((ctx.args as any).path) : '';
+      const lower = path.toLowerCase();
+      const isScript =
+        lower.endsWith('.js') ||
+        lower.endsWith('.ts') ||
+        lower.endsWith('.py') ||
+        lower.endsWith('.sh') ||
+        lower.endsWith('.ps1') ||
+        lower.endsWith('.bat') ||
+        lower.endsWith('.cmd');
+
+      if (isScript) {
+        return [
+          '脚本文件已写入（仅表示保存成功，不代表用户目标已完成）。',
+          '下一步必须：使用 shell_executor 执行该脚本/命令（workingDir 设为输出目录），并用 filesystem 验证关键产物已生成（例如 exists/read_file/list_directory）。',
+          '禁止：不要仅凭“File written successfully”就声称已创建文档/已完成任务。',
+        ].join('\n');
+      }
+
+      return '文件写入成功。若该文件就是最终交付物：向用户说明已完成（包含文件路径/必要的下一步）；否则继续执行后续步骤并验证结果。';
+    },
   },
 
   // 默认：成功则让模型基于结果回答，必要时补齐

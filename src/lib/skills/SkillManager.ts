@@ -9,6 +9,7 @@ import { LocalSkillLoader, createLocalSkillLoader } from './LocalSkillLoader';
 import { RemoteSkillLoader, createRemoteSkillLoader } from './RemoteSkillLoader';
 import { useSkillStore } from '@/store/skillStore';
 import { inferOriginKind } from './integrity';
+import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 
 /**
  * 技能管理器
@@ -525,6 +526,16 @@ export class SkillManager {
       if (!(await exists(skillsDir))) {
         await mkdir(skillsDir, { recursive: true });
       }
+
+      // 自动加入 filesystem 白名单（你选择了 skills_packages_dir 自动授权）
+      // 给一个稳定别名，便于用户/LLM 在需要时引用（也可直接用绝对路径）
+      void ensureAllowlistedDirectory({
+        path: skillsDir,
+        alias: 'Skills',
+        source: 'skills',
+        permissions: { read: true, write: true, create: true, delete: false },
+        reconnect: true,
+      });
       
       return skillsDir;
     } catch (error) {

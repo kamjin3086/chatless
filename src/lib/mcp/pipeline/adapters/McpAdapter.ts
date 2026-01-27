@@ -9,8 +9,8 @@ const BUILTIN_SERVERS = new Set<string>([
   'skill',
   'skills_fs',
   'user_fs',
+  'filesystem',
   'shell_executor',
-  // filesystem 是 MCP 概念层，本 adapter 仍可以处理它（但授权策略通常更严格）
 ]);
 
 export class McpAdapter implements ToolAdapter {

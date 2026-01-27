@@ -134,6 +134,12 @@ export async function executeToolCall(params: {
     });
     try {
       const result = await DEFAULT_PIPELINE.run(inv);
+      // 若该卡片已被用户“停止/跳过”，则不要覆盖 UI 状态，也不要触发 follow-up（跳过的 follow-up 由 UI 侧合成触发）
+      try {
+        if (coordinator.isToolCardCancelled(assistantMessageId, String(inv.cardId || ''))) {
+          return;
+        }
+      } catch { /* noop */ }
       // follow-up：让模型读取结果并继续（multi-tool gate 在 continueWithToolResult 内部）
       await continueWithToolResult({
         assistantMessageId,

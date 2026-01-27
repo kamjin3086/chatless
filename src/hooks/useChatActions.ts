@@ -74,13 +74,14 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       for (let i = msgs.length - 1; i >= 0; i--) {
         const m: any = msgs[i];
         if (!m || m.role !== 'assistant') continue;
-        // 只看还在“运行链路”的 assistant 气泡
-        if (m.status !== 'loading') continue;
-        const segs: any[] = Array.isArray(m.segments) ? m.segments : [];
+        // 关键：不要依赖 message.status === 'loading'。
+        // 在某些残留/恢复会话或中途异常场景，message 可能不是 loading，但工具卡仍在 running/pending_auth。
+        const rawSegs: any[] = Array.isArray(m.segments) ? m.segments : [];
+        const vmItems: any[] = Array.isArray(m.segments_vm?.items) ? m.segments_vm.items : [];
+        const segs = rawSegs.length > 0 ? rawSegs : vmItems;
         for (const s of segs) {
           if (s?.kind === 'toolCard' && (s.status === 'running' || s.status === 'pending_auth')) return true;
         }
-        return false;
       }
     } catch {
       // ignore
@@ -706,7 +707,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         .filter((msg: Message) => msg.role === 'assistant')
         .pop();
       
-      if (lastAssistantMessage && lastAssistantMessage.status === 'loading') {
+      if (lastAssistantMessage) {
         // 二次点击 stop：尝试强制取消正在执行的工具（best-effort）
         const now = Date.now();
         const armed = stopArmRef.current;
@@ -723,6 +724,51 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         }
         try {
           useAuthorizationStore.getState().rejectAuthorizationsByMessageId(lastAssistantMessage.id);
+        } catch {
+          // ignore
+        }
+
+        // 需求：点击停止后，把该次 agent 运行中的卡片都置为“已停止”，并 best-effort 取消执行
+        try {
+          const st = useChatStore.getState();
+          const conv = st.conversations.find((c) => c.id === currentConversationId);
+          const msg: any = conv?.messages.find((m) => m.id === lastAssistantMessage.id);
+          const rawSegs: any[] = Array.isArray(msg?.segments) ? msg.segments : [];
+          const vmItems: any[] = Array.isArray(msg?.segments_vm?.items) ? msg.segments_vm.items : [];
+          const segs = rawSegs.length > 0 ? rawSegs : vmItems;
+
+          const coord = ToolCallCoordinator.getInstance();
+          const sandbox = getProcessSandbox();
+
+          for (const s of segs) {
+            if (!s || s.kind !== 'toolCard' || !s.id) continue;
+            if (s.status !== 'running' && s.status !== 'pending_auth') continue;
+            const cid = String(s.id);
+            coord.cancelToolCard(lastAssistantMessage.id, cid);
+
+            // 如果是 shell_executor，尝试取消后端执行
+            if (String(s.server || '').toLowerCase() === 'shell_executor') {
+              try {
+                const executionId = `shell:${lastAssistantMessage.id}:${cid}`;
+                void sandbox.cancel(executionId);
+              } catch {
+                // ignore
+              }
+            }
+
+            try {
+              st.dispatchMessageAction(lastAssistantMessage.id, {
+                type: 'TOOL_RESULT',
+                server: String(s.server),
+                tool: String(s.tool),
+                ok: false,
+                errorMessage: 'stopped',
+                cardId: cid,
+              } as any);
+            } catch {
+              // ignore
+            }
+          }
         } catch {
           // ignore
         }

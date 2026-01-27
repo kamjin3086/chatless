@@ -58,9 +58,40 @@ export const MCP_FILESYSTEM_LIST_DIR_TOOL: McpTool = {
   },
 };
 
+export const MCP_FILESYSTEM_CREATE_DIR_TOOL: McpTool = {
+  name: 'create_directory',
+  description: '（MCP）创建目录（默认递归）。',
+  input_schema: {
+    schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '目录路径' },
+        recursive: { type: 'boolean', description: '是否递归创建（可选，默认 true）' },
+      },
+      required: ['path'],
+    },
+  },
+};
+
+export const MCP_FILESYSTEM_DELETE_FILE_TOOL: McpTool = {
+  name: 'delete_file',
+  description: '（MCP）删除文件。',
+  input_schema: {
+    schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '文件路径' },
+      },
+      required: ['path'],
+    },
+  },
+};
+
 export const MCP_FILESYSTEM_TOOLS: McpTool[] = [
   MCP_FILESYSTEM_READ_FILE_TOOL,
   MCP_FILESYSTEM_WRITE_FILE_TOOL,
   MCP_FILESYSTEM_LIST_DIR_TOOL,
+  MCP_FILESYSTEM_CREATE_DIR_TOOL,
+  MCP_FILESYSTEM_DELETE_FILE_TOOL,
 ];
 

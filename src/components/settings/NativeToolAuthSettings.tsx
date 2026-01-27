@@ -12,8 +12,6 @@ import {
   setServerAutoAuthorize,
 } from "@/lib/mcp/authorizationConfig";
 import { SHELL_EXECUTOR_SERVER_NAME } from "@/lib/mcp/nativeTools/shellExecutor";
-import { USER_FS_SERVER_NAME } from "@/lib/userFs/userFsTools";
-import { SKILLS_FS_SERVER_NAME } from "@/lib/skills/skillFileTools";
 
 type Mode = "default" | "auto" | "manual";
 
@@ -28,16 +26,6 @@ const ROWS: Row[] = [
     server: SHELL_EXECUTOR_SERVER_NAME,
     title: "命令执行（shell_executor）",
     description: "执行命令/脚本的能力，风险最高。建议保持“每次确认”。",
-  },
-  {
-    server: USER_FS_SERVER_NAME,
-    title: "用户授权文件系统（user_fs）",
-    description: "只能访问你在本页下方授权的目录（@别名/…）。是否每次调用都弹确认可在此控制。",
-  },
-  {
-    server: SKILLS_FS_SERVER_NAME,
-    title: "Skills 资源文件系统（skills_fs）",
-    description: "仅用于读取/写入技能包内资源。一般风险较低。",
   },
 ];
 

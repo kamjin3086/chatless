@@ -127,6 +127,15 @@ export function reduce(model: MessageModel, action: MessageAction): MessageModel
         
         return { ...model, segments: next as any, fsm: 'TOOL_RUNNING' }; // 保持 TOOL_RUNNING 状态
       }
+      // 特殊处理：用户主动停止/跳过（不应渲染为 error 红态）
+      if (action.errorMessage === 'stopped' || action.errorMessage === 'skipped') {
+        const next = updateCardStatus(
+          model.segments,
+          { id: action.cardId, server: action.server, tool: action.tool },
+          { status: 'stopped' as any, errorMessage: action.errorMessage }
+        );
+        return { ...model, segments: next as any, fsm: 'TOOL_DONE' };
+      }
       const next = updateCardStatus(model.segments, { id: action.cardId, server: action.server, tool: action.tool }, { status: 'error', errorMessage: action.errorMessage, schemaHint: action.schemaHint });
       
       return { ...model, segments: next as any, fsm: 'TOOL_ERROR' };

@@ -9,9 +9,11 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Paperclip, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X } from "lucide-react";
+import { Plus, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X, Folder } from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { cn } from "@/lib/utils";
+import { useConversationAttachmentStore } from "@/store/conversationAttachmentStore";
+import { useChatStore } from "@/store/chatStore";
 import {
   ActionPanel,
   ActionPanelTrigger,
@@ -31,6 +33,7 @@ interface AttachmentMenuProps {
   onPickImage: () => void;
   onPickDocument: () => void;
   onSelectKnowledgeBase: (kb: KnowledgeBase | null) => void;
+  conversationId?: string;
 }
 
 export function AttachmentMenu({
@@ -41,12 +44,17 @@ export function AttachmentMenu({
   onPickImage,
   onPickDocument,
   onSelectKnowledgeBase,
+  conversationId,
 }: AttachmentMenuProps) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"main" | "knowledge-base">("main");
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loadingKb, setLoadingKb] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const { setWorkingDir, clearWorkingDir, getWorkingDir } = useConversationAttachmentStore();
+  const currentConvId = useChatStore((s) => s.currentConversationId);
+  const effectiveConvId = conversationId || currentConvId || "";
+  const workingDir = effectiveConvId ? getWorkingDir(effectiveConvId) : undefined;
 
   // 加载知识库列表
   useEffect(() => {
@@ -85,11 +93,48 @@ export function AttachmentMenu({
   const renderMainView = () => (
     <>
       <ActionPanelHeader
-        title="添加附件"
-        icon={<Paperclip className="w-4 h-4 text-slate-400" />}
+        title="附加内容"
+        icon={<Plus className="w-4 h-4 text-slate-400" />}
       />
 
       <ActionPanelList>
+        {/* 工作目录（filesystem 白名单来源之一） */}
+        <ActionPanelItem
+          icon={<Folder className={cn("w-4 h-4", workingDir ? "text-emerald-500" : "text-emerald-400")} />}
+          title={workingDir ? "工作目录已附加" : "附加工作目录"}
+          description={workingDir ? "当前会话可用 @WorkDir/..." : "临时授权当前会话访问该目录及子目录"}
+          selected={!!workingDir}
+          onClick={async () => {
+            try {
+              const { open } = await import("@tauri-apps/plugin-dialog");
+              const selected = await open({ directory: true, multiple: false });
+              if (!selected || typeof selected !== "string") return;
+              if (effectiveConvId) setWorkingDir(effectiveConvId, selected);
+            } catch {
+              // ignore
+            } finally {
+              setOpen(false);
+            }
+          }}
+          suffix={
+            workingDir ? (
+              <button
+                className="text-[11px] text-rose-500 hover:text-rose-600 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (effectiveConvId) clearWorkingDir(effectiveConvId);
+                  setOpen(false);
+                }}
+                title="移除工作目录"
+              >
+                移除
+              </button>
+            ) : null
+          }
+        />
+
+        <ActionPanelDivider />
+
         {/* 图片 - 粉色系 */}
         <ActionPanelItem
           icon={<Image className="w-4 h-4 text-pink-500" />}
@@ -216,12 +261,12 @@ export function AttachmentMenu({
               ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50"
               : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           )}
-          title="添加附件"
+          title="附加内容"
         >
           {isParsingDocument ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            <Paperclip className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
           )}
         </Button>
       </ActionPanelTrigger>

@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { getSkillManager } from '@/lib/skills';
-import { toast } from '@/components/ui/sonner';
+import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 import {
   FileArchive,
   GitBranch,
@@ -23,7 +23,6 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle,
-  FolderOpen,
 } from 'lucide-react';
 
 interface SkillImportDialogProps {
@@ -101,6 +100,21 @@ export function SkillImportDialog({
         const name = selected.split(/[/\\]/).pop() || selected;
         setFileName(name);
         setError(null);
+
+        // 自动授权“附件所在目录”（你选择了 attachments_dir 自动加入白名单）
+        try {
+          const normalized = selected.replace(/\\/g, '/');
+          const idx = normalized.lastIndexOf('/');
+          const parent = idx > 0 ? normalized.slice(0, idx) : normalized;
+          void ensureAllowlistedDirectory({
+            path: parent,
+            source: 'attachment',
+            permissions: { read: true, write: false, create: false, delete: false },
+            reconnect: true,
+          });
+        } catch {
+          // ignore
+        }
       }
     } catch (err) {
       console.error('Failed to open file dialog:', err);

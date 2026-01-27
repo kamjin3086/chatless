@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Bot, ChevronDown, Check, Sparkles } from "lucide-react";
+import { MessageSquare, Bot, ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ActionPanel,
@@ -83,7 +83,6 @@ export function ChatModeSelector({
         >
           {currentMode.icon}
           <span>{currentMode.label}</span>
-          {mode === "agent" && <Sparkles className="w-3 h-3 opacity-60" />}
           <ChevronDown className="w-3 h-3 opacity-50" />
         </Button>
       </ActionPanelTrigger>

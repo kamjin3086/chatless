@@ -37,7 +37,10 @@ export async function handleToolCall(options: HandleToolCallOptions): Promise<vo
   const args = normalizeToolArgs(parsed.arguments !== undefined ? parsed.arguments : parsed.args);
   if (!server || !tool) return;
   
-  const needAuth = !(await shouldAutoAuthorize(server));
+  const forcedAuth =
+    String(server || '').toLowerCase() === 'filesystem' &&
+    (String(tool || '').toLowerCase() === 'write_file' || String(tool || '').toLowerCase() === 'delete_file');
+  const needAuth = forcedAuth ? true : !(await shouldAutoAuthorize(server));
   const cardId = crypto.randomUUID();
   
   // 写入卡片占位标记，确保 UI 始终可见

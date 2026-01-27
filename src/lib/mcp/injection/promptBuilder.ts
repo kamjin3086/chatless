@@ -20,8 +20,6 @@ import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nati
 import { persistentCache } from '../persistentCache';
 import { getConnectedServers, getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
 import { skillTools } from '@/lib/skills/skillTools';
-import { SKILLS_FS_SERVER_NAME, skillFileTools } from '@/lib/skills/skillFileTools';
-import { USER_FS_SERVER_NAME, userFsTools } from '@/lib/userFs/userFsTools';
 import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 
@@ -101,8 +99,48 @@ export async function buildInitialPrompt(
   // 使用原生工具调用时，只注入简化的协议说明
   messages.push({
     role: 'system',
-    content: `你可以通过工具调用来获取信息或执行操作。必须使用结构化 tool calling；不要输出任何 XML/标签格式的工具指令文本。`
+    content: `你可以通过工具调用来获取信息或执行操作。必须使用结构化 tool calling；不要输出任何 XML/标签格式的工具指令文本。
+
+【文件系统工具选择（重要）】
+- 所有文件/目录的读取、写入与列目录：**统一使用 \`${FILESYSTEM_SERVER_NAME}__*\`（filesystem）**。
+- 路径既可以使用绝对路径（如 \`D:/path/file.txt\`），也可以使用别名路径（如 \`@WorkDir/...\` 或用户配置的 \`@Alias/...\`）。
+- 当访问的路径不在白名单目录内时，会要求用户确认；确认后会把目录加入白名单以便后续自动执行。
+- **不要为了“探测权限/白名单范围”而先列目录或尝试查询授权列表**：直接使用目标路径作为参数调用 filesystem；若越界系统会弹出授权卡片由用户决定。
+
+【输出目录默认规则（重要）】
+- skills 目录（安装的技能包所在目录）**不是**用户文件的临时目录/输出目录。除非用户明确要求“修改/维护 skill 本身”，否则**禁止**把生成的文档/脚本/临时文件写到 skills 目录下。
+- 当用户对保存位置描述含糊时，默认把脚本/临时文件/产物写到 **@WorkDir（应用 AppData 工作区）** 下（通常为 \`@WorkDir/work\` 与 \`@WorkDir/out\`）。只有用户明确要求导出到 Documents/其他目录时，才申请白名单并写入该目录。
+
+【方法选择策略（重要，避免简单问题复杂化）】
+- A（优先）filesystem：直接读写/创建/移动/删除文件与目录，适合绝大多数“简单文件操作”。能用 A 完成就不要写脚本。
+- B（其次）shell_executor：当需要现成工具的一次性转换/批处理（例如 unzip/pandoc/git 等）时使用；命令应短、可复现，workingDir 默认使用 @WorkDir。
+- C（最后）脚本 + shell_executor：仅在需要复杂逻辑（循环/条件/多文件批处理）、需要复用、或需要强验证/报告时使用。写脚本≠完成：必须执行并用 filesystem 验证关键产物后再交付。
+
+【Skills 遵从策略（强制）】
+- 一旦你选择/引用了某个 skill（调用了 \`skills.get_skill_instructions\` 并获得指南），该指南视为**绝对主教程**：必须优先遵循；你的常识与网络搜索只能作为**辅助**，不得与指南冲突。
+- 目标是完成用户任务而不是“读完指南就结束”。你必须主动识别并完成为达成目标所需的额外步骤，例如：读取 skill 资源文件、选择/调用其他 skill、使用 filesystem 读写文件、用 shell_executor 执行脚本/命令、以及对关键产物做验证。
+- 必须形成闭环：读指南/资源 → 生成/修改 → 执行（脚本/命令）→ 验证（如 filesystem.read_file/list_directory/exists 或关键输出检查）→ 再向用户交付。**禁止**仅凭“写入脚本成功/下载成功”等中间结果就宣称任务已完成。
+`
   });
+
+  // 5.1 会话附加内容：工作目录（临时授权）
+  try {
+    const convId = context.conversationId || '';
+    if (convId) {
+      const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+      const wd = useConversationAttachmentStore.getState().getWorkingDir(convId);
+      if (wd) {
+        messages.push({
+          role: 'system',
+          content: `【当前会话工作目录】\n- @WorkDir -> ${wd}\n- 需要在该目录及其子目录中读写文件时，可使用 filesystem，并使用 @WorkDir/... 的别名路径或绝对路径。`,
+        });
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 不再自动引导/默认写入 Documents：默认更安全，输出留在 @WorkDir（AppData 工作区）。
   
   // 6. 启用服务器声明
   const allEnabled = [
@@ -230,54 +268,6 @@ async function buildNativeToolDefinitions(
     tools.push({
       name: `skills__${t.name}`,
       description: t.description || `Skill tool ${t.name}`,
-      parameters: normalizeParams(
-        t.parameters
-          ? {
-              type: 'object',
-              properties: Object.fromEntries(
-                Object.entries(t.parameters).map(([k, v]) => [
-                  k,
-                  { type: v.type, description: v.description },
-                ])
-              ),
-              required: Object.entries(t.parameters)
-                .filter(([, v]) => v.required)
-                .map(([k]) => k),
-            }
-          : { type: 'object' }
-      ),
-    });
-  }
-
-  // 0.1 Skills 文件系统（skills_fs）：仅用于读取/修改 skill 包内容
-  for (const t of skillFileTools) {
-    tools.push({
-      name: `${SKILLS_FS_SERVER_NAME}__${t.name}`,
-      description: t.description || `Skill FS tool ${t.name}`,
-      parameters: normalizeParams(
-        t.parameters
-          ? {
-              type: 'object',
-              properties: Object.fromEntries(
-                Object.entries(t.parameters).map(([k, v]) => [
-                  k,
-                  { type: v.type, description: v.description },
-                ])
-              ),
-              required: Object.entries(t.parameters)
-                .filter(([, v]) => v.required)
-                .map(([k]) => k),
-            }
-          : { type: 'object' }
-      ),
-    });
-  }
-
-  // 0.2 用户授权文件系统（user_fs）：仅允许访问用户已授权目录（alias）
-  for (const t of userFsTools) {
-    tools.push({
-      name: `${USER_FS_SERVER_NAME}__${t.name}`,
-      description: t.description || `User FS tool ${t.name}`,
       parameters: normalizeParams(
         t.parameters
           ? {

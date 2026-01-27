@@ -1,6 +1,6 @@
 import { ToolCallDetector } from '@/lib/mcp/ToolCallDetector';
 
-export type ToolCallStatus = 'running' | 'success' | 'error' | 'pending_auth';
+export type ToolCallStatus = 'running' | 'success' | 'error' | 'pending_auth' | 'stopped';
 
 export interface TextSegment { kind: 'text'; text: string }
 export interface ThinkSegment { 
@@ -187,7 +187,17 @@ export function insertRunningCard(
   );
   
   if (existingCardIndex !== -1) {
-    console.warn(`[insertRunningCard] 卡片 ${card.id} 已存在，跳过插入`);
+    // 关键：审批点击后需要立即变为 running（避免“点了没反应/延迟”）
+    const existing: any = out[existingCardIndex] as any;
+    out[existingCardIndex] = {
+      ...existing,
+      ...card,
+      status: 'running',
+      // 清理旧态，避免仍显示审批/错误
+      errorMessage: undefined,
+      schemaHint: undefined,
+      resultPreview: undefined,
+    } as any;
     return out;
   }
   
@@ -222,11 +232,18 @@ export function updateCardStatus(
     if (s.kind !== 'toolCard') return s;
     const idOk = match.id ? s.id === match.id : true;
     // 允许更新 running 或 pending_auth 状态的卡片
-    if (idOk && s.server === match.server && s.tool === match.tool && (s.status === 'running' || s.status === 'pending_auth')) {
+    // 重要：当提供了 cardId 时，以 cardId 为唯一匹配键（不要再要求 server/tool 完全一致），
+    // 否则在 tool 名称归一化/别名映射等情况下会出现“卡片一直 running、审批不出现”的问题。
+    const matchOk = match.id ? idOk : (s.server === match.server && s.tool === match.tool);
+    if (matchOk && (s.status === 'running' || s.status === 'pending_auth')) {
       // 特殊处理：如果 errorMessage 是 'pending_auth'，状态应该是 'pending_auth' 而不是 'error'
       if (to.errorMessage === 'pending_auth') {
         // 进入审批态：清理旧结果/提示，避免看起来像“错误卡片”
         return { ...s, status: 'pending_auth', errorMessage: to.errorMessage, resultPreview: undefined, schemaHint: undefined } as ToolCardSegment;
+      }
+      // 用户主动停止/跳过：用中性 stopped 状态
+      if (to.status === 'stopped') {
+        return { ...s, status: 'stopped', errorMessage: to.errorMessage, resultPreview: undefined, schemaHint: undefined } as ToolCardSegment;
       }
       // 成功：清理 errorMessage/schemaHint，避免 UI 仍按 pending/error 渲染
       if (to.status === 'success') {

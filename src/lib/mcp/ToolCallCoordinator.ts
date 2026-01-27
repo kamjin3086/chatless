@@ -19,6 +19,7 @@ type AcquireResult = {
 
 const TOOL_CALL_TTL_MS = 30000;
 const FOLLOWUP_DEBOUNCE_MS = 500;
+const TOOL_CALL_DONE_DEBOUNCE_MS = 1500;
 
 function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -44,6 +45,7 @@ export class ToolCallCoordinator {
   private toolCallLocks = new Map<string, ToolCallLock>();
   private followupLocks = new Map<string, number>();
   private cancelledMessages = new Map<string, number>();
+  private cancelledToolCards = new Map<string, number>();
 
   static getInstance(): ToolCallCoordinator {
     if (!ToolCallCoordinator.instance) {
@@ -63,6 +65,21 @@ export class ToolCallCoordinator {
     const id = String(messageId || '').trim();
     if (!id) return false;
     return this.cancelledMessages.has(id);
+  }
+
+  cancelToolCard(messageId: string, cardId: string): void {
+    const mid = String(messageId || '').trim();
+    const cid = String(cardId || '').trim();
+    if (!mid || !cid) return;
+    this.cancelledToolCards.set(`${mid}:${cid}`, Date.now());
+    this.cleanupCancelledToolCards(Date.now());
+  }
+
+  isToolCardCancelled(messageId: string, cardId: string): boolean {
+    const mid = String(messageId || '').trim();
+    const cid = String(cardId || '').trim();
+    if (!mid || !cid) return false;
+    return this.cancelledToolCards.has(`${mid}:${cid}`);
   }
 
   private buildToolCallKey(
@@ -93,9 +110,16 @@ export class ToolCallCoordinator {
     const now = Date.now();
     const existing = this.toolCallLocks.get(key);
 
-    if (existing && now - existing.timestamp < TOOL_CALL_TTL_MS) {
-
-      return { acquired: false, key, existing };
+    // 仅阻止“仍在运行”的重复调用；已 completed/failed 的调用允许重试，但做一个短防抖，
+    // 以避免流式解析产生的“同一 tool_call 结束后又被重复检测到”导致二次执行。
+    if (existing) {
+      const age = now - existing.timestamp;
+      if (existing.status === 'running' && age < TOOL_CALL_TTL_MS) {
+        return { acquired: false, key, existing };
+      }
+      if (existing.status !== 'running' && age < TOOL_CALL_DONE_DEBOUNCE_MS) {
+        return { acquired: false, key, existing };
+      }
     }
 
     this.toolCallLocks.set(key, {
@@ -160,6 +184,14 @@ export class ToolCallCoordinator {
     const cutoff = now - 5 * 60 * 1000;
     for (const [key, ts] of this.cancelledMessages.entries()) {
       if (ts < cutoff) this.cancelledMessages.delete(key);
+    }
+  }
+
+  private cleanupCancelledToolCards(now: number): void {
+    if (this.cancelledToolCards.size < 500) return;
+    const cutoff = now - 10 * 60 * 1000;
+    for (const [key, ts] of this.cancelledToolCards.entries()) {
+      if (ts < cutoff) this.cancelledToolCards.delete(key);
     }
   }
 }

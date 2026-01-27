@@ -136,11 +136,14 @@ async function getSkillInstructions(skillId: string): Promise<string> {
     actionsCount === 0
       ? `【instruction-only】无预定义actions，请自学自编自执行：
 → 用filesystem.read_file读资源（"${skillPath}/文件名"）
-→ 用filesystem.write_file写脚本（"${skillPath}/脚本.py或.js"）
-→ 用shell_executor.execute_command执行（workingDir:"${skillPath}"）
-🚫禁止调用run_skill_action或submit_execution_plan或口头声称已完成`
+→ ⚠️产物/临时文件/脚本默认写到 @WorkDir（应用 AppData 工作区），不要写到 skill 目录：
+   - 用filesystem.write_file写脚本（"@WorkDir/work/script.py" 或 "@WorkDir/work/script.js"）
+→ 用shell_executor.execute_command执行脚本（workingDir:"@WorkDir/work"）
+→ 用filesystem验证关键产物（如 exists/read/list_directory）后，才能向用户交付结果
+🚫禁止：不要仅凭“File written successfully”就声称已完成；不要把用户产物写入 skill 安装目录。
+如果当前会话未注入 @WorkDir：优先让用户在 UI 中设置工作目录，或切换/新建会话后重试（系统会自动创建工作区）。`
       : `【action-based】有${actionsCount}个actions，推荐：list_skill_actions→run_skill_action`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   // 保存 skill 上下文供后续 filesystem/shell_executor 使用
   try {

@@ -27,6 +27,16 @@ function sortToolsDeterministically(tools: ToolDefinition[]): ToolDefinition[] {
   list.sort((a, b) => {
     const an = String(a?.name || '');
     const bn = String(b?.name || '');
+    const rank = (n: string): number => {
+      const name = String(n || '').toLowerCase();
+      // 明确偏好：文件系统统一 filesystem，shell_executor 次之
+      if (name.startsWith('filesystem__')) return 0;
+      if (name.startsWith('shell_executor__')) return 1;
+      return 5;
+    };
+    const ar = rank(an);
+    const br = rank(bn);
+    if (ar !== br) return ar - br;
     if (an !== bn) return an.localeCompare(bn);
     // name 相同则按参数 schema 稳定序列化
     return stableStringify(a?.parameters).localeCompare(stableStringify(b?.parameters));

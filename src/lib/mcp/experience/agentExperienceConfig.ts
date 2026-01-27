@@ -20,6 +20,11 @@ export interface AgentExperienceConfig {
   stopScope: StopScope;
   approvalUiBehavior: ApprovalUiBehavior;
   autoFixFailurePolicy: AutoFixFailurePolicy;
+  /**
+   * 工具失败自动重试次数（不含首次尝试）
+   * 例如 2 表示最多 1 + 2 = 3 次尝试
+   */
+  maxToolRetries: number;
 }
 
 const CONFIG_FILE = 'mcp-settings.json';
@@ -38,6 +43,8 @@ const DEFAULT_CONFIG: AgentExperienceConfig = {
   approvalUiBehavior: 'auto',
   // 6) C：自动尝试 2-3 条路线，仍失败就给清单
   autoFixFailurePolicy: 'auto_retry_then_checklist',
+  // 工具失败自动重试 2 次（共 3 次）
+  maxToolRetries: 2,
 };
 
 export async function getAgentExperienceConfig(): Promise<AgentExperienceConfig> {
