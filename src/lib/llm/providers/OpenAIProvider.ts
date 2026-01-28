@@ -240,18 +240,11 @@ export class OpenAIProvider extends BaseProvider {
       if (!tc.name) continue;
       
       // 解析服务器和工具名称（格式: server__tool 或 server.tool 或直接工具名）
-      let serverName = 'default';
-      let toolName = tc.name;
-      
-      if (tc.name.includes('__')) {
-        const parts = tc.name.split('__');
-        serverName = parts[0];
-        toolName = parts.slice(1).join('__');
-      } else if (tc.name.includes('.')) {
-        const parts = tc.name.split('.');
-        serverName = parts[0];
-        toolName = parts.slice(1).join('.');
-      }
+      // 关键：避免出现 server=default 导致 “服务器 default 配置未找到”
+      const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
+      const n = normalizeToolCallServerAndTool({ serverName: 'default', toolName: tc.name });
+      const serverName = n.serverName;
+      const toolName = n.toolName;
       
       // 解析参数
       // 发送工具调用事件

@@ -163,3 +163,19 @@ pub async fn filesystem_delete_file(
   })
 }
 
+#[tauri::command]
+pub async fn filesystem_rename_file(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  old_path: String,
+  new_path: String,
+) -> Result<serde_json::Value, String> {
+  // rename/move is a write-like operation
+  let old_abs = state.assert_allowed(&app, &old_path, FsOp::Write).await?;
+  let new_abs = state.assert_allowed(&app, &new_path, FsOp::Write).await?;
+  tokio::fs::rename(&old_abs, &new_abs)
+    .await
+    .map_err(|e| format!("rename failed: {}", e))?;
+  Ok(serde_json::json!({ "ok": true, "oldPath": old_abs, "newPath": new_abs }))
+}
+

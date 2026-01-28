@@ -51,6 +51,15 @@ export class FilesystemAdapter implements ToolAdapter {
         return await invoke('filesystem_delete_file', { path });
       }
 
+      if (tool === 'rename_file' || tool === 'rename' || tool === 'move_file' || tool === 'move') {
+        const oldPath = typeof (args as any).oldPath === 'string' ? String((args as any).oldPath) : '';
+        const newPath = typeof (args as any).newPath === 'string' ? String((args as any).newPath) : '';
+        if (!oldPath || !newPath) {
+          return { ok: false, error: 'oldPath and newPath are required' };
+        }
+        return await invoke('filesystem_rename_file', { oldPath, newPath });
+      }
+
       // 未支持的工具：返回可读错误，让 follow-up 纠错
       return { ok: false, error: `Unsupported filesystem tool: ${invocation.tool}` };
     } catch (e) {

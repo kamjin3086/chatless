@@ -5,11 +5,14 @@ import { Streamdown } from 'streamdown';
 import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
 import { preprocessMarkdownForSafeRender } from './markdownPreprocess';
+import { replaceAliasPathsForDisplay } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 interface StreamingMarkdownProps {
   content: string;
   isStreaming: boolean;
   className?: string;
+  /** 将 @WorkDir/@Alias 路径展示为绝对路径（用于 assistant 最终总结降低歧义） */
+  resolvePathAliases?: boolean;
 }
 
 /**
@@ -146,7 +149,8 @@ class StreamingContentBuffer {
 export const StreamingMarkdown = React.memo(function StreamingMarkdown({ 
   content, 
   isStreaming, 
-  className 
+  className,
+  resolvePathAliases
 }: StreamingMarkdownProps) {
   const { size } = useMarkdownFontSize();
   
@@ -194,9 +198,13 @@ export const StreamingMarkdown = React.memo(function StreamingMarkdown({
   }, [buffer]);
 
   // Memoize 预处理（只在 displayContent 变化时计算）
+  const displayWithResolvedPaths = useMemo(
+    () => (resolvePathAliases ? replaceAliasPathsForDisplay(displayContent) : displayContent),
+    [displayContent, resolvePathAliases]
+  );
   const safe = useMemo(
-    () => preprocessMarkdownForSafeRender(displayContent, { wrapFullHtmlDocument: true }), 
-    [displayContent]
+    () => preprocessMarkdownForSafeRender(displayWithResolvedPaths, { wrapFullHtmlDocument: true }),
+    [displayWithResolvedPaths]
   );
 
   return (

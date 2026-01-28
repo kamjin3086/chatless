@@ -30,6 +30,8 @@ import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
 import { useUiSession } from '@/store/uiSession';
 import { useWebSearchStore } from '@/store/webSearchStore';
 import { useRouter } from 'next/navigation';
+import { detectTauriEnvironment } from "@/lib/utils/environment";
+import { getProcessSandbox } from "@/lib/skills/sandbox";
 import {
   hasInlineReferences,
   renderInlineReferencesForOverlay,
@@ -322,6 +324,16 @@ export function ChatInput({
       });
     }
   }, [inputValue]);
+
+  // shell_executor 预热：提前初始化 sandbox，减少“第一条工具卡片要等几秒才真正开跑”的体感
+  useEffect(() => {
+    try {
+      if (!detectTauriEnvironment()) return;
+      void getProcessSandbox().isAvailable().catch(() => {});
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // 动态更新 60% 视口高度限制
   useEffect(() => {

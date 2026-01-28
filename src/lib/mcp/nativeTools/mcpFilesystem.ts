@@ -87,11 +87,27 @@ export const MCP_FILESYSTEM_DELETE_FILE_TOOL: McpTool = {
   },
 };
 
+export const MCP_FILESYSTEM_RENAME_FILE_TOOL: McpTool = {
+  name: 'rename_file',
+  description: '（MCP）重命名/移动文件。',
+  input_schema: {
+    schema: {
+      type: 'object',
+      properties: {
+        oldPath: { type: 'string', description: '旧路径' },
+        newPath: { type: 'string', description: '新路径' },
+      },
+      required: ['oldPath', 'newPath'],
+    },
+  },
+};
+
 export const MCP_FILESYSTEM_TOOLS: McpTool[] = [
   MCP_FILESYSTEM_READ_FILE_TOOL,
   MCP_FILESYSTEM_WRITE_FILE_TOOL,
   MCP_FILESYSTEM_LIST_DIR_TOOL,
   MCP_FILESYSTEM_CREATE_DIR_TOOL,
   MCP_FILESYSTEM_DELETE_FILE_TOOL,
+  MCP_FILESYSTEM_RENAME_FILE_TOOL,
 ];
 

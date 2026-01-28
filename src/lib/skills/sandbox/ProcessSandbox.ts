@@ -67,6 +67,10 @@ export class ProcessSandbox extends BaseSandboxExecutor {
    */
   async isAvailable(): Promise<boolean> {
     try {
+      // 已初始化则直接返回，避免每次 tool call 都触发一次 invoke/appDataDir（会造成“首个工具卡片延迟几秒才开跑”的观感）
+      if (this.isInitialized) {
+        return true;
+      }
       // 检查是否在 Tauri 环境中
       if (typeof window === 'undefined') {
         return false;

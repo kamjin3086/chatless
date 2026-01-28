@@ -241,18 +241,11 @@ export class AnthropicProvider extends BaseProvider {
     callbacks: StreamCallbacks
   ): void {
     // 解析服务器和工具名称
-    let serverName = 'default';
-    let toolName = tc.name;
-    
-    if (tc.name.includes('__')) {
-      const parts = tc.name.split('__');
-      serverName = parts[0];
-      toolName = parts.slice(1).join('__');
-    } else if (tc.name.includes('.')) {
-      const parts = tc.name.split('.');
-      serverName = parts[0];
-      toolName = parts.slice(1).join('.');
-    }
+    // 关键：避免出现 server=default 导致 “服务器 default 配置未找到”
+    const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
+    const n = normalizeToolCallServerAndTool({ serverName: 'default', toolName: tc.name });
+    const serverName = n.serverName;
+    const toolName = n.toolName;
     
     // 发送工具调用事件
     if (callbacks.onEvent) {

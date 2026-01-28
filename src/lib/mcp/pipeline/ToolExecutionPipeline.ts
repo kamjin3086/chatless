@@ -77,6 +77,8 @@ function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
   if (tl === 'delete_file' || tl === 'delete') return 'delete';
   // MCP filesystem 常见工具名：read_file / list_directory / write_file
   if (tl === 'read_file' || tl === 'read' || tl === 'list_directory' || tl === 'list' || tl === 'dir') return 'read';
+  // rename/move 视为写入类操作
+  if (tl === 'rename_file' || tl === 'rename' || tl === 'move_file' || tl === 'move') return 'write';
   if (tl === 'write_file' || tl === 'write') return 'write';
   if (tl === 'mkdir' || tl === 'create_directory' || tl === 'create') return 'create';
   return 'read';

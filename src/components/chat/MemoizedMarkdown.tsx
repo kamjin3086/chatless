@@ -9,16 +9,19 @@ import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 // import { getThemeStyles } from '@/lib/markdown/themes';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
 import { preprocessMarkdownForSafeRender } from './markdownPreprocess';
+import { replaceAliasPathsForDisplay } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 interface MemoizedMarkdownProps {
   content: string;
   className?: string;
   // 可选：覆盖全局字号（用于"思考过程"等需要缩小一号的场景）
   sizeOverride?: 'small' | 'medium' | 'large';
+  /** 将 @WorkDir/@Alias 路径展示为绝对路径（用于 assistant 最终总结降低歧义） */
+  resolvePathAliases?: boolean;
 }
 
 
-export const MemoizedMarkdown = memo(({ content, className, sizeOverride }: MemoizedMarkdownProps) => {
+export const MemoizedMarkdown = memo(({ content, className, sizeOverride, resolvePathAliases }: MemoizedMarkdownProps) => {
   const { size } = useMarkdownFontSize();
   // 主题系统已禁用
   // const { theme } = useMarkdownTheme();
@@ -48,6 +51,8 @@ export const MemoizedMarkdown = memo(({ content, className, sizeOverride }: Memo
     if (!ESCAPE_TAG_NAMES.has(name)) return m;
     return m.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   });
+
+  const displayContent = resolvePathAliases ? replaceAliasPathsForDisplay(sanitizedContent) : sanitizedContent;
 
   // HTML 换行 <br> 预处理 → Markdown 硬换行
   function convertHtmlBreaksToMd(input: string): string {
@@ -152,7 +157,7 @@ export const MemoizedMarkdown = memo(({ content, className, sizeOverride }: Memo
   }
 
   // 关键：禁止 raw HTML 作为 DOM 渲染，避免影响整体布局；并尽量将“完整 HTML 文件”包进代码块。
-  const safe = preprocessMarkdownForSafeRender(sanitizedContent, { wrapFullHtmlDocument: true });
+  const safe = preprocessMarkdownForSafeRender(displayContent, { wrapFullHtmlDocument: true });
   const contentForRender = stabilizeStreamingMarkdown(convertHtmlBreaksToMd(safe));
 
   return (

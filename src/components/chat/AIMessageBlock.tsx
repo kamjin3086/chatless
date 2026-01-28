@@ -485,7 +485,7 @@ export function AIMessageBlock({
                       {(() => {
                         // 使用统一的StreamingMarkdown组件，支持流式和非流式markdown渲染
                         const { StreamingMarkdown } = require('./StreamingMarkdown');
-                        return <StreamingMarkdown content={textContent} isStreaming={isStreaming} />;
+                        return <StreamingMarkdown content={textContent} isStreaming={isStreaming} resolvePathAliases={!isStreaming} />;
                       })()}
                     </div>
                   </div>
@@ -503,7 +503,7 @@ export function AIMessageBlock({
                       <div className="markdown-content-area">
                         {(() => {
                           const { StreamingMarkdown } = require('./StreamingMarkdown');
-                          return <StreamingMarkdown content={fallbackTextCleaned} isStreaming={isStreaming} />;
+                          return <StreamingMarkdown content={fallbackTextCleaned} isStreaming={isStreaming} resolvePathAliases={!isStreaming} />;
                         })()}
                       </div>
                     </div>
@@ -544,7 +544,7 @@ export function AIMessageBlock({
       {/* 当没有任何结构化片段时，回退为渲染纯正文（兼容非流式RAG或历史消息） */}
       {(mixedSegments.length === 0) && !!(state?.regularContent || content) && (
         <div className="relative min-w-0 max-w-full w-full markdown-content-area">
-          <MemoizedMarkdown content={filterToolCallContent((state?.regularContent || content))} />
+          <MemoizedMarkdown content={filterToolCallContent((state?.regularContent || content))} resolvePathAliases />
         </div>
       )}
 
