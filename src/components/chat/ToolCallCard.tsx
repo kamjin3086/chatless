@@ -146,7 +146,16 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
       // ignore
     }
     toast.info('已停止该步骤', { description: '该工具已标记为停止（best-effort 取消执行）。' });
-  }, [messageId, cardId, server, tool]);
+    // 继续 agent：给 follow-up 一个“已停止”结果，避免后续工具卡/agent 卡死
+    void continueAfterToolCardAction({
+      assistantMessageId: messageId,
+      cardId,
+      server,
+      tool,
+      args,
+      result: { skipped: true, reason: 'USER_STOPPED' },
+    }).catch(() => {});
+  }, [messageId, cardId, server, tool, args]);
 
   const handleSkipRunning = React.useCallback(() => {
     if (!messageId || !cardId) return;

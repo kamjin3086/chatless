@@ -22,6 +22,7 @@ import { getConnectedServers, getGlobalEnabledServers, getAllConfiguredServers }
 import { skillTools } from '@/lib/skills/skillTools';
 import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
+import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 
 /**
  * 构建初始调用阶段的提示词
@@ -289,6 +290,10 @@ async function buildNativeToolDefinitions(
 
   // 1. 添加 MCP 服务器的工具
   for (const server of servers) {
+    // 避免与内置保留 server（filesystem/skills/web_search/shell_executor）发生工具名冲突
+    if (RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase())) {
+      continue;
+    }
     try {
       const serverTools = await persistentCache.getToolsWithCache(server);
       if (!Array.isArray(serverTools)) continue;

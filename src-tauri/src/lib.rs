@@ -20,6 +20,9 @@ pub mod web_search;
 #[path = "sandbox/mod.rs"]
 pub mod sandbox;
 
+#[path = "filesystem/mod.rs"]
+pub mod filesystem;
+
 #[tauri::command]
 fn exit(app: tauri::AppHandle, code: i32) {
   #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -201,6 +204,7 @@ pub fn run() {
     })
     .manage(sse::AppState::new())
     .manage(mcp::state::McpState::new())
+    .manage(filesystem::state::FilesystemAllowlistState::default())
     .invoke_handler(tauri::generate_handler![
       greet,
       generate_embedding_command,
@@ -247,7 +251,14 @@ pub fn run() {
       sandbox::commands::run_safe_shell,
       sandbox::commands::cancel_safe_shell,
       sandbox::commands::validate_command,
-      sandbox::commands::check_runtime_environment
+      sandbox::commands::check_runtime_environment,
+      // —— Filesystem (backend commands, allowlist enforced) ——
+      filesystem::commands::filesystem_set_allowlist,
+      filesystem::commands::filesystem_read_file,
+      filesystem::commands::filesystem_write_file,
+      filesystem::commands::filesystem_list_directory,
+      filesystem::commands::filesystem_create_directory,
+      filesystem::commands::filesystem_delete_file
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

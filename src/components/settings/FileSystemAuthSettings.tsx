@@ -8,7 +8,7 @@ import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { useFilesystemAllowlistStore } from "@/store/filesystemAllowlistStore";
 import type { AllowlistDirectory } from "@/lib/filesystemAllowlist";
 import { ensureAllowlistedDirectory, normalizeAlias as normalizeAliasCore } from "@/lib/filesystemAllowlist";
-import { setFilesystemAllowedDirectories } from "@/lib/mcp/filesystemServerConfig";
+import { syncFilesystemAllowlistToBackend } from "@/lib/filesystemAllowlist/backendSync";
 import { cn } from "@/lib/utils";
 
 function normalizeAlias(input: string): string {
@@ -23,9 +23,9 @@ export function FileSystemAuthSettings() {
     void load();
   }, [load]);
 
-  const syncToMcp = useCallback(async () => {
-    const paths = useFilesystemAllowlistStore.getState().directories.map((d) => d.path);
-    await setFilesystemAllowedDirectories({ directories: paths, reconnect: true });
+  const syncToBackend = useCallback(async () => {
+    const dirs = useFilesystemAllowlistStore.getState().directories;
+    await syncFilesystemAllowlistToBackend(dirs);
   }, []);
 
   const onAdd = useCallback(async () => {
@@ -136,7 +136,7 @@ export function FileSystemAuthSettings() {
                       if (raw === null) return;
                       const nextAlias = raw.trim() ? normalizeAlias(raw) : "";
                       await updateDirectory(d.id, { alias: nextAlias });
-                      await syncToMcp();
+                      await syncToBackend();
                     }}
                     className="text-xs rounded-lg border border-slate-200/70 dark:border-slate-700/60 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                   >
@@ -147,7 +147,7 @@ export function FileSystemAuthSettings() {
                       await updateDirectory(d.id, {
                         permissions: { ...d.permissions, write: !d.permissions.write, create: !d.permissions.create },
                       });
-                      await syncToMcp();
+                      await syncToBackend();
                     }}
                     className="text-xs rounded-lg border border-slate-200/70 dark:border-slate-700/60 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                   >
@@ -158,7 +158,7 @@ export function FileSystemAuthSettings() {
                       await updateDirectory(d.id, {
                         permissions: { ...d.permissions, delete: !d.permissions.delete },
                       });
-                      await syncToMcp();
+                      await syncToBackend();
                     }}
                     className="text-xs rounded-lg border border-slate-200/70 dark:border-slate-700/60 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                   >
@@ -167,7 +167,7 @@ export function FileSystemAuthSettings() {
                   <button
                     onClick={async () => {
                       await removeDirectory(d.id);
-                      await syncToMcp();
+                      await syncToBackend();
                     }}
                     className="inline-flex items-center gap-1 text-xs rounded-lg border border-red-200/70 dark:border-red-900/40 px-2 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                   >

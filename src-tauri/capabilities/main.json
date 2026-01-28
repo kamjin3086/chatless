@@ -32,10 +32,19 @@
           "path": "$APPLOG/**/*"
         },
         {
+          "path": "$DOWNLOAD"
+        },
+        {
           "path": "$DOWNLOAD/**/*"
         },
         {
+          "path": "$DESKTOP"
+        },
+        {
           "path": "$DESKTOP/**/*"
+        },
+        {
+          "path": "$DOCUMENT"
         },
         {
           "path": "$DOCUMENT/**/*"

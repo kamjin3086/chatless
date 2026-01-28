@@ -1,6 +1,6 @@
 import StorageUtil from '@/lib/storage';
-import { serverManager } from './ServerManager';
 import { McpServerConfig } from './McpClient'; // Added for getAllConfiguredServersWithStatus
+import { normalizeSavedServers } from './serverNamePolicy';
 
 const STORE_FILE = 'mcp-status.json'; // For conversation-specific MCP status
 const SETTINGS_FILE = 'mcp-settings.json'; // For global enabled MCP list
@@ -19,9 +19,19 @@ export async function getAllConfiguredServers(onlyEnabled: boolean = false): Pro
   try {
     const { Store } = await import('@tauri-apps/plugin-store');
     const store = await Store.load(SERVERS_CONFIG_FILE);
-    const list = (await store.get<Array<{ name: string; enabled?: boolean }>>('servers')) || [];
+    type Saved = { name: string; enabled?: boolean; config?: unknown };
+    const raw = (await store.get<Saved[]>('servers')) || [];
+    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : []);
+    if (renames.length) {
+      try {
+        await store.set('servers', list);
+        await store.save();
+      } catch {
+        // ignore
+      }
+    }
     return Array.isArray(list)
-      ? list.filter(s => !onlyEnabled || s.enabled !== false).map((s) => s.name).filter(Boolean)
+      ? list.filter((s: any) => !onlyEnabled || s.enabled !== false).map((s: any) => s.name).filter(Boolean)
       : [];
   } catch {
     return [];
@@ -33,7 +43,17 @@ export async function getAllConfiguredServersWithStatus(): Promise<Array<{ name:
   try {
     const { Store } = await import('@tauri-apps/plugin-store');
     const store = await Store.load(SERVERS_CONFIG_FILE);
-    const list = (await store.get<Array<{ name: string; config: McpServerConfig; enabled?: boolean }>>('servers')) || [];
+    type Saved = { name: string; config: McpServerConfig; enabled?: boolean };
+    const raw = (await store.get<Saved[]>('servers')) || [];
+    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : []);
+    if (renames.length) {
+      try {
+        await store.set('servers', list);
+        await store.save();
+      } catch {
+        // ignore
+      }
+    }
     
     // 使用zustand store获取当前状态
     const { useMcpStore } = await import('@/store/mcpStore');
@@ -101,8 +121,18 @@ export async function getEnabledConfiguredServers(): Promise<string[]> {
   try {
     const { Store } = await import('@tauri-apps/plugin-store');
     const store = await Store.load('mcp_servers.json');
-    const list = (await store.get<Array<{ name: string; enabled?: boolean }>>('servers')) || [];
-    return list.filter(s => s && (s.enabled !== false)).map(s => s.name);
+    type Saved = { name: string; enabled?: boolean; config?: unknown };
+    const raw = (await store.get<Saved[]>('servers')) || [];
+    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : []);
+    if (renames.length) {
+      try {
+        await store.set('servers', list);
+        await store.save();
+      } catch {
+        // ignore
+      }
+    }
+    return (list as any[]).filter((s) => s && s.enabled !== false).map((s) => s.name);
   } catch { return []; }
 }
 

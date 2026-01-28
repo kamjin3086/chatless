@@ -5,7 +5,7 @@ import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceCo
 import { isShellCommandTrusted, useShellAuthStore } from '@/store/shellAuthStore';
 import { resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
-import { setFilesystemAllowedDirectories } from '@/lib/mcp/filesystemServerConfig';
+import { syncFilesystemAllowlistToBackend } from '@/lib/filesystemAllowlist/backendSync';
 import { markError, markPendingAuth, markSuccess } from './ToolCardUpdater';
 import type { ToolAdapter } from './ToolAdapter';
 import { ToolInvocation } from './ToolInvocation';
@@ -151,15 +151,13 @@ export class ToolExecutionPipeline {
     let execInvocation: ToolInvocation = invocation;
     const srvLower = String(server || '').toLowerCase();
 
-    if (srvLower === 'filesystem') {
-      const inputPath = typeof (args as any)?.path === 'string' ? String((args as any).path) : '';
-      const op = getFilesystemOp(tool);
-
-      if (inputPath) {
+    // 预处理：shell_executor 的 workingDir 支持 @WorkDir / @Alias
+    if (srvLower === 'shell_executor') {
+      const workingDirInput = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
+      if (workingDirInput) {
         try {
           const allowlist = useFilesystemAllowlistStore.getState();
           await allowlist.load();
-          // 会话级别名：@WorkDir（来自附件菜单）
           const dirsForResolve = [...allowlist.directories];
           try {
             const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
@@ -177,6 +175,64 @@ export class ToolExecutionPipeline {
             }
           } catch {
             // ignore
+          }
+          const resolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any });
+          const execArgs = { ...(args || {}), workingDir: resolved.absolutePath };
+          execInvocation = new ToolInvocation({
+            assistantMessageId: invocation.assistantMessageId,
+            conversationId: invocation.conversationId,
+            server: invocation.server,
+            tool: invocation.tool,
+            args: execArgs,
+            provider: invocation.provider,
+            model: invocation.model,
+            historyForLlm: invocation.historyForLlm,
+            originalUserContent: invocation.originalUserContent,
+            callId: invocation.callId,
+            cardId,
+            lockKey: invocation.lockKey,
+          });
+        } catch {
+          // ignore: best-effort（解析失败则保持原 workingDir，让后续校验/授权处理）
+        }
+      }
+    }
+
+    if (srvLower === 'filesystem') {
+      const inputPath = typeof (args as any)?.path === 'string' ? String((args as any).path) : '';
+      const op = getFilesystemOp(tool);
+
+      if (inputPath) {
+        try {
+          const allowlist = useFilesystemAllowlistStore.getState();
+          await allowlist.load();
+          // 会话级别名：@WorkDir（来自附件菜单）
+          const dirsForResolve = [...allowlist.directories];
+          let workingDir: string | undefined;
+          try {
+            const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+            const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
+            if (wd) {
+              workingDir = String(wd).replace(/\\/g, '/');
+              dirsForResolve.unshift({
+                id: `session:${invocation.conversationId}:workdir`,
+                path: workingDir,
+                alias: 'WorkDir',
+                permissions: { read: true, write: true, create: true, delete: false },
+                source: 'workdir',
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              } as any);
+            }
+          } catch {
+            // ignore
+          }
+
+          // 确保后端 allowlist 与前端一致（避免后端最终校验拦截）
+          try {
+            await syncFilesystemAllowlistToBackend(dirsForResolve as any);
+          } catch {
+            // ignore: best-effort sync
           }
 
           const resolved = resolveAllowlistPath({ inputPath, directories: dirsForResolve as any });
@@ -233,12 +289,24 @@ export class ToolExecutionPipeline {
               return { error: 'AUTHORIZATION_DENIED', message: 'User denied authorization' };
             }
 
-            // 用户确认后：把目录加入 allowlist（或补齐权限），并同步写入 mcp_servers.json 后重连
+            // 用户确认后：把目录加入 allowlist（或补齐权限），并同步到 Rust 后端
             try {
               const st = useFilesystemAllowlistStore.getState();
               await st.upsertDirectoryForPath({ absolutePath: resolved.absolutePath, op: op as any, source: 'manual' });
-              const dirPaths = st.directories.map((d) => d.path);
-              await setFilesystemAllowedDirectories({ directories: dirPaths, reconnect: true });
+              const extra = workingDir
+                ? [
+                    {
+                      id: `session:${invocation.conversationId}:workdir`,
+                      path: workingDir,
+                      alias: 'WorkDir',
+                      permissions: { read: true, write: true, create: true, delete: false },
+                      source: 'workdir',
+                      createdAt: Date.now(),
+                      updatedAt: Date.now(),
+                    } as any,
+                  ]
+                : [];
+              await syncFilesystemAllowlistToBackend([...st.directories, ...extra] as any);
             } catch {
               // ignore: best-effort
             }
@@ -252,7 +320,8 @@ export class ToolExecutionPipeline {
       }
     } else {
       const autoAuth = await shouldAutoAuthorize(server);
-      if (needsAuthorization(server, tool, autoAuth, args || {})) {
+      const effectiveArgs = (execInvocation.args || args || {}) as any;
+      if (needsAuthorization(server, tool, autoAuth, effectiveArgs || {})) {
         markPendingAuth({ assistantMessageId, server, tool, cardId });
         const authorized = await new Promise<boolean>((resolve) => {
           const authId = `${assistantMessageId}:${cardId}`;
@@ -261,7 +330,7 @@ export class ToolExecutionPipeline {
             messageId: assistantMessageId,
             server,
             tool,
-            args: args || {},
+            args: effectiveArgs || {},
             createdAt: Date.now(),
             onApprove: () => resolve(true),
             onReject: () => resolve(false),
@@ -285,11 +354,11 @@ export class ToolExecutionPipeline {
         try {
           const srv = String(server || '').toLowerCase();
           if (srv === 'shell_executor') {
-            const wd = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
-            const cmd = typeof (args as any)?.command === 'string' ? String((args as any).command) : '';
+            const wd = typeof (effectiveArgs as any)?.workingDir === 'string' ? String((effectiveArgs as any).workingDir) : '';
+            const cmd = typeof (effectiveArgs as any)?.command === 'string' ? String((effectiveArgs as any).command) : '';
             if (wd.trim() && cmd.trim()) {
               // 仅对低风险命令进行“记忆”，高风险仍会被 isForcedApproval 拦下
-              if (!isForcedApproval(server, tool, args || {}) && isShellCommandTrusted({ command: cmd, workingDir: wd })) {
+              if (!isForcedApproval(server, tool, effectiveArgs || {}) && isShellCommandTrusted({ command: cmd, workingDir: wd })) {
                 // already trusted: no-op
               } else {
                 // 只记目录，不记具体命令；后续仍受 SAFE_EXECUTABLES 限制

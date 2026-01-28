@@ -32,11 +32,11 @@ export async function ensureAllowlistedDirectory(params: {
     });
   }
 
-  // 同步到 mcp_servers.json，并 best-effort 重连 filesystem
+  // 同步到 Rust 后端（后端为最终安全边界）
   try {
-    const { setFilesystemAllowedDirectories } = await import('@/lib/mcp/filesystemServerConfig');
-    const dirs = useFilesystemAllowlistStore.getState().directories.map((d) => d.path);
-    await setFilesystemAllowedDirectories({ directories: dirs, reconnect: params.reconnect !== false });
+    const { syncFilesystemAllowlistToBackend } = await import('@/lib/filesystemAllowlist/backendSync');
+    const dirs = useFilesystemAllowlistStore.getState().directories;
+    await syncFilesystemAllowlistToBackend(dirs);
   } catch {
     // ignore
   }

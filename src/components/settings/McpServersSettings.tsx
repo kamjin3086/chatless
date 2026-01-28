@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@/lib/mcp/McpClient";
 import { serverManager } from "@/lib/mcp/ServerManager";
 import { useMcpServerStatuses, useMcpStore } from "@/store/mcpStore";
+import { normalizeSavedServers, resolveNonConflictingServerName } from "@/lib/mcp/serverNamePolicy";
 import { toast, trimToastDescription } from "@/components/ui/sonner";
 import { downloadService } from "@/lib/utils/downloadService";
 import { detectTauriEnvironment } from "@/lib/utils/environment";
@@ -135,9 +136,32 @@ export function McpServersSettings() {
         console.log('[MCP] 未找到MCP服务配置，请手动配置MCP服务');
       }
       
-      // 默认启用
-      const normalized = Array.isArray(list) ? list.map(s => ({ ...s, enabled: s.enabled !== false })) : [];
+      // 默认启用 + 保留名冲突自动改名（例如 filesystem → filesystem_external）
+      const withEnabled = Array.isArray(list) ? list.map((s) => ({ ...s, enabled: s.enabled !== false })) : [];
+      const { list: normalized, renames } = normalizeSavedServers(withEnabled);
       setServers(normalized);
+
+      if (renames.length) {
+        // best-effort：写回存储，避免后续逻辑仍读取到冲突名
+        try {
+          await store.set("servers", normalized);
+          await store.save();
+        } catch {
+          // ignore
+        }
+        // best-effort：避免旧名字的“已连接”假象（状态与工具缓存清理）
+        try {
+          for (const r of renames) {
+            useMcpStore.getState().setServerStatus(r.from, "disconnected");
+            useMcpStore.getState().clearToolsCache(r.from);
+          }
+        } catch {
+          // ignore
+        }
+        toast.info("已自动规避 MCP 保留名冲突", {
+          description: renames.map((r) => `${r.from} → ${r.to}`).join("，"),
+        });
+      }
     } catch {
       // ignore; use memory default
     }
@@ -204,7 +228,9 @@ export function McpServersSettings() {
         }
       }
     }
-    return imported;
+    // 统一做一次保留名/重名修正
+    const { list: normalized } = normalizeSavedServers(imported);
+    return normalized;
   }, []);
 
   const importFromJson = async () => {
@@ -216,13 +242,19 @@ export function McpServersSettings() {
       if (imported.length === 0) throw new Error('无法识别的 JSON 格式');
       const byName = new Map(servers.map(s => [s.name, s] as const));
       for (const s of imported) byName.set(s.name, { ...s, enabled: true });
-      const next = Array.from(byName.values());
+      const merged = Array.from(byName.values());
+      const { list: next, renames } = normalizeSavedServers(merged);
       await saveServers(next);
       // 再次读取存储，确保不同运行环境（Tauri/浏览器）下列表立即刷新
       await loadServers();
       setImportOpen(false);
       setImportText("");
       toast.success("导入成功", { description: `共 ${imported.length} 条` });
+      if (renames.length) {
+        toast.info("已自动规避 MCP 保留名/重名", {
+          description: renames.map((r) => `${r.from} → ${r.to}`).join("，"),
+        });
+      }
     } catch (e) {
       setImportError('导入失败: ' + String(e));
     }
@@ -367,14 +399,24 @@ export function McpServersSettings() {
 
   const persistEdit = async () => {
     if (!editing) return;
-    const name = editing.name.trim();
-    if (!name) { setError("请输入名称"); return; }
+    const desiredName = editing.name.trim();
+    if (!desiredName) { setError("请输入名称"); return; }
+
+    const existingNames = servers
+      .map((s) => s.name)
+      .filter((n) => n && n !== desiredName);
+    const { name } = resolveNonConflictingServerName({ desiredName, existingNames });
+    if (name !== desiredName) {
+      setEditing({ ...editing, name });
+      toast.info("已自动规避 MCP 保留名/重名", { description: `${desiredName} → ${name}` });
+    }
+
     const exists = servers.find((s) => s.name === name);
     let next = servers.slice();
     if (exists) {
-      next = next.map((s) => (s.name === name ? editing : s));
+      next = next.map((s) => (s.name === name ? { ...editing, name } : s));
     } else {
-      next.unshift(editing);
+      next.unshift({ ...editing, name });
     }
     await saveServers(next);
     setEditing(null);

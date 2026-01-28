@@ -102,8 +102,8 @@ export async function executeToolCall(params: {
     const st0 = useChatStore.getState();
     const conv0 = st0.conversations.find(c => c.id === conversationId);
     const msg0: any = conv0?.messages.find(m => m.id === assistantMessageId);
-    // 若用户已停止（被标记为 error），则不再继续后续链路
-    if (!msg0 || msg0.status === 'error') {
+    // 仅当用户“停止整条 agent”（cancelMessage）时才中断；工具本身报错不应阻断后续工具卡
+    if (!msg0 || coordinator.isMessageCancelled(assistantMessageId)) {
       coordinator.markToolCallComplete(callKey, 'failed');
       return;
     }
@@ -134,7 +134,7 @@ export async function executeToolCall(params: {
     });
     try {
       const result = await DEFAULT_PIPELINE.run(inv);
-      // 若该卡片已被用户“停止/跳过”，则不要覆盖 UI 状态，也不要触发 follow-up（跳过的 follow-up 由 UI 侧合成触发）
+      // 若该卡片已被用户“停止/跳过”，则不要触发 follow-up（由 UI 侧合成触发，避免重复）
       try {
         if (coordinator.isToolCardCancelled(assistantMessageId, String(inv.cardId || ''))) {
           return;
