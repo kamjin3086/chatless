@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { Check, X, Globe, Pin } from 'lucide-react';
+import { Check, X, Globe, Loader2 } from 'lucide-react';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { useChatStore } from '@/store/chatStore';
@@ -209,7 +209,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
             </div>
           ) : status === 'running' ? (
             <div className="flex items-center justify-center w-6" title="调用中...">
-              <Pin className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
+              <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
             </div>
           ) : status === 'stopped' ? (
             <div title="已停止">
