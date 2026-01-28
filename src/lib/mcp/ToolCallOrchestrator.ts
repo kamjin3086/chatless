@@ -6,12 +6,6 @@ import { ToolExecutionPipeline, ToolInvocation } from './pipeline';
 import { createDefaultAdapters } from './pipeline/adapters';
 import { recordExpectedToolCardId, continueWithToolResult as dispatchFollowUp } from './followup/FollowUpDispatcher';
 
-// #region agent log
-const DEBUG_LOG_ENDPOINT = 'http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737';
-function debugLog(location: string, message: string, data?: unknown, hypothesisId?: string) {
-  fetch(DEBUG_LOG_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, message, data, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId }) }).catch(() => {});
-}
-// #endregion
 
 // 防止重复调用的缓存
 const runningCalls = new Map<string, Promise<void>>();
@@ -42,9 +36,7 @@ export async function executeToolCall(params: {
   const isInvalidServer = !server || server === 'unknown' || server.includes('use_mcp_tool') || server.includes('>');
   const isInvalidTool = !tool || tool === 'unknown';
   if (isInvalidServer || isInvalidTool) {
-    // #region agent log
-    debugLog('ToolCallOrchestrator.ts:executeToolCall:invalid', 'Skipping invalid tool call', { server, tool, isInvalidServer, isInvalidTool }, 'H2');
-    // #endregion
+
     return;
   }
   
@@ -63,9 +55,7 @@ export async function executeToolCall(params: {
 
   if (!lockResult.acquired) {
     console.log(`[MCP-DEBUG] 跳过重复调用(coordinator): ${lockResult.key}`);
-    // #region agent log
-    debugLog('ToolCallOrchestrator.ts:executeToolCall:coordinatorSkip', 'Skipping duplicate call via coordinator', { callKey: lockResult.key }, 'H4');
-    // #endregion
+
     return;
   }
 
@@ -75,15 +65,10 @@ export async function executeToolCall(params: {
   const existingCall = runningCalls.get(callKey);
   if (existingCall) {
     console.log(`[MCP-DEBUG] 跳过重复调用(running): ${callKey}`);
-    // #region agent log
-    debugLog('ToolCallOrchestrator.ts:executeToolCall:duplicate', 'Skipping duplicate call', { callKey }, 'H4');
-    // #endregion
+
     return existingCall;
   }
-  
-  // #region agent log
-  debugLog('ToolCallOrchestrator.ts:executeToolCall:entry', 'Tool call orchestrator entry', { server, tool, args, cardId, messageId: assistantMessageId }, 'H1');
-  // #endregion
+
 
   // 记账：本 message 实际启动的 toolCard（用于 multi-tool gate）
   // 注意：这里用 cardId（若存在）作为唯一键，确保 expectedCount 稳定。

@@ -5,6 +5,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
+import { SessionParametersDialog } from '@/components/chat/SessionParametersDialog';
 import type { Message } from "@/types/chat";
 import { useChatStore } from "@/store/chatStore";
 import { useSearchParams } from 'next/navigation';
@@ -57,6 +58,7 @@ export default function ChatPage() {
 
   // 会话参数相关状态
   const [currentSessionParameters, setCurrentSessionParameters] = useState<ModelParameters | undefined>(undefined);
+  const [sessionParametersDialogOpen, setSessionParametersDialogOpen] = useState(false);
 
   // 加载会话参数
   useEffect(() => {
@@ -310,6 +312,8 @@ export default function ChatPage() {
         onModelChange={handleModelChange}
         isModelSelectorDisabled={isLoading}
         tokenCount={tokenCount}
+        hasSessionParameters={!!currentSessionParameters}
+        onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
       />
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 flex flex-col">
@@ -389,6 +393,7 @@ export default function ChatPage() {
               onSessionParametersChange={handleSessionParametersChange}
               currentSessionParameters={currentSessionParameters}
               conversationId={currentConversationId}
+              onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
             />
             </div>
           </div>
@@ -398,6 +403,20 @@ export default function ChatPage() {
       {/* Skills 审批与计划面板（浮动） */}
       <FloatingSkillExecutionPlanPanel />
       <FloatingSkillApprovalPanel />
+
+      {/* 会话参数设置弹窗：统一挂载在页面层（右上角三点菜单/标签条共用） */}
+      {currentProviderName && selectedModelId && currentConversationId && (
+        <SessionParametersDialog
+          open={sessionParametersDialogOpen}
+          onOpenChange={setSessionParametersDialogOpen}
+          providerName={currentProviderName}
+          modelId={selectedModelId}
+          modelLabel={allMetadata?.find(p => p.models?.some(m => m.name === selectedModelId))?.models?.find(m => m.name === selectedModelId)?.label}
+          conversationId={currentConversationId}
+          onParametersChange={handleSessionParametersChange}
+          currentParameters={currentSessionParameters}
+        />
+      )}
     </div>
   );
 }

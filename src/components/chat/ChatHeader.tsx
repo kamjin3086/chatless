@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
-import { MoreVertical, Menu, Plus } from 'lucide-react';
+import { MoreVertical, Menu, Plus, Settings } from 'lucide-react';
 import { ModelSelector } from "./ModelSelector";
 import { ProviderMetadata } from "@/lib/metadata/types";
 import { DeleteConversationDialog } from './DeleteConversationDialog';
@@ -28,6 +28,9 @@ interface ChatHeaderProps {
   onModelChange: (newModelId: string) => void;
   isModelSelectorDisabled?: boolean;
   tokenCount?: number;
+  /** 会话参数：入口从输入框迁移到右上角三点菜单 */
+  hasSessionParameters?: boolean;
+  onOpenSessionParameters?: () => void;
 }
 
 export function ChatHeader({
@@ -42,7 +45,9 @@ export function ChatHeader({
   currentProviderName,
   onModelChange: handleModelChange,
   isModelSelectorDisabled = false,
-  tokenCount: _tokenCount = 0
+  tokenCount: _tokenCount = 0,
+  hasSessionParameters,
+  onOpenSessionParameters,
 }: ChatHeaderProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [_mcpAll, setMcpAll] = useState<string[]>([]);
@@ -156,6 +161,20 @@ export function ChatHeader({
               <DropdownMenuItem onSelect={handleNewChat}>新建对话</DropdownMenuItem>
               <DropdownMenuItem onSelect={onShare}>分享对话</DropdownMenuItem>
               <DropdownMenuItem onSelect={onDownload}>导出对话</DropdownMenuItem>
+              {onOpenSessionParameters ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={onOpenSessionParameters}>
+                    <div className="flex items-center gap-2">
+                      <Settings className="w-4 h-4" />
+                      <span>会话参数</span>
+                      {hasSessionParameters ? (
+                        <span className="ml-auto text-[10px] text-slate-500">已设置</span>
+                      ) : null}
+                    </div>
+                  </DropdownMenuItem>
+                </>
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={() => setShowDeleteConfirm(true)}>
                 删除对话

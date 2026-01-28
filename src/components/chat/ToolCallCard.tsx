@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { Check, X, Globe } from 'lucide-react';
+import { Check, X, Globe, Pin } from 'lucide-react';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { useChatStore } from '@/store/chatStore';
@@ -200,14 +200,16 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         {/* 左侧：状态点 */}
         <div className="mt-1">
           {isPendingAuth ? (
-            <div className="relative flex items-center justify-center w-2 h-2" title="等待授权">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+            <div className="flex items-center justify-center w-6" title="等待授权">
+              <span className="inline-flex items-center gap-0.5">
+                <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '120ms' }} />
+                <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '240ms' }} />
+              </span>
             </div>
           ) : status === 'running' ? (
-            <div className="relative flex items-center justify-center w-2 h-2" title="调用中...">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            <div className="flex items-center justify-center w-6" title="调用中...">
+              <Pin className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
             </div>
           ) : status === 'stopped' ? (
             <div title="已停止">

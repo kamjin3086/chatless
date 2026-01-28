@@ -2,6 +2,7 @@ import { openPath } from '@tauri-apps/plugin-opener';
 import { exists } from '@tauri-apps/plugin-fs';
 import { toast } from '@/components/ui/sonner';
 import { useState } from 'react';
+import { resolveAliasPath } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 /**
  * 文件打开工具类
@@ -14,6 +15,28 @@ import { useState } from 'react';
  * - 代码量极少，仅需几行核心代码
  */
 export class FileOpener {
+  // 避免重复触发 opener：某些环境下重复调用会导致先打开默认目录（如 Documents）再打开目标目录
+  private static _lastOpen: { path: string; ts: number } | null = null;
+  private static readonly _DEDUPE_WINDOW_MS = 1200;
+
+  private static normalizeForOpen(input: string): string {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+    // 将 @Alias / @WorkDir 解析为绝对路径（若可解析）
+    const resolved = resolveAliasPath({ path: raw });
+    // Windows 下用反斜杠更贴近 Explorer；同时避免把路径当成 URL
+    return String(resolved).replace(/\//g, '\\');
+  }
+
+  private static shouldSkipDuplicate(path: string): boolean {
+    const p = String(path || '');
+    if (!p) return true;
+    const now = Date.now();
+    const last = this._lastOpen;
+    if (last && last.path === p && (now - last.ts) < this._DEDUPE_WINDOW_MS) return true;
+    this._lastOpen = { path: p, ts: now };
+    return false;
+  }
   
   /**
    * 使用系统默认程序打开文件
@@ -23,17 +46,31 @@ export class FileOpener {
    */
   static async openFile(filePath: string, fileName?: string): Promise<boolean> {
     try {
-      // 检查文件是否存在
-      const fileExists = await exists(filePath);
-      if (!fileExists) {
-        toast.error('文件不存在', {
-          description: `无法找到文件: ${fileName || filePath}`
-        });
+      const normalized = this.normalizeForOpen(filePath);
+      if (!normalized) {
+        toast.error('打开文件失败', { description: '路径为空' });
         return false;
+      }
+      if (this.shouldSkipDuplicate(normalized)) return true;
+
+      // 检查文件是否存在
+      // 注意：在权限受限情况下 exists 可能失败；失败时降级为直接 openPath
+      try {
+        const fileExists = await exists(normalized);
+        if (!fileExists) {
+          // 仍尝试打开（某些系统关联程序可以处理不存在/快捷方式等场景）
+          // 但给出提示更友好
+          toast.error('文件不存在', {
+            description: `无法找到文件: ${fileName || normalized}`
+          });
+          return false;
+        }
+      } catch {
+        // ignore exists errors
       }
 
       // 使用系统默认程序打开文件
-      await openPath(filePath);
+      await openPath(normalized);
       
       toast.success('文档已打开', {
         description: `已使用系统默认程序打开: ${fileName || '文档'}`
@@ -60,7 +97,9 @@ export class FileOpener {
    */
   static async checkFileExists(filePath: string): Promise<boolean> {
     try {
-      return await exists(filePath);
+      const normalized = this.normalizeForOpen(filePath);
+      if (!normalized) return false;
+      return await exists(normalized);
     } catch (error) {
       console.error('检查文件存在性失败:', error);
       return false;
@@ -88,9 +127,19 @@ export class FileOpener {
    */
   static async openFileLocation(filePath: string): Promise<boolean> {
     try {
-      // 获取文件所在目录
-      const directory = filePath.substring(0, filePath.lastIndexOf('/') || filePath.lastIndexOf('\\'));
-      
+      const normalized = this.normalizeForOpen(filePath);
+      if (!normalized) {
+        toast.error('无法打开文件位置', { description: '路径为空' });
+        return false;
+      }
+
+      // 获取文件所在目录（修复：lastIndexOf('/') 为 -1 时不能用 `||`）
+      const i1 = normalized.lastIndexOf('\\');
+      const i2 = normalized.lastIndexOf('/');
+      const cut = Math.max(i1, i2);
+      const directory = cut >= 0 ? normalized.slice(0, cut) : normalized;
+
+      if (this.shouldSkipDuplicate(directory)) return true;
       await openPath(directory);
       
       toast.success('已打开文件位置');
@@ -99,6 +148,25 @@ export class FileOpener {
     } catch (error) {
       console.error('打开文件位置失败:', error);
       toast.error('无法打开文件位置');
+      return false;
+    }
+  }
+
+  /**
+   * 打开目录（不依赖 fs 权限校验；仅做去重与别名解析）
+   */
+  static async openDirectory(dirPath: string): Promise<boolean> {
+    try {
+      const normalized = this.normalizeForOpen(dirPath);
+      if (!normalized) {
+        toast.error('打开目录失败', { description: '路径为空' });
+        return false;
+      }
+      if (this.shouldSkipDuplicate(normalized)) return true;
+      await openPath(normalized);
+      return true;
+    } catch (e) {
+      toast.error('打开目录失败', { description: e instanceof Error ? e.message : String(e) });
       return false;
     }
   }

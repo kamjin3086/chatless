@@ -9,7 +9,7 @@ import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 // import { getThemeStyles } from '@/lib/markdown/themes';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
 import { preprocessMarkdownForSafeRender } from './markdownPreprocess';
-import { replaceAliasPathsForDisplay } from '@/lib/filesystemAllowlist/displayPathAliases';
+import { replaceAliasPathsForDisplayWithContext } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 interface MemoizedMarkdownProps {
   content: string;
@@ -18,10 +18,13 @@ interface MemoizedMarkdownProps {
   sizeOverride?: 'small' | 'medium' | 'large';
   /** 将 @WorkDir/@Alias 路径展示为绝对路径（用于 assistant 最终总结降低歧义） */
   resolvePathAliases?: boolean;
+  /** 可选：用于解析 @WorkDir 的会话上下文 */
+  contextMessageId?: string;
+  contextConversationId?: string;
 }
 
 
-export const MemoizedMarkdown = memo(({ content, className, sizeOverride, resolvePathAliases }: MemoizedMarkdownProps) => {
+export const MemoizedMarkdown = memo(({ content, className, sizeOverride, resolvePathAliases, contextMessageId, contextConversationId }: MemoizedMarkdownProps) => {
   const { size } = useMarkdownFontSize();
   // 主题系统已禁用
   // const { theme } = useMarkdownTheme();
@@ -52,7 +55,13 @@ export const MemoizedMarkdown = memo(({ content, className, sizeOverride, resolv
     return m.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   });
 
-  const displayContent = resolvePathAliases ? replaceAliasPathsForDisplay(sanitizedContent) : sanitizedContent;
+  const displayContent = resolvePathAliases
+    ? replaceAliasPathsForDisplayWithContext({
+        markdown: sanitizedContent,
+        messageId: contextMessageId,
+        conversationId: contextConversationId,
+      })
+    : sanitizedContent;
 
   // HTML 换行 <br> 预处理 → Markdown 硬换行
   function convertHtmlBreaksToMd(input: string): string {

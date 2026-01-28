@@ -7,14 +7,11 @@ import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
-import { AttachedDocumentView } from "./input/AttachedDocumentView";
-import { SelectedKnowledgeBaseView } from "./input/SelectedKnowledgeBaseView";
-import { SessionParametersDialog } from './SessionParametersDialog';
+// 输入框上方“长条附加项”已移除：保留输入框下方彩色标签条即可
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { ChatModeSelector, type ChatMode } from './input/ChatModeSelector';
 import { AttachmentMenu } from './input/AttachmentMenu';
-import { MoreOptionsMenu } from './input/MoreOptionsMenu';
 import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
 import { WebSearchToggle } from './input/WebSearchToggle';
 import { McpQuickToggle } from './input/McpQuickToggle';
@@ -41,6 +38,7 @@ import {
   getConnectedServers,
   getGlobalEnabledServers,
 } from "@/lib/mcp/chatIntegration";
+import { useConversationAttachmentStore } from "@/store/conversationAttachmentStore";
 
 interface EditingMessageData {
   content: string;
@@ -92,6 +90,8 @@ interface ChatInputProps {
   conversationId?: string; // 添加会话ID参数
   onSessionParametersChange?: (parameters: ModelParameters) => void;
   currentSessionParameters?: ModelParameters;
+  /** 由外部（右上角三点菜单）触发打开会话参数 */
+  onOpenSessionParameters?: () => void;
 }
 
 export function ChatInput({
@@ -106,11 +106,12 @@ export function ChatInput({
   tokenCount = 0,
   editingMessage = null,
   onCancelEdit,
-  providerName,
-  modelId,
-  modelLabel,
-  onSessionParametersChange,
+  providerName: _providerName,
+  modelId: _modelId,
+  modelLabel: _modelLabel,
+  onSessionParametersChange: _onSessionParametersChange,
   currentSessionParameters,
+  onOpenSessionParameters,
   conversationId
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState("");
@@ -148,8 +149,7 @@ export function ChatInput({
     [allKnowledgeBases]
   );
   
-  // 会话参数设置弹窗状态
-  const [sessionParametersDialogOpen, setSessionParametersDialogOpen] = useState(false);
+  // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
   
   const _webSearch = useWebSearchStore();
   const _router = useRouter();
@@ -207,6 +207,9 @@ export function ChatInput({
 
   // === 会话内草稿：仅在切换会话/失焦/卸载时提交，避免输入过程中重渲染导致光标跳动 ===
   const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
+  const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
+  // 仅展示用户主动挂载的目录（通过 + 号选择），不展示系统自动 @WorkDir
+  const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;
   const clearInputDraft = useChatStore((s)=>s.clearInputDraft);
   const setInputDraft = useChatStore((s)=>s.setInputDraft);
   const prevConvRef = useRef<string | null>(null);
@@ -290,7 +293,7 @@ export function ChatInput({
   };
 
   // 移除知识库选择
-  const handleRemoveKnowledgeBase = () => {
+  const _handleRemoveKnowledgeBase = () => {
     setSelectedKnowledgeBase(null);
   };
 
@@ -797,12 +800,7 @@ export function ChatInput({
         </div>
       )}
 
-      {selectedKnowledgeBase && (
-        <SelectedKnowledgeBaseView
-          knowledgeBase={selectedKnowledgeBase}
-          onRemove={handleRemoveKnowledgeBase}
-        />
-      )}
+      {/* 已移除输入框上方“长条附加项”（知识库/工作目录/文档），仅在下方彩色标签条展示 */}
 
       {attachedImages.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
@@ -820,15 +818,7 @@ export function ChatInput({
         </div>
       )}
 
-      {attachedDocument && (
-        <div className="w-full max-w-full overflow-hidden px-1">
-          <AttachedDocumentView
-            document={attachedDocument}
-            onRemove={removeAttachedDocument}
-            onIndexed={(kbId) => setSelectedKnowledgeBase(prev => prev || { id: kbId, name: '临时收纳箱' } as any)}
-          />
-        </div>
-      )}
+      {/* 文档附加展示已移至下方彩色标签条 */}
 
       <div className="relative flex w-full rounded-xl border border-slate-300/50 dark:border-slate-600/50 bg-white dark:bg-slate-900/90 backdrop-blur-sm shadow-sm hover:border-slate-400/60 dark:hover:border-slate-500/60 focus-within:border-blue-400/60 dark:focus-within:border-blue-500/60 focus-within:ring-2 focus-within:ring-blue-100/50 dark:focus-within:ring-blue-900/30 transition-all duration-200" onDragOver={(e)=>{ const dt=(e as React.DragEvent).dataTransfer; if (!dt) return; const hasFile = Array.from(dt.items||[]).some((it)=> it.kind==='file'); if (hasFile || dt.getData('text/uri-list')) { e.preventDefault(); dt.dropEffect='copy'; } }} onDrop={async (e)=>{ const dt=(e as React.DragEvent).dataTransfer; if (!dt) return; const files=Array.from(dt.files||[]); const imgs=files.filter(f=>f.type.startsWith('image/')); if (imgs.length>0){ e.preventDefault(); for (const f of imgs) await appendImageFromBlob(f, f.name||'dropped.png'); return; } const url = dt.getData('text/uri-list')||dt.getData('text/plain'); if (url && /^(https?:|data:)/i.test(url)){ e.preventDefault(); try{ const resp=await fetch(url); const blob=await resp.blob(); if (blob.type.startsWith('image/')) await appendImageFromBlob(blob, `dropped-${Date.now()}.${(blob.type.split('/')[1]||'png')}`);}catch{ /* noop */ }} } }>
         {/* 顶部拖拽手柄：按住可向上/下调整高度，封顶 60vh */}
@@ -1095,15 +1085,7 @@ export function ChatInput({
             }}
           />
 
-          {/* 更多选项（会话参数） */}
-          {providerName && modelId && conversationId && (
-            <MoreOptionsMenu
-              disabled={disabled || isLoading}
-              hasSessionParameters={!!currentSessionParameters}
-              canEditSessionParameters={true}
-              onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
-            />
-          )}
+          {/* 输入框齿轮按钮已移除：会话参数入口迁移到右上角三点菜单 */}
 
           {/* 隐藏的文件输入 */}
           <input
@@ -1184,25 +1166,22 @@ export function ChatInput({
           const kb = allKnowledgeBases.find(k => k.id === id);
           if (kb) setSelectedKnowledgeBase(kb);
         }}
+        workingDir={mountedDir}
+        onRemoveWorkingDir={() => {
+          try {
+            if (currentConvId) clearMountedDir(String(currentConvId));
+          } catch {
+            // ignore
+          }
+        }}
+        attachedDocument={attachedDocument ? { name: attachedDocument.name, fileSize: attachedDocument.fileSize } : undefined}
+        onRemoveDocument={() => removeAttachedDocument()}
         enabledMcpServers={[]}
         hasSessionParameters={!!currentSessionParameters}
-        onClickSessionParameters={() => setSessionParametersDialogOpen(true)}
+        onClickSessionParameters={() => onOpenSessionParameters?.()}
       />
 
-
-      {/* 会话参数设置弹窗 */}
-      {providerName && modelId && conversationId && (
-        <SessionParametersDialog
-          open={sessionParametersDialogOpen}
-          onOpenChange={setSessionParametersDialogOpen}
-          providerName={providerName}
-          modelId={modelId}
-          modelLabel={modelLabel}
-          conversationId={conversationId}
-          onParametersChange={onSessionParametersChange || (() => {})}
-          currentParameters={currentSessionParameters}
-        />
-      )}
+      {/* 会话参数弹窗已迁移到上层 Chat 页面统一挂载 */}
     </div>
   );
 } 

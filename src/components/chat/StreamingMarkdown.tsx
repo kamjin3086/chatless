@@ -5,7 +5,7 @@ import { Streamdown } from 'streamdown';
 import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
 import { preprocessMarkdownForSafeRender } from './markdownPreprocess';
-import { replaceAliasPathsForDisplay } from '@/lib/filesystemAllowlist/displayPathAliases';
+import { replaceAliasPathsForDisplayWithContext } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 interface StreamingMarkdownProps {
   content: string;
@@ -13,6 +13,9 @@ interface StreamingMarkdownProps {
   className?: string;
   /** 将 @WorkDir/@Alias 路径展示为绝对路径（用于 assistant 最终总结降低歧义） */
   resolvePathAliases?: boolean;
+  /** 可选：用于解析 @WorkDir 的会话上下文 */
+  contextMessageId?: string;
+  contextConversationId?: string;
 }
 
 /**
@@ -150,7 +153,9 @@ export const StreamingMarkdown = React.memo(function StreamingMarkdown({
   content, 
   isStreaming, 
   className,
-  resolvePathAliases
+  resolvePathAliases,
+  contextMessageId,
+  contextConversationId
 }: StreamingMarkdownProps) {
   const { size } = useMarkdownFontSize();
   
@@ -199,8 +204,15 @@ export const StreamingMarkdown = React.memo(function StreamingMarkdown({
 
   // Memoize 预处理（只在 displayContent 变化时计算）
   const displayWithResolvedPaths = useMemo(
-    () => (resolvePathAliases ? replaceAliasPathsForDisplay(displayContent) : displayContent),
-    [displayContent, resolvePathAliases]
+    () =>
+      resolvePathAliases
+        ? replaceAliasPathsForDisplayWithContext({
+            markdown: displayContent,
+            messageId: contextMessageId,
+            conversationId: contextConversationId,
+          })
+        : displayContent,
+    [displayContent, resolvePathAliases, contextMessageId, contextConversationId]
   );
   const safe = useMemo(
     () => preprocessMarkdownForSafeRender(displayWithResolvedPaths, { wrapFullHtmlDocument: true }),

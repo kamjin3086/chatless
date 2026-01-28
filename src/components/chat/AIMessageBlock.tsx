@@ -17,6 +17,10 @@ import 'yet-another-react-lightbox/styles.css';
 import { downloadService } from '@/lib/utils/downloadService';
 import { Download as DownloadIcon, Maximize2, Copy as CopyIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { extractFileChangesFromToolCards } from '@/lib/chat/extractFileChangesFromToolCards';
+import { toast } from '@/components/ui/sonner';
+import { FileOpener } from '@/lib/utils/fileOpener';
+import { resolveAliasPath } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 interface AIMessageBlockProps {
   content: string;
@@ -317,6 +321,47 @@ export function AIMessageBlock({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
+  // 从工具卡片埋点中提取“本次会话改动的文件/目录”，用于稳定展示（不改 LLM 文本）
+  const fileChanges = useMemo(() => {
+    const src: any[] = Array.isArray(viewModel?.items)
+      ? (viewModel?.items as any[])
+      : (Array.isArray(segments) ? (segments as any[]) : []);
+    const raw = extractFileChangesFromToolCards(src);
+    // 将 @WorkDir/@Alias 解析成绝对路径后再用于展示/去重（避免 alias 与绝对路径重复显示）
+    const resolved = raw
+      .map((c) => ({
+        ...c,
+        path: resolveAliasPath({ path: c.path, messageId: id }),
+      }))
+      .filter((c) => !!c.path);
+    // 以“路径”为唯一键去重（忽略 op），避免同一目录被 args/resultPreview/alias 重复带出
+    const seen = new Set<string>();
+    const uniq: typeof resolved = [];
+    for (const c of resolved) {
+      const key = String(c.path || '').trim().replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase();
+      if (!key) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniq.push(c);
+    }
+    return uniq;
+  }, [segments, viewModel?.items, id]);
+
+  const basename = (p: string): string => {
+    const s = String(p || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+    const i = s.lastIndexOf('/');
+    return i >= 0 ? s.slice(i + 1) : s;
+  };
+
+  const openPathSafe = async (path: string) => {
+    try {
+      // 对于文件直接打开；对目录也能打开
+      await FileOpener.openDirectory(path);
+    } catch (e) {
+      toast.error('打开失败', { description: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
   return (
     <div className="ai-markdown-container group w-full max-w-full min-w-0">
    
@@ -485,7 +530,7 @@ export function AIMessageBlock({
                       {(() => {
                         // 使用统一的StreamingMarkdown组件，支持流式和非流式markdown渲染
                         const { StreamingMarkdown } = require('./StreamingMarkdown');
-                        return <StreamingMarkdown content={textContent} isStreaming={isStreaming} resolvePathAliases={!isStreaming} />;
+                        return <StreamingMarkdown content={textContent} isStreaming={isStreaming} />;
                       })()}
                     </div>
                   </div>
@@ -503,7 +548,7 @@ export function AIMessageBlock({
                       <div className="markdown-content-area">
                         {(() => {
                           const { StreamingMarkdown } = require('./StreamingMarkdown');
-                          return <StreamingMarkdown content={fallbackTextCleaned} isStreaming={isStreaming} resolvePathAliases={!isStreaming} />;
+                          return <StreamingMarkdown content={fallbackTextCleaned} isStreaming={isStreaming} />;
                         })()}
                       </div>
                     </div>
@@ -544,7 +589,41 @@ export function AIMessageBlock({
       {/* 当没有任何结构化片段时，回退为渲染纯正文（兼容非流式RAG或历史消息） */}
       {(mixedSegments.length === 0) && !!(state?.regularContent || content) && (
         <div className="relative min-w-0 max-w-full w-full markdown-content-area">
-          <MemoizedMarkdown content={filterToolCallContent((state?.regularContent || content))} resolvePathAliases />
+          <MemoizedMarkdown content={filterToolCallContent((state?.regularContent || content))} />
+        </div>
+      )}
+
+      {/* 本次消息的文件改动清单（来源：工具卡片埋点），点击可打开 */}
+      {fileChanges.length > 0 && (
+        <div className="mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 select-none">
+            本次会话改动的文件/目录
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {fileChanges.slice(0, 12).map((c) => (
+              <button
+                key={`${c.op}:${c.path}`}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px]
+                  bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-900/20 dark:hover:bg-slate-900/30
+                  border border-slate-200/60 dark:border-slate-700/60
+                  text-slate-700 dark:text-slate-200"
+                title={c.path}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void openPathSafe(c.path);
+                }}
+              >
+                <span className="font-mono text-slate-500 dark:text-slate-400">{c.op}</span>
+                <span className="max-w-[320px] truncate">{basename(c.path)}</span>
+              </button>
+            ))}
+            {fileChanges.length > 12 && (
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 select-none px-1 py-1">
+                +{fileChanges.length - 12}
+              </span>
+            )}
+          </div>
         </div>
       )}
 

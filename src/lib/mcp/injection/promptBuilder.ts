@@ -429,10 +429,7 @@ async function injectSkillsIndex(
     
     // 获取技能索引提示词
     const skillsPrompt = manager.buildSkillIndexPrompt();
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:injectSkillsIndex',message:'Skills prompt generated',data:{hasPrompt:!!skillsPrompt,promptPreview:skillsPrompt?.slice(0,300)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H9'})}).catch(()=>{});
-    // #endregion
+
     
     if (skillsPrompt) {
       messages.push({ role: 'system', content: skillsPrompt });
@@ -442,4 +439,3 @@ async function injectSkillsIndex(
     // 不阻塞主流程
   }
 }
-

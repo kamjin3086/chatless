@@ -51,10 +51,10 @@ export function AttachmentMenu({
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loadingKb, setLoadingKb] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const { setWorkingDir, clearWorkingDir, getWorkingDir } = useConversationAttachmentStore();
+  const { setMountedDir, clearMountedDir, getMountedDir } = useConversationAttachmentStore();
   const currentConvId = useChatStore((s) => s.currentConversationId);
   const effectiveConvId = conversationId || currentConvId || "";
-  const workingDir = effectiveConvId ? getWorkingDir(effectiveConvId) : undefined;
+  const workingDir = effectiveConvId ? getMountedDir(effectiveConvId) : undefined;
 
   // 加载知识库列表
   useEffect(() => {
@@ -87,7 +87,7 @@ export function AttachmentMenu({
       : true
   );
 
-  const hasAnyAttachment = hasDocument || selectedKnowledgeBase;
+  const hasAnyAttachment = hasDocument || selectedKnowledgeBase || !!workingDir;
 
   // 主菜单视图
   const renderMainView = () => (
@@ -109,7 +109,7 @@ export function AttachmentMenu({
               const { open } = await import("@tauri-apps/plugin-dialog");
               const selected = await open({ directory: true, multiple: false });
               if (!selected || typeof selected !== "string") return;
-              if (effectiveConvId) setWorkingDir(effectiveConvId, selected);
+              if (effectiveConvId) setMountedDir(effectiveConvId, selected);
             } catch {
               // ignore
             } finally {
@@ -122,7 +122,7 @@ export function AttachmentMenu({
                 className="text-[11px] text-rose-500 hover:text-rose-600 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (effectiveConvId) clearWorkingDir(effectiveConvId);
+                  if (effectiveConvId) clearMountedDir(effectiveConvId);
                   setOpen(false);
                 }}
                 title="移除工作目录"
@@ -258,7 +258,7 @@ export function AttachmentMenu({
           className={cn(
             "h-8 w-8 shrink-0 rounded-lg transition-all duration-150",
             hasAnyAttachment
-              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
               : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           )}
           title="附加内容"

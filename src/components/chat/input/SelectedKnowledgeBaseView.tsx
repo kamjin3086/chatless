@@ -36,7 +36,12 @@ export function SelectedKnowledgeBaseView({ knowledgeBase, onRemove, className }
 
       {/* 管理按钮 */}
             <button
-        onClick={handleGoToKnowledgeBase}
+        onClick={(e) => {
+          // 防止被上层“整行可点击”容器误触发
+          e.preventDefault();
+          e.stopPropagation();
+          handleGoToKnowledgeBase();
+        }}
         className="shrink-0 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
         title="管理知识库"
             >
@@ -45,7 +50,11 @@ export function SelectedKnowledgeBaseView({ knowledgeBase, onRemove, className }
 
       {/* 移除按钮 */}
       <button
-            onClick={onRemove}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemove();
+            }}
         className="shrink-0 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
         title="移除"
           >
