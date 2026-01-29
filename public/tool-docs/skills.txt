@@ -1,0 +1,19 @@
+Skills (skills__*) — SOP
+
+Purpose
+- Skills are the primary tutorials (SKILL.md + actions) to accomplish user tasks.
+- If a skill is used, it becomes the authoritative step-by-step guide.
+
+Mandatory workflow
+1) Call skills__get_skill_instructions({ skillId }) first
+2) If the skill has actions, call skills__list_skill_actions({ skillId })
+3) Execute actions using returned actionId only (never guess)
+4) If instruction-only: break down into real filesystem / shell_executor steps
+5) Verify outputs with filesystem (read/list/etc)
+
+Efficient reading (line ranges)
+- `skills__get_skill_instructions` supports `startLine` / `endLine` (1-based) and returns `totalLines`.
+- Prefer reading only the relevant sections by line range instead of pulling the whole SKILL.md into context.
+
+Important semantics
+- “Saved a script” is NOT “task completed”. You must run commands and verify outputs.

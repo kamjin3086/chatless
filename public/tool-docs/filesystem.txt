@@ -1,0 +1,33 @@
+Filesystem (filesystem__*) — SOP
+
+Purpose
+- Read/write/list/create/rename/delete files and directories.
+- Use filesystem for most “simple file operations” (preferred over scripts).
+
+Path style (Windows)
+- Use absolute paths like: C:/Users/... or D:/...
+- Use forward slashes `/` as separators (recommended).
+- You may also use aliases like @WorkDir/... and @Alias/...; the system will resolve them.
+
+Authorization / allowlist
+- Do NOT “probe permissions” by listing directories first.
+- Directly call filesystem with the target path.
+- If the path is outside allowlist, the app will show an authorization card. After approval, the directory will be allowlisted.
+
+Permission denied feedback (STRUCTURED)
+- If you receive a tool result with `error.code = "AUTH_DENIED"`:
+  - Stop retrying the same call.
+  - Ask the user to approve/allowlist the suggested directory (often `error.fs.suggestDir`), then retry with the same intent.
+- If you receive `error.code = "FILESYSTEM_GATE_FAILED"`:
+  - Treat it as “path/alias not resolvable or not authorized”; ask user to clarify the correct absolute path or approve the directory.
+
+Safety
+- Delete operations require explicit user approval. Never delete without it.
+
+Examples
+- Read file:
+  path: "@WorkDir/out/result.txt"
+- Write file:
+  path: "C:/Users/User/Documents/test.txt"
+- List directory:
+  path: "@WorkDir/out"

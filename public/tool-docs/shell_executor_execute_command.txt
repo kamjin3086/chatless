@@ -1,0 +1,37 @@
+Shell Executor (shell_executor__execute_command) — SOP
+
+Purpose
+- Run external commands (python/node/git/npm/etc) in a sandboxed process environment.
+- Use this ONLY when filesystem tools cannot directly完成任务 or when you need existing CLI tools.
+
+Working directory (IMPORTANT)
+- Prefer passing workingDir explicitly.
+- Default workingDir should be @WorkDir (AppData workspace). Do NOT write outputs into skills directories.
+- If a command depends on a project directory (package.json, scripts, etc.), set workingDir to that project directory.
+
+Quoting rules (CRITICAL for correctness)
+- Treat the `command` string as a human command line. Do NOT add extra escaping beyond normal quoting.
+- For `python -c` / `node -e`, the code after -c/-e must be ONE argument:
+  - Good: python -c "import docx; print('ok')"
+  - Bad:  python -c \"import docx; print('ok')\"   (double-escaped quotes often break)
+  - Bad:  python -c "import                       (broken argument -> syntax error)
+
+Method selection
+- Prefer filesystem for simple file creation/modification.
+- Prefer shell_executor for one-off conversions (zip/unzip/pandoc/git/npm).
+- Prefer “script + shell_executor” only when logic is complex or must be reused/validated.
+
+Retry / failure handling
+- If a tool call fails, do NOT repeat the exact same command+workingDir more than 3 times.
+- Change one dimension when retrying: workingDir, command syntax, or switch method (filesystem vs shell).
+
+Permission denied feedback (STRUCTURED)
+- If you receive a tool result with `error.code = "AUTH_DENIED"`:
+  - Stop retrying automatically.
+  - Ask the user to approve the tool call (and/or allowlist the workingDir), then retry.
+
+Examples
+- Check python module:
+  python -c "import docx; print('docx ok')"
+- Run node inline:
+  node -e "console.log('hello')"
