@@ -18,11 +18,15 @@ import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from '@/lib/mcp/nativeTools/filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nativeTools/shellExecutor';
 import { persistentCache } from '../persistentCache';
-import { getConnectedServers, getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
+import { getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
 import { skillTools } from '@/lib/skills/skillTools';
 import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
+import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
+import { detectSkillIntent } from './intentDetector';
+import { CORE_TOOL_POLICY_MD } from './promptTemplates';
+import { getToolDoc } from './toolDocLoader';
 
 /**
  * 构建初始调用阶段的提示词
@@ -61,67 +65,75 @@ export async function buildInitialPrompt(
   
   // 1. 时间上下文（高优先级）
   await injectTimeContext(messages, context.userContent, signals.isTimeRelated);
+
+  // 1.1 运行平台上下文（用于生成稳定可执行的命令）
+  try {
+    const p = await getRuntimePlatform();
+    const g = getShellGuidance(p);
+    messages.push({
+      role: 'system',
+      content: `【运行环境（重要）】
+- 平台：${g.platformLabel}
+- shell_executor 优先命令风格：${g.preferredShell}
+- 规则：
+${g.rules.map((r) => `  - ${r}`).join('\n')}`,
+    });
+  } catch {
+    // ignore
+  }
   
-  // 2. 获取启用的服务器
-  const connected = await getConnectedServers();
-  const globalEnabled = await getGlobalEnabledServers();
-  let enabled = connected.filter(n => globalEnabled.includes(n));
-  
-  // 3. 处理 @mention 的服务器
+  // 2. 服务器工具默认收敛：仅在显式 @mention 时才启用外部 MCP server（避免默认把所有 connected/global tools 灌给模型）
+  //    内置能力仍通过 filesystem/shell_executor 暴露。
+  let enabled: string[] = [];
   if (signals.hasExplicitMention && signals.mentionedServers.length > 0) {
+    const globalEnabled = await getGlobalEnabledServers();
     const all = await getAllConfiguredServers();
-    const serverMap = new Map(all.map(n => [n.toLowerCase(), n] as const));
-    
+    const serverMap = new Map(all.map((n) => [n.toLowerCase(), n] as const));
+
     const mentionedEnabled = signals.mentionedServers
-      .map(n => serverMap.get(n.toLowerCase()))
+      .map((n) => serverMap.get(n.toLowerCase()))
       .filter((n): n is string => Boolean(n))
-      .filter(n => globalEnabled.includes(n));
-    
+      .filter((n) => globalEnabled.includes(n))
+      // 内置保留 server（filesystem/skills/web_search/shell_executor）不走外部 mcp 连接列表
+      .filter((n) => !RESERVED_MCP_SERVER_NAMES.has(String(n || '').toLowerCase()));
+
     if (mentionedEnabled.length > 0) {
-      // 预连接被 @mention 的服务器
       try {
         await persistentCache.preconnectServers(mentionedEnabled);
       } catch (error) {
         console.warn('[InjectionManager] 预连接失败:', error);
       }
-      
-      enabled = Array.from(new Set([...mentionedEnabled, ...enabled]));
+      enabled = Array.from(new Set([...mentionedEnabled]));
     }
   }
-  
   enabledServers.push(...enabled);
   
   // 4. 构建工具信息（仅在不支持原生工具调用时注入）
   const toolInfoParts: string[] = [];
   
+  // Skills：始终注入 skills 概览 + 始终暴露 skills 工具
+  // 目标：
+  // 1) 即使检测器偶发失效，LLM 也能“看到”全部 skills 概览并自行选择
+  // 2) 支持用户显式指定 skill（通过概览中的 id/name）
+  // 3) 强制要求：一旦发现 skill 能做用户要求，就立即遵从 skill（再搭配其它 skill / filesystem / shell_executor）
+  const _skillIntent = detectSkillIntent(context.userContent || '');
+  const shouldExposeSkills = true;
+  const shouldExposeWebSearch =
+    !!signals.webSearchEnabled &&
+    // 只在“明显需要实时信息”的场景下注入，避免所有请求都默认携带 web_search（会分散模型注意力）
+    (signals.isTimeRelated || (signals.hasExplicitMention && signals.mentionedServers.some((s) => s.toLowerCase() === WEB_SEARCH_SERVER_NAME)));
+
   // 构建原生工具定义（Native-only）
-  const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions(enabled, signals.webSearchEnabled);
+  const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
+    servers: enabled,
+    includeSkills: shouldExposeSkills,
+    includeWebSearch: shouldExposeWebSearch,
+  });
 
   // 使用原生工具调用时，只注入简化的协议说明
   messages.push({
     role: 'system',
-    content: `你可以通过工具调用来获取信息或执行操作。必须使用结构化 tool calling；不要输出任何 XML/标签格式的工具指令文本。
-
-【文件系统工具选择（重要）】
-- 所有文件/目录的读取、写入与列目录：**统一使用 \`${FILESYSTEM_SERVER_NAME}__*\`（filesystem）**。
-- 路径既可以使用绝对路径（如 \`D:/path/file.txt\`），也可以使用别名路径（如 \`@WorkDir/...\` 或用户配置的 \`@Alias/...\`）。
-- 当访问的路径不在白名单目录内时，会要求用户确认；确认后会把目录加入白名单以便后续自动执行。
-- **不要为了“探测权限/白名单范围”而先列目录或尝试查询授权列表**：直接使用目标路径作为参数调用 filesystem；若越界系统会弹出授权卡片由用户决定。
-
-【输出目录默认规则（重要）】
-- skills 目录（安装的技能包所在目录）**不是**用户文件的临时目录/输出目录。除非用户明确要求“修改/维护 skill 本身”，否则**禁止**把生成的文档/脚本/临时文件写到 skills 目录下。
-- 当用户对保存位置描述含糊时，默认把脚本/临时文件/产物写到 **@WorkDir（应用 AppData 工作区）** 下（通常为 \`@WorkDir/work\` 与 \`@WorkDir/out\`）。只有用户明确要求导出到 Documents/其他目录时，才申请白名单并写入该目录。
-
-【方法选择策略（重要，避免简单问题复杂化）】
-- A（优先）filesystem：直接读写/创建/移动/删除文件与目录，适合绝大多数“简单文件操作”。能用 A 完成就不要写脚本。
-- B（其次）shell_executor：当需要现成工具的一次性转换/批处理（例如 unzip/pandoc/git 等）时使用；命令应短、可复现，workingDir 默认使用 @WorkDir。
-- C（最后）脚本 + shell_executor：仅在需要复杂逻辑（循环/条件/多文件批处理）、需要复用、或需要强验证/报告时使用。写脚本≠完成：必须执行并用 filesystem 验证关键产物后再交付。
-
-【Skills 遵从策略（强制）】
-- 一旦你选择/引用了某个 skill（调用了 \`skills.get_skill_instructions\` 并获得指南），该指南视为**绝对主教程**：必须优先遵循；你的常识与网络搜索只能作为**辅助**，不得与指南冲突。
-- 目标是完成用户任务而不是“读完指南就结束”。你必须主动识别并完成为达成目标所需的额外步骤，例如：读取 skill 资源文件、选择/调用其他 skill、使用 filesystem 读写文件、用 shell_executor 执行脚本/命令、以及对关键产物做验证。
-- 必须形成闭环：读指南/资源 → 生成/修改 → 执行（脚本/命令）→ 验证（如 filesystem.read_file/list_directory/exists 或关键输出检查）→ 再向用户交付。**禁止**仅凭“写入脚本成功/下载成功”等中间结果就宣称任务已完成。
-`
+    content: CORE_TOOL_POLICY_MD
   });
 
   // 5.1 会话附加内容：工作目录（临时授权）
@@ -146,9 +158,10 @@ export async function buildInitialPrompt(
   // 6. 启用服务器声明
   const allEnabled = [
     ...enabled,
-    ...(signals.webSearchEnabled ? [WEB_SEARCH_SERVER_NAME] : []),
+    ...(shouldExposeWebSearch ? [WEB_SEARCH_SERVER_NAME] : []),
     FILESYSTEM_SERVER_NAME,
     SHELL_EXECUTOR_SERVER_NAME,
+    ...(shouldExposeSkills ? ['skills'] : []),
   ];
   
   if (allEnabled.length > 0) {
@@ -159,11 +172,11 @@ export async function buildInitialPrompt(
   }
   
   // 7. 网络搜索策略（如果启用）
-  if (signals.webSearchEnabled) {
+  if (shouldExposeWebSearch) {
     messages.push({ role: 'system', content: MCPPrompts.webSearchPolicy });
   }
   
-  // 8. Skills 索引注入（渐进式披露）
+  // 8. Skills 索引注入（始终）
   await injectSkillsIndex(messages);
   
   return {
@@ -242,10 +255,11 @@ async function injectTimeContext(
 /**
  * 构建原生工具定义（用于传递给 LLM API 的 tools 参数）
  */
-async function buildNativeToolDefinitions(
-  servers: string[],
-  webSearchEnabled: boolean
-): Promise<NativeToolDefinition[]> {
+async function buildNativeToolDefinitions(params: {
+  servers: string[];
+  includeWebSearch: boolean;
+  includeSkills: boolean;
+}): Promise<NativeToolDefinition[]> {
   const tools: NativeToolDefinition[] = [];
   const TOOL_LIMIT = 20; // 原生工具调用的限制
 
@@ -263,33 +277,36 @@ async function buildNativeToolDefinitions(
     };
   };
 
-  // 0. Skills（本地能力包）：永远可用，不依赖 MCP 连接状态
-  for (const t of skillTools) {
-    // tool.name 在 skillTools 中是裸名（如 get_skill_instructions），这里统一加 server 前缀以便解析
-    tools.push({
-      name: `skills__${t.name}`,
-      description: t.description || `Skill tool ${t.name}`,
-      parameters: normalizeParams(
-        t.parameters
-          ? {
-              type: 'object',
-              properties: Object.fromEntries(
-                Object.entries(t.parameters).map(([k, v]) => [
-                  k,
-                  { type: v.type, description: v.description },
-                ])
-              ),
-              required: Object.entries(t.parameters)
-                .filter(([, v]) => v.required)
-                .map(([k]) => k),
-            }
-          : { type: 'object' }
-      ),
-    });
+  // 0. Skills（本地能力包）：按需暴露（默认不注入，减少误调用与 tools 数量）
+  if (params.includeSkills) {
+    for (const t of skillTools) {
+      const fullName = `skills__${t.name}`;
+      const doc = await getToolDoc({ toolFullName: fullName });
+      tools.push({
+        name: fullName,
+        description: [t.description || `Skill tool ${t.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
+        parameters: normalizeParams(
+          t.parameters
+            ? {
+                type: 'object',
+                properties: Object.fromEntries(
+                  Object.entries(t.parameters).map(([k, v]) => [
+                    k,
+                    { type: v.type, description: v.description },
+                  ])
+                ),
+                required: Object.entries(t.parameters)
+                  .filter(([, v]) => v.required)
+                  .map(([k]) => k),
+              }
+            : { type: 'object' }
+        ),
+      });
+    }
   }
 
   // 1. 添加 MCP 服务器的工具
-  for (const server of servers) {
+  for (const server of params.servers) {
     // 避免与内置保留 server（filesystem/skills/web_search/shell_executor）发生工具名冲突
     if (RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase())) {
       continue;
@@ -302,9 +319,11 @@ async function buildNativeToolDefinitions(
         if (!tool?.name) continue;
         
         // 使用 server__toolname 格式以便解析
+        const fullName = `${server}__${tool.name}`;
+        const doc = await getToolDoc({ toolFullName: fullName });
         tools.push({
-          name: `${server}__${tool.name}`,
-          description: tool.description || `Tool ${tool.name} from ${server}`,
+          name: fullName,
+          description: [tool.description || `Tool ${tool.name} from ${server}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
           parameters: normalizeParams(tool.inputSchema || { type: 'object' }),
         });
       }
@@ -314,7 +333,7 @@ async function buildNativeToolDefinitions(
   }
 
   // 2. 添加网络搜索工具
-  if (webSearchEnabled) {
+  if (params.includeWebSearch) {
     tools.push({
       name: `${WEB_SEARCH_SERVER_NAME}__search`,
       description: '在互联网上搜索实时信息',
@@ -333,18 +352,22 @@ async function buildNativeToolDefinitions(
 
   // 3. 添加 Filesystem 基础工具（让 LLM 能读写文件、列目录）
   for (const fsTool of FILESYSTEM_TOOLS) {
+    const fullName = `${FILESYSTEM_SERVER_NAME}__${fsTool.name}`;
+    const doc = await getToolDoc({ toolFullName: fullName });
     tools.push({
-      name: `${FILESYSTEM_SERVER_NAME}__${fsTool.name}`,
-      description: fsTool.description || `Filesystem tool ${fsTool.name}`,
+      name: fullName,
+      description: [fsTool.description || `Filesystem tool ${fsTool.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
       parameters: normalizeParams((fsTool as any).input_schema?.schema || { type: 'object' }),
     });
   }
 
   // 4. 添加 Shell Executor 工具（让 LLM 能执行命令/脚本）
   for (const shellTool of SHELL_EXECUTOR_TOOLS) {
+    const fullName = `${SHELL_EXECUTOR_SERVER_NAME}__${shellTool.name}`;
+    const doc = await getToolDoc({ toolFullName: fullName });
     tools.push({
-      name: `${SHELL_EXECUTOR_SERVER_NAME}__${shellTool.name}`,
-      description: shellTool.description || `Shell tool ${shellTool.name}`,
+      name: fullName,
+      description: [shellTool.description || `Shell tool ${shellTool.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
       parameters: normalizeParams((shellTool as any).input_schema?.schema || { type: 'object' }),
     });
   }

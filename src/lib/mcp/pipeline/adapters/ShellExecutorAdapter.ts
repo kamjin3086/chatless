@@ -1,8 +1,77 @@
 import { getProcessSandbox } from '@/lib/skills/sandbox';
 import { SHELL_EXECUTOR_SERVER_NAME } from '@/lib/mcp/nativeTools/shellExecutor';
 import { buildWindowsNodeInstallHint, getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
+import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
+
+function normalizeEscapedQuotesForParsing(input: string): string {
+  const s = String(input || '');
+  // 兼容“多一层转义”的命令：如果命令里大量出现 \" 但几乎没有 "，
+  // 大概率是模型把引号又转义了一次。此处仅用于解析与分词，不改变语义。
+  if (s.includes('\\"') && !s.includes('"')) {
+    return s.replace(/\\"/g, '"');
+  }
+  if (s.includes("\\'") && !s.includes("'")) {
+    return s.replace(/\\'/g, "'");
+  }
+  return s;
+}
+
+/**
+ * 将一行命令拆成 argv，支持单/双引号。
+ * - 目的：避免 `python -c "..."` / `node -e "..."` 被错误按空格拆碎
+ * - 注意：这里做的是“参数级”拆分，不执行 shell 语义（不展开变量/通配符）
+ */
+function splitCommandLine(input: string): string[] {
+  const s = String(input || '').trim();
+  if (!s) return [];
+
+  const out: string[] = [];
+  let cur = '';
+  let inSingle = false;
+  let inDouble = false;
+  let escape = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+
+    if (escape) {
+      cur += ch;
+      escape = false;
+      continue;
+    }
+
+    // 仅在双引号内处理反斜杠转义（兼容 \"）
+    if (ch === '\\' && inDouble) {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue; // 去掉引号本身
+    }
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue; // 去掉引号本身
+    }
+
+    if (!inSingle && !inDouble && /\s/.test(ch)) {
+      if (cur) {
+        out.push(cur);
+        cur = '';
+      }
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  if (escape) cur += '\\';
+  if (cur) out.push(cur);
+  return out;
+}
 
 export class ShellExecutorAdapter implements ToolAdapter {
   readonly server = SHELL_EXECUTOR_SERVER_NAME;
@@ -20,11 +89,31 @@ export class ShellExecutorAdapter implements ToolAdapter {
     const isAvailable = await sandbox.isAvailable();
     if (!isAvailable) throw new Error('Shell executor is not available');
 
-    const parts = command.trim().split(/\s+/);
+    const normalizedForParsing = normalizeEscapedQuotesForParsing(command);
+    const parts = splitCommandLine(normalizedForParsing);
+    if (parts.length === 0) throw new Error('command is required');
     const cmd = parts[0];
     const cmdArgs = parts.slice(1);
     const workingDir = typeof (args as any).workingDir === 'string' ? String((args as any).workingDir) : undefined;
     const timeoutMs = typeof (args as any).timeout === 'number' ? (args as any).timeout : 30000;
+
+    // 统一 allowlist：shell_executor 的 allowedWorkingDirs 以 filesystem allowlist 为准（+ appData 默认工作区）
+    try {
+      const st = useFilesystemAllowlistStore.getState();
+      await st.load();
+      const dirs = (st.directories || []).map((d) => String(d.path || '').replace(/\\/g, '/'));
+      // 确保会话 @WorkDir 也在允许范围
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
+        if (wd) dirs.unshift(String(wd).replace(/\\/g, '/'));
+      } catch {
+        // ignore
+      }
+      sandbox.setAllowedWorkingDirs(dirs);
+    } catch {
+      // ignore: best-effort
+    }
 
     const base = cmd.toLowerCase();
     const needsNodeRuntime = base === 'node' || base === 'npm' || base === 'pnpm' || base === 'npx' || base === 'yarn';

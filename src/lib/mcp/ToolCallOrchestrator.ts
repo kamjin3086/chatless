@@ -4,7 +4,9 @@ import type { Message as LlmMessage } from '@/lib/llm/types';
 import { ToolCallCoordinator } from './ToolCallCoordinator';
 import { ToolExecutionPipeline, ToolInvocation } from './pipeline';
 import { createDefaultAdapters } from './pipeline/adapters';
-import { recordExpectedToolCardId, continueWithToolResult as dispatchFollowUp } from './followup/FollowUpDispatcher';
+import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
+import { streamChat } from '@/lib/llm';
+import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
 
 
 // 防止重复调用的缓存
@@ -14,7 +16,230 @@ const runningCalls = new Map<string, Promise<void>>();
 const coordinator = ToolCallCoordinator.getInstance();
 const DEFAULT_PIPELINE = new ToolExecutionPipeline({ adapters: createDefaultAdapters() });
 
-// multi-tool gate / follow-up 已迁移到 FollowUpDispatcher。
+// ============================================================
+// Strict tool_role AgentLoop (no "继续" user injection)
+// - Buffer tool results per assistant message
+// - Gate continuation until all expected tool cards for that message are done
+// - Resume generation by appending assistant.tool_calls + role=tool messages
+// ============================================================
+type BufferedToolResult = {
+  cardIdOrKey: string;
+  callId: string;
+  server: string;
+  tool: string;
+  args?: Record<string, unknown>;
+  result: unknown;
+};
+
+const bufferedResultsByMessage = new Map<string, Map<string, BufferedToolResult>>();
+const expectedToolCardIdsByMessage = new Map<string, Set<string>>();
+
+// Loop guards
+const resumeRoundsByMessage = new Map<string, number>();
+const attemptByKey = new Map<string, number>();
+const MAX_RESUME_ROUNDS = 8;
+const MAX_SAME_ATTEMPTS = 3;
+
+function makeAttemptKey(params: { conversationId: string; server: string; tool: string; args?: Record<string, unknown> }): string {
+  return `${params.conversationId}:${params.server}.${params.tool}:${stableStringify(params.args || {})}`;
+}
+
+function classifyToolResult(result: unknown): 'success' | 'empty' | 'tool_error' {
+  const isEmpty =
+    !result ||
+    (typeof result === 'string' && result.trim().length === 0) ||
+    (Array.isArray(result) && result.length === 0);
+  if (isEmpty) return 'empty';
+
+  if (result && typeof result === 'object') {
+    const r: any = result as any;
+    if (r.error) return 'tool_error';
+    if (typeof r.ok === 'boolean' && r.ok === false) return 'tool_error';
+    if (typeof r.success === 'boolean' && r.success === false) return 'tool_error';
+  }
+  return 'success';
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'symbol') return value.toString();
+  if (typeof value === 'function') return '[function]';
+  if (typeof value !== 'object') return '[unknown]';
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  const parts = keys.map((k) => `${k}:${stableStringify(obj[k])}`);
+  return `{${parts.join(',')}}`;
+}
+
+function recordExpectedToolCardId(assistantMessageId: string, cardIdOrKey: string) {
+  try {
+    const id = String(cardIdOrKey || '').trim();
+    if (!id) return;
+    const set = expectedToolCardIdsByMessage.get(assistantMessageId) || new Set<string>();
+    set.add(id);
+    expectedToolCardIdsByMessage.set(assistantMessageId, set);
+  } catch {
+    /* noop */
+  }
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function summarizeToolOutput(output: unknown): unknown {
+  // Keep tool payloads small & stable for context
+  try {
+    if (typeof output === 'string') {
+      const s = output;
+      if (s.length > 4000) return `${s.slice(0, 4000)}\n... (truncated, ${s.length} chars)`;
+      return s;
+    }
+    if (Array.isArray(output)) {
+      const arr = output as any[];
+      if (arr.length <= 60) return output;
+      return { summary: `Array(${arr.length}) truncated`, head: arr.slice(0, 30), tail: arr.slice(-10) };
+    }
+    if (output && typeof output === 'object') {
+      const s = safeJson(output);
+      if (s.length > 8000) return { summary: `Object truncated (${s.length} chars)`, preview: s.slice(0, 8000) };
+      return output;
+    }
+  } catch {
+    // ignore
+  }
+  return output;
+}
+
+function filterArtifactMessages(messages: LlmMessage[]): LlmMessage[] {
+  // Clean legacy artifacts introduced by old FollowUpDispatcher design.
+  const out: LlmMessage[] = [];
+  for (const m of messages || []) {
+    const role = m.role;
+    const content = String((m as any)?.content ?? '');
+    if (role === 'user') {
+      const t = content.trim();
+      if (
+        t === '继续：基于上述工具结果完成用户最初的请求。' ||
+        t === '工具调用已完成，请继续。' ||
+        t === '继续：基于上述工具结果完成用户最初的请求。' // duplicated safeguard
+      ) {
+        continue;
+      }
+    }
+    if (role === 'system') {
+      if (
+        content.startsWith('【Follow-up 指引】') ||
+        content.startsWith('【历史工具输出（降级文本') ||
+        content.startsWith('【防死循环】')
+      ) {
+        continue;
+      }
+    }
+    out.push(m);
+  }
+  return out;
+}
+
+function buildToolRoleAppendix(batch: BufferedToolResult[]): { assistantMsg: LlmMessage; toolMsgs: LlmMessage[] } {
+  const tool_calls: ToolCallRequest[] = batch.map((r) => ({
+    id: r.callId,
+    type: 'function',
+    function: {
+      name: `${r.server}__${r.tool}`,
+      arguments: safeJson(r.args || {}),
+    },
+  }));
+  const assistantMsg: LlmMessage = { role: 'assistant', content: '', tool_calls };
+  const toolMsgs: LlmMessage[] = batch.map((r) => ({
+    role: 'tool',
+    tool_call_id: r.callId,
+    content: typeof r.result === 'string' ? r.result : safeJson(summarizeToolOutput(r.result)),
+  })) as any;
+  return { assistantMsg, toolMsgs };
+}
+
+async function resumeAssistantWithToolRole(params: {
+  assistantMessageId: string;
+  provider: string;
+  model: string;
+  conversationId: string;
+  historyForLlm: LlmMessage[];
+  originalUserContent: string;
+  batch: BufferedToolResult[];
+  toolLoopTripped?: boolean;
+}) {
+  const { assistantMessageId, provider, model, conversationId, historyForLlm, originalUserContent, batch, toolLoopTripped } = params;
+
+  // Prevent overlapping continuations
+  if (!coordinator.tryAcquireFollowupLock(assistantMessageId, 500)) return;
+  if (coordinator.isMessageCancelled(assistantMessageId)) return;
+
+  // Round guard: prevent infinite tool loops even if model keeps emitting tool_calls
+  const nextRound = (resumeRoundsByMessage.get(assistantMessageId) || 0) + 1;
+  resumeRoundsByMessage.set(assistantMessageId, nextRound);
+
+  const cleanedHistory = filterArtifactMessages(historyForLlm || []);
+  const { assistantMsg, toolMsgs } = buildToolRoleAppendix(batch);
+  let messages: LlmMessage[] = [...cleanedHistory, assistantMsg, ...toolMsgs];
+
+  const orchestrator = new StreamOrchestrator({
+    messageId: assistantMessageId,
+    conversationId,
+    provider,
+    model,
+    originalUserContent,
+    historyForLlm: messages,
+    onUIUpdate: () => {},
+    onError: (error) => {
+      console.error('[ToolCallOrchestrator] resume failed:', error);
+      const store = useChatStore.getState();
+      store.updateMessage(assistantMessageId, { status: 'error' });
+    },
+  });
+  const streamCallbacks = orchestrator.createCallbacks();
+
+  // Inject native tool definitions via options (system prompt already present in historyForLlm)
+  const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
+  const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, {
+    forceInject: true,
+  });
+
+  const options: Record<string, any> = { conversationId, messageId: assistantMessageId };
+  if (injection.useNativeTools && injection.nativeTools && injection.nativeTools.length > 0) {
+    options.tools = injection.nativeTools.map((t: any) => ({
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    }));
+    options.toolChoice = 'auto';
+    options.__useNativeTools = true;
+  }
+
+  // If loop guard is tripped, force the model to finish without further tool calls.
+  if (toolLoopTripped || nextRound > MAX_RESUME_ROUNDS) {
+    messages = [
+      ...messages,
+      {
+        role: 'system',
+        content:
+          `【防死循环】已达到工具回合上限（${MAX_RESUME_ROUNDS}）或检测到同一调用重复失败（${MAX_SAME_ATTEMPTS}次）。` +
+          `现在禁止继续工具调用；请直接给出当前能给出的最佳结论，并明确需要用户补充哪些信息/采取哪些操作。`,
+      } as any,
+    ];
+    // Keep tools list but force none; some OpenAI-compatible backends require tools to coexist with tool_choice.
+    options.toolChoice = 'none';
+  }
+
+  await streamChat(provider, model, messages, streamCallbacks, options);
+}
 
 export async function executeToolCall(params: {
   assistantMessageId: string;
@@ -125,7 +350,6 @@ export async function executeToolCall(params: {
           return;
         }
       } catch { /* noop */ }
-      // follow-up：让模型读取结果并继续（multi-tool gate 在 continueWithToolResult 内部）
       await continueWithToolResult({
         assistantMessageId,
         provider,
@@ -189,6 +413,76 @@ export async function continueWithToolResult(params: {
   callId?: string;
   result: unknown;
 }) {
-  // thin wrapper：真实实现迁移到 FollowUpDispatcher
-  return dispatchFollowUp(params as any);
+  const {
+    assistantMessageId,
+    provider,
+    model,
+    conversationId,
+    historyForLlm,
+    originalUserContent,
+    server,
+    tool,
+    args,
+    cardId,
+    callId,
+    result,
+  } = params;
+
+  if (coordinator.isMessageCancelled(assistantMessageId)) return;
+
+  // Failure circuit breaker (same tool+args)
+  const kind = classifyToolResult(result);
+  const attemptKey = makeAttemptKey({ conversationId, server, tool, args });
+  let toolLoopTripped = false;
+  if (kind === 'empty' || kind === 'tool_error') {
+    const next = (attemptByKey.get(attemptKey) || 0) + 1;
+    attemptByKey.set(attemptKey, next);
+    if (next >= MAX_SAME_ATTEMPTS) toolLoopTripped = true;
+  } else {
+    attemptByKey.delete(attemptKey);
+  }
+
+  // Buffer this tool result (for multi-tool gating)
+  const bufKey =
+    (cardId && String(cardId).trim()) ||
+    (callId && String(callId).trim()) ||
+    `${server}.${tool}:${stableStringify(args || {})}`;
+  const effectiveCallId = (callId && String(callId).trim()) ? String(callId).trim() : `call_${bufKey}`.slice(0, 64);
+
+  let buf = bufferedResultsByMessage.get(assistantMessageId);
+  if (!buf) {
+    buf = new Map();
+    bufferedResultsByMessage.set(assistantMessageId, buf);
+  }
+  buf.set(bufKey, {
+    cardIdOrKey: bufKey,
+    callId: effectiveCallId,
+    server,
+    tool,
+    args,
+    result,
+  });
+
+  // Gate: wait until all expected tool cards are finished (if known)
+  const expected = expectedToolCardIdsByMessage.get(assistantMessageId);
+  const expectedCount = expected ? expected.size : 0;
+  const bufferedCount = buf.size;
+  const shouldGate = expectedCount > 1;
+  const shouldProceed = !shouldGate || bufferedCount >= expectedCount;
+  if (!shouldProceed) return;
+
+  const batch = Array.from((bufferedResultsByMessage.get(assistantMessageId) || new Map()).values());
+  bufferedResultsByMessage.delete(assistantMessageId);
+  expectedToolCardIdsByMessage.delete(assistantMessageId);
+
+  await resumeAssistantWithToolRole({
+    assistantMessageId,
+    provider,
+    model,
+    conversationId,
+    historyForLlm,
+    originalUserContent,
+    batch,
+    toolLoopTripped,
+  });
 }

@@ -19,6 +19,7 @@ import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import type { EventHandler, StreamContext } from '../types';
 import { useChatStore } from '@/store/chatStore';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+import { repairToolCall } from '@/lib/mcp/toolRepair/repairToolCall';
 
 
 const coordinator = ToolCallCoordinator.getInstance();
@@ -48,27 +49,31 @@ export class ToolCallEventHandler implements EventHandler {
     }
 
     const parsed = event.parsed || {};
-    const server = parsed.serverName || '';
-    const tool = parsed.toolName || '';
-    // arguments是JSON字符串，需要解析为对象
-    let args: Record<string, unknown> | undefined = undefined;
-    if (parsed.arguments) {
-      try {
-        args = JSON.parse(parsed.arguments);
-      } catch (error) {
-        console.warn('[ToolCallHandler] Failed to parse arguments:', error);
-      }
-    }
+    const parsedServer = parsed.serverName || '';
+    const parsedTool = parsed.toolName || '';
+    const parsedArguments = typeof parsed.arguments === 'string' ? String(parsed.arguments) : undefined;
 
     // 过滤无效工具调用：空值、unknown、包含错误格式标记
-    const isInvalidServer = !server || server === 'unknown' || server.includes('use_mcp_tool') || server.includes('>');
-    const isInvalidTool = !tool || tool === 'unknown' || tool === 'default';
+    const isInvalidServer = !parsedServer || parsedServer === 'unknown' || parsedServer.includes('use_mcp_tool') || parsedServer.includes('>');
+    const isInvalidTool = !parsedTool || parsedTool === 'unknown' || parsedTool === 'default';
     
     if (isInvalidServer || isInvalidTool) {
-      console.warn('[ToolCallHandler] Invalid tool call: invalid server or tool name', { server, tool });
+      console.warn('[ToolCallHandler] Invalid tool call: invalid server or tool name', { server: parsedServer, tool: parsedTool });
 
       return;
     }
+
+    // ============================================================
+    // Tool Repair（工具名/参数 JSON 修复 + 常见字段别名修复）
+    // ============================================================
+    const repaired = repairToolCall({
+      server: parsedServer,
+      tool: parsedTool,
+      rawArguments: parsedArguments,
+    });
+    const server = repaired.server;
+    const tool = repaired.tool;
+    const args = repaired.args;
     
     // ============================================================
     // 关键：全局工具调用去重（协调器）
@@ -134,6 +139,63 @@ export class ToolCallEventHandler implements EventHandler {
           args, 
           cardId 
         });
+      }
+
+      // 修复失败：不进入执行，直接把结构化错误回灌给模型，要求其自修
+      if (!repaired.ok) {
+        const schemaHint = JSON.stringify(
+          {
+            code: 'TOOL_REPAIR_FAILED',
+            issue: repaired.issue,
+            repairs: repaired.repairs,
+            rawArguments: repaired.rawArguments,
+          },
+          null,
+          2
+        );
+        if (typeof store.dispatchMessageAction === 'function') {
+          store.dispatchMessageAction(context.messageId, {
+            type: 'TOOL_RESULT',
+            server,
+            tool,
+            ok: false,
+            errorMessage: repaired.issue?.message || 'tool repair failed',
+            schemaHint,
+            cardId,
+          });
+        }
+        try {
+          coordinator.markToolCallComplete(lockResult.key, 'failed');
+        } catch {
+          // ignore
+        }
+        try {
+          const { continueWithToolResult } = await import('@/lib/mcp/ToolCallOrchestrator');
+          await continueWithToolResult({
+            assistantMessageId: context.messageId,
+            provider: context.metadata.provider,
+            model: context.metadata.model,
+            conversationId: context.conversationId,
+            historyForLlm: context.metadata.historyForLlm as any,
+            originalUserContent: context.metadata.originalUserContent,
+            server,
+            tool,
+            args,
+            cardId,
+            callId: normalizedCallId,
+            result: {
+              error: {
+                code: 'TOOL_REPAIR_FAILED',
+                issue: repaired.issue,
+                repairs: repaired.repairs,
+                rawArguments: repaired.rawArguments,
+              },
+            },
+          });
+        } catch (e) {
+          console.warn('[ToolCallHandler] continueWithToolResult after repair-fail failed:', e);
+        }
+        return;
       }
 
       // 执行工具调用（独立的错误处理）

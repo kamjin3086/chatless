@@ -63,6 +63,23 @@ export class ProcessSandbox extends BaseSandboxExecutor {
   }
 
   /**
+   * 更新允许的工作目录列表（用于将 filesystem allowlist 与 shell_executor 统一）
+   * - 仅影响前端预校验（CommandValidator.validatePath）
+   * - 后端仍会执行自身的安全校验
+   */
+  setAllowedWorkingDirs(dirs: string[]): void {
+    try {
+      const list = Array.isArray(dirs) ? dirs : [];
+      const normalized = list
+        .map((p) => String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/g, ''))
+        .filter(Boolean);
+      this.commandValidator.updateConfig({ allowedWorkingDirs: normalized });
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
    * 检查执行器是否可用
    */
   async isAvailable(): Promise<boolean> {
@@ -90,7 +107,9 @@ export class ProcessSandbox extends BaseSandboxExecutor {
       try {
         const { appDataDir } = await import('@tauri-apps/api/path');
         const appData = await appDataDir();
-        this.commandValidator.updateConfig({ allowedWorkingDirs: [appData] });
+        // 统一分隔符，避免 Windows 下 `C:\...` 与 `C:/...` 比较失败
+        const normalized = String(appData || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+        this.commandValidator.updateConfig({ allowedWorkingDirs: [normalized] });
       } catch {
         // ignore
       }

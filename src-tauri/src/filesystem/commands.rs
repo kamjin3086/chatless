@@ -21,6 +21,33 @@ pub struct OkResult {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ReadFilePayload {
+  pub path: String,
+  // Back-compat: older clients send maxLines / max_lines
+  #[serde(alias = "maxLines", alias = "max_lines")]
+  pub max_lines: Option<u32>,
+  // New: line range (1-based)
+  #[serde(alias = "startLine", alias = "start_line")]
+  pub start_line: Option<u32>,
+  #[serde(alias = "endLine", alias = "end_line")]
+  pub end_line: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReadFileResult {
+  pub ok: bool,
+  pub path: String,
+  #[serde(rename = "totalLines")]
+  pub total_lines: u32,
+  #[serde(rename = "startLine")]
+  pub start_line: u32,
+  #[serde(rename = "endLine")]
+  pub end_line: u32,
+  pub content: String,
+  pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct SetAllowlistPayload {
   pub directories: Vec<AllowlistDirectory>,
   pub version: Option<u32>,
@@ -44,27 +71,79 @@ pub async fn filesystem_set_allowlist(
 pub async fn filesystem_read_file(
   app: AppHandle,
   state: State<'_, FilesystemAllowlistState>,
-  path: String,
-  max_lines: Option<u32>,
-) -> Result<String, String> {
-  let abs = state.assert_allowed(&app, &path, FsOp::Read).await?;
+  payload: ReadFilePayload,
+) -> Result<ReadFileResult, String> {
+  let abs = state
+    .assert_allowed(&app, &payload.path, FsOp::Read)
+    .await?;
   let content = tokio::fs::read_to_string(&abs)
     .await
     .map_err(|e| format!("read failed: {}", e))?;
 
-  if let Some(n) = max_lines {
-    if n > 0 {
-      let lines: Vec<&str> = content.split('\n').collect();
-      let nn = n as usize;
-      if lines.len() > nn {
-        let head = lines[..nn].join("\n");
-        let more = lines.len() - nn;
-        return Ok(format!("{}\n... ({} more lines)", head, more));
+  // Compute total lines (1-based counting)
+  let lines: Vec<&str> = content.split('\n').collect();
+  let total = lines.len() as u32;
+
+  // Resolve range:
+  // - If start/end provided: use them (clamped)
+  // - Else if max_lines provided: read from 1..=max_lines
+  // - Else: read the whole file
+  let mut start: u32 = payload.start_line.unwrap_or(0);
+  let mut end: u32 = payload.end_line.unwrap_or(0);
+
+  if start == 0 && end == 0 {
+    if let Some(n) = payload.max_lines {
+      if n > 0 {
+        start = 1;
+        end = n;
       }
     }
   }
 
-  Ok(content)
+  if start == 0 {
+    start = 1;
+  }
+  if end == 0 {
+    end = total.max(1);
+  }
+
+  // Clamp and normalize
+  if total == 0 {
+    return Ok(ReadFileResult {
+      ok: true,
+      path: abs.replace('\\', "/"),
+      total_lines: 0,
+      start_line: 0,
+      end_line: 0,
+      content: "".to_string(),
+      truncated: false,
+    });
+  }
+
+  if start > total {
+    start = total;
+  }
+  if end > total {
+    end = total;
+  }
+  if end < start {
+    end = start;
+  }
+
+  let s_idx = (start - 1) as usize;
+  let e_idx = end as usize; // exclusive
+  let slice = lines[s_idx..e_idx].join("\n");
+  let truncated = start != 1 || end != total;
+
+  Ok(ReadFileResult {
+    ok: true,
+    path: abs.replace('\\', "/"),
+    total_lines: total,
+    start_line: start,
+    end_line: end,
+    content: slice,
+    truncated,
+  })
 }
 
 #[tauri::command]

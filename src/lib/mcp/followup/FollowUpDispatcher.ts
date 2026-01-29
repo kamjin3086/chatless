@@ -21,6 +21,44 @@ const expectedToolCardIdsByMessage = new Map<string, Set<string>>();
 const contextWindowManager = new ContextWindowManager();
 const coordinator = ToolCallCoordinator.getInstance();
 
+// 防止 follow-up 死循环：对“同一 tool + 同一关键参数”的重复失败/空结果做熔断
+const attemptByKey = new Map<string, number>();
+const MAX_SAME_ATTEMPTS = 3;
+
+function makeAttemptKey(params: { conversationId: string; server: string; tool: string; args?: Record<string, unknown> }): string {
+  return `${params.conversationId}:${params.server}.${params.tool}:${stableStringify(params.args || {})}`;
+}
+
+function summarizeToolOutput(server: string, tool: string, output: unknown): unknown {
+  // 对模型：优先给“可读摘要”，避免塞入超长 JSON 导致上下文爆炸
+  try {
+    if (typeof output === 'string') {
+      const s = output;
+      if (s.length > 4000) return `${s.slice(0, 4000)}\n... (truncated, ${s.length} chars)`;
+      return s;
+    }
+    if (Array.isArray(output)) {
+      const arr = output as any[];
+      if (arr.length <= 60) return output;
+      return {
+        summary: `Array(${arr.length}) truncated`,
+        head: arr.slice(0, 30),
+        tail: arr.slice(-10),
+      };
+    }
+    // 目录列表常见字段：name/path/isDirectory...
+    if (output && typeof output === 'object') {
+      const str = JSON.stringify(output);
+      if (str.length > 8000) {
+        return { summary: `Object truncated (${str.length} chars)`, preview: str.slice(0, 8000) };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return output;
+}
+
 function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
@@ -113,8 +151,21 @@ export async function continueWithToolResult(params: {
   // 统一 follow-up 指引（多工具：逐条生成并合并）
   const { GuidanceResolver, classifyToolResult } = await import('./GuidanceResolver');
   const instructionParts: string[] = [];
+  let toolLoopTripped = false;
   for (const r of batch) {
     const k = classifyToolResult(r.result);
+    // 熔断：同一 tool 调用连续失败/空结果最多 3 次
+    const attemptKey = makeAttemptKey({ conversationId, server: r.server, tool: r.tool, args: r.args });
+    if (k === 'empty' || k === 'tool_error' || k === 'connection_error') {
+      const next = (attemptByKey.get(attemptKey) || 0) + 1;
+      attemptByKey.set(attemptKey, next);
+      if (next >= MAX_SAME_ATTEMPTS) {
+        toolLoopTripped = true;
+      }
+    } else if (k === 'success') {
+      // 成功则清零计数（避免跨步骤误触发熔断）
+      attemptByKey.delete(attemptKey);
+    }
     const one = GuidanceResolver.getInstance().resolve({
       phase: 'tool_result',
       server: r.server,
@@ -136,8 +187,15 @@ export async function continueWithToolResult(params: {
     else if (m.role === 'assistant') log.appendAssistantMessage(m.content);
     else if (m.role === 'system' || m.role === 'developer') log.appendContextChange('other', m.content);
     else if (m.role === 'tool') {
-      // 历史里已存在 tool message（极少见），直接当作“已完成的 tool output”写入 wrapper 以避免丢信息
-      log.appendToolCallOutput({ server: 'unknown', tool: 'unknown', args: {}, output: m.content, callId: m.tool_call_id });
+      // ⚠️ 重要：历史 tool message 可能缺少上游 assistant.tool_calls（OpenAI tool 协议要求），
+      // 若直接注入为 role=tool 会产生“不合法 messages 序列”并导致 LM Studio/模型异常。
+      // 因此这里降级为普通上下文文本（system），避免生成 orphan tool 消息。
+      const content = [
+        '【历史工具输出（降级文本，避免 tool 协议不一致）】',
+        `tool_call_id: ${(m as any).tool_call_id || '(none)'}`,
+        `content: ${String(m.content || '')}`,
+      ].join('\n');
+      log.appendContextChange('other', content);
     } else {
       log.appendContextChange('other', m.content);
     }
@@ -158,17 +216,18 @@ export async function continueWithToolResult(params: {
       server: r.server,
       tool: r.tool,
       args: r.args || {},
-      output: r.result,
+      output: summarizeToolOutput(r.server, r.tool, r.result),
       isError: false,
       cardId: r.cardIdOrKey,
     });
   }
 
-  // 用一个轻量 user 指令触发继续（不再把结果拼进 user 文本）
-  log.appendUserMessage(
-    instruction ||
-      `工具调用已完成。请基于工具返回的结果继续回答用户问题；如仍不足，可继续调用工具补齐（注意预算与去重）。`
-  );
+  // ⚠️ Follow-up 指引不应作为“用户消息”注入（会被模型当作用户需求而无限重试）。
+  // 改为 system 上下文提示 + 一个轻量 user 触发继续。
+  if (instruction) {
+    log.appendContextChange('other', `【Follow-up 指引】\n${instruction}`);
+  }
+  log.appendUserMessage('继续：基于上述工具结果完成用户最初的请求。');
 
   const hasCallIds = batch.length > 0 && batch.every((r) => !!(r.callId && String(r.callId).trim()));
   let providerSupportsToolRole = false;
@@ -222,8 +281,21 @@ export async function continueWithToolResult(params: {
         description: t.description,
         parameters: t.parameters,
       }));
-      options.toolChoice = 'auto';
+      options.toolChoice = toolLoopTripped ? 'none' : 'auto';
       options.__useNativeTools = true;
+    }
+
+    if (toolLoopTripped) {
+      // 强制停止工具循环：让模型直接总结已知信息并给出下一步建议
+      messages = [
+        ...messages,
+        {
+          role: 'system',
+          content:
+            `【防死循环】检测到同一工具调用重复失败/空结果已达到上限（${MAX_SAME_ATTEMPTS}次）。` +
+            `现在禁止继续工具调用；请直接给出当前能给出的最佳结论，并明确需要用户补充哪些信息/采取哪些操作。`,
+        } as any,
+      ];
     }
 
     await streamChat(provider, model, messages, streamCallbacks, options);

@@ -9,6 +9,60 @@ import { syncFilesystemAllowlistToBackend } from '@/lib/filesystemAllowlist/back
 import { markError, markPendingAuth, markSuccess } from './ToolCardUpdater';
 import type { ToolAdapter } from './ToolAdapter';
 import { ToolInvocation } from './ToolInvocation';
+import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
+
+function normalizeSlashPath(p: unknown): string {
+  if (typeof p === 'string') return p.trim().replace(/\\/g, '/');
+  if (typeof p === 'number' || typeof p === 'boolean' || typeof p === 'bigint') return String(p).trim();
+  return '';
+}
+
+function dirnamePath(p: string): string {
+  const s = normalizeSlashPath(p);
+  if (!s) return '';
+  // keep drive root like C:/ intact
+  if (/^[A-Za-z]:\/$/.test(s)) return s;
+  const i = s.lastIndexOf('/');
+  if (i <= 0) return s;
+  return s.slice(0, i);
+}
+
+function buildAuthDeniedResult(params: {
+  server: string;
+  tool: string;
+  message: string;
+  conversationId?: string;
+  assistantMessageId?: string;
+  cardId?: string;
+  args?: Record<string, unknown>;
+  fs?: { op?: string; inputPath?: string; resolvedPath?: string; suggestDir?: string };
+}) {
+  return {
+    ok: false,
+    error: {
+      code: 'AUTH_DENIED',
+      message: params.message,
+      server: params.server,
+      tool: params.tool,
+      conversationId: params.conversationId,
+      assistantMessageId: params.assistantMessageId,
+      cardId: params.cardId,
+      args: params.args || {},
+      fs: params.fs,
+      suggestion:
+        params.server === 'filesystem'
+          ? {
+              action: 'REQUEST_DIRECTORY_AUTH',
+              directory: params.fs?.suggestDir,
+              note: '需要用户授权该目录（加入 allowlist）后才能继续执行 filesystem 操作。',
+            }
+          : {
+              action: 'REQUEST_TOOL_APPROVAL',
+              note: '需要用户批准该工具调用后才能继续执行。',
+            },
+    },
+  };
+}
 
 export type ToolExecutionPipelineDeps = {
   adapters: ToolAdapter[];
@@ -286,9 +340,42 @@ export class ToolExecutionPipeline {
               return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
             }
             if (!authorized) {
-              markError({ assistantMessageId, server, tool, cardId }, '用户拒绝授权此文件系统操作');
+              const suggestDir = normalizeSlashPath(resolved.directory?.path) || dirnamePath(resolved.absolutePath);
+              markError(
+                { assistantMessageId, server, tool, cardId },
+                `用户拒绝授权此文件系统操作（${op}）：${suggestDir || resolved.absolutePath}`
+              );
               this.coordinator.markToolCallComplete(callKey, 'failed');
-              return { error: 'AUTHORIZATION_DENIED', message: 'User denied authorization' };
+              const denied = buildAuthDeniedResult({
+                server,
+                tool,
+                message: 'User denied authorization',
+                conversationId: invocation.conversationId,
+                assistantMessageId,
+                cardId,
+                args: args || {},
+                fs: {
+                  op,
+                  inputPath,
+                  resolvedPath: resolved.absolutePath,
+                  suggestDir,
+                },
+              });
+              try {
+                await appendWorkspaceToolStep({
+                  conversationId: invocation.conversationId,
+                  assistantMessageId,
+                  cardId,
+                  callId,
+                  server,
+                  tool,
+                  args: args || {},
+                  result: denied,
+                });
+              } catch {
+                // ignore
+              }
+              return denied;
             }
 
             // 用户确认后：把目录加入 allowlist（或补齐权限），并同步到 Rust 后端
@@ -317,7 +404,31 @@ export class ToolExecutionPipeline {
           const msg = e instanceof Error ? e.message : String(e);
           markError({ assistantMessageId, server, tool, cardId }, msg);
           this.coordinator.markToolCallComplete(callKey, 'failed');
-          return { error: 'FILESYSTEM_GATE_FAILED', message: msg };
+          const gateFailed = {
+            ok: false,
+            error: {
+              code: 'FILESYSTEM_GATE_FAILED',
+              message: msg,
+              server,
+              tool,
+              args: args || {},
+            },
+          };
+          try {
+            await appendWorkspaceToolStep({
+              conversationId: invocation.conversationId,
+              assistantMessageId,
+              cardId,
+              callId,
+              server,
+              tool,
+              args: args || {},
+              result: gateFailed,
+            });
+          } catch {
+            // ignore
+          }
+          return gateFailed;
         }
       }
     } else {
@@ -349,7 +460,30 @@ export class ToolExecutionPipeline {
         if (!authorized) {
           markError({ assistantMessageId, server, tool, cardId }, '用户拒绝授权此工具调用');
           this.coordinator.markToolCallComplete(callKey, 'failed');
-          return { error: 'AUTHORIZATION_DENIED', message: 'User denied authorization' };
+          const denied = buildAuthDeniedResult({
+            server,
+            tool,
+            message: 'User denied authorization',
+            conversationId: invocation.conversationId,
+            assistantMessageId,
+            cardId,
+            args: effectiveArgs || {},
+          });
+          try {
+            await appendWorkspaceToolStep({
+              conversationId: invocation.conversationId,
+              assistantMessageId,
+              cardId,
+              callId,
+              server,
+              tool,
+              args: effectiveArgs || {},
+              result: denied,
+            });
+          } catch {
+            // ignore
+          }
+          return denied;
         }
 
         // UX：shell_executor 同意后，若提供了 workingDir，则“记住该工作目录”（降低后续重复确认）
@@ -431,6 +565,20 @@ export class ToolExecutionPipeline {
           return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
         }
         markSuccess({ assistantMessageId, server, tool, cardId }, result);
+        try {
+          await appendWorkspaceToolStep({
+            conversationId: invocation.conversationId,
+            assistantMessageId,
+            cardId,
+            callId,
+            server,
+            tool,
+            args: (execInvocation.args || args || {}) as any,
+            result,
+          });
+        } catch {
+          // ignore
+        }
         this.coordinator.markToolCallComplete(callKey, 'completed');
         return result;
       } catch (e) {
@@ -455,6 +603,20 @@ export class ToolExecutionPipeline {
           maxRetries,
         };
         markError({ assistantMessageId, server, tool, cardId }, lastErr);
+        try {
+          await appendWorkspaceToolStep({
+            conversationId: invocation.conversationId,
+            assistantMessageId,
+            cardId,
+            callId,
+            server,
+            tool,
+            args: (execInvocation.args || args || {}) as any,
+            result: { ok: false, ...summary },
+          });
+        } catch {
+          // ignore
+        }
         this.coordinator.markToolCallComplete(callKey, 'failed');
         return summary;
       }

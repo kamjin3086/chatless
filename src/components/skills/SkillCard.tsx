@@ -3,13 +3,7 @@
 import { cn } from '@/lib/utils';
 import type { Skill } from '@/lib/skills/types';
 import { SkillStatusBadge } from './SkillStatusBadge';
-import { 
-  Sparkles, 
-  User, 
-  Tag, 
-  FolderOpen,
-  Globe
-} from 'lucide-react';
+import { Sparkles, User, Tag, FolderOpen } from 'lucide-react';
 
 interface SkillCardProps {
   skill: Skill;
@@ -24,7 +18,8 @@ export function SkillCard({
   selected = false,
   className,
 }: SkillCardProps) {
-  const isLocal = skill.source === 'local';
+  // 当前产品形态：skills 以本地文件夹存在；不再展示“远程”来源（避免困惑）
+  const isLocal = true;
 
   return (
     <button
@@ -65,17 +60,8 @@ export function SkillCard({
           </div>
           {/* 来源标识 */}
           <div className="flex items-center gap-1 mt-0.5">
-            {isLocal ? (
-              <>
-                <FolderOpen className="h-3 w-3 text-gray-400" />
-                <span className="text-xs text-gray-400">本地</span>
-              </>
-            ) : (
-              <>
-                <Globe className="h-3 w-3 text-gray-400" />
-                <span className="text-xs text-gray-400">远程</span>
-              </>
-            )}
+            <FolderOpen className="h-3 w-3 text-gray-400" />
+            <span className="text-xs text-gray-400">本地</span>
           </div>
         </div>
       </div>

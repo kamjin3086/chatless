@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { getSkillManager } from '@/lib/skills';
 import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
+import { linkOpener } from '@/lib/utils/linkOpener';
 import {
   FileArchive,
   GitBranch,
@@ -23,6 +24,8 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 
 interface SkillImportDialogProps {
@@ -49,7 +52,7 @@ export function SkillImportDialog({
   
   // Git 克隆状态
   const [gitUrl, setGitUrl] = useState('');
-  const [gitAvailable, setGitAvailable] = useState<boolean | null>(null);
+  const [gitStatus, setGitStatus] = useState<{ ok: boolean; reason?: string; detail?: string; versionText?: string } | null>(null);
 
   // 重置状态
   const resetState = useCallback(() => {
@@ -77,10 +80,19 @@ export function SkillImportDialog({
   const checkGitAvailability = async () => {
     try {
       const manager = getSkillManager();
-      const available = await manager.checkGitAvailable();
-      setGitAvailable(available);
-    } catch {
-      setGitAvailable(false);
+      const r = await manager.checkGitStatus();
+      setGitStatus({ ok: r.ok, reason: r.reason, detail: r.detail, versionText: r.versionText });
+    } catch (e) {
+      setGitStatus({ ok: false, reason: 'not_found', detail: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const openGitInstallGuide = async () => {
+    try {
+      // 按你的要求：打开浏览器搜索 "git install"
+      await linkOpener.openLink('https://www.google.com/search?q=git+install');
+    } catch (e) {
+      console.error('Failed to open browser:', e);
     }
   };
 
@@ -229,16 +241,40 @@ export function SkillImportDialog({
 
           {/* Git 克隆 */}
           <TabsContent value="git" className="mt-4 space-y-4">
-            {gitAvailable === false && (
+            {gitStatus && gitStatus.ok === false && (
               <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg text-sm">
                 <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-amber-800 dark:text-amber-200">
-                    未检测到 Git
+                    {gitStatus.reason === 'shell_plugin_missing' ? '无法使用 Git 克隆' : '未检测到 Git'}
                   </p>
                   <p className="text-amber-600 dark:text-amber-400 text-xs mt-0.5">
-                    请确保已安装 Git 并添加到系统 PATH
+                    {gitStatus.reason === 'shell_plugin_missing'
+                      ? '当前环境未启用 Shell 功能，无法执行 git 命令。'
+                      : '请确保已安装 Git；如已安装但仍提示，点击“重新检测”。'}
                   </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={checkGitAvailability}
+                      type="button"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                      重新检测
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={openGitInstallGuide}
+                      type="button"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                      安装 Git
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -253,11 +289,16 @@ export function SkillImportDialog({
                   setGitUrl(e.target.value);
                   setError(null);
                 }}
-                disabled={isLoading || gitAvailable === false}
+                disabled={isLoading || (gitStatus?.reason === 'shell_plugin_missing')}
               />
               <p className="text-xs text-gray-500">
                 支持 GitHub、GitLab、Gitee 等 Git 仓库
               </p>
+              {gitStatus?.ok && gitStatus.versionText && (
+                <p className="text-[11px] text-gray-400">
+                  检测到：{gitStatus.versionText}
+                </p>
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -283,7 +324,7 @@ export function SkillImportDialog({
             disabled={
               isLoading ||
               (mode === 'zip' && !selectedFile) ||
-              (mode === 'git' && (!gitUrl.trim() || gitAvailable === false))
+              (mode === 'git' && (!gitUrl.trim() || (gitStatus?.ok === false)))
             }
           >
             {isLoading ? (

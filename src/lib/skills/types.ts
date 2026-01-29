@@ -194,7 +194,15 @@ export interface ISkillLoader {
 export interface SkillManagerConfig {
   /** 本地技能目录 */
   localSkillsPath?: string;
-  /** 远程仓库 URL */
+  /**
+   * 是否启用“远程技能目录/市场（catalog）”功能（默认关闭）。
+   *
+   * 说明：
+   * - 当前产品的技能运行形态始终是“本地文件夹”（ZIP 导入 / Git clone / 手动拷贝）。
+   * - 远程 catalog 仅用于“浏览/安装官方仓库技能”的可选能力；关闭后不会请求 GitHub，也不会生成 source="remote" 的条目。
+   */
+  enableRemoteCatalog?: boolean;
+  /** 远程仓库 URL（仅 enableRemoteCatalog=true 时使用） */
   remoteRepoUrl?: string;
   /** 缓存目录 */
   cachePath?: string;
@@ -219,6 +227,8 @@ export interface SkillIndexEntry {
   name: string;
   /** 简短描述（截断至 200 字符） */
   description: string;
+  /** SKILL.md 总行数（用于按行范围读取） */
+  lineCount?: number;
   /** 触发关键词列表 */
   triggers: string[];
   /** 分类（可选） */

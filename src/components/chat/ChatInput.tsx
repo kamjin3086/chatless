@@ -207,6 +207,26 @@ export function ChatInput({
 
   // === 会话内草稿：仅在切换会话/失焦/卸载时提交，避免输入过程中重渲染导致光标跳动 ===
   const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
+  // 统一的“agent 是否仍在运行”信号：不要只依赖父组件 isLoading（它只覆盖 LLM stream 阶段）
+  const storeAgentRunning = useChatStore((s: any) => {
+    const cid = conversationId || s.currentConversationId;
+    if (!cid) return false;
+    const conv = (s.conversations || []).find((c: any) => c && c.id === cid);
+    const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
+    // 1) 任意消息仍为 loading
+    if (msgs.some((m) => m && m.status === 'loading')) return true;
+    // 2) 任意 toolCard 仍在运行/等待授权（即使 stream 已结束）
+    for (const m of msgs) {
+      const segs: any[] = Array.isArray(m?.segments) ? m.segments : [];
+      for (const seg of segs) {
+        if (seg?.kind === 'toolCard' && (seg.status === 'running' || seg.status === 'pending_auth')) {
+          return true;
+        }
+      }
+    }
+    return false;
+  });
+  const effectiveLoading = isLoading || storeAgentRunning;
   const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
   // 仅展示用户主动挂载的目录（通过 + 号选择），不展示系统自动 @WorkDir
   const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;
@@ -508,7 +528,7 @@ export function ChatInput({
 
   const handleSend = async () => {
     if (!inputValue.trim() && !attachedDocument) return;
-    if (isLoading) return;
+    if (effectiveLoading) return;
 
     // 发送前检查
     if (onBeforeSendMessage) {
@@ -1050,12 +1070,12 @@ export function ChatInput({
             onModeChange={(mode) => {
               void setConversationToolMode?.(conversationId || '', mode);
             }}
-            disabled={disabled || isLoading}
+            disabled={disabled || effectiveLoading}
           />
 
           {/* 附件菜单 */}
           <AttachmentMenu
-            disabled={disabled || isLoading}
+            disabled={disabled || effectiveLoading}
             isParsingDocument={isParsingDocument}
             hasDocument={!!attachedDocument}
             selectedKnowledgeBase={selectedKnowledgeBase}
@@ -1068,7 +1088,7 @@ export function ChatInput({
           {/* 网络搜索 */}
           <WebSearchToggle
             conversationId={conversationId}
-            disabled={disabled || isLoading}
+            disabled={disabled || effectiveLoading}
           />
 
           {/* MCP 服务器 */}
@@ -1116,7 +1136,7 @@ export function ChatInput({
                 T: {tokenCount}
               </span>
             )}
-            {isLoading ? (
+            {effectiveLoading ? (
               <div className="flex items-center gap-2">
                 <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 select-none">
                   <span className="relative inline-flex h-2 w-2">
@@ -1141,10 +1161,10 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={handleSend}
-                disabled={disabled || isLoading || (!inputValue.trim() && !attachedDocument)}
+                disabled={disabled || effectiveLoading || (!inputValue.trim() && !attachedDocument)}
                 className={cn(
                   "h-8 w-8 rounded-full text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-opacity",
-                  (disabled || isLoading || (!inputValue.trim() && !attachedDocument)) && 'opacity-0 pointer-events-none'
+                  (disabled || effectiveLoading || (!inputValue.trim() && !attachedDocument)) && 'opacity-0 pointer-events-none'
                 )}
               >
                 <Send className="w-5 h-5" />

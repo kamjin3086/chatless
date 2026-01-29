@@ -177,7 +177,7 @@ export function DependencyInstallGuide({
     if (autoCheck && !initialDependencies) {
       checkDependencies();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [autoCheck, initialDependencies]);
 
   const checkDependencies = async () => {

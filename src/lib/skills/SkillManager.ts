@@ -17,12 +17,15 @@ import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 export class SkillManager {
   private config: SkillManagerConfig;
   private localLoader: LocalSkillLoader;
-  private remoteLoader: RemoteSkillLoader;
+  private remoteLoader: RemoteSkillLoader | null;
   private initialized = false;
+  // 防重复：同一 skill 同一时间只允许一个更新/导入任务
+  private _opLocks = new Map<string, Promise<unknown>>();
 
   constructor(config: SkillManagerConfig = {}) {
     this.config = {
       localSkillsPath: config.localSkillsPath || 'skills',
+      enableRemoteCatalog: config.enableRemoteCatalog ?? false,
       remoteRepoUrl: config.remoteRepoUrl || 'https://github.com/anthropics/skills',
       cachePath: config.cachePath || 'skills-cache',
       autoCheckUpdates: config.autoCheckUpdates ?? true,
@@ -32,9 +35,9 @@ export class SkillManager {
       skillsPath: this.config.localSkillsPath,
     });
 
-    this.remoteLoader = createRemoteSkillLoader({
-      repoUrl: this.config.remoteRepoUrl,
-    });
+    this.remoteLoader = this.config.enableRemoteCatalog
+      ? createRemoteSkillLoader({ repoUrl: this.config.remoteRepoUrl })
+      : null;
   }
 
   /**
@@ -54,7 +57,7 @@ export class SkillManager {
       this.initialized = true;
 
       // 自动检查更新
-      if (this.config.autoCheckUpdates) {
+      if (this.config.autoCheckUpdates && this.remoteLoader) {
         void this.checkForUpdates();
       }
     } catch (error) {
@@ -67,17 +70,14 @@ export class SkillManager {
   }
 
   /**
-   * 加载所有技能（本地 + 远程）
+   * 加载所有技能（本地；可选远程 catalog）
    */
   async loadAllSkills(): Promise<Skill[]> {
     const store = useSkillStore.getState();
     
     try {
-      // 并行加载本地和远程技能
-      const [localSkills, remoteSkills] = await Promise.all([
-        this.localLoader.loadAll(),
-        this.remoteLoader.loadAll(),
-      ]);
+      const localSkills = await this.localLoader.loadAll();
+      const remoteSkills = this.remoteLoader ? await this.remoteLoader.loadAll() : [];
 
       // 合并技能列表，本地技能优先
       const mergedSkills = this.mergeSkills(localSkills, remoteSkills);
@@ -155,7 +155,7 @@ export class SkillManager {
     try {
       // 清除加载器缓存
       this.localLoader.clearCache();
-      this.remoteLoader.clearCache();
+      this.remoteLoader?.clearCache();
 
       // 重新加载
       const skills = await this.loadAllSkills();
@@ -186,6 +186,7 @@ export class SkillManager {
       return localSkill;
     }
 
+    if (!this.remoteLoader) return null;
     return this.remoteLoader.load(id);
   }
 
@@ -193,6 +194,9 @@ export class SkillManager {
    * 检查技能更新
    */
   async checkForUpdates(): Promise<Map<string, boolean>> {
+    if (!this.remoteLoader) {
+      return new Map();
+    }
     const store = useSkillStore.getState();
     const localSkills = store.skills.filter(s => s.source === 'local');
     const updates = new Map<string, boolean>();
@@ -218,6 +222,12 @@ export class SkillManager {
    * 安装远程技能到本地
    */
   async installSkill(id: string, options: SkillInstallOptions = {}): Promise<boolean> {
+    // 当前产品形态：技能始终以“本地文件夹”存在。ZIP/Git 导入已覆盖主要安装路径。
+    // 远程 catalog 安装是可选能力；默认关闭，避免引入网络不确定性与“未安装技能列表”的复杂性。
+    if (!this.remoteLoader) {
+      console.warn('[SkillManager] Remote catalog disabled; installSkill is not available. Use importFromZip/cloneFromGit.');
+      return false;
+    }
     const store = useSkillStore.getState();
     const skill = store.skills.find(s => s.id === id);
 
@@ -324,9 +334,12 @@ export class SkillManager {
    * 从 ZIP 文件导入技能
    * 使用 JSZip 在前端解压
    */
-  async importFromZip(zipPath: string): Promise<string | null> {
+  async importFromZip(
+    zipPath: string,
+    options?: { overwrite?: boolean; targetSkillId?: string }
+  ): Promise<string | null> {
     try {
-      const { readFile, writeFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');
+      const { readFile, writeFile, mkdir, exists, remove, writeTextFile } = await import('@tauri-apps/plugin-fs');
       const JSZip = (await import('jszip')).default;
       
       // 读取 ZIP 文件
@@ -353,20 +366,26 @@ export class SkillManager {
         throw new Error('ZIP 文件中未找到 SKILL.md，不是有效的技能包');
       }
       
-      // 确定目标目录名
+      // 确定目标目录名（允许覆盖指定 skillId）
       const zipFileName = zipPath.split(/[/\\]/).pop() || 'imported-skill';
       const skillDirName = skillRoot 
         ? skillRoot.split('/')[0] 
         : zipFileName.replace(/\.zip$/i, '');
+      const finalDirName = String(options?.targetSkillId || '').trim() || skillDirName;
       
       // 获取技能基础路径
       const basePath = await this.getSkillsBasePath();
       const { join } = await import('@tauri-apps/api/path');
-      const targetDir = await join(basePath, skillDirName);
+      const targetDir = await join(basePath, finalDirName);
       
       // 检查目标目录是否已存在
       if (await exists(targetDir)) {
-        throw new Error(`技能 '${skillDirName}' 已存在，请先卸载`);
+        if (!options?.overwrite) {
+          throw new Error(`技能 '${finalDirName}' 已存在，请先卸载或选择“覆盖安装”`);
+        }
+        // 覆盖安装：先删除原目录
+        await remove(targetDir, { recursive: true });
+        await mkdir(targetDir, { recursive: true });
       }
       
       // 创建目标目录
@@ -397,6 +416,14 @@ export class SkillManager {
         // 写入文件
         const content = await file.async('uint8array');
         await writeFile(filePath, content);
+      }
+
+      // 写入安装元信息（用于更新/展示）
+      try {
+        const metaPath = await join(targetDir, '.chatless-skill.json');
+        await writeTextFile(metaPath, JSON.stringify({ installMethod: 'zip', updatedAt: Date.now() }, null, 2));
+      } catch {
+        // ignore
       }
       
       // 刷新列表
@@ -429,7 +456,7 @@ export class SkillManager {
         );
       }
       
-      const { exists, remove } = await import('@tauri-apps/plugin-fs');
+      const { exists, remove, writeTextFile } = await import('@tauri-apps/plugin-fs');
       const { join } = await import('@tauri-apps/api/path');
       
       // 从 URL 提取仓库名
@@ -466,6 +493,14 @@ export class SkillManager {
         await remove(targetDir, { recursive: true });
         throw new Error('仓库中未找到 SKILL.md，不是有效的技能仓库');
       }
+
+      // 写入安装元信息（用于更新/展示）
+      try {
+        const metaPath = await join(targetDir, '.chatless-skill.json');
+        await writeTextFile(metaPath, JSON.stringify({ installMethod: 'git', repoUrl: gitUrl, updatedAt: Date.now() }, null, 2));
+      } catch {
+        // ignore
+      }
       
       // 刷新列表
       await this.refresh();
@@ -492,22 +527,170 @@ export class SkillManager {
    * 需要 shell 插件和系统 Git
    */
   async checkGitAvailable(): Promise<boolean> {
+    const r = await this.checkGitStatus();
+    return r.ok;
+  }
+
+  /**
+   * 更可靠的 Git 状态检测（用于 UI 提示与引导）
+   * - 区分：shell 插件不可用 / git 不可用 / PATH 问题
+   * - 尝试常见安装路径（Windows/macOS/Linux）
+   */
+  async checkGitStatus(): Promise<{
+    ok: boolean;
+    reason?: 'shell_plugin_missing' | 'not_found';
+    detail?: string;
+    gitPath?: string;
+    versionText?: string;
+  }> {
+    // 检查 shell 插件是否可用
+    let Command: any;
     try {
-      // 检查 shell 插件是否可用
-      let Command;
+      const shellModule = await import('@tauri-apps/plugin-shell');
+      Command = (shellModule as any).Command;
+    } catch {
+      return { ok: false, reason: 'shell_plugin_missing', detail: 'shell plugin not available' };
+    }
+
+    const tryRun = async (cmd: string, args: string[]) => {
       try {
-        const shellModule = await import('@tauri-apps/plugin-shell');
-        Command = shellModule.Command;
-      } catch {
-        return false; // 插件未安装
+        const r = await Command.create(cmd, args).execute();
+        const out = String(r.stdout || r.stderr || '').trim();
+        return { code: Number(r.code || 0), out };
+      } catch (e) {
+        return { code: 1, out: e instanceof Error ? e.message : String(e) };
       }
-      
-      // 检查系统 Git 是否可用
-      const result = await Command.create('git', ['--version']).execute();
-      return result.code === 0;
+    };
+
+    // 1) 先走 PATH：git --version
+    const r1 = await tryRun('git', ['--version']);
+    if (r1.code === 0) return { ok: true, gitPath: 'git', versionText: r1.out };
+
+    // 2) 尝试常见安装路径
+    try {
+      const { platform } = await import('@tauri-apps/plugin-os');
+      const { exists } = await import('@tauri-apps/plugin-fs');
+      const { join, homeDir } = await import('@tauri-apps/api/path');
+
+      const candidates: string[] = [];
+      const plat = await platform();
+
+      if (plat === 'windows') {
+        candidates.push(
+          'C:/Program Files/Git/cmd/git.exe',
+          'C:/Program Files/Git/bin/git.exe',
+          'C:/Program Files (x86)/Git/cmd/git.exe',
+          'C:/Program Files (x86)/Git/bin/git.exe'
+        );
+        try {
+          const home = await homeDir();
+          const p1 = await join(home, 'AppData/Local/Programs/Git/cmd/git.exe');
+          const p2 = await join(home, 'AppData/Local/Programs/Git/bin/git.exe');
+          candidates.push(p1, p2);
+        } catch {
+          // ignore
+        }
+      } else if (plat === 'macos') {
+        candidates.push('/opt/homebrew/bin/git', '/usr/local/bin/git', '/usr/bin/git');
+      } else {
+        candidates.push('/usr/bin/git', '/usr/local/bin/git', '/bin/git');
+      }
+
+      for (const p of candidates) {
+        try {
+          if (!(await exists(p))) continue;
+          const rr = await tryRun(p, ['--version']);
+          if (rr.code === 0) return { ok: true, gitPath: p, versionText: rr.out };
+        } catch {
+          // ignore and continue
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    return { ok: false, reason: 'not_found', detail: r1.out || 'git --version failed' };
+  }
+
+  private async withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const k = String(key || '').trim();
+    const prev = this._opLocks.get(k);
+    if (prev) return (await prev) as T;
+    const p = (async () => fn())();
+    this._opLocks.set(k, p);
+    try {
+      return await p;
+    } finally {
+      this._opLocks.delete(k);
+    }
+  }
+
+  async isGitSkillDirectory(skillPath: string): Promise<boolean> {
+    try {
+      const { exists } = await import('@tauri-apps/plugin-fs');
+      const { join } = await import('@tauri-apps/api/path');
+      const p = await join(skillPath, '.git');
+      return await exists(p);
     } catch {
       return false;
     }
+  }
+
+  /**
+   * 一键更新（仅适用于 Git 安装的技能）
+   * - 执行：git -C <skill.path> pull --ff-only
+   */
+  async updateSkillFromGit(skillId: string): Promise<{ ok: boolean; message: string }> {
+    const id = String(skillId || '').trim();
+    if (!id) return { ok: false, message: 'skillId is required' };
+
+    return this.withLock(`update:${id}`, async () => {
+      const store = useSkillStore.getState();
+      const skill = store.skills.find((s) => s.id === id);
+      if (!skill || skill.source !== 'local' || !skill.path) {
+        return { ok: false, message: 'Skill not found or not local' };
+      }
+
+      const isGit = await this.isGitSkillDirectory(skill.path);
+      if (!isGit) {
+        return { ok: false, message: 'Not a git-installed skill' };
+      }
+
+      // shell plugin required
+      let Command: any;
+      try {
+        const shellModule = await import('@tauri-apps/plugin-shell');
+        Command = (shellModule as any).Command;
+      } catch {
+        return { ok: false, message: 'Git 更新需要 shell 插件。' };
+      }
+
+      // git available
+      const okGit = await this.checkGitAvailable();
+      if (!okGit) return { ok: false, message: '未检测到 Git，请先安装并配置到 PATH。' };
+
+      const r = await Command.create('git', ['-C', skill.path, 'pull', '--ff-only']).execute();
+      if (r.code !== 0) {
+        return { ok: false, message: String(r.stderr || r.stdout || 'git pull failed') };
+      }
+
+      await this.refresh();
+      return { ok: true, message: '更新完成' };
+    });
+  }
+
+  /**
+   * 重新导入覆盖（用于 ZIP/手动拷贝安装的技能）
+   */
+  async reinstallSkillFromZip(skillId: string, zipPath: string): Promise<{ ok: boolean; message: string }> {
+    const id = String(skillId || '').trim();
+    const zp = String(zipPath || '').trim();
+    if (!id || !zp) return { ok: false, message: 'skillId and zipPath are required' };
+
+    return this.withLock(`reinstall:${id}`, async () => {
+      await this.importFromZip(zp, { overwrite: true, targetSkillId: id });
+      return { ok: true, message: '覆盖安装完成' };
+    });
   }
 
   /**
@@ -619,6 +802,15 @@ export class SkillManager {
       id: skill.id,
       name: skill.name,
       description: this.truncateText(skill.description, maxDescriptionLength),
+      lineCount: (() => {
+        try {
+          const s = String((skill as any)?.skillMdContent || '');
+          if (!s) return undefined;
+          return s.split('\n').length;
+        } catch {
+          return undefined;
+        }
+      })(),
       triggers: this.extractTriggers(skill),
       category: skill.category,
     }));
@@ -649,112 +841,84 @@ export class SkillManager {
   /**
    * 构建用于注入的技能索引提示词
    * 
-   * 这是注入到 System Prompt 的精简版技能列表
+   * 这是注入到 System Prompt 的“极简版”技能列表：
+   * - 只注入 name + description（附带 id 便于调用）
+   * - SOP/调用规范由 tools description（厚工具描述）承载，避免重复占上下文
    */
   buildSkillIndexPrompt(): string | null {
     const index = this.getSkillIndex();
-    if (index.length === 0) {
-      return null;
-    }
+    if (index.length === 0) return null;
 
-    const skillList = index.map(s => {
-      const triggers = s.triggers.length > 0 
-        ? ` [触发词: ${s.triggers.slice(0, 3).join(', ')}]` 
-        : '';
-      return `- **${s.name}** (\`${s.id}\`): ${s.description}${triggers}`;
-    }).join('\n');
+    const lines = index.map((s) => {
+      const id = String((s as any)?.id || '').trim();
+      const name = String((s as any)?.name || id || '').trim();
+      const desc = String((s as any)?.description || '').trim();
+      const lc = typeof (s as any)?.lineCount === 'number' ? (s as any).lineCount : undefined;
+      const lcText = (lc && Number.isFinite(lc) && lc > 0) ? ` (${lc} lines)` : '';
+      return `- **${name || id || '(unknown)'}** (${id ? `\`${id}\`` : '(unknown-id)'}${lcText}): ${desc || '(no description)'}`;
+    });
 
-    // 构建每个技能的 ID 列表，用于关键词匹配提示
-    const skillIds = index.map(s => s.id).join(', ');
-    
-    return `## 🎯 可用技能 (HIGHEST PRIORITY)
+    return `## 可用 Skills（优先）
 
-**重要：当用户请求涉及以下任何技能时，必须首先使用技能工具，不要使用 web_search！**
+规则（强约束）：
+- 若用户消息**显式提到**某个 skill 的 id 或 name，必须优先使用 skills 工具来完成任务。
+- 若用户任务与某个 skill 的 description 明显匹配，也应优先使用该 skill。
+- skills 是主教程；filesystem / shell_executor / web_search 作为配合手段完成端到端任务。
 
-技能关键词匹配列表：${skillIds}
-
-已启用的技能：
-
-${skillList}
-
-### 技能工具调用方式
-
-**Native tool calling（必须使用结构化 tools 调用，不要输出任何 XML/标签文本）：**
-
-1) 获取技能说明（必须首先调用）：\`skills__get_skill_instructions\`
-   - 参数：\`{ "skillId": "技能ID" }\`
-
-2) 查看技能可用动作：\`skills__list_skill_actions\`
-   - 参数：\`{ "skillId": "技能ID" }\`
-
-3) 执行特定动作：\`skills__run_skill_action\`
-   - 参数：\`{ "skillId": "技能ID", "actionId": "动作ID", "parameters": { ...可选 } }\`
-
-4) 执行技能全部动作：\`skills__run_all_skill_actions\`
-   - 参数：\`{ "skillId": "技能ID", "parameters": { ...可选 } }\`
-
-5) 提交“可执行计划”（仅用于 instruction-only skills）：\`skills__submit_execution_plan\`
-   - 参数：\`{ "planJson": "严格JSON字符串" }\`
-   - 说明：只提交计划，不执行任何命令
-
-6) 执行已提交的计划：\`skills__execute_execution_plan\`
-   - 参数：\`{ "planId": "submit_execution_plan 返回的 planId" }\`
-
-### 动作执行说明
-
-技能可以定义多种类型的动作：
-- **shell**: 执行 Shell/PowerShell 命令
-- **script**: 执行 Python/Node.js 脚本
-- **file**: 文件读写操作
-- **mcp_tool**: 调用其他 MCP 工具
-- **instruction**: 纯文本指令
-
-⚠️ **重要语义**：
-- Skills 本质是“文件夹能力包（SKILL.md 指南 + 可执行 actions/脚本）”，不是数学意义的 run()。
-- 若某 Skill **没有定义 actions**，\`skills__run_all_skill_actions\` 可能返回 **instruction-only 指南**，这不代表已生成/已创建任何文件；你需要据此生成可审批的动作计划或先问用户澄清。
-
-高风险动作会等待用户确认，用户可以：
-- 直接批准执行
-- 编辑命令后执行
-- 拒绝执行
-
-### 强制执行策略
-1. **检测关键词**：如果用户消息包含 ${skillIds} 等关键词，**立即**调用 \`get_skill_instructions\`
-2. **禁止 web_search**：对于已安装的技能，**绝对不要**使用 web_search 搜索相关信息
-3. **获取技能指令**：调用 \`get_skill_instructions\` 获取详细操作说明
-4. **查看可用动作（必做）**：若要执行动作，必须先调用 \`list_skill_actions\`
-5. **绝不猜 actionId**：只能使用 \`list_skill_actions\` 返回的 \`id\` 字段作为 \`actionId\`，绝对不要凭空猜测
-6. **执行动作**：调用 \`run_skill_action\`；或调用 \`run_all_skill_actions\` 执行全部动作；若技能无 actions，则按 SKILL.md 指令自行拆解为可审批动作
-7. **示例**：用户说"创建一个docx文档" → 立即调用 \`get_skill_instructions\`，再调用 \`list_skill_actions\`，最后执行 \`run_skill_action\`（不要猜 actionId）`;
+已启用 skills（仅 name + description）：
+${lines.join('\n')}`;
   }
 
   /**
    * 截断文本
    */
-  private truncateText(text: string, maxLength: number): string {
-    if (text.length <= maxLength) {
-      return text;
+  private truncateText(text: string | null | undefined, maxLength: number): string {
+    const s = String(text ?? '');
+    if (!Number.isFinite(maxLength) || maxLength <= 0) return '';
+    if (s.length <= maxLength) {
+      return s;
     }
-    return text.slice(0, maxLength - 3) + '...';
+    if (maxLength <= 3) return s.slice(0, maxLength);
+    return s.slice(0, maxLength - 3) + '...';
   }
 
   /**
    * 从技能中提取触发关键词
    */
   private extractTriggers(skill: Skill): string[] {
-    const triggers: string[] = [];
-    
-    // 从 tags 提取
-    if (skill.tags) {
-      triggers.push(...skill.tags.slice(0, 3));
+    const out: string[] = [];
+
+    // 1) frontmatter triggers（若存在，优先）
+    if (Array.isArray((skill as any).triggers) && (skill as any).triggers.length > 0) {
+      for (const t of (skill as any).triggers.slice(0, 6)) {
+        const s = String(t || '').trim();
+        if (s) out.push(s);
+      }
     }
-    
-    // 从名称中提取关键词
-    const nameWords = skill.name.toLowerCase().split(/[\s-_]+/);
-    triggers.push(...nameWords.filter(w => w.length > 2));
-    
+
+    // 2) tags（保留前几个）
+    if (Array.isArray(skill.tags) && skill.tags.length > 0) {
+      for (const t of skill.tags.slice(0, 6)) {
+        const s = String(t || '').trim();
+        if (s) out.push(s);
+      }
+    }
+
+    // 3) skill id（用户经常直接写 id）
+    const id = String((skill as any).id || '').trim();
+    if (id) out.push(id);
+
+    // 4) name 分词（必须防御：name 可能为 undefined）
+    const name = String((skill as any).name || '').trim();
+    if (name) {
+      const words = name.toLowerCase().split(/[\s\-_]+/g).filter(Boolean);
+      for (const w of words) {
+        if (w.length > 2) out.push(w);
+      }
+    }
+
     // 去重并限制数量
-    return [...new Set(triggers)].slice(0, 5);
+    return Array.from(new Set(out)).slice(0, 8);
   }
 
   /**

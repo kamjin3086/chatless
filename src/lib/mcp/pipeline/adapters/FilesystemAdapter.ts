@@ -30,7 +30,9 @@ export class FilesystemAdapter implements ToolAdapter {
 
       if (tool === 'read_file' || tool === 'read') {
         const maxLines = typeof (args as any).maxLines === 'number' ? (args as any).maxLines : undefined;
-        return await invoke('filesystem_read_file', { path, maxLines });
+        const startLine = typeof (args as any).startLine === 'number' ? (args as any).startLine : undefined;
+        const endLine = typeof (args as any).endLine === 'number' ? (args as any).endLine : undefined;
+        return await invoke('filesystem_read_file', { path, maxLines, startLine, endLine });
       }
 
       if (tool === 'write_file' || tool === 'write') {

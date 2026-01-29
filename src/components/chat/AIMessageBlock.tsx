@@ -596,9 +596,9 @@ export function AIMessageBlock({
       {/* 本次消息的文件改动清单（来源：工具卡片埋点），点击可打开 */}
       {fileChanges.length > 0 && (
         <div className="mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 select-none">
+          {/* <div className="text-[11px] text-slate-500 dark:text-slate-400 select-none">
             本次会话改动的文件/目录
-          </div>
+          </div> */}
           <div className="mt-1 flex flex-wrap gap-1.5">
             {fileChanges.slice(0, 12).map((c) => (
               <button

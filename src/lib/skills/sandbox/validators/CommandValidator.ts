@@ -390,7 +390,7 @@ export class CommandValidator {
       return { valid: true }; // 空路径由其他逻辑处理
     }
 
-    const normalizedPath = path.trim();
+    const normalizedPath = this.normalizePathForCompare(path.trim());
 
     // 检查敏感路径
     for (const sensitive of SENSITIVE_PATHS) {
@@ -418,9 +418,16 @@ export class CommandValidator {
 
     // 检查允许的工作目录
     if (this.config.allowedWorkingDirs && this.config.allowedWorkingDirs.length > 0) {
-      const isAllowed = this.config.allowedWorkingDirs.some(dir => 
-        normalizedPath.toLowerCase().startsWith(dir.toLowerCase())
-      );
+      const isAllowed = this.config.allowedWorkingDirs.some(dir => {
+        const allowed = this.normalizePathForCompare(String(dir || ''));
+        if (!allowed) return false;
+        // allow exact match or prefix-with-separator
+        const p = normalizedPath.toLowerCase();
+        const a = allowed.toLowerCase();
+        if (p === a) return true;
+        const prefix = a.endsWith('/') ? a : `${a}/`;
+        return p.startsWith(prefix);
+      });
       if (!isAllowed) {
         return {
           valid: false,
@@ -431,6 +438,25 @@ export class CommandValidator {
     }
 
     return { valid: true };
+  }
+
+  /**
+   * 将路径统一为可比较形式：
+   * - 统一分隔符为 '/'
+   * - 去掉末尾多余 '/'
+   * - Windows 盘符路径大小写不敏感（比较时统一 lower）
+   */
+  private normalizePathForCompare(p: string): string {
+    const s = String(p || '').trim();
+    if (!s) return '';
+    let out = s.replace(/\\/g, '/');
+    // collapse duplicate slashes (keep leading // for UNC)
+    if (!out.startsWith('//')) out = out.replace(/\/{2,}/g, '/');
+    // trim trailing slashes (keep root)
+    if (out !== '/' && !/^[A-Za-z]:\/$/.test(out)) out = out.replace(/\/+$/g, '');
+    // normalize drive letter casing
+    out = out.replace(/^([A-Za-z]):\//, (_, d) => `${String(d).toUpperCase()}:/`);
+    return out;
   }
 
   /**

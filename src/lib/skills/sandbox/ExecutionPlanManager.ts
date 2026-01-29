@@ -380,7 +380,7 @@ export class ExecutionPlanManager {
       const handler = listener[event];
       if (typeof handler === 'function') {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (handler as (...args: unknown[]) => void).apply(listener, args);
         } catch (error) {
           console.error(`[ExecutionPlanManager] Listener error in ${event}:`, error);

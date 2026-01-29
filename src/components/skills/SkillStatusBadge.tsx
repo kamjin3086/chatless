@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 interface SkillStatusBadgeProps {
-  status: SkillStatus;
+  status: SkillStatus | (string & {}) | undefined | null;
   className?: string;
   showIcon?: boolean;
   showText?: boolean;
@@ -55,19 +55,29 @@ export function SkillStatusBadge({
   showIcon = true,
   showText = true,
 }: SkillStatusBadgeProps) {
-  const config = statusConfig[status];
-  const Icon = config.icon;
+  const key = (status && typeof status === 'string') ? status : 'unknown';
+  const config =
+    (key in statusConfig ? (statusConfig as any)[key] : null) as
+      | { label: string; icon: typeof CheckCircle; className: string }
+      | null;
+
+  const safeConfig = config ?? {
+    label: key === 'unknown' ? '未知' : `未知（${key}）`,
+    icon: AlertCircle,
+    className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  };
+  const Icon = safeConfig.icon;
 
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-        config.className,
+        safeConfig.className,
         className
       )}
     >
       {showIcon && <Icon className="h-3 w-3" />}
-      {showText && <span>{config.label}</span>}
+      {showText && <span>{safeConfig.label}</span>}
     </span>
   );
 }

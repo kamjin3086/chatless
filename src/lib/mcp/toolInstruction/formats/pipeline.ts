@@ -234,15 +234,15 @@ function registerBuiltinHandlers(pipeline: ToolCallPipeline): void {
   // 同步导入所有处理器
   // 注：这里使用 require 进行同步导入，确保处理器在 getDefaultPipeline 返回前已注册
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { OpenAIHandler } = require('./handlers/openai');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { XMLHandler } = require('./handlers/xml');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { GptOssHandler } = require('./handlers/gptoss');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { JsonHandler } = require('./handlers/json');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { GptOssTagHandler } = require('./handlers/gptoss-tags');
     
     pipeline.registerAll([

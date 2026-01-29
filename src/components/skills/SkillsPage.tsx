@@ -256,7 +256,6 @@ export function SkillsPage({ className }: SkillsPageProps) {
               <SelectContent>
                 <SelectItem value="all">全部来源</SelectItem>
                 <SelectItem value="local">本地</SelectItem>
-                <SelectItem value="remote">远程</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -272,7 +271,6 @@ export function SkillsPage({ className }: SkillsPageProps) {
             <SelectContent>
               <SelectItem value="all">全部状态</SelectItem>
               <SelectItem value="installed">已安装</SelectItem>
-              <SelectItem value="not_installed">未安装</SelectItem>
               <SelectItem value="needs_update">有更新</SelectItem>
               <SelectItem value="missing_deps">缺少依赖</SelectItem>
             </SelectContent>

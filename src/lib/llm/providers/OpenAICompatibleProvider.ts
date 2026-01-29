@@ -115,6 +115,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
     const { 
       extensions: _extensions, 
       mcpServers: _mcpServers,
+      // 这些字段仅用于应用内部追踪/调试，不应发送到 OpenAI-compatible 后端（LM Studio 会记录并可能触发兼容问题）
+      conversationId: _conversationId,
+      messageId: _messageId,
+      __useNativeTools: _useNativeTools,
       tools: toolDefs,
       toolChoice,
       parallelToolCalls,
@@ -135,7 +139,16 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     const body: Record<string, unknown> = {
       model,
-      messages: messages.map((m) => {
+      messages: messages
+        // 兼容：过滤“空 assistant 消息”（既无内容也无 tool_calls），避免污染上下文或触发后端校验问题
+        .filter((m) => {
+          if (m.role !== 'assistant') return true;
+          const anyMsg: any = m as any;
+          const hasToolCalls = Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0;
+          const hasContent = !!String(m.content || '').trim();
+          return hasContent || hasToolCalls;
+        })
+        .map((m) => {
         const anyMsg: any = m as any;
         const msg: any = { role: m.role, content: m.content };
         if (m.role === 'tool') {

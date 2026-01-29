@@ -94,6 +94,16 @@ export class LocalSkillLoader implements ISkillLoader {
     }
   }
 
+  private async readJson(path: string): Promise<any | null> {
+    try {
+      const txt = await this.readFile(path);
+      if (!txt) return null;
+      return JSON.parse(String(txt));
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * 加载所有本地技能
    */
@@ -165,6 +175,7 @@ export class LocalSkillLoader implements ISkillLoader {
       const { join } = await import('@tauri-apps/api/path');
       const skillPath = await join(basePath, dirName);
       const skillMdPath = await join(skillPath, SKILL_MD_FILENAME);
+      const metaPath = await join(skillPath, '.chatless-skill.json');
 
       // 读取 SKILL.md
       const content = await this.readFile(skillMdPath);
@@ -183,6 +194,9 @@ export class LocalSkillLoader implements ISkillLoader {
       const dependencies = extractDependencies(frontmatter);
       const actionTypes = parseResult.actions.map((a) => a.type);
       const skillMdSha256 = await sha256Hex(content);
+      const meta = await this.readJson(metaPath);
+      const repoUrl = meta && typeof meta.repoUrl === 'string' ? String(meta.repoUrl) : undefined;
+      const originKind = inferOriginKind(repoUrl, 'local');
 
       // 构建技能对象
       const skill: Skill = {
@@ -193,9 +207,10 @@ export class LocalSkillLoader implements ISkillLoader {
         source: 'local',
         status: this.determineStatus(dependencies),
         path: skillPath,
+        repoUrl,
         origin: {
-          kind: inferOriginKind(undefined, 'local'),
-          repoUrl: undefined,
+          kind: originKind,
+          repoUrl,
         },
         integrity: {
           skillMdSha256: skillMdSha256 || undefined,

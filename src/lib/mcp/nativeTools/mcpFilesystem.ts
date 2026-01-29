@@ -22,7 +22,11 @@ export const MCP_FILESYSTEM_READ_FILE_TOOL: McpTool = {
       type: 'object',
       properties: {
         path: { type: 'string', description: '文件路径' },
-        maxLines: { type: 'number', description: '最多读取行数（可选）' },
+        // 兼容：旧参数
+        maxLines: { type: 'number', description: '最多读取行数（可选，旧参数；等价于从第 1 行开始读取 maxLines 行）' },
+        // 新增：按行范围读取（1-based）
+        startLine: { type: 'number', description: '起始行号（1-based，可选）' },
+        endLine: { type: 'number', description: '结束行号（1-based，可选，>= startLine）' },
       },
       required: ['path'],
     },

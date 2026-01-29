@@ -32,6 +32,45 @@ function stableStringify(value: unknown): string {
 export function buildResultPreview(value: unknown, maxLen = 12000): string {
   try {
     if (typeof value === 'string') return value.slice(0, maxLen);
+
+    // UX: hide line-range metadata in UI preview (user doesn't care).
+    // Keep the full structured object for the model; this only affects tool card resultPreview.
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const v: any = value as any;
+
+      // skills__list_available_skills: show a compact list (no lineCount/triggers noise)
+      if (Array.isArray(v.skills) && typeof v.nextStep === 'string') {
+        const items = (v.skills as any[])
+          .map((s) => {
+            const id = String(s?.id || '').trim();
+            const name = String(s?.name || id || '').trim();
+            const desc = String(s?.description || '').trim();
+            const label = id ? `(${id})` : '';
+            return `- ${name || '(unknown)'}${label}${desc ? `: ${desc}` : ''}`;
+          })
+          .filter(Boolean);
+        const head = items.slice(0, 20).join('\n');
+        const more = items.length > 20 ? `\n... (${items.length - 20} more)` : '';
+        const out = [`Skills: ${items.length}`, head, more].filter(Boolean).join('\n');
+        return out.slice(0, maxLen);
+      }
+
+      // filesystem_read_file (new structured result)
+      if (typeof v.content === 'string' && typeof v.totalLines === 'number') {
+        return v.content.slice(0, maxLen);
+      }
+
+      // skills__get_skill_instructions (structured result)
+      if (typeof v.content === 'string' && (typeof v.skillId === 'string' || typeof v.skillName === 'string')) {
+        return v.content.slice(0, maxLen);
+      }
+
+      // If it is a wrapper { ok, content, ... }
+      if (typeof v.content === 'string' && typeof v.ok === 'boolean') {
+        return v.content.slice(0, maxLen);
+      }
+    }
+
     const json = JSON.stringify(value);
     return (json ?? String(value)).slice(0, maxLen);
   } catch {

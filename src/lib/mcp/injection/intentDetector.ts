@@ -170,12 +170,21 @@ export function detectSkillTriggers(userContent: string): SkillTriggerResult {
       };
     }
     
-    const contentLower = userContent.toLowerCase();
+    const contentLower = String(userContent || '').toLowerCase();
     const triggeredSkills: SkillIndexEntry[] = [];
     
     for (const skill of skillIndex) {
+      const skillIdLower = String((skill as any)?.id || '').toLowerCase();
+      const skillNameLower = String((skill as any)?.name || '').toLowerCase();
+
+      // 检查 skill id（优先：用户常直接指定 id）
+      if (skillIdLower && contentLower.includes(skillIdLower)) {
+        triggeredSkills.push(skill);
+        continue;
+      }
+
       // 检查技能名称
-      if (contentLower.includes(skill.name.toLowerCase())) {
+      if (skillNameLower && contentLower.includes(skillNameLower)) {
         triggeredSkills.push(skill);
         continue;
       }
@@ -183,7 +192,7 @@ export function detectSkillTriggers(userContent: string): SkillTriggerResult {
       // 检查触发关键词
       if (skill.triggers && skill.triggers.length > 0) {
         const isTriggered = skill.triggers.some(trigger => 
-          contentLower.includes(trigger.toLowerCase())
+          contentLower.includes(String(trigger || '').toLowerCase())
         );
         if (isTriggered) {
           triggeredSkills.push(skill);

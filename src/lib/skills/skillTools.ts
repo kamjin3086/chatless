@@ -74,24 +74,36 @@ async function listAvailableSkills(): Promise<{
  * 
  * @param skillId - 技能 ID
  */
-async function getSkillInstructions(skillId: string): Promise<string> {
+async function getSkillInstructions(params: { skillId: string; startLine?: number; endLine?: number }): Promise<unknown> {
 
   
+  const skillId = String(params?.skillId || '').trim();
+  const startLine = typeof params?.startLine === 'number' ? params.startLine : undefined;
+  const endLine = typeof params?.endLine === 'number' ? params.endLine : undefined;
+
   if (!skillId) {
     return 'Error: skillId is required';
   }
 
   const manager = getSkillManager();
   const skill = await manager.getSkill(skillId);
-  const content = await manager.getSkillPromptContent(skillId);
+  const full = await manager.getSkillPromptContent(skillId, 200000);
   
-  if (!content) {
+  if (!full) {
 
     return `Error: Skill "${skillId}" not found or has no content`;
   }
 
+  const lines = String(full).split('\n');
+  const totalLines = lines.length;
+  const s = Math.max(1, Math.floor(startLine || 1));
+  const e = Math.min(totalLines, Math.floor(endLine || totalLines));
+  const start = Math.min(s, totalLines || 1);
+  const end = Math.max(start, e);
+  const content = totalLines > 0 ? lines.slice(start - 1, end).join('\n') : '';
+
   // 为模型附加一段“不可见的执行规则提示”（仍然会出现在 tool card 中，但不会污染正常聊天内容）
-  const parsed = parseSkillMd(content);
+  const parsed = parseSkillMd(full);
   const actionsCount = parsed.actions.length;
 
 
@@ -109,23 +121,22 @@ async function getSkillInstructions(skillId: string): Promise<string> {
 
   const skillPath = skill!.path || '(unknown)';
 
-  const guidance = [
-    '',
-    '---',
-    `[system] Skill工作目录: ${skillPath}`,
-    resourceFiles.length > 0 ? `可用资源: ${resourceFiles.join(', ')}` : '可用资源: (none)',
-    '',
+  const guidance =
     actionsCount === 0
-      ? `【instruction-only】无预定义actions，请自学自编自执行：
-→ 用filesystem.read_file读资源（"${skillPath}/文件名"）
-→ ⚠️产物/临时文件/脚本默认写到 @WorkDir（应用 AppData 工作区），不要写到 skill 目录：
-   - 用filesystem.write_file写脚本（"@WorkDir/work/script.py" 或 "@WorkDir/work/script.js"）
-→ 用shell_executor.execute_command执行脚本（workingDir:"@WorkDir/work"）
-→ 用filesystem验证关键产物（如 exists/read/list_directory）后，才能向用户交付结果
-🚫禁止：不要仅凭“File written successfully”就声称已完成；不要把用户产物写入 skill 安装目录。
-如果当前会话未注入 @WorkDir：优先让用户在 UI 中设置工作目录，或切换/新建会话后重试（系统会自动创建工作区）。`
-      : `【action-based】有${actionsCount}个actions，推荐：list_skill_actions→run_skill_action`,
-  ].filter(Boolean).join('\n');
+      ? {
+          mode: 'instruction-only',
+          skillPath,
+          resourceFiles,
+          hint:
+            '该 skill 没有预定义 actions。请按 SKILL.md 的指引自行拆解为 filesystem/shell_executor 步骤；产物/脚本默认写到 @WorkDir，不要写入 skill 安装目录。',
+        }
+      : {
+          mode: 'action-based',
+          skillPath,
+          resourceFiles,
+          actionCount: actionsCount,
+          hint: '推荐流程：skills__list_skill_actions → skills__run_skill_action（不要猜 actionId）。',
+        };
 
   // 保存 skill 上下文供后续 filesystem/shell_executor 使用
   try {
@@ -138,8 +149,16 @@ async function getSkillInstructions(skillId: string): Promise<string> {
     // ignore
   }
 
-  
-  return `${content}${guidance}`;
+  return {
+    ok: true,
+    skillId,
+    skillName: skill?.name || skillId,
+    totalLines,
+    startLine: start,
+    endLine: end,
+    content,
+    guidance,
+  };
 }
 
 /**
@@ -441,8 +460,22 @@ export const skillTools: SkillToolDefinition[] = [
         description: '要获取说明的技能 ID（从 list_available_skills 返回的 id 字段）',
         required: true,
       },
+      startLine: {
+        type: 'number',
+        description: '可选：起始行号（1-based）。用于按行范围读取 SKILL.md，提升上下文效率。',
+        required: false,
+      },
+      endLine: {
+        type: 'number',
+        description: '可选：结束行号（1-based）。',
+        required: false,
+      },
     },
-    handler: async (params) => getSkillInstructions(params.skillId as string),
+    handler: async (params) => getSkillInstructions({
+      skillId: params.skillId as string,
+      startLine: params.startLine as number | undefined,
+      endLine: params.endLine as number | undefined,
+    }),
   },
   {
     name: 'check_skill_dependencies',

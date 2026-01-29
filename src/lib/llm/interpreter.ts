@@ -10,6 +10,7 @@ import { OpenAIProvider } from './providers/OpenAIProvider';
 import { GoogleAIProvider } from './providers/GoogleAIProvider';
 import { AnthropicProvider } from './providers/AnthropicProvider';
 import { DeepSeekProvider } from './providers/DeepSeekProvider';
+import type { ToolDefinition } from './types/tool-schema';
 
 /**
  * 简化版 LLMInterpreter：
@@ -145,6 +146,36 @@ export class LLMInterpreter {
 
       // 应用参数策略（按 Provider/模型正则自动注入/修正）
       const refined = ParameterPolicyEngine.apply(policyProviderName, model, options || {});
+
+      // Proxy compatibility: if history contains tool_calls / tool role but tools[] is missing,
+      // some OpenAI-compatible backends will 400. Inject a safe no-op tool and force toolChoice='none'.
+      try {
+        const hasToolHistory = Array.isArray(messages) && messages.some((m: any) => {
+          if (!m) return false;
+          if (m.role === 'tool') return true;
+          if (m.role === 'assistant') {
+            const tc = (m as any).tool_calls;
+            return Array.isArray(tc) && tc.length > 0;
+          }
+          return false;
+        });
+        const toolDefs = (refined as any)?.tools;
+        const hasTools = Array.isArray(toolDefs) && toolDefs.length > 0;
+        if (hasToolHistory && !hasTools) {
+          const noop: ToolDefinition = {
+            name: '_noop',
+            description:
+              'No-op tool for proxy compatibility. It does nothing and should not be called unless required by the protocol.',
+            parameters: { type: 'object', properties: {}, required: [] },
+          };
+          (refined as any).tools = [noop];
+          (refined as any).toolChoice = 'none';
+          (refined as any).parallelToolCalls = false;
+          (refined as any).__noopInjected = true;
+        }
+      } catch {
+        // ignore
+      }
 
       // 若存在"生效策略"，则在解释器层按策略委派到对应 Provider 实现，
       // 以解决自定义聚合 Provider 在注册时为 openai-compatible 的情况。
