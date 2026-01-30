@@ -18,64 +18,7 @@ web__download({ url: "直链URL", savePath: "file.jpg" })
 
 ---
 
-## 🚨 图片下载（必读！）
-
-### 正确流程：直接抓取 > 搜索
-
-**不要先搜索！** 直接抓取图库页面效率更高：
-
-```
-步骤 1: 直接抓取图库页面
-web__fetch({ url: "https://www.pexels.com/search/cat/" })
-
-步骤 2: 从返回的 HTML 中提取 images.pexels.com 直链
-例如: https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?w=800
-
-步骤 3: 下载直链
-web__download({
-  url: "https://images.pexels.com/photos/45201/xxx.jpeg?w=800",
-  savePath: "cat1.jpg"
-})
-```
-
-### 为什么不用搜索？
-
-| 方法 | 问题 |
-|------|------|
-| web__search + site:pexels.com | 经常返回空 `[]` |
-| 搜索结果的 URL | 是跳转链接，不是直链 |
-| 直接 fetch 图库页面 | ✅ 直接获取 HTML，提取直链 |
-
-### 直链格式
-
-| 来源 | 直链格式 |
-|------|----------|
-| Pexels | `https://images.pexels.com/photos/{id}/{name}.jpeg?w=800` |
-| Unsplash | `https://images.unsplash.com/photo-{id}?w=800` |
-| Pixabay | `https://pixabay.com/get/{hash}.jpg` |
-| wttr.in 天气图 | `https://wttr.in/城市.png` |
-
-### 如果 Pexels 被拦截（Just a moment...）
-
-换其他图库：
-```
-web__fetch({ url: "https://pixabay.com/images/search/cat/" })
-web__fetch({ url: "https://unsplash.com/s/photos/cat" })
-```
-
----
-
-## 搜索失败时怎么办
-
-| 情况 | 正确做法 |
-|------|----------|
-| 搜索返回 `[]` | 直接 fetch 目标网站，不要继续搜索变体 |
-| fetch 返回验证页 | 换另一个网站 |
-| 连续 2 次失败 | 告知用户问题，请求帮助 |
-
----
-
-## 免费 API（无需搜索）
+## 免费 API（无需搜索，直接 fetch）
 
 ### 天气
 
@@ -106,9 +49,8 @@ web__fetch({ url: "https://ipinfo.io/json" })
 
 ## 错误处理
 
-| 错误 | 原因 | 修正 |
-|------|------|------|
-| 搜索返回 [] | 搜索引擎限制 | 直接 fetch 目标网站 |
-| 下载 404 | URL 不是直链 | 用 images.pexels.com 格式 |
-| 需要登录 | 用了页面链接 | 改用直链格式 |
-| Just a moment | Cloudflare 验证 | 换另一个网站 |
+| 情况 | 处理方式 |
+|------|----------|
+| 搜索返回 [] | 换关键词或换方法 |
+| fetch 返回 "Just a moment..." | 被网站拦截，换其他网站或方法 |
+| 下载失败 | 确认 URL 是可直接下载的直链 |

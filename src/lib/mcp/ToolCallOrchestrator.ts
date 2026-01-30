@@ -59,6 +59,27 @@ function classifyToolResult(result: unknown): 'success' | 'empty' | 'tool_error'
     if (r.error) return 'tool_error';
     if (typeof r.ok === 'boolean' && r.ok === false) return 'tool_error';
     if (typeof r.success === 'boolean' && r.success === false) return 'tool_error';
+    
+    // 检测 Cloudflare/验证页面拦截（web__fetch 返回的空内容页面）
+    if (r.title && typeof r.title === 'string') {
+      const title = r.title.toLowerCase();
+      if (
+        title.includes('just a moment') ||
+        title.includes('checking your browser') ||
+        title.includes('cloudflare') ||
+        title.includes('access denied') ||
+        title.includes('403 forbidden') ||
+        title.includes('please wait')
+      ) {
+        // 有 title 但表明被拦截，视为失败
+        return 'tool_error';
+      }
+    }
+    
+    // web__fetch 返回结构：content 为空但有 title，视为无效结果
+    if (r.title && r.content === '' && Array.isArray(r.links) && r.links.length === 0) {
+      return 'empty';
+    }
   }
   return 'success';
 }

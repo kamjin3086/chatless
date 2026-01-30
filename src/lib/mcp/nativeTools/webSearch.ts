@@ -7,9 +7,8 @@ export const WEB_SEARCH_TOOL_SCHEMA: McpTool = {
   description: `在互联网上搜索实时信息。
 
 搜索技巧：
-- 图片搜索：加 site:pexels.com 或 site:unsplash.com
-- 文件搜索：加 filetype:pdf/doc/ppt
 - 限定网站：加 site:域名
+- 文件搜索：加 filetype:pdf/doc/ppt
 
 注意：某些信息可直接用 fetch 获取，无需搜索：
 - 天气：fetch("https://wttr.in/城市?format=3")
@@ -32,11 +31,11 @@ export const WEB_FETCH_TOOL_SCHEMA: McpTool = {
   name: 'fetch',
   description: `抓取指定网页内容，返回页面标题、正文与链接列表。
 
+如果返回 "Just a moment..." 或空内容，表示被网站拦截，换其他网站或方法。
+
 常用免费 API（直接 fetch，无需 API Key）：
-- 天气：https://wttr.in/城市?format=3 → "城市: ☀️ +10°C"
-- 天气详情：https://wttr.in/城市?format=%l:+%C+%t+%w
-- 汇率：https://api.exchangerate-api.com/v4/latest/USD
-- IP信息：https://ipinfo.io/json`,
+- 天气：https://wttr.in/城市?format=3
+- 汇率：https://api.exchangerate-api.com/v4/latest/USD`,
   input_schema: {
     schema: {
       type: 'object',
@@ -55,16 +54,7 @@ export const WEB_DOWNLOAD_TOOL_SCHEMA: McpTool = {
   name: 'download',
   description: `下载文件到本地。支持图片、文档等任意文件类型。
 
-【重要】URL 必须是直链，不是页面链接！
-
-图片下载正确示例：
-- Unsplash: https://images.unsplash.com/photo-{id}?w=800
-- Pexels: https://images.pexels.com/photos/{id}/{name}.jpeg?w=800
-- 天气图: https://wttr.in/Beijing.png
-
-错误示例（会失败）：
-- https://unsplash.com/photos/xxx （页面，非直链）
-- https://unsplash.com/photos/xxx/download （需登录）`,
+URL 必须是可直接下载的直链，不是网页链接。`,
   input_schema: {
     schema: {
       type: 'object',

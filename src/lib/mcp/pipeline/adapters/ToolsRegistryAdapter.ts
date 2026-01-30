@@ -64,7 +64,8 @@ export class ToolsRegistryAdapter implements ToolAdapter {
   }
 
   private handleLoad(args: Record<string, unknown>): unknown {
-    const groupId = String(args.group || '');
+    const rawGroup = args.group;
+    const groupId = typeof rawGroup === 'string' ? rawGroup : '';
     
     const validGroups: ToolGroupId[] = ['fs_extra', 'shell', 'web', 'ctx', 'skills'];
     if (!validGroups.includes(groupId as ToolGroupId)) {
@@ -72,6 +73,16 @@ export class ToolsRegistryAdapter implements ToolAdapter {
         ok: false,
         error: `无效的工具组: ${groupId}`,
         validGroups,
+      };
+    }
+
+    // 检查是否已加载
+    const loadedGroups = useToolLoadRequestStore.getState().loadedGroups;
+    if (loadedGroups.includes(groupId as ToolGroupId)) {
+      return {
+        ok: true,
+        alreadyLoaded: true,
+        message: `工具组 "${groupId}" 已经加载，无需重复加载。直接使用即可。`,
       };
     }
 
