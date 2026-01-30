@@ -26,6 +26,15 @@ export class WebSearchAdapter implements ToolAdapter {
       if (recent) return recent;
     }
 
+    let result: unknown;
+
+    // download 工具不需要 API credentials
+    if (tool === 'download') {
+      result = await this.handleDownload(args);
+      mcpCallHistory.recordCall(WEB_SEARCH_SERVER_NAME, tool, args, true, result);
+      return result;
+    }
+
     const cfg = useWebSearchStore.getState();
     const providerToUse = cfg.getConversationProvider(invocation.conversationId) || cfg.provider;
 
@@ -47,11 +56,7 @@ export class WebSearchAdapter implements ToolAdapter {
       apiKeyOllama: (cfg as any).apiKeyOllama,
     });
 
-    let result: unknown;
-
-    if (tool === 'download') {
-      result = await this.handleDownload(args);
-    } else if (tool === 'fetch') {
+    if (tool === 'fetch') {
       const url = typeof (args as any).url === 'string' ? String((args as any).url) : '';
       if (!url.trim()) throw new Error('MISSING_REQUIRED_ARGUMENT: url');
       const request: any = { provider: providerToUse, url, apiKey };
