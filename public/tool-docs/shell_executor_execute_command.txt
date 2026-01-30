@@ -1,37 +1,38 @@
-Shell Executor (shell_executor__execute_command) — SOP
+Shell Executor (shell_executor__execute_command) — 工具使用指南
 
-Purpose
-- Run external commands (python/node/git/npm/etc) in a sandboxed process environment.
-- Use this ONLY when filesystem tools cannot directly完成任务 or when you need existing CLI tools.
+## 用途
+在沙盒进程环境中运行外部命令（python/node/git/npm 等）。
+仅在 filesystem 无法直接完成任务，或需要调用现成 CLI 工具时使用。
 
-Working directory (IMPORTANT)
-- Prefer passing workingDir explicitly.
-- Default workingDir should be @WorkDir (AppData workspace). Do NOT write outputs into skills directories.
-- If a command depends on a project directory (package.json, scripts, etc.), set workingDir to that project directory.
+## 工作目录（重要）
+- 优先显式传递 workingDir
+- 默认应使用 `@WorkDir`（AppData 工作区）
+- 如果命令依赖项目目录（package.json 等），设置为该项目目录
+- 不要将输出写入 skills 目录
 
-Quoting rules (CRITICAL for correctness)
-- Treat the `command` string as a human command line. Do NOT add extra escaping beyond normal quoting.
-- For `python -c` / `node -e`, the code after -c/-e must be ONE argument:
-  - Good: python -c "import docx; print('ok')"
-  - Bad:  python -c \"import docx; print('ok')\"   (double-escaped quotes often break)
-  - Bad:  python -c "import                       (broken argument -> syntax error)
+## 命令引号规则（关键）
+- 按正常命令行格式编写，不要额外转义
+- 正确：`python -c "import docx; print('ok')"`
+- 错误：`python -c \"import docx\"` （双重转义会出错）
 
-Method selection
-- Prefer filesystem for simple file creation/modification.
-- Prefer shell_executor for one-off conversions (zip/unzip/pandoc/git/npm).
-- Prefer “script + shell_executor” only when logic is complex or must be reused/validated.
+## 方法选择优先级
+1. filesystem → 简单文件创建/修改
+2. shell_executor → 一次性调用现成工具（git/npm/pandoc）
+3. 脚本 + shell_executor → 仅在复杂逻辑/需要复用时
 
-Retry / failure handling
-- If a tool call fails, do NOT repeat the exact same command+workingDir more than 3 times.
-- Change one dimension when retrying: workingDir, command syntax, or switch method (filesystem vs shell).
+## 错误处理
+- `AUTH_DENIED`：停止自动重试，请用户授权后再试
+- 命令失败：分析 stderr，调整命令参数
+- 同一错误最多重试 2 次，每次必须改变参数
+- 2 次失败后：切换方法（filesystem ↔ shell_executor）
 
-Permission denied feedback (STRUCTURED)
-- If you receive a tool result with `error.code = "AUTH_DENIED"`:
-  - Stop retrying automatically.
-  - Ask the user to approve the tool call (and/or allowlist the workingDir), then retry.
+## 常用命令示例
+- 检查 Python 模块：`python -c "import docx; print('docx ok')"`
+- 运行 Node 内联代码：`node -e "console.log('hello')"`
+- Git 操作：`git status`（设置 workingDir 为项目目录）
+- 安装依赖：`npm install`（设置 workingDir 为项目目录）
 
-Examples
-- Check python module:
-  python -c "import docx; print('docx ok')"
-- Run node inline:
-  node -e "console.log('hello')"
+## 注意事项
+- 写脚本 ≠ 完成任务，必须执行并验证结果
+- 长时间运行的命令考虑加超时参数
+- 复杂输出建议写入文件后用 filesystem 读取

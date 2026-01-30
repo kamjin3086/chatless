@@ -1,0 +1,15 @@
+## 可用 Skills（可选能力）
+
+Skills 是预定义的任务模板，提供特定场景的最佳实践。
+
+### 使用规则
+
+1. **显式调用**：用户提到 skill 的 id 或 name → 必须使用该 skill
+2. **高置信匹配**：任务与 skill 描述明显匹配 → 优先使用该 skill
+3. **无关联时**：任务与现有 skills 无关 → 直接用 filesystem/shell_executor 完成，不要"保险性"调用 skills
+
+### 调用方式
+- 使用 `skills__get_skill_instructions` 获取 skill 的详细指导
+- 获取后按指导执行，可配合 filesystem/shell_executor 完成端到端任务
+
+### 已启用 skills：

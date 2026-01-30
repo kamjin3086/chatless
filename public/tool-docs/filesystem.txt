@@ -1,33 +1,35 @@
-Filesystem (filesystem__*) — SOP
+Filesystem (filesystem__*) — 工具使用指南
 
-Purpose
-- Read/write/list/create/rename/delete files and directories.
-- Use filesystem for most “simple file operations” (preferred over scripts).
+## 用途
+读/写/列出/创建/重命名/删除 文件和目录。
+优先使用 filesystem 进行简单文件操作（比写脚本更快更安全）。
 
-Path style (Windows)
-- Use absolute paths like: C:/Users/... or D:/...
-- Use forward slashes `/` as separators (recommended).
-- You may also use aliases like @WorkDir/... and @Alias/...; the system will resolve them.
+## 路径格式
+- Windows 绝对路径：`C:/Users/...` 或 `D:/...`
+- 推荐使用 `/` 作为分隔符
+- 支持别名：`@WorkDir/...`（系统自动解析为真实路径）
 
-Authorization / allowlist
-- Do NOT “probe permissions” by listing directories first.
-- Directly call filesystem with the target path.
-- If the path is outside allowlist, the app will show an authorization card. After approval, the directory will be allowlisted.
+## 操作前检查（重要）
+- 不确定路径是否存在？→ 先用 list_directory 确认
+- 覆盖现有文件？→ 先用 read_file 确认内容，或提示用户
+- 新建文件？→ 确认父目录存在
 
-Permission denied feedback (STRUCTURED)
-- If you receive a tool result with `error.code = "AUTH_DENIED"`:
-  - Stop retrying the same call.
-  - Ask the user to approve/allowlist the suggested directory (often `error.fs.suggestDir`), then retry with the same intent.
-- If you receive `error.code = "FILESYSTEM_GATE_FAILED"`:
-  - Treat it as “path/alias not resolvable or not authorized”; ask user to clarify the correct absolute path or approve the directory.
+## 授权机制
+- 直接对目标路径调用，无需先探测权限
+- 越界访问会弹出授权卡片，用户授权后重试即可
 
-Safety
-- Delete operations require explicit user approval. Never delete without it.
+## 错误处理
+- `AUTH_DENIED`：停止重试，提示用户授权该目录
+- `FILESYSTEM_GATE_FAILED`：路径不可解析或未授权，请用户确认正确路径
+- 删除操作需要用户明确同意
 
-Examples
-- Read file:
-  path: "@WorkDir/out/result.txt"
-- Write file:
-  path: "C:/Users/User/Documents/test.txt"
-- List directory:
-  path: "@WorkDir/out"
+## 常用操作示例
+- 读取文件：`path: "@WorkDir/out/result.txt"`
+- 写入文件：`path: "C:/Users/User/Documents/test.txt"`
+- 列出目录：`path: "@WorkDir/out"`
+- 创建目录：`path: "@WorkDir/new_folder"`
+
+## 与 shell_executor 的选择
+- 简单文件操作 → filesystem（优先）
+- 需要调用外部程序 → shell_executor
+- 批量处理/复杂转换 → shell_executor

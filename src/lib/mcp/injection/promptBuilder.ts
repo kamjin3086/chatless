@@ -10,6 +10,7 @@
  * 1. **消息合并**: 将多条 system 消息合并为结构化的少数消息
  * 2. **分阶段策略**: 初始调用、追问阶段使用不同的提示词策略
  * 3. **避免重复**: 追问阶段不重复注入已有的工具描述
+ * 4. **外部化提示词**: 追问提示词从 txt 文件加载，便于维护
  */
 
 import type { InjectionContext, InjectionResult, InjectionSignals, NativeToolDefinition } from './types';
@@ -26,7 +27,7 @@ import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { detectSkillIntent } from './intentDetector';
 import { CORE_TOOL_POLICY_MD } from './promptTemplates';
-import { getToolDoc } from './toolDocLoader';
+import { getToolDoc, buildFirstFollowUpPromptFromDoc, buildForcedAnswerPromptFromDoc } from './toolDocLoader';
 
 /**
  * 构建初始调用阶段的提示词
@@ -113,14 +114,14 @@ ${g.rules.map((r) => `  - ${r}`).join('\n')}`,
   
   // Skills：始终注入 skills 概览 + 始终暴露 skills 工具
   // 目标：
-  // 1) 即使检测器偶发失效，LLM 也能“看到”全部 skills 概览并自行选择
+  // 1) 即使检测器偶发失效，LLM 也能"看到"全部 skills 概览并自行选择
   // 2) 支持用户显式指定 skill（通过概览中的 id/name）
   // 3) 强制要求：一旦发现 skill 能做用户要求，就立即遵从 skill（再搭配其它 skill / filesystem / shell_executor）
   const _skillIntent = detectSkillIntent(context.userContent || '');
   const shouldExposeSkills = true;
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled &&
-    // 只在“明显需要实时信息”的场景下注入，避免所有请求都默认携带 web_search（会分散模型注意力）
+    // 只在"明显需要实时信息"的场景下注入，避免所有请求都默认携带 web_search（会分散模型注意力）
     (signals.isTimeRelated || (signals.hasExplicitMention && signals.mentionedServers.some((s) => s.toLowerCase() === WEB_SEARCH_SERVER_NAME)));
 
   // 构建原生工具定义（Native-only）
@@ -214,15 +215,17 @@ export async function buildFollowUpPrompt(
   
   if (depth >= 2) {
     // 第二次追问：强制回答（到达预算/深度上限）
+    const forcedPrompt = await buildForcedAnswerPrompt(originalQuestion);
     messages.push({
       role: 'system',
-      content: buildForcedAnswerPrompt(originalQuestion)
+      content: forcedPrompt
     });
   } else {
     // 第一次追问
+    const followUpPrompt = await buildFirstFollowUpPrompt(originalQuestion, context.hasToolError);
     messages.push({
       role: 'system',
-      content: buildFirstFollowUpPrompt(originalQuestion, context.hasToolError)
+      content: followUpPrompt
     });
   }
   
@@ -250,7 +253,7 @@ async function injectTimeContext(
   }
 }
 
-// Native-only：不再通过 System Prompt 注入“文本工具协议”，因此不再构建文本化工具说明（@mention/简洁模式）。
+// Native-only：不再通过 System Prompt 注入"文本工具协议"，因此不再构建文本化工具说明（@mention/简洁模式）。
 
 /**
  * 构建原生工具定义（用于传递给 LLM API 的 tools 参数）
@@ -379,54 +382,33 @@ async function buildNativeToolDefinitions(params: {
 
 /**
  * 构建第一次追问提示词
+ * 
+ * 从 /tool-docs/followup_first.txt 加载提示词模板
  */
-function buildFirstFollowUpPrompt(originalQuestion: string, hasError?: boolean): string {
-  if (hasError) {
-    return `工具调用遇到问题。请基于错误信息处理：
-
-【处理策略】：
-1. 参数错误：调整参数后重新调用（只输出 1 个工具调用）
-2. 连接错误：直接重试（系统会自动重连）
-3. 工具不可用：尝试其他工具
-4. 无法解决：基于已有知识回答
-
-【重要】如果需要重试工具调用，只进行 1 次结构化工具调用（tool_call），然后停止。
-
-用户问题：${originalQuestion}`;
+async function buildFirstFollowUpPrompt(originalQuestion: string, hasError?: boolean): Promise<string> {
+  try {
+    return await buildFirstFollowUpPromptFromDoc(originalQuestion, hasError);
+  } catch {
+    // 降级：使用内联提示词
+    if (hasError) {
+      return `工具调用遇到错误。请分析错误信息，调整参数后重试或换用其他方法。\n\n用户问题：${originalQuestion}`;
+    }
+    return `工具调用已完成。请基于结果回答用户问题。如信息不足，可继续调用工具补充。\n\n用户问题：${originalQuestion}`;
   }
-  
-  return `工具调用已完成。请基于返回的结果回答用户问题；如果信息不足，允许继续调用工具进行补充/纠错，但必须遵守预算与停止条件。
-
-【核心要求】：
-1. 阅读上面的工具调用结果
-2. 如果已经足够回答：直接给出最终中文答案，简洁明了
-3. 如果仍不足以回答：继续调用工具获取缺失信息（允许补充/重试）
-
-【工具调用规则（通用）】：
-- 只为“缺失/不确定/需要纠错”的信息调用工具，避免无意义探索
-- 允许一次输出多个工具调用用于并行补齐（但总数≤3），每个调用参数必须具体且互不重复
-- 如果需要重试同一工具：必须改变参数/查询以纠错（不要原样重复）
-- 工具预算：最多再补充 2 轮工具调用；若仍不足，请明确说明缺口并给出你能给出的最佳答案
-
-用户问题：${originalQuestion}`;
 }
 
 /**
  * 构建强制回答提示词（第二次追问）
+ * 
+ * 从 /tool-docs/followup_forced.txt 加载提示词模板
  */
-function buildForcedAnswerPrompt(originalQuestion: string): string {
-  return `【最终回答 - 禁止工具调用】
-
-你已经获得了所有需要的信息。现在必须给出最终答案。
-
-强制要求：
-1. 阅读上面的工具调用结果，总结关键信息
-2. 直接输出中文答案
-3. 绝对禁止输出 <use_mcp_tool> 或任何工具调用指令
-
-用户问题：${originalQuestion}
-
-现在直接回答（不要调用任何工具）：`;
+async function buildForcedAnswerPrompt(originalQuestion: string): Promise<string> {
+  try {
+    return await buildForcedAnswerPromptFromDoc(originalQuestion);
+  } catch {
+    // 降级：使用内联提示词
+    return `【最终回答】你已完成所有工具调用，现在必须给出最终答案。\n\n用户问题：${originalQuestion}`;
+  }
 }
 
 // ================================
