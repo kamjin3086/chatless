@@ -36,6 +36,35 @@ export const WEB_FETCH_TOOL_SCHEMA: McpTool = {
   },
 };
 
-export const WEB_SEARCH_TOOLS: McpTool[] = [WEB_SEARCH_TOOL_SCHEMA, WEB_FETCH_TOOL_SCHEMA];
+export const WEB_DOWNLOAD_TOOL_SCHEMA: McpTool = {
+  name: 'download',
+  description: '下载文件到本地。支持图片、文档等任意文件类型。',
+  input_schema: {
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: '文件下载地址（以 http:// 或 https:// 开头）',
+        },
+        savePath: {
+          type: 'string',
+          description: '保存路径（相对于 @WorkDir 或绝对路径）。例如: "images/cat.jpg" 或 "@WorkDir/downloads/file.pdf"',
+        },
+        filename: {
+          type: 'string',
+          description: '可选：自定义文件名。如果不指定，从 URL 或响应头中提取',
+        },
+      },
+      required: ['url', 'savePath'],
+    },
+  },
+};
+
+export const WEB_SEARCH_TOOLS: McpTool[] = [
+  WEB_SEARCH_TOOL_SCHEMA, 
+  WEB_FETCH_TOOL_SCHEMA,
+  WEB_DOWNLOAD_TOOL_SCHEMA,
+];
 
 

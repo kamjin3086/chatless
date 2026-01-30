@@ -5,7 +5,7 @@ import { MemoizedMarkdown } from './MemoizedMarkdown';
 import { ThinkingBar } from '@/components/chat/ThinkingBar';
 // MessageStreamParser 已移除
 import FoldingLoader from '../ui/FoldingLoader';
-import { ToolCallCard } from '@/components/chat/ToolCallCard';
+import { ToolCallGroup } from '@/components/chat/ToolCallGroup';
 import { filterToolCallContent } from '@/lib/chat/segments';
 // 采用成熟图片查看组件：yet-another-react-lightbox（需安装依赖）
 // pnpm add yet-another-react-lightbox yet-another-react-lightbox/plugins/zoom yet-another-react-lightbox/plugins/fullscreen yet-another-react-lightbox/plugins/rotate yet-another-react-lightbox/plugins/download
@@ -305,6 +305,44 @@ export function AIMessageBlock({
     return -1;
   }, [mixedSegments]);
 
+  // 将连续的工具卡片分组，便于折叠展示
+  // 返回：{ type: 'cardGroup', cards: [...] } | { type: 'single', seg: ... }
+  const groupedSegments = useMemo(() => {
+    const result: Array<
+      | { type: 'cardGroup'; cards: any[]; startIdx: number }
+      | { type: 'single'; seg: any; idx: number }
+    > = [];
+    
+    let currentCardGroup: any[] = [];
+    let groupStartIdx = -1;
+
+    for (let i = 0; i < mixedSegments.length; i++) {
+      const seg = mixedSegments[i];
+      
+      if (seg.type === 'card') {
+        if (currentCardGroup.length === 0) {
+          groupStartIdx = i;
+        }
+        currentCardGroup.push(seg.data);
+      } else {
+        // 遇到非卡片段，先把之前的卡片组flush出去
+        if (currentCardGroup.length > 0) {
+          result.push({ type: 'cardGroup', cards: [...currentCardGroup], startIdx: groupStartIdx });
+          currentCardGroup = [];
+          groupStartIdx = -1;
+        }
+        result.push({ type: 'single', seg, idx: i });
+      }
+    }
+
+    // 处理末尾的卡片组
+    if (currentCardGroup.length > 0) {
+      result.push({ type: 'cardGroup', cards: [...currentCardGroup], startIdx: groupStartIdx });
+    }
+
+    return result;
+  }, [mixedSegments]);
+
   // 将所有图片段聚合，避免把长段文本割裂
   const images = useMemo(() => {
     const src: any[] = Array.isArray(viewModel?.items) ? (viewModel?.items) : (Array.isArray(segments) ? (segments as any[]) : []);
@@ -402,33 +440,25 @@ export function AIMessageBlock({
         )}
       </AnimatePresence>
 
-      {/* 消息内容（混合片段顺序渲染） */}
+      {/* 消息内容（使用分组渲染，连续工具卡片会折叠） */}
       {(mixedSegments.length > 0) && (
         <div className="relative min-w-0 max-w-full w-full">
-          {mixedSegments.length > 0 ? (
+          {groupedSegments.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {mixedSegments.map((seg, idx) => {
-                // 关键调试：仅当准备渲染工具卡片时打印一次，帮助确认UI层已收到segments
-                // 默认关闭的日志
-                if (seg.type === 'card') {
-                  const d = seg.data;
+              {groupedSegments.map((group, gIdx) => {
+                // 渲染工具卡片组（连续的卡片会被分组折叠）
+                if (group.type === 'cardGroup') {
                   return (
-                    <div key={`card-wrap-${d.id || idx}`}>
-                      <ToolCallCard
-                      key={`card-${d.id || idx}-${idx}`}
-                      server={d.server}
-                      tool={d.tool}
-                      status={d.status}
-                      args={d.args}
-                      resultPreview={d.resultPreview}
-                      errorMessage={d.errorMessage}
-                      schemaHint={d.schemaHint}
-                      messageId={d.messageId}
-                      cardId={d.id}
-                      />
+                    <div key={`card-group-${gIdx}`}>
+                      <ToolCallGroup cards={group.cards} isStreaming={isStreaming} />
                     </div>
                   );
                 }
+
+                // 渲染单个非卡片段
+                const seg = group.seg;
+                const idx = group.idx;
+
                 // 独立渲染每个 think 段的思考栏
                 if (seg.type === 'think') {
                   // 是否为当前活跃的思考段：仅由activeThinkIndex决定，避免全局标志干扰
@@ -461,8 +491,8 @@ export function AIMessageBlock({
                 if (seg.type === 'image') {
                   const img = seg.data as { mimeType: string; data: string };
                   const src = `data:${img.mimeType};base64,${img.data}`;
-                  const prevType = idx > 0 ? mixedSegments[idx - 1]?.type : null;
-                  const needSoftDivider = prevType === 'card';
+                  const prevGroup = gIdx > 0 ? groupedSegments[gIdx - 1] : null;
+                  const needSoftDivider = prevGroup?.type === 'cardGroup';
                   const i = Math.max(0, images.findIndex((x)=>x.src===src));
                   return (
                     <div key={`img-inline-${idx}`} className={needSoftDivider ? 'pt-2 border-t border-dashed border-slate-200/60 dark:border-slate-700/60' : undefined}>
@@ -522,8 +552,8 @@ export function AIMessageBlock({
                 if (!textContent.trim()) {
                   return null; // 不渲染空的文本段落
                 }
-                const prevType = idx > 0 ? mixedSegments[idx - 1]?.type : null;
-                const needSoftDivider = prevType === 'card';
+                const prevGroup = gIdx > 0 ? groupedSegments[gIdx - 1] : null;
+                const needSoftDivider = prevGroup?.type === 'cardGroup';
                 return (
                   <div key={`md-wrap-${idx}`} className={needSoftDivider ? 'pt-3 border-t border-dashed border-slate-200/60 dark:border-slate-700/60' : undefined}>
                     <div className="markdown-content-area">

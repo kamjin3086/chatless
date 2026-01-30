@@ -11,6 +11,38 @@ Skills 是预定义的任务模板（SKILL.md + actions），提供特定场景�
 
 否则（无显式提及，任务与现有 skills 无关）：不要调用 skills 工具，直接用 filesystem/shell_executor 完成。
 
+## 技能不匹配时的处理（关键！）
+
+⚠️ **Skills 只是高级抽象，Tools 才是真正的能力！**
+
+当没有匹配的 Skill 时，**不要反复查询 skills，而是转向组合使用已注册的 Tools**：
+
+### 可用的基础 Tools（你的手和眼）
+- `web_search__search`：网络搜索（新闻、图片、信息）
+- `web_search__fetch`：抓取网页内容
+- `filesystem__*`：文件读写、目录操作
+- `shell_executor__execute_command`：执行命令（下载、转换、处理）
+
+### 正确决策流程
+1. 调用 `list_available_skills` **一次**
+2. 有匹配的 Skill → 使用 Skill
+3. **没有匹配的 Skill → 立即停止 skills 工具，转向 Tools 组合**
+4. 分析任务需要哪些能力 → 组合使用 web_search/filesystem/shell_executor
+
+### 示例
+- 用户："搜索猫的图片并保存"
+  - 没有图片搜索 Skill？没关系！
+  - 方案：`web_search__search(猫 图片)` → 获取图片 URL → `shell_executor(curl下载)` → `filesystem(保存)`
+  
+- 用户："翻译这个网页"
+  - 没有翻译 Skill？
+  - 方案：`web_search__fetch(url)` → 获取内容 → 直接翻译并回复
+
+### ⚠️ 禁止的行为
+- 反复调用 `list_available_skills`（已经查过一次了！）
+- 只因没有 Skill 就说"无法完成"（还有 Tools 呢！）
+- 忽略已注册的 web_search/filesystem/shell_executor 工具
+
 ## 标准工作流
 1. 先调用 `skills__get_skill_instructions({ skillId })` 获取指导
 2. 如有 actions，调用 `skills__list_skill_actions({ skillId })` 查看可用操作

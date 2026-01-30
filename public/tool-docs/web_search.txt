@@ -1,0 +1,98 @@
+Web Search Tools (web_search__*) — 网络工具使用指南
+
+## 可用工具
+
+### web_search__search
+在互联网搜索信息。
+
+参数：
+- query: 搜索关键词
+
+示例：
+- 搜索新闻：query = "2026年AI技术进展"
+- 搜索图片：query = "猫 高清图片 site:unsplash.com"
+- 搜索产品：query = "iPhone 16 评测"
+
+### web_search__fetch
+抓取网页内容，返回标题、正文和链接。
+
+参数：
+- url: 网页地址
+
+适用场景：
+- 阅读文章内容
+- 提取网页数据
+- 获取详细信息
+
+### web_search__download
+下载文件到本地（图片、文档、视频等）。
+
+参数：
+- url: 文件下载地址
+- savePath: 保存路径（相对于 @WorkDir 或绝对路径）
+- filename: 可选，自定义文件名
+
+示例：
+- 下载图片：url="https://example.com/cat.jpg", savePath="images/cat.jpg"
+- 下载文档：url="https://example.com/doc.pdf", savePath="@WorkDir/downloads/doc.pdf"
+
+## 常见任务的工具组合
+
+### 搜索并下载图片
+```
+1. web_search__search({ query: "猫 高清图片 site:unsplash.com" })
+   → 获取图片搜索结果（包含图片URL）
+
+2. web_search__download({ 
+     url: "https://example.com/cat1.jpg", 
+     savePath: "images/cat1.jpg" 
+   })
+   → 下载第一张图片
+
+3. 重复步骤2下载更多图片
+
+4. filesystem__list_directory({ path: "@WorkDir/images" })
+   → 验证下载结果
+```
+
+### 抓取网页并保存
+```
+1. web_search__fetch({ url: "https://example.com/article" })
+   → 获取网页内容
+
+2. filesystem__write_file({ 
+     path: "@WorkDir/articles/content.md", 
+     content: "..." 
+   })
+   → 保存为 Markdown
+```
+
+### 搜索、阅读、总结
+```
+1. web_search__search({ query: "主题关键词" })
+   → 获取搜索结果列表
+
+2. web_search__fetch({ url: "第一个结果链接" })
+   → 阅读详细内容
+
+3. 直接向用户总结内容
+```
+
+## 重要提醒
+
+1. **搜索结果可能包含图片URL**
+   - 使用 `site:unsplash.com` 或 `site:pixabay.com` 获取高质量免费图片
+   - 使用 `filetype:pdf` 搜索特定文件类型
+
+2. **下载前检查路径**
+   - 使用 `filesystem__list_directory` 确认目录存在
+   - 或使用 `filesystem__create_directory` 创建目录
+
+3. **批量下载策略**
+   - 一次搜索获取多个URL
+   - 逐个下载，每个下载后验证
+   - 最后汇报成功/失败数量
+
+4. **错误处理**
+   - 下载失败：检查URL是否有效，尝试备选链接
+   - 搜索无结果：调整关键词，添加限定词

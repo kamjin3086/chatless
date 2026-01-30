@@ -55,15 +55,27 @@ export interface SkillToolDefinition {
 async function listAvailableSkills(): Promise<{
   skills: SkillIndexEntry[];
   nextStep: string;
+  toolsReminder: string;
 }> {
   const manager = getSkillManager();
   const skills = manager.getSkillIndex();
   
+  // 关键提醒：Skills 只是高级抽象，Tools 才是真正的能力
+  const toolsReminder = `【重要提醒】Skills 只是高级任务模板。如果没有匹配的 Skill：
+→ 不要反复调用 list_available_skills！
+→ 转向组合使用已注册的 Tools：
+  • web_search__search：网络搜索
+  • web_search__fetch：抓取网页
+  • filesystem__*：文件操作
+  • shell_executor__execute_command：执行命令（下载/转换/处理）
+→ 示例：搜索图片 = web_search + shell_executor(curl下载) + filesystem(保存)`;
+  
   return {
     skills,
     nextStep: skills.length > 0
-      ? `✅ 找到 ${skills.length} 个技能。下一步：调用 skills.get_skill_instructions({skillId: "技能ID"}) 获取使用指南。`
-      : '❌ 未找到可用技能。',
+      ? `✅ 找到 ${skills.length} 个技能。如果匹配任务 → 用 Skill；不匹配 → 组合 Tools 完成。`
+      : '❌ 未找到技能。请直接组合 web_search/filesystem/shell_executor 等 Tools 完成任务。',
+    toolsReminder,
   };
 }
 
@@ -235,6 +247,7 @@ async function listSkillActions(skillId: string): Promise<{
     requiresApproval?: boolean;
   }>;
   message: string;
+  noActionsGuidance?: string;
 }> {
   if (!skillId) {
     return {
@@ -270,6 +283,15 @@ async function listSkillActions(skillId: string): Promise<{
   }));
 
 
+  // 当没有预定义动作时，给出明确的下一步指导
+  const noActionsGuidance = actions.length === 0
+    ? `【下一步】该技能是指导型（无预定义动作）。请：
+1. 按 SKILL.md 指引拆解为 Tools 步骤
+2. 使用 filesystem/shell_executor/web_search 等工具执行
+3. 产物写入 @WorkDir
+⚠️ 不要反复调用 skills 工具，直接用 Tools 执行！`
+    : undefined;
+
   return {
     skillId,
     skillName: skill.name,
@@ -277,6 +299,7 @@ async function listSkillActions(skillId: string): Promise<{
     message: actions.length > 0 
       ? `Skill "${skill.name}" has ${actions.length} available actions`
       : `Skill "${skill.name}" has no defined actions (uses instruction-based execution)`,
+    noActionsGuidance,
   };
 }
 

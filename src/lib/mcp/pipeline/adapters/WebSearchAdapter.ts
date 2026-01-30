@@ -1,4 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
+import { writeFile, mkdir, exists } from '@tauri-apps/plugin-fs';
+import { appDataDir, join, dirname } from '@tauri-apps/api/path';
 
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { mcpCallHistory } from '@/lib/mcp/callHistory';
@@ -47,7 +49,9 @@ export class WebSearchAdapter implements ToolAdapter {
 
     let result: unknown;
 
-    if (tool === 'fetch') {
+    if (tool === 'download') {
+      result = await this.handleDownload(args);
+    } else if (tool === 'fetch') {
       const url = typeof (args as any).url === 'string' ? String((args as any).url) : '';
       if (!url.trim()) throw new Error('MISSING_REQUIRED_ARGUMENT: url');
       const request: any = { provider: providerToUse, url, apiKey };
@@ -80,6 +84,93 @@ export class WebSearchAdapter implements ToolAdapter {
 
     mcpCallHistory.recordCall(WEB_SEARCH_SERVER_NAME, tool, args, true, result);
     return result;
+  }
+
+  /**
+   * 处理文件下载
+   */
+  private async handleDownload(args: Record<string, unknown>): Promise<{
+    success: boolean;
+    path?: string;
+    size?: number;
+    message: string;
+  }> {
+    const url = typeof args.url === 'string' ? args.url.trim() : '';
+    const savePath = typeof args.savePath === 'string' ? args.savePath.trim() : '';
+    const customFilename = typeof args.filename === 'string' ? args.filename.trim() : '';
+
+    if (!url) {
+      return { success: false, message: 'Error: url is required' };
+    }
+    if (!savePath) {
+      return { success: false, message: 'Error: savePath is required' };
+    }
+
+    try {
+      // 解析保存路径
+      let fullPath: string;
+      if (savePath.startsWith('@WorkDir')) {
+        const dataDir = await appDataDir();
+        const relativePath = savePath.replace(/^@WorkDir\/?/, '');
+        fullPath = await join(dataDir, relativePath);
+      } else if (savePath.startsWith('/') || /^[a-zA-Z]:/.test(savePath)) {
+        // 绝对路径
+        fullPath = savePath;
+      } else {
+        // 相对路径，默认在 appDataDir
+        const dataDir = await appDataDir();
+        fullPath = await join(dataDir, savePath);
+      }
+
+      // 如果指定了自定义文件名，替换路径中的文件名
+      if (customFilename) {
+        const dir = await dirname(fullPath);
+        fullPath = await join(dir, customFilename);
+      }
+
+      // 确保目录存在
+      const dir = await dirname(fullPath);
+      const dirExists = await exists(dir);
+      if (!dirExists) {
+        await mkdir(dir, { recursive: true });
+      }
+
+      // 下载文件
+      const response = await fetch(url);
+      if (!response.ok) {
+        return { 
+          success: false, 
+          message: `Download failed: HTTP ${response.status} ${response.statusText}` 
+        };
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // 写入文件
+      await writeFile(fullPath, uint8Array);
+
+      return {
+        success: true,
+        path: fullPath,
+        size: uint8Array.length,
+        message: `Downloaded successfully: ${fullPath} (${this.formatSize(uint8Array.length)})`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Download error: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * 格式化文件大小
+   */
+  private formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 }
 

@@ -360,35 +360,45 @@ ${OUTPUT_FORMAT_RULES}`;
 
 export const CORE_TOOL_POLICY_MD = `【核心工具策略】
 
-工具选择：
-- 文件操作 → filesystem__*（优先）
-- 运行命令 → shell_executor（workingDir 用 @WorkDir）
-- 实时信息 → web_search
-- 用户指定 skill → skills
+## Skills 与 Tools 的关系
 
-方法优先级：filesystem > shell_executor > 脚本
+Skills = 高级任务模板（可选）
+Tools = 基础能力（核心）
 
-路径格式：Windows 用 \`C:/...\`，推荐 \`/\` 分隔符
+决策流程：
+1. 有匹配的 Skill → 使用 Skill 指导
+2. 无匹配的 Skill → 直接组合 Tools 完成任务
+3. **不要因为没有 Skill 就说"无法完成"！**
 
-错误处理：同一错误最多重试 2 次，必须改变参数；失败则换方案；连续 3 次失败则止损
+## 可用 Tools（你的手和眼）
 
-复杂任务四步流程（>3 步时必须）：
+- filesystem__*：文件读写、目录操作
+- shell_executor：执行命令（下载/转换/处理）
+- web_search__search：网络搜索
+- web_search__fetch：抓取网页内容
+- web_search__download：下载文件到本地
+
+示例组合：
+- 搜索图片并保存 = search → download → list_directory 验证
+- 网页内容翻译 = fetch → 直接翻译
+- 文件格式转换 = read_file → shell_executor(转换命令) → write_file
+
+## 工具优先级
+
+filesystem > shell_executor > 脚本 > Skills
+
+## 复杂任务四步流程（>3 步时）
+
 1. 研究：理解任务，探索环境
 2. 规划：列 TodoList，标注风险
 3. 行动：逐项执行，汇报进度
 4. 确认：验证结果，输出报告
 
-文件导向（步骤 >5 时启用）：
-- 研究结果 → @WorkDir/.agent/research/{topic}.md
-- 任务计划 → @WorkDir/.agent/todo.md
-- 错误记录 → @WorkDir/.agent/errors.log
-- 新对话先检查是否有未完成任务
+## 关键原则
 
-关键：结果必须验证（read_file/list_directory 确认），不能只说"已完成"
-
-并行调用：独立查询可并行（≤3），有依赖则串行
-
-对话记忆：用户之前提到的约束仍有效，不确定时引用确认`;
+- 结果必须验证（read_file/list_directory 确认）
+- 不要反复调用同类工具（检测到循环立即换方案）
+- 错误最多重试 2 次，失败则换方案，连续 3 次则止损`;
 
 // ================================
 // 导出类型
