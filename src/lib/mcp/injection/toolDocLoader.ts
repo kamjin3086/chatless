@@ -24,7 +24,7 @@ async function fetchText(url: string): Promise<string> {
 }
 
 export async function getToolDoc(params: {
-  /** e.g. 'filesystem__read_file' or 'shell_executor__execute_command' */
+  /** e.g. 'fs__read' or 'shell__run' */
   toolFullName: string;
   /** max chars appended to tool description */
   maxChars?: number;
@@ -42,11 +42,28 @@ export async function getToolDoc(params: {
 
   const p = (async () => {
     // Map: tool -> doc file (public/)
+    // 新格式
+    if (key === 'shell__run') {
+      return await fetchText('/tool-docs/shell_run.txt');
+    }
+    if (key.startsWith('fs__')) {
+      return await fetchText('/tool-docs/fs.txt');
+    }
+    if (key.startsWith('web__')) {
+      return await fetchText('/tool-docs/web.txt');
+    }
+    if (key.startsWith('ctx__')) {
+      return await fetchText('/tool-docs/ctx.txt');
+    }
+    // 旧格式兼容
     if (key === 'shell_executor__execute_command') {
-      return await fetchText('/tool-docs/shell_executor_execute_command.txt');
+      return await fetchText('/tool-docs/shell_run.txt');
     }
     if (key.startsWith('filesystem__')) {
-      return await fetchText('/tool-docs/filesystem.txt');
+      return await fetchText('/tool-docs/fs.txt');
+    }
+    if (key.startsWith('web_search__')) {
+      return await fetchText('/tool-docs/web.txt');
     }
     if (key.startsWith('skills__')) {
       return await fetchText('/tool-docs/skills.txt');

@@ -1,0 +1,81 @@
+web__* — 网络工具
+
+## 工具列表
+
+| 工具 | 用途 |
+|------|------|
+| web__search | 搜索互联网 |
+| web__fetch | 抓取网页内容 |
+| web__download | 下载文件到本地 |
+
+## 快速示例
+
+```
+web__search({ query: "Python 教程" })
+web__fetch({ url: "https://wttr.in/Beijing?format=3" })
+web__download({ url: "直链URL", savePath: "file.jpg" })
+```
+
+---
+
+## 图片下载（重要！）
+
+**不要用搜索结果的 URL 直接下载！** 必须用直链。
+
+### Pexels（推荐）
+
+```
+1. 获取页面
+web__fetch({ url: "https://www.pexels.com/search/cat/" })
+
+2. 从 HTML 提取 images.pexels.com 链接
+
+3. 下载
+web__download({
+  url: "https://images.pexels.com/photos/45201/xxx.jpeg?w=800",
+  savePath: "cat.jpg"
+})
+```
+
+### 直链格式
+
+| 来源 | 格式 |
+|------|------|
+| Pexels | `https://images.pexels.com/photos/{id}/{name}.jpeg?w=800` |
+| Unsplash | `https://images.unsplash.com/photo-{id}?w=800` |
+| wttr.in | `https://wttr.in/城市.png` |
+
+---
+
+## 免费 API（无需搜索）
+
+### 天气
+
+```
+web__fetch({ url: "https://wttr.in/Beijing?format=3" })
+→ "Beijing: ☀️ +5°C"
+
+web__fetch({ url: "https://wttr.in/Shanghai?format=%l:+%c+%t+%w" })
+→ "Shanghai: ☁️ +8°C ↑12km/h"
+```
+
+### 汇率
+
+```
+web__fetch({ url: "https://api.exchangerate-api.com/v4/latest/USD" })
+```
+
+### IP 信息
+
+```
+web__fetch({ url: "https://ipinfo.io/json" })
+```
+
+---
+
+## 错误处理
+
+| 错误 | 原因 | 修正 |
+|------|------|------|
+| 下载 404 | URL 不是直链 | 用 images.pexels.com 直链 |
+| 需要登录 | 用了页面链接 | 改用直链格式 |

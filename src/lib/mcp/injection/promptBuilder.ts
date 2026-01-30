@@ -18,6 +18,7 @@ import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from '@/lib/mcp/nativeTools/filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nativeTools/shellExecutor';
+import { AGENT_CONTEXT_SERVER_NAME, AGENT_CONTEXT_TOOLS } from '@/lib/mcp/nativeTools/agentContext';
 import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
 import { skillTools } from '@/lib/skills/skillTools';
@@ -71,13 +72,24 @@ export async function buildInitialPrompt(
   try {
     const p = await getRuntimePlatform();
     const g = getShellGuidance(p);
+    
+    // 构建命令示例表
+    const cmdExamples = Object.entries(g.commandExamples || {})
+      .map(([op, cmd]) => `  ${op}: ${cmd}`)
+      .join('\n');
+    
     messages.push({
       role: 'system',
-      content: `【运行环境（重要）】
-- 平台：${g.platformLabel}
-- shell_executor 优先命令风格：${g.preferredShell}
-- 规则：
-${g.rules.map((r) => `  - ${r}`).join('\n')}`,
+      content: `【运行环境 - ${g.platformLabel}（强制遵守）】
+
+Shell: ${g.preferredShell}
+
+规则：
+${g.rules.map((r) => `- ${r}`).join('\n')}
+
+${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
+
+💡 创建目录优先用 fs__mkdir，而非 shell 命令`,
     });
   } catch {
     // ignore
@@ -372,6 +384,17 @@ async function buildNativeToolDefinitions(params: {
       name: fullName,
       description: [shellTool.description || `Shell tool ${shellTool.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
       parameters: normalizeParams((shellTool as any).input_schema?.schema || { type: 'object' }),
+    });
+  }
+
+  // 5. 添加 Agent Context 工具（上下文管理：研究/计划/错误）
+  for (const ctxTool of AGENT_CONTEXT_TOOLS) {
+    const fullName = `${AGENT_CONTEXT_SERVER_NAME}__${ctxTool.name}`;
+    const doc = await getToolDoc({ toolFullName: fullName });
+    tools.push({
+      name: fullName,
+      description: [ctxTool.description || `Context tool ${ctxTool.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
+      parameters: normalizeParams((ctxTool as any).input_schema?.schema || { type: 'object' }),
     });
   }
 

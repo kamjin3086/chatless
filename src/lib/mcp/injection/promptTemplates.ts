@@ -132,22 +132,23 @@ export const TASK_PLANNING_PROTOCOL = `【任务规划协议】
 export const TOOL_SELECTION_TREE = `【工具选择决策树】
 
 需求类型 → 推荐工具：
-├─ 读/写/创建/删除文件 → filesystem__*
-├─ 列出目录内容 → filesystem__list_directory
-├─ 运行命令/脚本 → shell_executor__execute_command
-├─ 需要实时网络信息 → web_search__search
+├─ 读/写/创建/删除文件 → fs__*
+├─ 列出目录内容 → fs__ls
+├─ 运行命令/脚本 → shell__run
+├─ 需要实时网络信息 → web__search
+├─ 下载文件 → web__download
 ├─ 用户指定了 skill → skills__get_skill_instructions
-└─ 不确定文件结构 → 先 filesystem__list_directory 探索
+└─ 不确定文件结构 → 先 fs__ls 探索
 
-filesystem vs shell_executor：
-- 简单文件操作 → filesystem（优先，更快更安全）
-- 调用外部程序（git/npm/python/pandoc）→ shell_executor
-- 批量处理/复杂转换 → shell_executor
+fs vs shell：
+- 简单文件操作 → fs__*（优先，更快更安全）
+- 调用外部程序（git/npm/python）→ shell__run
+- 批量处理/复杂转换 → shell__run
 
 常见错误提醒：
-- 读文件内容 → filesystem__read_file（不是 cat/type 命令）
-- 写文件内容 → filesystem__write_file（不是 echo 重定向）
-- 创建目录 → filesystem__create_directory（不是 mkdir 命令）`;
+- 读文件内容 → fs__read（不是 cat/type 命令）
+- 写文件内容 → fs__write（不是 echo 重定向）
+- 创建目录 → fs__mkdir（不是 mkdir 命令）`;
 
 // ================================
 // 上下文收集协议
@@ -158,8 +159,8 @@ export const CONTEXT_GATHERING_PROTOCOL = `【上下文收集协议】
 操作前检查清单：
 
 1. 文件操作前
-   - 路径是否存在？→ 不确定时先 list_directory
-   - 覆盖文件？→ 先 read_file 确认内容，或提示用户
+   - 路径是否存在？→ 不确定时先 fs__ls
+   - 覆盖文件？→ 先 fs__read 确认内容，或提示用户
    - 新建文件？→ 确认父目录存在
 
 2. 命令执行前
@@ -372,33 +373,88 @@ Tools = 基础能力（核心）
 
 ## 可用 Tools（你的手和眼）
 
-- filesystem__*：文件读写、目录操作
-- shell_executor：执行命令（下载/转换/处理）
-- web_search__search：网络搜索
-- web_search__fetch：抓取网页内容
-- web_search__download：下载文件到本地
+- fs__*：文件读写、目录操作（**首选！最可靠**）
+- ctx__*：上下文管理（研究/计划/错误记录）
+- web__*：网络搜索、抓取、下载
+- shell__run：运行命令（git/npm/python 等）
 
-示例组合：
-- 搜索图片并保存 = search → download → list_directory 验证
-- 网页内容翻译 = fetch → 直接翻译
-- 文件格式转换 = read_file → shell_executor(转换命令) → write_file
+## 工具选择
 
-## 工具优先级
+| 任务 | 推荐工具 |
+|------|----------|
+| 文件操作 | fs__* |
+| 上下文管理 | ctx__* |
+| 下载文件 | web__download |
+| 运行命令 | shell__run |
 
-filesystem > shell_executor > 脚本 > Skills
+## ctx__*：上下文管理（复杂任务必用）
+
+复杂任务（>3步）时，用 ctx 工具管理上下文：
+- ctx__save_plan: 创建计划
+- ctx__save_research: 保存研究结果
+- ctx__log_error: 记录错误
+- ctx__get: 检索上下文
+- ctx__update_step: 更新进度
+
+## shell__run：根据平台使用原生命令
+
+Windows → powershell -Command "..."
+macOS/Linux → mkdir -p / rm -rf / curl ...
+
+## 图片下载
+
+用 Pexels/Unsplash 直链：
+web__fetch({ url: "https://www.pexels.com/search/cat/" })
+→ 提取直链 → web__download
 
 ## 复杂任务四步流程（>3 步时）
 
-1. 研究：理解任务，探索环境
-2. 规划：列 TodoList，标注风险
-3. 行动：逐项执行，汇报进度
-4. 确认：验证结果，输出报告
+1. 规划：ctx__save_plan 创建计划
+2. 研究：收集信息，ctx__save_research 保存结果
+3. 执行：逐步行动，ctx__update_step 更新进度
+4. 验证：检查结果，总结输出
 
 ## 关键原则
 
 - 结果必须验证（read_file/list_directory 确认）
 - 不要反复调用同类工具（检测到循环立即换方案）
-- 错误最多重试 2 次，失败则换方案，连续 3 次则止损`;
+- 错误最多重试 2 次，失败则换方案，连续 3 次则止损
+
+## 脚本验证能力（不确定时的利器）
+
+当不确定 API/库/命令的用法时，**写小脚本快速验证** 比猜测更高效！
+
+✅ 正例：
+\`\`\`
+用户：把这个docx转成markdown
+
+# 不确定 python-docx 怎么用？写个脚本试试
+1. write_file: test_docx.py
+   import docx
+   doc = docx.Document("test.docx")
+   print([p.text for p in doc.paragraphs[:3]])
+
+2. shell_executor: python test_docx.py
+   → 看输出，确认 API 用法
+
+3. 基于验证结果，编写正式转换脚本
+\`\`\`
+
+❌ 反例：
+\`\`\`
+# 不验证，直接猜测用法
+1. 猜测 docx.read() 方法存在
+2. 写了完整脚本
+3. 执行失败：AttributeError: module 'docx' has no attribute 'read'
+4. 又猜测另一个方法...
+→ 浪费多轮尝试
+\`\`\`
+
+脚本验证适用场景：
+- 不确定第三方库 API 用法
+- 不确定网站返回的数据格式
+- 不确定命令参数效果
+- 需要探索文件结构或数据格式`;
 
 // ================================
 // 导出类型

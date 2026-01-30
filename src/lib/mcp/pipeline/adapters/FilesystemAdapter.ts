@@ -9,10 +9,11 @@ import type { ToolInvocation } from '../ToolInvocation';
  * - 后端会执行 allowlist 校验；前端 gate 负责审批 UX 与同步 allowlist
  */
 export class FilesystemAdapter implements ToolAdapter {
-  readonly server = 'filesystem';
+  readonly server = 'fs';
 
   canHandle(invocation: ToolInvocation): boolean {
-    return String(invocation.server || '').toLowerCase() === 'filesystem';
+    const srv = String(invocation.server || '').toLowerCase();
+    return srv === 'fs' || srv === 'filesystem';
   }
 
   async execute(invocation: ToolInvocation): Promise<unknown> {
@@ -40,7 +41,7 @@ export class FilesystemAdapter implements ToolAdapter {
         return await invoke('filesystem_write_file', { path, content });
       }
 
-      if (tool === 'list_directory' || tool === 'list' || tool === 'dir') {
+      if (tool === 'list_directory' || tool === 'list' || tool === 'dir' || tool === 'ls') {
         return await invoke('filesystem_list_directory', { path });
       }
 
@@ -49,11 +50,11 @@ export class FilesystemAdapter implements ToolAdapter {
         return await invoke('filesystem_create_directory', { path, recursive });
       }
 
-      if (tool === 'delete_file' || tool === 'delete') {
+      if (tool === 'delete_file' || tool === 'delete' || tool === 'rm') {
         return await invoke('filesystem_delete_file', { path });
       }
 
-      if (tool === 'rename_file' || tool === 'rename' || tool === 'move_file' || tool === 'move') {
+      if (tool === 'rename_file' || tool === 'rename' || tool === 'move_file' || tool === 'move' || tool === 'mv') {
         const oldPath = typeof (args as any).oldPath === 'string' ? String((args as any).oldPath) : '';
         const newPath = typeof (args as any).newPath === 'string' ? String((args as any).newPath) : '';
         if (!oldPath || !newPath) {

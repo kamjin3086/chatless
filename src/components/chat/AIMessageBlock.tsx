@@ -306,15 +306,25 @@ export function AIMessageBlock({
   }, [mixedSegments]);
 
   // 将连续的工具卡片分组，便于折叠展示
-  // 返回：{ type: 'cardGroup', cards: [...] } | { type: 'single', seg: ... }
+  // 改进：短文字（<80字符）不破坏工具调用的连续性，会被一起折叠
+  // 返回：{ type: 'cardGroup', cards: [...], interstitialTexts: [...] } | { type: 'single', seg: ... }
   const groupedSegments = useMemo(() => {
     const result: Array<
-      | { type: 'cardGroup'; cards: any[]; startIdx: number }
+      | { type: 'cardGroup'; cards: any[]; interstitialTexts: string[]; startIdx: number }
       | { type: 'single'; seg: any; idx: number }
     > = [];
     
     let currentCardGroup: any[] = [];
+    let interstitialTexts: string[] = [];
     let groupStartIdx = -1;
+
+    // 判断文字段是否"短"到可以忽略（不破坏分组）
+    const isShortText = (seg: any): boolean => {
+      if (seg.type !== 'text') return false;
+      const text = String(seg.text || '').trim();
+      // 短于80字符 或者 只是 AI 的过渡语（如"让我..."，"我需要..."，"好的..."）
+      return text.length < 80 || /^(让我|我需要|好的|接下来|现在|首先|然后)/.test(text);
+    };
 
     for (let i = 0; i < mixedSegments.length; i++) {
       const seg = mixedSegments[i];
@@ -324,11 +334,15 @@ export function AIMessageBlock({
           groupStartIdx = i;
         }
         currentCardGroup.push(seg.data);
+      } else if (currentCardGroup.length > 0 && isShortText(seg)) {
+        // 短文字不破坏分组，记录下来但继续累积卡片
+        interstitialTexts.push(String(seg.text || '').trim());
       } else {
-        // 遇到非卡片段，先把之前的卡片组flush出去
+        // 遇到非卡片且非短文字的段，先把之前的卡片组flush出去
         if (currentCardGroup.length > 0) {
-          result.push({ type: 'cardGroup', cards: [...currentCardGroup], startIdx: groupStartIdx });
+          result.push({ type: 'cardGroup', cards: [...currentCardGroup], interstitialTexts: [...interstitialTexts], startIdx: groupStartIdx });
           currentCardGroup = [];
+          interstitialTexts = [];
           groupStartIdx = -1;
         }
         result.push({ type: 'single', seg, idx: i });
@@ -337,7 +351,7 @@ export function AIMessageBlock({
 
     // 处理末尾的卡片组
     if (currentCardGroup.length > 0) {
-      result.push({ type: 'cardGroup', cards: [...currentCardGroup], startIdx: groupStartIdx });
+      result.push({ type: 'cardGroup', cards: [...currentCardGroup], interstitialTexts: [...interstitialTexts], startIdx: groupStartIdx });
     }
 
     return result;

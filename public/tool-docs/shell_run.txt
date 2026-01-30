@@ -1,0 +1,72 @@
+shell__run — 运行命令
+
+## 定位
+运行外部程序和系统命令。
+**文件操作首选 fs 工具！**
+
+## 工具选择
+
+| 任务 | 推荐工具 |
+|------|----------|
+| 读/写/删文件、创建目录 | fs__*（首选） |
+| 下载文件 | web__download |
+| 运行程序/命令 | shell__run |
+
+## 平台原生命令
+
+**根据当前平台使用对应的原生命令！**
+
+### Windows → PowerShell
+
+```powershell
+# 必须用 powershell -Command "..." 包装
+powershell -Command "New-Item -ItemType Directory -Path 'images' -Force"
+powershell -Command "Remove-Item -Path 'temp' -Recurse -Force"
+powershell -Command "Copy-Item -Path 'a.txt' -Destination 'b.txt'"
+powershell -Command "Invoke-WebRequest -Uri 'URL' -OutFile 'file.zip'"
+
+# 直接运行程序
+python script.py
+node app.js
+git status
+npm install
+```
+
+### macOS / Linux → Unix
+
+```bash
+mkdir -p images
+rm -rf temp
+cp a.txt b.txt
+curl -L -o file.zip "URL"
+
+# 运行程序
+python3 script.py
+node app.js
+git status
+npm install
+```
+
+## 常见错误
+
+| 错误 | 修正 |
+|------|------|
+| Windows 用 mkdir -p | 用 PowerShell New-Item |
+| Windows 用 rm -rf | 用 PowerShell Remove-Item |
+| Windows 用 curl | 用 Invoke-WebRequest |
+
+## 脚本模式（复杂逻辑）
+
+传入代码块，系统自动执行：
+
+```python
+import os
+for i, f in enumerate(os.listdir("photos")):
+    os.rename(f"photos/{f}", f"photos/img_{i:03d}.jpg")
+```
+
+## 参数
+
+- command：要执行的命令
+- workingDir：工作目录（可选）
+- timeout：超时毫秒（默认 30000）

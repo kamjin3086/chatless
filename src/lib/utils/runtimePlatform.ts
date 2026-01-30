@@ -37,27 +37,54 @@ export function getShellGuidance(platform: RuntimePlatform): {
   platformLabel: string;
   preferredShell: string;
   rules: string[];
+  /** 平台特定的命令示例 */
+  commandExamples: Record<string, string>;
 } {
   if (platform === 'windows') {
     return {
       platformLabel: 'Windows',
       preferredShell: 'PowerShell',
       rules: [
-        '优先生成 PowerShell 兼容命令（而不是 bash/zsh）。',
-        '路径用双引号包裹（例如 `"C:\\Users\\User\\file.txt"`），避免空格导致失败。',
-        '路径风格：Windows 绝对路径以盘符开头（如 `C:/Users/...` 或 `D:/...`）；本项目内部常用 `/` 作为分隔符（推荐 `C:/...` 这种写法，避免 `\\` 转义）。',
-        '若涉及管道/重定向/变量，使用 PowerShell 语法（例如 `$env:VAR`、`Get-ChildItem`、`Set-Content`）。',
+        '当前是 Windows 系统，使用 PowerShell 命令',
+        '必须用 powershell -Command "..." 执行 PowerShell cmdlet',
+        '路径用双引号包裹，内部单引号用于字符串',
+        '❌ 禁止 Unix 命令: mkdir -p, rm -rf, cat, ls, curl, wget',
       ],
+      commandExamples: {
+        '创建目录': 'powershell -Command "New-Item -ItemType Directory -Path \'路径\' -Force"',
+        '删除目录': 'powershell -Command "Remove-Item -Path \'路径\' -Recurse -Force"',
+        '删除文件': 'powershell -Command "Remove-Item -Path \'路径\' -Force"',
+        '复制文件': 'powershell -Command "Copy-Item -Path \'源\' -Destination \'目标\'"',
+        '移动文件': 'powershell -Command "Move-Item -Path \'源\' -Destination \'目标\'"',
+        '列目录': 'powershell -Command "Get-ChildItem -Path \'路径\'"',
+        '读文件': 'powershell -Command "Get-Content -Path \'路径\'"',
+        '下载文件': 'powershell -Command "Invoke-WebRequest -Uri \'URL\' -OutFile \'保存路径\'"',
+        '运行Python': 'python "脚本路径"',
+        '运行Node': 'node "脚本路径"',
+      },
     };
   }
   if (platform === 'macos') {
     return {
       platformLabel: 'macOS',
-      preferredShell: 'bash/zsh',
+      preferredShell: 'zsh/bash',
       rules: [
-        '优先生成 POSIX shell（bash/zsh）命令。',
-        '路径含空格要用双引号包裹（例如 `"/Users/name/My Documents/file.txt"`）。',
+        '当前是 macOS 系统，使用 Unix 命令',
+        '路径含空格用双引号包裹',
+        '支持: mkdir -p, rm -rf, cat, grep, ls, curl 等',
       ],
+      commandExamples: {
+        '创建目录': 'mkdir -p "路径"',
+        '删除目录': 'rm -rf "路径"',
+        '删除文件': 'rm -f "路径"',
+        '复制文件': 'cp "源" "目标"',
+        '移动文件': 'mv "源" "目标"',
+        '列目录': 'ls -la "路径"',
+        '读文件': 'cat "路径"',
+        '下载文件': 'curl -L -o "保存路径" "URL"',
+        '运行Python': 'python3 "脚本路径"',
+        '运行Node': 'node "脚本路径"',
+      },
     };
   }
   if (platform === 'linux') {
@@ -65,17 +92,31 @@ export function getShellGuidance(platform: RuntimePlatform): {
       platformLabel: 'Linux',
       preferredShell: 'bash',
       rules: [
-        '优先生成 bash 命令。',
-        '路径含空格要用双引号包裹。',
+        '当前是 Linux 系统，使用 Unix 命令',
+        '路径含空格用双引号包裹',
+        '支持: mkdir -p, rm -rf, cat, grep, ls, curl, wget 等',
       ],
+      commandExamples: {
+        '创建目录': 'mkdir -p "路径"',
+        '删除目录': 'rm -rf "路径"',
+        '删除文件': 'rm -f "路径"',
+        '复制文件': 'cp "源" "目标"',
+        '移动文件': 'mv "源" "目标"',
+        '列目录': 'ls -la "路径"',
+        '读文件': 'cat "路径"',
+        '下载文件': 'curl -L -o "保存路径" "URL"',
+        '运行Python': 'python3 "脚本路径"',
+        '运行Node': 'node "脚本路径"',
+      },
     };
   }
   return {
     platformLabel: 'Unknown',
     preferredShell: 'unknown',
     rules: [
-      '当前平台未知：生成命令前先用最少工具探测（或改用 filesystem 直接操作）。',
+      '当前平台未知：优先使用 filesystem 工具',
     ],
+    commandExamples: {},
   };
 }
 

@@ -25,13 +25,13 @@
 
 【快速判断】
 - AUTH_DENIED → 停止重试，提示用户授权
-- PATH_NOT_FOUND → 检查路径，或用 list_directory 确认
+- PATH_NOT_FOUND → 检查路径，或用 fs__ls 确认
 - COMMAND_FAILED → 分析 stderr，调整参数
 - 连接错误 → 直接重试
 
 【重试规则】
 - 同一错误最多重试 2 次，每次必须改变参数
-- 2 次失败 → 切换备选方案（filesystem ↔ shell_executor）
+- 2 次失败 → 切换备选方案（fs ↔ shell）
 
 【止损规则】
 - 连续失败 3 次 → 停止尝试，告知用户：
@@ -45,8 +45,8 @@
 
 1. **重复调用 `list_available_skills`**
    → 没有匹配的 Skill？没关系！
-   → 立即转向 Tools 组合：web_search/filesystem/shell_executor
-   → 示例：搜索图片 = web_search__search + shell_executor(curl) + filesystem
+   → 立即转向 Tools 组合：web/fs/shell
+   → 示例：搜索图片 = web__search + web__download + fs__ls
 
 2. **重复调用 `list_skill_actions` 且返回"无动作"**
    → 这是指导型 Skill，按 SKILL.md 拆解为 Tools 步骤执行
@@ -55,7 +55,8 @@
    → 停止规划，开始执行！用已有 Tools 逐步完成
 
 【记住】Skills 只是高级抽象，Tools 才是你的真正能力：
-- web_search__search：搜索任何信息
-- web_search__fetch：抓取网页内容
-- shell_executor：下载文件、执行命令
-- filesystem：保存/读取文件
+- web__search：搜索信息
+- web__fetch：抓取网页
+- web__download：下载文件
+- shell__run：执行命令
+- fs__*：文件操作

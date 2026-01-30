@@ -1,3 +1,4 @@
+import { AgentContextAdapter } from './AgentContextAdapter';
 import { FilesystemAdapter } from './FilesystemAdapter';
 import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
@@ -12,6 +13,7 @@ import type { ToolAdapter } from '../ToolAdapter';
  */
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
+    new AgentContextAdapter(),
     new WebSearchAdapter(),
     new SkillsToolAdapter(),
     new SkillsFsAdapter(),
@@ -22,6 +24,7 @@ export function createDefaultAdapters(): ToolAdapter[] {
   ];
 }
 
+export { AgentContextAdapter } from './AgentContextAdapter';
 export { FilesystemAdapter } from './FilesystemAdapter';
 export { McpAdapter } from './McpAdapter';
 export { ShellExecutorAdapter } from './ShellExecutorAdapter';

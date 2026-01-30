@@ -29,9 +29,9 @@ function sortToolsDeterministically(tools: ToolDefinition[]): ToolDefinition[] {
     const bn = String(b?.name || '');
     const rank = (n: string): number => {
       const name = String(n || '').toLowerCase();
-      // 明确偏好：文件系统统一 filesystem，shell_executor 次之
-      if (name.startsWith('filesystem__')) return 0;
-      if (name.startsWith('shell_executor__')) return 1;
+      // 明确偏好：文件系统 fs 优先，shell 次之
+      if (name.startsWith('fs__')) return 0;
+      if (name.startsWith('shell__')) return 1;
       return 5;
     };
     const ar = rank(an);

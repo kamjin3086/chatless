@@ -5,49 +5,65 @@ Web Search Tools (web_search__*) — 网络工具使用指南
 ### web_search__search
 在互联网搜索信息。
 
-参数：
-- query: 搜索关键词
-
 ### web_search__fetch
 抓取网页内容，返回标题、正文和链接。
 
-参数：
-- url: 网页地址
-
 ### web_search__download
-下载文件到本地（图片、文档、视频等）。
-
-参数：
-- url: 文件下载地址（必须是直链，不是页面链接）
-- savePath: 保存路径（相对于 @WorkDir 或绝对路径）
-- filename: 可选，自定义文件名
+下载文件到本地。参数：url（直链！）、savePath、filename（可选）
 
 ---
 
-## 免费图片下载（重要！）
+## ⚠️ 图片下载：必须使用 Pexels API（最可靠）
 
-### Unsplash 图片下载
-❌ 错误：`https://unsplash.com/photos/xxx` （页面链接，需登录）
-❌ 错误：`https://unsplash.com/photos/xxx/download` （404）
-✅ 正确：`https://images.unsplash.com/photo-{id}?w=800`
+**不要用通用搜索下载图片！** 搜索结果的 URL 通常无法直接下载。
 
-下载流程：
-1. 搜索：`query = "猫 site:unsplash.com"`
-2. 从结果中提取图片 ID（如 `photo-1514888286974-6c03e2ca1dba`）
-3. 构造直链：`https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800`
-4. 下载：`web_search__download({ url: "直链", savePath: "images/cat.jpg" })`
+### Pexels API（推荐，无需 API Key）
 
-### Pexels 图片下载
-✅ 直链格式：`https://images.pexels.com/photos/{id}/{filename}.jpeg?auto=compress&cs=tinysrgb&w=800`
+直接 fetch Pexels 搜索 API，返回 JSON 含直链：
 
-下载流程：
-1. 搜索：`query = "猫 site:pexels.com"`
-2. 从结果中提取图片路径
-3. 构造直链（添加 ?w=800 参数控制大小）
-4. 下载
+```
+1. fetch Pexels 搜索页面获取图片信息：
+   web_search__fetch({ url: "https://www.pexels.com/search/cat/" })
+   → 从返回的 HTML 中提取 images.pexels.com 链接
 
-### Pixabay 图片下载
-✅ 直链格式：`https://pixabay.com/get/{filename}`（需从页面提取）
+2. 直接下载（直链格式）：
+   web_search__download({
+     url: "https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?auto=compress&cs=tinysrgb&w=800",
+     savePath: "images/cat.jpg"
+   })
+```
+
+### 已验证可用的图片直链格式
+
+| 来源 | 直链格式 | 示例 |
+|------|----------|------|
+| Pexels | `https://images.pexels.com/photos/{id}/{name}.jpeg?w=800` | `https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?w=800` |
+| Unsplash | `https://images.unsplash.com/photo-{id}?w=800` | `https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800` |
+
+### ❌ 常见错误
+
+- `https://unsplash.com/photos/xxx` → 页面链接，需登录
+- `https://unsplash.com/photos/xxx/download` → 404
+- 通用搜索结果中的图片 URL → 大多无法直接下载
+
+### ✅ 正确流程（下载猫图片）
+
+```
+步骤1: 获取 Pexels 页面
+web_search__fetch({ url: "https://www.pexels.com/search/cat/" })
+
+步骤2: 从返回内容中提取 images.pexels.com 链接
+（寻找形如 https://images.pexels.com/photos/xxxxx/xxxxx.jpeg 的 URL）
+
+步骤3: 下载
+web_search__download({
+  url: "https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?w=800",
+  savePath: "images/cat1.jpg"
+})
+
+步骤4: 验证
+filesystem__list_directory({ path: "@WorkDir/images" })
+```
 
 ---
 

@@ -195,62 +195,50 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
       )}
       onClick={() => setOpen((o) => !o)}
     >
-      {/* 紧凑两行摘要 */}
-      <div className="px-3 py-2 flex items-start gap-2 min-w-0">
-        {/* 左侧：状态点 */}
-        <div className="mt-1">
+      {/* 单行紧凑摘要 */}
+      <div className="px-2.5 py-1.5 flex items-center gap-2 min-w-0">
+        {/* 左侧：状态图标 */}
+        <div className="shrink-0" title={
+          isPendingAuth ? "等待授权" : 
+          status === 'running' ? "调用中..." : 
+          status === 'stopped' ? "已停止" : 
+          status === 'success' ? "成功" : "失败"
+        }>
           {isPendingAuth ? (
-            <div className="flex items-center justify-center w-6" title="等待授权">
-              <span className="inline-flex items-center gap-0.5">
-                <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '120ms' }} />
-                <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '240ms' }} />
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-0.5">
+              <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '120ms' }} />
+              <span className="w-1 h-1 rounded-full bg-indigo-500/90 animate-bounce" style={{ animationDelay: '240ms' }} />
+            </span>
           ) : status === 'running' ? (
-            <div className="flex items-center justify-center w-6" title="调用中...">
-              <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
-            </div>
+            <Loader2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" />
           ) : status === 'stopped' ? (
-            <div title="已停止">
-              <span className="inline-flex rounded-full h-2 w-2 bg-slate-400 dark:bg-slate-500" />
-            </div>
+            <span className="inline-flex rounded-full h-2 w-2 bg-slate-400 dark:bg-slate-500" />
           ) : status === 'success' ? (
-            <div title="调用成功">
-              <Check className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-            </div>
+            <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
           ) : (
-            <div title="调用失败">
-              <X className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-            </div>
+            <X className="w-3 h-3 text-red-600 dark:text-red-400" />
           )}
         </div>
 
-        {/* 中间：两行文本（尽量用户友好，不暴露技术字段） */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            {server === WEB_SEARCH_SERVER_NAME ? (
-              <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-            ) : null}
-            <span className="text-[12px] font-semibold text-slate-900 dark:text-slate-100 truncate">
-              {presentation.titleLine}
-            </span>
-          </div>
-
-          {presentation.detailLineFull ? (
-            <div
-              className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300 truncate"
+        {/* 中间：单行文本（标题 + 简短详情） */}
+        <div className="min-w-0 flex-1 flex items-center gap-1.5 truncate">
+          {(server === WEB_SEARCH_SERVER_NAME || server === 'web_search') ? (
+            <Globe className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
+          ) : null}
+          <span className="text-[11px] font-medium text-slate-800 dark:text-slate-200 shrink-0">
+            {presentation.titleLine}
+          </span>
+          {(presentation.detailLineShort || presentation.detailLineFull) ? (
+            <span
+              className={cn(
+                "text-[11px] text-slate-500 dark:text-slate-400 truncate",
+                presentation.kind === 'shell' ? 'font-mono' : undefined
+              )}
               title={presentation.detailLineFull}
             >
-              <span className="text-slate-400 dark:text-slate-500">
-                {presentation.detailLineLabel ? `${presentation.detailLineLabel}: ` : ''}
-              </span>
-              <span className={cn(
-                presentation.kind === 'shell' ? 'font-mono' : undefined
-              )}>
-                {presentation.detailLineFull}
-              </span>
-            </div>
+              {presentation.detailLineShort || presentation.detailLineFull}
+            </span>
           ) : null}
         </div>
 

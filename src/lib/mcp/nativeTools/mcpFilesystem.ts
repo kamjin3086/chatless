@@ -12,11 +12,11 @@
 
 import type { McpTool } from '@/lib/mcp/McpClient';
 
-export const MCP_FILESYSTEM_SERVER_NAME = 'filesystem';
+export const MCP_FILESYSTEM_SERVER_NAME = 'fs';
 
 export const MCP_FILESYSTEM_READ_FILE_TOOL: McpTool = {
-  name: 'read_file',
-  description: '（MCP）读取文件内容。用于 MCP server 提供的文件系统能力。',
+  name: 'read',
+  description: '读取文件内容',
   input_schema: {
     schema: {
       type: 'object',
@@ -34,8 +34,8 @@ export const MCP_FILESYSTEM_READ_FILE_TOOL: McpTool = {
 };
 
 export const MCP_FILESYSTEM_WRITE_FILE_TOOL: McpTool = {
-  name: 'write_file',
-  description: '（MCP）写入文件内容（覆盖）。用于 MCP server 提供的文件系统能力。',
+  name: 'write',
+  description: '写入文件内容（覆盖）',
   input_schema: {
     schema: {
       type: 'object',
@@ -49,8 +49,8 @@ export const MCP_FILESYSTEM_WRITE_FILE_TOOL: McpTool = {
 };
 
 export const MCP_FILESYSTEM_LIST_DIR_TOOL: McpTool = {
-  name: 'list_directory',
-  description: '（MCP）列出目录内容（文件和子目录）。',
+  name: 'ls',
+  description: '列出目录内容（文件和子目录）',
   input_schema: {
     schema: {
       type: 'object',
@@ -63,8 +63,8 @@ export const MCP_FILESYSTEM_LIST_DIR_TOOL: McpTool = {
 };
 
 export const MCP_FILESYSTEM_CREATE_DIR_TOOL: McpTool = {
-  name: 'create_directory',
-  description: '（MCP）创建目录（默认递归）。',
+  name: 'mkdir',
+  description: '创建目录（默认递归）',
   input_schema: {
     schema: {
       type: 'object',
@@ -78,8 +78,8 @@ export const MCP_FILESYSTEM_CREATE_DIR_TOOL: McpTool = {
 };
 
 export const MCP_FILESYSTEM_DELETE_FILE_TOOL: McpTool = {
-  name: 'delete_file',
-  description: '（MCP）删除文件。',
+  name: 'rm',
+  description: '删除文件',
   input_schema: {
     schema: {
       type: 'object',
@@ -92,8 +92,8 @@ export const MCP_FILESYSTEM_DELETE_FILE_TOOL: McpTool = {
 };
 
 export const MCP_FILESYSTEM_RENAME_FILE_TOOL: McpTool = {
-  name: 'rename_file',
-  description: '（MCP）重命名/移动文件。',
+  name: 'mv',
+  description: '重命名/移动文件',
   input_schema: {
     schema: {
       type: 'object',

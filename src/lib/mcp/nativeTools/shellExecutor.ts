@@ -6,11 +6,11 @@
 
 import type { McpTool } from '@/lib/mcp/McpClient';
 
-export const SHELL_EXECUTOR_SERVER_NAME = 'shell_executor';
+export const SHELL_EXECUTOR_SERVER_NAME = 'shell';
 
 export const SHELL_EXECUTE_TOOL: McpTool = {
-  name: 'execute_command',
-  description: '在沙箱中执行 shell 命令（支持 bash/powershell/python/node 等）。中高风险命令需要用户审批。返回 stdout、stderr 和 exit code。',
+  name: 'run',
+  description: '执行命令（bash/powershell/python/node 等）。返回 stdout、stderr、exit code。',
   input_schema: {
     schema: {
       type: 'object',

@@ -64,17 +64,16 @@ async function listAvailableSkills(): Promise<{
   const toolsReminder = `【重要提醒】Skills 只是高级任务模板。如果没有匹配的 Skill：
 → 不要反复调用 list_available_skills！
 → 转向组合使用已注册的 Tools：
-  • web_search__search：网络搜索
-  • web_search__fetch：抓取网页
-  • filesystem__*：文件操作
-  • shell_executor__execute_command：执行命令（下载/转换/处理）
-→ 示例：搜索图片 = web_search + shell_executor(curl下载) + filesystem(保存)`;
+  • web__search / web__fetch / web__download
+  • fs__* (read/write/ls/mkdir/rm/mv)
+  • shell__run
+→ 示例：搜索图片 = web__search + web__download + fs__ls`;
   
   return {
     skills,
     nextStep: skills.length > 0
       ? `✅ 找到 ${skills.length} 个技能。如果匹配任务 → 用 Skill；不匹配 → 组合 Tools 完成。`
-      : '❌ 未找到技能。请直接组合 web_search/filesystem/shell_executor 等 Tools 完成任务。',
+      : '❌ 未找到技能。请直接组合 web/fs/shell 等 Tools 完成任务。',
     toolsReminder,
   };
 }

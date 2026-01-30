@@ -16,7 +16,7 @@ import type { McpServerConfig } from '@/lib/mcp/McpClient';
 import { normalizeDirectoryPath } from '@/lib/filesystemAllowlist/allowlist';
 
 const SERVERS_CONFIG_FILE = 'mcp_servers.json';
-const FILESYSTEM_SERVER_NAME = 'filesystem';
+const FILESYSTEM_SERVER_NAME = 'fs';
 
 type SavedServer = {
   name: string;

@@ -1,0 +1,204 @@
+ctx__* — Agent 上下文管理工具
+
+## 核心理念
+
+"让 Agent 专注任务本身，而非上下文管理"
+
+这组工具封装了文件导向工作流的核心操作，自动处理：
+- 文件创建/追加/格式化
+- 时间戳生成
+- 路径管理
+- 进度追踪
+
+## 工具列表
+
+| 工具 | 用途 | 何时使用 |
+|------|------|----------|
+| ctx__save_research | 保存研究结果 | 收集到大量信息时（>500字） |
+| ctx__save_plan | 创建任务计划 | 复杂任务开始时（>3步） |
+| ctx__log_error | 记录错误 | 遇到非平凡错误时 |
+| ctx__get | 检索上下文 | 需要回顾之前的信息时 |
+| ctx__update_step | 更新步骤状态 | 完成一个步骤后 |
+
+---
+
+## ctx__save_research
+
+保存研究结果，避免上下文溢出。
+
+```
+ctx__save_research({
+  topic: "market-analysis",        // 主题（用作文件名）
+  content: "## 发现\n- xxx\n- yyy", // 研究内容（markdown）
+  source: "https://example.com",   // 来源（可选）
+  keyFindings: ["发现1", "发现2"]   // 关键发现（可选）
+})
+```
+
+**自动处理**：
+- 创建 @WorkDir/.agent/research/{topic}.md
+- 同一 topic 会追加而非覆盖
+- 返回摘要用于上下文保留
+
+---
+
+## ctx__save_plan
+
+创建任务计划，支持断点续做。
+
+```
+ctx__save_plan({
+  title: "批量转换文档格式",
+  goal: "将 docs/ 下的 .docx 转换为 .md",
+  steps: [
+    "扫描目录找到所有 .docx",
+    "逐个调用 pandoc 转换",
+    "验证输出文件"
+  ],
+  constraints: ["保留原始文件"],  // 可选
+  risks: [                        // 可选
+    { risk: "pandoc 未安装", fallback: "提示用户安装" }
+  ]
+})
+```
+
+**自动处理**：
+- 创建 @WorkDir/.agent/todo.md
+- 格式化为标准模板
+- 跟踪进度
+
+---
+
+## ctx__log_error
+
+记录错误，跨轮次学习。
+
+```
+ctx__log_error({
+  operation: "pandoc 转换 report.docx",
+  error: "Font not found: SimHei",
+  analysis: "系统缺少中文字体",
+  resolution: "改用 wkhtmltopdf"  // 可选，未解决则留空
+})
+```
+
+**自动处理**：
+- 追加到 @WorkDir/.agent/errors.log
+- 保留最近 50 条
+- 后续操作前可检索避免重复
+
+---
+
+## ctx__get
+
+检索上下文，按需加载。
+
+```
+// 获取当前计划
+ctx__get({ type: "plan" })
+
+// 获取特定研究
+ctx__get({ type: "research", topic: "market-analysis" })
+
+// 列出所有研究主题
+ctx__get({ type: "research" })
+
+// 获取最近错误
+ctx__get({ type: "errors", limit: 5 })
+
+// 获取工作目录状态概览
+ctx__get({ type: "status" })
+```
+
+**返回内容**：
+- plan: 完整计划 + 进度
+- research: 指定主题内容 / 主题列表
+- errors: 最近 N 条错误
+- status: 概览（有无计划、研究数量、错误数量）
+
+---
+
+## ctx__update_step
+
+更新计划步骤状态。
+
+```
+ctx__update_step({
+  stepIndex: 2,           // 步骤号（从 1 开始）
+  status: "done",         // done/failed/skipped/in_progress
+  note: "转换了 15 个文件" // 可选备注
+})
+```
+
+**状态类型**：
+- done: 已完成 ✓
+- failed: 失败 ✗
+- skipped: 跳过 ⊘
+- in_progress: 进行中 ←
+
+---
+
+## 使用场景
+
+### 场景1：复杂研究任务
+
+```
+1. ctx__save_plan({ title: "竞品分析", goal: "...", steps: [...] })
+2. web__search(...) → 获取信息
+3. ctx__save_research({ topic: "competitor-A", content: "..." })
+4. ctx__update_step({ stepIndex: 1, status: "done" })
+5. ...继续后续步骤
+```
+
+### 场景2：断点续做
+
+用户返回时：
+```
+1. ctx__get({ type: "status" })
+   → 检测到未完成的计划
+2. ctx__get({ type: "plan" })
+   → 获取计划详情，确认当前步骤
+3. 询问用户是否继续
+4. 从断点继续执行
+```
+
+### 场景3：错误学习
+
+```
+1. shell__run(...) → 失败
+2. ctx__log_error({ operation: "...", error: "...", analysis: "..." })
+3. 下次类似操作前：
+   ctx__get({ type: "errors" })
+   → 检查是否有相关记录，避免重复
+```
+
+---
+
+## 与其他工具的关系
+
+| 场景 | 推荐工具 |
+|------|----------|
+| 简单文件操作 | fs__* |
+| 管理任务上下文 | ctx__* |
+| 执行命令 | shell__run |
+| 网络操作 | web__* |
+
+**原则**：
+- ctx__* 用于 Agent 自身的上下文管理
+- fs__* 用于用户数据的文件操作
+- 两者可以配合使用
+
+---
+
+## 文件结构
+
+所有上下文文件存储在 @WorkDir/.agent/：
+
+```
+.agent/
+├── todo.md              # 任务计划
+├── errors.log           # 错误日志
+└── research/            # 研究结果
+    ├── topic-a.md
+    └── topic-b.md
+```

@@ -148,7 +148,12 @@ function getShortDescription(card: ToolCardData): string {
  * 突出显示高优先级结果。
  */
 export function ToolCallGroup({ cards, isStreaming: _isStreaming }: ToolCallGroupProps) {
+  // 使用 ref 追踪用户是否手动操作过，避免自动切换干扰
+  const userInteractedRef = React.useRef(false);
   const [expanded, setExpanded] = useState(false);
+  
+  // 记录首次达到可折叠状态时的卡片数量，防止后续卡片增加时重新触发展开
+  const initialCollapseCountRef = React.useRef<number | null>(null);
 
   // 分析卡片状态
   const analysis = useMemo(() => {
@@ -175,8 +180,29 @@ export function ToolCallGroup({ cards, isStreaming: _isStreaming }: ToolCallGrou
     };
   }, [cards]);
 
-  // 如果只有1-2个卡片，或有待授权/正在运行的，不折叠
-  const shouldCollapse = !analysis.hasPendingAuth && !analysis.hasRunning && cards.length > 2;
+  // 核心改进：折叠逻辑稳定化
+  // 1. 待授权时必须展开（用户需要操作）
+  // 2. 卡片数 <= 2 时不折叠
+  // 3. 用户手动操作后，保持用户的选择
+  // 4. 正在运行时，不强制展开（这是导致抖动的根源）
+  const canCollapse = !analysis.hasPendingAuth && cards.length > 2;
+  
+  // 首次达到可折叠条件时，记录并自动折叠
+  React.useEffect(() => {
+    if (canCollapse && initialCollapseCountRef.current === null && !userInteractedRef.current) {
+      initialCollapseCountRef.current = cards.length;
+      // 初始状态：折叠
+      setExpanded(false);
+    }
+  }, [canCollapse, cards.length]);
+  
+  // 包装 setExpanded，标记用户已交互
+  const handleToggle = React.useCallback(() => {
+    userInteractedRef.current = true;
+    setExpanded(prev => !prev);
+  }, []);
+
+  const shouldCollapse = canCollapse;
 
   // 如果不需要折叠，直接渲染所有卡片
   if (!shouldCollapse) {
@@ -225,7 +251,7 @@ export function ToolCallGroup({ cards, isStreaming: _isStreaming }: ToolCallGrou
           'bg-slate-50/30 hover:bg-slate-50/60 dark:bg-slate-900/10 dark:hover:bg-slate-900/20',
           'text-slate-500 dark:text-slate-400'
         )}
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
       >
         {/* 展开/折叠图标 */}
         {expanded ? (

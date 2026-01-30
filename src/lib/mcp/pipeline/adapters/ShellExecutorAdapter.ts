@@ -2,6 +2,7 @@ import { getProcessSandbox } from '@/lib/skills/sandbox';
 import { SHELL_EXECUTOR_SERVER_NAME } from '@/lib/mcp/nativeTools/shellExecutor';
 import { buildWindowsNodeInstallHint, getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
+import { shouldUseScriptMode, parseScriptRequest, executeScript } from '@/lib/shell/scriptExecutor';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 
@@ -89,13 +90,42 @@ export class ShellExecutorAdapter implements ToolAdapter {
     const isAvailable = await sandbox.isAvailable();
     if (!isAvailable) throw new Error('Shell executor is not available');
 
+    const workingDir = typeof (args as any).workingDir === 'string' ? String((args as any).workingDir) : undefined;
+    const timeoutMs = typeof (args as any).timeout === 'number' ? (args as any).timeout : 30000;
+
+    // ========== 脚本模式（最高优先级）==========
+    // 如果命令是脚本格式（代码块或 JSON），直接执行脚本
+    if (shouldUseScriptMode(command)) {
+      const scriptReq = parseScriptRequest(command);
+      if (scriptReq) {
+        console.log(`[ShellExecutor] 脚本模式: ${scriptReq.language}, ${scriptReq.code.length} chars`);
+        
+        const result = await executeScript({
+          ...scriptReq,
+          workingDir,
+          timeoutMs,
+        });
+        
+        return {
+          success: result.success,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          duration: result.duration,
+          error: result.error,
+          mode: 'script',
+          scriptPath: result.scriptPath,
+        };
+      }
+    }
+
+    // ========== 原生命令处理 ==========
+    // AI 应根据平台生成正确的原生命令（Unix 或 PowerShell）
     const normalizedForParsing = normalizeEscapedQuotesForParsing(command);
     const parts = splitCommandLine(normalizedForParsing);
     if (parts.length === 0) throw new Error('command is required');
     const cmd = parts[0];
     const cmdArgs = parts.slice(1);
-    const workingDir = typeof (args as any).workingDir === 'string' ? String((args as any).workingDir) : undefined;
-    const timeoutMs = typeof (args as any).timeout === 'number' ? (args as any).timeout : 30000;
 
     // 统一 allowlist：shell_executor 的 allowedWorkingDirs 以 filesystem allowlist 为准（+ appData 默认工作区）
     try {

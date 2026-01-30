@@ -1,6 +1,6 @@
 import type { McpTool } from '@/lib/mcp/McpClient';
 
-export const WEB_SEARCH_SERVER_NAME = 'web_search';
+export const WEB_SEARCH_SERVER_NAME = 'web';
 
 export const WEB_SEARCH_TOOL_SCHEMA: McpTool = {
   name: 'search',
