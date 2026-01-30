@@ -4,6 +4,12 @@ Purpose
 - Skills are the primary tutorials (SKILL.md + actions) to accomplish user tasks.
 - If a skill is used, it becomes the authoritative step-by-step guide.
 
+When to use (IMPORTANT)
+- Use skills ONLY when at least one is true:
+  - The user explicitly references a skill (skill id/name, or #skill syntax), or asks to "use a skill".
+  - From the injected skills overview, you have HIGH confidence a particular skill directly matches the task.
+- Otherwise (no explicit skill mention, task seems unrelated to available skills): DO NOT call skills tools. Proceed with filesystem / shell_executor directly.
+
 Mandatory workflow
 1) Call skills__get_skill_instructions({ skillId }) first
 2) If the skill has actions, call skills__list_skill_actions({ skillId })

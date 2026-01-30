@@ -858,11 +858,12 @@ export class SkillManager {
       return `- **${name || id || '(unknown)'}** (${id ? `\`${id}\`` : '(unknown-id)'}${lcText}): ${desc || '(no description)'}`;
     });
 
-    return `## 可用 Skills（优先）
+    return `## 可用 Skills（可选能力）
 
 规则（强约束）：
 - 若用户消息**显式提到**某个 skill 的 id 或 name，必须优先使用 skills 工具来完成任务。
-- 若用户任务与某个 skill 的 description 明显匹配，也应优先使用该 skill。
+- 若用户任务与某个 skill 的 description **高置信**明显匹配，也应优先使用该 skill。
+- 若用户没有指定 skill，且任务看起来与现有 skills 毫无关联：**不要为了“保险”而先列技能/读教程**；直接用 filesystem / shell_executor / web_search 完成任务即可。
 - skills 是主教程；filesystem / shell_executor / web_search 作为配合手段完成端到端任务。
 
 已启用 skills（仅 name + description）：
