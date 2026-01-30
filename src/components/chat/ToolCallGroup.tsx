@@ -202,31 +202,8 @@ export function ToolCallGroup({ cards, isStreaming: _isStreaming }: ToolCallGrou
     setExpanded(prev => !prev);
   }, []);
 
-  const shouldCollapse = canCollapse;
-
-  // 如果不需要折叠，直接渲染所有卡片
-  if (!shouldCollapse) {
-    return (
-      <div className="flex flex-col gap-2">
-        {cards.map((card, idx) => (
-          <ToolCallCard
-            key={`card-${card.id || idx}`}
-            server={card.server}
-            tool={card.tool}
-            status={card.status}
-            args={card.args}
-            resultPreview={card.resultPreview}
-            errorMessage={card.errorMessage}
-            schemaHint={card.schemaHint}
-            messageId={card.messageId}
-            cardId={card.id}
-          />
-        ))}
-      </div>
-    );
-  }
-
   // 计算哪些卡片需要在折叠状态下显示在外面
+  // 注意：此 useMemo 必须在条件返回之前调用，遵守 Hooks 规则
   const { firstCard, lastRunningCard, middleCards, collapsedCount } = useMemo(() => {
     if (cards.length === 0) {
       return { firstCard: null, lastRunningCard: null, middleCards: [], collapsedCount: 0 };
@@ -253,6 +230,30 @@ export function ToolCallGroup({ cards, isStreaming: _isStreaming }: ToolCallGrou
       collapsedCount: middle.length,
     };
   }, [cards]);
+
+  const shouldCollapse = canCollapse;
+
+  // 如果不需要折叠，直接渲染所有卡片
+  if (!shouldCollapse) {
+    return (
+      <div className="flex flex-col gap-2">
+        {cards.map((card, idx) => (
+          <ToolCallCard
+            key={`card-${card.id || idx}`}
+            server={card.server}
+            tool={card.tool}
+            status={card.status}
+            args={card.args}
+            resultPreview={card.resultPreview}
+            errorMessage={card.errorMessage}
+            schemaHint={card.schemaHint}
+            messageId={card.messageId}
+            cardId={card.id}
+          />
+        ))}
+      </div>
+    );
+  }
 
   // 折叠视图
   return (

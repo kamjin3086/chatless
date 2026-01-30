@@ -37,8 +37,11 @@ const expectedToolCardIdsByMessage = new Map<string, Set<string>>();
 // Loop guards
 const resumeRoundsByMessage = new Map<string, number>();
 const attemptByKey = new Map<string, number>();
+// 连续空结果计数器（跨不同工具调用，但在同一会话中累计）
+const consecutiveEmptyByConversation = new Map<string, number>();
 const MAX_RESUME_ROUNDS = 8;
 const MAX_SAME_ATTEMPTS = 3;
+const MAX_CONSECUTIVE_EMPTY = 3; // 连续 3 次空结果就触发止损
 
 function makeAttemptKey(params: { conversationId: string; server: string; tool: string; args?: Record<string, unknown> }): string {
   return `${params.conversationId}:${params.server}.${params.tool}:${stableStringify(params.args || {})}`;
@@ -230,8 +233,14 @@ async function resumeAssistantWithToolRole(params: {
       {
         role: 'system',
         content:
-          `【防死循环】已达到工具回合上限（${MAX_RESUME_ROUNDS}）或检测到同一调用重复失败（${MAX_SAME_ATTEMPTS}次）。` +
-          `现在禁止继续工具调用；请直接给出当前能给出的最佳结论，并明确需要用户补充哪些信息/采取哪些操作。`,
+          `【止损】检测到以下问题之一：` +
+          `(1) 工具回合达到上限（${MAX_RESUME_ROUNDS}次）；` +
+          `(2) 同一调用重复失败（${MAX_SAME_ATTEMPTS}次）；` +
+          `(3) 连续${MAX_CONSECUTIVE_EMPTY}次工具调用返回空结果。\n\n` +
+          `现在禁止继续调用工具。请：\n` +
+          `1. 向用户解释你尝试了什么、遇到了什么问题\n` +
+          `2. 给出你目前能给出的最佳结论\n` +
+          `3. 告知用户需要补充什么信息或采取什么操作`,
       } as any,
     ];
     // Keep tools list but force none; some OpenAI-compatible backends require tools to coexist with tool_choice.
@@ -434,12 +443,24 @@ export async function continueWithToolResult(params: {
   const kind = classifyToolResult(result);
   const attemptKey = makeAttemptKey({ conversationId, server, tool, args });
   let toolLoopTripped = false;
+  
   if (kind === 'empty' || kind === 'tool_error') {
+    // 1) 同一工具+参数的重复调用计数
     const next = (attemptByKey.get(attemptKey) || 0) + 1;
     attemptByKey.set(attemptKey, next);
     if (next >= MAX_SAME_ATTEMPTS) toolLoopTripped = true;
+    
+    // 2) 连续空结果计数（跨不同工具调用）
+    const consecutiveEmpty = (consecutiveEmptyByConversation.get(conversationId) || 0) + 1;
+    consecutiveEmptyByConversation.set(conversationId, consecutiveEmpty);
+    if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
+      toolLoopTripped = true;
+      console.log(`[MCP-DEBUG] 连续空结果达到上限 (${consecutiveEmpty}/${MAX_CONSECUTIVE_EMPTY}), conversationId=${conversationId}`);
+    }
   } else {
     attemptByKey.delete(attemptKey);
+    // 成功后重置连续空结果计数
+    consecutiveEmptyByConversation.delete(conversationId);
   }
 
   // Buffer this tool result (for multi-tool gating)
