@@ -254,14 +254,11 @@ async function resumeAssistantWithToolRole(params: {
       {
         role: 'system',
         content:
-          `【止损】检测到以下问题之一：` +
-          `(1) 工具回合达到上限（${MAX_RESUME_ROUNDS}次）；` +
-          `(2) 同一调用重复失败（${MAX_SAME_ATTEMPTS}次）；` +
-          `(3) 连续${MAX_CONSECUTIVE_EMPTY}次工具调用返回空结果。\n\n` +
-          `现在禁止继续调用工具。请：\n` +
-          `1. 向用户解释你尝试了什么、遇到了什么问题\n` +
-          `2. 给出你目前能给出的最佳结论\n` +
-          `3. 告知用户需要补充什么信息或采取什么操作`,
+          `你已经尝试了多次但没有成功。请直接用文字回复用户：\n` +
+          `- 简单说明你尝试了什么\n` +
+          `- 遇到了什么问题（比如网站被拦截）\n` +
+          `- 建议用户可以怎么做\n\n` +
+          `现在请直接回复，不要再调用工具。`,
       } as any,
     ];
     // Keep tools list but force none; some OpenAI-compatible backends require tools to coexist with tool_choice.
