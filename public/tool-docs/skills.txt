@@ -1,25 +1,67 @@
-Skills (skills__*) — SOP
+Skills (skills__*) — 工具使用指南
 
-Purpose
-- Skills are the primary tutorials (SKILL.md + actions) to accomplish user tasks.
-- If a skill is used, it becomes the authoritative step-by-step guide.
+## 用途
+Skills 是预定义的任务模板（SKILL.md + actions），提供特定场景的最佳实践。
+使用 skill 时，它将成为权威的分步指南。
 
-When to use (IMPORTANT)
-- Use skills ONLY when at least one is true:
-  - The user explicitly references a skill (skill id/name, or #skill syntax), or asks to "use a skill".
-  - From the injected skills overview, you have HIGH confidence a particular skill directly matches the task.
-- Otherwise (no explicit skill mention, task seems unrelated to available skills): DO NOT call skills tools. Proceed with filesystem / shell_executor directly.
+## 何时使用（重要）
+仅在以下情况使用 skills：
+- 用户显式提到 skill（skill id/name，或 @skill 语法）
+- 从技能索引中，你高置信度地判断某个 skill 直接匹配任务
 
-Mandatory workflow
-1) Call skills__get_skill_instructions({ skillId }) first
-2) If the skill has actions, call skills__list_skill_actions({ skillId })
-3) Execute actions using returned actionId only (never guess)
-4) If instruction-only: break down into real filesystem / shell_executor steps
-5) Verify outputs with filesystem (read/list/etc)
+否则（无显式提及，任务与现有 skills 无关）：不要调用 skills 工具，直接用 filesystem/shell_executor 完成。
 
-Efficient reading (line ranges)
-- `skills__get_skill_instructions` supports `startLine` / `endLine` (1-based) and returns `totalLines`.
-- Prefer reading only the relevant sections by line range instead of pulling the whole SKILL.md into context.
+## 标准工作流
+1. 先调用 `skills__get_skill_instructions({ skillId })` 获取指导
+2. 如有 actions，调用 `skills__list_skill_actions({ skillId })` 查看可用操作
+3. 使用返回的 actionId 执行操作（不要猜测 actionId）
+4. 如仅有指导无 actions：分解为 filesystem/shell_executor 步骤执行
+5. 用 filesystem 验证输出结果
 
-Important semantics
-- “Saved a script” is NOT “task completed”. You must run commands and verify outputs.
+## 高效阅读（行范围）
+- `skills__get_skill_instructions` 支持 `startLine`/`endLine` 参数（1-based），返回 `totalLines`
+- 优先按行范围读取相关部分，避免将整个 SKILL.md 拉入上下文
+
+## 与文件导向工作流结合
+
+### Skill 内嵌工作流模板
+高级 Skill 可在 SKILL.md 中定义工作流模板：
+
+```markdown
+## 工作流模板（可选）
+
+执行此 Skill 时，建议创建以下文件结构：
+
+@WorkDir/.agent/
+├── todo.md          # 任务计划（使用下方模板）
+├── research/        # 研究结果目录
+└── output/          # 最终输出目录
+
+### todo.md 模板
+任务：{skill 名称} - {用户目标}
+状态：进行中
+
+步骤：
+1. [ ] {skill 定义的步骤1}
+2. [ ] {skill 定义的步骤2}
+...
+```
+
+### Agent 行为
+当 Skill 包含工作流模板时：
+1. 读取 Skill 指导
+2. 检测到工作流模板 → 在 @WorkDir/.agent/ 创建对应结构
+3. 用模板初始化 todo.md
+4. 按 todo.md 逐步执行，每完成一步更新状态
+5. 研究结果写入 research/*.md，最终输出写入 output/
+
+### 会话恢复
+用户中断后返回：
+1. 检查 @WorkDir/.agent/todo.md
+2. 如存在未完成的 Skill 任务，询问用户是否继续
+3. 用户确认后，从断点继续
+
+## 重要语义
+- "保存了脚本" ≠ "任务完成"，必须执行命令并验证输出
+- 研究结果写入文件后，上下文只保留摘要
+- 每步完成后更新 todo.md 状态

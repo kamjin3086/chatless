@@ -7,29 +7,23 @@ Filesystem (filesystem__*) — 工具使用指南
 ## 路径格式
 - Windows 绝对路径：`C:/Users/...` 或 `D:/...`
 - 推荐使用 `/` 作为分隔符
-- 支持别名：`@WorkDir/...`（系统自动解析为真实路径）
+- 支持别名：`@WorkDir/...`（系统自动解析）
 
-## 操作前检查（重要）
-- 不确定路径是否存在？→ 先用 list_directory 确认
-- 覆盖现有文件？→ 先用 read_file 确认内容，或提示用户
+## 操作前检查
+- 不确定路径？→ 先用 list_directory 确认
+- 覆盖文件？→ 先 read_file 确认内容，或提示用户
 - 新建文件？→ 确认父目录存在
 
 ## 授权机制
 - 直接对目标路径调用，无需先探测权限
-- 越界访问会弹出授权卡片，用户授权后重试即可
+- 越界访问会弹出授权卡片，用户授权后重试
 
-## 错误处理
-- `AUTH_DENIED`：停止重试，提示用户授权该目录
-- `FILESYSTEM_GATE_FAILED`：路径不可解析或未授权，请用户确认正确路径
-- 删除操作需要用户明确同意
-
-## 常用操作示例
-- 读取文件：`path: "@WorkDir/out/result.txt"`
-- 写入文件：`path: "C:/Users/User/Documents/test.txt"`
-- 列出目录：`path: "@WorkDir/out"`
-- 创建目录：`path: "@WorkDir/new_folder"`
+## 错误处理（快速参考）
+- AUTH_DENIED → 提示用户授权
+- PATH_NOT_FOUND → 检查路径拼写
+- 删除操作 → 需用户明确同意
 
 ## 与 shell_executor 的选择
 - 简单文件操作 → filesystem（优先）
-- 需要调用外部程序 → shell_executor
-- 批量处理/复杂转换 → shell_executor
+- 调用外部程序 → shell_executor
+- 批量/复杂转换 → shell_executor
