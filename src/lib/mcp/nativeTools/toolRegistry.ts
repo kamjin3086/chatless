@@ -90,6 +90,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     description: '搜索、抓取网页、下载文件',
     intentKeywords: [
       /搜索|search|查找|找一下|查一下/i,
+      /谷歌|google|百度|bing|必应/i,
       /网页|网站|url|链接|抓取|fetch|爬取/i,
       /下载|download|保存.*图片|获取.*文件/i,
       /天气|新闻|汇率|股价|最新/i,

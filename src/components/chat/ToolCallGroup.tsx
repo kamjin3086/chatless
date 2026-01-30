@@ -226,82 +226,129 @@ export function ToolCallGroup({ cards, isStreaming: _isStreaming }: ToolCallGrou
     );
   }
 
+  // 计算哪些卡片需要在折叠状态下显示在外面
+  const { firstCard, lastRunningCard, middleCards, collapsedCount } = useMemo(() => {
+    if (cards.length === 0) {
+      return { firstCard: null, lastRunningCard: null, middleCards: [], collapsedCount: 0 };
+    }
+    
+    const first = cards[0];
+    const last = cards[cards.length - 1];
+    const lastRunning = last.status === 'running' || last.status === 'pending_auth' ? last : null;
+    
+    // 中间需要折叠的卡片（排除第一个和最后一个运行中的）
+    let middle: ToolCardData[];
+    if (lastRunning && cards.length > 1) {
+      // 有运行中的最后一个：折叠第2个到倒数第2个
+      middle = cards.slice(1, -1);
+    } else {
+      // 没有运行中的：折叠第2个到最后
+      middle = cards.slice(1);
+    }
+    
+    return {
+      firstCard: first,
+      lastRunningCard: lastRunning,
+      middleCards: middle,
+      collapsedCount: middle.length,
+    };
+  }, [cards]);
+
   // 折叠视图
   return (
     <div className="space-y-2">
-      {/* 主要结果（高优先级操作） */}
-      {analysis.mainResult && !expanded && (
+      {/* 第一个 tool 始终显示 */}
+      {firstCard && (
         <ToolCallCard
-          server={analysis.mainResult.server}
-          tool={analysis.mainResult.tool}
-          status={analysis.mainResult.status}
-          args={analysis.mainResult.args}
-          resultPreview={analysis.mainResult.resultPreview}
-          errorMessage={analysis.mainResult.errorMessage}
-          schemaHint={analysis.mainResult.schemaHint}
-          messageId={analysis.mainResult.messageId}
-          cardId={analysis.mainResult.id}
+          server={firstCard.server}
+          tool={firstCard.tool}
+          status={firstCard.status}
+          args={firstCard.args}
+          resultPreview={firstCard.resultPreview}
+          errorMessage={firstCard.errorMessage}
+          schemaHint={firstCard.schemaHint}
+          messageId={firstCard.messageId}
+          cardId={firstCard.id}
         />
       )}
 
-      {/* 折叠的步骤摘要 */}
-      <div
-        className={cn(
-          'flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-colors',
-          'bg-slate-50/30 hover:bg-slate-50/60 dark:bg-slate-900/10 dark:hover:bg-slate-900/20',
-          'text-slate-500 dark:text-slate-400'
-        )}
-        onClick={handleToggle}
-      >
-        {/* 展开/折叠图标 */}
-        {expanded ? (
-          <ChevronDown className="w-4 h-4 shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 shrink-0" />
-        )}
+      {/* 折叠的中间步骤 */}
+      {collapsedCount > 0 && (
+        <>
+          <div
+            className={cn(
+              'flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-colors',
+              'bg-slate-50/30 hover:bg-slate-50/60 dark:bg-slate-900/10 dark:hover:bg-slate-900/20',
+              'text-slate-500 dark:text-slate-400'
+            )}
+            onClick={handleToggle}
+          >
+            {/* 展开/折叠图标 */}
+            {expanded ? (
+              <ChevronDown className="w-4 h-4 shrink-0" />
+            ) : (
+              <ChevronRight className="w-4 h-4 shrink-0" />
+            )}
 
-        {/* 状态图标 */}
-        {analysis.hasError ? (
-          <X className="w-3.5 h-3.5 text-red-500" />
-        ) : analysis.allSuccess ? (
-          <Check className="w-3.5 h-3.5 text-green-500" />
-        ) : (
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-        )}
+            {/* 状态图标 */}
+            {analysis.hasError ? (
+              <X className="w-3.5 h-3.5 text-red-500" />
+            ) : analysis.allSuccess ? (
+              <Check className="w-3.5 h-3.5 text-green-500" />
+            ) : (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+            )}
 
-        {/* 摘要文本 */}
-        <span className="text-[12px]">
-          {expanded ? '收起详细步骤' : (
-            <>
-              执行了 {analysis.total} 个步骤
-              {analysis.lowPriority.length > 0 && (
-                <span className="text-slate-400 dark:text-slate-500">
-                  （含 {analysis.lowPriority.length} 个准备步骤）
-                </span>
+            {/* 摘要文本 */}
+            <span className="text-[12px]">
+              {expanded ? '收起详细步骤' : (
+                <>
+                  还有 {collapsedCount} 个步骤
+                  {analysis.lowPriority.length > 0 && (
+                    <span className="text-slate-400 dark:text-slate-500">
+                      （含 {Math.min(analysis.lowPriority.length, collapsedCount)} 个准备步骤）
+                    </span>
+                  )}
+                </>
               )}
-            </>
-          )}
-        </span>
-      </div>
+            </span>
+          </div>
 
-      {/* 展开的详细步骤 */}
-      {expanded && (
-        <div className="ml-4 border-l-2 border-slate-200/60 dark:border-slate-700/60 pl-3 space-y-2">
-          {cards.map((card, idx) => (
-            <ToolCallCard
-              key={`card-expanded-${card.id || idx}`}
-              server={card.server}
-              tool={card.tool}
-              status={card.status}
-              args={card.args}
-              resultPreview={card.resultPreview}
-              errorMessage={card.errorMessage}
-              schemaHint={card.schemaHint}
-              messageId={card.messageId}
-              cardId={card.id}
-            />
-          ))}
-        </div>
+          {/* 展开的中间步骤 */}
+          {expanded && (
+            <div className="ml-4 border-l-2 border-slate-200/60 dark:border-slate-700/60 pl-3 space-y-2">
+              {middleCards.map((card, idx) => (
+                <ToolCallCard
+                  key={`card-middle-${card.id || idx}`}
+                  server={card.server}
+                  tool={card.tool}
+                  status={card.status}
+                  args={card.args}
+                  resultPreview={card.resultPreview}
+                  errorMessage={card.errorMessage}
+                  schemaHint={card.schemaHint}
+                  messageId={card.messageId}
+                  cardId={card.id}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 最后一个运行中/待授权的 tool 始终显示 */}
+      {lastRunningCard && (
+        <ToolCallCard
+          server={lastRunningCard.server}
+          tool={lastRunningCard.tool}
+          status={lastRunningCard.status}
+          args={lastRunningCard.args}
+          resultPreview={lastRunningCard.resultPreview}
+          errorMessage={lastRunningCard.errorMessage}
+          schemaHint={lastRunningCard.schemaHint}
+          messageId={lastRunningCard.messageId}
+          cardId={lastRunningCard.id}
+        />
       )}
     </div>
   );

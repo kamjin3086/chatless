@@ -199,26 +199,12 @@ export class DatabaseManager {
    */
   async execute(sql: string, params?: any[]): Promise<any> {
     const db = this.getDatabase();
-    const startTime = Date.now();
 
     try {
-      console.debug("执行SQL", sql, this.sanitizeParamsForLog(params));
       const result = await db.execute(sql, params);
-      
-      const duration = Date.now() - startTime;
-      console.debug("SQL执行完成", {
-        sql: sql.substring(0, 100),
-        paramsCount: params?.length || 0
-      });
-
       return result;
     } catch (error) {
-      const duration = Date.now() - startTime;
-      const dbError = DatabaseErrorAnalyzer.analyze(error, { 
-        sql,
-        params,
-        duration
-      });
+      const dbError = DatabaseErrorAnalyzer.analyze(error, { sql, params });
       console.error("SQL执行失败", dbError);
       throw dbError;
     }
@@ -229,27 +215,12 @@ export class DatabaseManager {
    */
   async select<T = any>(sql: string, params?: any[]): Promise<T[]> {
     const db = this.getDatabase();
-    const startTime = Date.now();
 
     try {
-      console.debug("执行查询", sql, this.sanitizeParamsForLog(params));
       const result = await db.select(sql, params);
-      
-      const duration = Date.now() - startTime;
-      console.debug("查询执行完成", {
-        sql: sql.substring(0, 100),
-        resultCount: result.length,
-        paramsCount: params?.length || 0
-      });
-
       return result;
     } catch (error) {
-      const duration = Date.now() - startTime;
-      const dbError = DatabaseErrorAnalyzer.analyze(error, { 
-        sql,
-        params,
-        duration
-      });
+      const dbError = DatabaseErrorAnalyzer.analyze(error, { sql, params });
       console.error("查询执行失败", dbError);
       throw dbError;
     }
@@ -263,26 +234,19 @@ export class DatabaseManager {
     
     try {
       await db.execute("BEGIN TRANSACTION");
-      console.debug("事务开始");
 
       return {
         execute: async (sql: string, params?: any[]) => {
-          // 直接使用数据库对象，避免调用外部包装方法
-          console.debug("事务内SQL执行", sql, this.sanitizeParamsForLog(params));
           return await db.execute(sql, params);
         },
         select: async <T = any>(sql: string, params?: any[]): Promise<T[]> => {
-          // 直接使用数据库对象，避免调用外部包装方法
-          console.debug("事务内查询执行", sql, this.sanitizeParamsForLog(params));
           return await db.select(sql, params);
         },
         commit: async () => {
           await db.execute("COMMIT");
-          console.debug("事务提交");
         },
         rollback: async () => {
           await db.execute("ROLLBACK");
-          console.debug("事务回滚");
         }
       };
     } catch (error) {

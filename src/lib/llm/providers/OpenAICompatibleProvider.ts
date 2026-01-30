@@ -176,10 +176,17 @@ export class OpenAICompatibleProvider extends BaseProvider {
       if (parallelToolCalls !== undefined) {
         body.parallel_tool_calls = parallelToolCalls;
       }
-
     }
 
-    // DevTools：打印完整请求体（不包含 Authorization 等敏感 header）
+    // DevTools：打印完整请求体（仅开发环境）
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        `%c[OpenAICompatibleProvider] Request → ${url}`,
+        'color: #4CAF50; font-weight: bold;'
+      );
+      console.log('%c请求体 JSON:', 'color: #2196F3; font-weight: bold;');
+      console.log(JSON.stringify(body, null, 2));
+    }
 
 
     // 防止重复触发完成回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、reader.done 等多条完成分支

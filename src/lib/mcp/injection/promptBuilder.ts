@@ -132,13 +132,10 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   // 4. 构建工具信息（仅在不支持原生工具调用时注入）
   const toolInfoParts: string[] = [];
   
-  // Skills：始终注入 skills 概览 + 始终暴露 skills 工具
-  // 目标：
-  // 1) 即使检测器偶发失效，LLM 也能"看到"全部 skills 概览并自行选择
-  // 2) 支持用户显式指定 skill（通过概览中的 id/name）
-  // 3) 强制要求：一旦发现 skill 能做用户要求，就立即遵从 skill（再搭配其它 skill / filesystem / shell_executor）
-  const _skillIntent = detectSkillIntent(context.userContent || '');
-  const shouldExposeSkills = true;
+  // Skills：根据意图检测决定是否注入
+  // 动态加载策略：只在检测到 skill 相关意图时才注入，减少工具数量
+  const skillIntent = detectSkillIntent(context.userContent || '');
+  const shouldExposeSkills = skillIntent.shouldPreloadSkill;
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled &&
     // 只在"明显需要实时信息"的场景下注入，避免所有请求都默认携带 web_search（会分散模型注意力）
@@ -306,11 +303,21 @@ async function buildNativeToolDefinitions(params: {
     };
   };
 
+  // 记录已加载文档的服务器，避免重复注入相同文档
+  const loadedDocServers = new Set<string>();
+  
   const addToolsFromGroup = async (groupId: ToolGroupId) => {
     const groupTools = getToolsForGroup(groupId);
     for (const { server, tool } of groupTools) {
       const fullName = `${server}__${tool.name}`;
-      const doc = await getToolDoc({ toolFullName: fullName });
+      
+      // 同一服务器的工具只在第一个工具中注入完整文档
+      let doc = '';
+      if (!loadedDocServers.has(server)) {
+        doc = await getToolDoc({ toolFullName: fullName });
+        if (doc) loadedDocServers.add(server);
+      }
+      
       tools.push({
         name: fullName,
         description: [tool.description || '', doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
@@ -366,10 +373,15 @@ async function buildNativeToolDefinitions(params: {
   // 加载各组工具
   for (const groupId of groupsToLoad) {
     if (groupId === 'skills') {
-      // Skills 特殊处理
+      // Skills 特殊处理：只在第一个工具注入文档
+      let skillDocLoaded = false;
       for (const t of skillTools) {
         const fullName = `skills__${t.name}`;
-        const doc = await getToolDoc({ toolFullName: fullName });
+        let doc = '';
+        if (!skillDocLoaded) {
+          doc = await getToolDoc({ toolFullName: fullName });
+          if (doc) skillDocLoaded = true;
+        }
         tools.push({
           name: fullName,
           description: [t.description || '', doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),

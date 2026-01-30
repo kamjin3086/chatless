@@ -37,7 +37,7 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
       await this.createOptimizedTable();
       await this.createIndexes();
       await this.optimizePragmaSettings();
-      console.log(`优化的SQLite向量存储已初始化: ${this.tableName}`);
+      // 初始化完成（静默）
     } catch (error) {
       throw new RetrievalError(
         `初始化SQLite向量存储失败: ${error instanceof Error ? error.message : '未知错误'}`
@@ -49,16 +49,11 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
     const sqlite = this.config.sqlite!;
     
     try {
-      // 使用DatabaseService的优化设置，这些设置已经在DatabaseManager中配置
-      console.log('数据库并发参数已由DatabaseService配置');
-      
       // 验证数据库连接
       const testResult = await this.dbManager.select('SELECT 1 as test');
       if (!testResult || testResult[0]?.test !== 1) {
         throw new Error('数据库连接验证失败');
       }
-      
-      console.log('向量存储数据库连接验证成功');
     } catch (error) {
       console.error('❌ 向量存储数据库设置失败:', error);
       throw error;
@@ -66,14 +61,7 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
   }
 
   private async optimizePragmaSettings(): Promise<void> {
-    // DatabaseService已经设置了大部分优化参数
-    // 这里只设置向量存储特有的优化
-    try {
-      console.log('SQLite性能优化已由DatabaseService配置');
-    } catch (error) {
-      console.warn('部分SQLite优化设置失败:', error);
-      // 不抛出错误，因为这些是优化设置，失败不应阻止运行
-    }
+    // DatabaseService 已设置优化参数，无需额外操作
   }
 
   private async createOptimizedTable(): Promise<void> {
@@ -131,7 +119,6 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
       `);
     }
     
-    console.log('SQLite向量存储索引创建完成');
   }
 
   protected async performSearch(
