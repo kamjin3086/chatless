@@ -16,9 +16,17 @@
 import type { InjectionContext, InjectionResult, InjectionSignals, NativeToolDefinition } from './types';
 import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
-import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from '@/lib/mcp/nativeTools/filesystem';
-import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nativeTools/shellExecutor';
-import { AGENT_CONTEXT_SERVER_NAME, AGENT_CONTEXT_TOOLS } from '@/lib/mcp/nativeTools/agentContext';
+import { FILESYSTEM_SERVER_NAME } from '@/lib/mcp/nativeTools/filesystem';
+import { SHELL_EXECUTOR_SERVER_NAME } from '@/lib/mcp/nativeTools/shellExecutor';
+import { 
+  TOOLS_DISCOVER_SERVER_NAME, 
+  TOOLS_REGISTRY_TOOLS,
+  detectToolGroupIntents,
+  detectComplexTaskIntent,
+  getToolsForGroup,
+  type ToolGroupId,
+} from '@/lib/mcp/nativeTools/toolRegistry';
+import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
 import { skillTools } from '@/lib/skills/skillTools';
@@ -136,11 +144,12 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     // 只在"明显需要实时信息"的场景下注入，避免所有请求都默认携带 web_search（会分散模型注意力）
     (signals.isTimeRelated || (signals.hasExplicitMention && signals.mentionedServers.some((s) => s.toLowerCase() === WEB_SEARCH_SERVER_NAME)));
 
-  // 构建原生工具定义（Native-only）
+  // 构建原生工具定义（Native-only，动态加载）
   const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
     servers: enabled,
     includeSkills: shouldExposeSkills,
     includeWebSearch: shouldExposeWebSearch,
+    userContent: context.userContent || '',
   });
 
   // 使用原生工具调用时，只注入简化的协议说明
@@ -269,17 +278,22 @@ async function injectTimeContext(
 
 /**
  * 构建原生工具定义（用于传递给 LLM API 的 tools 参数）
+ * 
+ * ## 动态加载策略
+ * 
+ * 1. 核心层（始终加载）：fs__read, fs__write, fs__ls, tools__discover
+ * 2. 意图检测层：根据用户输入自动注入匹配的工具组
+ * 3. AI 请求层：AI 通过 tools__load 请求的工具组
  */
 async function buildNativeToolDefinitions(params: {
   servers: string[];
   includeWebSearch: boolean;
   includeSkills: boolean;
+  userContent?: string; // 用于意图检测
 }): Promise<NativeToolDefinition[]> {
   const tools: NativeToolDefinition[] = [];
-  const TOOL_LIMIT = 20; // 原生工具调用的限制
 
   const normalizeParams = (p: any): { type: 'object'; properties: Record<string, unknown>; required: string[] } => {
-    // 一些 OpenAI-compat 后端会严格要求 parameters.properties 存在；否则会 400
     if (!p || typeof p !== 'object') {
       return { type: 'object', properties: {}, required: [] };
     }
@@ -292,37 +306,104 @@ async function buildNativeToolDefinitions(params: {
     };
   };
 
-  // 0. Skills（本地能力包）：按需暴露（默认不注入，减少误调用与 tools 数量）
-  if (params.includeSkills) {
-    for (const t of skillTools) {
-      const fullName = `skills__${t.name}`;
+  const addToolsFromGroup = async (groupId: ToolGroupId) => {
+    const groupTools = getToolsForGroup(groupId);
+    for (const { server, tool } of groupTools) {
+      const fullName = `${server}__${tool.name}`;
       const doc = await getToolDoc({ toolFullName: fullName });
       tools.push({
         name: fullName,
-        description: [t.description || `Skill tool ${t.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
-        parameters: normalizeParams(
-          t.parameters
-            ? {
-                type: 'object',
-                properties: Object.fromEntries(
-                  Object.entries(t.parameters).map(([k, v]) => [
-                    k,
-                    { type: v.type, description: v.description },
-                  ])
-                ),
-                required: Object.entries(t.parameters)
-                  .filter(([, v]) => v.required)
-                  .map(([k]) => k),
-              }
-            : { type: 'object' }
-        ),
+        description: [tool.description || '', doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
+        parameters: normalizeParams((tool as any).input_schema?.schema || { type: 'object' }),
       });
     }
+  };
+
+  // ========== 1. 核心层：始终加载 ==========
+  
+  // 1.1 核心文件工具（read, write, ls）
+  await addToolsFromGroup('core');
+  
+  // 1.2 工具发现工具（让 AI 知道还有什么）
+  for (const tool of TOOLS_REGISTRY_TOOLS) {
+    const fullName = `${TOOLS_DISCOVER_SERVER_NAME}__${tool.name}`;
+    tools.push({
+      name: fullName,
+      description: tool.description || '',
+      parameters: normalizeParams((tool as any).input_schema?.schema || { type: 'object' }),
+    });
   }
 
-  // 1. 添加 MCP 服务器的工具
+  // ========== 2. 意图检测层：根据用户输入自动注入 ==========
+  
+  const userContent = params.userContent || '';
+  const detectedGroups = detectToolGroupIntents(userContent);
+  const loadedGroups: ToolGroupId[] = ['core'];
+  
+  // 检测复杂任务 → 注入上下文管理工具
+  if (detectComplexTaskIntent(userContent) && !detectedGroups.includes('ctx')) {
+    detectedGroups.push('ctx');
+  }
+  
+  // 网络搜索开关 → 注入网络工具
+  if (params.includeWebSearch && !detectedGroups.includes('web')) {
+    detectedGroups.push('web');
+  }
+  
+  // 技能触发 → 注入技能工具
+  if (params.includeSkills && !detectedGroups.includes('skills')) {
+    detectedGroups.push('skills');
+  }
+
+  // ========== 3. AI 请求层：加载 AI 主动请求的工具组 ==========
+  
+  const store = useToolLoadRequestStore.getState();
+  const pendingRequests = store.getPendingRequests();
+  
+  // 合并所有需要加载的组
+  const groupsToLoad = [...new Set([...detectedGroups, ...pendingRequests])];
+  
+  // 加载各组工具
+  for (const groupId of groupsToLoad) {
+    if (groupId === 'skills') {
+      // Skills 特殊处理
+      for (const t of skillTools) {
+        const fullName = `skills__${t.name}`;
+        const doc = await getToolDoc({ toolFullName: fullName });
+        tools.push({
+          name: fullName,
+          description: [t.description || '', doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
+          parameters: normalizeParams(
+            t.parameters
+              ? {
+                  type: 'object',
+                  properties: Object.fromEntries(
+                    Object.entries(t.parameters).map(([k, v]) => [
+                      k,
+                      { type: v.type, description: v.description },
+                    ])
+                  ),
+                  required: Object.entries(t.parameters)
+                    .filter(([, v]) => v.required)
+                    .map(([k]) => k),
+                }
+              : { type: 'object' }
+          ),
+        });
+      }
+    } else {
+      await addToolsFromGroup(groupId);
+    }
+    loadedGroups.push(groupId);
+  }
+
+  // 更新已加载状态
+  store.markLoaded(loadedGroups);
+
+  // ========== 4. MCP 服务器工具（外部服务） ==========
+  
+  const TOOL_LIMIT = 15;
   for (const server of params.servers) {
-    // 避免与内置保留 server（filesystem/skills/web_search/shell_executor）发生工具名冲突
     if (RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase())) {
       continue;
     }
@@ -332,8 +413,6 @@ async function buildNativeToolDefinitions(params: {
 
       for (const tool of serverTools.slice(0, TOOL_LIMIT)) {
         if (!tool?.name) continue;
-        
-        // 使用 server__toolname 格式以便解析
         const fullName = `${server}__${tool.name}`;
         const doc = await getToolDoc({ toolFullName: fullName });
         tools.push({
@@ -347,56 +426,7 @@ async function buildNativeToolDefinitions(params: {
     }
   }
 
-  // 2. 添加网络搜索工具
-  if (params.includeWebSearch) {
-    tools.push({
-      name: `${WEB_SEARCH_SERVER_NAME}__search`,
-      description: '在互联网上搜索实时信息',
-      parameters: normalizeParams({
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: '搜索关键词',
-          },
-        },
-        required: ['query'],
-      }),
-    });
-  }
-
-  // 3. 添加 Filesystem 基础工具（让 LLM 能读写文件、列目录）
-  for (const fsTool of FILESYSTEM_TOOLS) {
-    const fullName = `${FILESYSTEM_SERVER_NAME}__${fsTool.name}`;
-    const doc = await getToolDoc({ toolFullName: fullName });
-    tools.push({
-      name: fullName,
-      description: [fsTool.description || `Filesystem tool ${fsTool.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
-      parameters: normalizeParams((fsTool as any).input_schema?.schema || { type: 'object' }),
-    });
-  }
-
-  // 4. 添加 Shell Executor 工具（让 LLM 能执行命令/脚本）
-  for (const shellTool of SHELL_EXECUTOR_TOOLS) {
-    const fullName = `${SHELL_EXECUTOR_SERVER_NAME}__${shellTool.name}`;
-    const doc = await getToolDoc({ toolFullName: fullName });
-    tools.push({
-      name: fullName,
-      description: [shellTool.description || `Shell tool ${shellTool.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
-      parameters: normalizeParams((shellTool as any).input_schema?.schema || { type: 'object' }),
-    });
-  }
-
-  // 5. 添加 Agent Context 工具（上下文管理：研究/计划/错误）
-  for (const ctxTool of AGENT_CONTEXT_TOOLS) {
-    const fullName = `${AGENT_CONTEXT_SERVER_NAME}__${ctxTool.name}`;
-    const doc = await getToolDoc({ toolFullName: fullName });
-    tools.push({
-      name: fullName,
-      description: [ctxTool.description || `Context tool ${ctxTool.name}`, doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
-      parameters: normalizeParams((ctxTool as any).input_schema?.schema || { type: 'object' }),
-    });
-  }
+  console.log(`[PromptBuilder] 工具加载: 核心(core) + ${groupsToLoad.join(', ') || '无'}, 共 ${tools.length} 个`);
 
   return tools;
 }

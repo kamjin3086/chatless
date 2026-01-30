@@ -4,6 +4,7 @@ import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
 import { SkillsFsAdapter } from './SkillsFsAdapter';
 import { SkillsToolAdapter } from './SkillsToolAdapter';
+import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 import { UserFsAdapter } from './UserFsAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
@@ -13,6 +14,7 @@ import type { ToolAdapter } from '../ToolAdapter';
  */
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
+    new ToolsRegistryAdapter(),
     new AgentContextAdapter(),
     new WebSearchAdapter(),
     new SkillsToolAdapter(),
@@ -30,6 +32,7 @@ export { McpAdapter } from './McpAdapter';
 export { ShellExecutorAdapter } from './ShellExecutorAdapter';
 export { SkillsFsAdapter } from './SkillsFsAdapter';
 export { SkillsToolAdapter } from './SkillsToolAdapter';
+export { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
 

@@ -87,6 +87,25 @@ export function presentToolCard(params: {
     return { titleLine: '上下文管理', detailLineLabel: '工具', detailLineFull: tool, detailLineShort: tool, kind: 'generic' };
   }
 
+  // ---------- tools (工具发现) ----------
+  if (srv === 'tools') {
+    if (tl === 'discover') {
+      return { titleLine: '发现工具', kind: 'generic' };
+    }
+    if (tl === 'load') {
+      const group = pickArg(args, 'group');
+      const groupNames: Record<string, string> = {
+        fs_extra: '文件管理',
+        shell: '命令执行',
+        web: '网络工具',
+        ctx: '上下文管理',
+        skills: '技能系统',
+      };
+      return { titleLine: '加载工具组', detailLineLabel: '组', detailLineFull: group, detailLineShort: groupNames[group] || group, kind: 'generic' };
+    }
+    return { titleLine: '工具管理', kind: 'generic' };
+  }
+
   // （兼容遗留）user_fs / skills_fs 不再对外暴露；这里保留通用兜底即可。
 
   // ---------- shell ----------

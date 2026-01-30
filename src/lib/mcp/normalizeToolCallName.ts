@@ -97,6 +97,14 @@ function inferFromBareToolName(toolName: string): Normalized | null {
     return { serverName: AGENT_CONTEXT_SERVER_NAME, toolName: t.slice('ctx_'.length) };
   }
 
+  // Tools Registry 工具
+  if (t === 'discover' || t === 'load') {
+    return { serverName: 'tools', toolName: t };
+  }
+  if (t.startsWith('tools_')) {
+    return { serverName: 'tools', toolName: t.slice('tools_'.length) };
+  }
+
   return null;
 }
 

@@ -53,7 +53,7 @@ export function buildTimeContextMessage(includeInSearch: boolean = false): strin
 【重要】：
 - 当用户问"今天"、"现在"、"最新"等时间相关问题时，请使用上述当前时间
 - 进行网络搜索时，应在查询中包含具体日期（如"${timeInfo.date}"）以获取最新信息
-- 例如：用户问"今天天气"，应搜索"${timeInfo.date} 天气"或"${timeInfo.datetime.split(' ')[0]}天气"`;
+- 例如：用户问"今天新闻"，应搜索"${timeInfo.date} 新闻"或"${timeInfo.datetime.split(' ')[0]}新闻"`;
   }
   
   return message;

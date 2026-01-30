@@ -55,6 +55,9 @@ export async function getToolDoc(params: {
     if (key.startsWith('ctx__')) {
       return await fetchText('/tool-docs/ctx.txt');
     }
+    if (key.startsWith('tools__')) {
+      return await fetchText('/tool-docs/tools.txt');
+    }
     // 旧格式兼容
     if (key === 'shell_executor__execute_command') {
       return await fetchText('/tool-docs/shell_run.txt');

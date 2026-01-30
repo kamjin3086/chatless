@@ -361,62 +361,54 @@ ${OUTPUT_FORMAT_RULES}`;
 
 export const CORE_TOOL_POLICY_MD = `【核心工具策略】
 
-## Skills 与 Tools 的关系
+## 工具动态加载机制
 
-Skills = 高级任务模板（可选）
-Tools = 基础能力（核心）
+系统按需加载工具，当前已加载的工具即为可用工具。
 
-决策流程：
-1. 有匹配的 Skill → 使用 Skill 指导
-2. 无匹配的 Skill → 直接组合 Tools 完成任务
-3. **不要因为没有 Skill 就说"无法完成"！**
+**如果当前工具不够用**：
+1. 调用 \`tools__discover\` 查看还有哪些工具组可用
+2. 调用 \`tools__load({ group: "xxx" })\` 请求加载
 
-## 可用 Tools（你的手和眼）
+## 核心工具（始终可用）
 
-- fs__*：文件读写、目录操作（**首选！最可靠**）
-- ctx__*：上下文管理（研究/计划/错误记录）
-- web__*：网络搜索、抓取、下载
-- shell__run：运行命令（git/npm/python 等）
+- fs__read / fs__write / fs__ls：文件读写
+- tools__discover / tools__load：工具发现与加载
 
-## 工具选择
+## 可加载的工具组
+
+| 组 ID | 包含 | 适用场景 |
+|-------|------|----------|
+| fs_extra | mkdir, rm, mv | 文件管理 |
+| shell | run | 运行命令 |
+| web | search, fetch, download | 网络操作 |
+| ctx | save_plan, save_research 等 | 复杂任务管理 |
+| skills | 技能系统 | 预定义模板 |
+
+## 工具选择原则
 
 | 任务 | 推荐工具 |
 |------|----------|
-| 文件操作 | fs__* |
-| 上下文管理 | ctx__* |
-| 下载文件 | web__download |
-| 运行命令 | shell__run |
+| 读写文件 | fs__read / fs__write |
+| 创建/删除文件 | 需要 fs_extra 组 |
+| 运行命令 | 需要 shell 组 |
+| 网络搜索/下载 | 需要 web 组 |
+| 复杂任务规划 | 需要 ctx 组 |
 
-## ctx__*：上下文管理（复杂任务必用）
-
-复杂任务（>3步）时，用 ctx 工具管理上下文：
-- ctx__save_plan: 创建计划
-- ctx__save_research: 保存研究结果
-- ctx__log_error: 记录错误
-- ctx__get: 检索上下文
-- ctx__update_step: 更新进度
-
-## shell__run：根据平台使用原生命令
+## shell__run（需加载 shell 组）
 
 Windows → powershell -Command "..."
 macOS/Linux → mkdir -p / rm -rf / curl ...
 
-## 图片下载
+## 复杂任务流程
 
-用 Pexels/Unsplash 直链：
-web__fetch({ url: "https://www.pexels.com/search/cat/" })
-→ 提取直链 → web__download
-
-## 复杂任务四步流程（>3 步时）
-
-1. 规划：ctx__save_plan 创建计划
-2. 研究：收集信息，ctx__save_research 保存结果
-3. 执行：逐步行动，ctx__update_step 更新进度
-4. 验证：检查结果，总结输出
+1. 检查是否有 ctx 工具，没有则 tools__load({ group: "ctx" })
+2. ctx__save_plan 创建计划
+3. 逐步执行，ctx__update_step 更新进度
+4. 验证结果
 
 ## 关键原则
 
-- 结果必须验证（read_file/list_directory 确认）
+- 结果必须验证（fs__read / fs__ls 确认）
 - 不要反复调用同类工具（检测到循环立即换方案）
 - 错误最多重试 2 次，失败则换方案，连续 3 次则止损
 
