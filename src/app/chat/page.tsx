@@ -346,10 +346,10 @@ export default function ChatPage() {
             {/* managedEndRef 已由组件内部渲染，无需此处额外 div */}
           </div>
           {/* 新消息指示器 - 用户查看历史消息时有新消息到达 */}
-          <NewMessageIndicator
+          {/* <NewMessageIndicator
             show={hasNewMessageWhileAway && !isInputAreaHovered}
             onClick={handleScrollToBottom}
-          />
+          /> */}
           
           {/* 回到底部按钮 - 用户向上滚动时显示 */}
           {/* <ScrollToBottomButton 
