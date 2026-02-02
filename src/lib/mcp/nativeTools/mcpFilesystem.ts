@@ -50,12 +50,16 @@ export const MCP_FILESYSTEM_WRITE_FILE_TOOL: McpTool = {
 
 export const MCP_FILESYSTEM_LIST_DIR_TOOL: McpTool = {
   name: 'ls',
-  description: '列出目录内容（文件和子目录）',
+  description:
+    '列出目录内容（默认不递归、默认限量返回）。建议优先用 pattern+limit 精确匹配，避免一次返回大量条目导致上下文拥堵。',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         path: { type: 'string', description: '目录路径' },
+        limit: { type: 'number', description: '最多返回条目数（可选，默认 200，上限 2000）' },
+        pattern: { type: 'string', description: '名称通配符（可选，支持 * 和 ?；仅匹配当前目录这一层的 name）' },
+        kind: { type: 'string', description: '筛选类型（可选）：any | file | dir（默认 any）' },
       },
       required: ['path'],
     },
@@ -79,14 +83,24 @@ export const MCP_FILESYSTEM_CREATE_DIR_TOOL: McpTool = {
 
 export const MCP_FILESYSTEM_DELETE_FILE_TOOL: McpTool = {
   name: 'rm',
-  description: '删除文件',
+  description:
+    '删除文件/目录（默认不递归）。三种用法任选其一：\n' +
+    '1) path: 单个路径\n' +
+    '2) paths: 批量路径数组（推荐规模操作）\n' +
+    '3) dir+pattern: 目录下通配符批量（推荐先 dryRun=true）',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: '文件路径' },
+        path: { type: 'string', description: '文件/目录路径（单个）' },
+        paths: { type: 'array', description: '批量删除路径列表（可选）', items: { type: 'string' } },
+        dir: { type: 'string', description: '目录路径（可选；与 pattern 一起使用，表示删除该目录下匹配项）' },
+        pattern: { type: 'string', description: '名称通配符（可选；与 dir 一起使用，支持 * 和 ?；默认不递归）' },
+        limit: { type: 'number', description: 'dir+pattern 模式最多删除/匹配条目数（可选，默认 200，上限 2000）' },
+        kind: { type: 'string', description: 'dir+pattern 筛选类型（可选）：any | file | dir（默认 any）' },
+        dryRun: { type: 'boolean', description: 'dir+pattern 预演（只列出 matches 不删除）（可选，默认 false）' },
       },
-      required: ['path'],
+      required: [],
     },
   },
 };

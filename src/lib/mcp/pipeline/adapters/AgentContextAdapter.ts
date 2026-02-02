@@ -107,9 +107,9 @@ export class AgentContextAdapter implements ToolAdapter {
 
   private async listDir(invoke: typeof import('@tauri-apps/api/core').invoke, path: string): Promise<string[]> {
     try {
-      const result = await invoke<{ ok: boolean; entries?: Array<{ name: string }> }>('filesystem_list_directory', { path });
+      const result = await invoke<{ ok: boolean; entries?: Array<{ name: string }>; truncated?: boolean }>('filesystem_list_directory', { path, limit: 200 });
       if (result.ok && result.entries) {
-        return result.entries.map(e => e.name);
+        return result.entries.map((e) => e.name);
       }
       return [];
     } catch {
@@ -261,7 +261,7 @@ ${risksSection}
 `;
 
     // 读取现有内容
-    let existing = await this.readFile(invoke, filePath);
+    const existing = await this.readFile(invoke, filePath);
 
     // 追加新条目
     const newContent = existing + entry;

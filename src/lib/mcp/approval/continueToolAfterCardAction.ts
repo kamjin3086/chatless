@@ -19,6 +19,8 @@ export async function continueAfterToolCardAction(params: {
     (c) => Array.isArray((c as any).messages) && (c as any).messages.some((m: any) => m?.id === assistantMessageId)
   );
   if (!conv) return false;
+  // agent 模式：续写由 while(true) AgentLoop 统一驱动，避免从卡片触发旧的递归 continueWithToolResult
+  if (((conv as any).tool_mode as any) === 'agent') return false;
 
   const provider = (conv as any).model_provider || '';
   const model = (conv as any).model_id || '';

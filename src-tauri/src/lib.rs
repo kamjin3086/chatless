@@ -259,6 +259,8 @@ pub fn run() {
       filesystem::commands::filesystem_list_directory,
       filesystem::commands::filesystem_create_directory,
       filesystem::commands::filesystem_delete_file,
+      filesystem::commands::filesystem_delete_many,
+      filesystem::commands::filesystem_delete_by_pattern,
       filesystem::commands::filesystem_rename_file
     ])
     .run(tauri::generate_context!())

@@ -3,7 +3,17 @@
  */
 
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
-import type { Message } from '@/types/chat';
+
+export type OnToolCall = (params: {
+  server: string;
+  tool: string;
+  args?: Record<string, unknown>;
+  callId?: string;
+  cardId: string;
+  lockKey: string;
+  /** 若提供，则表示无需真正执行工具，直接把该结果交给上层 AgentLoop 处理 */
+  preResult?: unknown;
+}) => Promise<void> | void;
 
 /**
  * 流式处理上下文（线性委派架构）
@@ -50,6 +60,8 @@ export interface StreamContext {
     model: string;
     originalUserContent: string;
     historyForLlm: any[];
+    /** AgentLoop：当存在时，tool_call 不会在 handler 内部直接递归续写 */
+    onToolCall?: OnToolCall;
   };
 }
 
@@ -84,6 +96,8 @@ export interface StreamOrchestratorConfig {
   originalUserContent: string;
   /** LLM 历史消息 */
   historyForLlm: any[];
+  /** AgentLoop：拦截 tool_call，把执行/续写交给外部 while(true) loop */
+  onToolCall?: OnToolCall;
   /** 更新UI的回调 */
   onUIUpdate?: (content: string) => void;
   /** 错误处理回调 */

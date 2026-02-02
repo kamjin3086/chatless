@@ -226,7 +226,20 @@ export function ChatInput({
     }
     return false;
   });
-  const effectiveLoading = isLoading || storeAgentRunning;
+  // AgentLoop 运行态：用于避免“仍在 loop 中但 Stop 按钮闪烁”
+  const agentRunActive = useChatStore((s: any) => {
+    const cid = conversationId || s.currentConversationId;
+    if (!cid) return false;
+    const conv = (s.conversations || []).find((c: any) => c && c.id === cid);
+    const toolMode = (conv?.tool_mode as ('chat' | 'agent') | undefined) || s.sessionToolMode || 'chat';
+    if (toolMode !== 'agent') return false;
+    const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
+    const lastAssistant = [...msgs].reverse().find((m) => m && m.role === 'assistant' && m.id);
+    if (!lastAssistant?.id) return false;
+    const runs = s.agentRuns || {};
+    return !!runs[String(lastAssistant.id)]?.running;
+  });
+  const effectiveLoading = isLoading || storeAgentRunning || agentRunActive;
   const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
   // 仅展示用户主动挂载的目录（通过 + 号选择），不展示系统自动 @WorkDir
   const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;

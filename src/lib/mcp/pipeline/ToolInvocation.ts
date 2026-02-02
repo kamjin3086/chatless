@@ -60,6 +60,20 @@ export function buildResultPreview(value: unknown, maxLen = 12000): string {
         return v.content.slice(0, maxLen);
       }
 
+      // filesystem_list_directory (structured, limited)
+      if (Array.isArray(v.entries) && typeof v.limit === 'number' && typeof v.returnedCount === 'number') {
+        const entries = (v.entries as any[]).filter(Boolean);
+        const head = entries.slice(0, 40).map((e) => {
+          const name = String(e?.name || '').trim() || '(unknown)';
+          const isDir = !!e?.isDirectory;
+          return `- ${name}${isDir ? '/' : ''}`;
+        });
+        const truncated = !!v.truncated;
+        const summary = `Entries: ${Number(v.returnedCount)}${truncated ? ` (truncated, limit=${Number(v.limit)})` : ''}`;
+        const more = entries.length > 40 ? `\n... (${entries.length - 40} more in preview)` : '';
+        return [summary, head.join('\n'), more].filter(Boolean).join('\n').slice(0, maxLen);
+      }
+
       // skills__get_skill_instructions (structured result)
       if (typeof v.content === 'string' && (typeof v.skillId === 'string' || typeof v.skillName === 'string')) {
         return v.content.slice(0, maxLen);
@@ -68,6 +82,28 @@ export function buildResultPreview(value: unknown, maxLen = 12000): string {
       // If it is a wrapper { ok, content, ... }
       if (typeof v.content === 'string' && typeof v.ok === 'boolean') {
         return v.content.slice(0, maxLen);
+      }
+
+      // Common structured error: { error: { code, message, hints[] } }
+      if (v.error && typeof v.error === 'object') {
+        const code = String((v.error as any).code || '').trim();
+        const msg = String((v.error as any).message || '').trim();
+        const hints = Array.isArray((v.error as any).hints) ? ((v.error as any).hints as any[]).map((x) => String(x || '').trim()).filter(Boolean) : [];
+        const head = [code ? `Error: ${code}` : 'Error', msg].filter(Boolean).join(' - ');
+        const hintText = hints.length ? `\nHints:\n${hints.slice(0, 5).map((h) => `- ${h}`).join('\n')}` : '';
+        return `${head}${hintText}`.slice(0, maxLen);
+      }
+
+      // Pipeline structured error: { errorDetails: { code, message, hints[] } }
+      if (v.errorDetails && typeof v.errorDetails === 'object') {
+        const code = String((v.errorDetails as any).code || '').trim();
+        const msg = String((v.errorDetails as any).message || '').trim();
+        const hints = Array.isArray((v.errorDetails as any).hints)
+          ? ((v.errorDetails as any).hints as any[]).map((x) => String(x || '').trim()).filter(Boolean)
+          : [];
+        const head = [code ? `Error: ${code}` : 'Error', msg].filter(Boolean).join(' - ');
+        const hintText = hints.length ? `\nHints:\n${hints.slice(0, 5).map((h) => `- ${h}`).join('\n')}` : '';
+        return `${head}${hintText}`.slice(0, maxLen);
       }
     }
 

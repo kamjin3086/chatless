@@ -39,6 +39,8 @@ interface FilesystemAllowlistState {
 
   /** 用于越界审批：给一个文件/目录绝对路径，自动按其所在目录生成条目（递归目录白名单） */
   upsertDirectoryForPath: (params: { absolutePath: string; op: FileOp; source: AllowlistSource }) => Promise<AllowlistDirectory | null>;
+  /** 用于显式授权某个目录本身（例如 dir+pattern 的批量操作） */
+  upsertDirectory: (params: { directoryPath: string; op: FileOp; source: AllowlistSource }) => Promise<AllowlistDirectory | null>;
 }
 
 const STORE_FILE = 'filesystem-allowlist-meta.json';
@@ -198,6 +200,37 @@ export const useFilesystemAllowlistStore = create<FilesystemAllowlistState>((set
       });
       await get().updateDirectory(existing.id, { permissions: nextPerm, source: source || existing.source });
       // 返回最新值（从 state 取）
+      return get().directories.find((d) => d.id === existing.id) || existing;
+    }
+
+    const alias = ensureUniqueAlias(defaultAliasFromDirPath(dirPath), get().directories);
+    return get().addDirectory({
+      path: dirPath,
+      alias,
+      permissions: {
+        read: op === 'read',
+        write: op === 'write',
+        create: op === 'create',
+        delete: op === 'delete',
+      },
+      source: source || 'unknown',
+    });
+  },
+
+  upsertDirectory: async ({ directoryPath, op, source }) => {
+    await get().load();
+    const dirPath = normalizeDirectoryPath(String(directoryPath || '').trim().replace(/\\/g, '/'));
+    if (!dirPath) return null;
+
+    const existing = get().getByPath(dirPath);
+    if (existing) {
+      const nextPerm = mergePermissions(existing.permissions, {
+        read: op === 'read',
+        write: op === 'write',
+        create: op === 'create',
+        delete: op === 'delete',
+      });
+      await get().updateDirectory(existing.id, { permissions: nextPerm, source: source || existing.source });
       return get().directories.find((d) => d.id === existing.id) || existing;
     }
 

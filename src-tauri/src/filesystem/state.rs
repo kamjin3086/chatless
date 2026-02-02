@@ -107,6 +107,21 @@ fn best_match<'a>(dirs: &'a [AllowlistDirectory], abs_path: &str) -> Option<&'a 
   best
 }
 
+fn best_match_for_op<'a>(dirs: &'a [AllowlistDirectory], abs_path: &str, op: FsOp) -> Option<&'a AllowlistDirectory> {
+  let mut best: Option<&AllowlistDirectory> = None;
+  let mut best_len: usize = 0;
+  for d in dirs {
+    if is_within_dir(&d.path, abs_path) && op_allowed(&d.permissions, op) {
+      let l = d.path.len();
+      if l >= best_len {
+        best = Some(d);
+        best_len = l;
+      }
+    }
+  }
+  best
+}
+
 fn op_allowed(perm: &FsPermissions, op: FsOp) -> bool {
   match op {
     FsOp::Read => perm.read,
@@ -178,11 +193,23 @@ impl FilesystemAllowlistState {
     self.ensure_loaded(app).await?;
     let abs = normalize_abs_path(input_path)?;
     let snap = self.inner.read().await;
-    let m = best_match(&snap.directories, &abs).ok_or_else(|| format!("forbidden path: {}", abs))?;
-    if !op_allowed(&m.permissions, op) {
-      return Err(format!("forbidden op for path: {}", abs));
+    // 关键：选择“最具体且允许该 op 的目录”
+    // 这样不会出现“更具体目录条目（仅 delete=true）意外覆盖父目录 read 权限，导致 ls 永远 forbidden”的问题。
+    if let Some(m) = best_match_for_op(&snap.directories, &abs, op) {
+      return Ok(abs);
     }
-    Ok(abs)
+
+    // 无任何目录允许该 op：给出可诊断信息（匹配到哪个目录、其权限是什么）
+    let m = best_match(&snap.directories, &abs).ok_or_else(|| format!("forbidden path: {}", abs))?;
+    return Err(format!(
+      "forbidden op for path: {} (matched allowlist: {}, perms: read={}, write={}, create={}, delete={})",
+      abs,
+      m.path,
+      m.permissions.read,
+      m.permissions.write,
+      m.permissions.create,
+      m.permissions.delete
+    ));
   }
 }
 

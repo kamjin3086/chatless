@@ -146,15 +146,24 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
       // ignore
     }
     toast.info('已停止该步骤', { description: '该工具已标记为停止（best-effort 取消执行）。' });
-    // 继续 agent：给 follow-up 一个“已停止”结果，避免后续工具卡/agent 卡死
-    void continueAfterToolCardAction({
-      assistantMessageId: messageId,
-      cardId,
-      server,
-      tool,
-      args,
-      result: { skipped: true, reason: 'USER_STOPPED' },
-    }).catch(() => {});
+    // 非 agent 模式：从卡片触发 follow-up（agent 模式由 while(true) AgentLoop 统一推进）
+    try {
+      const st = useChatStore.getState() as any;
+      const conv = (st.conversations || []).find((c: any) => (c?.messages || []).some((m: any) => m?.id === messageId));
+      const isAgent = String(conv?.tool_mode || '').toLowerCase() === 'agent';
+      if (!isAgent) {
+        void continueAfterToolCardAction({
+          assistantMessageId: messageId,
+          cardId,
+          server,
+          tool,
+          args,
+          result: { skipped: true, reason: 'USER_STOPPED' },
+        }).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
   }, [messageId, cardId, server, tool, args]);
 
   const handleSkipRunning = React.useCallback(() => {
@@ -176,14 +185,24 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
     }
 
     toast.info('已跳过该步骤', { description: '将继续后续步骤（忽略该工具的最终输出）。' });
-    void continueAfterToolCardAction({
-      assistantMessageId: messageId,
-      cardId,
-      server,
-      tool,
-      args,
-      result: { skipped: true, reason: 'USER_SKIPPED' },
-    }).catch(() => {});
+    // 非 agent 模式：从卡片触发 follow-up（agent 模式由 while(true) AgentLoop 统一推进）
+    try {
+      const st = useChatStore.getState() as any;
+      const conv = (st.conversations || []).find((c: any) => (c?.messages || []).some((m: any) => m?.id === messageId));
+      const isAgent = String(conv?.tool_mode || '').toLowerCase() === 'agent';
+      if (!isAgent) {
+        void continueAfterToolCardAction({
+          assistantMessageId: messageId,
+          cardId,
+          server,
+          tool,
+          args,
+          result: { skipped: true, reason: 'USER_SKIPPED' },
+        }).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
   }, [messageId, cardId, server, tool, args]);
   
   return (

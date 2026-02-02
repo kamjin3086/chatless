@@ -119,6 +119,42 @@ export class ToolCallEventHandler implements EventHandler {
       // 创建工具卡片ID
       cardId = stableCardId;
 
+      // 关键 UX：tool_call 到来时，先把抑制阀/inline thinking 的“尾巴”冲刷到 UI，
+      // 否则会出现“工具卡片出来了但文本还没渲染完”的观感（尾部文本要等 onComplete 才 flush）。
+      try {
+        const store = useChatStore.getState();
+        const anyCtx = context as any;
+        const sup = anyCtx?._toolSuppressor as { flush?: () => { tail: string; captured?: string; hadSuppression: boolean } } | undefined;
+        if (store && sup?.flush) {
+          const flushed = sup.flush();
+          if (flushed?.tail) {
+            store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: flushed.tail } as any);
+          }
+        } else {
+          // 兼容旧实现：冲刷 context.suppression.buffer
+          const s = (context as any).suppression as { buffer?: string; active?: boolean } | undefined;
+          if (store && s && !s.active && s.buffer && s.buffer.length > 0) {
+            const tail = s.buffer;
+            s.buffer = '';
+            store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: tail } as any);
+          }
+        }
+
+        // 冲刷 inline thinking 解析器尾部（例如 <think> 未闭合）
+        const inline = anyCtx?._inlineThinking as { flush?: () => Array<{ type: string; text?: string }> } | undefined;
+        if (store && inline?.flush) {
+          const evs = inline.flush();
+          for (const ev of evs || []) {
+            if (ev.type === 'text' && ev.text) store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: String(ev.text) } as any);
+            else if (ev.type === 'think_start') store.dispatchMessageAction(context.messageId, { type: 'THINK_START' } as any);
+            else if (ev.type === 'think_token' && ev.text) store.dispatchMessageAction(context.messageId, { type: 'THINK_APPEND', chunk: String(ev.text) } as any);
+            else if (ev.type === 'think_end') store.dispatchMessageAction(context.messageId, { type: 'THINK_END' } as any);
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       // 更新FSM状态
       context.fsmState = 'TOOL_RUNNING';
 
@@ -143,6 +179,7 @@ export class ToolCallEventHandler implements EventHandler {
 
       // 修复失败：不进入执行，直接把结构化错误回灌给模型，要求其自修
       if (!repaired.ok) {
+      const onToolCall = (context as any)?.metadata?.onToolCall;
         const schemaHint = JSON.stringify(
           {
             code: 'TOOL_REPAIR_FAILED',
@@ -169,21 +206,17 @@ export class ToolCallEventHandler implements EventHandler {
         } catch {
           // ignore
         }
+      // AgentLoop：交由外部 loop 生成下一轮 tool_role 续写（避免递归开新流）
+      if (typeof onToolCall === 'function') {
         try {
-          const { continueWithToolResult } = await import('@/lib/mcp/ToolCallOrchestrator');
-          await continueWithToolResult({
-            assistantMessageId: context.messageId,
-            provider: context.metadata.provider,
-            model: context.metadata.model,
-            conversationId: context.conversationId,
-            historyForLlm: context.metadata.historyForLlm as any,
-            originalUserContent: context.metadata.originalUserContent,
+          await onToolCall({
             server,
             tool,
             args,
-            cardId,
             callId: normalizedCallId,
-            result: {
+            cardId,
+            lockKey: lockResult.key,
+            preResult: {
               error: {
                 code: 'TOOL_REPAIR_FAILED',
                 issue: repaired.issue,
@@ -192,14 +225,57 @@ export class ToolCallEventHandler implements EventHandler {
               },
             },
           });
-        } catch (e) {
-          console.warn('[ToolCallHandler] continueWithToolResult after repair-fail failed:', e);
+        } catch {
+          // ignore
         }
+        return;
+      }
+
+      // 兼容旧链路：仍走 ToolCallOrchestrator 递归续写
+      try {
+        const { continueWithToolResult } = await import('@/lib/mcp/ToolCallOrchestrator');
+        await continueWithToolResult({
+          assistantMessageId: context.messageId,
+          provider: context.metadata.provider,
+          model: context.metadata.model,
+          conversationId: context.conversationId,
+          historyForLlm: context.metadata.historyForLlm as any,
+          originalUserContent: context.metadata.originalUserContent,
+          server,
+          tool,
+          args,
+          cardId,
+          callId: normalizedCallId,
+          result: {
+            error: {
+              code: 'TOOL_REPAIR_FAILED',
+              issue: repaired.issue,
+              repairs: repaired.repairs,
+              rawArguments: repaired.rawArguments,
+            },
+          },
+        });
+      } catch (e) {
+        console.warn('[ToolCallHandler] continueWithToolResult after repair-fail failed:', e);
+      }
         return;
       }
 
       // 执行工具调用（独立的错误处理）
       try {
+      const onToolCall = (context as any)?.metadata?.onToolCall;
+      // AgentLoop：把执行/续写交给外部 while(true) loop
+      if (typeof onToolCall === 'function') {
+        await onToolCall({
+          server,
+          tool,
+          args,
+          callId: normalizedCallId,
+          cardId,
+          lockKey: lockResult.key,
+        });
+        return;
+      }
 
         
         const { executeToolCall } = await import('@/lib/mcp/ToolCallOrchestrator');

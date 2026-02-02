@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronRight, Check, X, Loader2, FileText, FolderOpen, Terminal, Search, Wrench } from 'lucide-react';
 import { ToolCallCard } from './ToolCallCard';
+import { isFilesystemServer, isShellServer, isSkillsServer, isWebServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 
 type ToolCallStatus = 'success' | 'error' | 'running' | 'pending_auth' | 'stopped';
 
@@ -31,18 +32,18 @@ interface ToolCallGroupProps {
  * - low: 中间过程（列出技能、查看说明、列目录等探索性操作）
  */
 function getToolPriority(card: ToolCardData): 'high' | 'low' {
-  const srv = String(card.server || '').toLowerCase();
+  const srv = normalizeServerName(card.server);
   const tool = String(card.tool || '').toLowerCase();
 
   // Skills 相关操作通常是低优先级
-  if (srv === 'skills') {
+  if (isSkillsServer(srv)) {
     // 除非是 execute_action，否则都是低优先级
     if (tool.includes('execute') || tool.includes('run')) return 'high';
     return 'low';
   }
 
   // 文件系统操作
-  if (srv === 'filesystem' || srv === 'fs') {
+  if (isFilesystemServer(srv)) {
     // 写入/创建/删除是高优先级
     if (tool.includes('write') || tool.includes('create') || tool.includes('delete')) {
       return 'high';
@@ -55,12 +56,12 @@ function getToolPriority(card: ToolCardData): 'high' | 'low' {
   }
 
   // Shell 命令通常是高优先级（有实际效果）
-  if (srv === 'shell_executor' || srv === 'shell-executor') {
+  if (isShellServer(srv)) {
     return 'high';
   }
 
   // 网络搜索是高优先级
-  if (srv === 'web_search') {
+  if (isWebServer(srv)) {
     return 'high';
   }
 
@@ -71,25 +72,25 @@ function getToolPriority(card: ToolCardData): 'high' | 'low' {
  * 获取工具类型图标
  */
 function getToolIcon(card: ToolCardData): React.ReactNode {
-  const srv = String(card.server || '').toLowerCase();
+  const srv = normalizeServerName(card.server);
   const tool = String(card.tool || '').toLowerCase();
 
-  if (srv === 'filesystem' || srv === 'fs') {
+  if (isFilesystemServer(srv)) {
     if (tool.includes('list') || tool.includes('dir')) {
       return <FolderOpen className="w-3.5 h-3.5" />;
     }
     return <FileText className="w-3.5 h-3.5" />;
   }
 
-  if (srv === 'shell_executor' || srv === 'shell-executor') {
+  if (isShellServer(srv)) {
     return <Terminal className="w-3.5 h-3.5" />;
   }
 
-  if (srv === 'web_search') {
+  if (isWebServer(srv)) {
     return <Search className="w-3.5 h-3.5" />;
   }
 
-  if (srv === 'skills') {
+  if (isSkillsServer(srv)) {
     return <Wrench className="w-3.5 h-3.5" />;
   }
 
@@ -100,12 +101,12 @@ function getToolIcon(card: ToolCardData): React.ReactNode {
  * 获取简洁的操作描述
  */
 function getShortDescription(card: ToolCardData): string {
-  const srv = String(card.server || '').toLowerCase();
+  const srv = normalizeServerName(card.server);
   const tool = String(card.tool || '').toLowerCase();
   const args = card.args || {};
 
   // 文件系统操作
-  if (srv === 'filesystem' || srv === 'fs') {
+  if (isFilesystemServer(srv)) {
     const path = String((args as any).path || '').split(/[/\\]/).pop() || '';
     if (tool.includes('write')) return `写入 ${path}`;
     if (tool.includes('create_directory')) return `创建目录 ${path}`;
@@ -116,21 +117,21 @@ function getShortDescription(card: ToolCardData): string {
   }
 
   // Shell 命令
-  if (srv === 'shell_executor' || srv === 'shell-executor') {
+  if (isShellServer(srv)) {
     const cmd = String((args as any).command || '');
     const short = cmd.length > 30 ? cmd.slice(0, 30) + '...' : cmd;
     return `执行 ${short}`;
   }
 
   // 网络搜索
-  if (srv === 'web_search') {
+  if (isWebServer(srv)) {
     const query = String((args as any).query || (args as any).search_term || '');
     const short = query.length > 20 ? query.slice(0, 20) + '...' : query;
     return `搜索 ${short}`;
   }
 
   // Skills
-  if (srv === 'skills') {
+  if (isSkillsServer(srv)) {
     if (tool.includes('list_available')) return '列出技能';
     if (tool.includes('get_skill')) return '查看技能说明';
     if (tool.includes('list_skill_actions')) return '列出技能动作';

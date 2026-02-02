@@ -43,70 +43,54 @@ export function getShellGuidance(platform: RuntimePlatform): {
   if (platform === 'windows') {
     return {
       platformLabel: 'Windows',
-      preferredShell: 'PowerShell',
+      preferredShell: 'shell__run 需显式指定 shell: "cmd" 或 "powershell"',
       rules: [
-        '当前是 Windows 系统，使用 PowerShell 命令',
-        '必须用 powershell -Command "..." 执行 PowerShell cmdlet',
-        '路径用双引号包裹，内部单引号用于字符串',
-        '❌ 禁止 Unix 命令: mkdir -p, rm -rf, cat, ls, curl, wget',
+        '当前是 Windows 系统。',
+        '调用 shell__run 时，必须显式传入 shell 参数：shell="cmd" 或 shell="powershell"（不要手写 cmd.exe /c 或 powershell -Command）。',
+        'cmd 适合：dir /b、&&、.bat/.cmd 等 cmd 语义。',
+        'powershell 适合：Get-ChildItem、Remove-Item、$env: 等 PowerShell 语义。',
       ],
       commandExamples: {
-        '创建目录': 'powershell -Command "New-Item -ItemType Directory -Path \'路径\' -Force"',
-        '删除目录': 'powershell -Command "Remove-Item -Path \'路径\' -Recurse -Force"',
-        '删除文件': 'powershell -Command "Remove-Item -Path \'路径\' -Force"',
-        '复制文件': 'powershell -Command "Copy-Item -Path \'源\' -Destination \'目标\'"',
-        '移动文件': 'powershell -Command "Move-Item -Path \'源\' -Destination \'目标\'"',
-        '列目录': 'powershell -Command "Get-ChildItem -Path \'路径\'"',
-        '读文件': 'powershell -Command "Get-Content -Path \'路径\'"',
-        '下载文件': 'powershell -Command "Invoke-WebRequest -Uri \'URL\' -OutFile \'保存路径\'"',
-        '运行Python': 'python "脚本路径"',
-        '运行Node': 'node "脚本路径"',
+        'cmd 列目录（简洁）': 'shell__run({ shell: "cmd", command: "dir \\"路径\\" /b" })',
+        'cmd 复制文件': 'shell__run({ shell: "cmd", command: "copy \\"源\\" \\"目标\\"" })',
+        'PowerShell 列目录': 'shell__run({ shell: "powershell", command: "Get-ChildItem -Path \\"路径\\"" })',
+        'PowerShell 删除目录': 'shell__run({ shell: "powershell", command: "Remove-Item -Path \\"路径\\" -Recurse -Force" })',
+        '运行 Python': 'shell__run({ shell: "cmd", command: "python \\"脚本路径\\"" })',
+        '运行 Node': 'shell__run({ shell: "cmd", command: "node \\"脚本路径\\"" })',
       },
     };
   }
   if (platform === 'macos') {
     return {
       platformLabel: 'macOS',
-      preferredShell: 'zsh/bash',
+      preferredShell: 'shell__run 使用 shell: "bash"',
       rules: [
-        '当前是 macOS 系统，使用 Unix 命令',
-        '路径含空格用双引号包裹',
-        '支持: mkdir -p, rm -rf, cat, grep, ls, curl 等',
+        '当前是 macOS 系统。',
+        '调用 shell__run 时，必须显式传入 shell="bash"（不要猜测/不要包多层）。',
+        '路径含空格用双引号包裹。',
       ],
       commandExamples: {
-        '创建目录': 'mkdir -p "路径"',
-        '删除目录': 'rm -rf "路径"',
-        '删除文件': 'rm -f "路径"',
-        '复制文件': 'cp "源" "目标"',
-        '移动文件': 'mv "源" "目标"',
-        '列目录': 'ls -la "路径"',
-        '读文件': 'cat "路径"',
-        '下载文件': 'curl -L -o "保存路径" "URL"',
-        '运行Python': 'python3 "脚本路径"',
-        '运行Node': 'node "脚本路径"',
+        '列目录': 'shell__run({ shell: "bash", command: "ls -la \\"路径\\"" })',
+        '创建目录': 'shell__run({ shell: "bash", command: "mkdir -p \\"路径\\"" })',
+        '删除目录': 'shell__run({ shell: "bash", command: "rm -rf \\"路径\\"" })',
+        '读文件': 'shell__run({ shell: "bash", command: "cat \\"路径\\"" })',
       },
     };
   }
   if (platform === 'linux') {
     return {
       platformLabel: 'Linux',
-      preferredShell: 'bash',
+      preferredShell: 'shell__run 使用 shell: "bash"',
       rules: [
-        '当前是 Linux 系统，使用 Unix 命令',
-        '路径含空格用双引号包裹',
-        '支持: mkdir -p, rm -rf, cat, grep, ls, curl, wget 等',
+        '当前是 Linux 系统。',
+        '调用 shell__run 时，必须显式传入 shell="bash"（不要猜测/不要包多层）。',
+        '路径含空格用双引号包裹。',
       ],
       commandExamples: {
-        '创建目录': 'mkdir -p "路径"',
-        '删除目录': 'rm -rf "路径"',
-        '删除文件': 'rm -f "路径"',
-        '复制文件': 'cp "源" "目标"',
-        '移动文件': 'mv "源" "目标"',
-        '列目录': 'ls -la "路径"',
-        '读文件': 'cat "路径"',
-        '下载文件': 'curl -L -o "保存路径" "URL"',
-        '运行Python': 'python3 "脚本路径"',
-        '运行Node': 'node "脚本路径"',
+        '列目录': 'shell__run({ shell: "bash", command: "ls -la \\"路径\\"" })',
+        '创建目录': 'shell__run({ shell: "bash", command: "mkdir -p \\"路径\\"" })',
+        '删除目录': 'shell__run({ shell: "bash", command: "rm -rf \\"路径\\"" })',
+        '读文件': 'shell__run({ shell: "bash", command: "cat \\"路径\\"" })',
       },
     };
   }
@@ -114,7 +98,7 @@ export function getShellGuidance(platform: RuntimePlatform): {
     platformLabel: 'Unknown',
     preferredShell: 'unknown',
     rules: [
-      '当前平台未知：优先使用 filesystem 工具',
+      '当前平台未知：优先使用 filesystem 工具；如必须执行命令，请先确定平台后再选择 shell。',
     ],
     commandExamples: {},
   };

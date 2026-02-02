@@ -21,6 +21,18 @@ interface ChatState {
   currentConversationId: string | null;
   isLoadingConversations: boolean;
   isGenerating: boolean;
+  /**
+   * Agent 运行态（用于 Stop 按钮稳定显示）
+   * key = assistantMessageId
+   */
+  agentRuns?: Record<
+    string,
+    {
+      running: boolean;
+      updatedAt: number;
+      conversationId?: string;
+    }
+  >;
   lastUsedModelPerChat: Record<string, string>;
   sessionLastSelectedModel: string | null;
   /** 会话工具模式的“默认值”（新建会话沿用当前选择） */
@@ -75,6 +87,9 @@ interface ChatActions {
   notifyStreamStart: (conversationId: string) => void;
   /** 设置会话级工具模式（chat/agent）并持久化 */
   setConversationToolMode: (conversationId: string, mode: 'chat' | 'agent') => Promise<void>;
+
+  /** AgentLoop：设置某条 assistant 消息的运行态（仅内存） */
+  setAgentRunState: (params: { assistantMessageId: string; running: boolean; conversationId?: string }) => void;
 }
 
 // 添加安全的images字段解析函数
@@ -116,6 +131,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
       currentConversationId: null,
       isLoadingConversations: false,
       isGenerating: false,
+      agentRuns: {},
       lastUsedModelPerChat: {},
       sessionLastSelectedModel: null,
       sessionToolMode: 'chat',
@@ -1115,6 +1131,17 @@ export const useChatStore = create<ChatState & ChatActions>()(
         if (conversationId) {
           await get().updateConversation(conversationId, { tool_mode: mode } as any);
         }
+      },
+
+      setAgentRunState: ({ assistantMessageId, running, conversationId }) => {
+        const id = String(assistantMessageId || '').trim();
+        if (!id) return;
+        const now = Date.now();
+        set((state) => {
+          const next = { ...(state.agentRuns || {}) };
+          next[id] = { running: !!running, updatedAt: now, conversationId: conversationId ? String(conversationId) : undefined };
+          state.agentRuns = next;
+        });
       },
 
       renameConversation: async (id, newTitle) => {

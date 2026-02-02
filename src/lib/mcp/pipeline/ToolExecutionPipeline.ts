@@ -3,13 +3,15 @@ import { useAuthorizationStore } from '@/store/authorizationStore';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { isShellCommandTrusted, useShellAuthStore } from '@/store/shellAuthStore';
-import { resolveAllowlistPath } from '@/lib/filesystemAllowlist';
+import { isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
 import { syncFilesystemAllowlistToBackend } from '@/lib/filesystemAllowlist/backendSync';
 import { markError, markPendingAuth, markSuccess } from './ToolCardUpdater';
 import type { ToolAdapter } from './ToolAdapter';
 import { ToolInvocation } from './ToolInvocation';
 import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
+import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult } from './toolResultDiagnostics';
+import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 
 function normalizeSlashPath(p: unknown): string {
   if (typeof p === 'string') return p.trim().replace(/\\/g, '/');
@@ -50,7 +52,7 @@ function buildAuthDeniedResult(params: {
       args: params.args || {},
       fs: params.fs,
       suggestion:
-        params.server === 'filesystem'
+        params.server === 'filesystem' || params.server === 'fs'
           ? {
               action: 'REQUEST_DIRECTORY_AUTH',
               directory: params.fs?.suggestDir,
@@ -69,16 +71,16 @@ export type ToolExecutionPipelineDeps = {
 };
 
 function isForcedApproval(server: string, tool: string, args?: Record<string, unknown>): boolean {
-  const srv = String(server || '').toLowerCase();
+  const srv = normalizeServerName(server);
   const tl = String(tool || '').toLowerCase();
 
   // filesystem：仅 delete 强制人工确认（你选择的策略）
-  if (srv === 'filesystem') {
+  if (isFilesystemServer(srv)) {
     return tl === 'delete_file' || tl === 'delete';
   }
 
   // shell_executor：涉及安装运行时/改环境变量/下载脚本等高风险动作，强制确认
-  if (srv === 'shell_executor') {
+  if (isShellServer(srv)) {
     const cmd = typeof (args as any)?.command === 'string' ? String((args as any).command).toLowerCase() : '';
     if (!cmd) return false;
     if (cmd.includes('winget ') || cmd.includes('choco ')) return true;
@@ -91,13 +93,13 @@ function isForcedApproval(server: string, tool: string, args?: Record<string, un
 }
 
 function needsAuthorization(server: string, tool: string, autoAuth: boolean, args?: Record<string, unknown>): boolean {
-  const srv = String(server || '').toLowerCase();
+  const srv = normalizeServerName(server);
   const tl = String(tool || '').toLowerCase();
 
   if (isForcedApproval(server, tool, args)) return true;
 
   // shell_executor：若用户已“信任该工作目录”，且命令属于低风险清单，则可免重复审批
-  if (srv === 'shell_executor') {
+  if (isShellServer(srv)) {
     try {
       if (isShellCommandTrusted({ command: (args as any)?.command, workingDir: (args as any)?.workingDir })) {
         return false;
@@ -118,7 +120,7 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
   }
 
   // filesystem：授权由 allowlist gate 统一管理，这里不参与（返回 false 以避免“全局 autoAuth”影响文件系统安全边界）
-  if (srv === 'filesystem') {
+  if (isFilesystemServer(srv)) {
     return false;
   }
 
@@ -128,14 +130,18 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
 
 function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
   const tl = String(tool || '').toLowerCase();
-  if (tl === 'delete_file' || tl === 'delete') return 'delete';
+  if (tl === 'delete_file' || tl === 'delete' || tl === 'rm') return 'delete';
   // MCP filesystem 常见工具名：read_file / list_directory / write_file
-  if (tl === 'read_file' || tl === 'read' || tl === 'list_directory' || tl === 'list' || tl === 'dir') return 'read';
+  if (tl === 'read_file' || tl === 'read' || tl === 'list_directory' || tl === 'list' || tl === 'dir' || tl === 'ls') return 'read';
   // rename/move 视为写入类操作
-  if (tl === 'rename_file' || tl === 'rename' || tl === 'move_file' || tl === 'move') return 'write';
+  if (tl === 'rename_file' || tl === 'rename' || tl === 'move_file' || tl === 'move' || tl === 'mv') return 'write';
   if (tl === 'write_file' || tl === 'write') return 'write';
   if (tl === 'mkdir' || tl === 'create_directory' || tl === 'create') return 'create';
   return 'read';
+}
+
+function isDirectoryScopedFilesystemTool(tool: string): boolean {
+  return isDirectorySemanticFsTool(tool);
 }
 
 /**
@@ -196,7 +202,7 @@ export class ToolExecutionPipeline {
 
     // 预加载：shell 授权记忆（用于 needsAuthorization 的同步判断）
     try {
-      if (String(server || '').toLowerCase() === 'shell_executor') {
+      if (isShellServer(normalizeServerName(server))) {
         await useShellAuthStore.getState().load();
       }
     } catch {
@@ -205,10 +211,10 @@ export class ToolExecutionPipeline {
 
     // 授权 + filesystem allowlist gate（统一文件系统安全边界）
     let execInvocation: ToolInvocation = invocation;
-    const srvLower = String(server || '').toLowerCase();
+    const srvLower = normalizeServerName(server);
 
     // 预处理：shell_executor 的 workingDir 支持 @WorkDir / @Alias
-    if (srvLower === 'shell_executor') {
+    if (isShellServer(srvLower)) {
       const workingDirInput = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
       if (workingDirInput) {
         try {
@@ -254,8 +260,13 @@ export class ToolExecutionPipeline {
       }
     }
 
-    if (srvLower === 'filesystem') {
-      const inputPath = typeof (args as any)?.path === 'string' ? String((args as any).path) : '';
+    if (isFilesystemServer(srvLower)) {
+      const inputPath =
+        typeof (args as any)?.path === 'string'
+          ? String((args as any).path)
+          : typeof (args as any)?.dir === 'string'
+            ? String((args as any).dir)
+            : '';
       const op = getFilesystemOp(tool);
 
       if (inputPath) {
@@ -294,7 +305,11 @@ export class ToolExecutionPipeline {
           const resolved = resolveAllowlistPath({ inputPath, directories: dirsForResolve as any });
 
           // 执行时必须使用绝对路径（MCP filesystem 不理解 @Alias）
-          const execArgs = { ...(args || {}), path: resolved.absolutePath };
+          const execArgs = {
+            ...(args || {}),
+            path: resolved.absolutePath,
+            ...(typeof (args as any)?.dir === 'string' ? { dir: resolved.absolutePath } : {}),
+          };
           execInvocation = new ToolInvocation({
             assistantMessageId: invocation.assistantMessageId,
             conversationId: invocation.conversationId,
@@ -381,14 +396,38 @@ export class ToolExecutionPipeline {
             // 用户确认后：把目录加入 allowlist（或补齐权限），并同步到 Rust 后端
             try {
               const st = useFilesystemAllowlistStore.getState();
-              await st.upsertDirectoryForPath({ absolutePath: resolved.absolutePath, op: op as any, source: 'manual' });
+              const hasDirArg = typeof (args as any)?.dir === 'string';
+              const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
+
+              // 规则：
+              // - dir+pattern 或 ls/mkdir 这类“目录语义”工具：授权目录本身（避免更具体条目覆盖父目录权限造成 forbidden）
+              // - 其余（文件语义）：授权其所在目录（目录白名单模型）
+              if (hasDirArg || dirScopedByTool) {
+                await st.upsertDirectory({ directoryPath: resolved.absolutePath, op: op as any, source: 'manual' } as any);
+              } else {
+                await st.upsertDirectoryForPath({ absolutePath: resolved.absolutePath, op: op as any, source: 'manual' });
+              }
+
+              // 删除动作需要“读取目录/枚举条目”才能执行（尤其 dir+pattern / 删除目录），否则后端会先 Read 再 Delete。
+              // UX：用户既然确认了 delete，这里为同一目录补齐 read（不扩大到其它目录）。
+              if (op === 'delete') {
+                if (hasDirArg || dirScopedByTool) {
+                  await st.upsertDirectory({ directoryPath: resolved.absolutePath, op: 'read' as any, source: 'manual' } as any);
+                } else {
+                  await st.upsertDirectoryForPath({ absolutePath: resolved.absolutePath, op: 'read' as any, source: 'manual' });
+                }
+              }
+              const allowDeleteInWorkDir =
+                op === 'delete' && !!workingDir && isPathWithinDirectory({ absolutePath: resolved.absolutePath, directoryPath: workingDir });
+
               const extra = workingDir
                 ? [
                     {
                       id: `session:${invocation.conversationId}:workdir`,
                       path: workingDir,
                       alias: 'WorkDir',
-                      permissions: { read: true, write: true, create: true, delete: false },
+                      // 默认 WorkDir 不允许 delete；但若用户对 WorkDir 范围内的删除操作明确确认，则本次同步升级 delete 权限
+                      permissions: { read: true, write: true, create: true, delete: allowDeleteInWorkDir },
                       source: 'workdir',
                       createdAt: Date.now(),
                       updatedAt: Date.now(),
@@ -511,23 +550,7 @@ export class ToolExecutionPipeline {
     const cfg = await getAgentExperienceConfig();
     const maxRetries = typeof cfg.maxToolRetries === 'number' ? Math.max(0, Math.min(5, cfg.maxToolRetries)) : 0;
 
-    const detectFailure = (result: unknown): string | undefined => {
-      if (!result || typeof result !== 'object') return undefined;
-      const r: any = result as any;
-      // 通用：OpenAI / MCP 风格
-      if (typeof r.ok === 'boolean' && r.ok === false) {
-        return typeof r.error === 'string' ? r.error : (typeof r.message === 'string' ? r.message : 'tool returned ok=false');
-      }
-      // 进程执行风格（shell）
-      if (typeof r.success === 'boolean' && r.success === false) {
-        const parts: string[] = [];
-        if (typeof r.error === 'string' && r.error) parts.push(r.error);
-        if (typeof r.stderr === 'string' && r.stderr.trim()) parts.push(`stderr: ${r.stderr.trim().slice(0, 400)}`);
-        if (typeof r.exitCode === 'number') parts.push(`exitCode: ${r.exitCode}`);
-        return parts.join('\n') || 'command failed';
-      }
-      return undefined;
-    };
+    const toolId = { server, tool };
 
     const isRetryable = (message: string): boolean => {
       const m = String(message || '').toLowerCase();
@@ -555,11 +578,44 @@ export class ToolExecutionPipeline {
       }
 
       try {
-        const result = await adapter.execute(execInvocation);
-        const failure = detectFailure(result);
-        if (failure) {
-          throw new Error(failure);
+        const raw = await adapter.execute(execInvocation);
+        const result: any = raw as any;
+
+        // ok=false 但包含部分失败细节：不异常重试；直接标记为 error 并把细节回灌给模型/用户
+        if (result && typeof result === 'object' && typeof result.ok === 'boolean' && result.ok === false && isNonFatalNonOkResult(toolId, result)) {
+          const extra = buildHelpfulNonOkMessage(toolId, result);
+          const enriched = {
+            ...result,
+            error: {
+              code: 'TOOL_PARTIAL_FAILURE',
+              message: extra.message,
+              hints: extra.hints,
+              server,
+              tool,
+            },
+          };
+
+          markError({ assistantMessageId, server, tool, cardId }, extra.message);
+          try {
+            await appendWorkspaceToolStep({
+              conversationId: invocation.conversationId,
+              assistantMessageId,
+              cardId,
+              callId,
+              server,
+              tool,
+              args: (execInvocation.args || args || {}) as any,
+              result: enriched,
+            });
+          } catch {
+            // ignore
+          }
+          this.coordinator.markToolCallComplete(callKey, 'completed');
+          return enriched;
         }
+
+        const failure = detectFatalFailure(toolId, result);
+        if (failure) throw new Error(failure);
         if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
           this.coordinator.markToolCallComplete(callKey, 'failed');
           return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
@@ -595,12 +651,26 @@ export class ToolExecutionPipeline {
           continue;
         }
 
-        // 最终失败：把错误概览返回给 follow-up，让 AI 调整路线/参数
+        // 最终失败：返回“可行动”的结构化错误，避免 AI 乱猜
+        const hints = buildFatalErrorHints(toolId, lastErr);
         const summary = {
+          ok: false,
+          // 保持兼容：仍提供扁平字段（旧逻辑可能读取它们）
           error: 'TOOL_EXEC_FAILED',
           message: lastErr,
           attempts: attempt + 1,
           maxRetries,
+          hints,
+          // 新增：结构化错误（便于 UI/模型直接读懂）
+          errorDetails: {
+            code: 'TOOL_EXEC_FAILED',
+            message: lastErr,
+            hints,
+            attempts: attempt + 1,
+            maxRetries,
+            server,
+            tool,
+          },
         };
         markError({ assistantMessageId, server, tool, cardId }, lastErr);
         try {
@@ -612,7 +682,7 @@ export class ToolExecutionPipeline {
             server,
             tool,
             args: (execInvocation.args || args || {}) as any,
-            result: { ok: false, ...summary },
+            result: summary,
           });
         } catch {
           // ignore
@@ -623,7 +693,24 @@ export class ToolExecutionPipeline {
     }
 
     // 理论上不会走到这里
-    const summary = { error: 'TOOL_EXEC_FAILED', message: lastErr || 'Unknown error', attempts: maxRetries + 1, maxRetries };
+    const hints = buildFatalErrorHints(toolId, lastErr || 'Unknown error');
+    const summary = {
+      ok: false,
+      error: 'TOOL_EXEC_FAILED',
+      message: lastErr || 'Unknown error',
+      attempts: maxRetries + 1,
+      maxRetries,
+      hints,
+      errorDetails: {
+        code: 'TOOL_EXEC_FAILED',
+        message: lastErr || 'Unknown error',
+        hints,
+        attempts: maxRetries + 1,
+        maxRetries,
+        server,
+        tool,
+      },
+    };
     markError({ assistantMessageId, server, tool, cardId }, summary.message);
     this.coordinator.markToolCallComplete(callKey, 'failed');
     return summary;

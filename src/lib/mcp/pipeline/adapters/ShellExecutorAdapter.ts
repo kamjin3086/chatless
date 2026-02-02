@@ -3,6 +3,7 @@ import { SHELL_EXECUTOR_SERVER_NAME } from '@/lib/mcp/nativeTools/shellExecutor'
 import { buildWindowsNodeInstallHint, getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
 import { shouldUseScriptMode, parseScriptRequest, executeScript } from '@/lib/shell/scriptExecutor';
+import { buildFatalErrorHints } from '@/lib/mcp/pipeline/toolResultDiagnostics';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 
@@ -85,6 +86,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
     const args = invocation.args || {};
     const command = typeof (args as any).command === 'string' ? String((args as any).command) : '';
     if (!command.trim()) throw new Error('command is required');
+    const shellModeRaw = typeof (args as any).shell === 'string' ? String((args as any).shell) : '';
 
     const sandbox = getProcessSandbox();
     const isAvailable = await sandbox.isAvailable();
@@ -171,13 +173,135 @@ export class ShellExecutorAdapter implements ToolAdapter {
         conversationId: invocation.conversationId,
       });
 
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+    const isWindows = ua.includes('win');
+    const isMac = ua.includes('mac');
+    const isLinux = ua.includes('linux') && !isWindows && !isMac;
+    const base2 = base;
+    const shellMode = String(shellModeRaw || '').trim().toLowerCase();
+
+    // 建设前期：避免 auto 带来的不确定性，强制要求显式指定 shell
+    if (!shellMode) {
+      return {
+        success: false,
+        exitCode: -1,
+        stdout: '',
+        stderr: '',
+        duration: 0,
+        error: 'shell is required',
+        errorDetails: {
+          code: 'SHELL_NOT_SPECIFIED',
+          message: 'shell 参数缺失。请显式指定 shell（Windows: cmd/powershell；macOS/Linux: bash）。',
+          hints: [
+            'Windows + cmd 语法（dir /b、&&、.bat/.cmd）→ shell: "cmd"',
+            'Windows + PowerShell 语法（Get-ChildItem、Remove-Item、$env:）→ shell: "powershell"',
+            'macOS/Linux → shell: "bash"',
+          ],
+        },
+      };
+    }
+
+    // 显式 shell（确定性最高）：不做 fallback，只按指定执行
+    if (isWindows && shellMode === 'cmd') {
+      const r = await sandbox.execute({
+        command: 'cmd.exe',
+        args: ['/d', '/s', '/c', normalizedForParsing],
+        workingDir,
+        timeoutMs,
+      }, {
+        executionId: `shell:${invocation.assistantMessageId}:${invocation.ensureCardId()}`,
+        startTime: Date.now(),
+        conversationId: invocation.conversationId,
+      });
+      return {
+        success: r.success,
+        exitCode: r.exitCode,
+        stdout: r.stdout,
+        stderr: r.stderr,
+        duration: r.duration,
+        error: r.error,
+        note: '已按 shell=cmd 执行。',
+      };
+    }
+    if (isWindows && (shellMode === 'powershell' || shellMode === 'pwsh')) {
+      const r = await sandbox.execute({
+        command: 'powershell.exe',
+        args: ['-NoProfile', '-Command', normalizedForParsing],
+        workingDir,
+        timeoutMs,
+      }, {
+        executionId: `shell:${invocation.assistantMessageId}:${invocation.ensureCardId()}`,
+        startTime: Date.now(),
+        conversationId: invocation.conversationId,
+      });
+      return {
+        success: r.success,
+        exitCode: r.exitCode,
+        stdout: r.stdout,
+        stderr: r.stderr,
+        duration: r.duration,
+        error: r.error,
+        note: '已按 shell=powershell 执行。',
+      };
+    }
+
+    if ((isMac || isLinux) && shellMode === 'bash') {
+      const r = await sandbox.execute(
+        { command: 'bash', args: ['-lc', normalizedForParsing], workingDir, timeoutMs },
+        {
+          executionId: `shell:${invocation.assistantMessageId}:${invocation.ensureCardId()}`,
+          startTime: Date.now(),
+          conversationId: invocation.conversationId,
+        }
+      );
+      return {
+        success: r.success,
+        exitCode: r.exitCode,
+        stdout: r.stdout,
+        stderr: r.stderr,
+        duration: r.duration,
+        error: r.error,
+        note: '已按 shell=bash 执行。',
+      };
+    }
+
+    // 平台/执行器不匹配：明确返回错误（不做 fallback）
+    if (isWindows && shellMode === 'bash') {
+      return {
+        success: false,
+        exitCode: -1,
+        stdout: '',
+        stderr: '',
+        duration: 0,
+        error: 'bash is not supported on Windows',
+        errorDetails: {
+          code: 'SHELL_UNSUPPORTED',
+          message: 'Windows 上不支持 shell=bash。请改用 shell="cmd" 或 shell="powershell"。',
+          hints: ['cmd 适合 dir /b、&&、.bat/.cmd', 'powershell 适合 Get-ChildItem、Remove-Item、$env:'],
+        },
+      };
+    }
+    if ((isMac || isLinux) && (shellMode === 'cmd' || shellMode === 'powershell' || shellMode === 'pwsh')) {
+      return {
+        success: false,
+        exitCode: -1,
+        stdout: '',
+        stderr: '',
+        duration: 0,
+        error: 'cmd/powershell is not supported on this platform',
+        errorDetails: {
+          code: 'SHELL_UNSUPPORTED',
+          message: 'macOS/Linux 上不支持 shell=cmd/powershell。请改用 shell="bash"。',
+          hints: ['macOS/Linux → shell: "bash"（用 -lc 执行整行命令）'],
+        },
+      };
+    }
+
     let result = await tryExecute(cmd);
 
     // Windows: 一些命令（npm/pnpm/npx/yarn）通常是 *.cmd shim；后端不一定能用裸名解析到
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
-    const isWindows = ua.includes('win');
     const programNotFound = String((result as any).error || '').toLowerCase().includes('program not found');
-    if (isWindows && programNotFound && !cmd.includes('.') && (base === 'npm' || base === 'pnpm' || base === 'npx' || base === 'yarn')) {
+    if (isWindows && programNotFound && !cmd.includes('.') && (base2 === 'npm' || base2 === 'pnpm' || base2 === 'npx' || base2 === 'yarn')) {
       result = await tryExecute(`${cmd}.cmd`);
     }
 
@@ -187,7 +311,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
         '提示：未提供 workingDir。若命令依赖项目目录（如安装依赖/运行脚本），建议显式传入工作目录以避免在默认 appData 目录执行。';
     }
 
-    return {
+    const out = {
       success: result.success,
       exitCode: result.exitCode,
       stdout: result.stdout,
@@ -195,7 +319,18 @@ export class ShellExecutorAdapter implements ToolAdapter {
       duration: result.duration,
       error: result.error,
       note,
-    };
+    } as any;
+
+    // 更好的错误指引：program not found（系统会自动包裹内置命令，但仍可能遇到 PATH/沙箱限制）
+    if (out.success === false) {
+      const msg = String(out.error || out.stderr || '').trim();
+      const hints = buildFatalErrorHints({ server: 'shell', tool: 'run' } as any, msg);
+      if (programNotFound && isWindows) {
+        hints.unshift('Windows 上部分命令是系统内置命令：请直接写原命令（系统会自动处理）。若仍失败，多半是 PATH/沙箱限制或工作目录不允许。');
+      }
+      out.errorDetails = { code: 'SHELL_COMMAND_FAILED', message: msg || 'command failed', hints };
+    }
+    return out;
   }
 }
 

@@ -145,7 +145,11 @@ export function presentToolCard(params: {
   // ---------- filesystem / fs ----------
   if (srv === 'filesystem' || srv === 'file-system' || srv === 'fs') {
     const path = pickArg(args, 'path') || pickArg(args, 'oldPath');
-    const filename = basename(path);
+    const dir = pickArg(args, 'dir');
+    const pattern = pickArg(args, 'pattern');
+    const hasDirPattern = !!dir && !!pattern;
+    const displayPath = path || (hasDirPattern ? `${dir.replace(/\\/g, '/')}/${pattern}` : '');
+    const filename = basename(displayPath);
     const op =
       tl === 'mkdir' || tl.includes('create_directory') || tl.includes('create-dir') ? '创建目录' :
       tl === 'write' || tl.includes('write') ? '写入文件' :
@@ -154,7 +158,13 @@ export function presentToolCard(params: {
       tl === 'ls' || tl.includes('list') || tl.includes('dir') ? '列目录' :
       tl === 'mv' || tl.includes('rename') ? '移动文件' :
       '文件操作';
-    return { titleLine: op, detailLineLabel: '路径', detailLineFull: path, detailLineShort: filename || truncate(path, 30), kind: 'path' };
+    if (tl === 'rm' || tl.includes('delete')) {
+      const label = hasDirPattern ? '范围' : '路径';
+      const full = displayPath;
+      const short = hasDirPattern ? truncate(displayPath, 40) : (filename || truncate(displayPath, 30));
+      return { titleLine: op, detailLineLabel: label, detailLineFull: full, detailLineShort: short, kind: 'path' };
+    }
+    return { titleLine: op, detailLineLabel: '路径', detailLineFull: displayPath, detailLineShort: filename || truncate(displayPath, 30), kind: 'path' };
   }
 
   // ---------- generic fallback ----------

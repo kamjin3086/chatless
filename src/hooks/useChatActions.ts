@@ -21,6 +21,7 @@ import { renderPromptContent } from '@/lib/prompt/render';
 import { performanceMonitor } from '@/lib/performance/PerformanceMonitor';
 import { StreamOrchestrator } from '@/lib/chat/stream';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+import { AgentLoopRunner } from '@/lib/mcp/agentLoop';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { getProcessSandbox } from '@/lib/skills/sandbox';
 // 动态导入 Title 相关函数，避免静态未用告警
@@ -497,111 +498,106 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
     // 调试信息已移除，避免控制台噪音
 
-    // 构建一个按秒保存的自动保存器（在 onStart 时初始化）
-
-    // 使用新的 StreamOrchestrator 架构
-    const orchestrator = new StreamOrchestrator({
-      messageId: assistantMessageId,
-      conversationId: finalConversationId,
-      provider: effectiveProvider,
-      model: modelToUse,
-      originalUserContent: content,
-      historyForLlm: historyForLlm as any,
-      onUIUpdate: (_updatedContent) => {
-        // UI 更新回调（可选）
-        // MessageAutoSaver 在 onStart 中初始化，这里暂不处理
-      },
-      onError: (error) => {
-        console.error('[StreamOrchestrator] 错误:', error);
-        toast.error('流式处理错误', { description: error.message });
-      },
-    });
-    
-    const streamCallbacks = orchestrator.createCallbacks();
-    
-    // 包装 onStart 以保留现有逻辑
-    const originalOnStart = streamCallbacks.onStart;
-    streamCallbacks.onStart = () => {
-      originalOnStart?.();
-      
-      // 通知 UI
-      try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
-      
-      // 自动保存器
-      autoSaverRef.current = new MessageAutoSaver(async (latest) => {
-        await updateMessage(assistantMessageId, {
-          content: latest,
-          thinking_start_time: thinking_start_time,
-        });
-      }, 1000);
-      
-      // 超时监控
-      if (genTimeoutRef.current) clearTimeout(genTimeoutRef.current);
-      genTimeoutRef.current = setInterval(() => {
-        if (Date.now() - lastActivityTimeRef.current > 120000) {
-          handleStopGeneration();
-          void updateMessage(assistantMessageId, { 
-            status: 'error', 
-            content: '响应超时', 
-            thinking_duration: Math.floor((Date.now() - thinking_start_time) / 1000) 
-          });
-          toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
-          if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
-        }
-      }, 5000);
-      setGenerationTimeout(genTimeoutRef.current);
-      
-      // Token 计数重置
-      setTokenCount(0);
-      batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
-    };
-    
-    // 包装 onEvent 以保留性能监控
-    const originalOnEvent = streamCallbacks.onEvent;
-    streamCallbacks.onEvent = (event: any) => {
-      if ((streamCallbacks as any).__instanceId !== streamInstanceId) return;
-      lastActivityTimeRef.current = Date.now();
-      
-      // 简化的性能监控
-      const perfId = `onEvent_${event?.type}`;
-      performanceMonitor.start(perfId, { type: event?.type, messageId: assistantMessageId });
+    // agent/chat 分流：agent 使用 while(true) AgentLoop；chat 使用单轮 StreamOrchestrator
+    const toolModeForRun = (() => {
       try {
-        originalOnEvent?.(event);
-      } finally {
-        performanceMonitor.end(perfId);
+        const st = useChatStore.getState() as any;
+        const conv = (st.conversations || []).find((c: any) => c && c.id === finalConversationId);
+        return ((conv?.tool_mode as ('chat' | 'agent') | undefined) || st.sessionToolMode || 'chat') as 'chat' | 'agent';
+      } catch {
+        return 'chat';
       }
-    };
-    
-    // 包装 onComplete
-    const originalOnComplete = streamCallbacks.onComplete;
-    streamCallbacks.onComplete = async () => {
-      try {
-        await originalOnComplete?.();
-      } finally {
-        // 清理
-        autoSaverRef.current?.flush();
+    })();
+
+    let streamCallbacks: StreamCallbacks | null = null;
+    if (toolModeForRun !== 'agent') {
+      // 使用新的 StreamOrchestrator 架构（chat 模式）
+      const orchestrator = new StreamOrchestrator({
+        messageId: assistantMessageId,
+        conversationId: finalConversationId,
+        provider: effectiveProvider,
+        model: modelToUse,
+        originalUserContent: content,
+        historyForLlm: historyForLlm as any,
+        onUIUpdate: () => {},
+        onError: (error) => {
+          console.error('[StreamOrchestrator] 错误:', error);
+          toast.error('流式处理错误', { description: error.message });
+        },
+      });
+
+      streamCallbacks = orchestrator.createCallbacks();
+
+      // 包装 onStart 以保留现有逻辑
+      const originalOnStart = streamCallbacks.onStart;
+      streamCallbacks.onStart = () => {
+        originalOnStart?.();
+
+        // 通知 UI
+        try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
+
+        // 超时监控（chat 模式单轮）
+        if (genTimeoutRef.current) clearTimeout(genTimeoutRef.current);
+        genTimeoutRef.current = setInterval(() => {
+          if (Date.now() - lastActivityTimeRef.current > 120000) {
+            handleStopGeneration();
+            void updateMessage(assistantMessageId, {
+              status: 'error',
+              content: '响应超时',
+              thinking_duration: Math.floor((Date.now() - thinking_start_time) / 1000)
+            });
+            toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
+            if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
+          }
+        }, 5000);
+        setGenerationTimeout(genTimeoutRef.current);
+
+        // Token 计数重置
+        setTokenCount(0);
+        batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
+      };
+
+      // 包装 onEvent 以保留性能监控
+      const originalOnEvent = streamCallbacks.onEvent;
+      streamCallbacks.onEvent = (event: any) => {
+        if ((streamCallbacks as any).__instanceId !== streamInstanceId) return;
+        lastActivityTimeRef.current = Date.now();
+
+        const perfId = `onEvent_${event?.type}`;
+        performanceMonitor.start(perfId, { type: event?.type, messageId: assistantMessageId });
+        try {
+          originalOnEvent?.(event);
+        } finally {
+          performanceMonitor.end(perfId);
+        }
+      };
+
+      // 包装 onComplete
+      const originalOnComplete = streamCallbacks.onComplete;
+      streamCallbacks.onComplete = async () => {
+        try {
+          await originalOnComplete?.();
+        } finally {
+          if (genTimeoutRef.current) {
+            clearInterval(genTimeoutRef.current);
+            setGenerationTimeout(null);
+          }
+        }
+      };
+
+      // 包装 onError
+      const originalOnError = streamCallbacks.onError;
+      streamCallbacks.onError = (error: Error) => {
+        originalOnError?.(error);
         if (genTimeoutRef.current) {
           clearInterval(genTimeoutRef.current);
           setGenerationTimeout(null);
         }
-        // isGenerating 由 store 管理，无需手动设置
-      }
-    };
-    
-    // 包装 onError
-    const originalOnError = streamCallbacks.onError;
-    streamCallbacks.onError = (error: Error) => {
-      originalOnError?.(error);
-      autoSaverRef.current?.flush();
-      if (genTimeoutRef.current) {
-        clearInterval(genTimeoutRef.current);
-        setGenerationTimeout(null);
-      }
-      // isGenerating 由 store 管理，无需手动设置
-    };
+      };
 
-    // 标记当前回调归属的流实例
-    (streamCallbacks as any).__instanceId = streamInstanceId;
+      // 标记当前回调归属的流实例
+      (streamCallbacks as any).__instanceId = streamInstanceId;
+    }
 
     if (modelToUse) {
       // 参数优先级：会话参数（可覆盖/可显式禁用） > 模型级参数 > 系统默认
@@ -641,8 +637,72 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         baseOptions = { ...filteredModelOpts, ...sessionOpts };
 
         const composed = await composeChatOptions(effectiveProvider, modelToUse, baseOptions, currentConversationId || null, content);
+
+        if (toolModeForRun === 'agent') {
+          try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
+          await AgentLoopRunner.run({
+            assistantMessageId,
+            conversationId: finalConversationId,
+            provider: effectiveProvider,
+            model: modelToUse,
+            historyForLlm: historyForLlm as any,
+            originalUserContent: content,
+            options: composed,
+            runtimeHooks: {
+              onAgentStart: () => {
+                if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
+                genTimeoutRef.current = setInterval(() => {
+                  if (Date.now() - lastActivityTimeRef.current > 120000) {
+                    handleStopGeneration();
+                    void updateMessage(assistantMessageId, {
+                      status: 'error',
+                      content: '响应超时',
+                      thinking_duration: Math.floor((Date.now() - thinking_start_time) / 1000),
+                    });
+                    toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
+                    if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
+                  }
+                }, 5000);
+                setGenerationTimeout(genTimeoutRef.current);
+
+                setTokenCount(0);
+                batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
+              },
+              onStreamEvent: (event: any) => {
+                lastActivityTimeRef.current = Date.now();
+
+                const t = String(event?.type || '');
+                if (t === 'content_token' || t === 'thinking_token') {
+                  batchUpdateRef.current.tokenCount += 1;
+                  if (batchUpdateRef.current.tokenCount >= 10) {
+                    const delta = batchUpdateRef.current.tokenCount;
+                    batchUpdateRef.current.tokenCount = 0;
+                    setTokenCount((prev) => prev + delta);
+                  }
+                }
+
+                const perfId = `onEvent_agentloop_${event?.type}`;
+                performanceMonitor.start(perfId, { type: event?.type, mode: 'agentloop', messageId: assistantMessageId });
+                try {
+                  // no-op：事件本体由 StreamOrchestrator 处理
+                } finally {
+                  performanceMonitor.end(perfId);
+                }
+              },
+              onAgentEnd: () => {
+                if (genTimeoutRef.current) {
+                  clearInterval(genTimeoutRef.current);
+                  setGenerationTimeout(null);
+                }
+              },
+            },
+          });
+          return;
+        }
+
         const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
-        await gateway.stream(historyForLlm, streamCallbacks);
+        if (!streamCallbacks) throw new Error('streamCallbacks is not initialized');
+        await gateway.stream(historyForLlm, streamCallbacks as any);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         void updateMessage(assistantMessageId, {
@@ -719,6 +779,11 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         // 停止不仅要停 SSE，还要停止整个 agent loop（阻止后续 follow-up / tool 链路继续推进）
         try {
           ToolCallCoordinator.getInstance().cancelMessage(lastAssistantMessage.id);
+        } catch {
+          // ignore
+        }
+        try {
+          AgentLoopRunner.cancel({ assistantMessageId: lastAssistantMessage.id });
         } catch {
           // ignore
         }

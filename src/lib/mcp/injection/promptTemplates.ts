@@ -145,6 +145,11 @@ fs vs shell：
 - 调用外部程序（git/npm/python）→ shell__run
 - 批量处理/复杂转换 → shell__run
 
+规模操作（非常重要）：
+- **避免把巨量目录列表塞进上下文**：fs__ls 默认限量，但仍建议显式传 'limit'（如 50/100）。
+- **优先用 pattern**：fs__ls({ path, pattern: \"*.log\", limit: 50 }) 比先 ls 全目录再过滤更快、更不占上下文。
+- **批量删除优先**：fs__rm({ dir, pattern, dryRun: true, limit: 200 }) 先预演，再 fs__rm(dryRun:false) 执行；或直接 fs__rm({ paths: [...] }).
+
 常见错误提醒：
 - 读文件内容 → fs__read（不是 cat/type 命令）
 - 写文件内容 → fs__write（不是 echo 重定向）
@@ -159,9 +164,10 @@ export const CONTEXT_GATHERING_PROTOCOL = `【上下文收集协议】
 操作前检查清单：
 
 1. 文件操作前
-   - 路径是否存在？→ 不确定时先 fs__ls
+   - 路径是否存在？→ 不确定时先 fs__ls（**加 limit**，必要时用 pattern）
    - 覆盖文件？→ 先 fs__read 确认内容，或提示用户
    - 新建文件？→ 确认父目录存在
+   - 大目录（>200 项）→ **不要全量列出**：用 pattern+limit 或直接用 dir+pattern 的批量工具（rm）
 
 2. 命令执行前
    - workingDir 正确吗？→ 优先使用 @WorkDir 或用户指定路径
@@ -220,7 +226,8 @@ export const PATH_ENVIRONMENT_GUIDE = `【路径与环境】
 
 授权机制：
 - 直接对目标路径调用工具，无需先探测权限
-- 越界访问会弹出授权卡片，用户授权后重试即可`;
+- 越界访问会弹出授权卡片，用户授权后重试即可
+- **授权按目录生效**：规模操作优先授权目录（dir），避免为大量单文件反复确认`;
 
 // ================================
 // 方法优先级

@@ -30,6 +30,7 @@
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import type { EventHandler, StreamContext } from '../types';
 import { useChatStore } from '@/store/chatStore';
+import { createContentAppender } from '../ContentAppender';
 import { createToolInstructionSuppressor } from '../toolInstructionSuppressor';
 import { createInlineThinkingOrchestrator } from '../thinking';
 
@@ -80,6 +81,9 @@ export class ContentEventHandler implements EventHandler {
     const pieces = splitInlineThinking(context, visible);
     if (pieces.length === 0) return;
 
+    // 让 message.content 在流式期间也能更新（并节流落盘），避免“只有结束才有内容”
+    const appender = getContentAppender(context);
+
     // 转发给FSM处理（带错误处理）
     try {
       const store = useChatStore.getState();
@@ -93,6 +97,11 @@ export class ContentEventHandler implements EventHandler {
         if (p.type === 'text') {
           const t = String(p.text || '');
           if (t) {
+            try {
+              appender.append(t);
+            } catch {
+              // ignore
+            }
             store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: t });
           }
         } else if (p.type === 'think_start') {
@@ -110,6 +119,29 @@ export class ContentEventHandler implements EventHandler {
       // 不抛出错误，避免中断整个流
     }
   }
+}
+
+function getContentAppender(context: StreamContext) {
+  const anyCtx = context as any;
+  if (anyCtx._contentAppender) return anyCtx._contentAppender as ReturnType<typeof createContentAppender>;
+  const st = useChatStore.getState();
+  const appender = createContentAppender({
+    assistantMessageId: context.messageId,
+    updateMessageContentInMemory: st.updateMessageContentInMemory,
+    updateMessage: st.updateMessage,
+    getCurrentContent: () => {
+      try {
+        const fresh = useChatStore.getState();
+        const conv = fresh.conversations.find((c: any) => c && c.id === context.conversationId);
+        const msg: any = conv?.messages?.find((m: any) => m && m.id === context.messageId);
+        return String(msg?.content || '');
+      } catch {
+        return '';
+      }
+    },
+  });
+  anyCtx._contentAppender = appender;
+  return appender;
 }
 
 function splitInlineThinking(context: StreamContext, visibleChunk: string) {

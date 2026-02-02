@@ -47,6 +47,7 @@ export class StreamOrchestrator {
         model: config.model,
         originalUserContent: config.originalUserContent,
         historyForLlm: config.historyForLlm,
+        onToolCall: config.onToolCall,
       },
     };
 
@@ -254,12 +255,12 @@ export class StreamOrchestrator {
     this.logEventToResponse(event);
     
     // 找到合适的处理器
-    let handlerFound = false;
+    let _handlerFound = false;
     for (const handler of this.handlers) {
       if (handler.canHandle(event)) {
 
         await handler.handle(event, this.context);
-        handlerFound = true;
+        _handlerFound = true;
         break; // 每个事件只由一个处理器处理
       }
     }
@@ -289,12 +290,6 @@ export class StreamOrchestrator {
    */
   private async handleComplete(): Promise<void> {
     if (this.didHandleComplete) {
-      debugLog('StreamOrchestrator.ts:handleComplete:dup', 'Handle complete suppressed (already ran)', {
-        messageId: this.context.messageId,
-        conversationId: this.context.conversationId,
-        toolStarted: this.context.toolStarted,
-        contentLength: (this.context.content || '').length,
-      }, 'H1');
       return;
     }
     this.didHandleComplete = true;
@@ -313,9 +308,6 @@ export class StreamOrchestrator {
     // 确定要持久化的内容
     const hadCardMarker = !!(msg?.content && msg.content.includes('"__tool_call_card__"'));
     let contentToPersist = hadCardMarker ? (msg?.content || this.context.content) : this.context.content;
-    
-    // 保存原始内容用于日志/清理参考
-    const originalContent = contentToPersist;
 
 
     // Native-only + Event-only：不再允许“收尾阶段从文本中兜底解析并执行工具”。
@@ -337,7 +329,6 @@ export class StreamOrchestrator {
     const conv2 = fresh.conversations.find(c => c.id === this.context.conversationId);
     const msg2: any = conv2?.messages.find(m => m.id === this.context.messageId);
     const segsFresh = Array.isArray(msg2?.segments) ? msg2.segments : [];
-    const toolCardsFresh = segsFresh.filter((s: any) => s?.kind === 'toolCard');
 
 
     // 持久化消息 - 包含 segments

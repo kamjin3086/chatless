@@ -21,15 +21,15 @@ export class FilesystemAdapter implements ToolAdapter {
     const args = invocation.args || {};
 
     const path = typeof (args as any).path === 'string' ? String((args as any).path) : '';
-    if (!path) {
-      return { ok: false, error: 'path is required' };
-    }
+    const dir = typeof (args as any).dir === 'string' ? String((args as any).dir) : '';
+    const paths = Array.isArray((args as any).paths) ? (args as any).paths.map((p: any) => String(p || '').trim()).filter(Boolean) : null;
 
     try {
       // 动态导入：避免非客户端环境报错
       const { invoke } = await import('@tauri-apps/api/core');
 
       if (tool === 'read_file' || tool === 'read') {
+        if (!path) return { ok: false, error: 'path is required' };
         const maxLines = typeof (args as any).maxLines === 'number' ? (args as any).maxLines : undefined;
         const startLine = typeof (args as any).startLine === 'number' ? (args as any).startLine : undefined;
         const endLine = typeof (args as any).endLine === 'number' ? (args as any).endLine : undefined;
@@ -37,20 +37,38 @@ export class FilesystemAdapter implements ToolAdapter {
       }
 
       if (tool === 'write_file' || tool === 'write') {
+        if (!path) return { ok: false, error: 'path is required' };
         const content = typeof (args as any).content === 'string' ? String((args as any).content) : '';
         return await invoke('filesystem_write_file', { path, content });
       }
 
       if (tool === 'list_directory' || tool === 'list' || tool === 'dir' || tool === 'ls') {
-        return await invoke('filesystem_list_directory', { path });
+        if (!path) return { ok: false, error: 'path is required' };
+        const limit = typeof (args as any).limit === 'number' ? Number((args as any).limit) : undefined;
+        const pattern = typeof (args as any).pattern === 'string' ? String((args as any).pattern) : undefined;
+        const kind = typeof (args as any).kind === 'string' ? String((args as any).kind) : undefined;
+        return await invoke('filesystem_list_directory', { path, limit, pattern, kind });
       }
 
       if (tool === 'create_directory' || tool === 'mkdir' || tool === 'create') {
+        if (!path) return { ok: false, error: 'path is required' };
         const recursive = (args as any).recursive !== undefined ? !!(args as any).recursive : true;
         return await invoke('filesystem_create_directory', { path, recursive });
       }
 
       if (tool === 'delete_file' || tool === 'delete' || tool === 'rm') {
+        const pattern = typeof (args as any).pattern === 'string' ? String((args as any).pattern) : '';
+        const limit = typeof (args as any).limit === 'number' ? Number((args as any).limit) : undefined;
+        const kind = typeof (args as any).kind === 'string' ? String((args as any).kind) : undefined;
+        const dryRun = (args as any).dryRun !== undefined ? !!(args as any).dryRun : undefined;
+
+        if (paths && paths.length > 0) {
+          return await invoke('filesystem_delete_many', { payload: { paths } });
+        }
+        if (dir.trim() && pattern.trim()) {
+          return await invoke('filesystem_delete_by_pattern', { payload: { dir, pattern, limit, kind, dryRun } });
+        }
+        if (!path) return { ok: false, error: 'path / paths / (dir+pattern) is required' };
         return await invoke('filesystem_delete_file', { path });
       }
 

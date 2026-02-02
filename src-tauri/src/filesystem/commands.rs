@@ -14,6 +14,32 @@ pub struct FsEntry {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ListDirectoryResult {
+  pub ok: bool,
+  pub path: String,
+  pub entries: Vec<FsEntry>,
+  pub truncated: bool,
+  #[serde(rename = "returnedCount")]
+  pub returned_count: u32,
+  pub limit: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeleteManyPayload {
+  pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeleteByPatternPayload {
+  pub dir: String,
+  pub pattern: String,
+  pub limit: Option<u32>,
+  pub kind: Option<String>,
+  #[serde(alias = "dryRun", alias = "dry_run")]
+  pub dry_run: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct OkResult {
   pub ok: bool,
   pub message: String,
@@ -183,25 +209,219 @@ pub async fn filesystem_list_directory(
   app: AppHandle,
   state: State<'_, FilesystemAllowlistState>,
   path: String,
-) -> Result<Vec<FsEntry>, String> {
+  limit: Option<u32>,
+  pattern: Option<String>,
+  kind: Option<String>,
+) -> Result<ListDirectoryResult, String> {
   let abs = state.assert_allowed(&app, &path, FsOp::Read).await?;
   let mut rd = tokio::fs::read_dir(&abs)
     .await
     .map_err(|e| format!("read_dir failed: {}", e))?;
 
+  // 安全/体验：默认限制返回条目数，避免一次性把巨量目录塞进 AI 上下文。
+  // - 允许用户显式传入更大 limit，但设置硬上限防止内存/日志爆炸。
+  const DEFAULT_LIMIT: u32 = 200;
+  const HARD_MAX_LIMIT: u32 = 2000;
+  let mut eff_limit = limit.unwrap_or(DEFAULT_LIMIT);
+  if eff_limit == 0 {
+    eff_limit = DEFAULT_LIMIT;
+  }
+  if eff_limit > HARD_MAX_LIMIT {
+    eff_limit = HARD_MAX_LIMIT;
+  }
+
   let mut out: Vec<FsEntry> = Vec::new();
+  let mut truncated = false;
+  let kind = kind.unwrap_or_else(|| "any".to_string()).to_lowercase();
   while let Some(ent) = rd.next_entry().await.map_err(|e| format!("read_dir entry failed: {}", e))? {
+    // 读到 limit+1 以判断是否还有更多
+    if out.len() as u32 >= eff_limit + 1 {
+      truncated = true;
+      break;
+    }
     let fp = ent.path();
-    let meta = ent.metadata().await.map_err(|e| format!("metadata failed: {}", e))?;
     let name = ent.file_name().to_string_lossy().to_string();
+    if let Some(ref ptn) = pattern {
+      if !wildcard_match(ptn, &name) {
+        continue;
+      }
+    }
+
+    // 性能：先按 name 过滤，再取 file_type（比 metadata 更轻量）
+    let ft = ent.file_type().await.map_err(|e| format!("metadata failed: {}", e))?;
+    let is_dir = ft.is_dir();
+    let is_file = ft.is_file();
+    if kind == "dir" && !is_dir {
+      continue;
+    }
+    if kind == "file" && !is_file {
+      continue;
+    }
     out.push(FsEntry {
       name,
       path: fp.to_string_lossy().replace('\\', "/"),
-      is_directory: meta.is_dir(),
-      is_file: meta.is_file(),
+      is_directory: is_dir,
+      is_file: is_file,
     });
   }
-  Ok(out)
+
+  if out.len() as u32 > eff_limit {
+    out.truncate(eff_limit as usize);
+    truncated = true;
+  }
+
+  Ok(ListDirectoryResult {
+    ok: true,
+    path: abs.replace('\\', "/"),
+    returned_count: out.len() as u32,
+    entries: out,
+    truncated,
+    limit: eff_limit,
+  })
+}
+
+fn wildcard_match(pattern: &str, text: &str) -> bool {
+  // 简单通配符：
+  // - '*' 匹配任意长度（含空）
+  // - '?' 匹配任意单字符
+  let p = pattern.as_bytes();
+  let t = text.as_bytes();
+  let mut pi: usize = 0;
+  let mut ti: usize = 0;
+  let mut star_pi: Option<usize> = None;
+  let mut star_ti: usize = 0;
+
+  while ti < t.len() {
+    if pi < p.len() && (p[pi] == b'?' || p[pi] == t[ti]) {
+      pi += 1;
+      ti += 1;
+      continue;
+    }
+    if pi < p.len() && p[pi] == b'*' {
+      star_pi = Some(pi);
+      pi += 1;
+      star_ti = ti;
+      continue;
+    }
+    if let Some(sp) = star_pi {
+      pi = sp + 1;
+      star_ti += 1;
+      ti = star_ti;
+      continue;
+    }
+    return false;
+  }
+
+  while pi < p.len() && p[pi] == b'*' {
+    pi += 1;
+  }
+  pi == p.len()
+}
+
+async fn delete_path_impl(app: &AppHandle, state: &FilesystemAllowlistState, path: &str) -> Result<String, String> {
+  let abs = state.assert_allowed(app, path, FsOp::Delete).await?;
+  let meta = tokio::fs::metadata(&abs).await.map_err(|e| format!("delete failed: {}", e))?;
+  if meta.is_dir() {
+    tokio::fs::remove_dir_all(&abs).await.map_err(|e| format!("delete failed: {}", e))?;
+  } else {
+    tokio::fs::remove_file(&abs).await.map_err(|e| format!("delete failed: {}", e))?;
+  }
+  Ok(abs)
+}
+
+#[tauri::command]
+pub async fn filesystem_delete_many(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  payload: DeleteManyPayload,
+) -> Result<serde_json::Value, String> {
+  let mut deleted: Vec<String> = Vec::new();
+  let mut failed: Vec<serde_json::Value> = Vec::new();
+  for p in payload.paths.iter() {
+    let input = String::from(p);
+    match delete_path_impl(&app, &state, &input).await {
+      Ok(abs) => deleted.push(abs.replace('\\', "/")),
+      Err(e) => failed.push(serde_json::json!({ "path": input.replace('\\', "/"), "error": e })),
+    }
+  }
+  Ok(serde_json::json!({
+    "ok": failed.is_empty(),
+    "deletedCount": deleted.len(),
+    "failedCount": failed.len(),
+    "deleted": deleted,
+    "failed": failed
+  }))
+}
+
+#[tauri::command]
+pub async fn filesystem_delete_by_pattern(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  payload: DeleteByPatternPayload,
+) -> Result<serde_json::Value, String> {
+  let dir_abs = state.assert_allowed(&app, &payload.dir, FsOp::Read).await?;
+  // 默认限制，防止误删/误匹配太多
+  const DEFAULT_LIMIT: u32 = 200;
+  const HARD_MAX_LIMIT: u32 = 2000;
+  let mut eff_limit = payload.limit.unwrap_or(DEFAULT_LIMIT);
+  if eff_limit == 0 { eff_limit = DEFAULT_LIMIT; }
+  if eff_limit > HARD_MAX_LIMIT { eff_limit = HARD_MAX_LIMIT; }
+
+  let mut rd = tokio::fs::read_dir(&dir_abs).await.map_err(|e| format!("read_dir failed: {}", e))?;
+  let mut targets: Vec<String> = Vec::new();
+  let kind = payload.kind.clone().unwrap_or_else(|| "any".to_string()).to_lowercase();
+  while let Some(ent) = rd.next_entry().await.map_err(|e| format!("read_dir entry failed: {}", e))? {
+    if targets.len() as u32 >= eff_limit + 1 { break; }
+    let name = ent.file_name().to_string_lossy().to_string();
+    if !wildcard_match(&payload.pattern, &name) { continue; }
+    let ft = ent.file_type().await.map_err(|e| format!("metadata failed: {}", e))?;
+    if kind == "dir" && !ft.is_dir() { continue; }
+    if kind == "file" && !ft.is_file() { continue; }
+    let fp = ent.path().to_string_lossy().replace('\\', "/");
+    targets.push(fp);
+  }
+  let truncated = targets.len() as u32 > eff_limit;
+  if truncated { targets.truncate(eff_limit as usize); }
+
+  const DEFAULT_DRY_RUN: bool = false;
+  let dry_run = payload.dry_run.unwrap_or(DEFAULT_DRY_RUN);
+  if dry_run {
+    return Ok(serde_json::json!({
+      "ok": true,
+      "dryRun": true,
+      "dir": dir_abs.replace('\\', "/"),
+      "pattern": payload.pattern,
+      "kind": kind,
+      "limit": eff_limit,
+      "truncated": truncated,
+      "matchedCount": targets.len(),
+      "matches": targets
+    }));
+  }
+
+  let mut deleted: Vec<String> = Vec::new();
+  let mut failed: Vec<serde_json::Value> = Vec::new();
+  for p in targets.iter() {
+    match delete_path_impl(&app, &state, p).await {
+      Ok(abs) => deleted.push(abs.replace('\\', "/")),
+      Err(e) => failed.push(serde_json::json!({ "path": p, "error": e })),
+    }
+  }
+
+  Ok(serde_json::json!({
+    "ok": failed.is_empty(),
+    "dryRun": false,
+    "dir": dir_abs.replace('\\', "/"),
+    "pattern": payload.pattern,
+    "kind": kind,
+    "limit": eff_limit,
+    "truncated": truncated,
+    "matchedCount": deleted.len() + failed.len(),
+    "deletedCount": deleted.len(),
+    "failedCount": failed.len(),
+    "deleted": deleted,
+    "failed": failed
+  }))
 }
 
 #[tauri::command]
@@ -232,12 +452,24 @@ pub async fn filesystem_delete_file(
   path: String,
 ) -> Result<OkResult, String> {
   let abs = state.assert_allowed(&app, &path, FsOp::Delete).await?;
-  tokio::fs::remove_file(&abs)
+  let meta = tokio::fs::metadata(&abs)
     .await
     .map_err(|e| format!("delete failed: {}", e))?;
+
+  if meta.is_dir() {
+    // 目录：递归删除
+    tokio::fs::remove_dir_all(&abs)
+      .await
+      .map_err(|e| format!("delete failed: {}", e))?;
+  } else {
+    // 文件：删除文件
+    tokio::fs::remove_file(&abs)
+      .await
+      .map_err(|e| format!("delete failed: {}", e))?;
+  }
   Ok(OkResult {
     ok: true,
-    message: "File deleted successfully".to_string(),
+    message: "Path deleted successfully".to_string(),
     path: abs,
   })
 }
