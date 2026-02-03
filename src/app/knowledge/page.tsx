@@ -9,12 +9,11 @@ import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { initializeSampleDataIfNeeded } from '@/lib/sampleDataInitializer';
 import { Loader2, Database, Plus, FolderOpen } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { KnowledgeBaseCard } from "@/components/knowledge/KnowledgeBaseCard";
 import { CreateKnowledgeDialog } from '@/components/knowledge/CreateKnowledgeDialog';
 import { EditKnowledgeDialog } from '@/components/knowledge/EditKnowledgeDialog';
-import { RecentKnowledgeList } from "@/components/knowledge/RecentKnowledgeList";
+import { RecentUsedList } from "@/components/ui/RecentUsedList";
 import { RAGQueryInterface } from "@/components/knowledge/RAGQueryInterface";
 import { AlertDialog, AlertDialogHeader, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { motion } from "framer-motion";
@@ -248,24 +247,23 @@ export default function KnowledgePage() {
               </div>
               
               {knowledgeSubTab === 'my' && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                    className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
                   >
                     <option value="recent">最近更新</option>
                     <option value="name">名称</option>
                     <option value="docs">文档数量</option>
                   </select>
-                  <Button
-                    size="sm"
+                  <button
                     onClick={() => setShowCreateDialog(true)}
-                    className="h-7 text-xs gap-1"
+                    className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     新建
-                  </Button>
+                  </button>
                 </div>
               )}
             </div>
@@ -297,25 +295,38 @@ export default function KnowledgePage() {
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col items-center justify-center py-16"
+                      className="flex flex-col items-center justify-center py-12"
                     >
-                      <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mb-4">
-                        <Database className="w-7 h-7 text-slate-400" />
+                      <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center mb-3">
+                        <Database className="w-5 h-5 text-slate-400" />
                       </div>
-                      <h3 className="text-base font-medium text-slate-700 dark:text-slate-200 mb-1">暂无知识库</h3>
-                      <p className="text-sm text-slate-500 mb-4">创建您的第一个知识库</p>
-                      <Button onClick={() => setShowCreateDialog(true)} className="gap-1.5">
-                        <Plus className="w-4 h-4" />
+                      <h3 className="text-xs font-medium text-slate-500 mb-0.5">暂无知识库</h3>
+                      <p className="text-[11px] text-slate-400 mb-3">创建您的第一个知识库</p>
+                      <button 
+                        onClick={() => setShowCreateDialog(true)} 
+                        className="h-7 px-3 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded border border-slate-200/60 dark:border-slate-700/40 transition-colors flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
                         创建知识库
-                      </Button>
+                      </button>
                     </motion.div>
                   )}
 
                   {recentKnowledgeBases.length > 0 && filteredKnowledgeBases.length > 0 && (
-                    <RecentKnowledgeList 
-                      items={recentKnowledgeBases} 
-                      onUseKnowledgeBase={handleUseKnowledgeBase} 
-                    />
+                    <div className="mt-6 border-t border-slate-200/50 dark:border-slate-700/30 pt-3">
+                      <RecentUsedList 
+                        title="最近使用"
+                        items={recentKnowledgeBases.map(kb => ({
+                          id: kb.id,
+                          name: kb.name,
+                          iconType: 'database',
+                          subtitle: `${kb.docCount} 文档`,
+                          time: kb.lastUpdated,
+                        }))}
+                        onItemClick={handleUseKnowledgeBase}
+                        emptyText="暂无"
+                      />
+                    </div>
                   )}
                 </div>
               )}

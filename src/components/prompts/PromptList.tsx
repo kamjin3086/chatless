@@ -1,13 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { PromptCard, Prompt } from "./PromptCard";
 import { usePromptStore } from "@/store/promptStore";
 import { useChatStore } from "@/store/chatStore";
 import { toast } from "@/components/ui/sonner";
 import { PromptEditorDialog } from "./PromptEditorDialog";
-//
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface PromptListProps {
@@ -20,8 +18,6 @@ export function PromptList({ prompts }: PromptListProps) {
   const toggleFavorite = usePromptStore((s)=>s.toggleFavorite);
   const updatePrompt = usePromptStore((s)=>s.updatePrompt);
   const deletePrompt = usePromptStore((s)=>s.deletePrompt);
-  const setSortBy = usePromptStore((s)=>s.setSortBy);
-  const ui = usePromptStore((s)=>s.ui);
   const allPrompts = usePromptStore((s)=>s.prompts);
   const updateConversation = useChatStore((s)=>s.updateConversation);
   const currentConversationId = useChatStore((s)=>s.currentConversationId);
@@ -44,18 +40,7 @@ export function PromptList({ prompts }: PromptListProps) {
 
   return (
     <>
-      {/* 移除多余的排序下拉，统一在 Header 控制；若保留次入口，则使用同一封装组件 */}
-      <div className="flex items-center justify-end mb-3 hidden">
-        <Select value={ui?.sortBy || 'recent'} onValueChange={(v)=> setSortBy(v as any)}>
-          <SelectTrigger data-size="sm"><SelectValue placeholder="排序" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="recent">按最近更新</SelectItem>
-            <SelectItem value="frequency">按使用次数</SelectItem>
-            <SelectItem value="name">按名称</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 auto-rows-fr">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
         {prompts.map((prompt) => (
           <PromptCard 
             key={prompt.id} 

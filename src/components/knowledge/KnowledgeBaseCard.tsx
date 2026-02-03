@@ -8,10 +8,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator 
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
 import type { KnowledgeBase } from '@/lib/knowledgeService';
 import { createKnowledgeMenuItems } from './knowledgeMenu';
-import { SectionCard } from '@/components/ui/section-card';
 
 interface KnowledgeBaseCardProps {
   kb: KnowledgeBase & { documentCount?: number };
@@ -31,69 +29,75 @@ export function KnowledgeBaseCard({ kb, onClick, onRename, onEditDesc, onDelete 
   };
 
   const handleMenuClick = (e: React.MouseEvent, action?: () => void) => {
-    e.stopPropagation(); // 防止触发卡片点击
+    e.stopPropagation();
     action?.();
   };
 
   return (
     <ContextMenu menuItems={menuItems}>
       <div className="relative group">
-        <SectionCard
+        <button
+          type="button"
           onClick={handleCardClick}
-          className="flex flex-col p-5 min-h-36 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 bg-white/95 dark:bg-gray-900/80 backdrop-blur-sm border-gray-200/60 dark:border-gray-800/50 hover:border-blue-300/60 dark:hover:border-blue-600/50">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/30 flex items-center justify-center shadow-sm">
-              <BrainCircuit className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          className={cn(
+            "flex flex-col text-left w-full p-3 min-h-28 rounded-lg border transition-colors duration-150",
+            "bg-white/80 dark:bg-slate-900/60",
+            "border-slate-200/60 dark:border-slate-700/40",
+            "hover:border-slate-300/80 dark:hover:border-slate-600/60",
+            "focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600"
+          )}
+        >
+          <div className="flex items-center gap-2.5 mb-1.5">
+            <div className="w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <BrainCircuit className="h-4 w-4 text-slate-500 dark:text-slate-400" />
             </div>
-            <p className="truncate font-semibold text-sm flex-1 pr-8 text-gray-900 dark:text-gray-100">{kb.name}</p>
+            <p className="truncate font-medium text-xs flex-1 pr-6 text-slate-700 dark:text-slate-200">{kb.name}</p>
           </div>
-          <p className="mt-1 line-clamp-2 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{desc || '暂无描述'}</p>
+          <p className="line-clamp-2 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed flex-1">{desc || '暂无描述'}</p>
 
-          <div className="mt-auto pt-4 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-gradient-to-r from-gray-100 to-slate-100 dark:from-gray-800 dark:to-slate-800 border border-gray-200/50 dark:border-gray-700/50">
-              <FileText className="h-3 w-3" />
+          <div className="mt-auto pt-2 flex items-center justify-between text-[10px] text-slate-400">
+            <span className="flex items-center gap-1">
+              <FileText className="h-2.5 w-2.5" />
               {kb.documentCount ?? 0} 文档
             </span>
-            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-gradient-to-r from-gray-100 to-slate-100 dark:from-gray-800 dark:to-slate-800 border border-gray-200/50 dark:border-gray-700/50">
-              <Clock className="h-3 w-3" />
+            <span className="flex items-center gap-1">
+              <Clock className="h-2.5 w-2.5" />
               {new Date(kb.updatedAt).toLocaleDateString('zh-CN')}
             </span>
           </div>
-        </SectionCard>
+        </button>
 
-        {/* 三个点菜单 - 右上角 */}
+        {/* 三个点菜单 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg shadow-sm"
+            <button
+              className="absolute top-2 right-2 w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
               onClick={(e) => e.stopPropagation()}
             >
-              <MoreVertical className="w-4 h-4" />
-            </Button>
+              <MoreVertical className="w-3.5 h-3.5" />
+            </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-36">
+          <DropdownMenuContent align="end" className="w-32 text-xs">
             <DropdownMenuItem 
               onClick={(e) => handleMenuClick(e, () => onRename?.(kb))}
-              className="flex items-center gap-2 cursor-pointer"
+              className="flex items-center gap-2 cursor-pointer text-xs"
             >
-              <Edit className="w-3.5 h-3.5" />
+              <Edit className="w-3 h-3" />
               重命名
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={(e) => handleMenuClick(e, () => onEditDesc?.(kb) ?? onRename?.(kb))}
-              className="flex items-center gap-2 cursor-pointer"
+              className="flex items-center gap-2 cursor-pointer text-xs"
             >
-              <Edit className="w-3.5 h-3.5" />
+              <Edit className="w-3 h-3" />
               修改描述
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               onClick={(e) => handleMenuClick(e, () => onDelete?.(kb))}
-              className="flex items-center gap-2 cursor-pointer text-red-600 dark:text-red-400"
+              className="flex items-center gap-2 cursor-pointer text-xs text-red-500"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3 h-3" />
               删除
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -101,4 +105,4 @@ export function KnowledgeBaseCard({ kb, onClick, onRename, onEditDesc, onDelete 
       </div>
     </ContextMenu>
   );
-} 
+}

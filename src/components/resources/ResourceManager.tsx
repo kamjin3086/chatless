@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox as UICheckbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -19,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResourceUploader } from './ResourceUploader';
 import { ResourceList } from './ResourceList';
-import { RecentlyReferenced } from './RecentlyReferenced';
+import { RecentUsedList, type RecentItem } from '@/components/ui/RecentUsedList';
 import { AddToKnowledgeBase } from './AddToKnowledgeBase';
 import { UnifiedFileService, type UnifiedFile } from '@/lib/unifiedFileService';
 import { toast } from "@/components/ui/sonner";
@@ -45,12 +44,11 @@ const convertUnifiedFileToDocument = (file: UnifiedFile): ResourceDocument => ({
   lastReferencedAt: file.lastReferencedAt,
 });
 
-// 最近引用类型
+// 最近引用类型（内部使用，包含 conversationId）
 interface RecentReference {
   id: string;
   type: string;
   name: string;
-  context: string;
   time: string;
   conversationId: string;
 }
@@ -59,7 +57,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
   const [documents, setDocuments] = useState<ResourceDocument[]>([]);
   const [chatFiles, setChatFiles] = useState<ResourceDocument[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>("documents");
+  const [_activeTab, setActiveTab] = useState<string>("documents");
   
   // 知识库相关状态
   const [addToKnowledgeBaseOpen, setAddToKnowledgeBaseOpen] = useState(false);
@@ -220,10 +218,9 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
             id: row.conversation_id + fileName,
             type: fileName.split('.').pop() || 'file',
             name: fileName,
-            context: '在会话中引用',
             time: formatRelativeTime(row.created_at),
             conversationId: row.conversation_id
-          } as any;
+          };
         });
 
         setRecentReferences(recentRefs);
@@ -449,7 +446,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
   }, []);
   
   // 处理评论
-  const handleComment = useCallback((id: string) => {
+  const handleComment = useCallback((_id: string) => {
     toast.info('评论功能', {
       description: '评论功能将在后续版本中添加'
     });
@@ -479,58 +476,51 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
   }, [documents, showIndexedOnly, sortOption]);
   
   return (
-    <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-900/95">
+    <div className="h-full flex flex-col bg-white/95 dark:bg-slate-900/95">
       {/* 拖放上传卡片 */}
-      <div className="p-5">
+      <div className="p-4">
         <ResourceUploader onUploadSuccess={handleUploadSuccess} displayType="dropzone" />
       </div>
       
-      {/* 工具栏：排序 & 过滤 */}
-      <div className="flex items-center gap-4 px-5 pt-3 pb-3 bg-white/60 dark:bg-slate-800/40 backdrop-blur-sm border-y border-slate-200/60 dark:border-slate-700/60">
-        {/* 文件统计显示 */}
-        <div className="flex items-center gap-2 text-sm px-3 py-1.5 bg-blue-50/70 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/40 rounded-lg">
-          <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
-          <span className="text-slate-600 dark:text-slate-300 font-medium">
-            {isLoadingStats ? '加载中...' : `${totalFileCount} 个文件`}
-          </span>
-        </div>
+      {/* 紧凑工具栏 */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200/50 dark:border-slate-700/30">
+        {/* 文件统计 */}
+        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+          {isLoadingStats ? '加载中...' : `${totalFileCount} 个文件`}
+        </span>
+        
+        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
         
         {/* 排序 */}
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-slate-600 dark:text-slate-400 font-medium">排序:</span>
-          <Select value={sortOption} onValueChange={(value) => setSortOption(value as any)}>
-            <SelectTrigger className="h-9 w-28 text-sm rounded-lg border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 dark:text-slate-200 focus:ring-blue-400/60 transition-colors shadow-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-              <SelectItem value="date" className="text-sm rounded-md">日期</SelectItem>
-              <SelectItem value="name" className="text-sm rounded-md">名称</SelectItem>
-              <SelectItem value="size" className="text-sm rounded-md">大小</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <select
+          value={sortOption}
+          onChange={(e) => setSortOption(e.target.value)}
+          className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
+        >
+          <option value="date">日期</option>
+          <option value="name">名称</option>
+          <option value="size">大小</option>
+        </select>
 
-        {/* 仅已入库 toggle */}
-        <label className="flex items-center gap-2 text-sm cursor-pointer select-none px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+        {/* 仅已入库 */}
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
           <UICheckbox
-            className="border-slate-300 dark:border-slate-500 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+            className="h-3.5 w-3.5"
             checked={showIndexedOnly}
             onCheckedChange={(val: boolean) => setShowIndexedOnly(Boolean(val))}
           />
-          <span className="text-slate-600 dark:text-slate-300 font-medium">仅已入库</span>
+          <span>仅已入库</span>
         </label>
       </div>
       
       {/* 资源分类和列表 */}
-      <div className="flex-1 overflow-hidden flex flex-col px-5 pb-3 pt-4">
+      <div className="flex-1 overflow-hidden flex flex-col px-4 pb-3 pt-3">
         <Tabs defaultValue="documents" className="w-full h-full flex flex-col" onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 mb-3 flex-shrink-0 bg-slate-100/80 dark:bg-slate-800/60 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-sm">
-            <TabsTrigger value="documents" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all">文档</TabsTrigger>
-            <TabsTrigger value="files" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all">文件</TabsTrigger>
-            <TabsTrigger value="chat" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all">聊天文件</TabsTrigger>
-            <TabsTrigger value="knowledge" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all">已入库</TabsTrigger>
+          <TabsList className="grid grid-cols-4 mb-2 flex-shrink-0 bg-slate-50 dark:bg-slate-800/40 p-0.5 rounded-lg h-8">
+            <TabsTrigger value="documents" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文档</TabsTrigger>
+            <TabsTrigger value="files" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文件</TabsTrigger>
+            <TabsTrigger value="chat" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">聊天文件</TabsTrigger>
+            <TabsTrigger value="knowledge" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">已入库</TabsTrigger>
           </TabsList>
           
           <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
@@ -585,8 +575,24 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       </div>
       
       {/* 最近引用区域 */}
-      <div className="border-t border-slate-200/70 dark:border-slate-700/70 bg-gradient-to-t from-slate-50 to-white dark:from-slate-800/50 dark:to-slate-900/50 backdrop-blur-sm p-4 flex-shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <RecentlyReferenced references={recentReferences} onNavigate={(cid) => { setCurrentConversation(cid); router.push('/chat'); }} />
+      <div className="border-t border-slate-200/50 dark:border-slate-700/30 p-3 flex-shrink-0">
+        <RecentUsedList 
+          title="最近引用"
+          items={recentReferences.map(ref => ({
+            id: ref.id,
+            name: ref.name,
+            iconType: ref.type,
+            time: ref.time,
+          } as RecentItem))}
+          onItemClick={(id) => {
+            const ref = recentReferences.find(r => r.id === id);
+            if (ref) {
+              setCurrentConversation(ref.conversationId);
+              router.push('/chat');
+            }
+          }}
+          emptyText="暂无引用"
+        />
       </div>
       
       {/* 添加到知识库对话框 */}

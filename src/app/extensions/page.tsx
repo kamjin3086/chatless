@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PageTabs } from '@/components/ui/PageTabs';
 import { SkillsPage } from '@/components/skills/SkillsPage';

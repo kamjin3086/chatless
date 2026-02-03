@@ -1,18 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FolderPlus, Trash2 } from "lucide-react";
+import { FolderPlus, Trash2, Edit2, Shield } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { useFilesystemAllowlistStore } from "@/store/filesystemAllowlistStore";
-import type { AllowlistDirectory } from "@/lib/filesystemAllowlist";
 import { ensureAllowlistedDirectory, normalizeAlias as normalizeAliasCore } from "@/lib/filesystemAllowlist";
 import { syncFilesystemAllowlistToBackend } from "@/lib/filesystemAllowlist/backendSync";
 import { cn } from "@/lib/utils";
 
 function normalizeAlias(input: string): string {
   return normalizeAliasCore(input);
+}
+
+// 从路径中提取显示名称（仅显示最后一级目录名）
+function getDisplayName(path: string, alias?: string): string {
+  if (alias) return `@${alias}`;
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+  const parts = normalized.split('/');
+  return parts[parts.length - 1] || '未知目录';
+}
+
+// 来源标签
+function getSourceLabel(source: string): string {
+  switch (source) {
+    case 'manual': return '手动添加';
+    case 'skills': return '技能';
+    case 'attachment': return '附件';
+    default: return '';
+  }
 }
 
 export function FileSystemAuthSettings() {
@@ -35,7 +53,7 @@ export function FileSystemAuthSettings() {
       const selected = await open({ directory: true, multiple: false });
       if (!selected || typeof selected !== "string") return;
 
-      const rawAlias = window.prompt("为该目录设置一个别名（可选，将以 @别名/... 形式使用）", "ProjectDocs");
+      const rawAlias = window.prompt("为该目录设置一个别名（推荐设置，便于识别）", "");
       const alias = rawAlias ? normalizeAlias(rawAlias) : undefined;
 
       await ensureAllowlistedDirectory({
@@ -50,137 +68,153 @@ export function FileSystemAuthSettings() {
     }
   }, []);
 
-  const list = useMemo(() => directories, [directories]);
+  // 过滤掉工作目录来源的条目（工作目录默认被授权，无需显示）
+  const filteredDirs = useMemo(() => {
+    return directories.filter(d => d.source !== 'workdir');
+  }, [directories]);
 
-  const sourceLabel = useCallback((s: AllowlistDirectory["source"]) => {
-    switch (s) {
-      case "skills":
-        return "skills";
-      case "workdir":
-        return "workdir";
-      case "attachment":
-        return "attachment";
-      case "manual":
-        return "manual";
-      default:
-        return "unknown";
-    }
-  }, []);
+  const permLabel = (v: boolean) => v ? "✓" : "–";
 
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={FolderPlus} title="白名单目录（filesystem）" iconBgColor="from-emerald-500 to-teal-500" />
+      <SettingsSectionHeader icon={Shield} title="文件访问白名单" iconBgColor="from-emerald-500 to-teal-500" />
 
-      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-        这里管理 <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">filesystem</code> 的目录白名单（递归）。
-        LLM 可使用绝对路径或 <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">@别名/路径</code> 访问；不在白名单内的路径会要求确认，确认后会加入白名单。
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+        管理允许AI访问的目录。建议为每个目录设置易识别的别名。
       </p>
 
-      <div className="mt-4 flex items-center justify-between gap-3">
+      {/* 顶部工具栏 */}
+      <div className="mt-3 flex items-center justify-between gap-2">
         <button
           onClick={onAdd}
           disabled={loading}
           className={cn(
-            "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+            "h-7 px-2 text-xs rounded flex items-center gap-1",
             "bg-emerald-600 text-white hover:bg-emerald-700 transition-colors",
             loading && "opacity-60 cursor-not-allowed"
           )}
         >
-          <FolderPlus className="h-4 w-4" />
+          <FolderPlus className="h-3.5 w-3.5" />
           添加目录
         </button>
-        <div className="text-xs text-slate-500 dark:text-slate-400">已加入白名单 {list.length} 个目录</div>
+        <span className="text-[11px] text-slate-400">{filteredDirs.length} 个</span>
       </div>
 
-      <div className="mt-4 space-y-3">
-        {list.length === 0 ? (
-          <div className="text-sm text-slate-500 dark:text-slate-400">暂无白名单目录。点击“添加目录”开始。</div>
-        ) : (
-          list.map((d: AllowlistDirectory) => (
-            <div
-              key={d.id}
-              className={cn(
-                "rounded-xl border border-slate-200/70 dark:border-slate-700/60",
-                "bg-white/60 dark:bg-slate-900/40 p-3"
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-                    {d.alias ? `@${d.alias}` : "（无别名）"}
-                  </div>
-                  <div className="text-xs text-slate-600 dark:text-slate-300 break-all">{d.path}</div>
-                  <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                    source: <span className="font-mono">{sourceLabel(d.source)}</span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-                    <span className="rounded-md border border-slate-200/60 dark:border-slate-700/60 px-2 py-0.5">
-                      read: {d.permissions.read ? "✓" : "✗"}
-                    </span>
-                    <span className="rounded-md border border-slate-200/60 dark:border-slate-700/60 px-2 py-0.5">
-                      write: {d.permissions.write ? "✓" : "✗"}
-                    </span>
-                    <span className="rounded-md border border-slate-200/60 dark:border-slate-700/60 px-2 py-0.5">
-                      create: {d.permissions.create ? "✓" : "✗"}
-                    </span>
-                    <span className="rounded-md border border-slate-200/60 dark:border-slate-700/60 px-2 py-0.5">
-                      delete: {d.permissions.delete ? "✓" : "✗"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={async () => {
-                      const raw = window.prompt("修改别名（可留空表示不设置别名）", d.alias || "");
-                      if (raw === null) return;
-                      const nextAlias = raw.trim() ? normalizeAlias(raw) : "";
-                      await updateDirectory(d.id, { alias: nextAlias });
-                      await syncToBackend();
-                    }}
-                    className="text-xs rounded-lg border border-slate-200/70 dark:border-slate-700/60 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                  >
-                    别名
-                  </button>
-                  <button
-                    onClick={async () => {
-                      await updateDirectory(d.id, {
-                        permissions: { ...d.permissions, write: !d.permissions.write, create: !d.permissions.create },
-                      });
-                      await syncToBackend();
-                    }}
-                    className="text-xs rounded-lg border border-slate-200/70 dark:border-slate-700/60 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                  >
-                    切换写入
-                  </button>
-                  <button
-                    onClick={async () => {
-                      await updateDirectory(d.id, {
-                        permissions: { ...d.permissions, delete: !d.permissions.delete },
-                      });
-                      await syncToBackend();
-                    }}
-                    className="text-xs rounded-lg border border-slate-200/70 dark:border-slate-700/60 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                  >
-                    切换删除
-                  </button>
-                  <button
-                    onClick={async () => {
-                      await removeDirectory(d.id);
-                      await syncToBackend();
-                    }}
-                    className="inline-flex items-center gap-1 text-xs rounded-lg border border-red-200/70 dark:border-red-900/40 px-2 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    移除
-                  </button>
-                </div>
-              </div>
+      {/* 目录列表 */}
+      <div className="mt-3 border border-slate-200/60 dark:border-slate-700/40 rounded-lg overflow-hidden">
+        <ScrollArea className="h-[240px]">
+          {filteredDirs.length === 0 ? (
+            <div className="p-4 text-center text-[11px] text-slate-400">
+              暂无白名单目录
             </div>
-          ))
-        )}
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredDirs.map(d => (
+                <div
+                  key={d.id}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors group"
+                >
+                  {/* 主信息 */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn(
+                        "text-xs font-medium truncate",
+                        d.alias ? "text-emerald-600 dark:text-emerald-400" : "text-slate-700 dark:text-slate-200"
+                      )}>
+                        {getDisplayName(d.path, d.alias)}
+                      </span>
+                      {getSourceLabel(d.source) && (
+                        <span className="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                          {getSourceLabel(d.source)}
+                        </span>
+                      )}
+                    </div>
+                    {/* 权限标签 */}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={cn(
+                        "text-[9px]",
+                        d.permissions.read ? "text-emerald-500" : "text-slate-300"
+                      )}>读{permLabel(d.permissions.read)}</span>
+                      <span className={cn(
+                        "text-[9px]",
+                        d.permissions.write ? "text-blue-500" : "text-slate-300"
+                      )}>写{permLabel(d.permissions.write)}</span>
+                      <span className={cn(
+                        "text-[9px]",
+                        d.permissions.create ? "text-amber-500" : "text-slate-300"
+                      )}>建{permLabel(d.permissions.create)}</span>
+                      <span className={cn(
+                        "text-[9px]",
+                        d.permissions.delete ? "text-red-500" : "text-slate-300"
+                      )}>删{permLabel(d.permissions.delete)}</span>
+                    </div>
+                  </div>
+                  
+                  {/* 操作按钮 */}
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={async () => {
+                        const raw = window.prompt("设置别名（便于识别）", d.alias || "");
+                        if (raw === null) return;
+                        await updateDirectory(d.id, { alias: raw.trim() ? normalizeAlias(raw) : "" });
+                        await syncToBackend();
+                      }}
+                      className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
+                      title="编辑别名"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await updateDirectory(d.id, {
+                          permissions: { ...d.permissions, write: !d.permissions.write, create: !d.permissions.create },
+                        });
+                        await syncToBackend();
+                      }}
+                      className={cn(
+                        "h-6 px-1 text-[10px] rounded transition-colors",
+                        d.permissions.write 
+                          ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20" 
+                          : "text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
+                      )}
+                      title="切换写入权限"
+                    >
+                      写
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await updateDirectory(d.id, {
+                          permissions: { ...d.permissions, delete: !d.permissions.delete },
+                        });
+                        await syncToBackend();
+                      }}
+                      className={cn(
+                        "h-6 px-1 text-[10px] rounded transition-colors",
+                        d.permissions.delete 
+                          ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" 
+                          : "text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
+                      )}
+                      title="切换删除权限"
+                    >
+                      删
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await removeDirectory(d.id);
+                        await syncToBackend();
+                      }}
+                      className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="移除"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
       </div>
     </SettingsCard>
   );
 }
-

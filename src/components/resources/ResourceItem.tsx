@@ -20,13 +20,13 @@ const getFileIcon = (filename: string) => {
   const ext = filename.split('.').pop()?.toLowerCase();
   switch (ext) {
     case 'json':
-      return <FileJson className="h-5 w-5 text-slate-500 dark:text-slate-400" />;
+      return <FileJson className="h-4 w-4 text-slate-400" />;
     case 'md':
     case 'markdown':
     case 'txt':
-      return <FileCode className="h-5 w-5 text-slate-500 dark:text-slate-400" />;
+      return <FileCode className="h-4 w-4 text-slate-400" />;
     default:
-      return <FileText className="h-5 w-5 text-slate-500 dark:text-slate-400" />;
+      return <FileText className="h-4 w-4 text-slate-400" />;
   }
 };
 
@@ -89,150 +89,111 @@ export function ResourceItem({
 
   return (
     <TooltipProvider delayDuration={100}>
-      <SectionCard
-        onClick={() => {}}
-        hoverable
-        variant="flat"
-        className="flex items-center gap-3 p-2.5 transition-colors hover:bg-gray-50/80 dark:hover:bg-slate-800/60">
+      <div className="flex items-center gap-2.5 px-2 py-2 border-b border-slate-100 dark:border-slate-800/40 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
         {/* 文件图标 */}
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700 flex-shrink-0">
+        <div className="flex h-7 w-7 items-center justify-center rounded bg-slate-100 dark:bg-slate-800 flex-shrink-0">
           {getFileIcon(title)}
         </div>
 
         {/* 文件信息 */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-          <p className="truncate font-medium text-sm text-gray-900 dark:text-gray-100">
-            {title}
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">
+              {title}
             </p>
             {isChatFile && (
-              <span className="rounded px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 dark:bg-blue-800/60 dark:text-blue-300">
-                💬 聊天文件
+              <span className="rounded px-1 py-0.5 text-[10px] bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                聊天
               </span>
             )}
-            {/* 显示知识库标签 - 移除对聊天文件的限制 */}
             {!hideIndexedStatus && knowledgeBases && knowledgeBases.length > 0 && (
-              <div className="flex gap-1 flex-wrap">
-                {knowledgeBases.map((kb, index) => (
+              <div className="flex gap-0.5 flex-wrap">
+                {knowledgeBases.slice(0, 2).map((kb, index) => (
                   <span 
                     key={`${kb.id}-${index}`} 
-                    className={`rounded px-1.5 py-0.5 text-xs ${
+                    className={`rounded px-1 py-0.5 text-[10px] ${
                       kb.status === 'indexed' 
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-800/60 dark:text-emerald-300'
+                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
                         : kb.status === 'pending' || kb.status === 'indexing'
-                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-800/60 dark:text-yellow-300'
-                        : 'bg-red-100 text-red-700 dark:bg-red-800/60 dark:text-red-300'
+                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
+                        : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
                     }`}
-                    title={`状态: ${kb.status === 'indexed' ? '已索引' : kb.status === 'pending' ? '待处理' : kb.status === 'indexing' ? '处理中' : '失败'}`}
                   >
                     {kb.name}
                   </span>
                 ))}
+                {knowledgeBases.length > 2 && (
+                  <span className="text-[10px] text-slate-400">+{knowledgeBases.length - 2}</span>
+                )}
               </div>
             )}
           </div>
-          <div className="mt-0.5 flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
-            <span className="flex items-center gap-1">
-              <HardDrive className="h-3 w-3" />
-              {formatFileSize(fileSize)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {new Date(createdAt).toLocaleDateString('zh-CN')}
-            </span>
-            {/* 只有非聊天文件才显示分片信息 */}
-            {!isChatFile && typeof chunkCount === 'number' && (
-              <span className="flex items-center gap-1">
-                <Layers className="h-3 w-3" />
-                {chunkCount} 个分片
-              </span>
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+            <span>{formatFileSize(fileSize)}</span>
+            <span>{new Date(createdAt).toLocaleDateString('zh-CN')}</span>
+            {!isChatFile && typeof chunkCount === 'number' && chunkCount > 0 && (
+              <span>{chunkCount} 分片</span>
             )}
-            {/* 聊天文件显示可点击的"来自对话" */}
             {isChatFile && conversationId && (
               <span 
-                className="flex items-center gap-1 text-blue-500 dark:text-blue-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-300 hover:underline"
+                className="text-blue-500 dark:text-blue-400 cursor-pointer hover:underline"
                 onClick={handleJumpToConversation}
-                title="点击跳转到对话"
               >
-                💬 来自对话
+                对话中
               </span>
             )}
           </div>
         </div>
 
         {/* 操作按钮 */}
-        <div className="flex items-center gap-1">
-          {/* 查看按钮 - 对于聊天文件显示为"跳转到对话" */}
+        <div className="flex items-center gap-0.5">
           {onView && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onView(id)}
-                  className="h-7 w-7 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isChatFile ? '跳转到对话' : '查看文档'}</p>
-              </TooltipContent>
-            </Tooltip>
+            <button
+              onClick={() => onView(id)}
+              className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+              title={isChatFile ? '跳转到对话' : '查看'}
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </button>
           )}
 
-          {/* 添加到知识库按钮 */}
           {onAddToKnowledgeBase && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onAddToKnowledgeBase(id)}
-                  className="h-7 w-7"
-                >
-                  <Database className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{knowledgeBases && knowledgeBases.length > 0 ? '添加到其他知识库' : '添加到知识库'}</p>
-              </TooltipContent>
-            </Tooltip>
+            <button
+              onClick={() => onAddToKnowledgeBase(id)}
+              className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+              title="添加到知识库"
+            >
+              <Database className="h-3.5 w-3.5" />
+            </button>
           )}
 
-          {/* 更多操作菜单 - 聊天文件显示"移除"而不是"删除" */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-7 w-7 focus:outline-none focus:ring-0 focus:ring-offset-0"
-              >
-                <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              </Button>
+              <button className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors">
+                <MoreVertical className="h-3.5 w-3.5" />
+              </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => setDetailOpen(true)} className="cursor-pointer">
-                <Info className="h-4 w-4 mr-2" />
-                查看详情
+            <DropdownMenuContent align="end" className="w-32 text-xs">
+              <DropdownMenuItem onClick={() => setDetailOpen(true)} className="cursor-pointer text-xs">
+                <Info className="h-3 w-3 mr-2" />
+                详情
               </DropdownMenuItem>
               {onDelete && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
                     onClick={() => onDelete(id)} 
-                    className="cursor-pointer"
-                    variant="destructive"
+                    className="cursor-pointer text-xs text-red-500"
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {isChatFile ? '移除文件' : '删除文件'}
+                    <Trash2 className="h-3 w-3 mr-2" />
+                    {isChatFile ? '移除' : '删除'}
                   </DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </SectionCard>
+      </div>
 
       {/* 详情对话框 */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>

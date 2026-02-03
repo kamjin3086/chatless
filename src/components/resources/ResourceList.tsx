@@ -53,10 +53,10 @@ export function ResourceList({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-60">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="mt-2 text-sm text-gray-500">加载资源中...</p>
+          <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
+          <p className="mt-2 text-xs text-slate-400">加载资源中...</p>
         </div>
       </div>
     );
@@ -64,25 +64,23 @@ export function ResourceList({
 
   if (filteredResources.length === 0) {
     return (
-      <div className="flex items-center justify-center h-60">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <div className="w-12 h-12 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-xl flex items-center justify-center">
-            <FileText className="w-6 h-6 text-gray-400 dark:text-gray-500" strokeWidth={1.5} />
+          <div className="w-10 h-10 mx-auto mb-3 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+            <FileText className="w-5 h-5 text-slate-400" strokeWidth={1.5} />
           </div>
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+          <p className="text-xs font-medium text-slate-500 mb-1">
             {type === 'documents' && '暂无文档'}
             {type === 'files' && '暂无文件'}
             {type === 'chat' && '暂无聊天附件'}
             {type === 'knowledge' && '知识库中暂无资源'}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-[11px] text-slate-400">
             {type === 'knowledge' 
-              ? '在资源卡片上点击"添加到知识库"即可入库' 
+              ? '点击"添加到知识库"即可入库' 
               : type === 'chat'
-                ? '您在聊天窗口中附加的文件将自动出现在此处' 
-                : type === 'documents'
-                  ? '支持拖拽 .txt / .md / .pdf 等文档到顶部区域，或点击"上传资源"按钮' 
-                  : '支持拖拽代码、数据文件到顶部区域，或点击"上传资源"按钮'}
+                ? '聊天中附加的文件会自动出现' 
+                : '拖放文件到上方区域上传'}
           </p>
         </div>
       </div>
@@ -90,7 +88,7 @@ export function ResourceList({
   }
 
   return (
-    <div className="h-full overflow-auto pb-4 rounded-xl bg-white/60 dark:bg-slate-900/40">
+    <div className="h-full overflow-auto">
       {filteredResources.map(resource => (
         <ResourceItem 
           key={resource.id}

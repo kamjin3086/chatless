@@ -7,20 +7,9 @@ import { getSkillManager } from '@/lib/skills';
 import type { Skill } from '@/lib/skills/types';
 import { SkillGrid } from './SkillGrid';
 import { SkillDrawer } from './SkillDrawer';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   RefreshCw,
   Search,
-  Filter,
-  Sparkles,
   FolderOpen,
   Plus,
   ChevronDown,
@@ -173,123 +162,98 @@ export function SkillsPage({ className }: SkillsPageProps) {
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {/* 页面头部 */}
-      <header className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                技能管理
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                管理和配置 AI 技能插件
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenSkillsFolder}
-            >
-              <FolderOpen className="h-4 w-4 mr-1" />
-              打开文件夹
-            </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  导入技能
-                  <ChevronDown className="h-3 w-3 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleImport('zip')}>
-                  从 ZIP 导入
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleImport('git')}>
-                  从 Git 克隆
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing || isLoading}
-            >
-              <RefreshCw className={cn('h-4 w-4 mr-1', isRefreshing && 'animate-spin')} />
-              刷新
-            </Button>
-          </div>
+      {/* 紧凑工具栏 */}
+      <header className="flex-shrink-0 h-10 px-3 border-b border-slate-200/50 dark:border-slate-700/30 flex items-center justify-between bg-white/90 dark:bg-slate-900/90">
+        {/* 左侧：搜索 */}
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="搜索技能..."
+            value={filterOptions.search || ''}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="w-full h-7 pl-7 pr-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600"
+          />
         </div>
-
-        {/* 搜索和筛选 */}
-        <div className="flex items-center gap-4">
-          {/* 搜索框 */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="搜索技能..."
-              value={filterOptions.search || ''}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
+        
+        {/* 右侧：筛选 + 操作 */}
+        <div className="flex items-center gap-1.5">
           {/* 来源筛选 */}
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-400" />
-            <Select
-              value={filterOptions.source || 'all'}
-              onValueChange={handleSourceChange}
-            >
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部来源</SelectItem>
-                <SelectItem value="local">本地</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <select
+            value={filterOptions.source || 'all'}
+            onChange={(e) => handleSourceChange(e.target.value)}
+            className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
+          >
+            <option value="all">全部来源</option>
+            <option value="local">本地</option>
+          </select>
 
           {/* 状态筛选 */}
-          <Select
+          <select
             value={(filterOptions.status as string) || 'all'}
-            onValueChange={handleStatusChange}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
           >
-            <SelectTrigger className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部状态</SelectItem>
-              <SelectItem value="installed">已安装</SelectItem>
-              <SelectItem value="needs_update">有更新</SelectItem>
-              <SelectItem value="missing_deps">缺少依赖</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="all">全部状态</option>
+            <option value="installed">已安装</option>
+            <option value="needs_update">有更新</option>
+            <option value="missing_deps">缺少依赖</option>
+          </select>
 
-          {/* 统计信息 */}
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            共 {filteredSkills.length} 个技能
+          {/* 统计 */}
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 ml-1">
+            {filteredSkills.length} 个
             {skills.filter(s => s.enabled).length > 0 && (
-              <span className="ml-2 text-emerald-600 dark:text-emerald-400">
-                • {skills.filter(s => s.enabled).length} 已启用
+              <span className="text-emerald-600 dark:text-emerald-400 ml-1">
+                · {skills.filter(s => s.enabled).length} 启用
               </span>
             )}
-          </div>
+          </span>
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+
+          {/* 打开文件夹 */}
+          <button
+            onClick={handleOpenSkillsFolder}
+            className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1"
+            title="打开技能文件夹"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+          </button>
+          
+          {/* 导入 */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5" />
+                <span>导入</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="text-xs">
+              <DropdownMenuItem onClick={() => handleImport('zip')} className="text-xs">
+                从 ZIP 导入
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleImport('git')} className="text-xs">
+                从 Git 克隆
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* 刷新 */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+            className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+            title="刷新"
+          >
+            <RefreshCw className={cn('w-3.5 h-3.5', isRefreshing && 'animate-spin')} />
+          </button>
         </div>
       </header>
 
       {/* 技能网格 */}
-      <main className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-950">
+      <main className="flex-1 overflow-y-auto p-4 bg-slate-50/80 dark:bg-slate-900/60">
         <SkillGrid
           skills={filteredSkills}
           selectedSkillId={selectedSkillId}
@@ -322,4 +286,3 @@ export function SkillsPage({ className }: SkillsPageProps) {
     </div>
   );
 }
-

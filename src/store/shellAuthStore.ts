@@ -15,18 +15,26 @@ export interface TrustedShellWorkingDir {
   authorizedAt: number;
 }
 
+/** 自动清理偏好设置（天数） */
+export type CleanupDays = 0 | 30 | 90 | 180;
+
 interface ShellAuthState {
   isLoaded: boolean;
   trustedWorkingDirs: TrustedShellWorkingDir[];
+  /** 自动清理天数，0表示不清理 */
+  cleanupDays: CleanupDays;
 
   load: () => Promise<void>;
   addTrustedWorkingDir: (absolutePath: string) => Promise<TrustedShellWorkingDir>;
   removeTrustedWorkingDir: (id: string) => Promise<void>;
   isTrustedWorkingDir: (absolutePath: string) => boolean;
+  setCleanupDays: (days: CleanupDays) => Promise<void>;
+  cleanupExpired: () => Promise<void>;
 }
 
 const STORE_FILE = 'shell-auth.json';
 const STORE_KEY = 'trusted_shell_working_dirs_v1';
+const CLEANUP_KEY = 'shell_auth_cleanup_days';
 
 function normalizePath(p: string): string {
   return String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/g, '');
@@ -36,14 +44,26 @@ async function persist(list: TrustedShellWorkingDir[]): Promise<void> {
   await StorageUtil.setItem(STORE_KEY, list, STORE_FILE);
 }
 
+async function persistCleanupDays(days: CleanupDays): Promise<void> {
+  await StorageUtil.setItem(CLEANUP_KEY, days, STORE_FILE);
+}
+
 export const useShellAuthStore = create<ShellAuthState>((set, get) => ({
   isLoaded: false,
   trustedWorkingDirs: [],
+  cleanupDays: 90,
 
   load: async () => {
     if (get().isLoaded) return;
     const list = (await StorageUtil.getItem<TrustedShellWorkingDir[]>(STORE_KEY, [], STORE_FILE)) || [];
-    set({ trustedWorkingDirs: Array.isArray(list) ? list : [], isLoaded: true });
+    const days = (await StorageUtil.getItem<CleanupDays>(CLEANUP_KEY, 90, STORE_FILE)) || 90;
+    set({ 
+      trustedWorkingDirs: Array.isArray(list) ? list : [], 
+      cleanupDays: days,
+      isLoaded: true 
+    });
+    // 自动清理过期项
+    await get().cleanupExpired();
   },
 
   addTrustedWorkingDir: async (absolutePath) => {
@@ -82,6 +102,29 @@ export const useShellAuthStore = create<ShellAuthState>((set, get) => ({
       const dp = normalizePath(d.path).toLowerCase();
       return lp === dp || lp.startsWith(`${dp}/`);
     });
+  },
+
+  setCleanupDays: async (days) => {
+    set({ cleanupDays: days });
+    await persistCleanupDays(days);
+    await get().cleanupExpired();
+  },
+
+  cleanupExpired: async () => {
+    const { cleanupDays, trustedWorkingDirs } = get();
+    if (cleanupDays === 0) return; // 不清理
+    
+    const now = Date.now();
+    const maxAge = cleanupDays * 24 * 60 * 60 * 1000;
+    const filtered = trustedWorkingDirs.filter(d => (now - d.authorizedAt) < maxAge);
+    
+    // 限制最多100条
+    const limited = filtered.slice(0, 100);
+    
+    if (limited.length !== trustedWorkingDirs.length) {
+      set({ trustedWorkingDirs: limited });
+      await persist(limited);
+    }
   },
 }));
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FolderDown, FolderPlus, Trash2 } from "lucide-react";
+import { FolderDown, Trash2, HardDrive, ChevronDown, Check } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
@@ -17,89 +18,112 @@ function todayStamp(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// 格式化会话标题
+function formatConversationTitle(title: string, maxLen = 24): string {
+  if (!title) return '未命名会话';
+  return title.length > maxLen ? title.slice(0, maxLen) + '...' : title;
+}
+
 export function WorkspaceSettings() {
+  const conversations = useChatStore((s) => s.conversations);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
-  const workDir = useConversationAttachmentStore(
-    (s) => (currentConversationId ? s.getWorkingDir(currentConversationId) : undefined)
-  );
   const clearWorkingDir = useConversationAttachmentStore((s) => s.clearWorkingDir);
 
   const [loading, setLoading] = useState(false);
-  const [refreshToken, setRefreshToken] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  const workspaceRoot = useMemo(() => workDir || "", [workDir]);
-  const outDir = useMemo(() => (workspaceRoot ? `${workspaceRoot.replace(/\\+/g, "/")}/out` : ""), [workspaceRoot]);
+  // 当前会话信息
+  const currentConversation = useMemo(() => {
+    return conversations.find(c => c.id === currentConversationId);
+  }, [conversations, currentConversationId]);
 
-  // 确保当前会话工作区存在（避免设置页打开时 @WorkDir 为空）
+  // 确保当前会话工作区存在
   useEffect(() => {
     if (!currentConversationId) return;
-    if (workspaceRoot) return;
     void (async () => {
       try {
         const ws = await ensureConversationWorkspace(currentConversationId);
         useConversationAttachmentStore.getState().setWorkingDir(currentConversationId, ws.root);
       } catch {
         // ignore
-      } finally {
-        setRefreshToken((x) => x + 1);
       }
     })();
   }, [currentConversationId]);
 
+  // 导出选中的会话
   const onExport = useCallback(async () => {
-    if (!currentConversationId) {
-      toast.error("未选择会话");
+    const ids = selectedIds.size > 0 ? Array.from(selectedIds) : (currentConversationId ? [currentConversationId] : []);
+    if (ids.length === 0) {
+      toast.error("请选择要导出的会话");
       return;
     }
+    
     setLoading(true);
     try {
-      const ws = await ensureConversationWorkspace(currentConversationId);
-
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({ directory: true, multiple: false, title: "选择导出目录（将把 out/ 导出到此目录）" });
+      const selected = await open({ directory: true, multiple: false, title: "选择导出位置" });
       if (!selected || typeof selected !== "string") return;
 
-      // 结构化目录：<selected>/Chatless/Outputs/<YYYY-MM-DD>/<conversationId>/
-      const normalized = selected.replace(/\\/g, "/");
-      const dest = `${normalized}/Chatless/Outputs/${todayStamp()}/${currentConversationId}`;
-
       const { mkdir } = await import("@tauri-apps/plugin-fs");
-      await mkdir(dest, { recursive: true });
-
-      const r = await copyDirectoryRecursive(ws.outDir, dest);
-      toast.success(`导出完成：复制 ${r.filesCopied} 个文件到 ${dest}`);
+      const normalized = selected.replace(/\\/g, "/");
+      const baseExportDir = `${normalized}/Chatless-Export/${todayStamp()}`;
+      
+      let totalFiles = 0;
+      for (const id of ids) {
+        const ws = await ensureConversationWorkspace(id);
+        const conv = conversations.find(c => c.id === id);
+        // 使用会话标题作为导出文件夹名
+        const safeName = (conv?.title || id).replace(/[<>:"/\\|?*]/g, '_').slice(0, 50);
+        const dest = `${baseExportDir}/${safeName}`;
+        
+        await mkdir(dest, { recursive: true });
+        const r = await copyDirectoryRecursive(ws.outDir, dest);
+        totalFiles += r.filesCopied;
+      }
+      
+      toast.success(`导出完成：${ids.length} 个会话，${totalFiles} 个文件`);
+      setSelectedIds(new Set());
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(`导出失败：${msg}`);
     } finally {
       setLoading(false);
     }
-  }, [currentConversationId]);
+  }, [selectedIds, currentConversationId, conversations]);
 
-  const onClearCurrent = useCallback(async () => {
-    if (!currentConversationId) {
-      toast.error("未选择会话");
+  // 清理选中的会话工作区
+  const onCleanSelected = useCallback(async () => {
+    const ids = selectedIds.size > 0 ? Array.from(selectedIds) : (currentConversationId ? [currentConversationId] : []);
+    if (ids.length === 0) {
+      toast.error("请选择要清理的会话");
       return;
     }
+    
     setLoading(true);
     try {
-      await removeConversationWorkspace(currentConversationId);
-      clearWorkingDir(currentConversationId);
-      toast.success("已清理当前会话工作区");
+      for (const id of ids) {
+        await removeConversationWorkspace(id);
+        clearWorkingDir(id);
+      }
+      toast.success(`已清理 ${ids.length} 个会话的工作区`);
+      setSelectedIds(new Set());
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(`清理失败：${msg}`);
     } finally {
       setLoading(false);
-      setRefreshToken((x) => x + 1);
     }
-  }, [clearWorkingDir, currentConversationId]);
+  }, [selectedIds, currentConversationId, clearWorkingDir]);
 
+  // 清理全部工作区
   const onClearAll = useCallback(async () => {
+    if (!window.confirm("确定要清理全部工作区吗？此操作不可撤销。")) return;
+    
     setLoading(true);
     try {
       await clearAllWorkspaces();
-      // 清空会话级 workingDir（非持久化）
+      // 清空会话级 workingDir
       try {
         const st = useConversationAttachmentStore.getState();
         const map = (st as any).workingDirByConversation || {};
@@ -107,81 +131,171 @@ export function WorkspaceSettings() {
       } catch {
         // ignore
       }
-      toast.success("已清理全部工作区（AppData/workspaces）");
+      toast.success("已清理全部工作区");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(`清理失败：${msg}`);
     } finally {
       setLoading(false);
-      setRefreshToken((x) => x + 1);
     }
   }, []);
 
+  // 切换选中状态
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedIds.size === conversations.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(conversations.map(c => c.id)));
+    }
+  };
+
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={FolderPlus} title="工作区与导出" iconBgColor="from-sky-500 to-indigo-500" />
+      <SettingsSectionHeader icon={HardDrive} title="工作区管理" iconBgColor="from-sky-500 to-indigo-500" />
 
-      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-        默认情况下，Agent 的脚本/中间文件/产物会写入 <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">@WorkDir</code>{" "}
-        （应用 AppData 工作区），避免自动扩大到 Documents 等用户目录。只有当你点击“导出”并选择目录时，才会把 out/ 复制到你指定的位置。
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+        AI产物保存在应用专用区域。选择会话后可导出或清理。
       </p>
 
-      <div className="mt-4 grid grid-cols-1 gap-2">
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          当前会话：<span className="font-mono">{currentConversationId || "(none)"}</span>
+      {/* 当前会话显示 */}
+      {currentConversation && (
+        <div className="mt-3 px-3 py-2 rounded-lg bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[10px] text-slate-400">当前会话</div>
+              <div className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                {formatConversationTitle(currentConversation.title)}
+              </div>
+            </div>
+            <button
+              onClick={onExport}
+              disabled={loading}
+              className={cn(
+                "h-7 px-2 text-xs rounded flex items-center gap-1",
+                "bg-indigo-600 text-white hover:bg-indigo-700 transition-colors",
+                loading && "opacity-60 cursor-not-allowed"
+              )}
+            >
+              <FolderDown className="h-3.5 w-3.5" />
+              导出
+            </button>
+          </div>
         </div>
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          @WorkDir：<span className="font-mono break-all">{workspaceRoot || "(初始化中...)"}</span>
+      )}
+
+      {/* 会话选择器 */}
+      <div className="mt-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="h-7 px-2 text-xs rounded border border-slate-200/60 dark:border-slate-700/40 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+            >
+              选择会话
+              <ChevronDown className={cn("h-3 w-3 transition-transform", showDropdown && "rotate-180")} />
+            </button>
+            
+            {showDropdown && (
+              <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/40 rounded-lg shadow-lg z-10">
+                <div className="p-1.5 border-b border-slate-100 dark:border-slate-700">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="w-full text-left px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded transition-colors"
+                  >
+                    {selectedIds.size === conversations.length ? '取消全选' : '全选'}
+                  </button>
+                </div>
+                <ScrollArea className="h-[200px]">
+                  <div className="p-1.5">
+                    {conversations.slice(0, 50).map(conv => (
+                      <button
+                        key={conv.id}
+                        onClick={() => toggleSelect(conv.id)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700 rounded transition-colors"
+                      >
+                        <div className={cn(
+                          "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
+                          selectedIds.has(conv.id)
+                            ? "bg-indigo-600 border-indigo-600"
+                            : "border-slate-300 dark:border-slate-600"
+                        )}>
+                          {selectedIds.has(conv.id) && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <span className="text-xs text-slate-700 dark:text-slate-200 truncate flex-1">
+                          {formatConversationTitle(conv.title, 32)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+          
+          {selectedIds.size > 0 && (
+            <span className="text-[11px] text-slate-400">已选 {selectedIds.size} 个</span>
+          )}
         </div>
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          out/：<span className="font-mono break-all">{outDir || "(unknown)"}</span>
-        </div>
+
+        {/* 批量操作按钮 */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onExport}
+              disabled={loading}
+              className={cn(
+                "h-7 px-2 text-xs rounded flex items-center gap-1",
+                "bg-indigo-600 text-white hover:bg-indigo-700 transition-colors",
+                loading && "opacity-60 cursor-not-allowed"
+              )}
+            >
+              <FolderDown className="h-3.5 w-3.5" />
+              导出选中
+            </button>
+            <button
+              onClick={onCleanSelected}
+              disabled={loading}
+              className={cn(
+                "h-7 px-2 text-xs rounded flex items-center gap-1",
+                "border border-slate-200/60 dark:border-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors",
+                loading && "opacity-60 cursor-not-allowed"
+              )}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              清理选中
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          onClick={onExport}
-          disabled={loading || !currentConversationId}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
-            "bg-indigo-600 text-white hover:bg-indigo-700 transition-colors",
-            (loading || !currentConversationId) && "opacity-60 cursor-not-allowed"
-          )}
-        >
-          <FolderDown className="h-4 w-4" />
-          导出 out/ 到指定目录
-        </button>
-
-        <button
-          onClick={onClearCurrent}
-          disabled={loading || !currentConversationId}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
-            "border border-slate-200/70 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors",
-            (loading || !currentConversationId) && "opacity-60 cursor-not-allowed"
-          )}
-        >
-          <Trash2 className="h-4 w-4" />
-          清理当前会话工作区
-        </button>
-
+      {/* 危险操作区 */}
+      <div className="mt-4 pt-3 border-t border-slate-200/50 dark:border-slate-700/30">
         <button
           onClick={onClearAll}
           disabled={loading}
           className={cn(
-            "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
-            "border border-red-200/70 dark:border-red-900/40 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors",
+            "h-7 px-2 text-xs rounded flex items-center gap-1",
+            "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors",
             loading && "opacity-60 cursor-not-allowed"
           )}
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
           清理全部工作区
         </button>
       </div>
-
-      {/* 仅用于触发重渲染，避免 eslint 提示未使用 */}
-      <span className="hidden">{refreshToken}</span>
     </SettingsCard>
   );
 }
-

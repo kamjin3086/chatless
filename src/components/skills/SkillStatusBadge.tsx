@@ -25,27 +25,27 @@ const statusConfig: Record<SkillStatus, {
   installed: {
     label: '已安装',
     icon: CheckCircle,
-    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400',
   },
   needs_update: {
     label: '有更新',
     icon: AlertCircle,
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    className: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400',
   },
   missing_deps: {
     label: '缺少依赖',
     icon: AlertTriangle,
-    className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    className: 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400',
   },
   not_installed: {
     label: '未安装',
     icon: Download,
-    className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+    className: 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400',
   },
   error: {
     label: '错误',
     icon: XCircle,
-    className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    className: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400',
   },
 };
 
@@ -64,19 +64,19 @@ export function SkillStatusBadge({
   const safeConfig = config ?? {
     label: key === 'unknown' ? '未知' : `未知（${key}）`,
     icon: AlertCircle,
-    className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+    className: 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400',
   };
   const Icon = safeConfig.icon;
 
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+        'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium',
         safeConfig.className,
         className
       )}
     >
-      {showIcon && <Icon className="h-3 w-3" />}
+      {showIcon && <Icon className="h-2.5 w-2.5" />}
       {showText && <span>{safeConfig.label}</span>}
     </span>
   );

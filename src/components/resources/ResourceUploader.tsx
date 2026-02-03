@@ -130,7 +130,7 @@ export function ResourceUploader({
   // 拖放区域版本
   return (
     <div 
-      className={`drop-zone border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-lg flex flex-col items-center justify-center p-4 cursor-pointer bg-white/50 dark:bg-gray-800/30 backdrop-blur-sm hover:border-primary dark:hover:border-primary transition-all duration-300 ${uploading ? 'opacity-70' : ''}`}
+      className={`border border-dashed border-slate-300/60 dark:border-slate-600/40 rounded-lg flex items-center justify-center p-3 cursor-pointer bg-slate-50/50 dark:bg-slate-800/30 hover:border-slate-400/60 dark:hover:border-slate-500/50 transition-colors ${uploading ? 'opacity-70' : ''}`}
       onClick={uploading ? undefined : handleUploadClick}
       onDrop={uploading ? undefined : handleDrop}
       onDragOver={handleDragOver}
@@ -144,17 +144,14 @@ export function ResourceUploader({
       />
       
       {uploading ? (
-        <div className="flex flex-row items-center gap-3 py-1">
-          <Loader2 className="w-5 h-5 text-primary animate-spin" />
-          <div className="text-sm font-medium text-gray-700 dark:text-gray-300">资源上传中...</div>
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-4 h-4 text-slate-500 animate-spin" />
+          <span className="text-xs text-slate-500">上传中...</span>
         </div>
       ) : (
-        <div className="flex flex-row items-center gap-3 py-1">
-          <HardDriveUpload className="w-5 h-5 text-gray-400 dark:text-gray-300" />
-          <div className="flex flex-col">
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">拖放文件到这里导入</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">或点击选择文件</div>
-          </div>
+        <div className="flex items-center gap-2">
+          <HardDriveUpload className="w-4 h-4 text-slate-400" />
+          <span className="text-xs text-slate-500 dark:text-slate-400">拖放文件或点击上传</span>
         </div>
       )}
     </div>

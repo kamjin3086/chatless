@@ -25,9 +25,9 @@ export function SkillGrid({
   // 加载状态
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
-        <Loader2 className="h-8 w-8 animate-spin mb-3" />
-        <p className="text-sm">正在加载技能...</p>
+      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <Loader2 className="h-5 w-5 animate-spin mb-2" />
+        <p className="text-xs">正在加载技能...</p>
       </div>
     );
   }
@@ -35,10 +35,10 @@ export function SkillGrid({
   // 错误状态
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-red-500 dark:text-red-400">
-        <AlertCircle className="h-8 w-8 mb-3" />
-        <p className="text-sm font-medium">加载失败</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{error}</p>
+      <div className="flex flex-col items-center justify-center py-12 text-red-500 dark:text-red-400">
+        <AlertCircle className="h-5 w-5 mb-2" />
+        <p className="text-xs font-medium">加载失败</p>
+        <p className="text-[11px] text-slate-400 mt-1">{error}</p>
       </div>
     );
   }
@@ -46,12 +46,12 @@ export function SkillGrid({
   // 空状态
   if (skills.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
-        <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
-          <Sparkles className="h-8 w-8" />
+      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 mb-3">
+          <Sparkles className="h-5 w-5" />
         </div>
-        <p className="text-sm font-medium">暂无技能</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+        <p className="text-xs font-medium text-slate-500">暂无技能</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">
           尝试刷新或添加本地技能
         </p>
       </div>
@@ -61,7 +61,7 @@ export function SkillGrid({
   return (
     <div
       className={cn(
-        'grid gap-4',
+        'grid gap-3',
         'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
         className
       )}
@@ -77,4 +77,3 @@ export function SkillGrid({
     </div>
   );
 }
-
