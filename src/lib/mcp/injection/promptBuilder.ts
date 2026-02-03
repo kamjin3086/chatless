@@ -365,10 +365,13 @@ async function buildNativeToolDefinitions(params: {
   // ========== 3. AI 请求层：加载 AI 主动请求的工具组 ==========
   
   const store = useToolLoadRequestStore.getState();
+  // 关键：已加载的组需要在后续轮次持续注入（否则会出现“上一轮能用、下一轮工具不见了”）
+  // 说明：store.loadedGroups 会随着 tools__load 或意图检测逐步累积；这里把它作为“粘性工具组”基础集合。
+  const stickyLoaded = (store.loadedGroups || []).filter((g) => g && g !== 'core');
   const pendingRequests = store.getPendingRequests();
   
   // 合并所有需要加载的组
-  const groupsToLoad = [...new Set([...detectedGroups, ...pendingRequests])];
+  const groupsToLoad = [...new Set([...stickyLoaded, ...detectedGroups, ...pendingRequests])];
   
   // 加载各组工具
   for (const groupId of groupsToLoad) {

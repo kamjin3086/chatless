@@ -67,7 +67,7 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     const rawGroup = args.group;
     const groupId = typeof rawGroup === 'string' ? rawGroup : '';
     
-    const validGroups: ToolGroupId[] = ['fs_extra', 'shell', 'web', 'ctx', 'skills'];
+    const validGroups: ToolGroupId[] = ['fs_extra', 'shell', 'web', 'ctx', 'skills', 'system'];
     if (!validGroups.includes(groupId as ToolGroupId)) {
       return {
         ok: false,
@@ -95,6 +95,7 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       web: '网络工具（search, fetch, download）',
       ctx: '上下文管理（save_research, save_plan 等）',
       skills: '技能系统',
+      system: '系统管理（提示词、技能管理）',
     };
 
     return {

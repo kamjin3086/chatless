@@ -12,6 +12,14 @@
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 import { AGENT_CONTEXT_SERVER_NAME } from '@/lib/mcp/nativeTools/agentContext';
+import {
+  readFile as fsReadFile,
+  writeFile as fsWriteFile,
+  listDirectory as fsListDirectory,
+  createDirectory as fsCreateDirectory,
+  type ReadFileResult,
+  type ListDirectoryResult,
+} from '@/lib/tauri/filesystemCommands';
 
 const AGENT_DIR = '.agent';
 const RESEARCH_DIR = 'research';
@@ -43,24 +51,22 @@ export class AgentContextAdapter implements ToolAdapter {
     const args = invocation.args || {};
 
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-
       // 确保 .agent 目录存在
-      const workDir = await this.getWorkDir(invoke);
+      const workDir = await this.getWorkDir();
       const agentDir = `${workDir}/${AGENT_DIR}`;
-      await this.ensureDir(invoke, agentDir);
+      await this.ensureDir(agentDir);
 
       switch (tool) {
         case 'save_research':
-          return await this.saveResearch(invoke, agentDir, args);
+          return await this.saveResearch(agentDir, args);
         case 'save_plan':
-          return await this.savePlan(invoke, agentDir, args);
+          return await this.savePlan(agentDir, args);
         case 'log_error':
-          return await this.logError(invoke, agentDir, args);
+          return await this.logError(agentDir, args);
         case 'get':
-          return await this.getContext(invoke, agentDir, args);
+          return await this.getContext(agentDir, args);
         case 'update_step':
-          return await this.updateStep(invoke, agentDir, args);
+          return await this.updateStep(agentDir, args);
         default:
           return { ok: false, error: `Unknown ctx tool: ${tool}` };
       }
@@ -70,8 +76,9 @@ export class AgentContextAdapter implements ToolAdapter {
     }
   }
 
-  private async getWorkDir(invoke: typeof import('@tauri-apps/api/core').invoke): Promise<string> {
+  private async getWorkDir(): Promise<string> {
     try {
+      const { invoke } = await import('@tauri-apps/api/core');
       const result = await invoke<{ workDir: string }>('get_work_dir');
       return result.workDir || '.';
     } catch {
@@ -79,35 +86,35 @@ export class AgentContextAdapter implements ToolAdapter {
     }
   }
 
-  private async ensureDir(invoke: typeof import('@tauri-apps/api/core').invoke, path: string): Promise<void> {
+  private async ensureDir(path: string): Promise<void> {
     try {
-      await invoke('filesystem_create_directory', { path, recursive: true });
+      await fsCreateDirectory({ path, recursive: true });
     } catch {
       // 目录可能已存在，忽略错误
     }
   }
 
-  private async readFile(invoke: typeof import('@tauri-apps/api/core').invoke, path: string): Promise<string> {
+  private async readFile(path: string): Promise<string> {
     try {
-      const result = await invoke<{ ok: boolean; content?: string }>('filesystem_read_file', { path });
+      const result: ReadFileResult = await fsReadFile({ path });
       return result.ok && result.content ? result.content : '';
     } catch {
       return '';
     }
   }
 
-  private async writeFile(invoke: typeof import('@tauri-apps/api/core').invoke, path: string, content: string): Promise<boolean> {
+  private async writeFile(path: string, content: string): Promise<boolean> {
     try {
-      const result = await invoke<{ ok: boolean }>('filesystem_write_file', { path, content });
+      const result = await fsWriteFile({ path, content });
       return result.ok;
     } catch {
       return false;
     }
   }
 
-  private async listDir(invoke: typeof import('@tauri-apps/api/core').invoke, path: string): Promise<string[]> {
+  private async listDir(path: string): Promise<string[]> {
     try {
-      const result = await invoke<{ ok: boolean; entries?: Array<{ name: string }>; truncated?: boolean }>('filesystem_list_directory', { path, limit: 200 });
+      const result: ListDirectoryResult = await fsListDirectory({ path, limit: 200 });
       if (result.ok && result.entries) {
         return result.entries.map((e) => e.name);
       }
@@ -119,7 +126,6 @@ export class AgentContextAdapter implements ToolAdapter {
 
   // ============ save_research ============
   private async saveResearch(
-    invoke: typeof import('@tauri-apps/api/core').invoke,
     agentDir: string,
     args: Record<string, unknown>
   ): Promise<unknown> {
@@ -133,13 +139,13 @@ export class AgentContextAdapter implements ToolAdapter {
     }
 
     const researchDir = `${agentDir}/${RESEARCH_DIR}`;
-    await this.ensureDir(invoke, researchDir);
+    await this.ensureDir(researchDir);
 
     const filePath = `${researchDir}/${topic}.md`;
     const timestamp = getTimestamp();
 
     // 检查是否已存在
-    const existing = await this.readFile(invoke, filePath);
+    const existing = await this.readFile(filePath);
 
     let newContent: string;
     if (existing) {
@@ -165,7 +171,7 @@ ${keyFindings.length > 0 ? `\n## 关键发现\n${keyFindings.map(f => `- ${f}`).
 `;
     }
 
-    const ok = await this.writeFile(invoke, filePath, newContent);
+    const ok = await this.writeFile(filePath, newContent);
     if (!ok) {
       return { ok: false, error: 'Failed to write research file' };
     }
@@ -180,7 +186,6 @@ ${keyFindings.length > 0 ? `\n## 关键发现\n${keyFindings.map(f => `- ${f}`).
 
   // ============ save_plan ============
   private async savePlan(
-    invoke: typeof import('@tauri-apps/api/core').invoke,
     agentDir: string,
     args: Record<string, unknown>
   ): Promise<unknown> {
@@ -220,7 +225,7 @@ ${risksSection}
 - 任务创建
 `;
 
-    const ok = await this.writeFile(invoke, filePath, content);
+    const ok = await this.writeFile(filePath, content);
     if (!ok) {
       return { ok: false, error: 'Failed to write plan file' };
     }
@@ -236,7 +241,6 @@ ${risksSection}
 
   // ============ log_error ============
   private async logError(
-    invoke: typeof import('@tauri-apps/api/core').invoke,
     agentDir: string,
     args: Record<string, unknown>
   ): Promise<unknown> {
@@ -261,7 +265,7 @@ ${risksSection}
 `;
 
     // 读取现有内容
-    const existing = await this.readFile(invoke, filePath);
+    const existing = await this.readFile(filePath);
 
     // 追加新条目
     const newContent = existing + entry;
@@ -271,7 +275,7 @@ ${risksSection}
     const limitedEntries = entries.slice(-MAX_ERRORS);
     const finalContent = limitedEntries.join('---\n') + (limitedEntries.length > 0 ? '---\n' : '');
 
-    const ok = await this.writeFile(invoke, filePath, finalContent);
+    const ok = await this.writeFile(filePath, finalContent);
     if (!ok) {
       return { ok: false, error: 'Failed to write error log' };
     }
@@ -281,7 +285,6 @@ ${risksSection}
 
   // ============ get ============
   private async getContext(
-    invoke: typeof import('@tauri-apps/api/core').invoke,
     agentDir: string,
     args: Record<string, unknown>
   ): Promise<unknown> {
@@ -292,7 +295,7 @@ ${risksSection}
     switch (type) {
       case 'plan': {
         const filePath = `${agentDir}/${TODO_FILE}`;
-        const content = await this.readFile(invoke, filePath);
+        const content = await this.readFile(filePath);
         if (!content) {
           return { ok: true, exists: false, message: '没有活动的任务计划' };
         }
@@ -305,14 +308,14 @@ ${risksSection}
         const researchDir = `${agentDir}/${RESEARCH_DIR}`;
         if (topic) {
           const filePath = `${researchDir}/${topic}.md`;
-          const content = await this.readFile(invoke, filePath);
+          const content = await this.readFile(filePath);
           if (!content) {
             return { ok: true, exists: false, message: `没有找到研究: ${topic}` };
           }
           return { ok: true, exists: true, topic, content };
         } else {
           // 列出所有研究主题
-          const files = await this.listDir(invoke, researchDir);
+          const files = await this.listDir(researchDir);
           const topics = files
             .filter(f => f.endsWith('.md'))
             .map(f => f.replace('.md', ''));
@@ -322,7 +325,7 @@ ${risksSection}
 
       case 'errors': {
         const filePath = `${agentDir}/${ERRORS_FILE}`;
-        const content = await this.readFile(invoke, filePath);
+        const content = await this.readFile(filePath);
         if (!content) {
           return { ok: true, exists: false, message: '没有错误记录' };
         }
@@ -335,14 +338,14 @@ ${risksSection}
       case 'status':
       default: {
         // 概览
-        const todoExists = !!(await this.readFile(invoke, `${agentDir}/${TODO_FILE}`));
-        const errorExists = !!(await this.readFile(invoke, `${agentDir}/${ERRORS_FILE}`));
-        const researchFiles = await this.listDir(invoke, `${agentDir}/${RESEARCH_DIR}`);
+        const todoExists = !!(await this.readFile(`${agentDir}/${TODO_FILE}`));
+        const errorExists = !!(await this.readFile(`${agentDir}/${ERRORS_FILE}`));
+        const researchFiles = await this.listDir(`${agentDir}/${RESEARCH_DIR}`);
         const researchCount = researchFiles.filter(f => f.endsWith('.md')).length;
 
         let planSummary = '无活动计划';
         if (todoExists) {
-          const todoContent = await this.readFile(invoke, `${agentDir}/${TODO_FILE}`);
+          const todoContent = await this.readFile(`${agentDir}/${TODO_FILE}`);
           const progress = this.parsePlanProgress(todoContent);
           planSummary = `${progress.title} (${progress.completed}/${progress.total})`;
         }
@@ -361,7 +364,6 @@ ${risksSection}
 
   // ============ update_step ============
   private async updateStep(
-    invoke: typeof import('@tauri-apps/api/core').invoke,
     agentDir: string,
     args: Record<string, unknown>
   ): Promise<unknown> {
@@ -374,7 +376,7 @@ ${risksSection}
     }
 
     const filePath = `${agentDir}/${TODO_FILE}`;
-    let content = await this.readFile(invoke, filePath);
+    let content = await this.readFile(filePath);
     if (!content) {
       return { ok: false, error: '没有活动的任务计划' };
     }
@@ -401,7 +403,7 @@ ${risksSection}
       content = content + '\n## 执行日志' + logEntry;
     }
 
-    const ok = await this.writeFile(invoke, filePath, content);
+    const ok = await this.writeFile(filePath, content);
     if (!ok) {
       return { ok: false, error: 'Failed to update plan' };
     }

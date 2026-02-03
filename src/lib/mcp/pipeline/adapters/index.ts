@@ -4,6 +4,7 @@ import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
 import { SkillsFsAdapter } from './SkillsFsAdapter';
 import { SkillsToolAdapter } from './SkillsToolAdapter';
+import { SystemToolAdapter } from './SystemToolAdapter';
 import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 import { UserFsAdapter } from './UserFsAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
@@ -22,6 +23,7 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new UserFsAdapter(),
     new FilesystemAdapter(),
     new ShellExecutorAdapter(),
+    new SystemToolAdapter(),
     new McpAdapter(),
   ];
 }
@@ -32,6 +34,7 @@ export { McpAdapter } from './McpAdapter';
 export { ShellExecutorAdapter } from './ShellExecutorAdapter';
 export { SkillsFsAdapter } from './SkillsFsAdapter';
 export { SkillsToolAdapter } from './SkillsToolAdapter';
+export { SystemToolAdapter } from './SystemToolAdapter';
 export { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';

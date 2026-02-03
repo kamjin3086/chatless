@@ -1,14 +1,7 @@
 import type { AllowlistDirectory } from './types';
+import { setAllowlist, type SetAllowlistParams } from '@/lib/tauri/filesystemCommands';
 
-type BackendAllowlistDirectory = {
-  path: string;
-  permissions: {
-    read: boolean;
-    write: boolean;
-    create: boolean;
-    delete: boolean;
-  };
-};
+type BackendAllowlistDirectory = SetAllowlistParams['directories'][number];
 
 let lastSyncedKey = '';
 
@@ -34,7 +27,6 @@ export async function syncFilesystemAllowlistToBackend(directories: AllowlistDir
   if (key === lastSyncedKey) return;
   lastSyncedKey = key;
 
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('filesystem_set_allowlist', { payload: { directories: backendDirs, version: 1 } });
+  await setAllowlist({ directories: backendDirs, version: 1 });
 }
 

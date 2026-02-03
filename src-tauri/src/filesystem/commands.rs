@@ -1,83 +1,7 @@
-use crate::filesystem::state::{AllowlistDirectory, AllowlistSnapshot, FilesystemAllowlistState, FsOp};
-use serde::{Deserialize, Serialize};
+use crate::filesystem::state::{AllowlistSnapshot, FilesystemAllowlistState, FsOp};
+use crate::filesystem::types::*;
 use std::path::Path;
 use tauri::{AppHandle, State};
-
-#[derive(Debug, Clone, Serialize)]
-pub struct FsEntry {
-  pub name: String,
-  pub path: String,
-  #[serde(rename = "isDirectory")]
-  pub is_directory: bool,
-  #[serde(rename = "isFile")]
-  pub is_file: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ListDirectoryResult {
-  pub ok: bool,
-  pub path: String,
-  pub entries: Vec<FsEntry>,
-  pub truncated: bool,
-  #[serde(rename = "returnedCount")]
-  pub returned_count: u32,
-  pub limit: u32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct DeleteManyPayload {
-  pub paths: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct DeleteByPatternPayload {
-  pub dir: String,
-  pub pattern: String,
-  pub limit: Option<u32>,
-  pub kind: Option<String>,
-  #[serde(alias = "dryRun", alias = "dry_run")]
-  pub dry_run: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct OkResult {
-  pub ok: bool,
-  pub message: String,
-  pub path: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ReadFilePayload {
-  pub path: String,
-  // Back-compat: older clients send maxLines / max_lines
-  #[serde(alias = "maxLines", alias = "max_lines")]
-  pub max_lines: Option<u32>,
-  // New: line range (1-based)
-  #[serde(alias = "startLine", alias = "start_line")]
-  pub start_line: Option<u32>,
-  #[serde(alias = "endLine", alias = "end_line")]
-  pub end_line: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ReadFileResult {
-  pub ok: bool,
-  pub path: String,
-  #[serde(rename = "totalLines")]
-  pub total_lines: u32,
-  #[serde(rename = "startLine")]
-  pub start_line: u32,
-  #[serde(rename = "endLine")]
-  pub end_line: u32,
-  pub content: String,
-  pub truncated: bool,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct SetAllowlistPayload {
-  pub directories: Vec<AllowlistDirectory>,
-  pub version: Option<u32>,
-}
 
 #[tauri::command]
 pub async fn filesystem_set_allowlist(
@@ -176,9 +100,10 @@ pub async fn filesystem_read_file(
 pub async fn filesystem_write_file(
   app: AppHandle,
   state: State<'_, FilesystemAllowlistState>,
-  path: String,
-  content: String,
+  payload: WriteFilePayload,
 ) -> Result<OkResult, String> {
+  let path = payload.path;
+  let content = payload.content;
   // write permission on target file
   let abs = state.assert_allowed(&app, &path, FsOp::Write).await?;
   let p = Path::new(&abs);
@@ -208,11 +133,12 @@ pub async fn filesystem_write_file(
 pub async fn filesystem_list_directory(
   app: AppHandle,
   state: State<'_, FilesystemAllowlistState>,
-  path: String,
-  limit: Option<u32>,
-  pattern: Option<String>,
-  kind: Option<String>,
+  payload: ListDirectoryPayload,
 ) -> Result<ListDirectoryResult, String> {
+  let path = payload.path;
+  let limit = payload.limit;
+  let pattern = payload.pattern;
+  let kind = payload.kind;
   let abs = state.assert_allowed(&app, &path, FsOp::Read).await?;
   let mut rd = tokio::fs::read_dir(&abs)
     .await
@@ -428,9 +354,10 @@ pub async fn filesystem_delete_by_pattern(
 pub async fn filesystem_create_directory(
   app: AppHandle,
   state: State<'_, FilesystemAllowlistState>,
-  path: String,
-  recursive: Option<bool>,
+  payload: CreateDirectoryPayload,
 ) -> Result<serde_json::Value, String> {
+  let path = payload.path;
+  let recursive = payload.recursive;
   let abs = state.assert_allowed(&app, &path, FsOp::Create).await?;
   let rec = recursive.unwrap_or(true);
   if rec {
@@ -449,8 +376,9 @@ pub async fn filesystem_create_directory(
 pub async fn filesystem_delete_file(
   app: AppHandle,
   state: State<'_, FilesystemAllowlistState>,
-  path: String,
+  payload: DeleteFilePayload,
 ) -> Result<OkResult, String> {
+  let path = payload.path;
   let abs = state.assert_allowed(&app, &path, FsOp::Delete).await?;
   let meta = tokio::fs::metadata(&abs)
     .await
@@ -478,9 +406,10 @@ pub async fn filesystem_delete_file(
 pub async fn filesystem_rename_file(
   app: AppHandle,
   state: State<'_, FilesystemAllowlistState>,
-  old_path: String,
-  new_path: String,
+  payload: RenameFilePayload,
 ) -> Result<serde_json::Value, String> {
+  let old_path = payload.old_path;
+  let new_path = payload.new_path;
   // rename/move is a write-like operation
   let old_abs = state.assert_allowed(&app, &old_path, FsOp::Write).await?;
   let new_abs = state.assert_allowed(&app, &new_path, FsOp::Write).await?;

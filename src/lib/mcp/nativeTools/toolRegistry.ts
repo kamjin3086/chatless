@@ -14,6 +14,8 @@ import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from './filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecutor';
 import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
 import { AGENT_CONTEXT_SERVER_NAME, AGENT_CONTEXT_TOOLS } from './agentContext';
+import { SYSTEM_SERVER_NAME, SYSTEM_PROMPT_TOOLS } from './systemPrompts';
+import { SYSTEM_SKILL_TOOLS } from './systemSkills';
 
 // ============ 工具组定义 ============
 
@@ -23,7 +25,8 @@ export type ToolGroupId =
   | 'shell'     // 命令执行
   | 'web'       // 网络：搜索、抓取、下载
   | 'ctx'       // 上下文管理
-  | 'skills';   // 技能系统
+  | 'skills'    // 技能系统
+  | 'system';   // 系统管理（提示词、技能管理）
 
 export interface ToolGroup {
   id: ToolGroupId;
@@ -121,6 +124,29 @@ export const TOOL_GROUPS: ToolGroup[] = [
     ],
     tools: [], // 动态从 skillTools 获取
   },
+  {
+    id: 'system',
+    name: '系统管理',
+    description: '管理提示词和技能（列出、创建、编辑、删除、启用/禁用）',
+    intentKeywords: [
+      // 提示词管理
+      /提示词|prompt|指令|system\s*prompt/i,
+      /列出.*提示|查看.*提示|搜索.*提示|找.*提示/i,
+      /创建.*提示|新建.*提示|添加.*提示|写.*提示/i,
+      /修改.*提示|编辑.*提示|更新.*提示|改.*提示/i,
+      /删除.*提示|移除.*提示/i,
+      /优化.*提示|改进.*提示|润色.*提示/i,
+      // 技能管理
+      /管理.*技能|技能.*管理/i,
+      /安装.*技能|卸载.*技能|启用.*技能|禁用.*技能|更新.*技能/i,
+      /列出.*技能|查看.*技能/i,
+      /技能列表|skill.*list|skill.*install|skill.*uninstall/i,
+    ],
+    tools: [
+      ...SYSTEM_PROMPT_TOOLS.map(t => ({ server: SYSTEM_SERVER_NAME, tool: t })),
+      ...SYSTEM_SKILL_TOOLS.map(t => ({ server: SYSTEM_SERVER_NAME, tool: t })),
+    ],
+  },
 ];
 
 // ============ 工具发现工具定义 ============
@@ -160,14 +186,15 @@ export const TOOLS_LOAD_TOOL: McpTool = {
 - shell: 命令执行（git, npm, python）
 - web: 网络工具（搜索、抓取、下载）
 - ctx: 上下文管理（计划、研究、错误记录）
-- skills: 技能系统`,
+- skills: 技能系统
+- system: 系统管理（提示词、技能管理）`,
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         group: {
           type: 'string',
-          enum: ['fs_extra', 'shell', 'web', 'ctx', 'skills'],
+          enum: ['fs_extra', 'shell', 'web', 'ctx', 'skills', 'system'],
           description: '要加载的工具组 ID',
         },
       },
