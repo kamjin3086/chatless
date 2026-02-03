@@ -26,16 +26,16 @@ export function SidebarNavButton({ href, label, icon: Icon, dev }: SidebarNavBut
           <Link
             href={href}
             className={cn(
-              'nav-item flex flex-col items-center justify-center h-10 w-10 rounded-lg transition-colors duration-150 relative group cursor-pointer',
+              'nav-item flex flex-col items-center justify-center h-8 w-8 rounded-md transition-colors duration-150 relative group cursor-pointer',
               isActive
-                ? 'bg-blue-50/70 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 hover:text-gray-700 dark:hover:text-gray-200',
+                ? 'bg-slate-100/80 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 hover:text-slate-600 dark:hover:text-slate-300',
               dev && 'border border-orange-400/30 dark:border-orange-500/30'
             )}
             aria-label={label}
           >
             <Icon
-              style={{ width: 'var(--sidebar-icon-size, 1.2rem)', height: 'var(--sidebar-icon-size, 1.2rem)' }}
+              style={{ width: 'var(--sidebar-icon-size, 0.95rem)', height: 'var(--sidebar-icon-size, 0.95rem)' }}
               className={cn('transition-colors', dev && 'text-orange-500 dark:text-orange-400')}
             />
           </Link>

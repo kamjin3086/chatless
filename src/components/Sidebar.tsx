@@ -1,36 +1,30 @@
 'use client';
 
 import { SidebarNavButton } from '@/components/ui/SidebarNavButton';
-import { Wrench, Sparkles } from "lucide-react";
+import { Wrench, Plug2 } from "lucide-react";
 import { 
-  HomeIcon, 
   ChatIcon, 
-  FolderIcon, 
   DatabaseIcon, 
-  HistoryIcon, 
   AnalyticsIcon, 
   SettingsIcon,
   BookmarkIcon,
 } from '@/components/icons/SidebarIcons';
 
-// Skills 图标组件
-const SkillsIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <Sparkles {...props} />
+// 扩展图标组件 (技能+MCP)
+const ExtensionsIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <Plug2 {...props} />
 );
 import { shouldShowDevTools } from '@/lib/utils/environment';
 import { useEffect, useState } from 'react';
 import { DockHoverScaler } from '@/components/ui/DockHoverScaler';
 
-// 基础侧边栏导航项
+// 基础侧边栏导航项（精简后）
 const baseNavItems = [
-  { href: '/', label: '首页', icon: HomeIcon },
-  { href: '/chat', label: '聊天会话', icon: ChatIcon },
-  { href: '/prompts', label: '提示词库', icon: BookmarkIcon },
-  { href: '/resources', label: '知识资源', icon: FolderIcon },
-  { href: '/knowledge', label: '知识库', icon: DatabaseIcon },
-  { href: '/skills', label: '技能', icon: SkillsIcon },
-  { href: '/history', label: '历史记录', icon: HistoryIcon },
-  { href: '/analytics', label: '数据统计', icon: AnalyticsIcon },
+  { href: '/chat', label: '聊天', icon: ChatIcon },
+  { href: '/prompts', label: '提示词', icon: BookmarkIcon },
+  { href: '/knowledge', label: '知识', icon: DatabaseIcon },
+  { href: '/extensions', label: '扩展', icon: ExtensionsIcon },
+  { href: '/analytics', label: '统计', icon: AnalyticsIcon },
   { href: '/settings', label: '设置', icon: SettingsIcon },
 ];
 
@@ -57,11 +51,11 @@ export function Sidebar() {
     >
       <DockHoverScaler
         orientation="vertical"
-        maxScale={1.28}
-        influenceRadius={100}
+        maxScale={1.2}
+        influenceRadius={80}
         transitionMs={90}
-        className="flex-1 flex flex-col items-center gap-2 overflow-y-auto py-2 no-scrollbar"
-        itemClassName="block py-1.5"
+        className="flex-1 flex flex-col items-center gap-1 overflow-y-auto py-1.5 no-scrollbar"
+        itemClassName="block py-1"
         itemTag="div"
       >
         {navItems.map((item) => (
