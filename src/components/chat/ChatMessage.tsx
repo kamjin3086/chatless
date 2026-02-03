@@ -3,7 +3,6 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { Copy, Star, RefreshCcw, Check, Trash2 } from 'lucide-react';
 import { cn } from "@/lib/utils";
-import { Button } from '@/components/ui/button';
 import { ContextMenu, createMessageMenuItems } from '@/components/ui/context-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useChatStore } from '@/store/chatStore';
@@ -225,7 +224,7 @@ function ChatMessageComponent({
   return (
     <div
       className={cn(
-        "flex chat-transition group mt-4 mb-4 relative w-full",
+        "flex chat-transition group mt-2 mb-2 relative w-full",
         isUser 
           ? "flex-row-reverse justify-start max-w-[85%] ml-auto" 
           : "max-w-[85%]"
@@ -261,11 +260,10 @@ function ChatMessageComponent({
           >
             <div className={cn(
               isUser ? "max-w-full min-w-0" : "w-full max-w-full min-w-0",
-              // 用户消息：蓝色背景，清晰区分
+              // 混合优化：减少圆角和边框，更紧凑
               isUser
-                ? "px-2.5 py-2 text-[14px] leading-[1.3] rounded-2xl bg-blue-50/80 dark:bg-slate-800/50 border border-blue-200/40 dark:border-slate-700"
-                : "px-2.5 py-2 rounded-2xl bg-slate-100/90 dark:bg-slate-800/70 border border-slate-300/70 dark:border-slate-600/60",
-              !isUser && "rounded-tl-2xl"
+                ? "px-2.5 py-1.5 text-[14px] leading-[1.4] rounded-lg bg-blue-50/60 dark:bg-slate-800/40"
+                : "px-2 py-1.5 rounded-lg"
             )}>
               {messageContent}
             </div>
@@ -293,7 +291,7 @@ function ChatMessageComponent({
         {/* 时间戳和模型信息：仅在非流式且非追问阶段时显示，避免生成中抖动 */}
         {shouldShowTimestamp && (formattedTime || (!isUser && model)) && (
           <div className={cn(
-            "flex items-center justify-between flex-nowrap text-xs text-slate-500 dark:text-slate-400 ml-2 mt-1.5",
+            "flex items-center justify-between flex-nowrap text-[11px] text-slate-500 dark:text-slate-400 ml-1 mt-1",
             isUser ? "self-end" : "self-start w-full"
           )}>
             <div className="flex items-center gap-2 min-w-0 whitespace-nowrap overflow-hidden">
@@ -302,59 +300,45 @@ function ChatMessageComponent({
               )}
               <span className="shrink-0">{formattedTime}</span>
             </div>
-            {/* AI消息功能按钮 */}
+            {/* AI消息功能按钮 - 更轻量的设计 */}
             {!isUser && (
-              <div className="flex items-center gap-1 mr-3 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto translate-x-1">
+              <div className="flex items-center gap-0.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto">
                 {onRetry && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
+                  <button
                     onClick={onRetry}
-                    className="h-5 w-5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 shrink-0"
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
                     title="重试"
                   >
                     <RefreshCcw className="w-3 h-3" />
-                  </Button>
+                  </button>
                 )}
-                <div className="relative group/copy">
-                  <Button
-                    variant="ghost"
-                    size="icon"
+                <button
                   onClick={() => handleCopy(copyVisibleText)}
-                    className={cn(
-                      "h-5 w-5 rounded-full transition-all duration-200",
-                      isCopied
-                        ? "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                        : " text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 shrink-0"
-                    )}
-                    title={isCopied ? "已复制" : "复制"}
-                  >
-                    {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  </Button>
-                  {/* 复制按钮的 tip 展示字数 */}
-                  <div className="absolute right-0 -top-6 translate-y-[-2px] opacity-0 group-hover/copy:opacity-100 pointer-events-none select-none text-[11px] text-gray-500 bg-gray-50/90 dark:bg-gray-800/70 rounded px-1.5 py-0.5 shadow-sm whitespace-nowrap">
-                  {`字数: ${String(copyVisibleText || '').replace(/\s+/g,'').length}`}
-                  </div>
-                </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setConfirmOpen(true)}
-                className="h-5 w-5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 shrink-0"
-                title="删除"
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
+                  className={cn(
+                    "p-1 rounded transition-colors",
+                    isCopied
+                      ? "text-emerald-500"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  )}
+                  title={isCopied ? "已复制" : "复制"}
+                >
+                  {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                </button>
+                <button
+                  onClick={() => setConfirmOpen(true)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
+                  title="删除"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
                 {onStar && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
+                  <button
                     onClick={() => onStar(id)}
-                    className="h-5 w-5 text-gray-400 hover:text-gray-600 rounded-full ring-1 ring-transparent hover:ring-gray-300 dark:hover:ring-gray-600"
-                    title="收藏回答"
+                    className="p-1 text-slate-400 hover:text-amber-500 rounded transition-colors"
+                    title="收藏"
                   >
                     <Star className="w-3 h-3" />
-                  </Button>
+                  </button>
                 )}
               </div>
             )}

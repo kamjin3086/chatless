@@ -52,7 +52,7 @@ export function Sidebar() {
   
   return (
     <div
-      className="fixed h-[calc(100vh-1rem)] bg-gradient-to-b from-white/95 to-gray-50/90 dark:from-gray-900/95 dark:to-gray-950/90 backdrop-blur-md flex flex-col items-center pt-3 pb-3 z-50"
+      className="fixed h-[calc(100vh-1rem)] bg-white/90 dark:bg-gray-900/90 flex flex-col items-center pt-2 pb-2 z-50"
       style={{ width: 'var(--sidebar-width, 5rem)' }}
     >
       <DockHoverScaler

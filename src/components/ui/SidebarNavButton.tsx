@@ -26,24 +26,24 @@ export function SidebarNavButton({ href, label, icon: Icon, dev }: SidebarNavBut
           <Link
             href={href}
             className={cn(
-              'nav-item flex flex-col items-center justify-center h-12 w-12 rounded-xl transition-all duration-200 relative group cursor-pointer',
+              'nav-item flex flex-col items-center justify-center h-10 w-10 rounded-lg transition-colors duration-150 relative group cursor-pointer',
               isActive
-                ? 'bg-gradient-to-br from-blue-50 to-indigo-50/80 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-600 dark:text-blue-400 shadow-md ring-2 ring-blue-400/30 dark:ring-blue-500/30'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gradient-to-br hover:from-gray-100/80 hover:to-gray-50/60 dark:hover:from-gray-800/60 dark:hover:to-gray-850/50 hover:text-gray-900 dark:hover:text-gray-100 hover:shadow-sm',
-              dev && 'border-2 border-orange-400/40 dark:border-orange-500/40'
+                ? 'bg-blue-50/70 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 hover:text-gray-700 dark:hover:text-gray-200',
+              dev && 'border border-orange-400/30 dark:border-orange-500/30'
             )}
             aria-label={label}
           >
             <Icon
-              style={{ width: 'var(--sidebar-icon-size, 1.3rem)', height: 'var(--sidebar-icon-size, 1.3rem)' }}
-              className={cn('transition-all duration-200 group-hover:scale-110', dev && 'text-orange-500 dark:text-orange-400')}
+              style={{ width: 'var(--sidebar-icon-size, 1.2rem)', height: 'var(--sidebar-icon-size, 1.2rem)' }}
+              className={cn('transition-colors', dev && 'text-orange-500 dark:text-orange-400')}
             />
           </Link>
         </TooltipTrigger>
         <TooltipContent
           side="right"
-          sideOffset={12}
-          className="px-3 py-1.5 text-xs rounded-lg border border-gray-200/60 dark:border-gray-700/60 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md text-gray-700 dark:text-gray-100 shadow-xl"
+          sideOffset={8}
+          className="px-2 py-1 text-xs rounded bg-gray-900 dark:bg-gray-100 text-gray-100 dark:text-gray-900"
         >
           {label}
           {dev && <span className="ml-1 text-orange-500">(开发)</span>}

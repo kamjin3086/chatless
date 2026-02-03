@@ -65,10 +65,10 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
     }
   }, [activeTab]);
   return (
-    <div className="w-48 border-r border-gray-200/60 dark:border-gray-800/50 overflow-y-auto custom-scrollbar bg-gradient-to-b from-white/95 to-gray-50/90 dark:from-gray-900/95 dark:to-gray-950/90 backdrop-blur-md flex flex-col h-full select-none shadow-sm">
+    <div className="w-44 border-r border-gray-200/40 dark:border-gray-800/40 overflow-y-auto custom-scrollbar bg-white/90 dark:bg-gray-900/90 flex flex-col h-full select-none">
       {/* Header */}
-      <div className="px-3 py-3 flex items-center justify-between border-b border-gray-200/60 dark:border-gray-800/50 flex-shrink-0">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">设置</h3>
+      <div className="px-3 py-2 flex items-center justify-between border-b border-gray-200/40 dark:border-gray-800/40 flex-shrink-0">
+        <h3 className="font-medium text-gray-800 dark:text-gray-200 text-sm">设置</h3>
       </div>
       
       {/* Settings Tabs */}
@@ -83,21 +83,21 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200 border",
+                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors duration-150",
                 isActive 
-                  ? "bg-gradient-to-r from-blue-50 to-indigo-50/80 dark:from-blue-900/30 dark:to-indigo-900/25 text-blue-700 dark:text-blue-300 border-blue-300/60 dark:border-blue-600/50 shadow-md font-semibold" 
-                  : "text-gray-700 dark:text-gray-400 hover:bg-gradient-to-r hover:from-gray-100/80 hover:to-slate-100/60 dark:hover:from-gray-800/60 dark:hover:to-slate-800/50 hover:text-gray-900 dark:hover:text-gray-200 border-transparent hover:shadow-sm"
+                  ? "bg-blue-50/80 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium" 
+                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 hover:text-gray-900 dark:hover:text-gray-200"
               )}
             >
               <Icon className={cn(
-                "w-4 h-4 flex-shrink-0 transition-transform",
-                isActive ? "text-blue-600 dark:text-blue-400 scale-110" : "text-gray-500 dark:text-gray-400"
+                "w-4 h-4 flex-shrink-0",
+                isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"
               )} />
               <span className="truncate flex items-center gap-2 flex-1">
                 {tab.name}
                 {isAbout && showAboutDot && !isActive && (
                   <span
-                    className="ml-auto inline-flex items-center rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-2 py-0.5 text-[9px] font-semibold leading-tight text-white shadow-md"
+                    className="ml-auto inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium leading-tight text-blue-600 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40"
                   >
                     NEW
                   </span>

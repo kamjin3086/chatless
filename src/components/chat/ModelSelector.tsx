@@ -307,28 +307,28 @@ export function ModelSelector({
         disabled={disabled}
         onOpenChange={handleOpenChange}
       >
-        <SelectTrigger className="h-8 px-1.5 bg-transparent border-0 rounded-md text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:ring-0">
-          <span className="inline-flex items-center gap-2">
+        <SelectTrigger className="h-7 px-1.5 bg-transparent border-0 rounded text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 focus:ring-0">
+          <span className="inline-flex items-center gap-1.5">
             {currentProvider && currentModelId ? (
               !useProviderIcon ? (
-                <div className="w-5 h-5 bg-gray-100 dark:bg-gray-200 rounded-sm">
+                <div className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded-sm flex-shrink-0">
                 <ModelBrandLogo
                   modelId={currentModelId}
                   providerName={currentProvider.name}
-                  size={18}
+                  size={14}
                   fallbackSrc={providerCatalogSrc || providerAvatarSrc}
-                  className="w-5 h-5 rounded-sm"
+                  className="w-4 h-4 rounded-sm"
                 />
                 </div>
               ) : (
                 isImgSrc(providerCatalogSrc) ? (
-                  <div className="w-5 h-5 bg-gray-100 dark:bg-gray-200 rounded-sm">
+                  <div className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded-sm flex-shrink-0">
                   <Image
                     src={providerCatalogSrc}
                     alt={currentProvider.name}
-                    width={18}
-                    height={18}
-                    className="w-5 h-5 rounded-sm"
+                    width={14}
+                    height={14}
+                    className="w-4 h-4 rounded-sm"
                     onError={() => {
                       if (providerIsCatalog && providerExtIdx < iconExts.length - 1) {
                         setProviderExtIdx(i => i + 1);
@@ -337,25 +337,25 @@ export function ModelSelector({
                   />
                   </div>
                 ) : (
-                  <div className="w-5 h-5 bg-gray-100 dark:bg-gray-200 rounded-sm">
+                  <div className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded-sm flex-shrink-0">
                   <Image
                     src={providerAvatarSrc}
                     alt={currentProvider.name}
-                    width={18}
-                    height={18}
-                    className="w-5 h-5 rounded-sm"
+                    width={14}
+                    height={14}
+                    className="w-4 h-4 rounded-sm"
                   />
                   </div>
                 )
               )
             ) : null}
-            <span>
+            <span className="truncate max-w-[200px]">
               {currentModelId
                 ? currentProvider
-                  ? `${(currentProvider.models.find(m=>m.name===currentModelId)?.label) || currentModelId} [ ${((currentProvider as any).displayName || currentProvider.name)} ]`
+                  ? `${(currentProvider.models.find(m=>m.name===currentModelId)?.label) || currentModelId} · ${((currentProvider as any).displayName || currentProvider.name)}`
                   : currentModelId
                 : allMetadata.length === 0
-                  ? '加载模型中...'
+                  ? '加载中...'
                   : '选择模型'}
             </span>
           </span>

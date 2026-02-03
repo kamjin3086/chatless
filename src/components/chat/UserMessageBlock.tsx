@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Copy, Pencil, Check, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { DocumentReference } from './DocumentReference';
 import { cn } from '@/lib/utils';
 
@@ -163,45 +162,39 @@ export const UserMessageBlock = ({
         )}
       </div>
       
-      {/* 操作按钮部分 - 优化定位和布局 */}
-      <div className="absolute top-1/2 -translate-y-1/2 -left-3 md:-left-4 transform -translate-x-full z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 will-change-transform">
+      {/* 操作按钮 - 轻量设计 */}
+      <div className="absolute top-1/2 -translate-y-1/2 -left-2 transform -translate-x-full flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
         {onEdit && id && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <button
             onClick={() => onEdit(id)}
-            className="rounded-lg text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-gray-800/60 shrink-0 shadow-sm"
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
             title="编辑"
           >
-            <Pencil className="w-3.5 h-3.5" />
-          </Button>
+            <Pencil className="w-3 h-3" />
+          </button>
         )}
         {onCopy && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <button
             onClick={() => handleCopy(content)}
             className={cn(
-              "shrink-0 transition-all duration-200 rounded-lg shadow-sm",
+              "p-1 rounded transition-colors",
               isCopied
-                ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
-                : "text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-gray-800/60"
+                ? "text-emerald-500"
+                : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             )}
             title={isCopied ? "已复制" : "复制"}
           >
-            {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          </Button>
+            {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          </button>
         )}
         {onDelete && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <button
             onClick={() => onDelete()}
-            className="rounded-lg text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-gray-800/60 shrink-0 shadow-sm"
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
             title="删除"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
+            <Trash2 className="w-3 h-3" />
+          </button>
         )}
       </div>
       

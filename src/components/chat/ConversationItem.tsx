@@ -78,16 +78,16 @@ function ConversationItemImpl({
     >
       <li
         className={cn(
-          "group relative flex flex-col gap-0.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 cursor-pointer border border-transparent",
+          "group relative flex flex-col gap-0.5 px-2 py-1.5 rounded-md transition-colors duration-150 cursor-pointer",
           isCurrent
-            ? "text-blue-600 dark:text-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50/50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200/50 dark:border-blue-700/40 shadow-sm"
-            : "text-slate-600 dark:text-slate-400 hover:bg-gradient-to-r hover:from-slate-50 hover:to-gray-50/50 dark:hover:from-slate-800/40 dark:hover:to-slate-800/20 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-200/50 dark:hover:border-slate-700/40"
+            ? "text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-900/20"
+            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/30 hover:text-slate-900 dark:hover:text-slate-200"
         )}
         onClick={() => onSelect(conversation.id)}
       >
-        {/* 活动强调条 - 精致轻盈设计 */}
+        {/* 活动强调条 - 简化设计 */}
         {isCurrent && (
-          <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-blue-500 to-indigo-500 dark:from-blue-400 dark:to-indigo-400 rounded-r-full" />
+          <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-500 dark:bg-blue-400 rounded-r-full" />
         )}
         <div className="flex items-center gap-1.5 min-w-0 ml-1.5">
           {isRenaming ? (

@@ -2,18 +2,16 @@
 
 import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
-import { MoreVertical, Menu, Plus, Settings } from 'lucide-react';
+import { Ellipsis, PanelLeft, PenLine, Settings } from 'lucide-react';
 import { ModelSelector } from "./ModelSelector";
 import { ProviderMetadata } from "@/lib/metadata/types";
 import { DeleteConversationDialog } from './DeleteConversationDialog';
 import { EditableTitle } from './EditableTitle';
-import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { PromptPill } from './PromptPill';
 import { useEffect } from 'react';
 import { getEnabledConfiguredServers, getConnectedServers, getEnabledServersForConversation, setEnabledServersForConversation } from '@/lib/mcp/chatIntegration';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ChatHeaderProps {
   title: string;
@@ -89,51 +87,46 @@ export function ChatHeader({
 
   return (
     <>
-      <div className="px-3 sm:px-4 md:px-6 py-2 border-b border-slate-200/50 dark:border-slate-700/40 flex items-center justify-between bg-gradient-to-r from-slate-50/60 via-white/40 to-slate-50/60 dark:from-slate-900/60 dark:via-slate-800/40 dark:to-slate-900/60 backdrop-blur-xl shadow-sm transition-all">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <button onClick={toggleSidebar} className="p-2 rounded-lg hover:bg-slate-100/80 dark:hover:bg-slate-700/60 transition-all duration-200 cursor-pointer" title="切换侧边栏">
-            <Menu className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+      <div className="h-9 px-2 border-b border-slate-200/30 dark:border-slate-700/20 flex items-center justify-between bg-white/90 dark:bg-slate-900/90">
+        {/* 左侧：侧边栏切换 + 新建 + 标题 */}
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <button 
+            onClick={toggleSidebar} 
+            className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors" 
+            title="侧边栏"
+          >
+            <PanelLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
           
-          {/* 会话栏折叠时显示新建按钮 */}
           {!isSidebarOpen && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleNewChat}
-                    className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>新建对话</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <button
+              onClick={handleNewChat}
+              className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+              title="新建"
+            >
+              <PenLine className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            </button>
           )}
           
           <EditableTitle
             initialTitle={title}
             onTitleChange={onTitleChange}
-            className="font-medium text-sm sm:text-sm text-gray-800 dark:text-gray-200 truncate"
-            inputClassName="text-sm sm:text-sm font-medium"
+            className="text-xs text-slate-600 dark:text-slate-300 truncate ml-1"
+            inputClassName="text-xs"
           />
           
           {tags?.map((tag, index) => (
             <span
               key={index}
-              className="bg-gradient-to-r from-indigo-50 to-indigo-100/80 text-indigo-700 dark:from-indigo-900/40 dark:to-indigo-800/30 dark:text-indigo-300 text-xs px-3 py-1 rounded-full border border-indigo-200/50 dark:border-indigo-700/50"
+              className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 bg-slate-100/60 dark:bg-slate-800/40 rounded"
             >
               {tag}
             </span>
           ))}
         </div>
         
-        <div className="flex items-center gap-2 sm:gap-3 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-sm flex-shrink-0">
+        {/* 右侧：模型选择 + 提示词 + 更多 */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           <ModelSelector 
             allMetadata={allMetadata}
             currentModelId={currentModelId}
@@ -141,43 +134,35 @@ export function ChatHeader({
             onModelChange={handleModelChange}
             disabled={isModelSelectorDisabled}
           />
-          {/* 旧的右上角 MCP 选择已移除，改为输入框上拉面板 */}
-          <div className="text-xs">
-            <PromptPill />
-          </div>
+          
+          <PromptPill />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                title="更多操作" 
-                className="text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              <button 
+                className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                title="更多"
               >
-                <MoreVertical className="w-4 h-4" />
-              </Button>
+                <Ellipsis className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onSelect={handleNewChat}>新建对话</DropdownMenuItem>
-              <DropdownMenuItem onSelect={onShare}>分享对话</DropdownMenuItem>
-              <DropdownMenuItem onSelect={onDownload}>导出对话</DropdownMenuItem>
-              {onOpenSessionParameters ? (
+            <DropdownMenuContent align="end" className="w-36 text-xs">
+              <DropdownMenuItem onSelect={handleNewChat} className="text-xs">新建对话</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onShare} className="text-xs">分享</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onDownload} className="text-xs">导出</DropdownMenuItem>
+              {onOpenSessionParameters && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={onOpenSessionParameters}>
-                    <div className="flex items-center gap-2">
-                      <Settings className="w-4 h-4" />
-                      <span>会话参数</span>
-                      {hasSessionParameters ? (
-                        <span className="ml-auto text-[10px] text-slate-500">已设置</span>
-                      ) : null}
-                    </div>
+                  <DropdownMenuItem onSelect={onOpenSessionParameters} className="text-xs">
+                    <Settings className="w-3 h-3 mr-1.5" />
+                    参数
+                    {hasSessionParameters && <span className="ml-auto text-[9px] text-slate-400">·</span>}
                   </DropdownMenuItem>
                 </>
-              ) : null}
+              )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={() => setShowDeleteConfirm(true)}>
-                删除对话
+              <DropdownMenuItem variant="destructive" onSelect={() => setShowDeleteConfirm(true)} className="text-xs">
+                删除
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

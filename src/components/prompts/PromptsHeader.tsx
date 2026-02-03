@@ -40,7 +40,7 @@ export function PromptsHeader() {
   const commonTags = ['写作', '编程', '翻译', '总结', '创意'];
 
   return (
-    <div className="px-6 py-4">
+    <div className="px-5 py-3">
       <div className="max-w-6xl mx-auto space-y-3">
         {/* 主要操作区域 */}
         <div className="flex items-center justify-between gap-4">

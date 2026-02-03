@@ -12,7 +12,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
 import { 
   ArrowUpIcon,
   ArrowDownIcon,
@@ -46,39 +45,37 @@ export function ChatToolbar({
     <TooltipProvider>
       <div
         className={cn(
-          "flex items-center gap-0.5 px-0.5 bg-white/40 dark:bg-slate-800/40 backdrop-blur-sm rounded-full border border-gray-200/30 dark:border-gray-600/30",
+          "flex items-center gap-px text-slate-500 dark:text-slate-400",
           className
         )}
       >
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={onScrollToTop}
-              className="h-6 w-6 p-0 opacity-60 hover:opacity-80 dark:opacity-50 hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+              className="h-5 w-5 flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+              title="顶部"
             >
-              <ArrowUpIcon className="h-4 w-4" />
-            </Button>
+              <ArrowUpIcon className="h-3.5 w-3.5" />
+            </button>
           </TooltipTrigger>
-          <TooltipContent>
-            <p>滚动到顶部</p>
+          <TooltipContent side="left" className="text-xs px-2 py-1">
+            <p>顶部</p>
           </TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={onScrollToBottom}
-              className="h-6 w-6 p-0 opacity-60 hover:opacity-80 dark:opacity-50 hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+              className="h-5 w-5 flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+              title="底部"
             >
-              <ArrowDownIcon className="h-4 w-4" />
-            </Button>
+              <ArrowDownIcon className="h-3.5 w-3.5" />
+            </button>
           </TooltipTrigger>
-          <TooltipContent>
-            <p>滚动到底部</p>
+          <TooltipContent side="left" className="text-xs px-2 py-1">
+            <p>底部</p>
           </TooltipContent>
         </Tooltip>
 
@@ -86,17 +83,16 @@ export function ChatToolbar({
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 opacity-60 hover:opacity-80 dark:opacity-50 hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+                <button
+                  className="h-5 w-5 flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  title="定位"
                 >
-                  <LocateFixed className="h-4 w-4" />
-                </Button>
+                  <LocateFixed className="h-3.5 w-3.5" />
+                </button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>消息列表</p>
+            <TooltipContent side="left" className="text-xs px-2 py-1">
+              <p>定位</p>
             </TooltipContent>
           </Tooltip>
           

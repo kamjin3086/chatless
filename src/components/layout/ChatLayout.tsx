@@ -275,81 +275,77 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         >
           {/* 侧边栏头部已隐藏 */}
 
-          {/* 搜索框 + 新建按钮 */}
-          <div className="flex-shrink-0 p-3 border-b border-slate-200/60 dark:border-slate-700/50 bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-900/80">
-            {/* 搜索框（右侧内置"新建"按钮，保持与主头部对齐的高度和间距） */}
-            <div className="flex items-center gap-2">
+          {/* 搜索框 + 新建按钮 - 紧凑风格 */}
+          <div className="flex-shrink-0 px-2 py-1.5 border-b border-slate-200/40 dark:border-slate-700/40 bg-white/90 dark:bg-slate-900/90">
+            <div className="flex items-center gap-1.5">
               <div className="flex-1 min-w-0">
-                <div className="relative bg-white dark:bg-slate-800/60 rounded-xl pl-3 pr-16 py-2 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-400/60 dark:focus-within:ring-blue-400/20 transition-all duration-200 shadow-sm border border-slate-200/60 dark:border-slate-600/50">
+                <div className="relative bg-slate-100/60 dark:bg-slate-800/40 rounded px-2 py-1 focus-within:bg-slate-100 dark:focus-within:bg-slate-800/60 transition-colors">
                   <SearchInput
                     placeholder="搜索对话..."
                     value={searchQuery}
                     onChange={handleSearchChange}
-                    className="w-full bg-transparent border-none focus:ring-0 text-sm h-5 placeholder:text-slate-400/80"
+                    className="w-full bg-transparent border-none focus:ring-0 text-xs h-5 placeholder:text-slate-400/70"
                   />
-                  {/* 右侧区域：清除 + 新建 */}
-                  <div className="absolute top-1/2 -translate-y-1/2 right-2 flex items-center gap-1">
-                    {isSearching && (
-                      <button
-                        onClick={handleClearSearch}
-                        className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-all"
-                        aria-label="清除搜索"
-                      >
-                        <X className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                      </button>
-                    )}
-                    <IconButton
-                      onClick={handleNewChat}
-                      title="新建对话"
-                      icon={ListPlus}
-                      className="h-7 w-7"
-                    />
-                  </div>
+                  {isSearching && (
+                    <button
+                      onClick={handleClearSearch}
+                      className="absolute top-1/2 -translate-y-1/2 right-1 p-0.5 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded transition-colors"
+                      aria-label="清除"
+                    >
+                      <X className="w-3 h-3 text-slate-400" />
+                    </button>
+                  )}
                 </div>
               </div>
+              <IconButton
+                onClick={handleNewChat}
+                title="新建"
+                icon={ListPlus}
+                className="h-6 w-6 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              />
             </div>
           </div>
 
-          {/* 对话分类标签 - 统一概念和图标 */}
+          {/* 对话分类标签 - 紧凑文字风格 */}
           {!isSearching && (
-            <div className="flex-shrink-0 p-2 border-b border-slate-200/60 dark:border-slate-700/50 bg-white dark:bg-slate-900">
-              <div className="flex gap-1 bg-slate-100/80 dark:bg-slate-800/60 rounded-xl p-1 border border-slate-200/50 dark:border-slate-700/40">
-                <div 
+            <div className="flex-shrink-0 px-2 py-1 border-b border-slate-200/40 dark:border-slate-700/40 bg-white/90 dark:bg-slate-900/90">
+              <div className="flex items-center gap-0.5 text-[11px]">
+                <button 
                   className={cn(
-                    "flex-1 text-center py-2 text-xs font-medium cursor-pointer transition-all duration-200 flex items-center justify-center gap-1.5 rounded-lg",
+                    "px-2 py-1 rounded transition-colors flex items-center gap-1",
                     activeFilter === 'recent' 
-                      ? "text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-700/80 shadow-sm" 
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-800/40"
+                      ? "text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/20" 
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
                   )} 
                   onClick={() => handleFilterChange('recent')}
                 >
-                  <Clock className="w-3.5 h-3.5" />
+                  <Clock className="w-3 h-3" />
                   <span>最近</span>
-                </div>
-                <div 
+                </button>
+                <button 
                   className={cn(
-                    "flex-1 text-center py-2 text-xs font-medium cursor-pointer transition-all duration-200 flex items-center justify-center gap-1.5 rounded-lg",
+                    "px-2 py-1 rounded transition-colors flex items-center gap-1",
                     activeFilter === 'favorite' 
-                      ? "text-yellow-600 dark:text-yellow-400 bg-white dark:bg-slate-700/80 shadow-sm" 
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-800/40"
+                      ? "text-yellow-600 dark:text-yellow-400 bg-yellow-50/60 dark:bg-yellow-900/20" 
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
                   )} 
                   onClick={() => handleFilterChange('favorite')}
                 >
-                  <Star className={cn("w-3.5 h-3.5", activeFilter === 'favorite' && "fill-current")} />
+                  <Star className={cn("w-3 h-3", activeFilter === 'favorite' && "fill-current")} />
                   <span>收藏</span>
-                </div>
-                <div 
+                </button>
+                <button 
                   className={cn(
-                    "flex-1 text-center py-2 text-xs font-medium cursor-pointer transition-all duration-200 flex items-center justify-center gap-1.5 rounded-lg",
+                    "px-2 py-1 rounded transition-colors flex items-center gap-1",
                     activeFilter === 'important' 
-                      ? "text-red-600 dark:text-red-400 bg-white dark:bg-slate-700/80 shadow-sm" 
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-800/40"
+                      ? "text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-900/20" 
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
                   )} 
                   onClick={() => handleFilterChange('important')}
                 >
-                  <Flag className="w-3.5 h-3.5" />
+                  <Flag className="w-3 h-3" />
                   <span>重要</span>
-                </div>
+                </button>
               </div>
             </div>
           )}

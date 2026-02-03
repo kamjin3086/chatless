@@ -371,7 +371,7 @@ export default function ChatPage() {
             />
           </div>
           <div 
-            className="px-4 py-2 bg-transparent"
+            className="px-3 py-1.5 bg-transparent"
             onMouseEnter={() => setIsInputAreaHovered(true)}
             onMouseLeave={() => setIsInputAreaHovered(false)}
           >

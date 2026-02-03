@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 import { RotateCcw, Settings, Check, HelpCircle, Plus, X, Search, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ModelParametersService } from "@/lib/model-parameters";
@@ -53,7 +51,7 @@ export function SessionParametersDialog({
   const [modelInheritedParameters, setModelInheritedParameters] = useState<CustomParameter[]>([]); // 仅展示用途
   const [modelParamsState, setModelParamsState] = useState<ModelParameters | null>(null);
   const [parameterSource, setParameterSource] = useState<'default' | 'model' | 'session'>('default');
-  const [hasChanges, setHasChanges] = useState(false);
+  const [_hasChanges, setHasChanges] = useState(false);
   const [previewJson, setPreviewJson] = useState<string>('{}');
   
   // Provider字段支持信息
@@ -485,7 +483,7 @@ export function SessionParametersDialog({
     setParameterSource('default');
   };
 
-  const handleClearSessionParameters = async () => {
+  const _handleClearSessionParameters = async () => {
     try {
       // 清除会话参数
       await ModelParametersService.removeSessionParameters(conversationId);
@@ -561,84 +559,75 @@ export function SessionParametersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[90vw] p-0 overflow-hidden">
-        {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <Settings className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-              </div>
-              <div>
-                <DialogTitle className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
+      <DialogContent className="max-w-4xl w-[85vw] p-0 overflow-hidden bg-white dark:bg-slate-900 border-0 shadow-xl">
+        {/* Header - 紧凑精致 */}
+        <DialogHeader className="px-5 py-3 border-b border-slate-100 dark:border-slate-800/60">
+          <div className="flex items-center gap-3">
+            <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+              <Settings className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-sm font-medium text-slate-800 dark:text-slate-200">
                   会话参数设置
                 </DialogTitle>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300">
-                    {modelLabel || modelId}
-                  </Badge>
-                  <Badge className={cn("text-xs", getParameterSourceColor())}>
-                    {getParameterSourceText()}
-                  </Badge>
-                  {hasChanges && (
-                    <Badge variant="outline" className="text-xs text-blue-600 border-blue-200 dark:text-blue-400 dark:border-blue-800">
-                      已修改
-                    </Badge>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  仅对当前会话生效；<span className="font-medium">未开启或未改动</span>的参数<strong>不会下发</strong>，由模型默认值接管。
-                </p>
+                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                  {modelLabel || modelId}
+                </span>
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded", getParameterSourceColor())}>
+                  {getParameterSourceText()}
+                </span>
               </div>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                仅对当前会话生效；未开启或未改动的参数<span className="font-medium">不会下发</span>，由模型默认值接管。
+              </p>
             </div>
-          
           </div>
         </DialogHeader>
 
         {/* Content with Tabs */}
         <Tabs value={activeTab} onValueChange={(v)=>setActiveTab(v as any)}>
-          <div className="px-6 pt-3">
-            <TabsList className="h-10">
-              <TabsTrigger value="prompt" className="px-6 py-2 text-base">提示词</TabsTrigger>
-              <TabsTrigger value="params" className="px-6 py-2 text-base">参数</TabsTrigger>
+          <div className="px-5 pt-2">
+            <TabsList className="h-8 p-0.5 bg-slate-100/80 dark:bg-slate-800/60 rounded-md">
+              <TabsTrigger value="prompt" className="px-4 py-1 text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm">提示词</TabsTrigger>
+              <TabsTrigger value="params" className="px-4 py-1 text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm">参数</TabsTrigger>
             </TabsList>
           </div>
 
-          {/* 固定高度容器，避免切换抖动 */}
           {/* 提示词页：左侧侧边栏 + 右侧编辑区 */}
           <TabsContent value="prompt" className="mt-0">
-            <div className="px-6 pb-4 h-[65vh] flex gap-5">
-              {/* Sidebar */}
-              <div className="w-72 shrink-0 h-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex flex-col bg-gray-50/50 dark:bg-gray-900/20">
+            <div className="px-5 pb-4 h-[60vh] flex gap-4">
+              {/* Sidebar - 更精致 */}
+              <div className="w-64 shrink-0 h-full border border-slate-200/60 dark:border-slate-700/40 rounded-lg overflow-hidden flex flex-col bg-slate-50/30 dark:bg-slate-800/20">
                 {/* 搜索和筛选 */}
-                <div className="p-3 border-b border-gray-200 dark:border-gray-700 space-y-2 bg-white dark:bg-gray-900">
+                <div className="p-2.5 border-b border-slate-200/60 dark:border-slate-700/40 space-y-2">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                     <Input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="搜索提示词..."
-                      className="pl-9 h-9 text-sm bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:bg-white dark:focus:bg-gray-900"
+                      className="pl-8 h-7 text-xs bg-white dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/40 rounded"
                     />
                   </div>
                   <button
                     onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                     className={cn(
-                      "w-full flex items-center justify-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors",
+                      "w-full flex items-center justify-center gap-1.5 px-2 py-1 text-[11px] rounded transition-colors",
                       showFavoritesOnly
-                        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+                        ? "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400"
+                        : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700/40"
                     )}
                   >
-                    <Star className={cn("w-3.5 h-3.5", showFavoritesOnly && "fill-yellow-500")} />
-                    {showFavoritesOnly ? "仅显示收藏" : "显示全部"}
+                    <Star className={cn("w-3 h-3", showFavoritesOnly && "fill-amber-500")} />
+                    {showFavoritesOnly ? "仅收藏" : "显示全部"}
                   </button>
                 </div>
 
                 {/* 提示词列表 */}
                 <div className="flex-1 overflow-y-auto">
                   {filteredPrompts.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-gray-400">
+                    <div className="p-3 text-center text-[11px] text-slate-400">
                       {searchQuery ? "未找到匹配的提示词" : "暂无提示词"}
                     </div>
                   ) : (
@@ -646,10 +635,10 @@ export function SessionParametersDialog({
                       <button
                         key={p.id}
                         className={cn(
-                          "w-full text-left px-3 py-2.5 text-sm transition-all border-l-2",
+                          "w-full text-left px-2.5 py-2 text-xs transition-all border-l-2",
                           selectedPromptId === p.id
-                            ? "bg-blue-50 dark:bg-blue-900/20 border-l-blue-500 font-medium"
-                            : "border-l-transparent hover:bg-gray-100 dark:hover:bg-gray-800"
+                            ? "bg-blue-50/60 dark:bg-blue-900/10 border-l-blue-500 text-slate-700 dark:text-slate-200"
+                            : "border-l-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-700/30"
                         )}
                         onClick={() => {
                           setSelectedPromptId(p.id);
@@ -658,16 +647,12 @@ export function SessionParametersDialog({
                           setNameInvalid(false);
                         }}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {p.isFavorite && <Star className="w-3 h-3 fill-yellow-500 text-yellow-500 shrink-0" />}
-                              <span className="truncate">{p.name}</span>
-                            </div>
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              使用 {p?.stats?.uses || 0} 次
-                            </div>
-                          </div>
+                        <div className="flex items-center gap-1.5">
+                          {p.isFavorite && <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400 shrink-0" />}
+                          <span className="truncate font-medium">{p.name}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          使用 {p?.stats?.uses || 0} 次
                         </div>
                       </button>
                     ))
@@ -675,27 +660,28 @@ export function SessionParametersDialog({
                 </div>
               </div>
 
-              {/* Editor */}
+              {/* Editor - 更精致 */}
               <div className="flex-1 h-full flex flex-col overflow-hidden">
                 {/* 操作按钮组 */}
-                <div className="flex items-center gap-2 mb-4 flex-wrap">
-                  <Button
-                    variant={selectedPromptId === CUSTOM_VALUE ? "default" : "outline"}
-                    size="sm"
+                <div className="flex items-center gap-2 mb-3">
+                  <button
                     onClick={() => {
                       setSelectedPromptId(CUSTOM_VALUE);
                       setSystemPromptText('');
                       setPromptName('');
                       setNameInvalid(false);
                     }}
-                    className="gap-1.5"
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors",
+                      selectedPromptId === CUSTOM_VALUE
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    )}
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3.5 h-3.5" />
                     新建提示词
-                  </Button>
-                  <Button
-                    variant={selectedPromptId === NONE_VALUE ? "secondary" : "outline"}
-                    size="sm"
+                  </button>
+                  <button
                     onClick={() => {
                       setSelectedPromptId(NONE_VALUE);
                       setSystemPromptText('');
@@ -704,23 +690,23 @@ export function SessionParametersDialog({
                         updateConversation(conversationId, { system_prompt_applied: null } as any);
                       } catch { /* noop */ }
                     }}
-                    className="gap-1.5"
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors",
+                      selectedPromptId === NONE_VALUE
+                        ? "bg-slate-600 text-white"
+                        : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    )}
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-3.5 h-3.5" />
                     不使用提示词
-                  </Button>
-                  {selectedPromptId && selectedPromptId !== CUSTOM_VALUE && selectedPromptId !== NONE_VALUE && (
-                    <Badge variant="outline" className="ml-auto text-xs shrink-0">
-                      当前：{(prompts || []).find((p: any) => p.id === selectedPromptId)?.name || '未知'}
-                    </Badge>
-                  )}
+                  </button>
                 </div>
 
                 {/* 名称输入 */}
-                <div className="mb-3">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+                <div className="mb-2">
+                  <Label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 block">
                     提示词名称
-                    {nameInvalid && <span className="text-red-500 ml-1">*必填</span>}
+                    {nameInvalid && <span className="text-red-500 ml-1">*</span>}
                   </Label>
                   <Input
                     value={promptName}
@@ -730,56 +716,33 @@ export function SessionParametersDialog({
                     }}
                     placeholder="请输入提示词名称"
                     className={cn(
-                      "h-9 transition-all",
-                      nameInvalid
-                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                        : "border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                      "h-8 text-sm border-slate-200/60 dark:border-slate-700/40 rounded",
+                      nameInvalid && "border-red-400 focus:border-red-400"
                     )}
                   />
                 </div>
 
                 {/* 内容输入 */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">系统提示词</Label>
+                  <Label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">系统提示词</Label>
                   <textarea
                     value={systemPromptText}
                     onChange={(e) => setSystemPromptText(e.target.value)}
-                    className="w-full flex-1 resize-none rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full flex-1 resize-none rounded-md border border-slate-200/60 dark:border-slate-700/40 bg-white dark:bg-slate-800/50 p-2.5 text-sm text-slate-700 dark:text-slate-300 outline-none transition-all focus:border-blue-400 focus:ring-1 focus:ring-blue-400/20 placeholder:text-slate-400"
                     placeholder="为本会话设置系统提示词，可保存到提示词列表"
                   />
                 </div>
 
-                {/* 标签展示 */}
-                {(() => {
-                  const p = (prompts || []).find((x: any) => x.id === selectedPromptId);
-                  const tags = p?.tags || [];
-                  return tags.length > 0 ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {tags.map((t: string) => (
-                        <Badge key={t} variant="secondary" className="text-xs">
-                          {t}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null;
-                })()}
-
                 {/* 底部按钮 */}
-                <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="sm" onClick={handleSaveAndApply} className="gap-1.5">
-                          <Check className="w-4 h-4" />
-                          保存并应用
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-xs">保存到提示词库并应用到当前会话</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <span className="text-xs text-gray-500">
+                <div className="flex items-center gap-2 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <button
+                    onClick={handleSaveAndApply}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    保存并应用
+                  </button>
+                  <span className="text-[11px] text-slate-400">
                     提示词将应用于当前会话的所有消息
                   </span>
                 </div>
@@ -787,27 +750,28 @@ export function SessionParametersDialog({
             </div>
           </TabsContent>
 
-          {/* 参数页：原有内容 */}
+          {/* 参数页：精致设计 */}
           <TabsContent value="params" className="mt-0">
         <TooltipProvider>
-        <div className="px-6 py-2.5 space-y-3 h-[65vh] overflow-y-auto">
+        <div className="px-5 py-3 space-y-2 h-[60vh] overflow-y-auto">
             {/* Temperature */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 py-1">
               <Checkbox 
                 checked={parameters.enableTemperature !== false}
                 onCheckedChange={(checked) => updateParameter('enableTemperature', Boolean(checked))}
+                className="h-3.5 w-3.5"
               />
               
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableTemperature === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+              <div className="flex items-center gap-1.5 w-36">
+                <Label className={cn("text-xs", parameters.enableTemperature === false ? "text-slate-400" : "text-slate-600 dark:text-slate-300")}>
                   Temperature
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">控制输出的随机性。值越高越有创意，越低越确定。</p>
+                    <p className="text-[11px]">控制输出的随机性。值越高越有创意，越低越确定。</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -815,13 +779,13 @@ export function SessionParametersDialog({
               <input
                 type="range"
                 className={cn(
-                  "flex-1 max-w-48 appearance-none h-1.5 rounded-full cursor-pointer",
-                  "focus:outline-none focus:ring-0",
-                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4",
+                  "flex-1 appearance-none h-1 rounded-full cursor-pointer",
+                  "focus:outline-none",
+                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3",
                   "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white",
-                  "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500",
+                  "[&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-slate-300",
                   "[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-all",
-                  "disabled:[&::-webkit-slider-thumb]:bg-gray-300 disabled:[&::-webkit-slider-thumb]:border-gray-400"
+                  "disabled:[&::-webkit-slider-thumb]:bg-slate-200 disabled:[&::-webkit-slider-thumb]:border-slate-300"
                 )}
                 min={MODEL_PARAMETER_LIMITS.temperature.min}
                 max={MODEL_PARAMETER_LIMITS.temperature.max}
@@ -837,15 +801,15 @@ export function SessionParametersDialog({
                 }}
                 style={{ 
                   background: parameters.enableTemperature === false
-                    ? '#d1d5db'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.temperature || 0, MODEL_PARAMETER_LIMITS.temperature.min, MODEL_PARAMETER_LIMITS.temperature.max)}%, #e5e7eb ${calcPercent(parameters.temperature || 0, MODEL_PARAMETER_LIMITS.temperature.min, MODEL_PARAMETER_LIMITS.temperature.max)}%, #e5e7eb 100%)`
+                    ? '#e2e8f0'
+                    : `linear-gradient(to right, #94a3b8 0%, #94a3b8 ${calcPercent(parameters.temperature || 0, MODEL_PARAMETER_LIMITS.temperature.min, MODEL_PARAMETER_LIMITS.temperature.max)}%, #e2e8f0 ${calcPercent(parameters.temperature || 0, MODEL_PARAMETER_LIMITS.temperature.min, MODEL_PARAMETER_LIMITS.temperature.max)}%, #e2e8f0 100%)`
                 }}
                 disabled={parameters.enableTemperature === false}
               />
 
               <Input
                 type="number"
-                className="w-20 h-8 text-sm"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
                 min={MODEL_PARAMETER_LIMITS.temperature.inputMin}
                 max={MODEL_PARAMETER_LIMITS.temperature.inputMax}
                 step={MODEL_PARAMETER_LIMITS.temperature.step}
@@ -863,22 +827,23 @@ export function SessionParametersDialog({
             </div>
 
             {/* Max Tokens */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 py-1">
               <Checkbox 
                 checked={parameters.enableMaxTokens !== false}
                 onCheckedChange={(checked) => updateParameter('enableMaxTokens', Boolean(checked))}
+                className="h-3.5 w-3.5"
               />
               
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableMaxTokens === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+              <div className="flex items-center gap-1.5 w-36">
+                <Label className={cn("text-xs", parameters.enableMaxTokens === false ? "text-slate-400" : "text-slate-600 dark:text-slate-300")}>
                   Max Tokens
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">限制单次回复能生成的最大 Token 数。</p>
+                    <p className="text-[11px]">限制单次回复能生成的最大 Token 数。</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -886,13 +851,10 @@ export function SessionParametersDialog({
               <input
                 type="range"
                 className={cn(
-                  "flex-1 max-w-48 appearance-none h-1.5 rounded-full cursor-pointer",
-                  "focus:outline-none focus:ring-0",
-                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4",
+                  "flex-1 appearance-none h-1 rounded-full cursor-pointer focus:outline-none",
+                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3",
                   "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white",
-                  "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500",
-                  "[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-all",
-                  "disabled:[&::-webkit-slider-thumb]:bg-gray-300 disabled:[&::-webkit-slider-thumb]:border-gray-400"
+                  "[&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-slate-300 [&::-webkit-slider-thumb]:shadow-sm"
                 )}
                 min={MODEL_PARAMETER_LIMITS.maxTokens.min}
                 max={MODEL_PARAMETER_LIMITS.maxTokens.max}
@@ -901,15 +863,15 @@ export function SessionParametersDialog({
                 onChange={(e) => setParameters(prev => ({ ...prev, maxTokens: parseFloat(e.target.value) }))}
                 style={{ 
                   background: parameters.enableMaxTokens === false
-                    ? '#d1d5db'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.maxTokens || 0, MODEL_PARAMETER_LIMITS.maxTokens.min, MODEL_PARAMETER_LIMITS.maxTokens.max)}%, #e5e7eb ${calcPercent(parameters.maxTokens || 0, MODEL_PARAMETER_LIMITS.maxTokens.min, MODEL_PARAMETER_LIMITS.maxTokens.max)}%, #e5e7eb 100%)`
+                    ? '#e2e8f0'
+                    : `linear-gradient(to right, #94a3b8 0%, #94a3b8 ${calcPercent(parameters.maxTokens || 0, MODEL_PARAMETER_LIMITS.maxTokens.min, MODEL_PARAMETER_LIMITS.maxTokens.max)}%, #e2e8f0 ${calcPercent(parameters.maxTokens || 0, MODEL_PARAMETER_LIMITS.maxTokens.min, MODEL_PARAMETER_LIMITS.maxTokens.max)}%, #e2e8f0 100%)`
                 }}
                 disabled={parameters.enableMaxTokens === false}
               />
 
               <Input
                 type="number"
-                className="w-20 h-8 text-sm"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
                 min={MODEL_PARAMETER_LIMITS.maxTokens.inputMin}
                 max={MODEL_PARAMETER_LIMITS.maxTokens.inputMax}
                 step={MODEL_PARAMETER_LIMITS.maxTokens.step}
@@ -920,22 +882,23 @@ export function SessionParametersDialog({
             </div>
 
             {/* Top P */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 py-1">
               <Checkbox 
                 checked={parameters.enableTopP !== false}
                 onCheckedChange={(checked) => updateParameter('enableTopP', Boolean(checked))}
+                className="h-3.5 w-3.5"
               />
               
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableTopP === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+              <div className="flex items-center gap-1.5 w-36">
+                <Label className={cn("text-xs", parameters.enableTopP === false ? "text-slate-400" : "text-slate-600 dark:text-slate-300")}>
                   Top P
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">从累计概率最高的候选中采样。越低越保守。与 Temperature 一般二选一调节。</p>
+                    <p className="text-[11px]">从累计概率最高的候选中采样。越低越保守。</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -943,13 +906,10 @@ export function SessionParametersDialog({
               <input
                 type="range"
                 className={cn(
-                  "flex-1 max-w-48 appearance-none h-1.5 rounded-full cursor-pointer",
-                  "focus:outline-none focus:ring-0",
-                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4",
+                  "flex-1 appearance-none h-1 rounded-full cursor-pointer focus:outline-none",
+                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3",
                   "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white",
-                  "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500",
-                  "[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-all",
-                  "disabled:[&::-webkit-slider-thumb]:bg-gray-300 disabled:[&::-webkit-slider-thumb]:border-gray-400"
+                  "[&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-slate-300 [&::-webkit-slider-thumb]:shadow-sm"
                 )}
                 min={MODEL_PARAMETER_LIMITS.topP.min}
                 max={MODEL_PARAMETER_LIMITS.topP.max}
@@ -958,15 +918,15 @@ export function SessionParametersDialog({
                 onChange={(e) => setParameters(prev => ({ ...prev, topP: parseFloat(e.target.value) }))}
                 style={{ 
                   background: parameters.enableTopP === false
-                    ? '#d1d5db'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.topP || 0, MODEL_PARAMETER_LIMITS.topP.min, MODEL_PARAMETER_LIMITS.topP.max)}%, #e5e7eb ${calcPercent(parameters.topP || 0, MODEL_PARAMETER_LIMITS.topP.min, MODEL_PARAMETER_LIMITS.topP.max)}%, #e5e7eb 100%)`
+                    ? '#e2e8f0'
+                    : `linear-gradient(to right, #94a3b8 0%, #94a3b8 ${calcPercent(parameters.topP || 0, MODEL_PARAMETER_LIMITS.topP.min, MODEL_PARAMETER_LIMITS.topP.max)}%, #e2e8f0 ${calcPercent(parameters.topP || 0, MODEL_PARAMETER_LIMITS.topP.min, MODEL_PARAMETER_LIMITS.topP.max)}%, #e2e8f0 100%)`
                 }}
                 disabled={parameters.enableTopP === false}
               />
 
               <Input
                 type="number"
-                className="w-20 h-8 text-sm"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
                 min={MODEL_PARAMETER_LIMITS.topP.inputMin}
                 max={MODEL_PARAMETER_LIMITS.topP.inputMax}
                 step={MODEL_PARAMETER_LIMITS.topP.step}
@@ -977,22 +937,23 @@ export function SessionParametersDialog({
             </div>
 
             {/* Frequency Penalty */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 py-1">
               <Checkbox 
                 checked={parameters.enableFrequencyPenalty !== false}
                 onCheckedChange={(checked) => updateParameter('enableFrequencyPenalty', Boolean(checked))}
+                className="h-3.5 w-3.5"
               />
               
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableFrequencyPenalty === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+              <div className="flex items-center gap-1.5 w-36">
+                <Label className={cn("text-xs", parameters.enableFrequencyPenalty === false ? "text-slate-400" : "text-slate-600 dark:text-slate-300")}>
                   Frequency Penalty
-              </Label>
+                </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">增大可降低重复词汇的概率。</p>
+                    <p className="text-[11px]">增大可降低重复词汇的概率。</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -1000,13 +961,10 @@ export function SessionParametersDialog({
               <input
                 type="range"
                 className={cn(
-                  "flex-1 max-w-48 appearance-none h-1.5 rounded-full cursor-pointer",
-                  "focus:outline-none focus:ring-0",
-                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4",
+                  "flex-1 appearance-none h-1 rounded-full cursor-pointer focus:outline-none",
+                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3",
                   "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white",
-                  "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500",
-                  "[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-all",
-                  "disabled:[&::-webkit-slider-thumb]:bg-gray-300 disabled:[&::-webkit-slider-thumb]:border-gray-400"
+                  "[&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-slate-300 [&::-webkit-slider-thumb]:shadow-sm"
                 )}
                 min={MODEL_PARAMETER_LIMITS.frequencyPenalty.min}
                 max={MODEL_PARAMETER_LIMITS.frequencyPenalty.max}
@@ -1015,15 +973,15 @@ export function SessionParametersDialog({
                 onChange={(e) => setParameters(prev => ({ ...prev, frequencyPenalty: parseFloat(e.target.value) }))}
                 style={{ 
                   background: parameters.enableFrequencyPenalty === false
-                    ? '#d1d5db'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.frequencyPenalty || 0, MODEL_PARAMETER_LIMITS.frequencyPenalty.min, MODEL_PARAMETER_LIMITS.frequencyPenalty.max)}%, #e5e7eb ${calcPercent(parameters.frequencyPenalty || 0, MODEL_PARAMETER_LIMITS.frequencyPenalty.min, MODEL_PARAMETER_LIMITS.frequencyPenalty.max)}%, #e5e7eb 100%)`
+                    ? '#e2e8f0'
+                    : `linear-gradient(to right, #94a3b8 0%, #94a3b8 ${calcPercent(parameters.frequencyPenalty || 0, MODEL_PARAMETER_LIMITS.frequencyPenalty.min, MODEL_PARAMETER_LIMITS.frequencyPenalty.max)}%, #e2e8f0 ${calcPercent(parameters.frequencyPenalty || 0, MODEL_PARAMETER_LIMITS.frequencyPenalty.min, MODEL_PARAMETER_LIMITS.frequencyPenalty.max)}%, #e2e8f0 100%)`
                 }}
                 disabled={parameters.enableFrequencyPenalty === false}
               />
 
               <Input
                 type="number"
-                className="w-20 h-8 text-sm"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
                 min={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMin}
                 max={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMax}
                 step={MODEL_PARAMETER_LIMITS.frequencyPenalty.step}
@@ -1034,36 +992,34 @@ export function SessionParametersDialog({
             </div>
 
             {/* Presence Penalty */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 py-1">
               <Checkbox 
                 checked={parameters.enablePresencePenalty !== false}
                 onCheckedChange={(checked) => updateParameter('enablePresencePenalty', Boolean(checked))}
+                className="h-3.5 w-3.5"
               />
               
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enablePresencePenalty === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+              <div className="flex items-center gap-1.5 w-36">
+                <Label className={cn("text-xs", parameters.enablePresencePenalty === false ? "text-slate-400" : "text-slate-600 dark:text-slate-300")}>
                   Presence Penalty
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">增大可鼓励模型引入新话题。</p>
+                    <p className="text-[11px]">增大可鼓励模型引入新话题。</p>
                   </TooltipContent>
                 </Tooltip>
-          </div>
+              </div>
 
               <input
                 type="range"
                 className={cn(
-                  "flex-1 max-w-48 appearance-none h-1.5 rounded-full cursor-pointer",
-                  "focus:outline-none focus:ring-0",
-                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4",
+                  "flex-1 appearance-none h-1 rounded-full cursor-pointer focus:outline-none",
+                  "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3",
                   "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white",
-                  "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500",
-                  "[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-all",
-                  "disabled:[&::-webkit-slider-thumb]:bg-gray-300 disabled:[&::-webkit-slider-thumb]:border-gray-400"
+                  "[&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-slate-300 [&::-webkit-slider-thumb]:shadow-sm"
                 )}
                 min={MODEL_PARAMETER_LIMITS.presencePenalty.min}
                 max={MODEL_PARAMETER_LIMITS.presencePenalty.max}
@@ -1072,15 +1028,15 @@ export function SessionParametersDialog({
                 onChange={(e) => setParameters(prev => ({ ...prev, presencePenalty: parseFloat(e.target.value) }))}
                 style={{ 
                   background: parameters.enablePresencePenalty === false
-                    ? '#d1d5db'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.presencePenalty || 0, MODEL_PARAMETER_LIMITS.presencePenalty.min, MODEL_PARAMETER_LIMITS.presencePenalty.max)}%, #e5e7eb ${calcPercent(parameters.presencePenalty || 0, MODEL_PARAMETER_LIMITS.presencePenalty.min, MODEL_PARAMETER_LIMITS.presencePenalty.max)}%, #e5e7eb 100%)`
+                    ? '#e2e8f0'
+                    : `linear-gradient(to right, #94a3b8 0%, #94a3b8 ${calcPercent(parameters.presencePenalty || 0, MODEL_PARAMETER_LIMITS.presencePenalty.min, MODEL_PARAMETER_LIMITS.presencePenalty.max)}%, #e2e8f0 ${calcPercent(parameters.presencePenalty || 0, MODEL_PARAMETER_LIMITS.presencePenalty.min, MODEL_PARAMETER_LIMITS.presencePenalty.max)}%, #e2e8f0 100%)`
                 }}
                 disabled={parameters.enablePresencePenalty === false}
               />
 
               <Input
                 type="number"
-                className="w-20 h-8 text-sm"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
                 min={MODEL_PARAMETER_LIMITS.presencePenalty.inputMin}
                 max={MODEL_PARAMETER_LIMITS.presencePenalty.inputMax}
                 step={MODEL_PARAMETER_LIMITS.presencePenalty.step}
@@ -1209,37 +1165,33 @@ export function SessionParametersDialog({
             )}
 
             {/* Thinking */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 py-1">
               <Checkbox 
                 checked={parameters.enableThinking === true}
                 onCheckedChange={(checked) => updateParameter('enableThinking', Boolean(checked))}
+                className="h-3.5 w-3.5"
               />
               
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableThinking === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+              <div className="flex items-center gap-1.5 w-36">
+                <Label className={cn("text-xs", parameters.enableThinking === false ? "text-slate-400" : "text-slate-600 dark:text-slate-300")}>
                   启用思考模式
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">启用后，模型会展示思考过程（如Ollama的thinking字段）。关闭则直接输出结果。</p>
+                    <p className="text-[11px]">启用后，模型会展示思考过程。</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
 
-              <div className="flex-1 max-w-48 flex items-center gap-2">
-                <Label className={cn(
-                  "text-sm",
-                  parameters.enableThinking === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-                )}>
+              <div className="flex-1 flex items-center justify-end gap-2">
+                <span className={cn("text-[11px]", parameters.enableThinking === false ? "text-slate-400" : "text-slate-500")}>
                   {parameters.thinking ? "已启用" : "已禁用"}
-                </Label>
-                <Button
+                </span>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
                   onClick={() => {
                     const newParams = { ...parameters, thinking: !parameters.thinking };
                     setParameters(newParams);
@@ -1247,47 +1199,46 @@ export function SessionParametersDialog({
                   }}
                   disabled={parameters.enableThinking === false}
                   className={cn(
-                    "ml-auto px-3 h-8",
-                    parameters.thinking ? "bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400" : ""
+                    "px-2.5 py-1 text-[11px] rounded transition-colors",
+                    parameters.thinking 
+                      ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400" 
+                      : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+                    parameters.enableThinking === false && "opacity-50 cursor-not-allowed"
                   )}
                 >
                   {parameters.thinking ? "开启" : "关闭"}
-                </Button>
+                </button>
               </div>
             </div>
 
             {/* Streaming */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 py-1">
               <Checkbox 
                 checked={parameters.enableStreaming !== false}
                 onCheckedChange={(checked) => updateParameter('enableStreaming', Boolean(checked))}
+                className="h-3.5 w-3.5"
               />
               
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableStreaming === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+              <div className="flex items-center gap-1.5 w-36">
+                <Label className={cn("text-xs", parameters.enableStreaming === false ? "text-slate-400" : "text-slate-600 dark:text-slate-300")}>
                   启用流式响应
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">启用后，模型会实时流式输出内容。关闭则等待全部生成完成后一次性返回。</p>
+                    <p className="text-[11px]">启用后，模型会实时流式输出内容。</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
 
-              <div className="flex-1 max-w-48 flex items-center gap-2">
-                <Label className={cn(
-                  "text-sm",
-                  parameters.enableStreaming === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-                )}>
+              <div className="flex-1 flex items-center justify-end gap-2">
+                <span className={cn("text-[11px]", parameters.enableStreaming === false ? "text-slate-400" : "text-slate-500")}>
                   {parameters.streaming ? "已启用" : "已禁用"}
-                </Label>
-                <Button
+                </span>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
                   onClick={() => {
                     const newParams = { ...parameters, streaming: !parameters.streaming };
                     setParameters(newParams);
@@ -1295,12 +1246,15 @@ export function SessionParametersDialog({
                   }}
                   disabled={parameters.enableStreaming === false}
                   className={cn(
-                    "ml-auto px-3 h-8",
-                    parameters.streaming ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400" : ""
+                    "px-2.5 py-1 text-[11px] rounded transition-colors",
+                    parameters.streaming 
+                      ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" 
+                      : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+                    parameters.enableStreaming === false && "opacity-50 cursor-not-allowed"
                   )}
                 >
                   {parameters.streaming ? "开启" : "关闭"}
-                </Button>
+                </button>
               </div>
             </div>
 
@@ -1350,76 +1304,83 @@ export function SessionParametersDialog({
             )}
 
             {/* 自定义参数 */}
-            <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">自定义参数</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addCustomParameter}>
-                  <Plus className="w-4 h-4 mr-1" />
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">自定义参数</Label>
+                <button 
+                  type="button" 
+                  onClick={addCustomParameter}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
                   添加参数
-                </Button>
+                </button>
               </div>
               
               {customParameters.map((param, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 border border-gray-200 dark:border-gray-700 rounded-md">
+                <div key={index} className="flex items-center gap-2 p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded">
                   <Input
                     placeholder="参数名"
                     value={param.key}
                     onChange={(e) => updateCustomParameter(index, 'key', e.target.value)}
-                    className="w-32 h-8 text-sm"
+                    className="w-28 h-6 text-xs border-slate-200/60 dark:border-slate-700/40 rounded"
                   />
                   <Input
                     placeholder="参数值"
                     value={param.value}
                     onChange={(e) => updateCustomParameter(index, 'value', e.target.value)}
-                    className="flex-1 h-8 text-sm"
+                    className="flex-1 h-6 text-xs border-slate-200/60 dark:border-slate-700/40 rounded"
                   />
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <Checkbox
                       checked={param.asString}
                       onCheckedChange={(checked) => updateCustomParameter(index, 'asString', Boolean(checked))}
+                      className="h-3 w-3"
                     />
-                    <Label className="text-xs text-gray-500 whitespace-nowrap">使用字符串对待</Label>
+                    <span className="text-[10px] text-slate-400 whitespace-nowrap">字符串</span>
                   </div>
-                  <Button 
+                  <button 
                     type="button" 
-                    variant="ghost" 
-                    size="sm"
                     onClick={() => removeCustomParameter(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
                   >
-                    <X className="w-4 h-4" />
-              </Button>
-            </div>
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
               ))}
 
-            {modelInheritedParameters.length > 0 && (
-              <div className="mt-2">
-                <Label className="text-xs font-medium text-gray-500">继承自模型（未覆盖）</Label>
-                <div className="mt-2 space-y-2">
-                  {modelInheritedParameters.map((p) => (
-                    <div key={p.key} className="flex items-center justify-between text-xs px-3 py-2 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded">
-                      <div className="truncate">
-                        <span className="font-medium text-gray-700 dark:text-gray-200 mr-2">{p.key}</span>
-                        <span className="text-gray-600 dark:text-gray-400">{p.value}</span>
-                        <Badge variant="outline" className="ml-2 text-[10px]">模型</Badge>
+              {modelInheritedParameters.length > 0 && (
+                <div className="mt-2">
+                  <span className="text-[10px] text-slate-400">继承自模型（未覆盖）</span>
+                  <div className="mt-1 space-y-1">
+                    {modelInheritedParameters.map((p) => (
+                      <div key={p.key} className="flex items-center justify-between text-[11px] px-2 py-1.5 bg-slate-50/50 dark:bg-slate-800/20 rounded">
+                        <div className="truncate">
+                          <span className="font-medium text-slate-600 dark:text-slate-300 mr-1.5">{p.key}</span>
+                          <span className="text-slate-500 dark:text-slate-400">{p.value}</span>
+                        </div>
+                        <button 
+                          onClick={() => adoptInheritedParameter(p)} 
+                          className="text-[10px] text-blue-500 hover:text-blue-600"
+                        >
+                          覆盖
+                        </button>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => adoptInheritedParameter(p)} className="text-blue-600 hover:text-blue-700">覆盖此参数</Button>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
 
             {/* 预览JSON */}
-            <div className="mt-6 space-y-2">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">参数预览</Label>
-              <div className="p-3 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-md">
-                <pre className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap overflow-auto max-h-40">
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">参数预览</Label>
+              <div className="p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded">
+                <pre className="text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap overflow-auto max-h-32 font-mono">
                   {previewJson}
                 </pre>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-[10px] text-slate-400">
                 以上是发送给 LLM 时的完整参数配置（仅包含已启用的参数）
               </p>
             </div>
@@ -1429,63 +1390,45 @@ export function SessionParametersDialog({
           </TabsContent>
         </Tabs>
 
-        {/* Footer */}
-        <DialogFooter className="px-6 py-3 border-t border-gray-100/80 dark:border-gray-800/80 bg-gradient-to-b from-gray-50/30 to-gray-50/60 dark:from-gray-900/10 dark:to-gray-900/30">
-          <div className="flex items-center gap-2 w-full">
+        {/* Footer - 精致紧凑 */}
+        <DialogFooter className="px-5 py-2 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/30 dark:bg-slate-800/10">
+          <div className="flex items-center gap-1.5 w-full">
             {activeTab === 'params' ? (
               <>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
+                <button 
                   onClick={handleResetToModelDefault}
-                  className="gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-800"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-3 h-3" />
                   重置为模型默认
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
+                </button>
+                <button 
                   onClick={handleResetToSystemDefault}
-                  className="gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-800"
+                  className="px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
                 >
                   重置为系统默认
-                </Button>
-                {parameterSource === 'session' && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={handleClearSessionParameters}
-                    className="gap-1.5 ml-auto text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-800"
-                  >
-                    清除会话参数
-                  </Button>
-                )}
+                </button>
               </>
             ) : (
               <>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <button 
                   onClick={()=>setSystemPromptText('')}
-                  className="gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-800"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-3 h-3" />
                   重置提示词
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                </button>
+                <button 
                   onClick={()=>{ window.open('/prompts','_blank'); }}
-                  className="gap-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-800"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
                 >
-                  <Settings className="w-3.5 h-3.5" />
+                  <Settings className="w-3 h-3" />
                   管理已保存提示词
-                </Button>
+                </button>
               </>
             )}
             <div className="flex-1" />
-            <span className="text-xs text-gray-500">
+            <span className="text-[10px] text-slate-400">
               {activeTab === 'params' ? '参数调整实时生效' : '提示词仅在保存时应用'}
             </span>
           </div>

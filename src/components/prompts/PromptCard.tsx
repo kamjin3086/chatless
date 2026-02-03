@@ -43,9 +43,9 @@ export function PromptCard({
 }: PromptCardProps) {
 
   return (
-    <div className="prompt-card bg-white/95 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-800/50 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-1 flex flex-col">
+    <div className="prompt-card bg-white/90 dark:bg-gray-900/70 border border-gray-200/40 dark:border-gray-800/40 rounded-lg hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors duration-150 flex flex-col">
       {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100/80 dark:border-gray-800/60">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100/60 dark:border-gray-800/40">
         <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate pr-2" title={title}>{title}</h3>
         <div className="flex items-center gap-1.5">
           <Button
@@ -87,13 +87,13 @@ export function PromptCard({
       </div>
 
       {/* 主体 */}
-      <div className="p-4 flex flex-col gap-3 flex-grow">
+      <div className="p-3 flex flex-col gap-2 flex-grow">
         {description ? (
           <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2 leading-relaxed">{description}</p>
         ) : null}
 
         {/* 内容预览：使用 line-clamp 提升空间利用 */}
-        <div className="rounded-lg bg-gradient-to-br from-slate-50/80 to-gray-50/60 dark:from-gray-800/60 dark:to-slate-800/50 backdrop-blur-sm ring-1 ring-gray-200/60 dark:ring-gray-700/50 px-3 py-2.5 shadow-sm">
+        <div className="rounded bg-gray-50/80 dark:bg-gray-800/50 px-2.5 py-2">
           <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-800 dark:text-gray-200 line-clamp-5">{content}</pre>
         </div>
 
@@ -104,7 +104,7 @@ export function PromptCard({
               <Badge
                 key={s}
                 variant="secondary"
-                className="shrink-0 px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-mono border border-amber-200/50 dark:border-amber-700/50"
+                className="shrink-0 px-1.5 py-0.5 rounded bg-amber-50/80 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-xs font-mono"
                 title={`/${s}`}
               >
                 /{s}
@@ -114,7 +114,7 @@ export function PromptCard({
               <Badge
                 key={index}
                 variant="secondary"
-                className="px-2 py-0.5 rounded-full text-[10px] font-medium cursor-default bg-gradient-to-r from-gray-100 to-slate-100 text-gray-700 dark:from-gray-800 dark:to-slate-800 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50"
+                className="px-1.5 py-0.5 rounded text-[10px] font-medium cursor-default bg-gray-100/80 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400"
               >
                 {tag}
               </Badge>
