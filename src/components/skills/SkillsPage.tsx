@@ -6,7 +6,7 @@ import { useSkillStore } from '@/store/skillStore';
 import { getSkillManager } from '@/lib/skills';
 import type { Skill } from '@/lib/skills/types';
 import { SkillGrid } from './SkillGrid';
-import { SkillDrawer } from './SkillDrawer';
+import { SkillDetailDialog } from './SkillDetailDialog';
 import {
   RefreshCw,
   Search,
@@ -263,16 +263,14 @@ export function SkillsPage({ className }: SkillsPageProps) {
         />
       </main>
 
-      {/* 技能详情抽屉 */}
-      <SkillDrawer
+      {/* 技能详情对话框 */}
+      <SkillDetailDialog
         skill={selectedSkill}
         open={drawerOpen}
         onOpenChange={(open) => !open && closeDrawer()}
-        onInstall={handleInstall}
         onUninstall={handleUninstall}
         onToggleEnabled={handleToggleEnabled}
         onOpenFolder={handleOpenFolder}
-        isInstalling={isInstalling}
       />
 
       {/* 导入对话框 */}

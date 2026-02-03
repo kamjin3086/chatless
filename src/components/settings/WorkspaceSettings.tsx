@@ -164,7 +164,7 @@ export function WorkspaceSettings() {
 
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={HardDrive} title="工作区管理" iconBgColor="from-sky-500 to-indigo-500" />
+      <SettingsSectionHeader icon={HardDrive} title="工作区管理" />
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
         AI产物保存在应用专用区域。选择会话后可导出或清理。

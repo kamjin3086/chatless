@@ -247,7 +247,6 @@ export function PrivacySettings() {
       <SettingsSectionHeader
         icon={Shield}
         title="隐私设置"
-        iconBgColor="from-red-500 to-orange-500"
       />
 
       {/* 导入 / 导出 备份按钮 */}

@@ -74,12 +74,12 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
   // 添加文档对话框状态
   const [addDocsOpen, setAddDocsOpen] = useState(false);
 
-  // 处理返回
+  // 处理返回 - 保持 Tab 状态为知识库
   const handleBack = () => {
     if (onBack) {
       onBack();
     } else {
-      router.push('/knowledge');
+      router.push('/knowledge?tab=knowledge');
     }
   };
 

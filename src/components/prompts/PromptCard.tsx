@@ -1,6 +1,6 @@
 'use client';
 
-import { Star, Edit, MoreVertical, Trash2 } from 'lucide-react';
+import { Star, MoreVertical, Trash2, Edit } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,8 @@ interface PromptCardProps extends Prompt {
   onApply?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  /** 点击卡片本体（用于打开详情） */
+  onClick?: (id: string) => void;
 }
 
 export function PromptCard({
@@ -37,15 +39,28 @@ export function PromptCard({
   onApply = () => {},
   onEdit = () => {},
   onDelete = () => {},
+  onClick,
 }: PromptCardProps) {
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // 如果点击的是按钮或菜单区域，不触发卡片点击
+    if ((e.target as HTMLElement).closest('button, [role="menuitem"]')) {
+      return;
+    }
+    onClick?.(id);
+  };
+
   return (
-    <div className={cn(
-      "group flex flex-col p-3 rounded-lg border transition-colors duration-150",
-      "bg-white/80 dark:bg-slate-900/60",
-      "border-slate-200/60 dark:border-slate-700/40",
-      "hover:border-slate-300/80 dark:hover:border-slate-600/60"
-    )}>
+    <div 
+      className={cn(
+        "group flex flex-col p-3 rounded-lg border transition-colors duration-150",
+        "bg-white/80 dark:bg-slate-900/60",
+        "border-slate-200/60 dark:border-slate-700/40",
+        "hover:border-slate-300/80 dark:hover:border-slate-600/60",
+        onClick && "cursor-pointer"
+      )}
+      onClick={handleCardClick}
+    >
       {/* 头部 */}
       <div className="flex items-center justify-between mb-1.5">
         <h3 className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate pr-2" title={title}>
@@ -53,7 +68,7 @@ export function PromptCard({
         </h3>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={() => onApply(id)}
+            onClick={(e) => { e.stopPropagation(); onApply(id); }}
             className="h-6 px-2 text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors"
           >
             应用
@@ -65,13 +80,16 @@ export function PromptCard({
                 ? "text-amber-500" 
                 : "text-slate-400 hover:text-amber-500"
             )} 
-            onClick={() => onToggleFavorite(id)}
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(id); }}
           >
             <Star className={cn("h-3 w-3", isFavorite && "fill-current")} />
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-6 h-6 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 flex items-center justify-center transition-colors">
+              <button 
+                className="w-6 h-6 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 flex items-center justify-center transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreVertical className="h-3 w-3" />
               </button>
             </DropdownMenuTrigger>

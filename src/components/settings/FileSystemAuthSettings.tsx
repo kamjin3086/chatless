@@ -77,7 +77,7 @@ export function FileSystemAuthSettings() {
 
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={Shield} title="文件访问白名单" iconBgColor="from-emerald-500 to-teal-500" />
+      <SettingsSectionHeader icon={Shield} title="文件访问白名单" />
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
         管理允许AI访问的目录。建议为每个目录设置易识别的别名。

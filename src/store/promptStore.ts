@@ -2,10 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
-import type { PromptItem } from '@/types/prompt';
+import type { PromptItem, PromptHistory } from '@/types/prompt';
+
+const MAX_HISTORY_PER_PROMPT = 10;
 
 interface PromptState {
   prompts: PromptItem[];
+  /** 提示词修改历史，key 为 promptId */
+  history: Record<string, PromptHistory[]>;
   ui?: {
     searchQuery: string;
     favoriteOnly: boolean;
@@ -27,12 +31,17 @@ interface PromptActions {
   setTagFilter: (tag: string | null) => void;
   setSortBy: (s: 'recent' | 'frequency' | 'name') => void;
   loadFromDatabase: () => Promise<void>;
+  /** 获取某个提示词的修改历史 */
+  getHistory: (promptId: string) => PromptHistory[];
+  /** 从历史记录恢复 */
+  restoreFromHistory: (historyId: string) => void;
 }
 
 export const usePromptStore = create<PromptState & PromptActions>()(
   persist(
     (set, get) => ({
       prompts: [],
+      history: {},
       ui: { searchQuery: '', favoriteOnly: false, tagFilter: null, sortBy: 'recent' },
       // 从数据库加载
       loadFromDatabase: async () => {
@@ -106,6 +115,33 @@ export const usePromptStore = create<PromptState & PromptActions>()(
       },
 
       updatePrompt: (id, updates) => {
+        const currentPrompt = get().prompts.find(p => p.id === id);
+        
+        // 检查内容是否有变化，有变化则保存历史
+        if (currentPrompt && (
+          ('content' in updates && updates.content !== currentPrompt.content) ||
+          ('name' in updates && updates.name !== currentPrompt.name) ||
+          ('description' in updates && updates.description !== currentPrompt.description)
+        )) {
+          const historyEntry: PromptHistory = {
+            id: uuidv4(),
+            promptId: id,
+            name: currentPrompt.name,
+            content: currentPrompt.content,
+            description: currentPrompt.description,
+            tags: currentPrompt.tags,
+            shortcuts: currentPrompt.shortcuts,
+            savedAt: Date.now(),
+          };
+          
+          set((state) => {
+            const existing = state.history[id] || [];
+            // 保持最多 MAX_HISTORY_PER_PROMPT 条记录
+            const updated = [historyEntry, ...existing].slice(0, MAX_HISTORY_PER_PROMPT);
+            return { history: { ...state.history, [id]: updated } };
+          });
+        }
+        
         set((state) => ({
           prompts: state.prompts.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: Date.now() } : p)),
         }));
@@ -228,6 +264,34 @@ export const usePromptStore = create<PromptState & PromptActions>()(
       setFavoriteOnly: (v) => set((state) => ({ ui: { ...(state.ui || { searchQuery: '', favoriteOnly: false, tagFilter: null, sortBy: 'recent' }), favoriteOnly: v } })),
       setTagFilter: (tag) => set((state) => ({ ui: { ...(state.ui || { searchQuery: '', favoriteOnly: false, tagFilter: null, sortBy: 'recent' }), tagFilter: tag } })),
       setSortBy: (s) => set((state) => ({ ui: { ...(state.ui || { searchQuery: '', favoriteOnly: false, tagFilter: null, sortBy: 'recent' }), sortBy: s } })),
+      
+      getHistory: (promptId) => {
+        return get().history[promptId] || [];
+      },
+      
+      restoreFromHistory: (historyId) => {
+        const state = get();
+        // 找到历史记录
+        let targetHistory: PromptHistory | null = null;
+        for (const histories of Object.values(state.history)) {
+          const found = histories.find(h => h.id === historyId);
+          if (found) {
+            targetHistory = found;
+            break;
+          }
+        }
+        if (!targetHistory) return;
+        
+        // 更新提示词
+        const { updatePrompt } = get();
+        updatePrompt(targetHistory.promptId, {
+          name: targetHistory.name,
+          content: targetHistory.content,
+          description: targetHistory.description,
+          tags: targetHistory.tags,
+          shortcuts: targetHistory.shortcuts,
+        });
+      },
     }),
     { name: 'prompt-store' }
   )

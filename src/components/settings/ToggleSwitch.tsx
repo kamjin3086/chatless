@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { HelpCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ToggleSwitchProps {
   label: string;
@@ -7,49 +8,59 @@ interface ToggleSwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   tooltip?: string;
+  className?: string;
 }
 
+/**
+ * 紧凑的开关切换组件
+ */
 export function ToggleSwitch({
   label,
   description,
   checked,
   onChange,
   tooltip,
+  className,
 }: ToggleSwitchProps) {
   const id = useId();
+  
   return (
-    <div className="flex items-center justify-between py-3">
-      {/* 左侧：标题 */}
-      <div className="flex items-center gap-2">
-        <label htmlFor={id} className="text-sm font-medium text-gray-700 dark:text-gray-300">
+    <div className={cn("flex items-center justify-between gap-4 py-1", className)}>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <label htmlFor={id} className="text-xs text-slate-700 dark:text-slate-300">
           {label}
         </label>
+        {description && (
+          <span className="text-[10px] text-slate-400 hidden sm:inline">{description}</span>
+        )}
         {tooltip && (
           <div className="group relative">
-            <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help transition-colors" />
-            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+            <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-help" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 max-w-xs">
               {tooltip}
-              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
             </div>
           </div>
         )}
       </div>
       
-      {/* 右侧：开关按钮 */}
-      <div className="flex-shrink-0">
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            id={id}
-            checked={checked}
-            onChange={(e) => onChange(e.target.checked)}
-            className="sr-only peer"
-          />
-          <div className="w-12 h-7 bg-gray-100 dark:bg-gray-700 rounded-full relative transition-all duration-300 ease-out peer-checked:bg-blue-500 peer-checked:shadow-lg
-          after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-6 after:w-6 after:shadow-sm after:transition-all after:duration-300 after:ease-out peer-checked:after:translate-x-5">
-          </div>
-        </label>
-      </div>
+      <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+        <input
+          type="checkbox"
+          id={id}
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="sr-only peer"
+        />
+        <div className={cn(
+          "w-9 h-5 rounded-full transition-colors duration-200",
+          "bg-slate-200 dark:bg-slate-700",
+          "peer-checked:bg-blue-500",
+          "after:content-[''] after:absolute after:top-0.5 after:left-0.5",
+          "after:bg-white after:rounded-full after:h-4 after:w-4",
+          "after:shadow-sm after:transition-transform after:duration-200",
+          "peer-checked:after:translate-x-4"
+        )} />
+      </label>
     </div>
   );
-} 
+}

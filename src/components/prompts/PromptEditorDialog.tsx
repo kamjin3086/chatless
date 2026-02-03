@@ -1,33 +1,37 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import type { PromptItem, PromptVariableDefinition } from '@/types/prompt';
-import { generateShortcutCandidates } from '@/lib/prompt/shortcut';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import type { PromptItem, PromptVariableDefinition, PromptHistory } from '@/types/prompt';
+import { X, History, Star, Copy, Trash2, RotateCcw } from 'lucide-react';
+import { usePromptStore } from '@/store/promptStore';
+import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
 
 interface PromptEditorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initial?: Partial<PromptItem> | null;
   onSubmit: (data: Omit<PromptItem, 'id' | 'createdAt' | 'updatedAt' | 'stats'> & { id?: string }) => void;
+  onDelete?: () => void;
+  onToggleFavorite?: () => void;
 }
 
-export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit }: PromptEditorDialogProps) {
+export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDelete, onToggleFavorite }: PromptEditorDialogProps) {
   const [name, setName] = useState(initial?.name || '');
   const [description, setDescription] = useState(initial?.description || '');
   const [content, setContent] = useState(initial?.content || '');
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
   const [tags, setTags] = useState<string[]>(initial?.tags || []);
-  const [languages, setLanguages] = useState<string[]>(initial?.languages || []);
-  const [modelHints, setModelHints] = useState<string[]>(initial?.modelHints || []);
-  const [favorite, setFavorite] = useState<boolean>(!!initial?.favorite);
   const [shortcuts, setShortcuts] = useState<string[]>(initial?.shortcuts || []);
+  const [showHistory, setShowHistory] = useState(false);
+  
+  const getHistory = usePromptStore((s) => s.getHistory);
+  
+  const promptId = (initial as any)?.id;
+  const isEditing = !!promptId;
+  const history = useMemo(() => promptId ? getHistory(promptId) : [], [promptId, getHistory]);
 
   useEffect(() => {
     if (open) {
@@ -35,24 +39,22 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit }: Pr
       setDescription(initial?.description || '');
       setContent(initial?.content || '');
       setTags(initial?.tags || []);
-      setLanguages(initial?.languages || []);
-      setModelHints(initial?.modelHints || []);
-      setFavorite(!!initial?.favorite);
       setShortcuts(initial?.shortcuts || []);
+      setShowHistory(false);
     }
   }, [open, initial]);
 
+  // Token 估算
   const tokenEstimate = useMemo(() => {
     const plain = content || '';
     if (!plain) return 0;
-    // 粗略估算：中文每字≈1 token，英文每4字符≈1 token
     const chineseChars = plain.replace(/[\x00-\x7F]/g, '').length;
     const englishChars = plain.length - chineseChars;
     return Math.round(chineseChars + englishChars / 4);
   }, [content]);
 
+  // 从内容中提取变量
   const deriveVariables = (text: string): PromptVariableDefinition[] => {
-    // 支持中文、字母、数字与常见符号（不包含空白、花括号、等号）
     const re = /\{\{\s*([^\s{}=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^}]+)))?\s*\}\}/gu;
     const map = new Map<string, PromptVariableDefinition>();
     let m: RegExpExecArray | null;
@@ -71,45 +73,21 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit }: Pr
     if (!name.trim() || !content.trim()) return;
     const autoVariables = deriveVariables(content);
     onSubmit({
-      id: (initial as any)?.id,
+      id: promptId,
       name: name.trim(),
       description: description.trim(),
       content: content,
       tags,
-      languages,
-      modelHints,
+      languages: [],
+      modelHints: [],
       variables: autoVariables,
-      favorite,
+      favorite: initial?.favorite || false,
       shortcuts,
     });
     onOpenChange(false);
   };
 
-  const handleTagsInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const target = e.target as HTMLInputElement;
-    if (e.key === 'Enter' && target.value.trim()) {
-      setTags((prev) => Array.from(new Set([...prev, target.value.trim()])));
-      target.value = '';
-    }
-  };
-
-  const handleLanguagesInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const target = e.target as HTMLInputElement;
-    if (e.key === 'Enter' && target.value.trim()) {
-      setLanguages((prev) => Array.from(new Set([...prev, target.value.trim()])));
-      target.value = '';
-    }
-  };
-
-  const handleModelsInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const target = e.target as HTMLInputElement;
-    if (e.key === 'Enter' && target.value.trim()) {
-      setModelHints((prev) => Array.from(new Set([...prev, target.value.trim()])));
-      target.value = '';
-    }
-  };
-
-  // 高亮渲染：把 {{var}} 包裹成带背景的片段，保持字符等宽与原文本一致，不插入额外字符
+  // 变量高亮渲染
   const highlighted = useMemo(() => {
     const re = /\{\{\s*([^\s{}=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^}]+)))?\s*\}\}/gu;
     const esc = (s: string) => s
@@ -122,159 +100,273 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit }: Pr
     while ((m = re.exec(src))) {
       out += esc(src.slice(last, m.index));
       const raw = esc(m[0]);
-      out += `<span class=\"rounded-sm bg-yellow-100/60 text-yellow-900 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.45)] dark:bg-yellow-400/20 dark:text-yellow-200 dark:shadow-[inset_0_0_0_1px_rgba(234,179,8,0.35)]\">${raw}</span>`;
+      out += `<span class="rounded-sm bg-amber-100/70 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">${raw}</span>`;
       last = m.index + m[0].length;
     }
     out += esc(src.slice(last));
-    // 保持换行（空格由 whitespace-pre-wrap 处理）
     return out.replace(/\n/g, '<br/>');
   }, [content]);
 
-  // 同步滚动
   const syncScroll = () => {
     if (!contentRef.current || !previewRef.current) return;
     previewRef.current.scrollTop = contentRef.current.scrollTop;
   };
 
   const removeTag = (t: string) => setTags(prev => prev.filter(x => x !== t));
-  const removeLang = (t: string) => setLanguages(prev => prev.filter(x => x !== t));
-  const removeModel = (t: string) => setModelHints(prev => prev.filter(x => x !== t));
   const removeShortcut = (s: string) => setShortcuts(prev => prev.filter(x => x !== s));
 
-  const Chip = ({ label, onRemove }: { label: string; onRemove: () => void }) => (
-    <span className="relative group inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs border border-emerald-200/70 bg-emerald-50/70 text-emerald-700 dark:bg-emerald-500/15 dark:border-emerald-600/40 dark:text-emerald-200 hover:bg-emerald-100/70 dark:hover:bg-emerald-500/25 transition-colors">
-      {label}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-slate-400/80 text-white text-[10px] leading-none hover:bg-slate-500 shadow-sm"
-        title="移除"
-      >
-        ×
-      </button>
-    </span>
-  );
+  const handleTagInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const target = e.target as HTMLInputElement;
+    if (e.key === 'Enter' && target.value.trim()) {
+      e.preventDefault();
+      setTags((prev) => Array.from(new Set([...prev, target.value.trim()])));
+      target.value = '';
+    }
+  };
+
+  const handleShortcutInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    if (e.key === 'Enter' && target.value.trim()) {
+      e.preventDefault();
+      const val = target.value.trim().replace(/^\//,'').toLowerCase();
+      setShortcuts((prev) => Array.from(new Set([...prev, val])));
+      target.value = '';
+    }
+  };
+
+  const handleCopyContent = () => {
+    navigator.clipboard.writeText(content);
+    toast.success('已复制内容');
+  };
+
+  const handleRestoreHistory = (h: PromptHistory) => {
+    setName(h.name);
+    setContent(h.content);
+    setDescription(h.description || '');
+    setTags(h.tags || []);
+    setShortcuts(h.shortcuts || []);
+    setShowHistory(false);
+    toast.success('已恢复历史版本');
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl h-[80vh] p-0 flex flex-col rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-xl">
-        <DialogHeader className="px-6 pt-5 pb-3 border-b border-slate-100/80 dark:border-slate-800/60 bg-gradient-to-b from-slate-50/50 to-transparent dark:from-slate-900/30">
-          <DialogTitle className="text-lg font-semibold">{(initial as any)?.id ? '编辑提示词' : '新建提示词'}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-5 overflow-auto px-6 pb-4 pt-1">
-          <div className="grid grid-cols-2 gap-6 items-end">
-            <div>
-              <Label htmlFor="prompt-name" className="text-sm font-medium mb-1.5">名称</Label>
-              <Input id="prompt-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：技术文档总结助手" className="h-10 rounded-lg border-slate-200 dark:border-slate-700 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
-            </div>
-            <div>
-              <Label className="text-sm font-medium mb-1.5">Token 估算</Label>
-              <div className="h-10 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
-                <span className="inline-flex items-center rounded-full bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/70 text-slate-700 dark:text-slate-300 px-4 py-1.5 border border-slate-200/60 dark:border-slate-700/60 shadow-sm">≈ {tokenEstimate} tokens</span>
-              </div>
+      <DialogContent className="max-w-xl p-0 max-h-[85vh] flex flex-col overflow-hidden [&>button]:hidden">
+        {/* 头部 */}
+        <div className="flex-shrink-0 p-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-slate-800 dark:text-slate-200">
+              {isEditing ? '编辑提示词' : '新建提示词'}
+            </h2>
+            <div className="flex items-center gap-1">
+              {/* 历史按钮 - 仅编辑模式 */}
+              {isEditing && history.length > 0 && (
+                <button
+                  onClick={() => setShowHistory(!showHistory)}
+                  className={cn(
+                    "w-7 h-7 rounded flex items-center justify-center transition-colors",
+                    showHistory 
+                      ? "text-blue-500 bg-blue-50 dark:bg-blue-900/20" 
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  )}
+                  title={`查看历史 (${history.length})`}
+                >
+                  <History className="w-4 h-4" />
+                </button>
+              )}
+              {/* 关闭 */}
+              <button
+                onClick={() => onOpenChange(false)}
+                className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <Label htmlFor="prompt-desc" className="text-sm font-medium">描述</Label>
-              <span className="text-xs text-slate-400">可选</span>
+        {/* 历史面板 */}
+        {showHistory && history.length > 0 && (
+          <div className="flex-shrink-0 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 p-3 max-h-48 overflow-y-auto">
+            <div className="text-[10px] text-slate-400 mb-2">修改历史 (最近 {history.length} 次)</div>
+            <div className="space-y-1.5">
+              {history.map((h) => (
+                <div key={h.id} className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/40">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs text-slate-700 dark:text-slate-200 truncate">{h.name}</div>
+                    <div className="text-[10px] text-slate-400">
+                      {new Date(h.savedAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreHistory(h)}
+                    className="h-6 px-2 text-[10px] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    恢复
+                  </button>
+                </div>
+              ))}
             </div>
-            <Input id="prompt-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="简要说明用途（可选）" className="h-10 rounded-lg border-slate-200 dark:border-slate-700 focus:border-blue-400 dark:focus:border-blue-500 transition-colors" />
+          </div>
+        )}
+
+        {/* 内容区域 */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* 名称 */}
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-600 dark:text-slate-400">名称</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="提示词名称"
+              className="w-full h-8 px-3 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label htmlFor="prompt-content" className="text-sm font-medium">内容</Label>
-              <div className="text-xs text-slate-500 bg-slate-100/60 dark:bg-slate-800/60 px-2 py-1 rounded">在文本中直接使用 {'{{变量}}'}，无需单独新增变量</div>
+          {/* 描述 */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-slate-600 dark:text-slate-400">描述</label>
+              <span className="text-[10px] text-slate-400">可选</span>
             </div>
-            <div className="relative rounded-xl ring-1 ring-slate-200/70 dark:ring-slate-700/70 bg-white/80 dark:bg-slate-900/40 min-h-[280px] max-h-[50vh] shadow-sm hover:ring-slate-300/70 dark:hover:ring-slate-600/70 transition-all">
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="简要说明用途"
+              className="w-full h-8 px-3 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            />
+          </div>
+
+          {/* 内容 */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-slate-600 dark:text-slate-400">内容</label>
+              <span className="text-[10px] text-slate-400">≈ {tokenEstimate} tokens · 用 {'{{变量}}'} 定义变量</span>
+            </div>
+            <div className="relative rounded-lg border border-slate-200/60 dark:border-slate-700/40 bg-white/80 dark:bg-slate-800/60 min-h-[180px]">
               <div
                 ref={previewRef}
-                className="absolute inset-0 overflow-auto p-4 text-sm leading-6 whitespace-pre-wrap pointer-events-none select-none text-slate-900 dark:text-slate-100 font-mono"
-                dangerouslySetInnerHTML={{ __html: highlighted || '<span class=\'text-slate-400\'>直接描述角色、目标、输出格式与边界，可用 {{变量}}</span>' }}
+                className="absolute inset-0 overflow-auto p-3 text-xs leading-5 whitespace-pre-wrap pointer-events-none select-none text-slate-700 dark:text-slate-200 font-mono"
+                dangerouslySetInnerHTML={{ __html: highlighted || '<span class="text-slate-400">输入提示词内容...</span>' }}
               />
               <textarea
                 ref={contentRef as any}
-                id="prompt-content"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onScroll={syncScroll}
-                className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none ring-0 focus:ring-0 p-4 text-sm leading-6 text-transparent selection:bg-blue-500/20 dark:selection:bg-blue-400/25 caret-blue-600 dark:caret-blue-400 font-mono"
-                placeholder=""
+                className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-3 text-xs leading-5 text-transparent selection:bg-blue-500/20 caret-blue-500 font-mono min-h-[180px]"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">标签（回车添加）</Label>
-              <Input onKeyDown={handleTagsInput} placeholder="写作、翻译… 回车添加" className="h-9 rounded-lg border-slate-200 dark:border-slate-700" />
-              <div className="flex flex-wrap gap-2">
-                {tags.map((t) => (
-                  <Chip key={t} label={t} onRemove={() => removeTag(t)} />
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {['写作','编程','翻译','总结'].map(t => (
-                  <button
-                    key={t}
-                    className="text-xs px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                    onClick={()=>setTags(prev=>Array.from(new Set([...prev, t])))}
-                  >{t}</button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">语言（回车添加）</Label>
-              <Input onKeyDown={handleLanguagesInput} placeholder="zh-CN、en… 回车添加" className="h-9 rounded-lg border-slate-200 dark:border-slate-700" />
-              <div className="flex flex-wrap gap-2">
-                {languages.map((t) => (
-                  <Chip key={t} label={t} onRemove={() => removeLang(t)} />
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">模型提示（回车添加）</Label>
-              <Input onKeyDown={handleModelsInput} placeholder="gpt-4o、claude-3-5… 回车添加" className="h-9 rounded-lg border-slate-200 dark:border-slate-700" />
-              <div className="flex flex-wrap gap-2">
-                {modelHints.map((t) => (
-                  <Chip key={t} label={t} onRemove={() => removeModel(t)} />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <Label className="text-sm font-medium">快捷指令（回车添加）</Label>
-            <Input onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>)=>{ const target=e.currentTarget; if(e.key==='Enter'&&target.value.trim()){ const val=target.value.trim().replace(/^\//,'').toLowerCase(); setShortcuts((prev: string[])=>Array.from(new Set([...prev,val]))); target.value=''; } }} placeholder="如 /write、/review，不加斜杠也可" className="h-9 rounded-lg border-slate-200 dark:border-slate-700 mt-1.5" />
-            <div className="mt-2 flex flex-wrap gap-2">
-              {shortcuts.map((s: string) => (
-                <Chip key={s} label={`/${s}`} onRemove={() => removeShortcut(s)} />
-              ))}
-            </div>
-            {generateShortcutCandidates(name, tags, languages).filter(s=>!shortcuts.includes(s)).length > 0 && (
-              <>
-                <div className="mt-2 text-xs text-gray-500">系统建议：</div>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {generateShortcutCandidates(name, tags, languages).filter(s=>!shortcuts.includes(s)).map(s => (
-                    <button key={s} className="px-2 py-0.5 rounded-full bg-indigo-50/80 text-indigo-600 border border-indigo-200 shadow-sm hover:bg-indigo-100" onClick={()=>setShortcuts((prev:string[])=>Array.from(new Set([...prev,s])))}>/{s}</button>
+          {/* 标签和快捷指令 - 两列布局 */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* 标签 */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-600 dark:text-slate-400">标签</label>
+              <input
+                onKeyDown={handleTagInput}
+                placeholder="回车添加"
+                className="w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+              />
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {tags.map((t) => (
+                    <span key={t} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                      {t}
+                      <button onClick={() => removeTag(t)} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
+                    </span>
                   ))}
                 </div>
-              </>
-            )}
-          </div>
+              )}
+            </div>
 
-            {/* 去掉额外“添加变量”UI，变量从内容中自动识别 */}
+            {/* 快捷指令 */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-600 dark:text-slate-400">快捷指令</label>
+              <input
+                onKeyDown={handleShortcutInput}
+                placeholder="/指令名"
+                className="w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+              />
+              {shortcuts.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {shortcuts.map((s) => (
+                    <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-mono">
+                      /{s}
+                      <button onClick={() => removeShortcut(s)} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <DialogFooter className="mt-2 px-6 py-4 border-t border-slate-100/80 dark:border-slate-800/60 bg-gradient-to-t from-slate-50/30 to-transparent dark:from-slate-900/20">
-          <Button variant="dialogSecondary" onClick={() => onOpenChange(false)} className="rounded-lg">取消</Button>
-          <Button variant="soft" onClick={handleSubmit} disabled={!name.trim() || !content.trim()} className="rounded-lg shadow-sm">保存</Button>
-        </DialogFooter>
+        {/* 底部操作区 */}
+        <div className="flex-shrink-0 p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+          <div className="flex items-center justify-between">
+            {/* 左侧操作 */}
+            <div className="flex items-center gap-1">
+              {isEditing && (
+                <>
+                  {/* 收藏 */}
+                  {onToggleFavorite && (
+                    <button
+                      onClick={onToggleFavorite}
+                      className={cn(
+                        "h-7 px-2 text-xs rounded flex items-center gap-1 transition-colors",
+                        initial?.favorite 
+                          ? "text-amber-500" 
+                          : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      )}
+                      title={initial?.favorite ? '取消收藏' : '收藏'}
+                    >
+                      <Star className={cn("w-3.5 h-3.5", initial?.favorite && "fill-current")} />
+                    </button>
+                  )}
+                  {/* 复制 */}
+                  <button
+                    onClick={handleCopyContent}
+                    className="h-7 px-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded flex items-center gap-1 transition-colors"
+                    title="复制内容"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  {/* 删除 */}
+                  {onDelete && (
+                    <button
+                      onClick={onDelete}
+                      className="h-7 px-2 text-xs text-slate-400 hover:text-red-500 rounded flex items-center gap-1 transition-colors"
+                      title="删除"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            
+            {/* 右侧按钮 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onOpenChange(false)}
+                className="h-7 px-3 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!name.trim() || !content.trim()}
+                className="h-7 px-4 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
-

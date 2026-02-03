@@ -13,19 +13,22 @@ import { createKnowledgeMenuItems } from './knowledgeMenu';
 
 interface KnowledgeBaseCardProps {
   kb: KnowledgeBase & { documentCount?: number };
-  onClick: (id: string) => void;
+  /** 点击卡片打开详情 */
+  onClick?: (kb: KnowledgeBase & { documentCount?: number }) => void;
+  /** 管理文档（跳转页面） */
+  onManage?: (id: string) => void;
   onRename?: (kb: KnowledgeBase) => void;
   onEditDesc?: (kb: KnowledgeBase) => void;
   onDelete?: (kb: KnowledgeBase) => void;
 }
 
-export function KnowledgeBaseCard({ kb, onClick, onRename, onEditDesc, onDelete }: KnowledgeBaseCardProps) {
+export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc, onDelete }: KnowledgeBaseCardProps) {
   const desc = (kb.description || '').replace(/(\\n|\\r|\\t)/g, ' ').replace(/(\r?\n|\r)/g, ' ').trim();
 
   const menuItems = createKnowledgeMenuItems(kb, { onRename, onEditDesc, onDelete });
 
   const handleCardClick = () => {
-    onClick(kb.id);
+    onClick?.(kb);
   };
 
   const handleMenuClick = (e: React.MouseEvent, action?: () => void) => {

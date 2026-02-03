@@ -78,7 +78,6 @@ export function NativeToolAuthSettings() {
       <SettingsSectionHeader
         icon={ShieldCheck}
         title="原生工具授权策略"
-        iconBgColor="from-indigo-500 to-violet-500"
       />
 
       <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">

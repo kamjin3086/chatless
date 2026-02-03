@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { KnowledgeBaseCard } from "@/components/knowledge/KnowledgeBaseCard";
 import { CreateKnowledgeDialog } from '@/components/knowledge/CreateKnowledgeDialog';
 import { EditKnowledgeDialog } from '@/components/knowledge/EditKnowledgeDialog';
+import { KnowledgeBaseDetailDialog } from '@/components/knowledge/KnowledgeBaseDetailDialog';
 import { RecentUsedList } from "@/components/ui/RecentUsedList";
 import { RAGQueryInterface } from "@/components/knowledge/RAGQueryInterface";
 import { AlertDialog, AlertDialogHeader, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
@@ -54,6 +55,10 @@ export default function KnowledgePage() {
   const [kbToDelete, setKbToDelete] = useState<KnowledgeBase | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [kbEditing, setKbEditing] = useState<KnowledgeBase | null>(null);
+  
+  // 详情对话框状态
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailKb, setDetailKb] = useState<KnowledgeBaseWithCount | null>(null);
   
   const hasInitializedRef = useRef(false);
 
@@ -127,7 +132,12 @@ export default function KnowledgePage() {
   }, [loadKnowledgeBases]);
 
   // 知识库操作
-  const handleViewKnowledgeBase = (id: string) => {
+  const handleCardClick = (kb: KnowledgeBase & { documentCount?: number }) => {
+    setDetailKb({ ...kb, documentCount: kb.documentCount ?? 0 });
+    setDetailDialogOpen(true);
+  };
+
+  const handleManageKnowledgeBase = (id: string) => {
     router.push(`/knowledge/detail?id=${id}`);
   };
 
@@ -284,7 +294,8 @@ export default function KnowledgePage() {
                         <KnowledgeBaseCard
                           key={kb.id}
                           kb={kb}
-                          onClick={handleViewKnowledgeBase}
+                          onClick={handleCardClick}
+                          onManage={handleManageKnowledgeBase}
                           onDelete={handleDeleteKnowledgeBase}
                           onRename={openEditDialog}
                           onEditDesc={openEditDialog}
@@ -362,6 +373,17 @@ export default function KnowledgePage() {
         kb={kbEditing} 
         onOpenChange={setEditDialogOpen} 
         onSave={handleSaveEditKb} 
+      />
+      
+      {/* 知识库详情对话框 */}
+      <KnowledgeBaseDetailDialog
+        open={detailDialogOpen}
+        onOpenChange={(o) => { setDetailDialogOpen(o); if (!o) setDetailKb(null); }}
+        kb={detailKb}
+        onManage={() => detailKb && handleManageKnowledgeBase(detailKb.id)}
+        onRename={() => detailKb && openEditDialog(detailKb)}
+        onEditDesc={() => detailKb && openEditDialog(detailKb)}
+        onDelete={() => detailKb && handleDeleteKnowledgeBase(detailKb)}
       />
     </div>
   );

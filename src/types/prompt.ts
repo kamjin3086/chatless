@@ -32,3 +32,15 @@ export interface AppliedPromptState {
   mode?: 'permanent' | 'temporary' | 'oneOff';
 }
 
+/** 提示词修改历史记录 */
+export interface PromptHistory {
+  id: string;
+  promptId: string;
+  name: string;
+  content: string;
+  description?: string;
+  tags?: string[];
+  shortcuts?: string[];
+  savedAt: number;
+}
+

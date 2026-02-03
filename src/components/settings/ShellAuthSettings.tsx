@@ -70,7 +70,6 @@ export function ShellAuthSettings() {
       <SettingsSectionHeader
         icon={TerminalSquare}
         title="命令执行授权"
-        iconBgColor="from-blue-500 to-cyan-500"
       />
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">

@@ -7,7 +7,6 @@ import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { SelectField } from "./SelectField";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { InputField } from "./InputField";
-import { InfoBanner } from "./InfoBanner";
 import { toast } from "@/components/ui/sonner";
 import {
   AlertDialog,
@@ -23,7 +22,6 @@ import {
 
 import { UniversalModelManager } from "./UniversalModelManager";
 import { Database, FileText, Search, Brain, HardDrive, Zap } from "lucide-react";
-import type { EmbeddingConfig } from "@/lib/embedding/types";
 import { 
   KnowledgeBaseConfig, 
   getKnowledgeBaseConfigManager, 
@@ -93,17 +91,12 @@ export function KnowledgeBaseSettings() {
 
   return (
     <div className="space-y-4">
-         {/* 页面标题 */}
-         <div className="mb-5">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">知识库管理</h2>
-
-        <div className="rounded-xl border border-slate-200/70 bg-gradient-to-br from-slate-50/50 to-blue-50/30 dark:from-slate-800/30 dark:to-blue-900/10 p-4 dark:border-slate-700/60 shadow-sm">
-          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            在此添加/编辑知识库配置，并进行连接管理。聊天会话中可选择已连接知识库，AI 将按需调用工具/资源/提示。
-          </p>
-        </div>
-
-      
+      {/* 页面标题 */}
+      <div className="mb-4">
+        <h2 className="text-base font-medium text-slate-800 dark:text-slate-100 mb-2">知识库管理</h2>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+          添加/编辑知识库配置，聊天中可选择已连接知识库。
+        </p>
       </div>
       {/* 嵌入模型管理 */}
       <SettingsCard>
@@ -114,19 +107,16 @@ export function KnowledgeBaseSettings() {
       {/* 优化预设 */}
       <SettingsCard>
         <SettingsSectionHeader icon={Zap} title="优化预设" />
-        <div className="pt-4">
-          <SelectField
-            label="性能预设"
-            options={[
-              { value: 'memory_optimized', label: '小型知识库 · 内存优化' },
-              { value: 'balanced', label: '中型知识库 · 平衡模式' },
-              { value: 'performance', label: '大型知识库 · 性能优化' },
-            ]}
-            value={settings.vectorStore.performanceProfile}
-            onChange={(value) => updateSettings('vectorStore', 'performanceProfile', value)}
-            description="根据知识库规模快速应用推荐配置，可在下方高级配置中进一步微调"
-          />
-        </div>
+        <SelectField
+          label="性能预设"
+          options={[
+            { value: 'memory_optimized', label: '小型·内存优化' },
+            { value: 'balanced', label: '中型·平衡模式' },
+            { value: 'performance', label: '大型·性能优化' },
+          ]}
+          value={settings.vectorStore.performanceProfile}
+          onChange={(value) => updateSettings('vectorStore', 'performanceProfile', value)}
+        />
       </SettingsCard>
       {/* 向量存储设置 */}
       <CollapsibleCard title="向量存储设置" icon={Database}>
@@ -373,29 +363,17 @@ export function KnowledgeBaseSettings() {
       </CollapsibleCard>
 
       {/* 性能提示 */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Zap className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-1">性能优化建议</h4>
-            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-              <li>• 小型知识库(小于 1000文档): 使用内存优化配置</li>
-              <li>• 中型知识库(1000-10000文档): 使用平衡模式配置</li>
-              <li>• 大型知识库(大于 10000文档): 使用性能优化配置</li>
-              <li>• 增大缓存大小可提升查询速度，但会占用更多内存</li>
-            </ul>
-          </div>
-        </div>
+      <div className="text-[10px] text-slate-500 dark:text-slate-400 px-3 py-2 bg-slate-50/80 dark:bg-slate-800/40 rounded-lg">
+        <span className="font-medium">提示：</span>
+        小型(&lt;1K文档)用内存优化，中型(1K-10K)用平衡模式，大型(&gt;10K)用性能优化
       </div>
 
       {/* 重置按钮 */}
-      <div className="flex justify-end pt-4">
+      <div className="flex justify-end pt-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <button
-              className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50 disabled:opacity-50"
-            >
-              恢复默认设置
+            <button className="h-7 px-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded">
+              恢复默认
             </button>
           </AlertDialogTrigger>
           <AlertDialogContent>
