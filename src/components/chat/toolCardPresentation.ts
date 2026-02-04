@@ -51,12 +51,58 @@ export function presentToolCard(params: {
   const args = params.args || {};
 
 
-  // ---------- skills ----------
-  if (srv === 'skills') {
-    if (tl === 'list_available_skills') return { titleLine: '列出可用技能', kind: 'generic' };
-    if (tl === 'get_skill_instructions') return { titleLine: '查看技能说明', kind: 'generic' };
-    if (tl === 'list_skill_actions') return { titleLine: '列出技能动作', kind: 'generic' };
-    return { titleLine: '调用技能工具', detailLineLabel: '工具', detailLineFull: tool, detailLineShort: truncate(tool, 30), kind: 'generic' };
+  // ---------- skills (旧) / skill (新) ----------
+  if (srv === 'skills' || srv === 'skill') {
+    const id = pickArg(args, 'id');
+    const name = pickArg(args, 'name');
+    const skillLabel = id || name || '';
+    
+    // 使用类（只读）
+    if (tl === 'list_available_skills' || tl === 'list') {
+      return { titleLine: '列出技能', kind: 'generic' };
+    }
+    if (tl === 'get_skill_instructions' || tl === 'guide' || tl === 'use' || tl === 'get') {
+      return { titleLine: '获取技能指南', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'list_resources' || tl === 'list_files') {
+      return { titleLine: '列出技能资源', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'get_template' || tl === 'read_file') {
+      const resourceName = pickArg(args, 'name') || pickArg(args, 'path');
+      return { titleLine: '获取模板', detailLineLabel: '文件', detailLineFull: resourceName, detailLineShort: truncate(resourceName, 25), kind: 'generic' };
+    }
+    if (tl === 'list_skill_actions') {
+      return { titleLine: '列出技能动作', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    
+    // 管理类
+    if (tl === 'install') {
+      const repoUrl = pickArg(args, 'repoUrl');
+      return { titleLine: '安装技能', detailLineLabel: '来源', detailLineFull: repoUrl, detailLineShort: truncate(repoUrl, 30), kind: 'generic' };
+    }
+    if (tl === 'uninstall') {
+      return { titleLine: '卸载技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'update') {
+      return { titleLine: '更新技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'enable') {
+      return { titleLine: '启用技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'disable') {
+      return { titleLine: '禁用技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'check_deps') {
+      return { titleLine: '检查依赖', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+    }
+    
+    // 编辑类
+    if (tl === 'edit_resource' || tl === 'write_file') {
+      const resourceName = pickArg(args, 'name') || pickArg(args, 'path');
+      return { titleLine: '编辑技能资源', detailLineLabel: '文件', detailLineFull: resourceName, detailLineShort: truncate(resourceName, 25), kind: 'generic' };
+    }
+    
+    return { titleLine: 'skill 操作', detailLineLabel: '工具', detailLineFull: tool, detailLineShort: truncate(tool, 30), kind: 'generic' };
   }
 
   // ---------- ctx (Agent Context) ----------
@@ -167,12 +213,53 @@ export function presentToolCard(params: {
     return { titleLine: op, detailLineLabel: '路径', detailLineFull: displayPath, detailLineShort: filename || truncate(displayPath, 30), kind: 'path' };
   }
 
+  // ---------- system (提示词管理) ----------
+  if (srv === 'system') {
+    const id = pickArg(args, 'id');
+    const name = pickArg(args, 'name');
+    const promptLabel = name || id || '';
+    
+    if (tl === 'list_prompts') {
+      return { titleLine: '列出提示词', kind: 'generic' };
+    }
+    if (tl === 'get_prompt') {
+      return { titleLine: '获取提示词', detailLineLabel: '名称', detailLineFull: promptLabel, detailLineShort: truncate(promptLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'create_prompt') {
+      return { titleLine: '创建提示词', detailLineLabel: '名称', detailLineFull: name, detailLineShort: truncate(name, 20), kind: 'generic' };
+    }
+    if (tl === 'update_prompt') {
+      return { titleLine: '更新提示词', detailLineLabel: '名称', detailLineFull: promptLabel, detailLineShort: truncate(promptLabel, 20), kind: 'generic' };
+    }
+    if (tl === 'delete_prompt') {
+      return { titleLine: '删除提示词', detailLineLabel: 'ID', detailLineFull: id, detailLineShort: truncate(id, 20), kind: 'generic' };
+    }
+    if (tl === 'optimize_prompt') {
+      return { titleLine: '优化提示词', detailLineLabel: 'ID', detailLineFull: id, detailLineShort: truncate(id, 20), kind: 'generic' };
+    }
+    return { titleLine: '系统操作', detailLineLabel: '工具', detailLineFull: tool, detailLineShort: truncate(tool, 25), kind: 'generic' };
+  }
+
   // ---------- generic fallback ----------
   const maybeUrl = pickArg(args, 'url');
   if (maybeUrl) return { titleLine: '访问链接', detailLineLabel: 'URL', detailLineFull: maybeUrl, detailLineShort: truncate(maybeUrl, 40), kind: 'url' };
   const maybePath = pickArg(args, 'path');
   if (maybePath) return { titleLine: `${server} 操作`, detailLineLabel: '路径', detailLineFull: maybePath, detailLineShort: basename(maybePath) || truncate(maybePath, 30), kind: 'path' };
 
-  return { titleLine: `${server} · ${tool}`, kind: 'generic' };
+  // 尝试生成友好的回退名称
+  const friendlyServerNames: Record<string, string> = {
+    'fs': '文件',
+    'filesystem': '文件',
+    'shell': '命令',
+    'web': '网络',
+    'skill': '技能',
+    'skills': '技能',
+    'ctx': '上下文',
+    'system': '系统',
+    'tools': '工具',
+  };
+  const friendlyServer = friendlyServerNames[srv] || server;
+  
+  return { titleLine: `${friendlyServer} · ${tool}`, kind: 'generic' };
 }
 
