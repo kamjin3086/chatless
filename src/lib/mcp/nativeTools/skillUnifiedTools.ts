@@ -8,18 +8,30 @@
  * Skill 是"指导 AI 如何组合使用已有 Tools 完成任务"的模板，而不是"直接执行脚本"的容器。
  * AI 读取 SKILL.md 后，应该使用 shell__run、fs__*、web__* 等通用工具来执行任务。
  *
- * ## 工具列表
+ * ## 工具列表（语义明确，避免与 fs 工具混淆）
  *
- * - skill__list: 列出技能（仅返回名称/ID，不含使用方法）
- * - skill__guide: 获取技能操作指南（包含完整 SKILL.md，调用后根据需要再读取其他文件）
- * - skill__install: 安装技能（从 Git 或 ZIP）
+ * ### 使用类（只读）
+ * - skill__list: 列出技能（仅返回名称/ID）
+ * - skill__guide: 获取技能操作指南（SKILL.md）
+ * - skill__get_template: 获取技能提供的模板/示例代码（只读）
+ * - skill__list_resources: 列出技能提供的资源文件
+ *
+ * ### 管理类
+ * - skill__install: 安装技能
  * - skill__uninstall: 卸载技能
+ * - skill__update: 更新技能（从 Git 拉取最新版本）
  * - skill__enable: 启用技能
  * - skill__disable: 禁用技能
- * - skill__update: 更新技能
- * - skill__list_files: 列出技能内部资源文件
- * - skill__read_file: 读取技能内部资源文件
- * - skill__write_file: 写入技能内部文件
+ * - skill__check_deps: 检查依赖
+ *
+ * ### 编辑类（需用户明确指示）
+ * - skill__edit_resource: 编辑技能包的内部资源（仅用于修改 skill 包本身）
+ *
+ * ## 重要：skill 工具 vs fs 工具
+ *
+ * - skill__get_template: 获取 skill 包内的模板 → 用于参考
+ * - skill__edit_resource: 编辑 skill 包资源 → 仅当用户要求修改 skill 本身
+ * - fs__write: 写入用户文件 → 用于保存任务输出（默认选择）
  */
 
 import type { McpTool } from '@/lib/mcp/McpClient';
@@ -143,11 +155,11 @@ export const SKILL_UPDATE_TOOL: McpTool = {
   },
 };
 
-// ============ 文件操作 ============
+// ============ 资源获取（只读，语义明确） ============
 
-export const SKILL_LIST_FILES_TOOL: McpTool = {
-  name: 'list_files',
-  description: '列出技能内部资源文件',
+export const SKILL_LIST_RESOURCES_TOOL: McpTool = {
+  name: 'list_resources',
+  description: '列出技能提供的资源文件（模板、示例代码、配置样例）。用于了解 skill 包含哪些可参考的内容。',
   input_schema: {
     schema: {
       type: 'object',
@@ -160,34 +172,40 @@ export const SKILL_LIST_FILES_TOOL: McpTool = {
   },
 };
 
-export const SKILL_READ_FILE_TOOL: McpTool = {
-  name: 'read_file',
-  description: '读取技能包内部资源文件（如模板、配置、示例代码）。用户工作目录的文件请用 fs__read。',
+export const SKILL_GET_TEMPLATE_TOOL: McpTool = {
+  name: 'get_template',
+  description: '获取技能提供的模板或示例代码（只读）。用于参考 skill 的最佳实践，然后用 fs__write 写入用户目录。',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Skill ID（必填）' },
-        path: { type: 'string', description: '相对 skill 目录的文件路径（必填）。这是 skill 包内部路径，不支持别名。' },
+        name: { type: 'string', description: '资源文件名（从 skill__list_resources 获取）' },
         maxLines: { type: 'number', description: '最多读取行数（用于大文件）' },
       },
-      required: ['id', 'path'],
+      required: ['id', 'name'],
     },
   },
 };
 
-export const SKILL_WRITE_FILE_TOOL: McpTool = {
-  name: 'write_file',
-  description: '写入技能内部配置/模板文件（仅限 skill 包内部资源，如配置模板、示例代码）。⚠️ 注意：此工具仅用于修改 skill 包本身，不要用于写入用户文件！用户文件请使用 fs__write 并配合 @WorkDir 或绝对路径。',
+// 保留旧名称的兼容性别名（内部映射到新工具）
+export const SKILL_LIST_FILES_TOOL = SKILL_LIST_RESOURCES_TOOL;
+export const SKILL_READ_FILE_TOOL = SKILL_GET_TEMPLATE_TOOL;
+
+// ============ 编辑 skill 包（需用户明确指示） ============
+
+export const SKILL_EDIT_RESOURCE_TOOL: McpTool = {
+  name: 'edit_resource',
+  description: '编辑技能包的内部资源文件。⚠️ 仅当用户明确要求修改 skill 包本身时使用。普通任务输出请用 fs__write + @WorkDir。',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Skill ID（必填）' },
-        path: { type: 'string', description: '相对 skill 目录的文件路径（必填）。⚠️ 这是 skill 包内部路径，不支持 @WorkDir 等别名。用户文件请用 fs__write。' },
-        content: { type: 'string', description: '要写入的内容（必填）' },
+        name: { type: 'string', description: '资源文件名（必填）' },
+        content: { type: 'string', description: '新内容（必填）' },
       },
-      required: ['id', 'path', 'content'],
+      required: ['id', 'name', 'content'],
     },
   },
 };
@@ -211,19 +229,23 @@ export const SKILL_CHECK_DEPS_TOOL: McpTool = {
 // ============ 导出 ============
 
 export const SKILL_UNIFIED_TOOLS: McpTool[] = [
+  // 使用类（只读）
   SKILL_LIST_TOOL,
   SKILL_GUIDE_TOOL,
+  SKILL_LIST_RESOURCES_TOOL,
+  SKILL_GET_TEMPLATE_TOOL,
+  // 管理类
   SKILL_INSTALL_TOOL,
   SKILL_UNINSTALL_TOOL,
+  SKILL_UPDATE_TOOL,
   SKILL_ENABLE_TOOL,
   SKILL_DISABLE_TOOL,
-  SKILL_UPDATE_TOOL,
-  SKILL_LIST_FILES_TOOL,
-  SKILL_READ_FILE_TOOL,
-  SKILL_WRITE_FILE_TOOL,
   SKILL_CHECK_DEPS_TOOL,
+  // 编辑类（需用户明确指示）
+  SKILL_EDIT_RESOURCE_TOOL,
 ];
 
 // 兼容性导出（保留旧名称的别名）
 export const SKILL_USE_TOOL = SKILL_GUIDE_TOOL;
 export const SKILL_GET_TOOL = SKILL_GUIDE_TOOL;
+export const SKILL_WRITE_FILE_TOOL = SKILL_EDIT_RESOURCE_TOOL; // 兼容旧名称

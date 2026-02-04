@@ -56,13 +56,18 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       case 'update':
         return this.updateSkill(args || {});
 
-      // 文件操作
-      case 'list_files':
-        return this.listFiles(args || {});
-      case 'read_file':
-        return this.readFile(args || {});
-      case 'write_file':
-        return this.writeFile(args || {});
+      // 资源获取（只读）
+      case 'list_resources':  // 新名称
+      case 'list_files':      // 兼容旧名称
+        return this.listResources(args || {});
+      case 'get_template':    // 新名称
+      case 'read_file':       // 兼容旧名称
+        return this.getTemplate(args || {});
+      
+      // 编辑 skill 包资源（需用户明确指示）
+      case 'edit_resource':   // 新名称（推荐）
+      case 'write_file':      // 兼容旧名称
+        return this.editResource(args || {});
 
       // 依赖检查
       case 'check_deps':
@@ -228,9 +233,9 @@ export class SkillUnifiedAdapter implements ToolAdapter {
     // 执行指南：告诉 AI 如何按照 SKILL.md 完成任务
     result.howToUse = {
       step1: '阅读 content 中的操作指南',
-      step2: '如果指南中提到需要使用 skill 包内的模板/脚本/资源，用 skill__list_files 查看可用文件，skill__read_file 读取内容',
-      step3: '使用 shell__run、fs__* 等工具按指南执行任务',
-      note: 'content 是核心指南，其他文件按需读取',
+      step2: '如需 skill 包内的模板/示例，用 skill__list_resources 查看，skill__get_template 读取',
+      step3: '使用 shell__run、fs__write（配合 @WorkDir）等工具执行任务',
+      important: '用户文件必须用 fs__write 写入 @WorkDir，不要写入 skill 包',
     };
 
     return result;
@@ -363,10 +368,10 @@ export class SkillUnifiedAdapter implements ToolAdapter {
   }
 
   // ========================================
-  // 文件操作
+  // 资源获取（只读）
   // ========================================
 
-  private async listFiles(args: Record<string, unknown>): Promise<unknown> {
+  private async listResources(args: Record<string, unknown>): Promise<unknown> {
     const id = String(args.id || '').trim();
     const max = typeof args.max === 'number' ? args.max : 50;
 
@@ -378,58 +383,62 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       const files = await listSkillResources(id, max);
       return {
         skillId: id,
-        files,
+        resources: files,
         count: files.length,
-        note: '使用 skill__read_file 读取文件内容',
+        usage: '使用 skill__get_template 读取模板/示例内容，然后用 fs__write 写入用户目录',
       };
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  private async readFile(args: Record<string, unknown>): Promise<unknown> {
+  private async getTemplate(args: Record<string, unknown>): Promise<unknown> {
     const id = String(args.id || '').trim();
-    const path = String(args.path || '').trim();
+    // 支持 name（新）和 path（旧）两种参数名
+    const name = String(args.name || args.path || '').trim();
     const maxLines = typeof args.maxLines === 'number' ? args.maxLines : undefined;
 
     if (!id) {
       return { error: 'id is required' };
     }
-    if (!path) {
-      return { error: 'path is required' };
+    if (!name) {
+      return { error: 'name is required (资源文件名，从 skill__list_resources 获取)' };
     }
 
     try {
-      const content = await readSkillResource(id, path, maxLines);
+      const content = await readSkillResource(id, name, maxLines);
       return {
         skillId: id,
-        path,
+        name,
         content,
+        usage: '这是 skill 包提供的模板/示例。如需使用，请用 fs__write 写入用户目录（@WorkDir/...）',
       };
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  private async writeFile(args: Record<string, unknown>): Promise<unknown> {
+  private async editResource(args: Record<string, unknown>): Promise<unknown> {
     const id = String(args.id || '').trim();
-    const path = String(args.path || '').trim();
+    // 支持 name（新）和 path（旧）两种参数名
+    const name = String(args.name || args.path || '').trim();
     const content = String(args.content ?? '');
 
     if (!id) {
       return { error: 'id is required' };
     }
-    if (!path) {
-      return { error: 'path is required' };
+    if (!name) {
+      return { error: 'name is required (资源文件名)' };
     }
 
     try {
-      const result = await writeSkillFile(id, path, content);
+      const result = await writeSkillFile(id, name, content);
       return {
         success: true,
         skillId: id,
-        path,
+        name,
         message: result,
+        note: '已修改 skill 包内部资源。如果这不是你想要的，用户文件请用 fs__write + @WorkDir。',
       };
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) };
