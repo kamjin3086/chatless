@@ -119,6 +119,21 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
     return false;
   }
 
+  // ctx (Agent Context): auto-approve
+  if (srv === 'ctx') {
+    return false;
+  }
+
+  // tools: auto-approve
+  if (srv === 'tools') {
+    return false;
+  }
+
+  // system: auto-approve
+  if (srv === 'system') {
+    return false;
+  }
+
   // filesystem：授权由 allowlist gate 统一管理，这里不参与（返回 false 以避免“全局 autoAuth”影响文件系统安全边界）
   if (isFilesystemServer(srv)) {
     return false;
@@ -213,52 +228,80 @@ export class ToolExecutionPipeline {
     let execInvocation: ToolInvocation = invocation;
     const srvLower = normalizeServerName(server);
 
-    // 预处理：shell_executor 的 workingDir 支持 @WorkDir / @Alias / 相对路径
+    // 预处理：shell_executor 的 workingDir 和 command 支持 @WorkDir / @Alias / 相对路径
     if (isShellServer(srvLower)) {
-      const workingDirInput = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
-      if (workingDirInput) {
+      try {
+        const allowlist = useFilesystemAllowlistStore.getState();
+        await allowlist.load();
+        const dirsForResolve = [...allowlist.directories];
+        let shellWorkDir: string | undefined;
         try {
-          const allowlist = useFilesystemAllowlistStore.getState();
-          await allowlist.load();
-          const dirsForResolve = [...allowlist.directories];
-          let shellWorkDir: string | undefined;
-          try {
-            const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-            const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
-            if (wd) {
-              shellWorkDir = String(wd).replace(/\\/g, '/');
-              dirsForResolve.unshift({
-                id: `session:${invocation.conversationId}:workdir`,
-                path: shellWorkDir,
-                alias: 'WorkDir',
-                permissions: { read: true, write: true, create: true, delete: false },
-                source: 'workdir',
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-              } as any);
-            }
-          } catch {
-            // ignore
+          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+          const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
+          if (wd) {
+            shellWorkDir = String(wd).replace(/\\/g, '/');
+            dirsForResolve.unshift({
+              id: `session:${invocation.conversationId}:workdir`,
+              path: shellWorkDir,
+              alias: 'WorkDir',
+              permissions: { read: true, write: true, create: true, delete: false },
+              source: 'workdir',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            } as any);
           }
-          const shellResolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any, workingDir: shellWorkDir });
-          const execArgs = { ...(args || {}), workingDir: shellResolved.absolutePath };
-          execInvocation = new ToolInvocation({
-            assistantMessageId: invocation.assistantMessageId,
-            conversationId: invocation.conversationId,
-            server: invocation.server,
-            tool: invocation.tool,
-            args: execArgs,
-            provider: invocation.provider,
-            model: invocation.model,
-            historyForLlm: invocation.historyForLlm,
-            originalUserContent: invocation.originalUserContent,
-            callId: invocation.callId,
-            cardId,
-            lockKey: invocation.lockKey,
-          });
         } catch {
-          // ignore: best-effort（解析失败则保持原 workingDir，让后续校验/授权处理）
+          // ignore
         }
+
+        const execArgs: Record<string, unknown> = { ...(args || {}) };
+
+        // 解析 workingDir 参数中的别名
+        const workingDirInput = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
+        if (workingDirInput) {
+          const shellResolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any, workingDir: shellWorkDir });
+          execArgs.workingDir = shellResolved.absolutePath;
+        }
+
+        // 解析 command 参数中的 @WorkDir / @Alias 别名
+        const commandInput = typeof (args as any)?.command === 'string' ? String((args as any).command) : '';
+        if (commandInput && commandInput.includes('@')) {
+          let resolvedCommand = commandInput;
+          // 替换 @WorkDir 别名（支持 @WorkDir、@WorkDir/、@WorkDir\）
+          if (shellWorkDir) {
+            // 使用全局替换，支持多种后缀形式
+            resolvedCommand = resolvedCommand.replace(/@WorkDir(?=[\/\\]|$|\s|"|')/g, shellWorkDir);
+          }
+          // 替换其他 @Alias 别名（格式：@AliasName 或 @AliasName/path）
+          for (const dir of dirsForResolve) {
+            if (dir.alias && dir.path) {
+              const aliasName = String(dir.alias);
+              // 使用动态正则，匹配 @AliasName 后跟路径分隔符、空白、引号或字符串结尾
+              const pattern = new RegExp(`@${aliasName}(?=[/\\\\]|$|\\s|"|')`, 'g'); // eslint-disable-line no-useless-escape
+              resolvedCommand = resolvedCommand.replace(pattern, String(dir.path).replace(/\\/g, '/'));
+            }
+          }
+          if (resolvedCommand !== commandInput) {
+            execArgs.command = resolvedCommand;
+          }
+        }
+
+        execInvocation = new ToolInvocation({
+          assistantMessageId: invocation.assistantMessageId,
+          conversationId: invocation.conversationId,
+          server: invocation.server,
+          tool: invocation.tool,
+          args: execArgs,
+          provider: invocation.provider,
+          model: invocation.model,
+          historyForLlm: invocation.historyForLlm,
+          originalUserContent: invocation.originalUserContent,
+          callId: invocation.callId,
+          cardId,
+          lockKey: invocation.lockKey,
+        });
+      } catch {
+        // ignore: best-effort（解析失败则保持原参数，让后续校验/授权处理）
       }
     }
 

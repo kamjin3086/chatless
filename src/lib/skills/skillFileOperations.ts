@@ -29,6 +29,14 @@ function assertSafeRelativePath(p: string): void {
 async function getSkillPath(skillId: string): Promise<string> {
   const manager = getSkillManager();
   await manager.initialize();
+
+  // 确保 skills 目录在白名单中（触发白名单同步）
+  try {
+    await manager.getSkillsBasePath();
+  } catch {
+    // 忽略错误，后续操作会给出更具体的错误信息
+  }
+
   const skill = await manager.getSkill(skillId);
   if (!skill?.path) {
     // 给出“可纠错”的强提示：skillId 必须来自 skills.list_available_skills

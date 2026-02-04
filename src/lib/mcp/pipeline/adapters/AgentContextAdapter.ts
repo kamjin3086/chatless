@@ -27,6 +27,17 @@ const TODO_FILE = 'todo.md';
 const ERRORS_FILE = 'errors.log';
 const MAX_ERRORS = 50;
 
+function normalizePath(p: string): string {
+  return String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/g, '');
+}
+
+function joinPath(base: string, rest: string): string {
+  const b = normalizePath(base);
+  const r = String(rest || '').trim().replace(/\\/g, '/');
+  if (!r) return b;
+  return `${b}/${r.replace(/^\/+/, '')}`;
+}
+
 function getTimestamp(): string {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
@@ -50,12 +61,36 @@ export class AgentContextAdapter implements ToolAdapter {
     const tool = String(invocation.tool || '').toLowerCase();
     const args = invocation.args || {};
 
+    // 获取工作目录
+    let workDir: string;
     try {
-      // 确保 .agent 目录存在
-      const workDir = await this.getWorkDir();
-      const agentDir = `${workDir}/${AGENT_DIR}`;
-      await this.ensureDir(agentDir);
+      workDir = await this.getWorkDir(invocation.conversationId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        error: 'WorkDir 不可用',
+        details: msg,
+        hint: '请确保在界面中已设置/附加工作目录，或等待会话工作区自动初始化。',
+      };
+    }
 
+    // 确保 .agent 目录存在
+    const agentDir = joinPath(workDir, AGENT_DIR);
+    try {
+      await this.ensureDir(agentDir);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        error: '无法创建 .agent 目录',
+        details: msg,
+        path: agentDir,
+        hint: '请检查目录是否在文件系统允许列表中，以及是否有写入权限。',
+      };
+    }
+
+    try {
       switch (tool) {
         case 'save_research':
           return await this.saveResearch(agentDir, args);
@@ -72,25 +107,81 @@ export class AgentContextAdapter implements ToolAdapter {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: msg };
+      return { ok: false, error: msg, tool, agentDir };
     }
   }
 
-  private async getWorkDir(): Promise<string> {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<{ workDir: string }>('get_work_dir');
-      return result.workDir || '.';
-    } catch {
-      return '.';
+  private async getWorkDir(conversationId?: string): Promise<string> {
+    // 辅助函数：确保目录在 allowlist 中并同步到后端
+    const authorizeDir = async (p: string): Promise<void> => {
+      const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
+      await ensureAllowlistedDirectory({
+        path: p,
+        source: 'workdir',
+        permissions: { read: true, write: true, create: true, delete: false },
+        reconnect: true,
+      });
+    };
+
+    // 1. 首选：指定的会话 @WorkDir
+    if (conversationId) {
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const wd = useConversationAttachmentStore.getState().getWorkingDir(conversationId);
+        if (wd) {
+          const p = normalizePath(String(wd));
+          await authorizeDir(p);
+          return p;
+        }
+      } catch (e) {
+        console.warn('[AgentContext] getWorkDir from conversation failed:', e);
+      }
     }
+
+    // 2. 兜底：当前活动会话
+    try {
+      const { useChatStore } = await import('@/store/chatStore');
+      const cid = useChatStore.getState().currentConversationId || '';
+      if (cid && cid !== conversationId) {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const wd = useConversationAttachmentStore.getState().getWorkingDir(cid);
+        if (wd) {
+          const p = normalizePath(String(wd));
+          await authorizeDir(p);
+          return p;
+        }
+      }
+    } catch (e) {
+      console.warn('[AgentContext] getWorkDir from current session failed:', e);
+    }
+
+    // 3. 最后兜底：应用数据目录
+    try {
+      const { appDataDir, join } = await import('@tauri-apps/api/path');
+      const base = await appDataDir();
+      const full = await join(base, 'chatless-workdir');
+      const p = normalizePath(String(full));
+      await authorizeDir(p);
+      return p;
+    } catch (e) {
+      console.warn('[AgentContext] getWorkDir from appDataDir failed:', e);
+    }
+
+    throw new Error('WorkDir 不可用：请在界面中附加工作目录后重试，或检查文件系统权限设置。');
   }
 
   private async ensureDir(path: string): Promise<void> {
     try {
-      await fsCreateDirectory({ path, recursive: true });
-    } catch {
-      // 目录可能已存在，忽略错误
+      const result = await fsCreateDirectory({ path, recursive: true });
+      if (!(result as any)?.ok) {
+        throw new Error((result as any)?.message || 'mkdir failed');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('forbidden')) {
+        throw new Error(`创建目录被拒绝: ${path}\n原因: ${msg}\n解决方案: 请在设置中将目录添加到文件系统允许列表，并确保有 create 权限。`);
+      }
+      throw new Error(`创建目录失败: ${path}\n${msg}`);
     }
   }
 
@@ -103,12 +194,30 @@ export class AgentContextAdapter implements ToolAdapter {
     }
   }
 
-  private async writeFile(path: string, content: string): Promise<boolean> {
+  private async writeFile(path: string, content: string): Promise<void> {
+    const p = normalizePath(path);
+    const parent = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+    
+    if (parent) {
+      try {
+        await this.ensureDir(parent);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`创建父目录失败: ${parent}\n${msg}`);
+      }
+    }
+
     try {
-      const result = await fsWriteFile({ path, content });
-      return result.ok;
-    } catch {
-      return false;
+      const result = await fsWriteFile({ path: p, content });
+      if (!(result as any)?.ok) {
+        throw new Error((result as any)?.message || 'write failed');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('forbidden')) {
+        throw new Error(`写入被拒绝: ${p}\n原因: ${msg}\n解决方案: 请在设置中将工作目录添加到文件系统允许列表。`);
+      }
+      throw new Error(`写入文件失败: ${p}\n${msg}`);
     }
   }
 
@@ -125,10 +234,7 @@ export class AgentContextAdapter implements ToolAdapter {
   }
 
   // ============ save_research ============
-  private async saveResearch(
-    agentDir: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  private async saveResearch(agentDir: string, args: Record<string, unknown>): Promise<unknown> {
     const topic = sanitizeFilename(String(args.topic || 'research'));
     const content = String(args.content || '');
     const source = args.source ? String(args.source) : undefined;
@@ -138,18 +244,15 @@ export class AgentContextAdapter implements ToolAdapter {
       return { ok: false, error: 'content is required' };
     }
 
-    const researchDir = `${agentDir}/${RESEARCH_DIR}`;
+    const researchDir = joinPath(agentDir, RESEARCH_DIR);
     await this.ensureDir(researchDir);
 
-    const filePath = `${researchDir}/${topic}.md`;
+    const filePath = joinPath(researchDir, `${topic}.md`);
     const timestamp = getTimestamp();
-
-    // 检查是否已存在
     const existing = await this.readFile(filePath);
 
     let newContent: string;
     if (existing) {
-      // 追加模式
       const appendSection = `
 ---
 
@@ -160,7 +263,6 @@ ${keyFindings.length > 0 ? `\n### 关键发现\n${keyFindings.map(f => `- ${f}`)
 `;
       newContent = existing + appendSection;
     } else {
-      // 新建
       newContent = `# 研究：${topic}
 创建时间：${timestamp}
 
@@ -171,12 +273,21 @@ ${keyFindings.length > 0 ? `\n## 关键发现\n${keyFindings.map(f => `- ${f}`).
 `;
     }
 
-    const ok = await this.writeFile(filePath, newContent);
-    if (!ok) {
-      return { ok: false, error: 'Failed to write research file' };
+    try {
+      await this.writeFile(filePath, newContent);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        error: 'Failed to write research file',
+        details: msg,
+        path: filePath,
+        researchDir,
+        agentDir,
+        hint: '请确保工作目录在文件系统允许列表中（设置 → 安全 → 允许的目录）。',
+      };
     }
 
-    // 返回摘要
     const summary = keyFindings.length > 0
       ? `已保存到 ${filePath}。关键发现: ${keyFindings.slice(0, 3).join('; ')}${keyFindings.length > 3 ? '...' : ''}`
       : `已保存到 ${filePath}`;
@@ -185,10 +296,7 @@ ${keyFindings.length > 0 ? `\n## 关键发现\n${keyFindings.map(f => `- ${f}`).
   }
 
   // ============ save_plan ============
-  private async savePlan(
-    agentDir: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  private async savePlan(agentDir: string, args: Record<string, unknown>): Promise<unknown> {
     const title = String(args.title || '未命名任务');
     const goal = String(args.goal || '');
     const steps = Array.isArray(args.steps) ? args.steps.map(String) : [];
@@ -199,7 +307,7 @@ ${keyFindings.length > 0 ? `\n## 关键发现\n${keyFindings.map(f => `- ${f}`).
       return { ok: false, error: 'steps is required' };
     }
 
-    const filePath = `${agentDir}/${TODO_FILE}`;
+    const filePath = joinPath(agentDir, TODO_FILE);
     const timestamp = getTimestamp();
 
     const stepsSection = steps.map((s, i) => `${i + 1}. [ ] ${s}`).join('\n');
@@ -225,9 +333,11 @@ ${risksSection}
 - 任务创建
 `;
 
-    const ok = await this.writeFile(filePath, content);
-    if (!ok) {
-      return { ok: false, error: 'Failed to write plan file' };
+    try {
+      await this.writeFile(filePath, content);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: 'Failed to write plan file', details: msg, path: filePath };
     }
 
     return {
@@ -240,10 +350,7 @@ ${risksSection}
   }
 
   // ============ log_error ============
-  private async logError(
-    agentDir: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  private async logError(agentDir: string, args: Record<string, unknown>): Promise<unknown> {
     const operation = String(args.operation || '');
     const error = String(args.error || '');
     const analysis = String(args.analysis || '');
@@ -253,7 +360,7 @@ ${risksSection}
       return { ok: false, error: 'operation and error are required' };
     }
 
-    const filePath = `${agentDir}/${ERRORS_FILE}`;
+    const filePath = joinPath(agentDir, ERRORS_FILE);
     const timestamp = getTimestamp();
 
     const entry = `[${timestamp}] ERROR
@@ -264,30 +371,24 @@ ${risksSection}
 ---
 `;
 
-    // 读取现有内容
     const existing = await this.readFile(filePath);
-
-    // 追加新条目
     const newContent = existing + entry;
-
-    // 限制条目数量（简单按 '---' 分割）
     const entries = newContent.split('---\n').filter(e => e.trim());
     const limitedEntries = entries.slice(-MAX_ERRORS);
     const finalContent = limitedEntries.join('---\n') + (limitedEntries.length > 0 ? '---\n' : '');
 
-    const ok = await this.writeFile(filePath, finalContent);
-    if (!ok) {
-      return { ok: false, error: 'Failed to write error log' };
+    try {
+      await this.writeFile(filePath, finalContent);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: 'Failed to write error log', details: msg, path: filePath };
     }
 
     return { ok: true, message: '错误已记录' };
   }
 
   // ============ get ============
-  private async getContext(
-    agentDir: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  private async getContext(agentDir: string, args: Record<string, unknown>): Promise<unknown> {
     const type = String(args.type || 'status');
     const topic = args.topic ? sanitizeFilename(String(args.topic)) : undefined;
     const limit = typeof args.limit === 'number' ? args.limit : 10;
@@ -299,7 +400,6 @@ ${risksSection}
         if (!content) {
           return { ok: true, exists: false, message: '没有活动的任务计划' };
         }
-        // 解析进度
         const progress = this.parsePlanProgress(content);
         return { ok: true, exists: true, content, ...progress };
       }
@@ -314,11 +414,8 @@ ${risksSection}
           }
           return { ok: true, exists: true, topic, content };
         } else {
-          // 列出所有研究主题
           const files = await this.listDir(researchDir);
-          const topics = files
-            .filter(f => f.endsWith('.md'))
-            .map(f => f.replace('.md', ''));
+          const topics = files.filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''));
           return { ok: true, topics, message: topics.length > 0 ? `找到 ${topics.length} 个研究主题` : '没有研究记录' };
         }
       }
@@ -329,7 +426,6 @@ ${risksSection}
         if (!content) {
           return { ok: true, exists: false, message: '没有错误记录' };
         }
-        // 取最近 N 条
         const entries = content.split('---\n').filter(e => e.trim());
         const recent = entries.slice(-limit);
         return { ok: true, exists: true, count: entries.length, recent: recent.join('---\n') };
@@ -337,7 +433,6 @@ ${risksSection}
 
       case 'status':
       default: {
-        // 概览
         const todoExists = !!(await this.readFile(`${agentDir}/${TODO_FILE}`));
         const errorExists = !!(await this.readFile(`${agentDir}/${ERRORS_FILE}`));
         const researchFiles = await this.listDir(`${agentDir}/${RESEARCH_DIR}`);
@@ -363,10 +458,7 @@ ${risksSection}
   }
 
   // ============ update_step ============
-  private async updateStep(
-    agentDir: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  private async updateStep(agentDir: string, args: Record<string, unknown>): Promise<unknown> {
     const stepIndex = typeof args.stepIndex === 'number' ? args.stepIndex : 0;
     const status = String(args.status || 'done');
     const note = args.note ? String(args.note) : '';
@@ -375,7 +467,7 @@ ${risksSection}
       return { ok: false, error: 'stepIndex must be >= 1' };
     }
 
-    const filePath = `${agentDir}/${TODO_FILE}`;
+    const filePath = joinPath(agentDir, TODO_FILE);
     let content = await this.readFile(filePath);
     if (!content) {
       return { ok: false, error: '没有活动的任务计划' };
@@ -385,27 +477,26 @@ ${risksSection}
     const statusMark = status === 'done' ? 'x' : status === 'failed' ? '!' : status === 'skipped' ? '-' : '>';
     const statusText = status === 'done' ? '✓ ' + timestamp : status === 'failed' ? '✗ ' + timestamp : status === 'skipped' ? '⊘ ' + timestamp : '← 当前';
 
-    // 更新步骤状态（简单正则替换）
     const stepPattern = new RegExp(`^(${stepIndex}\\. )\\[.\\](.*)$`, 'm');
     if (stepPattern.test(content)) {
       content = content.replace(stepPattern, `$1[${statusMark}]$2 ${statusText}`);
     }
 
-    // 追加执行日志
     const logEntry = `\n### ${timestamp}
 - 步骤 ${stepIndex}: ${status}${note ? ` - ${note}` : ''}
 `;
 
-    // 在执行日志章节追加
     if (content.includes('## 执行日志')) {
       content = content + logEntry;
     } else {
       content = content + '\n## 执行日志' + logEntry;
     }
 
-    const ok = await this.writeFile(filePath, content);
-    if (!ok) {
-      return { ok: false, error: 'Failed to update plan' };
+    try {
+      await this.writeFile(filePath, content);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: 'Failed to update plan', details: msg, path: filePath };
     }
 
     const progress = this.parsePlanProgress(content);

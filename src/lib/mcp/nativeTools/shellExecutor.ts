@@ -17,27 +17,24 @@ export const SHELL_EXECUTE_TOOL: McpTool = {
       properties: {
         command: {
           type: 'string',
-          description: '要执行的命令（如 "python script.py"、"npm install"、"pandoc input.docx -o output.md"）',
+          description: '完整命令（如 "node sample.js"、"python script.py"、"npm install"）',
         },
         shell: {
           type: 'string',
-          enum: ['cmd', 'powershell', 'bash'],
+          enum: ['auto', 'cmd', 'powershell', 'bash'],
           description:
-            '选择执行器（必填）。\n' +
-            '- cmd：按 cmd.exe 语义执行（适合 dir /b、&&、.bat/.cmd 等）\n' +
-            '- powershell：按 PowerShell 语义执行（适合 Get-ChildItem、Remove-Item、$env: 等）\n' +
-            '- bash：按 bash 语义执行（macOS/Linux；用 -lc 执行整行命令）',
+            'Shell 执行器（可选，默认 auto）。auto=自动选择（Win→cmd, Mac/Linux→bash）。这是指定用什么 shell 来运行命令，不是要运行的程序名。',
         },
         workingDir: {
           type: 'string',
-          description: '工作目录（可选，默认为 appData 目录）',
+          description: '工作目录（可选，默认 @WorkDir）',
         },
         timeout: {
           type: 'number',
-          description: '超时时间（毫秒，默认 30000）',
+          description: '超时毫秒（默认 30000）',
         },
       },
-      required: ['command', 'shell'],
+      required: ['command'],
     },
   },
 };

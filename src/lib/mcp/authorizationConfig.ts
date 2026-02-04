@@ -127,8 +127,14 @@ export async function shouldAutoAuthorize(serverName: string): Promise<boolean> 
       return !!serverConfig.autoAuthorize;
     }
 
-    // 对高敏感度服务强制要求人工确认（除非为该服务显式开启）
+    // 内部工具默认自动授权（无需用户审批）
     const name = (serverName || '').toLowerCase().trim();
+    const autoApprovedServers = ['ctx', 'skill', 'skills', 'skills_fs', 'tools', 'system'];
+    if (autoApprovedServers.includes(name)) {
+      return true;
+    }
+
+    // 对高敏感度服务强制要求人工确认（除非为该服务显式开启）
     const isSensitive =
       name === 'filesystem' || name === 'file-system' || name === 'fs' || name === 'shell_executor' || name === 'shell-executor';
     if (isSensitive) {

@@ -19,11 +19,11 @@ shell__run — 运行命令
 ### Windows → PowerShell
 
 ```powershell
-# 必须用 powershell -Command "..." 包装
-powershell -Command "New-Item -ItemType Directory -Path 'images' -Force"
-powershell -Command "Remove-Item -Path 'temp' -Recurse -Force"
-powershell -Command "Copy-Item -Path 'a.txt' -Destination 'b.txt'"
-powershell -Command "Invoke-WebRequest -Uri 'URL' -OutFile 'file.zip'"
+# 直接写 PowerShell 命令即可（不要再手动包一层 powershell -Command）
+New-Item -ItemType Directory -Path 'images' -Force
+Remove-Item -Path 'temp' -Recurse -Force
+Copy-Item -Path 'a.txt' -Destination 'b.txt'
+Invoke-WebRequest -Uri 'URL' -OutFile 'file.zip'
 
 # 直接运行程序
 python script.py
@@ -70,3 +70,12 @@ for i, f in enumerate(os.listdir("photos")):
 - command：要执行的命令
 - workingDir：工作目录（可选）
 - timeout：超时毫秒（默认 30000）
+
+## shell 选择（重要）
+
+- Windows：auto / cmd / powershell（pwsh 视为 powershell）
+- macOS/Linux：auto / bash
+
+提示：
+- shell 是“命令解释器类型”，不是运行时（不要填 node/python）。
+- `cd ... && ...` 这种包含 shell 语法的命令，请用 auto 或显式 cmd/powershell/bash。

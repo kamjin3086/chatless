@@ -710,15 +710,19 @@ export class SkillManager {
         await mkdir(skillsDir, { recursive: true });
       }
 
-      // 自动加入 filesystem 白名单（你选择了 skills_packages_dir 自动授权）
-      // 给一个稳定别名，便于用户/LLM 在需要时引用（也可直接用绝对路径）
-      void ensureAllowlistedDirectory({
-        path: skillsDir,
-        alias: 'Skills',
-        source: 'skills',
-        permissions: { read: true, write: true, create: true, delete: false },
-        reconnect: true,
-      });
+      // 自动加入 filesystem 白名单（确保 skill 文件操作不会被权限拒绝）
+      try {
+        await ensureAllowlistedDirectory({
+          path: skillsDir,
+          alias: 'Skills',
+          source: 'skills',
+          permissions: { read: true, write: true, create: true, delete: false },
+          reconnect: true,
+        });
+      } catch (e) {
+        console.warn('[SkillManager] Failed to add skills dir to allowlist:', e);
+        // 继续执行，让后续操作给出具体错误
+      }
       
       return skillsDir;
     } catch (error) {

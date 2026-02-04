@@ -86,7 +86,14 @@ export class ShellExecutorAdapter implements ToolAdapter {
     const args = invocation.args || {};
     const command = typeof (args as any).command === 'string' ? String((args as any).command) : '';
     if (!command.trim()) throw new Error('command is required');
-    const shellModeRaw = typeof (args as any).shell === 'string' ? String((args as any).shell) : '';
+    const shellModeRaw =
+      typeof (args as any).shell === 'string'
+        ? String((args as any).shell)
+        : typeof (args as any).shell_type === 'string'
+          ? String((args as any).shell_type)
+          : typeof (args as any).shellType === 'string'
+            ? String((args as any).shellType)
+            : '';
 
     const sandbox = getProcessSandbox();
     const isAvailable = await sandbox.isAvailable();
@@ -180,34 +187,109 @@ export class ShellExecutorAdapter implements ToolAdapter {
     const base2 = base;
     const shellMode = String(shellModeRaw || '').trim().toLowerCase();
 
-    // 建设前期：避免 auto 带来的不确定性，强制要求显式指定 shell
-    if (!shellMode) {
+    const ALLOWED_SHELLS = new Set(['auto', 'cmd', 'powershell', 'pwsh', 'bash']);
+    if (shellMode && !ALLOWED_SHELLS.has(shellMode)) {
       return {
         success: false,
         exitCode: -1,
         stdout: '',
         stderr: '',
         duration: 0,
-        error: 'shell is required',
+        error: `invalid shell: ${shellModeRaw}`,
         errorDetails: {
-          code: 'SHELL_NOT_SPECIFIED',
-          message: 'shell 参数缺失。请显式指定 shell（Windows: cmd/powershell；macOS/Linux: bash）。',
+          code: 'SHELL_INVALID',
+          message:
+            `shell 参数不合法：${shellModeRaw}。` +
+            `允许值：auto/cmd/powershell/pwsh/bash。` +
+            `注意：shell 是“命令解释器类型”，不是运行时（不要填 node/python）。`,
           hints: [
-            'Windows + cmd 语法（dir /b、&&、.bat/.cmd）→ shell: "cmd"',
-            'Windows + PowerShell 语法（Get-ChildItem、Remove-Item、$env:）→ shell: "powershell"',
-            'macOS/Linux → shell: "bash"',
+            '想运行 Node：用 command 写 "node your-script.js"，shell 选 cmd/powershell/auto（Windows）或 bash/auto（macOS/Linux）',
+            '包含 cd / && / | / 重定向 等 shell 语法时，建议用 shell=auto 或显式 cmd/powershell/bash',
           ],
         },
       };
     }
 
+    // ========== auto 推断 ==========
+    const inferWindowsShell = (raw: string): 'cmd' | 'powershell' => {
+      const s = String(raw || '').trim();
+      const sl = s.toLowerCase();
+
+      // Windows PowerShell 5.x 不支持 `&&` / `||`；出现时优先用 cmd
+      if (sl.includes('&&') || sl.includes('||')) {
+        return 'cmd';
+      }
+
+      // 明确 PowerShell 语法/关键字
+      if (
+        sl.includes('$env:') ||
+        /\bget-childitem\b/i.test(s) ||
+        /\bremove-item\b/i.test(s) ||
+        /\bcopy-item\b/i.test(s) ||
+        /\bmove-item\b/i.test(s) ||
+        /\bnew-item\b/i.test(s) ||
+        /\binvoke-webrequest\b/i.test(s) ||
+        /\bselect-string\b/i.test(s)
+      ) {
+        return 'powershell';
+      }
+
+      // 明确 cmd 语法（%VAR%、/b 这类开关、set VAR=...）
+      if (/%[a-zA-Z0-9_]+%/.test(s) || /\bset\s+[a-zA-Z0-9_]+\s*=/i.test(s)) {
+        return 'cmd';
+      }
+      if (/\bdir\s+\/[a-z]/i.test(s) || /\bcopy\s+\/[a-z]/i.test(s) || /\bdel\s+\/[a-z]/i.test(s)) {
+        return 'cmd';
+      }
+
+      // 默认：PowerShell（更通用的交互/管道能力），但不保证兼容 cmd 的 /switch 写法
+      return 'powershell';
+    };
+
+    const effectiveShell: 'cmd' | 'powershell' | 'bash' = (() => {
+      const mode = shellMode || 'auto';
+      if (mode === 'cmd') return 'cmd';
+      if (mode === 'powershell' || mode === 'pwsh') return 'powershell';
+      if (mode === 'bash') return 'bash';
+      // auto
+      if (isWindows) return inferWindowsShell(command);
+      return 'bash';
+    })();
+
+    const autoNote =
+      (!shellMode || shellMode === 'auto')
+        ? `未显式指定 shell，已自动选择：${effectiveShell}`
+        : undefined;
+
+    // ========== 依赖检查（Shell 行内也尽量提示缺失运行时）==========
+    // 之前仅在“直接执行 argv”路径检查 node 环境；但很多任务会用 `cd ... && node ...` 这类 shell 行。
+    // 这里做一个轻量启发式：若整行命令中出现 node/npm/pnpm/npx/yarn，先检查 node 环境，避免用户看到晦涩的 “not recognized/program not found”。
+    const usesNodeRuntimeInShellLine = /\b(node|npm|pnpm|npx|yarn)\b/i.test(command);
+    if (usesNodeRuntimeInShellLine) {
+      const env = await sandbox.checkEnvironment('node');
+      if (!env.available) {
+        const cfg = await getAgentExperienceConfig();
+        const hint = [env.error, env.installHint, env.downloadUrl].filter(Boolean).join('\n');
+        const plan = buildWindowsNodeInstallHint(cfg.windowsRuntimeInstallStrategy);
+        return {
+          success: false,
+          exitCode: -1,
+          stdout: '',
+          stderr: '',
+          duration: 0,
+          error: `Node.js 运行时不可用，无法执行命令行中的 Node 相关指令`,
+          errorDetails: {
+            code: 'NODE_RUNTIME_NOT_AVAILABLE',
+            message: [`命令包含 node/npm/pnpm/npx/yarn，但运行环境未检测到 Node.js。`, hint || '', plan].filter(Boolean).join('\n').trim(),
+          },
+        };
+      }
+    }
+
     // 显式 shell（确定性最高）：不做 fallback，只按指定执行
     // 对于 shell 模式，直接传递原始命令（command），不使用 normalizedForParsing
     // 因为 normalizedForParsing 会去掉引号，但 shell 需要完整的命令行语法
-    if (isWindows && shellMode === 'cmd') {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShellExecutorAdapter.ts:cmd-mode',message:'CMD mode input',data:{rawCommand:command,commandLength:command.length,hasEscapedQuotes:command.includes('\\"'),hasNormalQuotes:command.includes('"'),firstChars:command.substring(0,50),lastChars:command.substring(command.length-50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,D'})}).catch(()=>{});
-      // #endregion
+    if (isWindows && effectiveShell === 'cmd') {
       const r = await sandbox.execute({
         command: 'cmd.exe',
         args: ['/d', '/s', '/c', command],
@@ -218,9 +300,6 @@ export class ShellExecutorAdapter implements ToolAdapter {
         startTime: Date.now(),
         conversationId: invocation.conversationId,
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShellExecutorAdapter.ts:cmd-result',message:'CMD execution result',data:{success:r.success,exitCode:r.exitCode,stderr:r.stderr?.substring(0,200),stdout:r.stdout?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C,E'})}).catch(()=>{});
-      // #endregion
       return {
         success: r.success,
         exitCode: r.exitCode,
@@ -228,10 +307,10 @@ export class ShellExecutorAdapter implements ToolAdapter {
         stderr: r.stderr,
         duration: r.duration,
         error: r.error,
-        note: '已按 shell=cmd 执行。',
+        note: [autoNote, '已按 shell=cmd 执行。'].filter(Boolean).join('\n'),
       };
     }
-    if (isWindows && (shellMode === 'powershell' || shellMode === 'pwsh')) {
+    if (isWindows && effectiveShell === 'powershell') {
       const r = await sandbox.execute({
         command: 'powershell.exe',
         args: ['-NoProfile', '-Command', command],
@@ -249,11 +328,11 @@ export class ShellExecutorAdapter implements ToolAdapter {
         stderr: r.stderr,
         duration: r.duration,
         error: r.error,
-        note: '已按 shell=powershell 执行。',
+        note: [autoNote, '已按 shell=powershell 执行。'].filter(Boolean).join('\n'),
       };
     }
 
-    if ((isMac || isLinux) && shellMode === 'bash') {
+    if ((isMac || isLinux) && effectiveShell === 'bash') {
       const r = await sandbox.execute(
         { command: 'bash', args: ['-lc', command], workingDir, timeoutMs },
         {
@@ -269,12 +348,12 @@ export class ShellExecutorAdapter implements ToolAdapter {
         stderr: r.stderr,
         duration: r.duration,
         error: r.error,
-        note: '已按 shell=bash 执行。',
+        note: [autoNote, '已按 shell=bash 执行。'].filter(Boolean).join('\n'),
       };
     }
 
     // 平台/执行器不匹配：明确返回错误（不做 fallback）
-    if (isWindows && shellMode === 'bash') {
+    if (isWindows && effectiveShell === 'bash') {
       return {
         success: false,
         exitCode: -1,
@@ -289,7 +368,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
         },
       };
     }
-    if ((isMac || isLinux) && (shellMode === 'cmd' || shellMode === 'powershell' || shellMode === 'pwsh')) {
+    if ((isMac || isLinux) && (effectiveShell === 'cmd' || effectiveShell === 'powershell')) {
       return {
         success: false,
         exitCode: -1,
