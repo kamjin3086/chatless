@@ -162,13 +162,13 @@ export const SKILL_LIST_FILES_TOOL: McpTool = {
 
 export const SKILL_READ_FILE_TOOL: McpTool = {
   name: 'read_file',
-  description: '读取技能内部资源文件',
+  description: '读取技能包内部资源文件（如模板、配置、示例代码）。用户工作目录的文件请用 fs__read。',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Skill ID（必填）' },
-        path: { type: 'string', description: '相对 skill 目录的文件路径（必填）' },
+        path: { type: 'string', description: '相对 skill 目录的文件路径（必填）。这是 skill 包内部路径，不支持别名。' },
         maxLines: { type: 'number', description: '最多读取行数（用于大文件）' },
       },
       required: ['id', 'path'],
@@ -178,13 +178,13 @@ export const SKILL_READ_FILE_TOOL: McpTool = {
 
 export const SKILL_WRITE_FILE_TOOL: McpTool = {
   name: 'write_file',
-  description: '写入技能内部文件',
+  description: '写入技能内部配置/模板文件（仅限 skill 包内部资源，如配置模板、示例代码）。⚠️ 注意：此工具仅用于修改 skill 包本身，不要用于写入用户文件！用户文件请使用 fs__write 并配合 @WorkDir 或绝对路径。',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Skill ID（必填）' },
-        path: { type: 'string', description: '相对 skill 目录的文件路径（必填）' },
+        path: { type: 'string', description: '相对 skill 目录的文件路径（必填）。⚠️ 这是 skill 包内部路径，不支持 @WorkDir 等别名。用户文件请用 fs__write。' },
         content: { type: 'string', description: '要写入的内容（必填）' },
       },
       required: ['id', 'path', 'content'],

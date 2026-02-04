@@ -67,9 +67,20 @@ for i, f in enumerate(os.listdir("photos")):
 
 ## 参数
 
-- command：要执行的命令
-- workingDir：工作目录（可选）
+- command：要执行的命令。**支持 @WorkDir 别名**（如 `node @WorkDir/script.js`）
+- workingDir：工作目录（可选）。支持 @WorkDir、@别名、绝对路径
 - timeout：超时毫秒（默认 30000）
+
+## @WorkDir 别名用法
+
+命令中的 `@WorkDir` 会自动替换为用户工作目录的绝对路径：
+
+```
+# 示例
+node @WorkDir/script.js
+cd @WorkDir && npm install
+python @WorkDir/tools/convert.py
+```
 
 ## shell 选择（重要）
 

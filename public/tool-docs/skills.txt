@@ -98,3 +98,28 @@ Skills 是预定义的任务模板（SKILL.md + actions），提供特定场景�
 - "保存了脚本" ≠ "任务完成"，必须执行命令并验证输出
 - 研究结果写入文件后，上下文只保留摘要
 - 每步完成后更新 todo.md 状态
+
+## ⚠️ skill__read_file / skill__write_file 工具的正确使用
+
+### 这些工具的用途
+- `skill__read_file`: 读取 **skill 包内部** 的资源文件（如模板、配置、示例代码）
+- `skill__write_file`: 修改 **skill 包本身** 的内部文件
+
+### ⚠️ 禁止的行为（会污染 skill 包！）
+- 用 `skill__write_file` 写入用户生成的文件（如文档、报告、代码输出）
+- 用 `skill__write_file` 保存任务执行结果
+
+### 正确做法
+用户文件必须使用 `fs__write`，配合以下路径写法：
+- `@WorkDir/output/result.docx` — 写入用户工作目录
+- `@WorkDir/reports/daily.md` — 写入用户工作目录的子目录
+- 绝对路径 — 写入指定位置
+
+### 示例
+```
+❌ 错误：skill__write_file({ id: "docx", path: "report.docx", content: "..." })
+   → 这会污染 docx skill 包！
+
+✅ 正确：fs__write({ path: "@WorkDir/report.docx", content: "..." })
+   → 文件写入用户工作目录
+```
