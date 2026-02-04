@@ -35,9 +35,10 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       // 列表和查询
       case 'list':
         return this.listSkills(args || {});
-      case 'use':  // 新名称
-      case 'get':  // 兼容旧名称
-        return this.getSkill(args || {});
+      case 'guide':  // 推荐名称
+      case 'use':    // 兼容旧名称
+      case 'get':    // 兼容旧名称
+        return this.getSkillGuide(args || {});
 
       // 安装和卸载
       case 'install':
@@ -141,22 +142,21 @@ export class SkillUnifiedAdapter implements ToolAdapter {
           triggers: index?.triggers || [],
         };
       }),
-      // ⚠️ 强调必须调用 skill__use 获取操作指南
       // 注意：nextStep 和 toolsReminder 会被 stripInternalFields 过滤，仅 warning 会保留
       nextStep:
         skills.length > 0
-          ? '⚠️ 【必须】调用 skill__use 获取完整操作指南后，才能正确执行技能！'
+          ? '调用 skill__guide 获取操作指南'
           : '未找到匹配技能。请直接组合 shell/fs/web 等工具完成任务。',
       warning:
         skills.length > 0
-          ? '⚠️ 重要：此列表仅含名称，不含使用方法。你必须调用 skill__use 获取操作指南后才能使用技能！'
+          ? '此列表仅含名称。调用 skill__guide 获取完整操作指南后再执行。'
           : undefined,
       toolsReminder:
-        'Skill 是任务模板。必须先用 skill__use 读取指南，再用 shell__run、fs__*、web__* 等工具执行。',
+        '调用 skill__guide 获取操作指南，指南包含所有所需信息，无需再读取其他文件。',
     };
   }
 
-  private async getSkill(args: Record<string, unknown>): Promise<unknown> {
+  private async getSkillGuide(args: Record<string, unknown>): Promise<unknown> {
     const manager = getSkillManager();
     const id = String(args.id || '').trim();
     const name = String(args.name || '').trim().toLowerCase();
@@ -196,11 +196,6 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       repoUrl: skill.repoUrl,
       installedAt: skill.installedAt,
       pathAlias,
-      fileAccessGuide: {
-        hint: '访问此 Skill 内部文件时，使用 skill__list_files 和 skill__read_file',
-        listFiles: { tool: 'skill__list_files', example: { id: skill.id } },
-        readFile: { tool: 'skill__read_file', example: { id: skill.id, path: 'README.md' } },
-      },
     };
 
     // 获取 SKILL.md 内容
@@ -230,8 +225,13 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       }
     }
 
-    result.executionGuide =
-      '阅读 content 中的指导，然后使用 shell__run、fs__*、web__* 等工具执行任务。';
+    // 执行指南：告诉 AI 如何按照 SKILL.md 完成任务
+    result.howToUse = {
+      step1: '阅读 content 中的操作指南',
+      step2: '如果指南中提到需要使用 skill 包内的模板/脚本/资源，用 skill__list_files 查看可用文件，skill__read_file 读取内容',
+      step3: '使用 shell__run、fs__* 等工具按指南执行任务',
+      note: 'content 是核心指南，其他文件按需读取',
+    };
 
     return result;
   }

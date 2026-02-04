@@ -413,16 +413,19 @@ fs__ls → 验证输出文件
 fs__read → 检查结果内容（如需要）
 \`\`\`
 
-### 技能使用（⚠️ 必须严格遵守）
+### 技能使用
 \`\`\`
-skill__list → 找到匹配技能（仅返回名称/ID）
-skill__use → 【必须】获取完整操作指南（响应内容是SKILL.md,这是该Skill的指南）
-按 SKILL.md 指南执行（通常用 shell__run + fs__*）
+skill__list → 查看可用技能（仅名称/ID）
+skill__guide → 获取操作指南（返回 SKILL.md）
+按指南执行：
+  - 如需 skill 包内的模板/脚本 → skill__list_files + skill__read_file
+  - 执行命令 → shell__run
+  - 文件操作 → fs__*
 验证结果
 \`\`\`
 
-❌ 禁止：未调用 skill__use 就尝试操作
-❌ 禁止：根据技能名称/描述猜测用法
+❌ 禁止：跳过 skill__guide 直接操作
+✅ 允许：按指南需要读取 skill 包内的其他资源文件
 
 ### 网络搜索
 \`\`\`

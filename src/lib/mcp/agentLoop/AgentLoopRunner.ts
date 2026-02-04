@@ -44,8 +44,8 @@ function getToolBudgetCost(server: string, tool: string): number {
     (srv === 'fs' && (t === 'read' || t === 'ls' || t === 'list' || t.includes('read') || t.includes('list'))) ||
     // 网络搜索/获取
     (srv === 'web' && (t === 'search' || t === 'fetch')) ||
-    // 技能查询
-    (srv === 'skill' && (t === 'list' || t === 'use' || t === 'list_files' || t === 'read_file' || t === 'check_deps')) ||
+    // 技能查询（guide 替代了 use）
+    (srv === 'skill' && (t === 'list' || t === 'guide' || t === 'use' || t === 'list_files' || t === 'read_file' || t === 'check_deps')) ||
     // 工具发现
     (srv === 'tools' && (t === 'discover' || t === 'load')) ||
     // 上下文获取
@@ -191,41 +191,45 @@ function buildGuidanceSystemMessage(batch: BufferedToolResult[]): LlmMessage | n
     
     // ==================== Skill 相关 ====================
     
-    // skill__list 后的引导 - 强调必须调用 skill__use
+    // skill__list 后的引导 - 强调必须调用 skill__guide
     if (srv === 'skill' && tool === 'list') {
       const skills = Array.isArray(res?.skills) ? res.skills : [];
       if (skills.length > 0) {
         const skillItems = skills.slice(0, 3).map((s: any) => ({ id: s.id, name: s.name }));
         const skillDesc = skillItems.map((s: any) => `${s.name}(id:${s.id})`).join('、');
         hints.push(
-          `[Skill] ⚠️ CRITICAL: Found ${skills.length} skill(s): ${skillDesc}${skills.length > 3 ? '...' : ''}.\n` +
-          `YOU MUST call skill__use with the skill id BEFORE doing anything else!\n` +
-          `The skill__list only returns names/ids - it does NOT contain usage instructions.\n` +
-          `Without skill__use, you don't know HOW to use the skill correctly.\n` +
-          `Next action: skill__use({ id: "${skillItems[0]?.id || 'xxx'}" })\n` +
-          `Tell user: "我找到了相关技能，正在获取使用指南..."`
+          `[Skill] Found ${skills.length} skill(s): ${skillDesc}${skills.length > 3 ? '...' : ''}.\n` +
+          `Next: call skill__guide({ id: "${skillItems[0]?.id || 'xxx'}" }) to get the operation guide.\n` +
+          `The guide contains everything you need - no need to read README or other files after that.\n` +
+          `Tell user: "我找到了相关技能，正在获取操作指南..."`
         );
       } else {
         hints.push(
-          `[Skill] No skills found for this task. Tell user naturally and suggest:\n` +
+          `[Skill] No skills found. Tell user and suggest:\n` +
           `1. Install a relevant skill, OR\n` +
           `2. Use basic tools (shell__run, fs__*, web__*) directly.`
         );
       }
     }
     
-    // skill__use 后的引导
-    if (srv === 'skill' && (tool === 'use' || tool === 'get')) {
+    // skill__guide 后的引导（也兼容旧名 use/get）
+    if (srv === 'skill' && (tool === 'guide' || tool === 'use' || tool === 'get')) {
       const content = res?.content || res?.instructions || '';
-      const hasScript = String(content).includes('.py') || String(content).includes('.js') || String(content).includes('shell');
+      const hasScript = String(content).includes('.py') || String(content).includes('.js') || String(content).includes('.sh');
+      const hasTemplate = String(content).includes('template') || String(content).includes('模板');
       
-      hints.push(
-        `[Skill] Guide loaded. ` +
-        (hasScript 
-          ? `This skill uses scripts. Read them with skill__read_file if needed, then execute with shell__run.`
-          : `Follow the SKILL.md instructions step by step.`) +
-        ` Output to @WorkDir. Tell user: "我正在按照技能指南操作..."`
-      );
+      let guideHint = `[Skill] ✅ Guide loaded. Now follow the SKILL.md instructions:\n`;
+      guideHint += `1. Read the 'content' field carefully - it's the complete guide\n`;
+      
+      if (hasScript || hasTemplate) {
+        guideHint += `2. If the guide mentions scripts/templates in the skill package, use skill__list_files and skill__read_file to access them\n`;
+      }
+      
+      guideHint += `3. Execute tasks using shell__run, fs__*, etc. as described in the guide\n`;
+      guideHint += `4. Output files to @WorkDir\n`;
+      guideHint += `Tell user: "我已获取操作指南，正在按步骤执行..."`;
+      
+      hints.push(guideHint);
     }
     
     // skill__check_deps 后的引导

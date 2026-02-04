@@ -10,8 +10,8 @@
  *
  * ## 工具列表
  *
- * - skill__list: 列出技能（支持任务模式和管理模式）
- * - skill__use: 使用技能 - 获取完整指导（含 SKILL.md 内容）
+ * - skill__list: 列出技能（仅返回名称/ID，不含使用方法）
+ * - skill__guide: 获取技能操作指南（包含完整 SKILL.md，调用后根据需要再读取其他文件）
  * - skill__install: 安装技能（从 Git 或 ZIP）
  * - skill__uninstall: 卸载技能
  * - skill__enable: 启用技能
@@ -49,21 +49,15 @@ export const SKILL_LIST_TOOL: McpTool = {
   },
 };
 
-export const SKILL_USE_TOOL: McpTool = {
-  name: 'use',
-  description: '【必须】获取技能的完整操作指南。skill__list 只返回名称，必须调用此工具才能知道如何正确使用技能。',
+export const SKILL_GUIDE_TOOL: McpTool = {
+  name: 'guide',
+  description: '获取技能的完整操作指南（SKILL.md）。返回内容包含：依赖检查、执行步骤、示例命令。调用后根据需要再读取其他文件。',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Skill ID（从 skill__list 获取）' },
         name: { type: 'string', description: 'Skill 名称（模糊匹配）' },
-        includeContent: {
-          type: 'boolean',
-          description: '是否包含 SKILL.md 完整内容（默认 true）',
-        },
-        startLine: { type: 'number', description: '起始行号（用于分段读取大文件）' },
-        endLine: { type: 'number', description: '结束行号' },
       },
       required: [],
     },
@@ -218,7 +212,7 @@ export const SKILL_CHECK_DEPS_TOOL: McpTool = {
 
 export const SKILL_UNIFIED_TOOLS: McpTool[] = [
   SKILL_LIST_TOOL,
-  SKILL_USE_TOOL,
+  SKILL_GUIDE_TOOL,
   SKILL_INSTALL_TOOL,
   SKILL_UNINSTALL_TOOL,
   SKILL_ENABLE_TOOL,
@@ -231,4 +225,5 @@ export const SKILL_UNIFIED_TOOLS: McpTool[] = [
 ];
 
 // 兼容性导出（保留旧名称的别名）
-export const SKILL_GET_TOOL = SKILL_USE_TOOL;
+export const SKILL_USE_TOOL = SKILL_GUIDE_TOOL;
+export const SKILL_GET_TOOL = SKILL_GUIDE_TOOL;
