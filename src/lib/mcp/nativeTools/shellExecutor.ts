@@ -10,9 +10,7 @@ export const SHELL_EXECUTOR_SERVER_NAME = 'shell';
 
 export const SHELL_EXECUTE_TOOL: McpTool = {
   name: 'run',
-  description:
-    '执行命令（bash/powershell/python/node 等）。返回 stdout、stderr、exit code。\n' +
-    '显式指定 shell：Windows 用 cmd/powershell，macOS/Linux 用 bash（避免歧义）。',
+  description: '执行命令，返回 stdout/stderr/exitCode',
   input_schema: {
     schema: {
       type: 'object',

@@ -6,9 +6,12 @@ export const SKILLS_FS_SERVER_NAME = 'skills_fs';
 export const skillFileTools: SkillToolDefinition[] = [
   {
     name: 'list_skill_resources',
-    description: '列出指定技能包内的可用资源文件（不含 SKILL.md）。用于查找示例代码、模板等。',
+    description:
+      '【Skill 专属】列出指定技能包内的可用资源文件（不含 SKILL.md）。\n' +
+      '**重要**：这是查看 Skill 目录文件的唯一方式，不要使用 fs__list_directory。\n' +
+      '用于查找 skill 内的示例代码、模板、配置文件等。',
     parameters: {
-      skillId: { type: 'string', description: '技能 ID', required: true },
+      skillId: { type: 'string', description: '技能 ID（从 system__get_skill 返回的 id 字段获取）', required: true },
       max: { type: 'number', description: '最多返回多少个文件（可选，默认50）' },
     },
     handler: async (params) => {
@@ -19,10 +22,13 @@ export const skillFileTools: SkillToolDefinition[] = [
   },
   {
     name: 'read_skill_resource',
-    description: '读取指定技能包内的资源文件内容（只允许相对 skill 目录的路径）。',
+    description:
+      '【Skill 专属】读取指定技能包内的资源文件内容。\n' +
+      '**重要**：这是读取 Skill 内部文件的唯一方式，不要使用 fs__read_file。\n' +
+      '只接受相对 skill 目录的路径，系统会自动解析到正确的绝对路径。',
     parameters: {
-      skillId: { type: 'string', description: '技能 ID', required: true },
-      resourcePath: { type: 'string', description: '相对 skill 目录的资源路径，例如 docx-js.md', required: true },
+      skillId: { type: 'string', description: '技能 ID（从 system__get_skill 返回的 id 字段获取）', required: true },
+      resourcePath: { type: 'string', description: '相对 skill 目录的资源路径，例如 docx-js.md、templates/example.txt', required: true },
       maxLines: { type: 'number', description: '最多读取行数（可选，用于大文件）' },
     },
     handler: async (params) => {
@@ -35,9 +41,11 @@ export const skillFileTools: SkillToolDefinition[] = [
   {
     name: 'write_skill_file',
     description:
-      '在技能目录内创建/修改文件（用于迭代改进 skill，例如修复脚本/补充文档）。只允许相对 skill 目录的路径。',
+      '【Skill 专属】在技能目录内创建/修改文件。\n' +
+      '**重要**：这是写入 Skill 内部文件的唯一方式，不要使用 fs__write_file。\n' +
+      '用于迭代改进 skill，例如修复脚本、补充文档。只接受相对 skill 目录的路径。',
     parameters: {
-      skillId: { type: 'string', description: '技能 ID', required: true },
+      skillId: { type: 'string', description: '技能 ID（从 system__get_skill 返回的 id 字段获取）', required: true },
       filePath: { type: 'string', description: '相对 skill 目录的文件路径，例如 scripts/build.ts', required: true },
       content: { type: 'string', description: '要写入的内容', required: true },
     },

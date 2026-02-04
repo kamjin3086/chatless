@@ -83,7 +83,7 @@ export class StreamOrchestrator {
       onComplete: async () => {
         try {
           // 在完成前尝试冲刷抑制阀缓冲区中的尾部可见文本
-          // ✅ 稳定版：优先冲刷共享状态机（toolInstructionSuppressor）的 guardWindow 尾巴，避免短文本尾部“卡住不显示”
+          // ✅ 稳定版：优先冲刷共享状态机（toolInstructionSuppressor）的 guardWindow 尾巴，避免短文本尾部"卡住不显示"
           try {
             const store = useChatStore.getState();
             const anyCtx = this.context as any;
@@ -178,7 +178,7 @@ export class StreamOrchestrator {
             ? Math.floor((Date.now() - this.context.thinkingStartTime) / 1000)
             : undefined;
 
-          // 检测是否“没有任何有效输出”的空气泡
+          // 检测是否"没有任何有效输出"的空气泡
           try {
             const conv = store.conversations.find(c => c.id === this.context.conversationId);
             const msg: any = conv?.messages.find(m => m.id === this.context.messageId);
@@ -213,7 +213,7 @@ export class StreamOrchestrator {
               if (!contentToPersist || String(contentToPersist).trim().length === 0) {
                 contentToPersist = (error as any)?.userMessage || (error?.message || '请求失败');
               }
-              // 关键修复：错误分支也要清理工具指令，避免在卡片失败时把原始指令“回灌”到正文
+              // 关键修复：错误分支也要清理工具指令，避免在卡片失败时把原始指令"回灌"到正文
               // display 版本会额外清理流式输出的半截标签尾巴（如 "<use_mcp_tool"）
               try { contentToPersist = cleanToolCallInstructionsForDisplay(String(contentToPersist)); } catch { /* noop */ }
               void store.updateMessage(this.context.messageId, {
@@ -294,7 +294,7 @@ export class StreamOrchestrator {
     }
     this.didHandleComplete = true;
 
-    // 注意：useChatStore.getState() 返回的是“快照对象”；
+    // 注意：useChatStore.getState() 返回的是"快照对象"；
     // handleComplete 内部会 dispatchMessageAction（会更新 store），因此不能长期复用同一个快照读取 segments。
     const store = useChatStore.getState();
     
@@ -310,7 +310,7 @@ export class StreamOrchestrator {
     let contentToPersist = hadCardMarker ? (msg?.content || this.context.content) : this.context.content;
 
 
-    // Native-only + Event-only：不再允许“收尾阶段从文本中兜底解析并执行工具”。
+    // Native-only + Event-only：不再允许"收尾阶段从文本中兜底解析并执行工具"。
     // 工具执行只能由结构化 tool_call 事件触发（ToolCallEventHandler）。
 
     // 最终清理：移除所有工具调用指令（display 版本会额外清理半截尾巴）
@@ -362,42 +362,56 @@ export class StreamOrchestrator {
     // 标题生成（通用路径）：在任意一次助手首次完成后尝试生成
     // MCP 递归链已在 Orchestrator 外部（ToolCallOrchestrator）增加一次调用，此处作为通用兜底；
     // 由于包含 isDefaultTitle 判定，不会重复生成。
-    try {
-      const st = useChatStore.getState();
-      const conv = st.conversations.find(c => c.id === this.context.conversationId);
-      if (conv) {
-        const {
-          shouldGenerateTitleAfterAssistantComplete,
-          extractFirstUserMessageSeed,
-          isDefaultTitle,
-        } = await import('@/lib/chat/TitleGenerator');
-        const { generateTitle } = await import('@/lib/chat/TitleService');
-        if (shouldGenerateTitleAfterAssistantComplete(conv)) {
-          // 若本条消息仍处于工具链路中（存在 running/pending_auth 工具卡片），则延后标题生成：
-          // - 避免与主模型并发抢占资源（性能抖动）
-          // - 避免在工具未闭环时过早触发额外请求（用户观感“抢跑”）
-          try {
-            const msgNow: any = conv.messages?.find((m: any) => m.id === this.context.messageId);
-            const segsNow = Array.isArray(msgNow?.segments) ? msgNow.segments : [];
-            const toolCardsNow = segsNow.filter((s: any) => s?.kind === 'toolCard');
-            const hasBlockingTool = toolCardsNow.some((t: any) => t?.status === 'running' || t?.status === 'pending_auth');
-            if (hasBlockingTool) {
-
-              return;
-            }
-          } catch { /* noop */ }
-          const seed = extractFirstUserMessageSeed(conv);
-          if (seed && seed.trim()) {
-            const gen = await generateTitle(this.config.provider, this.config.model, seed, { maxLength: 24, language: 'zh' });
-            const st2 = useChatStore.getState();
-            const conv2 = st2.conversations.find(c => c.id === this.context.conversationId);
-            if (conv2 && isDefaultTitle(conv2.title) && gen && gen.trim()) {
-              void st2.renameConversation(String(this.context.conversationId), gen.trim());
+    // 
+    // 重要：AgentLoop 模式下（skipTitleGeneration=true），跳过此处的标题生成，
+    // 由 AgentLoopRunner 在整个循环结束后统一处理，避免与主模型并发抢占资源。
+    if (this.config.skipTitleGeneration) {
+      console.debug('[StreamOrchestrator] 跳过标题生成（AgentLoop 模式）');
+    } else {
+      try {
+        const st = useChatStore.getState();
+        const convForTitle = st.conversations.find(c => c.id === this.context.conversationId);
+        if (convForTitle) {
+          const {
+            shouldGenerateTitleAfterAssistantComplete,
+            extractFirstUserMessageSeed,
+            isDefaultTitle,
+          } = await import('@/lib/chat/TitleGenerator');
+          const { generateTitle } = await import('@/lib/chat/TitleService');
+          if (shouldGenerateTitleAfterAssistantComplete(convForTitle)) {
+            // 若本条消息仍处于工具链路中（存在 running/pending_auth 工具卡片），则延后标题生成：
+            // - 避免与主模型并发抢占资源（性能抖动）
+            // - 避免在工具未闭环时过早触发额外请求（用户观感"抢跑"）
+            try {
+              const msgNow: any = convForTitle.messages?.find((m: any) => m.id === this.context.messageId);
+              const segsNow = Array.isArray(msgNow?.segments) ? msgNow.segments : [];
+              const toolCardsNow = segsNow.filter((s: any) => s?.kind === 'toolCard');
+              const hasBlockingTool = toolCardsNow.some((t: any) => t?.status === 'running' || t?.status === 'pending_auth');
+              if (hasBlockingTool) {
+                return;
+              }
+            } catch { /* noop */ }
+            const seed = extractFirstUserMessageSeed(convForTitle);
+            if (seed && seed.trim()) {
+              console.debug('[StreamOrchestrator] 开始生成标题, seed:', seed.slice(0, 50));
+              const gen = await generateTitle(this.config.provider, this.config.model, seed, { maxLength: 24, language: 'zh' });
+              console.debug('[StreamOrchestrator] 标题生成结果:', gen);
+              const st2 = useChatStore.getState();
+              const convForTitle2 = st2.conversations.find(c => c.id === this.context.conversationId);
+              if (convForTitle2 && isDefaultTitle(convForTitle2.title) && gen && gen.trim()) {
+                console.debug('[StreamOrchestrator] 更新对话标题:', gen.trim());
+                void st2.renameConversation(String(this.context.conversationId), gen.trim());
+              } else {
+                console.debug('[StreamOrchestrator] 跳过标题更新, 原因:', 
+                  !convForTitle2 ? '对话不存在' : 
+                  !isDefaultTitle(convForTitle2.title) ? `标题已非默认(${convForTitle2.title})` : 
+                  '生成结果为空');
+              }
             }
           }
         }
-      }
-    } catch { /* ignore title generation errors */ }
+      } catch { /* ignore title generation errors */ }
+    }
 
     // 🎯 输出完整的响应日志（在所有处理完成后）
     try {

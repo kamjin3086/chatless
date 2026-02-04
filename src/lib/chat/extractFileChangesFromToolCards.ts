@@ -47,14 +47,15 @@ function classifyTool(tool: string): FileChangeOp | null {
   if (t.includes("list")) return null;
   if (t.includes("stat")) return null;
   if (t.includes("exists")) return null;
+  if (t === "ls") return null; // 新的简化名称
 
-  if (t.includes("write")) return "write";
-  if (t.includes("create_directory") || t.includes("mkdir")) return "create";
-  if (t.includes("delete") || t.includes("remove") || t.includes("unlink")) return "delete";
-  if (t.includes("rename")) return "rename";
+  if (t.includes("write") || t === "write") return "write";
+  if (t.includes("create_directory") || t.includes("mkdir") || t === "mkdir") return "create";
+  if (t.includes("delete") || t.includes("remove") || t.includes("unlink") || t === "rm") return "delete";
+  if (t.includes("rename") || t === "mv") return "rename"; // mv 可用于重命名或移动
   if (t.includes("move")) return "move";
-  if (t.includes("copy")) return "copy";
-  return "unknown";
+  if (t.includes("copy") || t === "cp") return "copy";
+  return null; // 改为返回 null 而不是 "unknown"，避免显示无意义的操作
 }
 
 function pickPathsFromArgs(args: Record<string, unknown> | undefined): string[] {
@@ -123,18 +124,59 @@ export function extractFileChangesFromToolCards(input: Array<any>): FileChange[]
   for (const seg of input || []) {
     if (!seg || seg.kind !== "toolCard") continue;
     const server = String(seg.server || "").toLowerCase();
-    if (server !== "filesystem") continue;
+    const tool = String(seg.tool || "").toLowerCase();
+    
+    // 支持多种 server 名称：fs, filesystem, skill（用于 skill 内的文件操作）
+    const isFileSystemServer = server === "fs" || server === "filesystem";
+    const isSkillFileOp = server === "skill" && (tool === "write_file" || tool === "read_file");
+    const isShellWithFileOutput = server === "shell" || server === "shell_executor";
+    
+    if (isFileSystemServer) {
+      const op = classifyTool(tool);
+      if (!op) continue;
 
-    const op = classifyTool(String(seg.tool || ""));
-    if (!op) continue;
+      const paths = [
+        ...pickPathsFromResultPreview(seg.resultPreview),
+        ...pickPathsFromArgs(seg.args),
+      ];
 
-    const paths = [
-      ...pickPathsFromResultPreview(seg.resultPreview),
-      ...pickPathsFromArgs(seg.args),
-    ];
+      for (const p of paths) {
+        changes.push({ op, path: p });
+      }
+    } else if (isSkillFileOp) {
+      // skill 的文件操作也记录
+      const op: FileChangeOp = tool === "write_file" ? "write" : "unknown";
+      if (op === "unknown") continue;
+      
+      const paths = [
+        ...pickPathsFromResultPreview(seg.resultPreview),
+        ...pickPathsFromArgs(seg.args),
+      ];
 
-    for (const p of paths) {
-      changes.push({ op, path: p });
+      for (const p of paths) {
+        changes.push({ op, path: p });
+      }
+    } else if (isShellWithFileOutput && seg.status === 'success') {
+      // shell 执行成功后，尝试从结果中提取创建的文件路径
+      // 只有当命令看起来是创建文件的操作时才提取
+      const cmd = String(seg.args?.command || '').toLowerCase();
+      const isCreatingFile = 
+        cmd.includes('pandoc') || 
+        cmd.includes('convert') || 
+        cmd.includes('wkhtmlto') ||
+        cmd.includes(' > ') ||
+        cmd.includes(' >> ');
+      
+      if (isCreatingFile) {
+        const paths = pickPathsFromResultPreview(seg.resultPreview);
+        for (const p of paths) {
+          // 过滤掉明显不是文件输出的路径
+          if (p.endsWith('/') || p.endsWith('\\')) continue;
+          // 只保留有文件扩展名的路径
+          if (!/\.\w{1,10}$/.test(p)) continue;
+          changes.push({ op: "create", path: p });
+        }
+      }
     }
   }
   return uniqByPath(changes);

@@ -1,15 +1,15 @@
 /**
  * SystemToolAdapter - 系统内部功能的 Tool Adapter
  *
- * 职责：处理 system__* 命名的工具调用，对接 promptStore、SkillManager 等内部模块。
+ * 职责：处理 system__* 命名的工具调用，仅对接 promptStore（提示词管理）。
  * 命名约定：server = "system"
+ *
+ * 注意：Skill 管理已迁移到 SkillUnifiedAdapter (server = "skill")
  */
 
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 import { usePromptStore } from '@/store/promptStore';
-import { useSkillStore } from '@/store/skillStore';
-import { getSkillManager } from '@/lib/skills/SkillManager';
 import type { PromptItem } from '@/types/prompt';
 
 const SYSTEM_SERVER = 'system';
@@ -40,24 +40,6 @@ export class SystemToolAdapter implements ToolAdapter {
       case 'optimize_prompt':
         return this.optimizePrompt(args || {});
 
-      // === Skill Management ===
-      case 'list_skills':
-        return this.listSkills(args || {});
-      case 'get_skill':
-        return this.getSkill(args || {});
-      case 'install_skill_from_git':
-        return this.installSkillFromGit(args || {});
-      case 'install_skill_from_zip':
-        return this.installSkillFromZip(args || {});
-      case 'uninstall_skill':
-        return this.uninstallSkill(args || {});
-      case 'enable_skill':
-        return this.enableSkill(args || {});
-      case 'disable_skill':
-        return this.disableSkill(args || {});
-      case 'update_skill':
-        return this.updateSkill(args || {});
-
       default:
         return { error: `Unknown system tool: ${tool}` };
     }
@@ -72,7 +54,7 @@ export class SystemToolAdapter implements ToolAdapter {
     let prompts = [...store.prompts];
 
     // 搜索过滤
-    const query = String(args.query || '').trim().toLowerCase();
+    const query = String(args.query ?? '').trim().toLowerCase();
     if (query) {
       prompts = prompts.filter((p) => {
         const name = (p.name || '').toLowerCase();
@@ -84,7 +66,7 @@ export class SystemToolAdapter implements ToolAdapter {
     }
 
     // 按标签过滤
-    const tag = String(args.tag || '').trim().toLowerCase();
+    const tag = String(args.tag ?? '').trim().toLowerCase();
     if (tag) {
       prompts = prompts.filter((p) => (p.tags || []).some((t) => t.toLowerCase() === tag));
     }
@@ -116,8 +98,8 @@ export class SystemToolAdapter implements ToolAdapter {
 
   private getPrompt(args: Record<string, unknown>): unknown {
     const store = usePromptStore.getState();
-    const id = String(args.id || '').trim();
-    const name = String(args.name || '').trim().toLowerCase();
+    const id = String(args.id ?? '').trim();
+    const name = String(args.name ?? '').trim().toLowerCase();
 
     let prompt: PromptItem | undefined;
 
@@ -151,8 +133,8 @@ export class SystemToolAdapter implements ToolAdapter {
 
   private createPrompt(args: Record<string, unknown>): unknown {
     const store = usePromptStore.getState();
-    const name = String(args.name || '').trim();
-    const content = String(args.content || '').trim();
+    const name = String(args.name ?? '').trim();
+    const content = String(args.content ?? '').trim();
 
     if (!name || !content) {
       return { error: 'name and content are required' };
@@ -161,7 +143,7 @@ export class SystemToolAdapter implements ToolAdapter {
     const id = store.createPrompt({
       name,
       content,
-      description: String(args.description || ''),
+      description: String(args.description ?? ''),
       tags: Array.isArray(args.tags) ? args.tags.map(String) : [],
       shortcuts: Array.isArray(args.shortcuts) ? args.shortcuts.map(String) : [],
       favorite: args.favorite === true,
@@ -175,7 +157,7 @@ export class SystemToolAdapter implements ToolAdapter {
 
   private updatePrompt(args: Record<string, unknown>): unknown {
     const store = usePromptStore.getState();
-    const id = String(args.id || '').trim();
+    const id = String(args.id ?? '').trim();
 
     if (!id) {
       return { error: 'id is required' };
@@ -201,7 +183,7 @@ export class SystemToolAdapter implements ToolAdapter {
 
   private deletePrompt(args: Record<string, unknown>): unknown {
     const store = usePromptStore.getState();
-    const id = String(args.id || '').trim();
+    const id = String(args.id ?? '').trim();
     const confirm = args.confirm === true;
 
     if (!id) {
@@ -224,8 +206,8 @@ export class SystemToolAdapter implements ToolAdapter {
 
   private optimizePrompt(args: Record<string, unknown>): unknown {
     const store = usePromptStore.getState();
-    const id = String(args.id || '').trim();
-    const goal = String(args.optimization_goal || '').trim();
+    const id = String(args.id ?? '').trim();
+    const goal = String(args.optimization_goal ?? '').trim();
 
     if (!id) {
       return { error: 'id is required' };
@@ -245,206 +227,5 @@ export class SystemToolAdapter implements ToolAdapter {
       optimizationGoal: goal || '(未指定)',
       note: '优化建议已生成。如需应用，请调用 system__update_prompt 更新 content 字段。',
     };
-  }
-
-  // ========================================
-  // Skill Management Implementation
-  // ========================================
-
-  private listSkills(args: Record<string, unknown>): unknown {
-    const store = useSkillStore.getState();
-    let skills = [...store.skills];
-
-    // 搜索过滤
-    const query = String(args.query || '').trim().toLowerCase();
-    if (query) {
-      skills = skills.filter((s) => {
-        const name = (s.name || '').toLowerCase();
-        const desc = (s.description || '').toLowerCase();
-        const tags = (s.tags || []).join(' ').toLowerCase();
-        return name.includes(query) || desc.includes(query) || tags.includes(query);
-      });
-    }
-
-    // 按状态过滤
-    const status = String(args.status || '').trim();
-    if (status && status !== 'all') {
-      skills = skills.filter((s) => s.status === status);
-    }
-
-    // 按来源过滤
-    const source = String(args.source || '').trim();
-    if (source && source !== 'all') {
-      skills = skills.filter((s) => s.source === source);
-    }
-
-    // 返回精简数据
-    return {
-      total: skills.length,
-      skills: skills.map((s) => ({
-        id: s.id,
-        name: s.name,
-        description: (s.description || '').slice(0, 100),
-        status: s.status,
-        source: s.source,
-        enabled: s.enabled,
-        category: s.category,
-      })),
-    };
-  }
-
-  private async getSkill(args: Record<string, unknown>): Promise<unknown> {
-    const manager = getSkillManager();
-    const id = String(args.id || '').trim();
-    const name = String(args.name || '').trim().toLowerCase();
-
-    let skill = null;
-
-    if (id) {
-      skill = await manager.getSkill(id);
-    }
-    if (!skill && name) {
-      const store = useSkillStore.getState();
-      const found = store.skills.find((s) => (s.name || '').toLowerCase() === name);
-      if (found) {
-        skill = await manager.getSkill(found.id);
-      }
-    }
-
-    if (!skill) {
-      return { error: 'Skill not found', id, name };
-    }
-
-    return {
-      id: skill.id,
-      name: skill.name,
-      description: skill.description,
-      version: skill.version,
-      author: skill.author,
-      status: skill.status,
-      source: skill.source,
-      enabled: skill.enabled,
-      category: skill.category,
-      tags: skill.tags,
-      path: skill.path,
-      repoUrl: skill.repoUrl,
-      installedAt: skill.installedAt,
-    };
-  }
-
-  private async installSkillFromGit(args: Record<string, unknown>): Promise<unknown> {
-    const manager = getSkillManager();
-    const repoUrl = String(args.repoUrl || '').trim();
-
-    if (!repoUrl) {
-      return { error: 'repoUrl is required' };
-    }
-
-    try {
-      const path = await manager.cloneFromGit(repoUrl);
-      return { success: true, path, message: `Skill installed from ${repoUrl}` };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
-    }
-  }
-
-  private async installSkillFromZip(args: Record<string, unknown>): Promise<unknown> {
-    const manager = getSkillManager();
-    const filePath = String(args.filePath || '').trim();
-
-    if (!filePath) {
-      return { error: 'filePath is required' };
-    }
-
-    try {
-      const path = await manager.importFromZip(filePath);
-      return { success: true, path, message: `Skill installed from ZIP` };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
-    }
-  }
-
-  private async uninstallSkill(args: Record<string, unknown>): Promise<unknown> {
-    const manager = getSkillManager();
-    const id = String(args.id || '').trim();
-
-    if (!id) {
-      return { error: 'id is required' };
-    }
-
-    try {
-      const success = await manager.uninstallSkill(id);
-      if (success) {
-        return { success: true, id, message: `Skill "${id}" uninstalled` };
-      } else {
-        return { error: 'Failed to uninstall skill', id };
-      }
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
-    }
-  }
-
-  private enableSkill(args: Record<string, unknown>): unknown {
-    const manager = getSkillManager();
-    const id = String(args.id || '').trim();
-
-    if (!id) {
-      return { error: 'id is required' };
-    }
-
-    const store = useSkillStore.getState();
-    const skill = store.skills.find((s) => s.id === id);
-    if (!skill) {
-      return { error: 'Skill not found', id };
-    }
-
-    manager.enableSkill(id);
-    return { success: true, id, message: `Skill "${skill.name}" enabled` };
-  }
-
-  private disableSkill(args: Record<string, unknown>): unknown {
-    const manager = getSkillManager();
-    const id = String(args.id || '').trim();
-
-    if (!id) {
-      return { error: 'id is required' };
-    }
-
-    const store = useSkillStore.getState();
-    const skill = store.skills.find((s) => s.id === id);
-    if (!skill) {
-      return { error: 'Skill not found', id };
-    }
-
-    manager.disableSkill(id);
-    return { success: true, id, message: `Skill "${skill.name}" disabled` };
-  }
-
-  private async updateSkill(args: Record<string, unknown>): Promise<unknown> {
-    const manager = getSkillManager();
-    const id = String(args.id || '').trim();
-
-    if (!id) {
-      return { error: 'id is required' };
-    }
-
-    const store = useSkillStore.getState();
-    const skill = store.skills.find((s) => s.id === id);
-    if (!skill) {
-      return { error: 'Skill not found', id };
-    }
-
-    // 检查是否为 Git 安装的技能
-    const isGit = skill.path ? await manager.isGitSkillDirectory(skill.path) : false;
-
-    if (isGit) {
-      const result = await manager.updateSkillFromGit(id);
-      return result;
-    } else {
-      return {
-        error: 'Skill is not git-installed. Use install_skill_from_zip to reinstall.',
-        id,
-      };
-    }
   }
 }

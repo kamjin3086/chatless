@@ -1,15 +1,25 @@
 /**
  * 技能工具定义
- * 
+ *
+ * @deprecated 此文件已废弃。Skill 相关工具已统一迁移到：
+ * - 工具定义：src/lib/mcp/nativeTools/skillUnifiedTools.ts
+ * - 适配器：src/lib/mcp/pipeline/adapters/SkillUnifiedAdapter.ts
+ *
+ * 新的 skill 工具组使用 server = "skill"，工具命名为 skill__list, skill__use 等。
+ *
+ * 保留此文件仅为兼容可能的外部引用。
+ *
+ * ---
+ *
  * 供 AI 调用的技能相关工具，实现渐进式披露的关键
- * 
+ *
  * ## 设计理念
- * 
+ *
  * 渐进式披露（Progressive Disclosure）：
  * 1. Layer 1：技能索引 - 仅包含名称和简短描述，约 100 tokens/skill
  * 2. Layer 2：技能指令 - 完整的 SKILL.md 内容，约 500-2000 tokens
  * 3. Layer 3：执行资源 - 脚本/工具/大型文档，按需加载
- * 
+ *
  * 通过这种方式，可以节省约 70-75% 的 Token 消耗
  */
 
@@ -54,27 +64,13 @@ export interface SkillToolDefinition {
  */
 async function listAvailableSkills(): Promise<{
   skills: SkillIndexEntry[];
-  nextStep: string;
-  toolsReminder: string;
 }> {
   const manager = getSkillManager();
   const skills = manager.getSkillIndex();
   
-  // 关键提醒：Skills 只是高级抽象，Tools 才是真正的能力
-  const toolsReminder = `【重要提醒】Skills 只是高级任务模板。如果没有匹配的 Skill：
-→ 不要反复调用 list_available_skills！
-→ 转向组合使用已注册的 Tools：
-  • web__search / web__fetch / web__download
-  • fs__* (read/write/ls/mkdir/rm/mv)
-  • shell__run
-→ 示例：搜索图片 = web__search + web__download + fs__ls`;
-  
+  // 只返回技能列表数据，引导信息通过 AgentLoopRunner 的 system 消息注入
   return {
     skills,
-    nextStep: skills.length > 0
-      ? `✅ 找到 ${skills.length} 个技能。如果匹配任务 → 用 Skill；不匹配 → 组合 Tools 完成。`
-      : '❌ 未找到技能。请直接组合 web/fs/shell 等 Tools 完成任务。',
-    toolsReminder,
   };
 }
 
@@ -132,22 +128,13 @@ async function getSkillInstructions(params: { skillId: string; startLine?: numbe
 
   const skillPath = skill!.path || '(unknown)';
 
-  const guidance =
-    actionsCount === 0
-      ? {
-          mode: 'instruction-only',
-          skillPath,
-          resourceFiles,
-          hint:
-            '该 skill 没有预定义 actions。请按 SKILL.md 的指引自行拆解为 filesystem/shell_executor 步骤；产物/脚本默认写到 @WorkDir，不要写入 skill 安装目录。',
-        }
-      : {
-          mode: 'action-based',
-          skillPath,
-          resourceFiles,
-          actionCount: actionsCount,
-          hint: '推荐流程：skills__list_skill_actions → skills__run_skill_action（不要猜 actionId）。',
-        };
+  // 元数据：供 AI 了解如何访问技能资源（不含引导信息，引导通过 system 消息注入）
+  const meta = {
+    mode: actionsCount === 0 ? 'instruction-only' : 'action-based',
+    skillPath,
+    resourceFiles,
+    actionCount: actionsCount,
+  };
 
   // 保存 skill 上下文供后续 filesystem/shell_executor 使用
   try {
@@ -168,7 +155,7 @@ async function getSkillInstructions(params: { skillId: string; startLine?: numbe
     startLine: start,
     endLine: end,
     content,
-    guidance,
+    meta,
   };
 }
 

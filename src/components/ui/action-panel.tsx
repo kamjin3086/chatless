@@ -264,11 +264,11 @@ export function ActionPanelList({
 /**
  * 列表项
  */
-interface ActionPanelItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ActionPanelItemProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'title'> {
   /** 图标 */
   icon?: React.ReactNode;
   /** 标题 */
-  title: string;
+  title: React.ReactNode;
   /** 描述 */
   description?: string;
   /** 右侧内容 */

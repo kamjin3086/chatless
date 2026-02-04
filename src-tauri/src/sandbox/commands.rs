@@ -186,6 +186,21 @@ pub async fn run_safe_shell(
     options.command,
     working_dir
   );
+  
+  // Debug log: 记录完整的命令和参数
+  log::info!(
+    "[Sandbox] DEBUG - command: '{}', args: {:?}, args_count: {}",
+    options.command,
+    options.args,
+    options.args.len()
+  );
+  // 如果是 cmd.exe，特别记录第四个参数（实际命令）
+  if options.command.to_lowercase().contains("cmd") && options.args.len() >= 4 {
+    log::info!(
+      "[Sandbox] DEBUG - cmd.exe actual command (arg[3]): '{}'",
+      options.args.get(3).unwrap_or(&String::new())
+    );
+  }
 
   // 启动进程
   let child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;

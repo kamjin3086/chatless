@@ -108,8 +108,8 @@ export function SkillsPage({ className }: SkillsPageProps) {
   const handleOpenFolder = useCallback(async (skill: Skill) => {
     if (!skill.path) return;
     try {
-      const { open } = await import('@tauri-apps/plugin-opener');
-      await open(skill.path);
+      const opener = await import('@tauri-apps/plugin-opener');
+      await opener.openPath(skill.path);
     } catch (err) {
       console.error('Failed to open folder:', err);
     }

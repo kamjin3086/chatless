@@ -189,7 +189,7 @@ export function parseToolArguments(argsString: string): Record<string, unknown> 
     // 使用增量解析器
     try {
       const { parsePartialJson } = require('@/lib/utils/partialJsonParser');
-      const result = parsePartialJson<Record<string, unknown>>(argsString);
+      const result = parsePartialJson(argsString) as Record<string, unknown> | null;
       return result || {};
     } catch {
       return {};

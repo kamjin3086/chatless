@@ -29,7 +29,6 @@ import {
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
-import { skillTools } from '@/lib/skills/skillTools';
 import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
@@ -180,7 +179,7 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     ...(shouldExposeWebSearch ? [WEB_SEARCH_SERVER_NAME] : []),
     FILESYSTEM_SERVER_NAME,
     SHELL_EXECUTOR_SERVER_NAME,
-    ...(shouldExposeSkills ? ['skills'] : []),
+    ...(shouldExposeSkills ? ['skill'] : []),
   ];
   
   if (allEnabled.length > 0) {
@@ -352,14 +351,12 @@ async function buildNativeToolDefinitions(params: {
     detectedGroups.push('ctx');
   }
   
-  // 网络搜索开关 → 注入网络工具
-  if (params.includeWebSearch && !detectedGroups.includes('web')) {
-    detectedGroups.push('web');
-  }
+  // 注意：网络搜索工具已包含在 'core' 组中，无需单独注入
+  // params.includeWebSearch 仅作为功能开关，不影响工具组加载
   
   // 技能触发 → 注入技能工具
-  if (params.includeSkills && !detectedGroups.includes('skills')) {
-    detectedGroups.push('skills');
+  if (params.includeSkills && !detectedGroups.includes('skill')) {
+    detectedGroups.push('skill');
   }
 
   // ========== 3. AI 请求层：加载 AI 主动请求的工具组 ==========
@@ -375,40 +372,8 @@ async function buildNativeToolDefinitions(params: {
   
   // 加载各组工具
   for (const groupId of groupsToLoad) {
-    if (groupId === 'skills') {
-      // Skills 特殊处理：只在第一个工具注入文档
-      let skillDocLoaded = false;
-      for (const t of skillTools) {
-        const fullName = `skills__${t.name}`;
-        let doc = '';
-        if (!skillDocLoaded) {
-          doc = await getToolDoc({ toolFullName: fullName });
-          if (doc) skillDocLoaded = true;
-        }
-        tools.push({
-          name: fullName,
-          description: [t.description || '', doc ? `\n\n${doc}` : ''].filter(Boolean).join(''),
-          parameters: normalizeParams(
-            t.parameters
-              ? {
-                  type: 'object',
-                  properties: Object.fromEntries(
-                    Object.entries(t.parameters).map(([k, v]) => [
-                      k,
-                      { type: v.type, description: v.description },
-                    ])
-                  ),
-                  required: Object.entries(t.parameters)
-                    .filter(([, v]) => v.required)
-                    .map(([k]) => k),
-                }
-              : { type: 'object' }
-          ),
-        });
-      }
-    } else {
-      await addToolsFromGroup(groupId);
-    }
+    // 所有组（包括 skill）现在统一使用 addToolsFromGroup
+    await addToolsFromGroup(groupId);
     loadedGroups.push(groupId);
   }
 

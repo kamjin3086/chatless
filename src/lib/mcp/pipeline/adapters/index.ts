@@ -2,8 +2,7 @@ import { AgentContextAdapter } from './AgentContextAdapter';
 import { FilesystemAdapter } from './FilesystemAdapter';
 import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
-import { SkillsFsAdapter } from './SkillsFsAdapter';
-import { SkillsToolAdapter } from './SkillsToolAdapter';
+import { SkillUnifiedAdapter } from './SkillUnifiedAdapter';
 import { SystemToolAdapter } from './SystemToolAdapter';
 import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 import { UserFsAdapter } from './UserFsAdapter';
@@ -11,15 +10,19 @@ import { WebSearchAdapter } from './WebSearchAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 
 /**
- * 默认 adapters（含 web_search）。
+ * 默认 adapters
+ *
+ * 注意：Skill 相关适配器已统一为 SkillUnifiedAdapter
+ * - 移除了 SkillsToolAdapter (旧的 list_available_skills 等)
+ * - 移除了 SkillsFsAdapter (旧的 skills_fs 操作)
+ * - 合并到 SkillUnifiedAdapter (统一的 skill__* 工具)
  */
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
     new ToolsRegistryAdapter(),
     new AgentContextAdapter(),
     new WebSearchAdapter(),
-    new SkillsToolAdapter(),
-    new SkillsFsAdapter(),
+    new SkillUnifiedAdapter(),
     new UserFsAdapter(),
     new FilesystemAdapter(),
     new ShellExecutorAdapter(),
@@ -32,10 +35,15 @@ export { AgentContextAdapter } from './AgentContextAdapter';
 export { FilesystemAdapter } from './FilesystemAdapter';
 export { McpAdapter } from './McpAdapter';
 export { ShellExecutorAdapter } from './ShellExecutorAdapter';
-export { SkillsFsAdapter } from './SkillsFsAdapter';
-export { SkillsToolAdapter } from './SkillsToolAdapter';
+export { SkillUnifiedAdapter } from './SkillUnifiedAdapter';
 export { SystemToolAdapter } from './SystemToolAdapter';
 export { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
+
+// 保留旧导出以兼容可能的外部引用（标记为 deprecated）
+/** @deprecated 使用 SkillUnifiedAdapter 代替 */
+export { SkillUnifiedAdapter as SkillsToolAdapter } from './SkillUnifiedAdapter';
+/** @deprecated 使用 SkillUnifiedAdapter 代替 */
+export { SkillUnifiedAdapter as SkillsFsAdapter } from './SkillUnifiedAdapter';
 

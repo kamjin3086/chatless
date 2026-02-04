@@ -38,8 +38,8 @@ export function buildResultPreview(value: unknown, maxLen = 12000): string {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const v: any = value as any;
 
-      // skills__list_available_skills: show a compact list (no lineCount/triggers noise)
-      if (Array.isArray(v.skills) && typeof v.nextStep === 'string') {
+      // skill__list: show a compact list (no lineCount/triggers noise)
+      if (Array.isArray(v.skills) && (typeof v.nextStep === 'string' || typeof v.mode === 'string')) {
         const items = (v.skills as any[])
           .map((s) => {
             const id = String(s?.id || '').trim();
@@ -74,8 +74,8 @@ export function buildResultPreview(value: unknown, maxLen = 12000): string {
         return [summary, head.join('\n'), more].filter(Boolean).join('\n').slice(0, maxLen);
       }
 
-      // skills__get_skill_instructions (structured result)
-      if (typeof v.content === 'string' && (typeof v.skillId === 'string' || typeof v.skillName === 'string')) {
+      // skill__get (structured result)
+      if (typeof v.content === 'string' && (typeof v.id === 'string' || typeof v.name === 'string')) {
         return v.content.slice(0, maxLen);
       }
 

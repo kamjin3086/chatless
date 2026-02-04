@@ -257,8 +257,8 @@ export class OllamaProvider extends BaseProvider {
           if (!cb.onEvent) {
             throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
           }
-          const doneResult = this.thinkingStrategy.processToken({ done: true });
-          if (doneResult.events && doneResult.events.length > 0) {
+          const doneResult = this.thinkingStrategy?.processToken({ done: true });
+          if (doneResult?.events && doneResult.events.length > 0) {
             doneResult.events.forEach((ev) => cb.onEvent!(ev));
           }
           cb.onComplete?.();
@@ -269,8 +269,8 @@ export class OllamaProvider extends BaseProvider {
           if (!cb.onEvent) {
             throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
           }
-          const result = this.thinkingStrategy.processToken({ content: token, done: false });
-          if (result.events && result.events.length > 0) {
+          const result = this.thinkingStrategy?.processToken({ content: token, done: false });
+          if (result?.events && result.events.length > 0) {
             result.events.forEach((ev) => cb.onEvent!(ev));
           }
         }

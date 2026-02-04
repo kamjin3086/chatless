@@ -273,7 +273,6 @@ export function SkillParameterForm({
               )}
             </div>
             <Switch
-              id={param.name}
               checked={Boolean(value)}
               onCheckedChange={(checked) => updateValue(param.name, checked)}
             />
@@ -291,7 +290,7 @@ export function SkillParameterForm({
               // 选项少时用 RadioGroup
               <RadioGroup
                 value={String(value || '')}
-                onValueChange={(v) => updateValue(param.name, v)}
+                onValueChange={(v: string) => updateValue(param.name, v)}
                 className="flex flex-wrap gap-4"
               >
                 {param.options.map((option) => (
@@ -307,7 +306,7 @@ export function SkillParameterForm({
               // 选项多时用 Select
               <Select
                 value={String(value || '')}
-                onValueChange={(v) => updateValue(param.name, v)}
+                onValueChange={(v: string) => updateValue(param.name, v)}
               >
                 <SelectTrigger className={cn(error && 'border-red-500')}>
                   <SelectValue placeholder={param.placeholder || '请选择'} />

@@ -202,10 +202,15 @@ export class ShellExecutorAdapter implements ToolAdapter {
     }
 
     // 显式 shell（确定性最高）：不做 fallback，只按指定执行
+    // 对于 shell 模式，直接传递原始命令（command），不使用 normalizedForParsing
+    // 因为 normalizedForParsing 会去掉引号，但 shell 需要完整的命令行语法
     if (isWindows && shellMode === 'cmd') {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShellExecutorAdapter.ts:cmd-mode',message:'CMD mode input',data:{rawCommand:command,commandLength:command.length,hasEscapedQuotes:command.includes('\\"'),hasNormalQuotes:command.includes('"'),firstChars:command.substring(0,50),lastChars:command.substring(command.length-50)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B,D'})}).catch(()=>{});
+      // #endregion
       const r = await sandbox.execute({
         command: 'cmd.exe',
-        args: ['/d', '/s', '/c', normalizedForParsing],
+        args: ['/d', '/s', '/c', command],
         workingDir,
         timeoutMs,
       }, {
@@ -213,6 +218,9 @@ export class ShellExecutorAdapter implements ToolAdapter {
         startTime: Date.now(),
         conversationId: invocation.conversationId,
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShellExecutorAdapter.ts:cmd-result',message:'CMD execution result',data:{success:r.success,exitCode:r.exitCode,stderr:r.stderr?.substring(0,200),stdout:r.stdout?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C,E'})}).catch(()=>{});
+      // #endregion
       return {
         success: r.success,
         exitCode: r.exitCode,
@@ -226,7 +234,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
     if (isWindows && (shellMode === 'powershell' || shellMode === 'pwsh')) {
       const r = await sandbox.execute({
         command: 'powershell.exe',
-        args: ['-NoProfile', '-Command', normalizedForParsing],
+        args: ['-NoProfile', '-Command', command],
         workingDir,
         timeoutMs,
       }, {
@@ -247,7 +255,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
 
     if ((isMac || isLinux) && shellMode === 'bash') {
       const r = await sandbox.execute(
-        { command: 'bash', args: ['-lc', normalizedForParsing], workingDir, timeoutMs },
+        { command: 'bash', args: ['-lc', command], workingDir, timeoutMs },
         {
           executionId: `shell:${invocation.assistantMessageId}:${invocation.ensureCardId()}`,
           startTime: Date.now(),

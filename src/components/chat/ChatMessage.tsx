@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useEffect, useState } from 'react';
-import { Copy, Star, RefreshCcw, Check, Trash2 } from 'lucide-react';
+import { Copy, Star, RefreshCcw, Check, Trash2, Loader2 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ContextMenu, createMessageMenuItems } from '@/components/ui/context-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -105,6 +105,13 @@ function ChatMessageComponent({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const deleteMessage = useChatStore((s)=> s.deleteMessage);
   
+  // 🔑 检测当前消息是否处于 AgentLoop 运行状态
+  const isAgentLoopRunning = useChatStore((s) => {
+    const runs = s.agentRuns || {};
+    const run = runs[id];
+    return run?.running === true;
+  });
+  
   // 🔑 修复界面跳动：追踪消息是否已完成过首次入场动画
   // 一旦消息已经"入场"过（有过内容），后续的追问流程不应再触发入场动画
   const hasEnteredRef = React.useRef(false);
@@ -142,11 +149,16 @@ function ChatMessageComponent({
   // 只有当 FSM 真正进入 COMPLETE 状态时，才认为消息完全结束
   const isViewModelComplete = viewModel?.flags?.isComplete === true;
   
-  // 🔑 决定是否显示时间戳：
+  // 🔑 决定是否显示时间戳和模型名称：
   // - 正在流式时不显示
   // - 有正在运行的工具调用时不显示
   // - FSM 未完成时不显示（即使 status 是 sent）
-  const shouldShowTimestamp = !isStreaming && !hasRunningToolCall && isViewModelComplete;
+  // - AgentLoop 运行中不显示
+  const shouldShowTimestamp = !isStreaming && !hasRunningToolCall && isViewModelComplete && !isAgentLoopRunning;
+  
+  // 🔑 决定是否显示 AgentLoop 运行指示器
+  // 条件：AI消息 + AgentLoop 正在运行 + 当前没有活跃的工具卡片正在运行
+  const shouldShowAgentLoopIndicator = !isUser && isAgentLoopRunning && !hasRunningToolCall;
   
   // 仅对"正在生成/刚发送"的消息开启入场动画；历史消息不做入场动画，避免切换会话时整列表闪烁
   // 🔑 修复：如果消息已经入场过，不再触发入场动画
@@ -288,7 +300,15 @@ function ChatMessageComponent({
           </AlertDialogContent>
         </AlertDialog>
  
-        {/* 时间戳和模型信息：仅在非流式且非追问阶段时显示，避免生成中抖动 */}
+        {/* AgentLoop 运行指示器：当 loop 运行中且没有工具卡片运行时显示 */}
+        {shouldShowAgentLoopIndicator && (
+          <div className="flex items-center gap-1.5 text-[11px] text-blue-500 dark:text-blue-400 ml-1 mt-1.5 self-start">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            <span className="animate-pulse">处理中...</span>
+          </div>
+        )}
+
+        {/* 时间戳和模型信息：仅在非流式、非追问阶段、非 AgentLoop 运行时显示，避免生成中抖动 */}
         {shouldShowTimestamp && (formattedTime || (!isUser && model)) && (
           <div className={cn(
             "flex items-center justify-between flex-nowrap text-[11px] text-slate-500 dark:text-slate-400 ml-1 mt-1",

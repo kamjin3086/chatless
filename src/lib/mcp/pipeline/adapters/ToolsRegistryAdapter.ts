@@ -67,8 +67,16 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     const rawGroup = args.group;
     const groupId = typeof rawGroup === 'string' ? rawGroup : '';
     
-    const validGroups: ToolGroupId[] = ['fs_extra', 'shell', 'web', 'ctx', 'skills', 'system'];
+    const validGroups: ToolGroupId[] = ['ctx', 'skill', 'prompt'];
     if (!validGroups.includes(groupId as ToolGroupId)) {
+      // 对已废弃的组给出友好提示
+      if (groupId === 'fs_extra' || groupId === 'shell' || groupId === 'web') {
+        return {
+          ok: true,
+          alreadyLoaded: true,
+          message: `工具组 "${groupId}" 已包含在核心工具中，无需加载。直接使用即可。`,
+        };
+      }
       return {
         ok: false,
         error: `无效的工具组: ${groupId}`,
@@ -90,12 +98,9 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     useToolLoadRequestStore.getState().requestLoad(groupId as ToolGroupId);
 
     const groupNames: Record<string, string> = {
-      fs_extra: '文件管理（mkdir, rm, mv）',
-      shell: '命令执行（run）',
-      web: '网络工具（search, fetch, download）',
       ctx: '上下文管理（save_research, save_plan 等）',
-      skills: '技能系统',
-      system: '系统管理（提示词、技能管理）',
+      skill: '技能系统（查询、管理技能）',
+      prompt: '提示词管理（列出、创建、编辑、删除）',
     };
 
     return {

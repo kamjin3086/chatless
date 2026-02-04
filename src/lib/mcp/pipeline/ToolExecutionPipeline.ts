@@ -213,7 +213,7 @@ export class ToolExecutionPipeline {
     let execInvocation: ToolInvocation = invocation;
     const srvLower = normalizeServerName(server);
 
-    // 预处理：shell_executor 的 workingDir 支持 @WorkDir / @Alias
+    // 预处理：shell_executor 的 workingDir 支持 @WorkDir / @Alias / 相对路径
     if (isShellServer(srvLower)) {
       const workingDirInput = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
       if (workingDirInput) {
@@ -221,13 +221,15 @@ export class ToolExecutionPipeline {
           const allowlist = useFilesystemAllowlistStore.getState();
           await allowlist.load();
           const dirsForResolve = [...allowlist.directories];
+          let shellWorkDir: string | undefined;
           try {
             const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
             const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
             if (wd) {
+              shellWorkDir = String(wd).replace(/\\/g, '/');
               dirsForResolve.unshift({
                 id: `session:${invocation.conversationId}:workdir`,
-                path: String(wd).replace(/\\/g, '/'),
+                path: shellWorkDir,
                 alias: 'WorkDir',
                 permissions: { read: true, write: true, create: true, delete: false },
                 source: 'workdir',
@@ -238,8 +240,8 @@ export class ToolExecutionPipeline {
           } catch {
             // ignore
           }
-          const resolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any });
-          const execArgs = { ...(args || {}), workingDir: resolved.absolutePath };
+          const shellResolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any, workingDir: shellWorkDir });
+          const execArgs = { ...(args || {}), workingDir: shellResolved.absolutePath };
           execInvocation = new ToolInvocation({
             assistantMessageId: invocation.assistantMessageId,
             conversationId: invocation.conversationId,
@@ -261,15 +263,23 @@ export class ToolExecutionPipeline {
     }
 
     if (isFilesystemServer(srvLower)) {
-      const inputPath =
-        typeof (args as any)?.path === 'string'
-          ? String((args as any).path)
-          : typeof (args as any)?.dir === 'string'
-            ? String((args as any).dir)
-            : '';
+      // 提取所有可能的路径参数
+      const rawPath = typeof (args as any)?.path === 'string' ? String((args as any).path) : '';
+      const rawDir = typeof (args as any)?.dir === 'string' ? String((args as any).dir) : '';
+      const rawOldPath = typeof (args as any)?.oldPath === 'string' ? String((args as any).oldPath) : '';
+      const rawNewPath = typeof (args as any)?.newPath === 'string' ? String((args as any).newPath) : '';
+      const rawPaths = Array.isArray((args as any)?.paths)
+        ? ((args as any).paths as unknown[]).map((p) => String(p ?? '').trim()).filter(Boolean)
+        : [];
+      
+      // 主路径用于权限检查
+      const inputPath = rawPath || rawDir || rawOldPath || '';
       const op = getFilesystemOp(tool);
+      
+      // 判断是否有任何需要解析的路径
+      const hasPathsToResolve = inputPath || rawNewPath || rawPaths.length > 0;
 
-      if (inputPath) {
+      if (hasPathsToResolve) {
         try {
           const allowlist = useFilesystemAllowlistStore.getState();
           await allowlist.load();
@@ -302,14 +312,35 @@ export class ToolExecutionPipeline {
             // ignore: best-effort sync
           }
 
-          const resolved = resolveAllowlistPath({ inputPath, directories: dirsForResolve as any });
-
-          // 执行时必须使用绝对路径（MCP filesystem 不理解 @Alias）
-          const execArgs = {
-            ...(args || {}),
-            path: resolved.absolutePath,
-            ...(typeof (args as any)?.dir === 'string' ? { dir: resolved.absolutePath } : {}),
+          // 路径解析辅助函数：支持相对路径、别名路径、绝对路径
+          const resolvePath = (p: string) => {
+            if (!p.trim()) return '';
+            return resolveAllowlistPath({ inputPath: p, directories: dirsForResolve as any, workingDir }).absolutePath;
           };
+
+          // 解析主路径用于权限检查
+          const resolved = inputPath
+            ? resolveAllowlistPath({ inputPath, directories: dirsForResolve as any, workingDir })
+            : null;
+
+          // 构建执行参数，解析所有路径
+          const execArgs: Record<string, unknown> = { ...(args || {}) };
+          
+          // 解析 path/dir 参数
+          if (resolved) {
+            if (rawPath) execArgs.path = resolved.absolutePath;
+            if (rawDir) execArgs.dir = resolved.absolutePath;
+          }
+          
+          // 解析 rename/move 的 oldPath 和 newPath
+          if (rawOldPath) execArgs.oldPath = resolvePath(rawOldPath);
+          if (rawNewPath) execArgs.newPath = resolvePath(rawNewPath);
+          
+          // 解析 paths 数组（用于 delete_many 等）
+          if (rawPaths.length > 0) {
+            execArgs.paths = rawPaths.map(resolvePath).filter(Boolean);
+          }
+
           execInvocation = new ToolInvocation({
             assistantMessageId: invocation.assistantMessageId,
             conversationId: invocation.conversationId,
@@ -325,10 +356,13 @@ export class ToolExecutionPipeline {
             lockKey: invocation.lockKey,
           });
 
+          // 获取主路径的绝对路径（用于权限检查和授权）
+          const primaryAbsolutePath = resolved?.absolutePath || '';
+          
           const forceApproval = op === 'delete';
-          const hasDir = !!resolved.directory;
-          const hasPerm = hasDir ? !!resolved.directory?.permissions?.[op] : false;
-          const needAuth = forceApproval || !hasDir || !hasPerm;
+          const hasDir = !!resolved?.directory;
+          const hasPerm = hasDir ? !!resolved?.directory?.permissions?.[op] : false;
+          const needAuth = primaryAbsolutePath && (forceApproval || !hasDir || !hasPerm);
 
           if (needAuth) {
             markPendingAuth({ assistantMessageId, server, tool, cardId });
@@ -355,10 +389,10 @@ export class ToolExecutionPipeline {
               return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
             }
             if (!authorized) {
-              const suggestDir = normalizeSlashPath(resolved.directory?.path) || dirnamePath(resolved.absolutePath);
+              const suggestDir = normalizeSlashPath(resolved?.directory?.path) || dirnamePath(primaryAbsolutePath);
               markError(
                 { assistantMessageId, server, tool, cardId },
-                `用户拒绝授权此文件系统操作（${op}）：${suggestDir || resolved.absolutePath}`
+                `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`
               );
               this.coordinator.markToolCallComplete(callKey, 'failed');
               const denied = buildAuthDeniedResult({
@@ -372,7 +406,7 @@ export class ToolExecutionPipeline {
                 fs: {
                   op,
                   inputPath,
-                  resolvedPath: resolved.absolutePath,
+                  resolvedPath: primaryAbsolutePath,
                   suggestDir,
                 },
               });
@@ -403,22 +437,22 @@ export class ToolExecutionPipeline {
               // - dir+pattern 或 ls/mkdir 这类“目录语义”工具：授权目录本身（避免更具体条目覆盖父目录权限造成 forbidden）
               // - 其余（文件语义）：授权其所在目录（目录白名单模型）
               if (hasDirArg || dirScopedByTool) {
-                await st.upsertDirectory({ directoryPath: resolved.absolutePath, op: op as any, source: 'manual' } as any);
+                await st.upsertDirectory({ directoryPath: primaryAbsolutePath, op: op as any, source: 'manual' } as any);
               } else {
-                await st.upsertDirectoryForPath({ absolutePath: resolved.absolutePath, op: op as any, source: 'manual' });
+                await st.upsertDirectoryForPath({ absolutePath: primaryAbsolutePath, op: op as any, source: 'manual' });
               }
 
               // 删除动作需要“读取目录/枚举条目”才能执行（尤其 dir+pattern / 删除目录），否则后端会先 Read 再 Delete。
               // UX：用户既然确认了 delete，这里为同一目录补齐 read（不扩大到其它目录）。
               if (op === 'delete') {
                 if (hasDirArg || dirScopedByTool) {
-                  await st.upsertDirectory({ directoryPath: resolved.absolutePath, op: 'read' as any, source: 'manual' } as any);
+                  await st.upsertDirectory({ directoryPath: primaryAbsolutePath, op: 'read' as any, source: 'manual' } as any);
                 } else {
-                  await st.upsertDirectoryForPath({ absolutePath: resolved.absolutePath, op: 'read' as any, source: 'manual' });
+                  await st.upsertDirectoryForPath({ absolutePath: primaryAbsolutePath, op: 'read' as any, source: 'manual' });
                 }
               }
               const allowDeleteInWorkDir =
-                op === 'delete' && !!workingDir && isPathWithinDirectory({ absolutePath: resolved.absolutePath, directoryPath: workingDir });
+                op === 'delete' && !!workingDir && isPathWithinDirectory({ absolutePath: primaryAbsolutePath, directoryPath: workingDir });
 
               const extra = workingDir
                 ? [

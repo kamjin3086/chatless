@@ -38,8 +38,8 @@ const mockMessages = [
     content: '我将为您列出桌面上的所有文档。首先，让我检查一下桌面目录的内容。',
     time: '15:34',
     toolCalls: [
-      { name: '列目录', target: 'Desktop', status: 'success' as const },
-      { name: '筛选文件', target: '*.lnk, *.txt', status: 'success' as const },
+      { name: '列目录', target: 'Desktop', status: 'success' as 'success' | 'error' | 'running' },
+      { name: '筛选文件', target: '*.lnk, *.txt', status: 'success' as 'success' | 'error' | 'running' },
     ],
   },
   {

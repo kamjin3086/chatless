@@ -102,6 +102,12 @@ export interface StreamOrchestratorConfig {
   onUIUpdate?: (content: string) => void;
   /** 错误处理回调 */
   onError?: (error: Error) => void;
+  /** 
+   * 跳过标题生成（AgentLoop 模式下使用）
+   * 当为 true 时，handleComplete 不会触发标题生成，
+   * 由 AgentLoopRunner 在整个循环结束后统一处理
+   */
+  skipTitleGeneration?: boolean;
 }
 
 /**

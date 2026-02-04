@@ -36,7 +36,7 @@ const mockMessages = [
     role: 'assistant' as const,
     content: '我将为您列出桌面上的所有文档。',
     toolCalls: [
-      { name: '列目录', target: 'Desktop', status: 'success' as const },
+      { name: '列目录', target: 'Desktop', status: 'success' as 'success' | 'error' | 'running' },
     ],
   },
   {

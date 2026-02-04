@@ -284,30 +284,38 @@ export const useScrollManagement = (
   }, [messagesContainerRef, isNearBottom, shouldFollowOutput]);
 
   /**
-   * ✅ 稳定跟随：流式期间（尤其是代码块渲染）会产生“二次布局变化”
+   * ✅ 稳定跟随：流式期间（尤其是代码块渲染）会产生"二次布局变化"
    * 
    * 典型现象：
    * - token 已经在继续追加，但渲染 Markdown（代码块/换行/字体度量）会在稍后重新排版，导致 scrollHeight 突增
-   * - Virtuoso 的 followOutput=auto 会认为用户“离开了底部”，从而停止跟随
+   * - Virtuoso 的 followOutput=auto 会认为用户"离开了底部"，从而停止跟随
    *
    * 解决思路：
    * - 仅在 shouldFollowOutput 且用户未主动滚动时启用
    * - 监听 DOM 变化（MutationObserver），在下一帧将滚动位置重新钉到底部
    * - 采用 scrollTop 直接赋值（避免 smooth 造成追赶延迟）
+   * 
+   * 修复：即使 isLoading=false，只要 shouldFollowOutput=true 就应该监听 DOM 变化
+   * 因为消息内容可能在 isLoading 变为 false 后仍有渲染变化（如 Markdown 解析、代码高亮）
    */
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    if (!isLoading) return;
+    // 修复：移除 isLoading 的强制检查，只要 shouldFollowOutput=true 就启用监听
+    // 这样可以确保即使在非加载状态下，内容变化也能触发滚动
+    if (!shouldFollowOutput) return;
 
     let rafId: number | null = null;
     const stickToBottomIfNeeded = () => {
       rafId = null;
       if (!shouldFollowOutput) return;
       if (isUserScrollingRef.current) return; // 用户主动查看历史时不打扰
-      // 只要用户处于“跟随模式”，就允许在布局变化后补一次到底部
+      // 只要用户处于"跟随模式"，就允许在布局变化后补一次到底部
       const target = container.scrollHeight - container.clientHeight;
-      container.scrollTop = target;
+      // 仅当不在底部时才滚动，避免不必要的滚动操作
+      if (Math.abs(container.scrollTop - target) > 5) {
+        container.scrollTop = target;
+      }
     };
 
     const schedule = () => {
@@ -328,6 +336,9 @@ export const useScrollManagement = (
       // 某些环境下（极少）可能不允许 observe，忽略即可
     }
 
+    // 初始化时立即检查一次
+    schedule();
+
     return () => {
       try { mo.disconnect(); } catch { /* noop */ }
       if (rafId !== null) {
@@ -335,7 +346,7 @@ export const useScrollManagement = (
         rafId = null;
       }
     };
-  }, [messagesContainerRef, isLoading, shouldFollowOutput]);
+  }, [messagesContainerRef, shouldFollowOutput]);
 
   // 简化：直接返回计算值，不再使用基于时间的防抖
   // 界面抖动的根本解决方案在 ChatMessage.tsx 中通过检测工具调用状态实现
@@ -354,4 +365,4 @@ export const useScrollManagement = (
     // 导出给 Virtuoso 使用的 followOutput 状态
     shouldFollowOutput: computedFollowOutput,
   };
-}; 
+};

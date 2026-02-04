@@ -17,19 +17,7 @@ export const AGENT_CONTEXT_SERVER_NAME = 'ctx';
 
 export const CTX_SAVE_RESEARCH_TOOL: McpTool = {
   name: 'save_research',
-  description: `保存研究结果到文件（避免上下文溢出）。
-
-**何时使用**：
-- 收集到大量信息时（>500字）
-- 需要跨多轮对话保留的发现
-- 多来源信息汇总
-
-**自动处理**：
-- 自动创建 @WorkDir/.agent/research/{topic}.md
-- 自动添加时间戳
-- 追加模式：同 topic 会追加到已有内容
-
-**返回**：文件路径 + 关键发现摘要（用于上下文保留）`,
+  description: '保存研究结果',
   input_schema: {
     schema: {
       type: 'object',
@@ -59,19 +47,7 @@ export const CTX_SAVE_RESEARCH_TOOL: McpTool = {
 
 export const CTX_SAVE_PLAN_TOOL: McpTool = {
   name: 'save_plan',
-  description: `创建或更新任务计划（防止目标漂移）。
-
-**何时使用**：
-- 复杂任务开始时（预估 >3 步）
-- 需要跨多轮对话的任务
-- 用户要求"记录过程"
-
-**自动处理**：
-- 创建 @WorkDir/.agent/todo.md
-- 格式化为标准计划模板
-- 支持断点续做
-
-**返回**：计划摘要（当前步骤、进度）`,
+  description: '创建任务计划',
   input_schema: {
     schema: {
       type: 'object',
@@ -113,19 +89,7 @@ export const CTX_SAVE_PLAN_TOOL: McpTool = {
 
 export const CTX_LOG_ERROR_TOOL: McpTool = {
   name: 'log_error',
-  description: `记录错误到日志（跨轮次学习）。
-
-**何时使用**：
-- 遇到非平凡错误时
-- 需要记住的失败尝试
-- 为后续操作提供参考
-
-**自动处理**：
-- 追加到 @WorkDir/.agent/errors.log
-- 自动添加时间戳
-- 保留最近 50 条
-
-**返回**：确认信息`,
+  description: '记录错误',
   input_schema: {
     schema: {
       type: 'object',
@@ -154,15 +118,7 @@ export const CTX_LOG_ERROR_TOOL: McpTool = {
 
 export const CTX_GET_TOOL: McpTool = {
   name: 'get',
-  description: `检索 Agent 上下文（按需加载）。
-
-**检索类型**：
-- \`plan\`: 当前任务计划（todo.md）
-- \`research\`: 研究结果（指定 topic 或全部）
-- \`errors\`: 错误日志（最近 N 条）
-- \`status\`: 工作目录状态概览
-
-**返回**：对应内容或摘要`,
+  description: '检索上下文',
   input_schema: {
     schema: {
       type: 'object',
@@ -188,18 +144,7 @@ export const CTX_GET_TOOL: McpTool = {
 
 export const CTX_UPDATE_STEP_TOOL: McpTool = {
   name: 'update_step',
-  description: `更新计划步骤状态。
-
-**何时使用**：
-- 完成一个步骤后
-- 需要标记当前进度
-
-**自动处理**：
-- 更新 todo.md 中的步骤状态
-- 添加完成时间戳
-- 追加执行日志
-
-**返回**：更新后的进度摘要`,
+  description: '更新步骤状态',
   input_schema: {
     schema: {
       type: 'object',

@@ -126,9 +126,25 @@ export function computeRelativePath(params: { absolutePath: string; directoryPat
   return rel;
 }
 
+/**
+ * 检查路径是否为相对路径（非绝对路径且非别名路径）
+ */
+export function isRelativePath(p: string): boolean {
+  const s = String(p || '').trim();
+  if (!s) return false;
+  // 别名路径
+  if (s.startsWith('@')) return false;
+  // 绝对路径
+  if (isAbsolutePath(s)) return false;
+  // 其他都是相对路径
+  return true;
+}
+
 export function resolveAllowlistPath(params: {
   inputPath: string;
   directories: AllowlistDirectory[];
+  /** 可选的工作目录（绝对路径），用于解析相对路径 */
+  workingDir?: string;
 }): ResolvedAllowlistPath {
   const raw = String(params.inputPath || '').trim();
   if (!raw) throw new Error('path is required');
@@ -146,11 +162,31 @@ export function resolveAllowlistPath(params: {
     return { absolutePath: abs, directory: dir, relativePath: rel, viaAlias: true };
   }
 
-  // absolute path
-  const abs = normalizeAbsolutePath(raw);
+  // 尝试解析为绝对路径
+  let abs = normalizeAbsolutePath(raw);
+  
+  // 如果不是绝对路径，检查是否可以基于 workingDir 解析为相对路径
+  if (!abs && params.workingDir) {
+    const normalizedWorkingDir = normalizeDirectoryPath(params.workingDir);
+    if (normalizedWorkingDir) {
+      // 安全检查：防止路径穿越
+      try {
+        abs = joinAbsoluteAndRelative(normalizedWorkingDir, raw);
+      } catch {
+        // joinAbsoluteAndRelative 会对 .. 等路径穿越进行检查
+        abs = '';
+      }
+    }
+  }
+  
   if (!abs) {
+    // 提供更友好的错误信息
+    if (isRelativePath(raw)) {
+      throw new Error(`Relative path "${raw}" cannot be resolved. Please use absolute path, @WorkDir/... alias, or ensure a working directory is set.`);
+    }
     throw new Error('Only absolute paths or @Alias/... paths are allowed');
   }
+  
   const matched = findBestMatchingDirectory(abs, params.directories || []);
   if (!matched) {
     return { absolutePath: abs };

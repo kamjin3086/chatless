@@ -16,7 +16,7 @@ export const MCP_FILESYSTEM_SERVER_NAME = 'fs';
 
 export const MCP_FILESYSTEM_READ_FILE_TOOL: McpTool = {
   name: 'read',
-  description: '读取文件内容',
+  description: '读取文件',
   input_schema: {
     schema: {
       type: 'object',
@@ -35,7 +35,7 @@ export const MCP_FILESYSTEM_READ_FILE_TOOL: McpTool = {
 
 export const MCP_FILESYSTEM_WRITE_FILE_TOOL: McpTool = {
   name: 'write',
-  description: '写入文件内容（覆盖）',
+  description: '写入文件（覆盖）',
   input_schema: {
     schema: {
       type: 'object',
@@ -50,8 +50,7 @@ export const MCP_FILESYSTEM_WRITE_FILE_TOOL: McpTool = {
 
 export const MCP_FILESYSTEM_LIST_DIR_TOOL: McpTool = {
   name: 'ls',
-  description:
-    '列出目录内容（默认不递归、默认限量返回）。建议优先用 pattern+limit 精确匹配，避免一次返回大量条目导致上下文拥堵。',
+  description: '列出目录内容',
   input_schema: {
     schema: {
       type: 'object',
@@ -68,7 +67,7 @@ export const MCP_FILESYSTEM_LIST_DIR_TOOL: McpTool = {
 
 export const MCP_FILESYSTEM_CREATE_DIR_TOOL: McpTool = {
   name: 'mkdir',
-  description: '创建目录（默认递归）',
+  description: '创建目录',
   input_schema: {
     schema: {
       type: 'object',
@@ -83,11 +82,7 @@ export const MCP_FILESYSTEM_CREATE_DIR_TOOL: McpTool = {
 
 export const MCP_FILESYSTEM_DELETE_FILE_TOOL: McpTool = {
   name: 'rm',
-  description:
-    '删除文件/目录（默认不递归）。三种用法任选其一：\n' +
-    '1) path: 单个路径\n' +
-    '2) paths: 批量路径数组（推荐规模操作）\n' +
-    '3) dir+pattern: 目录下通配符批量（推荐先 dryRun=true）',
+  description: '删除文件/目录',
   input_schema: {
     schema: {
       type: 'object',
@@ -107,7 +102,7 @@ export const MCP_FILESYSTEM_DELETE_FILE_TOOL: McpTool = {
 
 export const MCP_FILESYSTEM_RENAME_FILE_TOOL: McpTool = {
   name: 'mv',
-  description: '重命名/移动文件',
+  description: '移动/重命名',
   input_schema: {
     schema: {
       type: 'object',

@@ -28,6 +28,7 @@ export class LLMInterpreter {
     options: ChatOptions = {}
   ): Promise<{ content: string; raw: any }> {
     let content = '';
+    let thinkingContent = ''; // 收集思考内容
     // 确保等待到 onComplete 后再返回，避免 Provider 流实现"立即 resolve"导致返回空字符串
     let resolveDone: (() => void) | null = null;
     let rejectDone: ((e: Error) => void) | null = null;
@@ -47,6 +48,18 @@ export class LLMInterpreter {
       model,
       messages,
       {
+        // 优先使用 onEvent 回调（新架构：Provider 只发射结构化事件）
+        onEvent: (event: import('./types/stream-events').StreamEvent) => {
+          // 从 content_token 事件中提取内容
+          if (event.type === 'content_token' && typeof event.content === 'string') {
+            content += event.content;
+          }
+          // 同时收集 thinking_token（某些模型如 Qwen 会输出思考过程）
+          if (event.type === 'thinking_token' && typeof event.content === 'string') {
+            thinkingContent += event.content;
+          }
+        },
+        // 保留 onToken 作为后备（兼容可能仍使用 onToken 的 Provider）
         onToken: (t: string) => { content += t; },
         onComplete: () => { if (resolveDone) resolveDone(); },
         onError: (e: Error) => { if (rejectDone) rejectDone(e); },
@@ -57,7 +70,9 @@ export class LLMInterpreter {
     ).catch(() => {});
 
     try { await donePromise; } catch { /* 忽略，交由上层回退 */ }
-    return { content, raw: null };
+    // 如果正文内容为空但有思考内容，返回思考内容（供标题生成等场景使用）
+    const finalContent = content || thinkingContent;
+    return { content: finalContent, raw: null };
   }
 
   // —— 流控制 ——

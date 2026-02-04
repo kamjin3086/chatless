@@ -415,8 +415,8 @@ function compareVersions(v1: string, v2: string): number {
  */
 export async function openDownloadUrl(url: string): Promise<boolean> {
   try {
-    const { open } = await import('@tauri-apps/plugin-opener');
-    await open(url);
+    const opener = await import('@tauri-apps/plugin-opener');
+    await opener.openUrl(url);
     return true;
   } catch (error) {
     console.error('Failed to open download URL:', error);

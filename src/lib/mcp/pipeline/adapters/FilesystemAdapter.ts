@@ -41,7 +41,7 @@ export class FilesystemAdapter implements ToolAdapter {
       ? String((args as Record<string, unknown>).dir)
       : '';
     const paths = Array.isArray((args as Record<string, unknown>).paths)
-      ? ((args as Record<string, unknown>).paths as unknown[]).map((p) => String(p || '').trim()).filter(Boolean)
+      ? ((args as Record<string, unknown>).paths as unknown[]).map((p) => String(p ?? '').trim()).filter(Boolean)
       : null;
 
     try {

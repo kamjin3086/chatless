@@ -418,14 +418,15 @@ export function AIMessageBlock({
     <div className="ai-markdown-container group w-full max-w-full min-w-0">
    
       {/* 初始加载状态 - 当AI还没有任何响应时显示 */}
-      {hasNoContent && (
+      {/* 暂时不再使用，已被正在处理的loading代替 */}
+      {/* {hasNoContent && (
         <div key="loader-waiting" className="flex items-center gap-3 py-2">
           <div className="flex items-center gap-2">
             <FoldingLoader size={22} />
           </div>
           <span className="text-xs italic text-slate-500 dark:text-slate-400">等待响应...</span>
         </div>
-      )}
+      )} */}
 
       {/* 思考进度条：仅在没有结构化segments时显示全局思考栏（兼容旧消息） */}
       {/* 修复：只有在真正有思考内容时才显示思考栏，避免误将普通消息识别为思考过程 */}

@@ -40,10 +40,10 @@ export async function generateTitle(
     return pending;
   }
   
-  // 2. 检查短期缓存
+  // 2. 检查短期缓存（仅当缓存的标题有效时才使用）
   const cached = titleCache.get(requestKey);
-  if (cached && Date.now() - cached.timestamp < TITLE_CACHE_TTL_MS) {
-    console.debug('[TitleService] 使用缓存的标题');
+  if (cached && cached.title && cached.title.trim() && Date.now() - cached.timestamp < TITLE_CACHE_TTL_MS) {
+    console.debug('[TitleService] 使用缓存的标题:', cached.title);
     return cached.title;
   }
   
@@ -74,7 +74,9 @@ Follow these rules strictly:
     ];
     const gateway = new ChatGateway({ provider, model, options: { temperature: 0.2 } });
     const { content } = await gateway.chat(messages);
+    console.debug('[TitleService] 模型原始输出:', content);
     const parsed = extractTitleFromOutput(content, max);
+    console.debug('[TitleService] 解析结果:', parsed, '| 归一化结果:', normalizeTitle(content, max));
     return parsed || normalizeTitle(content, max);
   })();
   
@@ -83,8 +85,13 @@ Follow these rules strictly:
   
   try {
     const title = await requestPromise;
-    // 缓存结果
-    titleCache.set(requestKey, { title, timestamp: Date.now() });
+    // 仅缓存有效的标题（非空）
+    if (title && title.trim()) {
+      titleCache.set(requestKey, { title, timestamp: Date.now() });
+      console.debug('[TitleService] 标题生成成功并缓存:', title);
+    } else {
+      console.debug('[TitleService] 标题生成返回空值，不缓存');
+    }
     return title;
   } finally {
     // 请求完成后从 pending 缓存中移除

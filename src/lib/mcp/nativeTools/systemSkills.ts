@@ -12,8 +12,8 @@ export const SYSTEM_SERVER_NAME = 'system';
 export const SYSTEM_LIST_SKILLS_TOOL: McpTool = {
   name: 'list_skills',
   description:
-    '列出技能（本地/远程均可，取决于当前技能目录与 catalog 配置）。\n' +
-    '用于查找要操作的 skill id。',
+    '列出已安装的技能。返回包含 id、name、pathAlias 等信息。\n' +
+    '**重要**：返回结果中的 pathAlias（如 @skill:docx）可用于后续访问 skill 内部文件。',
   input_schema: {
     schema: {
       type: 'object',
@@ -31,7 +31,10 @@ export const SYSTEM_LIST_SKILLS_TOOL: McpTool = {
 
 export const SYSTEM_GET_SKILL_TOOL: McpTool = {
   name: 'get_skill',
-  description: '获取 Skill 详情。你必须提供 id 或 name（至少一个）。',
+  description:
+    '获取 Skill 详情，包括版本、路径别名、文件访问指南等元信息。\n' +
+    '**重要**：返回结果包含 fileAccessGuide，指导如何使用 skills_fs 工具组访问 skill 内部文件。\n' +
+    '访问 skill 内部文件时，必须使用 skills_fs__read_skill_resource，不要使用 fs__read。',
   input_schema: {
     schema: {
       type: 'object',

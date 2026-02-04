@@ -858,8 +858,19 @@ export class SkillManager {
       return `- **${name || id || '(unknown)'}** (${id ? `\`${id}\`` : '(unknown-id)'}${lcText}): ${desc || '(no description)'}`;
     });
 
-    // 精简版规则：只保留核心决策逻辑
-    const header = '## 可用 Skills\n\n使用规则：\n- 用户指定 skill → 必须使用\n- 任务与 skill 明显匹配 → 优先使用\n- 无关联 → 直接用 filesystem/shell_executor 完成\n\n已启用：';
+    // 精简版规则：强调必须调用 skill__use
+    const header = `## 可用 Skills
+
+⚠️ 重要：此列表仅包含名称，不含使用方法。
+
+使用流程（必须遵守）：
+1. skill__list → 查看可用技能（可选）
+2. skill__use → 【必须】获取操作指南（包含 SKILL.md 内容）
+3. 按照指南执行（通常用 shell__run + fs__*）
+
+❌ 禁止行为：未调用 skill__use 就尝试使用技能
+
+已启用：`;
     return header + '\n' + lines.join('\n');
   }
 
