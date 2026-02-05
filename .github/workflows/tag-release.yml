@@ -415,6 +415,28 @@ jobs:
           ls -la src-tauri/target/${{ matrix.targets }}/release/ || echo "target directory not found"
         shell: bash
       
+      - name: List all generated files including signatures
+        run: |
+          echo "=== Checking for .sig signature files ==="
+          echo ""
+          echo "--- All .sig files ---"
+          find src-tauri/target/release/bundle -name "*.sig" -type f 2>/dev/null || echo "No .sig files found!"
+          echo ""
+          echo "--- All generated bundle files ---"
+          find src-tauri/target/release/bundle -type f 2>/dev/null | head -50 || echo "No bundle files found"
+          echo ""
+          if [ -z "$(find src-tauri/target/release/bundle -name '*.sig' -type f 2>/dev/null)" ]; then
+            echo "::warning::No .sig signature files were generated!"
+            echo "::warning::This usually means TAURI_PRIVATE_KEY secret is not configured or empty."
+            echo ""
+            echo "Please ensure the following secrets are configured in GitHub repository settings:"
+            echo "  - TAURI_PRIVATE_KEY: Your Tauri signing private key"
+            echo "  - TAURI_KEY_PASSWORD: Password for the private key (if any)"
+          else
+            echo "✓ Signature files found"
+          fi
+        shell: bash
+      
       - name: Clean test artifacts before upload
         run: |
           echo "Cleaning test artifacts before upload..."

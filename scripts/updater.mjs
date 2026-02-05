@@ -105,6 +105,12 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
 
     const updateData = createEmptyUpdate(tag.name, release.body);
 
+    // 构建 asset id 到 asset 的映射，用于通过 API 获取签名内容
+    const assetMap = new Map();
+    for (const asset of release.assets) {
+      assetMap.set(asset.name, asset);
+    }
+
     // 收集 Linux 资产候选，便于在收集完成后按优先级选择（.deb > .rpm > AppImage/tarball）
     const linuxCandidates = {};
     const ensureArch = (arch) => {
@@ -118,12 +124,20 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
       return "x86_64";
     };
 
+    // 辅助函数：通过 GitHub API 获取签名文件内容（支持私有仓库）
+    const getSignatureFromAsset = async (sigFileName) => {
+      const sigAsset = assetMap.get(sigFileName);
+      if (!sigAsset) {
+        console.warn(`Signature asset not found: ${sigFileName}`);
+        return "Not Found";
+      }
+      return await getSignatureViaApi(octokit, options, sigAsset.id);
+    };
+
     const fillTasks = release.assets.map(async (asset) => {
       const { name, browser_download_url: originalUrl } = asset;
       // 使用目标仓库的 URL（如果配置了 PUBLIC_RELEASE_REPO）用于最终的下载链接
       const browser_download_url = rewriteDownloadUrl(originalUrl, targetRepo, tag.name);
-      // 获取签名时使用原始 URL（当前仓库），因为签名文件在当前仓库中
-      const sigSourceUrl = originalUrl;
 
       // Windows x64
       if (name.endsWith("x64-setup.exe")) {
@@ -131,7 +145,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms["windows-x86_64"].url = browser_download_url;
       }
       if (name.endsWith("x64-setup.exe.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         updateData.platforms.win64.signature = sig;
         updateData.platforms["windows-x86_64"].signature = sig;
       }
@@ -142,7 +156,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms["windows-i686"].url = browser_download_url;
       }
       if (name.endsWith("x86-setup.exe.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         updateData.platforms["windows-x86"].signature = sig;
         updateData.platforms["windows-i686"].signature = sig;
       }
@@ -152,7 +166,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms["windows-aarch64"].url = browser_download_url;
       }
       if (name.endsWith("arm64-setup.exe.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         updateData.platforms["windows-aarch64"].signature = sig;
       }
 
@@ -166,7 +180,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         }
       }
       if (name.endsWith(".app.tar.gz.sig") && !name.includes("aarch") && !name.includes("arm64")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         updateData.platforms.darwin.signature = sig;
         updateData.platforms["darwin-intel"].signature = sig;
         updateData.platforms["darwin-x86_64"].signature = sig;
@@ -180,7 +194,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms["darwin-aarch64"].url = browser_download_url;
       }
       if (name.endsWith("aarch64.app.tar.gz.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         updateData.platforms["darwin-aarch64"].signature = sig;
       }
 
@@ -189,7 +203,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms["darwin-aarch64"].url = browser_download_url;
       }
       if (name.endsWith("arm64.app.tar.gz.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         updateData.platforms["darwin-aarch64"].signature = sig;
       }
 
@@ -200,7 +214,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms["darwin-x86_64"].url = browser_download_url;
       }
       if (name.endsWith("x64.app.tar.gz.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         updateData.platforms.darwin.signature = sig;
         updateData.platforms["darwin-intel"].signature = sig;
         updateData.platforms["darwin-x86_64"].signature = sig;
@@ -225,7 +239,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         ensureArch(arch).app.url = ensureArch(arch).app.url || browser_download_url;
       }
       if (name.endsWith(".AppImage.tar.gz.sig") || name.endsWith("linux-x86_64.tar.gz.sig") || name.endsWith("linux-aarch64.tar.gz.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         const lower = name.toLowerCase();
         const arch = detectLinuxArch(lower);
         if (lower.includes("aarch64") || lower.includes("arm64")) {
@@ -260,7 +274,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms.linux.url = updateData.platforms.linux.url || browser_download_url;
       }
       if (name.endsWith(".deb.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         const lower = name.toLowerCase();
         const arch = detectLinuxArch(lower);
         // 记录 deb 签名
@@ -293,7 +307,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
         updateData.platforms.linux.url = updateData.platforms.linux.url || browser_download_url;
       }
       if (name.endsWith(".rpm.sig")) {
-        const sig = await getSignature(sigSourceUrl);
+        const sig = await getSignatureFromAsset(name);
         const lower = name.toLowerCase();
         const arch = detectLinuxArch(lower);
         // 记录 rpm 签名
@@ -479,22 +493,44 @@ async function uploadJsonAsset(octokit, options, releaseId, name, json) {
   });
 }
 
-async function getSignature(url) {
+/**
+ * 通过 GitHub API 获取 Release asset 内容（支持私有仓库）
+ * @param {Octokit} octokit - GitHub API 客户端
+ * @param {object} options - { owner, repo }
+ * @param {number} assetId - Asset ID
+ * @returns {Promise<string>} 签名内容
+ */
+async function getSignatureViaApi(octokit, options, assetId) {
   try {
-    const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/octet-stream" } });
-    if (!res.ok) {
-      console.warn(`Failed to fetch signature from ${url}: ${res.status} ${res.statusText}`);
+    // 使用 GitHub API 获取 asset 内容
+    const { data } = await octokit.repos.getReleaseAsset({
+      ...options,
+      asset_id: assetId,
+      headers: {
+        Accept: "application/octet-stream"
+      }
+    });
+    
+    // data 可能是 ArrayBuffer 或 string
+    let text;
+    if (typeof data === "string") {
+      text = data;
+    } else if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+      text = new TextDecoder().decode(data);
+    } else {
+      // 尝试转换为字符串
+      text = String(data);
+    }
+    
+    // 验证签名内容是否有效
+    if (!text || text.includes("<html") || text.includes("<!DOCTYPE") || text.includes("Not Found")) {
+      console.warn(`Invalid signature content for asset ${assetId}`);
       return "Not Found";
     }
-    const text = await res.text();
-    // 验证签名内容是否有效（应该是 base64 编码的字符串，不包含 HTML）
-    if (text.includes("<html") || text.includes("<!DOCTYPE") || text.includes("Not Found")) {
-      console.warn(`Invalid signature content from ${url}`);
-      return "Not Found";
-    }
+    
     return text.trim();
   } catch (error) {
-    console.warn(`Error fetching signature from ${url}:`, error.message);
+    console.warn(`Error fetching signature via API (asset ${assetId}):`, error.message);
     return "Not Found";
   }
 }
