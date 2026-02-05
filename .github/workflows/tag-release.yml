@@ -448,7 +448,6 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/msi/*.msi.sig
-            src-tauri/target/release/bundle/**/*.sig
             src-tauri/target/release/bundle/**/*.sha256*
           retention-days: 7
 
