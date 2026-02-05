@@ -37,6 +37,7 @@ chatless is a desktop AI chat client that supports multiple cloud-based AI servi
 - Local RAG Knowledge Base - Vector retrieval for improved accuracy
 - MCP Protocol Integration - Extend with third-party tools
 - Prompt Management - Quick access to commonly used prompts
+- WebDAV Sync (Prompts) - Multi-device prompt sync (JSON-Chunk)
 - Local Data Storage - Privacy protection
 
 ## Preview
@@ -65,6 +66,13 @@ Download the installation package for your system from [GitHub Releases](https:/
 2. Add API keys for AI providers
 3. (Optional) Configure Ollama for local models
 4. Start chatting
+
+### WebDAV Sync (Prompts)
+
+Configure WebDAV in `Settings → Sync`:
+
+- Remote structure: `{basePath}/prompts/data/{id}.json` and `.../metadata.json`
+- Deletion: remote files are not deleted; `deleted_at` tombstones are synced
 
 > For complete usage instructions, visit the [User Documentation](https://kamjin3086.github.io/chatless/docs)
 

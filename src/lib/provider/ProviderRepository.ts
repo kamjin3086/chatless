@@ -52,7 +52,7 @@ export class ProviderRepository {
       if ((next as any).status === (ProviderStatus as any).CONNECTING) {
         next.status = ProviderStatus.UNKNOWN;
         // 清理中间态的提示信息
-        next.lastReason = next.lastReason;
+        next.lastReason = undefined;
         next.lastMessage = next.lastMessage ?? null;
       }
       list[idx] = next;

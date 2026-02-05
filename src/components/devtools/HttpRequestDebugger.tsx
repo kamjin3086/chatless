@@ -190,7 +190,7 @@ export default function HttpRequestDebugger() {
       alert("请求保存成功！");
     } catch (error) {
       console.error("Failed to save request:", error);
-      alert("保存失败：" + error);
+      alert("保存失败：" + String(error));
     }
   };
 
@@ -222,7 +222,7 @@ export default function HttpRequestDebugger() {
       setSavedRequests(updatedRequests);
     } catch (error) {
       console.error("Failed to delete request:", error);
-      alert("删除失败：" + error);
+      alert("删除失败：" + String(error));
     }
   };
 
@@ -239,7 +239,7 @@ export default function HttpRequestDebugger() {
       alert(`客户端测试结果: ${JSON.stringify(result, null, 2)}`);
     } catch (error) {
       console.error("Client test failed:", error);
-      alert(`客户端测试失败: ${error}`);
+      alert(`客户端测试失败: ${String(error)}`);
     } finally {
       setSending(false);
     }
@@ -802,5 +802,4 @@ export default function HttpRequestDebugger() {
     </div>
   );
 }
-
 

@@ -16,6 +16,8 @@ export interface DbPromptItem {
   updated_at: number;
   external_id?: string | null;
   stats?: string; // { uses, lastUsedAt }
+  deleted_at?: number | null;
+  updated_by_device_id?: string | null;
 }
 
 export class PromptRepository extends BaseRepository<DbPromptItem> {
@@ -26,4 +28,3 @@ export class PromptRepository extends BaseRepository<DbPromptItem> {
     super(dbManager as any);
   }
 }
-

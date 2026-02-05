@@ -36,6 +36,7 @@ chatless 是一个桌面 AI 聊天客户端，支持接入多种云端 AI 服务
 - 本地 RAG 知识库 - 向量检索提升回答准确性
 - MCP 协议集成 - 扩展第三方工具能力
 - Prompt 管理 - 快速复用常用提示词
+- WebDAV 同步（Prompts）- 多设备同步提示词（JSON-Chunk）
 - 数据本地存储 - 保护用户隐私
 
 ## 界面预览
@@ -64,6 +65,13 @@ chatless 是一个桌面 AI 聊天客户端，支持接入多种云端 AI 服务
 2. 添加 AI 提供商的 API 密钥
 3. （可选）配置 Ollama 使用本地模型
 4. 开始对话
+
+### WebDAV 同步（Prompts）
+
+在 `设置 → 同步` 中配置 WebDAV：
+
+- 远端目录结构：`{basePath}/prompts/data/{id}.json` 与 `.../metadata.json`
+- 删除策略：不直接删除远端文件，使用 `deleted_at` tombstone 同步
 
 > 完整使用说明请访问 [使用文档](https://kamjin3086.github.io/chatless/docs)
 
