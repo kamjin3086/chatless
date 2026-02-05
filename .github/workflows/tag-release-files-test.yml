@@ -1,0 +1,537 @@
+name: Tag Release Files Test
+
+# 此工作流用于测试 release 文件上传是否正确，包括：
+# - sig 签名文件
+# - update.json 和 update-proxy.json
+# - tar.gz 文件
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_mirror:
+        description: '是否测试公开仓库同步（需要配置 PUBLIC_RELEASE_TOKEN 和 PUBLIC_RELEASE_REPO）'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  VERSION: 0.0.0-filestest-${{ github.run_id }}
+  TEST_TAG: v0.0.0-filestest-${{ github.run_id }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+          - os: windows-2022
+            platform: windows
+          - os: macos-15
+            platform: macos
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Generate placeholder bundles with sig files
+        shell: bash
+        run: |
+          set -eu
+          VERSION="${{ env.VERSION }}"
+          echo "=== 生成模拟构建文件 (VERSION=$VERSION) ==="
+          
+          # 清理旧文件
+          rm -rf src-tauri/target/release/bundle || true
+          
+          case "${{ matrix.platform }}" in
+            "windows")
+              echo "生成 Windows 文件..."
+              mkdir -p src-tauri/target/release/bundle/{nsis,msi}
+              
+              # NSIS 安装包
+              echo "Windows NSIS Setup $VERSION" > "src-tauri/target/release/bundle/nsis/Chatless_${VERSION}_x64-setup.exe"
+              echo "sig-nsis-$VERSION" > "src-tauri/target/release/bundle/nsis/Chatless_${VERSION}_x64-setup.exe.sig"
+              echo "nsis-zip-content-$VERSION" > "src-tauri/target/release/bundle/nsis/Chatless_${VERSION}_x64-setup.nsis.zip"
+              echo "sig-nsis-zip-$VERSION" > "src-tauri/target/release/bundle/nsis/Chatless_${VERSION}_x64-setup.nsis.zip.sig"
+              
+              # MSI 安装包
+              echo "Windows MSI $VERSION" > "src-tauri/target/release/bundle/msi/Chatless_${VERSION}_x64_en-US.msi"
+              echo "sig-msi-$VERSION" > "src-tauri/target/release/bundle/msi/Chatless_${VERSION}_x64_en-US.msi.sig"
+              ;;
+              
+            "linux")
+              echo "生成 Linux 文件..."
+              mkdir -p src-tauri/target/release/bundle/{appimage,deb,rpm}
+              
+              # AppImage
+              echo "Linux AppImage $VERSION" > "src-tauri/target/release/bundle/appimage/Chatless_${VERSION}_amd64.AppImage"
+              echo "appimage-tar-content-$VERSION" > "src-tauri/target/release/bundle/appimage/Chatless_${VERSION}_amd64.AppImage.tar.gz"
+              echo "sig-appimage-tar-$VERSION" > "src-tauri/target/release/bundle/appimage/Chatless_${VERSION}_amd64.AppImage.tar.gz.sig"
+              
+              # DEB
+              echo "Linux DEB $VERSION" > "src-tauri/target/release/bundle/deb/Chatless_${VERSION}_amd64.deb"
+              echo "sig-deb-$VERSION" > "src-tauri/target/release/bundle/deb/Chatless_${VERSION}_amd64.deb.sig"
+              
+              # RPM
+              echo "Linux RPM $VERSION" > "src-tauri/target/release/bundle/rpm/Chatless-${VERSION}-1.x86_64.rpm"
+              echo "sig-rpm-$VERSION" > "src-tauri/target/release/bundle/rpm/Chatless-${VERSION}-1.x86_64.rpm.sig"
+              ;;
+              
+            "macos")
+              echo "生成 macOS 文件..."
+              mkdir -p src-tauri/target/release/bundle/{macos,dmg}
+              
+              # DMG
+              echo "macOS DMG $VERSION" > "src-tauri/target/release/bundle/dmg/Chatless_${VERSION}_aarch64.dmg"
+              echo "sig-dmg-$VERSION" > "src-tauri/target/release/bundle/dmg/Chatless_${VERSION}_aarch64.dmg.sig"
+              
+              # App tar.gz (用于自动更新)
+              echo "macOS App Bundle $VERSION" > "src-tauri/target/release/bundle/macos/Chatless.app.tar.gz"
+              echo "sig-app-tar-$VERSION" > "src-tauri/target/release/bundle/macos/Chatless.app.tar.gz.sig"
+              ;;
+          esac
+          
+          echo "=== 生成的文件列表 ==="
+          find src-tauri/target/release/bundle -type f | sort
+          echo ""
+          echo "=== 文件内容验证 ==="
+          find src-tauri/target/release/bundle -type f -exec sh -c 'echo "--- $1 ---"; cat "$1"; echo ""' _ {} \;
+
+      - name: Upload Windows artifacts
+        if: ${{ matrix.platform == 'windows' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatless-windows-2022-unknown
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+            src-tauri/target/release/bundle/nsis/*.nsis.zip
+            src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/msi/*.msi.sig
+          retention-days: 1
+
+      - name: Upload Linux artifacts
+        if: ${{ matrix.platform == 'linux' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatless-ubuntu-22.04-unknown
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
+            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/deb/*.deb.sig
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/rpm/*.rpm.sig
+          retention-days: 1
+
+      - name: Upload macOS artifacts
+        if: ${{ matrix.platform == 'macos' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatless-macos-15-arm64
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/dmg/*.dmg.sig
+            src-tauri/target/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Display downloaded artifacts structure
+        run: |
+          echo "=== Artifacts 目录结构 ==="
+          find artifacts -type f | sort
+          echo ""
+          echo "=== 各类型文件统计 ==="
+          echo "DMG files: $(find artifacts -name '*.dmg' -type f | wc -l)"
+          echo "DMG sig files: $(find artifacts -name '*.dmg.sig' -type f | wc -l)"
+          echo "App tar.gz files: $(find artifacts -name '*.app.tar.gz' -type f | wc -l)"
+          echo "App tar.gz sig files: $(find artifacts -name '*.app.tar.gz.sig' -type f | wc -l)"
+          echo "AppImage files: $(find artifacts -name '*.AppImage' -type f | wc -l)"
+          echo "AppImage tar.gz files: $(find artifacts -name '*.AppImage.tar.gz' -type f | wc -l)"
+          echo "AppImage tar.gz sig files: $(find artifacts -name '*.AppImage.tar.gz.sig' -type f | wc -l)"
+          echo "DEB files: $(find artifacts -name '*.deb' -type f | wc -l)"
+          echo "DEB sig files: $(find artifacts -name '*.deb.sig' -type f | wc -l)"
+          echo "RPM files: $(find artifacts -name '*.rpm' -type f | wc -l)"
+          echo "RPM sig files: $(find artifacts -name '*.rpm.sig' -type f | wc -l)"
+          echo "EXE files: $(find artifacts -name '*.exe' -type f | wc -l)"
+          echo "EXE sig files: $(find artifacts -name '*.exe.sig' -type f | wc -l)"
+          echo "MSI files: $(find artifacts -name '*.msi' -type f | wc -l)"
+          echo "MSI sig files: $(find artifacts -name '*.msi.sig' -type f | wc -l)"
+          echo "NSIS zip files: $(find artifacts -name '*.nsis.zip' -type f | wc -l)"
+          echo "NSIS zip sig files: $(find artifacts -name '*.nsis.zip.sig' -type f | wc -l)"
+        shell: bash
+
+      - name: Rename macOS files to include arch suffix
+        run: |
+          echo "=== 重命名 macOS 文件 ==="
+          
+          if [ -d "artifacts/chatless-macos-15-arm64" ]; then
+            # 重命名 .app.tar.gz
+            find artifacts/chatless-macos-15-arm64 -name "*.app.tar.gz" -type f | while read file; do
+              dir=$(dirname "$file")
+              filename=$(basename "$file")
+              newname=$(echo "$filename" | sed 's/\.app\.tar\.gz/\.arm64\.app\.tar\.gz/')
+              mv "$file" "$dir/$newname"
+              echo "Renamed: $filename -> $newname"
+            done
+            
+            # 重命名 .app.tar.gz.sig
+            find artifacts/chatless-macos-15-arm64 -name "*.app.tar.gz.sig" -type f | while read file; do
+              dir=$(dirname "$file")
+              filename=$(basename "$file")
+              newname=$(echo "$filename" | sed 's/\.app\.tar\.gz\.sig/\.arm64\.app\.tar\.gz\.sig/')
+              mv "$file" "$dir/$newname"
+              echo "Renamed: $filename -> $newname"
+            done
+          fi
+          
+          echo "=== 重命名后的文件列表 ==="
+          find artifacts -type f | sort
+        shell: bash
+
+      - name: Generate mock update.json files
+        run: |
+          VERSION="${{ env.VERSION }}"
+          TAG="${{ env.TEST_TAG }}"
+          
+          echo "=== 生成模拟 update.json 文件 ==="
+          
+          # 生成 update.json
+          cat > update.json << EOF
+          {
+            "version": "$VERSION",
+            "notes": "Test release for file upload verification",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "url": "https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless.arm64.app.tar.gz",
+                "signature": "sig-app-tar-$VERSION"
+              },
+              "linux-x86_64": {
+                "url": "https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_amd64.AppImage.tar.gz",
+                "signature": "sig-appimage-tar-$VERSION"
+              },
+              "windows-x86_64": {
+                "url": "https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_x64-setup.exe",
+                "signature": "sig-nsis-$VERSION"
+              }
+            }
+          }
+          EOF
+          
+          # 生成 update-proxy.json (带代理前缀)
+          cat > update-proxy.json << EOF
+          {
+            "version": "$VERSION",
+            "notes": "Test release for file upload verification",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "url": "https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless.arm64.app.tar.gz",
+                "signature": "sig-app-tar-$VERSION"
+              },
+              "linux-x86_64": {
+                "url": "https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_amd64.AppImage.tar.gz",
+                "signature": "sig-appimage-tar-$VERSION"
+              },
+              "windows-x86_64": {
+                "url": "https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_x64-setup.exe",
+                "signature": "sig-nsis-$VERSION"
+              }
+            }
+          }
+          EOF
+          
+          echo "=== update.json 内容 ==="
+          cat update.json
+          echo ""
+          echo "=== update-proxy.json 内容 ==="
+          cat update-proxy.json
+        shell: bash
+
+      - name: Generate release notes
+        run: |
+          VERSION="${{ env.VERSION }}"
+          TAG="${{ env.TEST_TAG }}"
+          
+          cat > release_notes.md << 'EOF'
+          # 文件上传测试 Release
+          
+          此 Release 用于验证以下文件是否正确上传：
+          
+          ## 预期文件列表
+          
+          ### 安装包文件
+          - [ ] Windows: `.exe`, `.msi`
+          - [ ] Linux: `.AppImage`, `.deb`, `.rpm`
+          - [ ] macOS: `.dmg`, `.app.tar.gz`
+          
+          ### 签名文件 (.sig)
+          - [ ] `.exe.sig`
+          - [ ] `.msi.sig`
+          - [ ] `.AppImage.tar.gz.sig`
+          - [ ] `.deb.sig`
+          - [ ] `.rpm.sig`
+          - [ ] `.dmg.sig`
+          - [ ] `.app.tar.gz.sig`
+          - [ ] `.nsis.zip.sig`
+          
+          ### 更新器配置文件
+          - [ ] `update.json`
+          - [ ] `update-proxy.json`
+          
+          ---
+          
+          如果以上所有文件都出现在 Assets 中，则修复成功！
+          EOF
+          
+          echo "=== Release Notes ==="
+          cat release_notes.md
+        shell: bash
+
+      - name: List all files to be uploaded
+        run: |
+          echo "=== 将要上传到 Release 的所有文件 ==="
+          echo ""
+          echo "--- Artifacts 中的文件 ---"
+          find artifacts -type f | sort
+          echo ""
+          echo "--- 根目录中的 JSON 文件 ---"
+          ls -la *.json 2>/dev/null || echo "No JSON files in root"
+          echo ""
+          echo "--- 根目录中的 MD 文件 ---"
+          ls -la *.md 2>/dev/null || echo "No MD files in root"
+        shell: bash
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TEST_TAG }}
+          name: "Files Test Release ${{ env.TEST_TAG }}"
+          body_path: release_notes.md
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.dmg.sig
+            artifacts/**/*.app.tar.gz
+            artifacts/**/*.app.tar.gz.sig
+            artifacts/**/*.AppImage
+            artifacts/**/*.AppImage.tar.gz
+            artifacts/**/*.AppImage.tar.gz.sig
+            artifacts/**/*.deb
+            artifacts/**/*.deb.sig
+            artifacts/**/*.rpm
+            artifacts/**/*.rpm.sig
+            artifacts/**/*.exe
+            artifacts/**/*.exe.sig
+            artifacts/**/*.msi
+            artifacts/**/*.msi.sig
+            artifacts/**/*.nsis.zip
+            artifacts/**/*.nsis.zip.sig
+            artifacts/**/*.sig
+            artifacts/**/*.sha256*
+            update.json
+            update-proxy.json
+          draft: false
+          prerelease: true
+
+      - name: Verify uploaded files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ env.TEST_TAG }}"
+          echo "=== 验证 Release $TAG 中的文件 ==="
+          
+          # 等待 Release 创建完成
+          sleep 5
+          
+          # 获取 Release 中的所有资产
+          echo "--- Release Assets ---"
+          gh release view "$TAG" --json assets -q '.assets[].name' | sort
+          
+          echo ""
+          echo "--- 文件数量统计 ---"
+          ASSET_COUNT=$(gh release view "$TAG" --json assets -q '.assets | length')
+          echo "总文件数: $ASSET_COUNT"
+          
+          echo ""
+          echo "--- 按类型统计 ---"
+          gh release view "$TAG" --json assets -q '.assets[].name' | grep -c '\.sig$' || echo "0" | xargs -I {} echo "签名文件 (.sig): {}"
+          gh release view "$TAG" --json assets -q '.assets[].name' | grep -c '\.json$' || echo "0" | xargs -I {} echo "JSON 文件: {}"
+          gh release view "$TAG" --json assets -q '.assets[].name' | grep -c '\.tar\.gz$' || echo "0" | xargs -I {} echo "Tar.gz 文件: {}"
+        shell: bash
+
+  # 可选：测试公开仓库同步
+  mirror-public-release:
+    needs: release
+    runs-on: ubuntu-22.04
+    if: ${{ inputs.test_mirror == true || inputs.test_mirror == 'true' }}
+    steps:
+      - name: Check public release secrets
+        id: check
+        env:
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ secrets.PUBLIC_RELEASE_REPO }}
+        run: |
+          if [ -n "$PUBLIC_RELEASE_TOKEN" ] && [ -n "$PUBLIC_RELEASE_REPO" ]; then
+            echo "has_secrets=true" >> $GITHUB_OUTPUT
+            echo "Secrets configured, will proceed with mirror"
+          else
+            echo "has_secrets=false" >> $GITHUB_OUTPUT
+            echo "PUBLIC_RELEASE_TOKEN/PUBLIC_RELEASE_REPO not set, skipping mirror."
+          fi
+        shell: bash
+
+      - name: Skip if no secrets
+        if: ${{ steps.check.outputs.has_secrets != 'true' }}
+        run: echo "Skipping mirror due to missing secrets"
+
+      - name: Checkout repository
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Download all artifacts
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Rename macOS files
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        run: |
+          if [ -d "artifacts/chatless-macos-15-arm64" ]; then
+            find artifacts/chatless-macos-15-arm64 -name "*.app.tar.gz" -type f | while read file; do
+              dir=$(dirname "$file")
+              filename=$(basename "$file")
+              newname=$(echo "$filename" | sed 's/\.app\.tar\.gz/\.arm64\.app\.tar\.gz/')
+              mv "$file" "$dir/$newname"
+            done
+            
+            find artifacts/chatless-macos-15-arm64 -name "*.app.tar.gz.sig" -type f | while read file; do
+              dir=$(dirname "$file")
+              filename=$(basename "$file")
+              newname=$(echo "$filename" | sed 's/\.app\.tar\.gz\.sig/\.arm64\.app\.tar\.gz\.sig/')
+              mv "$file" "$dir/$newname"
+            done
+          fi
+        shell: bash
+
+      - name: Fetch release notes
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view ${{ env.TEST_TAG }} --json body -q .body > public_release_notes.md
+
+      - name: Download update.json files from release
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ env.TEST_TAG }}"
+          mkdir -p artifacts/updater
+          gh release download "$TAG" --pattern "update.json" --dir artifacts/updater --clobber || echo "update.json not found"
+          gh release download "$TAG" --pattern "update-proxy.json" --dir artifacts/updater --clobber || echo "update-proxy.json not found"
+          ls -la artifacts/updater/ || echo "No updater files"
+        shell: bash
+
+      - name: Sync to public repo
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ secrets.PUBLIC_RELEASE_REPO }}
+        run: |
+          set -e
+          TAG="${{ env.TEST_TAG }}"
+          
+          echo "=== 同步到公开仓库 $PUBLIC_RELEASE_REPO ==="
+          
+          # 创建或更新 Release
+          if gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$PUBLIC_RELEASE_REPO" --notes-file public_release_notes.md
+          else
+            gh release create "$TAG" --repo "$PUBLIC_RELEASE_REPO" --title "Files Test $TAG" --notes-file public_release_notes.md --prerelease
+          fi
+          
+          # 收集文件
+          PATTERNS=(
+            "*.dmg"
+            "*.dmg.sig"
+            "*.app.tar.gz"
+            "*.app.tar.gz.sig"
+            "*.AppImage"
+            "*.AppImage.tar.gz"
+            "*.AppImage.tar.gz.sig"
+            "*.deb"
+            "*.deb.sig"
+            "*.rpm"
+            "*.rpm.sig"
+            "*.exe"
+            "*.exe.sig"
+            "*.msi"
+            "*.msi.sig"
+            "*.nsis.zip"
+            "*.nsis.zip.sig"
+            "*.sig"
+            "update.json"
+            "update-proxy.json"
+          )
+          
+          UPLOAD_FILES=""
+          for pattern in "${PATTERNS[@]}"; do
+            found=$(find artifacts -name "$pattern" -type f 2>/dev/null || true)
+            if [ -n "$found" ]; then
+              echo "找到 $pattern: $(echo "$found" | wc -l) 个"
+              UPLOAD_FILES="$UPLOAD_FILES $found"
+            fi
+          done
+          
+          UPLOAD_FILES=$(echo "$UPLOAD_FILES" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          
+          echo "=== 上传文件 ==="
+          for file in $UPLOAD_FILES; do
+            if [ -n "$file" ] && [ -f "$file" ]; then
+              echo "上传: $file"
+              gh release upload "$TAG" "$file" --repo "$PUBLIC_RELEASE_REPO" --clobber || echo "上传失败: $file"
+            fi
+          done
+          
+          echo "=== 同步完成 ==="
+        shell: bash
+
+      - name: Verify public release
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ secrets.PUBLIC_RELEASE_REPO }}
+        run: |
+          TAG="${{ env.TEST_TAG }}"
+          echo "=== 公开仓库 Release 文件列表 ==="
+          gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' | sort
+        shell: bash
