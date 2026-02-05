@@ -252,15 +252,15 @@ jobs:
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "darwin-aarch64": {
-                "url": "https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless.arm64.app.tar.gz",
+                "url": "https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless.arm64.app.tar.gz",
                 "signature": "sig-app-tar-$VERSION"
               },
               "linux-x86_64": {
-                "url": "https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_amd64.AppImage.tar.gz",
+                "url": "https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_amd64.AppImage.tar.gz",
                 "signature": "sig-appimage-tar-$VERSION"
               },
               "windows-x86_64": {
-                "url": "https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_x64-setup.exe",
+                "url": "https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/download/$TAG/Chatless_${VERSION}_x64-setup.exe",
                 "signature": "sig-nsis-$VERSION"
               }
             }

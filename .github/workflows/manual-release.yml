@@ -217,14 +217,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          UPDATER_PROXY_PREFIX: https://gh-proxy.com/
+          UPDATER_PROXY_PREFIX: https://gh-proxy.org/
         run: pnpm run update:generate
       - name: Verify updater endpoints
         env:
           EXPECTED_VERSION: ${{ github.event.inputs.version }}
           ENDPOINTS: |
             https://github.com/${{ github.repository }}/releases/download/updater/update.json
-            https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/updater/update-proxy.json
+            https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/download/updater/update-proxy.json
         run: pnpm run update:verify
 
   # ===========同步release到指定仓库的工作流===========

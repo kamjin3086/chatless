@@ -806,7 +806,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          UPDATER_PROXY_PREFIX: https://gh-proxy.com/
+          UPDATER_PROXY_PREFIX: https://gh-proxy.org/
           RELEASE_TAG: ${{ github.ref_name }}
           # 如果配置了 PUBLIC_RELEASE_REPO，则生成指向公开仓库的下载链接
           # 这使得私有仓库构建的 update.json 可以在公开仓库中正常使用
@@ -818,9 +818,9 @@ jobs:
           EXPECTED_VERSION: ${{ github.ref_name }}
           ENDPOINTS: |
             https://github.com/${{ github.repository }}/releases/latest/download/update.json
-            https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/latest/download/update.json
+            https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/latest/download/update.json
             https://github.com/${{ github.repository }}/releases/download/updater-alpha/update.json
-            https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/updater-alpha/update.json
+            https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/download/updater-alpha/update.json
         run: pnpm run update:verify
         continue-on-error: true
         shell: bash

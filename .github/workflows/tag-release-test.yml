@@ -376,7 +376,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          UPDATER_PROXY_PREFIX: https://gh-proxy.com/
+          UPDATER_PROXY_PREFIX: https://gh-proxy.org/
           RELEASE_TAG: ${{ github.ref_name }}
         run: pnpm run update:generate
       - name: Verify updater endpoints
@@ -384,9 +384,9 @@ jobs:
           EXPECTED_VERSION: ${{ github.ref_name }}
           ENDPOINTS: |
             https://github.com/${{ github.repository }}/releases/latest/download/update.json
-            https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/latest/download/update.json
+            https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/latest/download/update.json
             https://github.com/${{ github.repository }}/releases/download/updater-alpha/update.json
-            https://gh-proxy.com/https://github.com/${{ github.repository }}/releases/download/updater-alpha/update.json
+            https://gh-proxy.org/https://github.com/${{ github.repository }}/releases/download/updater-alpha/update.json
         run: pnpm run update:verify
         continue-on-error: true
       - name: Generate Release Notes with Quick Download Links
