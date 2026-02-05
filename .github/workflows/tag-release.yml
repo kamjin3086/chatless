@@ -799,7 +799,6 @@ jobs:
             artifacts/**/*.msi.sig
             artifacts/**/*.nsis.zip
             artifacts/**/*.nsis.zip.sig
-            artifacts/**/*.sig
             artifacts/**/*.sha256*
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
@@ -931,20 +930,22 @@ jobs:
           # 注意：使用 -regex 来匹配复合后缀如 .app.tar.gz 和 .app.tar.gz.sig
           PATTERNS=(
             "*.dmg"
+            "*.dmg.sig"
             "*.app.tar.gz"
             "*.app.tar.gz.sig"
             "*.AppImage"
             "*.AppImage.tar.gz"
             "*.AppImage.tar.gz.sig"
             "*.deb"
+            "*.deb.sig"
             "*.rpm"
+            "*.rpm.sig"
             "*.exe"
             "*.exe.sig"
             "*.msi"
             "*.msi.sig"
             "*.nsis.zip"
             "*.nsis.zip.sig"
-            "*.sig"
             "*.sha256*"
             "update.json"
             "update-proxy.json"

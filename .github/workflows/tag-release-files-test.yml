@@ -352,7 +352,6 @@ jobs:
             artifacts/**/*.msi.sig
             artifacts/**/*.nsis.zip
             artifacts/**/*.nsis.zip.sig
-            artifacts/**/*.sig
             artifacts/**/*.sha256*
             update.json
             update-proxy.json
