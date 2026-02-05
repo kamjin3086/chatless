@@ -15,6 +15,9 @@ async function main() {
   }
 
   const { owner, repo } = resolveRepo();
+  // 支持使用 PUBLIC_RELEASE_REPO 来生成指向公开仓库的 URL
+  // 格式: owner/repo (例如: kamjin3086/chatless-pro2)
+  const targetRepo = resolveTargetRepo();
   const octokit = token ? new Octokit({ auth: token }) : new Octokit();
 
   const explicitTag = process.env.RELEASE_TAG;
@@ -29,7 +32,7 @@ async function main() {
     const isAlpha = preReleaseRegex.test(t.name);
     const isStable = stableTagRegex.test(t.name);
     if (!isAlpha && !isStable) continue;
-    await processRelease(octokit, { owner, repo }, t, isAlpha);
+    await processRelease(octokit, { owner, repo }, t, isAlpha, targetRepo);
   }
 }
 
@@ -47,6 +50,42 @@ function resolveRepo() {
   return { owner, repo };
 }
 
+/**
+ * 解析目标仓库（用于生成下载 URL）
+ * 优先使用 PUBLIC_RELEASE_REPO 环境变量，如果未设置则使用当前仓库
+ * 这允许私有仓库构建后，生成指向公开仓库的下载链接
+ */
+function resolveTargetRepo() {
+  const publicRepo = process.env.PUBLIC_RELEASE_REPO;
+  if (publicRepo) {
+    const [owner, repo] = publicRepo.split("/");
+    if (owner && repo) {
+      console.log(`Using PUBLIC_RELEASE_REPO for download URLs: ${publicRepo}`);
+      return { owner, repo };
+    }
+    console.warn(`Invalid PUBLIC_RELEASE_REPO format: ${publicRepo}, falling back to GITHUB_REPOSITORY`);
+  }
+  return resolveRepo();
+}
+
+/**
+ * 将原始下载 URL 转换为目标仓库的 URL
+ * @param {string} originalUrl - 原始的 browser_download_url
+ * @param {object} targetRepo - 目标仓库 { owner, repo }
+ * @param {string} tagName - Release 标签名
+ * @returns {string} 转换后的 URL
+ */
+function rewriteDownloadUrl(originalUrl, targetRepo, tagName) {
+  if (!originalUrl) return originalUrl;
+  
+  // 提取文件名
+  const fileName = originalUrl.split("/").pop();
+  if (!fileName) return originalUrl;
+  
+  // 生成新的下载 URL
+  return `https://github.com/${targetRepo.owner}/${targetRepo.repo}/releases/download/${tagName}/${fileName}`;
+}
+
 async function fetchAllTags(octokit, owner, repo) {
   const perPage = 100;
   let page = 1;
@@ -60,7 +99,7 @@ async function fetchAllTags(octokit, owner, repo) {
   return all;
 }
 
-async function processRelease(octokit, options, tag, isAlpha) {
+async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
   try {
     const { data: release } = await octokit.repos.getReleaseByTag({ ...options, tag: tag.name });
 
@@ -80,7 +119,11 @@ async function processRelease(octokit, options, tag, isAlpha) {
     };
 
     const fillTasks = release.assets.map(async (asset) => {
-      const { name, browser_download_url } = asset;
+      const { name, browser_download_url: originalUrl } = asset;
+      // 使用目标仓库的 URL（如果配置了 PUBLIC_RELEASE_REPO）用于最终的下载链接
+      const browser_download_url = rewriteDownloadUrl(originalUrl, targetRepo, tag.name);
+      // 获取签名时使用原始 URL（当前仓库），因为签名文件在当前仓库中
+      const sigSourceUrl = originalUrl;
 
       // Windows x64
       if (name.endsWith("x64-setup.exe")) {
@@ -88,7 +131,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms["windows-x86_64"].url = browser_download_url;
       }
       if (name.endsWith("x64-setup.exe.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         updateData.platforms.win64.signature = sig;
         updateData.platforms["windows-x86_64"].signature = sig;
       }
@@ -99,7 +142,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms["windows-i686"].url = browser_download_url;
       }
       if (name.endsWith("x86-setup.exe.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         updateData.platforms["windows-x86"].signature = sig;
         updateData.platforms["windows-i686"].signature = sig;
       }
@@ -109,7 +152,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms["windows-aarch64"].url = browser_download_url;
       }
       if (name.endsWith("arm64-setup.exe.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         updateData.platforms["windows-aarch64"].signature = sig;
       }
 
@@ -123,7 +166,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         }
       }
       if (name.endsWith(".app.tar.gz.sig") && !name.includes("aarch") && !name.includes("arm64")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         updateData.platforms.darwin.signature = sig;
         updateData.platforms["darwin-intel"].signature = sig;
         updateData.platforms["darwin-x86_64"].signature = sig;
@@ -137,7 +180,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms["darwin-aarch64"].url = browser_download_url;
       }
       if (name.endsWith("aarch64.app.tar.gz.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         updateData.platforms["darwin-aarch64"].signature = sig;
       }
 
@@ -146,7 +189,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms["darwin-aarch64"].url = browser_download_url;
       }
       if (name.endsWith("arm64.app.tar.gz.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         updateData.platforms["darwin-aarch64"].signature = sig;
       }
 
@@ -157,7 +200,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms["darwin-x86_64"].url = browser_download_url;
       }
       if (name.endsWith("x64.app.tar.gz.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         updateData.platforms.darwin.signature = sig;
         updateData.platforms["darwin-intel"].signature = sig;
         updateData.platforms["darwin-x86_64"].signature = sig;
@@ -182,7 +225,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         ensureArch(arch).app.url = ensureArch(arch).app.url || browser_download_url;
       }
       if (name.endsWith(".AppImage.tar.gz.sig") || name.endsWith("linux-x86_64.tar.gz.sig") || name.endsWith("linux-aarch64.tar.gz.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         const lower = name.toLowerCase();
         const arch = detectLinuxArch(lower);
         if (lower.includes("aarch64") || lower.includes("arm64")) {
@@ -217,7 +260,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms.linux.url = updateData.platforms.linux.url || browser_download_url;
       }
       if (name.endsWith(".deb.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         const lower = name.toLowerCase();
         const arch = detectLinuxArch(lower);
         // 记录 deb 签名
@@ -250,7 +293,7 @@ async function processRelease(octokit, options, tag, isAlpha) {
         updateData.platforms.linux.url = updateData.platforms.linux.url || browser_download_url;
       }
       if (name.endsWith(".rpm.sig")) {
-        const sig = await getSignature(browser_download_url);
+        const sig = await getSignature(sigSourceUrl);
         const lower = name.toLowerCase();
         const arch = detectLinuxArch(lower);
         // 记录 rpm 签名
@@ -437,8 +480,23 @@ async function uploadJsonAsset(octokit, options, releaseId, name, json) {
 }
 
 async function getSignature(url) {
-  const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/octet-stream" } });
-  return res.text();
+  try {
+    const res = await fetch(url, { method: "GET", headers: { "Content-Type": "application/octet-stream" } });
+    if (!res.ok) {
+      console.warn(`Failed to fetch signature from ${url}: ${res.status} ${res.statusText}`);
+      return "Not Found";
+    }
+    const text = await res.text();
+    // 验证签名内容是否有效（应该是 base64 编码的字符串，不包含 HTML）
+    if (text.includes("<html") || text.includes("<!DOCTYPE") || text.includes("Not Found")) {
+      console.warn(`Invalid signature content from ${url}`);
+      return "Not Found";
+    }
+    return text.trim();
+  } catch (error) {
+    console.warn(`Error fetching signature from ${url}:`, error.message);
+    return "Not Found";
+  }
 }
 
 main().catch((e) => {
