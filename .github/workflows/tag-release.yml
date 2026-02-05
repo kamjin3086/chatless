@@ -822,6 +822,68 @@ jobs:
         continue-on-error: true
         shell: bash
 
+      - name: Verify uploaded release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "=== 验证 Release $TAG 中的文件 ==="
+          
+          # 等待 Release 资产同步
+          sleep 3
+          
+          # 获取 Release 中的所有资产
+          echo "--- Release Assets ---"
+          gh release view "$TAG" --json assets -q '.assets[].name' | sort
+          
+          echo ""
+          echo "--- 文件数量统计 ---"
+          ASSET_COUNT=$(gh release view "$TAG" --json assets -q '.assets | length')
+          echo "总文件数: $ASSET_COUNT"
+          
+          echo ""
+          echo "--- 按类型统计 ---"
+          SIG_COUNT=$(gh release view "$TAG" --json assets -q '.assets[].name' | grep -c '\.sig$' || echo "0")
+          JSON_COUNT=$(gh release view "$TAG" --json assets -q '.assets[].name' | grep -c '\.json$' || echo "0")
+          TAR_COUNT=$(gh release view "$TAG" --json assets -q '.assets[].name' | grep -c '\.tar\.gz$' || echo "0")
+          echo "签名文件 (.sig): $SIG_COUNT"
+          echo "JSON 文件: $JSON_COUNT"
+          echo "Tar.gz 文件: $TAR_COUNT"
+          
+          # 验证关键文件是否存在
+          echo ""
+          echo "--- 关键文件检查 ---"
+          ASSETS=$(gh release view "$TAG" --json assets -q '.assets[].name')
+          
+          # 检查 update.json
+          if echo "$ASSETS" | grep -q "^update\.json$"; then
+            echo "✓ update.json 已上传"
+          else
+            echo "::warning::update.json 未找到"
+          fi
+          
+          # 检查 update-proxy.json
+          if echo "$ASSETS" | grep -q "^update-proxy\.json$"; then
+            echo "✓ update-proxy.json 已上传"
+          else
+            echo "::warning::update-proxy.json 未找到"
+          fi
+          
+          # 检查 .app.tar.gz (macOS 更新所需)
+          if echo "$ASSETS" | grep -q "\.app\.tar\.gz$"; then
+            echo "✓ macOS app.tar.gz 已上传"
+          else
+            echo "::warning::macOS app.tar.gz 未找到"
+          fi
+          
+          # 检查 .AppImage.tar.gz (Linux 更新所需)
+          if echo "$ASSETS" | grep -q "\.AppImage\.tar\.gz$"; then
+            echo "✓ Linux AppImage.tar.gz 已上传"
+          else
+            echo "::warning::Linux AppImage.tar.gz 未找到"
+          fi
+        shell: bash
+
   # ===========同步release到指定仓库的工作流===========
   mirror-public-release:
     needs: release
@@ -980,4 +1042,32 @@ jobs:
           done
           
           echo "=== Release 同步完成 ==="
+        shell: bash
 
+      - name: Verify public release assets
+        if: ${{ steps.check.outputs.has_secrets == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_RELEASE_REPO: ${{ secrets.PUBLIC_RELEASE_REPO }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "=== 验证公开仓库 Release $TAG 中的文件 ==="
+          
+          # 获取 Release 中的所有资产
+          echo "--- Release Assets ---"
+          gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' | sort
+          
+          echo ""
+          echo "--- 文件数量统计 ---"
+          ASSET_COUNT=$(gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets | length')
+          echo "总文件数: $ASSET_COUNT"
+          
+          echo ""
+          echo "--- 按类型统计 ---"
+          SIG_COUNT=$(gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' | grep -c '\.sig$' || echo "0")
+          JSON_COUNT=$(gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' | grep -c '\.json$' || echo "0")
+          TAR_COUNT=$(gh release view "$TAG" --repo "$PUBLIC_RELEASE_REPO" --json assets -q '.assets[].name' | grep -c '\.tar\.gz$' || echo "0")
+          echo "签名文件 (.sig): $SIG_COUNT"
+          echo "JSON 文件: $JSON_COUNT"
+          echo "Tar.gz 文件: $TAR_COUNT"
+        shell: bash
