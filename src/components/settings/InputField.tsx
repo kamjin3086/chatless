@@ -1,10 +1,11 @@
 import React, { useState, useId } from "react";
 import { cn } from "@/lib/utils";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, HelpCircle } from "lucide-react";
 
 interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
   description?: string;
+  tooltip?: string; // 问号提示
   icon?: React.ReactNode;
   wrapperClassName?: string;
   inline?: boolean; // 行内显示：标签与输入框同一行
@@ -14,6 +15,7 @@ interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
 export function InputField({
   label,
   description,
+  tooltip,
   icon,
   wrapperClassName,
   className,
@@ -32,15 +34,25 @@ export function InputField({
 
   return (
     <div className={cn("group mb-4", inline ? "flex items-center gap-3" : "", wrapperClassName)}>
-      <label
-        htmlFor={id}
-        className={cn(
-          "text-sm font-medium text-gray-700 dark:text-gray-300",
-          inline ? cn(labelWidthClassName ?? "w-28", "mb-0") : "block mb-1.5"
+      <div className={cn("flex items-center gap-1.5", inline ? "" : "mb-1.5")}>
+        <label
+          htmlFor={id}
+          className={cn(
+            "text-sm font-medium text-gray-700 dark:text-gray-300",
+            inline ? cn(labelWidthClassName ?? "w-28", "mb-0") : ""
+          )}
+        >
+          {label}
+        </label>
+        {tooltip && (
+          <div className="group/tooltip relative">
+            <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-help" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 max-w-xs">
+              {tooltip}
+            </div>
+          </div>
         )}
-      >
-        {label}
-      </label>
+      </div>
       <div className={cn("relative", inline ? "flex-1" : "")}>
         {icon && (
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">

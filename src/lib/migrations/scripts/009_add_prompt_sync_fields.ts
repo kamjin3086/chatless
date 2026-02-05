@@ -2,8 +2,8 @@ import { Migration } from '../types';
 
 // 版本: 8
 // 为 prompts 表补齐同步所需字段（软删除 tombstone + tie-break device_id）
-export const migration_008: Migration = {
-  version: 8,
+export const migration_009: Migration = {
+  version: 9,
   name: 'add_prompt_sync_fields',
   description: 'Add deleted_at and updated_by_device_id fields for prompts sync',
 

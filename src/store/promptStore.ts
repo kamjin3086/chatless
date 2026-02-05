@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import type { PromptItem, PromptHistory } from '@/types/prompt';
+import { triggerPromptSync } from '@/lib/sync/prompts/autoSync';
 
 const MAX_HISTORY_PER_PROMPT = 10;
 import { getOrCreateSyncDeviceId } from '@/lib/sync/deviceId';
@@ -117,6 +118,8 @@ export const usePromptStore = create<PromptState & PromptActions>()(
               deleted_at: null,
               updated_by_device_id: deviceId,
             } as any).catch(() => {});
+            // 触发自动同步
+            triggerPromptSync();
           })();
         } catch {}
         return id;
@@ -170,6 +173,8 @@ export const usePromptStore = create<PromptState & PromptActions>()(
           void (async () => {
             const deviceId = await getOrCreateSyncDeviceId();
             await repo.update(id, { ...toUpdate, updated_by_device_id: deviceId } as any).catch(() => {});
+            // 触发自动同步
+            triggerPromptSync();
           })();
         } catch {}
       },
@@ -182,6 +187,8 @@ export const usePromptStore = create<PromptState & PromptActions>()(
           void (async () => {
             const deviceId = await getOrCreateSyncDeviceId();
             await repo.update(id, { deleted_at: now, updated_at: now, updated_by_device_id: deviceId } as any).catch(() => {});
+            // 触发自动同步
+            triggerPromptSync();
           })();
         } catch {}
       },
