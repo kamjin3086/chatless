@@ -1,31 +1,70 @@
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '@/lib/llm/types/stream-events';
-import { cleanToolCallInstructionsForDisplay, extractToolCallFromText, extractToolCallsFromText } from '@/lib/chat/tool-call-cleanup';
-import { ToolCallDetector } from '@/lib/mcp/ToolCallDetector';
-import { createToolInstructionSuppressor } from '@/lib/mcp/toolInstruction/suppressor';
-
-
-// ============================================================
-// 工具指令“跨 chunk”抑制/捕获（用于 GPT-OSS 拆包场景）
-// - Provider 会把内容拆成多个 content_token（如 "<|channel|>", "<|message|>", "<json>"...）
-// - 若仍按“单 token 解析”，必然解析失败并产生残片/空气泡
-// - 这里复用 suppressor：在捕获到完整指令块后立刻产出 tool_call 事件
-// ============================================================
-const suppressor = createToolInstructionSuppressor({ guardWindow: 64, maxBuffer: 65536 });
-let detectBuf = '';
+import { extractToolCallFromText, extractToolCallsFromText } from '@/lib/chat/tool-call-cleanup';
 
 /**
- * 工具通道解析器
- *
- * 职责：
- * - 从 content_token 中识别并剥离工具调用指令
- * - 将工具指令转换为结构化的 tool_call 事件
- * - 确保下游（Store/UI）永远不会看到原始指令文本
- *
- * 兼容格式：
- * - GPT‑OSS: <|channel|>commentary to=server[.tool] ... {json}
- * - XML:    <tool_call>...</tool_call> / <use_mcp_tool>...</use_mcp_tool>
- * - JSON:   {"type":"tool_call", ...}
+ * 简化版工具通道解析器
+ * 
+ * 设计原则：
+ * 1. 无复杂状态机，只用简单的缓冲区累积
+ * 2. 流式期间检测工具指令特征，抑制可能的工具指令内容
+ * 3. 在 stream_complete 时统一解析，生成 tool_call 事件
+ * 
+ * 支持格式：
+ * - GPT-OSS: <|channel|>commentary to=server__tool ... {json}
+ * - XML: <tool_call>...</tool_call>, <use_mcp_tool>...</use_mcp_tool>
+ * - JSON: {"server":"...", "tool":"..."}
+ */
+
+// 累积缓冲区，用于在流结束时解析工具调用
+let contentBuffer = '';
+// 标记是否正在抑制（检测到工具指令开始）
+let suppressing = false;
+// 抑制开始的位置（用于在结束时提取工具指令）
+let suppressionStartIndex = 0;
+
+// 工具指令起始模式
+const TOOL_START_PATTERNS = [
+  '<|channel|>',           // GPT-OSS 格式
+  '<tool_call>',           // XML 格式
+  '<use_mcp_tool>',        // XML 格式
+  '{"server":',            // JSON 格式
+  '{"tool":',              // JSON 格式变体
+];
+
+// 检查文本是否以工具指令开始
+function startsWithToolPattern(text: string): boolean {
+  const trimmed = text.trimStart();
+  return TOOL_START_PATTERNS.some(p => trimmed.startsWith(p));
+}
+
+// 检查文本是否确定包含工具指令开始（必须是完整匹配）
+function containsToolStart(text: string): boolean {
+  return TOOL_START_PATTERNS.some(p => text.includes(p));
+}
+
+// 检查文本是否以工具指令的部分前缀结尾（跨 chunk 场景，需要等待更多内容）
+function endsWithPartialToolPattern(text: string): { partial: boolean; minLength: number } {
+  for (const pattern of TOOL_START_PATTERNS) {
+    // 检查是否以 pattern 的前缀结尾（至少 2 个字符才算有意义的前缀）
+    for (let i = 2; i < pattern.length; i++) {
+      if (text.endsWith(pattern.slice(0, i))) {
+        return { partial: true, minLength: pattern.length - i };
+      }
+    }
+  }
+  return { partial: false, minLength: 0 };
+}
+
+// 重置状态
+function reset(): void {
+  contentBuffer = '';
+  suppressing = false;
+  suppressionStartIndex = 0;
+}
+
+/**
+ * 重写事件流，处理工具调用
  */
 export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[] {
   if (!Array.isArray(events) || events.length === 0) return events;
@@ -33,166 +72,94 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
   const out: StreamEvent[] = [];
 
   for (const ev of events) {
-    // 流结束：冲刷抑制器尾部（避免“尾巴丢字”，以及捕获到的工具指令漏解析）
+    // 流结束：解析累积的内容，生成工具调用事件
     if (ev.type === 'stream_complete') {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:stream_complete',message:'stream_complete received',data:{bufferLen:contentBuffer.length,bufferPreview:contentBuffer.slice(0,200),suppressing},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
+      // #endregion
       try {
-        const flushed = suppressor.flush();
-        if (flushed.hadSuppression && flushed.captured) {
-          const parsedAll = extractToolCallsFromText(flushed.captured);
-          if (parsedAll.length > 0) {
-            for (const parsed of parsedAll) {
+        if (contentBuffer) {
+          // 尝试从累积内容中提取工具调用
+          const toolCalls = extractToolCallsFromText(contentBuffer);
+          
+          if (toolCalls.length > 0) {
+            for (const tc of toolCalls) {
+              // #region agent log
+              fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:complete',message:'emitting tool_call on stream_complete',data:{server:tc.server,tool:tc.tool,bufferLen:contentBuffer.length},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
+              // #endregion
               out.push(
-                createStreamEvent.toolCall(flushed.captured, {
-                  serverName: parsed.server,
-                  toolName: parsed.tool,
-                  arguments: parsed.args ? JSON.stringify(parsed.args) : undefined,
+                createStreamEvent.toolCall(contentBuffer, {
+                  serverName: tc.server,
+                  toolName: tc.tool,
+                  arguments: tc.args ? JSON.stringify(tc.args) : undefined,
                 })
               );
             }
           } else {
-            // 兼容兜底：保留旧 parseFirst 行为
-            const parsed = extractToolCallFromText(flushed.captured);
-            if (parsed?.server && parsed.tool) {
+            // 兜底：尝试单个解析
+            const tc = extractToolCallFromText(contentBuffer);
+            if (tc?.server && tc.tool) {
+              // #region agent log
+              fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:complete',message:'emitting single tool_call on stream_complete',data:{server:tc.server,tool:tc.tool},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
+              // #endregion
               out.push(
-                createStreamEvent.toolCall(flushed.captured, {
-                  serverName: parsed.server,
-                  toolName: parsed.tool,
-                  arguments: parsed.args ? JSON.stringify(parsed.args) : undefined,
+                createStreamEvent.toolCall(contentBuffer, {
+                  serverName: tc.server,
+                  toolName: tc.tool,
+                  arguments: tc.args ? JSON.stringify(tc.args) : undefined,
                 })
               );
             }
           }
-        } else if (flushed.tail) {
-          const tail = flushed.tail;
-          if (tail.trim().length > 0) {
-            out.push({ ...ev, type: 'content_token', content: tail } as any);
-          }
         }
-      } catch { /* noop */ }
-      detectBuf = '';
+      } catch (e) {
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:complete',message:'error parsing tool calls',data:{error:String(e)},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
+        // #endregion
+      }
+      
+      // 重置状态
+      reset();
       out.push(ev);
       continue;
     }
 
+    // 非内容事件：直接透传
     if (ev.type !== 'content_token') {
       out.push(ev);
       continue;
     }
 
-    const raw = ev.content || '';
+    const content = ev.content || '';
+    if (!content) continue;
 
-    // —— 早期抑制阀：先保证 UI 永远看不到工具指令碎片 ——
-    const up = suppressor.push(raw);
-    if (up.ended && up.captured) {
-      try {
-        const parsedAll = extractToolCallsFromText(up.captured);
-        if (parsedAll.length > 0) {
+    // 累积到缓冲区
+    contentBuffer += content;
 
-          for (const parsed of parsedAll) {
-            out.push(
-              createStreamEvent.toolCall(up.captured, {
-                serverName: parsed.server,
-                toolName: parsed.tool,
-                arguments: parsed.args ? JSON.stringify(parsed.args) : undefined,
-              })
-            );
-          }
-          detectBuf = ''; // 捕获命中后清空，避免重复
-        } else {
-          const parsed = extractToolCallFromText(up.captured);
-          if (parsed?.server && parsed.tool) {
-            out.push(
-              createStreamEvent.toolCall(up.captured, {
-                serverName: parsed.server,
-                toolName: parsed.tool,
-                arguments: parsed.args ? JSON.stringify(parsed.args) : undefined,
-              })
-            );
-            detectBuf = '';
-          }
-        }
-      } catch { /* noop */ }
-    }
-
-    const visible = up.visible || '';
-    if (!visible) {
-      // 纯指令碎片（或 guardWindow 尾巴）被抑制：不向下游输出
-      continue;
-    }
-
-    // 兜底识别：累积可见文本，处理“未触发抑制器”的变体格式
-    detectBuf += visible;
-    if (detectBuf.length > 2048) detectBuf = detectBuf.slice(-2048);
-    if (!up.ended) {
-      try {
-        const parsedAll = extractToolCallsFromText(detectBuf);
-        if (parsedAll.length > 0) {
-
-          for (const p of parsedAll) {
-            out.push(
-              createStreamEvent.toolCall(detectBuf, {
-                serverName: p.server,
-                toolName: p.tool,
-                arguments: p.args ? JSON.stringify(p.args) : undefined,
-              })
-            );
-          }
-          detectBuf = '';
-        } else {
-          const p = extractToolCallFromText(detectBuf);
-          if (p?.server && p.tool) {
-            out.push(
-              createStreamEvent.toolCall(detectBuf, {
-                serverName: p.server,
-                toolName: p.tool,
-                arguments: p.args ? JSON.stringify(p.args) : undefined,
-              })
-            );
-            detectBuf = '';
-          }
-        }
-      } catch { /* noop */ }
-    }
-
-    // 快速路径：使用统一的 ToolCallDetector 检测
-    const detector = ToolCallDetector.getInstance();
-    if (!detector.mightContainToolCall(visible)) {
-      out.push({ ...ev, content: visible });
-      continue;
-    }
-
-
-    // 尝试解析为工具调用
-    const parsed = extractToolCallFromText(visible);
-    // UI/流式：必须用 display 清理，避免 "<use_mcp_tool" 等半截标签漏到正文
-    const cleaned = cleanToolCallInstructionsForDisplay(visible);
-
-
-    // 若解析失败，仅输出清理过的文本
-    if (!parsed || !parsed.server || !parsed.tool) {
-      if (cleaned && cleaned.trim().length > 0) {
-        out.push({ ...ev, content: cleaned });
+    // 检查是否应该开始抑制
+    // 只有当确定检测到工具指令开始时才抑制（完整模式匹配）
+    if (!suppressing) {
+      if (startsWithToolPattern(contentBuffer) || containsToolStart(contentBuffer)) {
+        suppressing = true;
+        suppressionStartIndex = contentBuffer.length - content.length;
+        // #region agent log
+        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:push',message:'starting suppression',data:{contentPreview:content.slice(0,50),bufferLen:contentBuffer.length,reason:'tool_pattern_matched'},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
+        // #endregion
+        // 不输出任何内容
+        continue;
       }
+    }
 
+    // 如果正在抑制，不输出内容
+    if (suppressing) {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:push',message:'suppressing content',data:{contentPreview:content.slice(0,50)},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
+      // #endregion
       continue;
     }
 
-    // 1) 先输出“去除了指令后的正文”（若还有的话）
-    if (cleaned && cleaned.trim().length > 0) {
-      out.push({ ...ev, content: cleaned });
-    }
-
-    // 2) 再追加一个结构化的 tool_call 事件
-    const toolEvent = createStreamEvent.toolCall(
-      visible,
-      {
-        serverName: parsed.server,
-        toolName: parsed.tool,
-        arguments: parsed.args ? JSON.stringify(parsed.args) : undefined,
-      }
-    );
-    out.push(toolEvent);
-
+    // 正常内容：直接透传
+    out.push(ev);
   }
 
   return out;

@@ -31,7 +31,6 @@ import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import type { EventHandler, StreamContext } from '../types';
 import { useChatStore } from '@/store/chatStore';
 import { createContentAppender } from '../ContentAppender';
-import { createToolInstructionSuppressor } from '../toolInstructionSuppressor';
 import { createInlineThinkingOrchestrator } from '../thinking';
 
 export class ContentEventHandler implements EventHandler {
@@ -73,7 +72,7 @@ export class ContentEventHandler implements EventHandler {
     // - 判断是否有文本内容应该使用 segments 而不是 content
     context.content += chunk;
 
-    // —— 早阻断抑制阀（稳定版，状态机） ——
+    // —— 早阻断抑制阀（已简化：工具指令抑制由 ToolChannelParser 统一处理） ——
     const visible = applySuppressionValve(context, chunk);
     if (!visible) return;
 
@@ -81,7 +80,7 @@ export class ContentEventHandler implements EventHandler {
     const pieces = splitInlineThinking(context, visible);
     if (pieces.length === 0) return;
 
-    // 让 message.content 在流式期间也能更新（并节流落盘），避免“只有结束才有内容”
+    // 让 message.content 在流式期间也能更新（并节流落盘），避免"只有结束才有内容"
     const appender = getContentAppender(context);
 
     // 转发给FSM处理（带错误处理）
@@ -97,7 +96,7 @@ export class ContentEventHandler implements EventHandler {
         if (p.type === 'text') {
           const rawText = String(p.text || '');
           if (rawText) {
-            // 注意：为了让 salvage/orchestrator 能“看见”原始的 </think>，TOKEN_APPEND 仍发送 rawText。
+            // 注意：为了让 salvage/orchestrator 能"看见"原始的 </think>，TOKEN_APPEND 仍发送 rawText。
             // 但 message.content（用于 UI fallback / early render）不应包含字面量 think 标签，否则会短暂/持续泄漏到正文。
             const visibleText = rawText.replaceAll('</think>', '').replaceAll('<think>', '');
 
@@ -163,33 +162,26 @@ function splitInlineThinking(context: StreamContext, visibleChunk: string) {
 }
 
 /**
- * 早阻断“抑制阀”（稳定版）
- * - 使用共享状态机，避免“猜测式截断”误伤普通文本（尤其是 HTML/代码里的 "<"）
- * - 支持 XML 闭合标签与 JSON 大括号闭合
+ * 早阻断"抑制阀"（已简化）
+ * 
+ * 重要变更：工具指令抑制已统一由 ToolChannelParser（Provider 层）处理。
+ * 此函数现在直接透传内容，不再创建额外的 suppressor 实例。
+ * 
+ * 这样做是为了避免多个 suppressor 实例导致的状态不一致问题：
+ * - 之前 ContentEventHandler 和 ToolChannelParser 各自创建 suppressor
+ * - 当内容被分割到不同实例处理时，会导致工具指令识别失败
+ * - 现在统一在 ToolChannelParser 层处理，确保单一状态机处理完整的流
  */
 function applySuppressionValve(context: StreamContext, chunk: string): string {
-  // 在 context.suppression 上复用字段，保证 Orchestrator 的“尾巴冲刷”逻辑仍然可用
-  const anyCtx = context as any;
-  if (!anyCtx._toolSuppressor) {
-    anyCtx._toolSuppressor = createToolInstructionSuppressor({ guardWindow: 64, maxBuffer: 65536 });
-  }
-  const sup = anyCtx._toolSuppressor as ReturnType<typeof createToolInstructionSuppressor>;
-  const up = sup.push(chunk);
-
-  // 同步给旧字段（仅用于冲刷尾部窗口）
+  // 保留 context.suppression 字段用于兼容性
   if (!context.suppression) {
     context.suppression = { buffer: '', active: false, braceDepth: 0, seenJsonStart: false, guardWindow: 64 };
   }
-  context.suppression.buffer = ''; // 由 suppressor 自己维护 buffer；这里仅保留“可冲刷尾巴”的语义
-  context.suppression.active = sup.getState().active;
-  context.suppression.guardWindow = 64;
-
-  if (up.started) {
-    try { useChatStore.getState().dispatchMessageAction(context.messageId, { type: 'TOOL_DETECTING_START' } as any); } catch { /* noop */ }
-  }
-  if (up.ended) {
-    try { useChatStore.getState().dispatchMessageAction(context.messageId, { type: 'TOOL_DETECTING_END' } as any); } catch { /* noop */ }
-  }
-  return up.visible || '';
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ContentEventHandler.ts:applySuppressionValve',message:'passthrough (suppression moved to ToolChannelParser)',data:{chunkPreview:chunk.slice(0,100)},timestamp:Date.now(),hypothesisId:'G'})}).catch(()=>{});
+  // #endregion
+  
+  // 直接返回原始 chunk，工具指令抑制由 ToolChannelParser 在 Provider 层统一处理
+  return chunk;
 }
-

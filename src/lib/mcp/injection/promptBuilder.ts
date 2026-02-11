@@ -64,9 +64,19 @@ export async function buildInitialPrompt(
   const modelName = context.modelName || '';
   const useNativeTools = shouldUseNativeToolCalls(providerName, modelName);
   const toolStrategy = getToolCallStrategy(providerName, modelName);
+  
+  // 调试日志：追踪工具调用策略决策
+  console.debug('[promptBuilder] 工具调用策略:', {
+    providerName,
+    modelName,
+    useNativeTools,
+    toolStrategy: toolStrategy.useNative ? 'native' : 'prompt',
+    source: toolStrategy.source,
+    note: toolStrategy.note,
+  });
 
-  // 不支持 native tool 的模型：跳过工具注入，作为普通对话模型使用
-  // 不抛错，允许用户继续使用不支持工具调用的模型
+  // 不支持 native tool 的模型：仍然注入工具提示，依靠文本解析提取工具调用
+  // 不抛错，允许用户继续使用不支持原生工具调用 API 的模型
   
   // 1. 时间上下文（高优先级）
   await injectTimeContext(messages, context.userContent, signals.isTimeRelated);
@@ -136,7 +146,7 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     // 只在"明显需要实时信息"的场景下注入，避免所有请求都默认携带 web_search（会分散模型注意力）
     (signals.isTimeRelated || (signals.hasExplicitMention && signals.mentionedServers.some((s) => s.toLowerCase() === WEB_SEARCH_SERVER_NAME)));
 
-  // 构建原生工具定义（Native-only，动态加载）
+  // 构建原生工具定义（用于 native tool API 或文本注入）
   const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
     servers: enabled,
     includeSkills: shouldExposeSkills,
@@ -144,11 +154,29 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     userContent: context.userContent || '',
   });
 
-  // 使用原生工具调用时，只注入简化的协议说明
+  // 注入工具策略说明
   messages.push({
     role: 'system',
     content: CORE_TOOL_POLICY_MD
   });
+
+  // 对于不支持 native tool 的模型：将工具 schema 转换为文本格式注入
+  // 这让模型知道有哪些工具可用、参数是什么，从而能够生成正确的工具调用格式
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:155',message:'checking tool schema injection',data:{useNativeTools,nativeToolsCount:nativeTools?.length||0,providerName,modelName},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  if (!useNativeTools && Array.isArray(nativeTools) && nativeTools.length > 0) {
+    const toolSchemaText = buildToolSchemaPrompt(nativeTools);
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:160',message:'tool schema generated',data:{schemaLength:toolSchemaText?.length||0,schemaPreview:toolSchemaText?.slice(0,300)||''},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    if (toolSchemaText) {
+      messages.push({
+        role: 'system',
+        content: toolSchemaText
+      });
+    }
+  }
 
   // 5.1 会话附加内容：工作目录（临时授权）
   try {
@@ -472,4 +500,69 @@ async function injectSkillsIndex(
     console.warn('[PromptBuilder] Skills 索引注入失败:', error);
     // 不阻塞主流程
   }
+}
+
+/**
+ * 将工具定义转换为文本格式的提示词
+ * 用于不支持 native tool API 的模型
+ * 
+ * @param tools 工具定义列表
+ * @returns 格式化的工具 schema 提示词
+ */
+function buildToolSchemaPrompt(tools: NativeToolDefinition[]): string {
+  if (!tools || tools.length === 0) return '';
+
+  const toolDescriptions = tools.map((tool, index) => {
+    const { name, description, parameters } = tool;
+    
+    // 构建参数说明
+    let paramsText = '';
+    if (parameters && parameters.properties) {
+      const props = parameters.properties as Record<string, { type?: string; description?: string; enum?: string[] }>;
+      const required = parameters.required || [];
+      
+      const paramsList = Object.entries(props).map(([paramName, paramDef]) => {
+        const isRequired = required.includes(paramName);
+        const typeStr = paramDef.type || 'any';
+        const desc = paramDef.description || '';
+        const enumStr = paramDef.enum ? ` (可选值: ${paramDef.enum.join(', ')})` : '';
+        const requiredMark = isRequired ? ' [必填]' : ' [可选]';
+        return `    - ${paramName}: ${typeStr}${requiredMark}${enumStr}${desc ? ` - ${desc}` : ''}`;
+      });
+      
+      paramsText = paramsList.length > 0 
+        ? `\n  参数:\n${paramsList.join('\n')}` 
+        : '\n  参数: 无';
+    } else {
+      paramsText = '\n  参数: 无';
+    }
+
+    return `${index + 1}. ${name}\n  描述: ${description}${paramsText}`;
+  }).join('\n\n');
+
+  return `【可用工具列表】
+
+你可以使用以下工具来完成任务。调用工具时，请使用以下 JSON 格式：
+
+\`\`\`json
+{
+  "server": "服务器名称",
+  "tool": "工具名称",
+  "arguments": {
+    "参数名": "参数值"
+  }
+}
+\`\`\`
+
+**重要**：JSON 必须以 \`{"server":\` 开头，\`"tool":\` 紧随其后。
+
+工具列表：
+
+${toolDescriptions}
+
+调用规则：
+- 工具名格式为 "server__tool"，调用时 server 填 "__" 前的部分，tool 填后面的部分
+- 例如：fs__read → server: "fs", tool: "read"
+- 必填参数必须提供，可选参数可省略
+- 一次只调用一个工具，等待结果后再决定下一步`;
 }

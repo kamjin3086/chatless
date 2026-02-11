@@ -73,11 +73,15 @@ Follow these rules strictly:
       { role: 'user', content: seed },
     ];
     const gateway = new ChatGateway({ provider, model, options: { temperature: 0.2 } });
+    console.debug('[TitleService] 开始调用模型生成标题, provider:', provider, 'model:', model);
     const { content } = await gateway.chat(messages);
-    console.debug('[TitleService] 模型原始输出:', content);
+    console.debug('[TitleService] 模型原始输出:', content, '| 类型:', typeof content, '| 长度:', content?.length);
     const parsed = extractTitleFromOutput(content, max);
-    console.debug('[TitleService] 解析结果:', parsed, '| 归一化结果:', normalizeTitle(content, max));
-    return parsed || normalizeTitle(content, max);
+    const normalized = normalizeTitle(content, max);
+    console.debug('[TitleService] 解析结果:', parsed, '| 归一化结果:', normalized);
+    const result = parsed || normalized;
+    console.debug('[TitleService] 最终返回:', result);
+    return result;
   })();
   
   // 将请求 Promise 添加到 pending 缓存

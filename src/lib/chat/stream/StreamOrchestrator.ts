@@ -60,6 +60,16 @@ export class StreamOrchestrator {
       new ContentEventHandler(),
       new ToolCallEventHandler(),
     ];
+
+    // 将 orchestrator 引用存储到 context 中，供 ContentEventHandler 在检测到文本工具调用时回调
+    (this.context as any)._orchestrator = this;
+  }
+
+  /**
+   * 公开的事件处理方法，供 ContentEventHandler 回调使用
+   */
+  public async dispatchEvent(event: StreamEvent): Promise<void> {
+    await this.handleEvent(event);
   }
 
   /**
@@ -410,7 +420,9 @@ export class StreamOrchestrator {
             }
           }
         }
-      } catch { /* ignore title generation errors */ }
+      } catch (e) {
+        console.error('[StreamOrchestrator] 标题生成失败:', e);
+      }
     }
 
     // 🎯 输出完整的响应日志（在所有处理完成后）

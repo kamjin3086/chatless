@@ -236,6 +236,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
    * @param conversationId 会话ID
    * @param messages 消息列表
    * @param userContent 用户当前输入的内容
+   * @param provider Provider 名称（用于检测工具调用能力）
+   * @param model 模型名称（用于检测工具调用能力）
    * @param options 可选参数
    * @returns 构建好的历史消息数组
    */
@@ -243,6 +245,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     conversationId: string,
     messages: Message[],
     userContent: string,
+    provider?: string,
+    model?: string,
     options?: {
       images?: string[];
       contextData?: string;
@@ -277,7 +281,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       // 2. 添加MCP系统注入
       try {
         const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
-        const injection = await buildMcpSystemInjections(userContent, conversationId);
+        // 传递 provider 和 model 以正确判断工具调用能力
+        const injection = await buildMcpSystemInjections(userContent, conversationId, provider, model);
         for (const m of injection.systemMessages) {
           const c = String((m as any).content || '');
           // 避免重复注入时间（因为我们已经在顶部注入了）
@@ -490,6 +495,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       finalConversationId,
       currentConversation?.messages || [],
       content,
+      effectiveProvider,
+      modelToUse,
       {
         images: options?.images,
         contextData: documentData?.contextData,
@@ -988,12 +995,25 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     // 直接添加到消息列表中（会被分组逻辑处理）
     await st.addMessage(newVersionMsg);
 
+    // 选择 provider/model 与参数（提前获取，供 buildLlmHistory 使用）
+    const modelToUse = conv.model_id;
+    let effectiveProvider = currentProviderName;
+    try {
+      const { specializedStorage } = await import('@/lib/storage');
+      const lastPair = await specializedStorage.models.getLastSelectedModelPair();
+      if (lastPair && lastPair.modelId === modelToUse && lastPair.provider) {
+        effectiveProvider = lastPair.provider;
+      }
+    } catch { /* noop */ }
+
     // 构建历史（不包含当前被重试的 assistant 内容）
     // 使用统一的 buildLlmHistory 函数，传入 userIdx 作为截止索引
     const historyForLlm = await buildLlmHistory(
       conv.id,
       conv.messages,
       userMsg.content,
+      effectiveProvider,
+      modelToUse,
       {
         images: userMsg.images,
         contextData: userMsg.context_data,
@@ -1008,17 +1028,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         role: 'system',
         content: `【重试生成】这是同一问题的重新生成版本。请避免复用上一版本的句子组织方式与措辞；如果内容相同也要换一种表达方式。\nnonce=${Date.now()}`,
       });
-    } catch { /* noop */ }
-
-    // 选择 provider/model 与参数
-    const modelToUse = conv.model_id;
-    let effectiveProvider = currentProviderName;
-    try {
-      const { specializedStorage } = await import('@/lib/storage');
-      const lastPair = await specializedStorage.models.getLastSelectedModelPair();
-      if (lastPair && lastPair.modelId === modelToUse && lastPair.provider) {
-        effectiveProvider = lastPair.provider;
-      }
     } catch { /* noop */ }
 
     const apiKeyValid = await checkApiKeyValidity(effectiveProvider, modelToUse);

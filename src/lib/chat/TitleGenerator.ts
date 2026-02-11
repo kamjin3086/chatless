@@ -18,6 +18,9 @@ export function normalizeTitle(raw: string, maxLength: number): string {
   if (!raw) return '';
   let title = String(raw).trim();
 
+  // 移除反引号包裹
+  title = title.replace(/`/g, '');
+
   // 若包含 JSON 形态的 {"title":"..."}，先直接提取值
   try {
     const jsonLike = title.match(/"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
@@ -30,6 +33,9 @@ export function normalizeTitle(raw: string, maxLength: number): string {
 
   // 去除 R1 等模型输出的思考标签与任意 HTML/XML 标签
   title = title.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  // 移除孤立的 </think> 闭合标签
+  title = title.replace(/<\/think>/gi, '');
+  // 移除其他 HTML/XML 标签
   title = title.replace(/<[^>]+>/g, '');
 
   // 去除换行与多余空白
@@ -102,8 +108,18 @@ export function extractTitleFromOutput(raw: string, maxLength: number): string {
 
   // 去掉可能的代码块围栏，降低解析失败概率
   text = text.replace(/```[a-zA-Z]*\n([\s\S]*?)\n```/g, '$1');
-  // 先移除 <think> 块，避免其中的花括号干扰 JSON 解析
+  
+  // 移除反引号包裹（部分模型会输出 `{...}`）
+  text = text.replace(/`/g, '');
+  
+  // 移除 <think>...</think> 块（完整标签对）
   text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  
+  // 移除孤立的 </think> 闭合标签（模型可能只输出闭合标签或截断）
+  text = text.replace(/<\/think>/gi, '');
+  
+  // 移除孤立的 <think> 开始标签及其后的内容直到遇到 JSON 或结尾
+  text = text.replace(/<think>[\s\S]*/gi, '');
 
   // 优先用正则在任意位置提取 \"title\" 字段（无需完整 JSON），成功即返回
   try {

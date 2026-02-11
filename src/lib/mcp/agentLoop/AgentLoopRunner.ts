@@ -909,7 +909,9 @@ export class AgentLoopRunner {
             }
           }
         }
-      } catch { /* ignore title generation errors */ }
+      } catch (e) {
+        console.error('[AgentLoopRunner] 标题生成失败:', e);
+      }
     }
   }
 }
