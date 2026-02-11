@@ -104,12 +104,8 @@ export async function composeChatOptions(
     { forceInject: true }
   );
 
-  
-  if (!injection.useNativeTools) {
-    throw new Error(`Native tool calling is required. Unsupported provider/model: ${provider}/${model}`);
-  }
-
-  if (injection.nativeTools && injection.nativeTools.length > 0) {
+  // 不支持 native tool 的模型：跳过工具注入，作为普通对话模型使用
+  if (injection.useNativeTools && injection.nativeTools && injection.nativeTools.length > 0) {
       // 转换为 ToolDefinition 格式
       (refined as any).tools = injection.nativeTools.map((t: any) => ({
         name: t.name,

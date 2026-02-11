@@ -65,12 +65,8 @@ export async function buildInitialPrompt(
   const useNativeTools = shouldUseNativeToolCalls(providerName, modelName);
   const toolStrategy = getToolCallStrategy(providerName, modelName);
 
-  // Native-only：不再支持 Prompt 注入 + 文本解析工具调用
-  if (!useNativeTools) {
-    throw new Error(
-      `Native tool calling is required but not supported by provider/model: ${providerName}/${modelName || 'unknown'}`
-    );
-  }
+  // 不支持 native tool 的模型：跳过工具注入，作为普通对话模型使用
+  // 不抛错，允许用户继续使用不支持工具调用的模型
   
   // 1. 时间上下文（高优先级）
   await injectTimeContext(messages, context.userContent, signals.isTimeRelated);

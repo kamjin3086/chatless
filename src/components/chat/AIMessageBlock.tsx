@@ -98,14 +98,8 @@ export function AIMessageBlock({
       (Array.isArray(segments) && segments.some((s: any) => s?.kind === 'think'));
     if (!should) return;
 
-    const src: any[] = Array.isArray(viewModel?.items)
-      ? viewModel.items
-      : (Array.isArray(segments) ? (segments as any[]) : []);
-    // 计算用于条件渲染的统计（保留变量用于后续逻辑）
-    void src;
-    void thinkCount;
-    void textCount;
-    void cardCount;
+    // 调试日志已移除，此 effect 仅保留作为渲染信号检测占位
+    void 0;
   }, [id, isStreaming, content, hasThinkTags, hasThinkCloseTag, viewModel?.flags?.isThinking, viewModel?.items, segments]);
 
       // 提前解析工具调用格式：<use_mcp_tool>（推荐）或 <tool_call>（兼容）或 JSON 格式的 {"type":"tool_call",...}
