@@ -177,10 +177,7 @@ function applySuppressionValve(context: StreamContext, chunk: string): string {
   if (!context.suppression) {
     context.suppression = { buffer: '', active: false, braceDepth: 0, seenJsonStart: false, guardWindow: 64 };
   }
-  
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ContentEventHandler.ts:applySuppressionValve',message:'passthrough (suppression moved to ToolChannelParser)',data:{chunkPreview:chunk.slice(0,100)},timestamp:Date.now(),hypothesisId:'G'})}).catch(()=>{});
-  // #endregion
+
   
   // 直接返回原始 chunk，工具指令抑制由 ToolChannelParser 在 Provider 层统一处理
   return chunk;

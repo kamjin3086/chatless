@@ -162,14 +162,10 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
 
   // 对于不支持 native tool 的模型：将工具 schema 转换为文本格式注入
   // 这让模型知道有哪些工具可用、参数是什么，从而能够生成正确的工具调用格式
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:155',message:'checking tool schema injection',data:{useNativeTools,nativeToolsCount:nativeTools?.length||0,providerName,modelName},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
+
   if (!useNativeTools && Array.isArray(nativeTools) && nativeTools.length > 0) {
     const toolSchemaText = buildToolSchemaPrompt(nativeTools);
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'promptBuilder.ts:160',message:'tool schema generated',data:{schemaLength:toolSchemaText?.length||0,schemaPreview:toolSchemaText?.slice(0,300)||''},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
+
     if (toolSchemaText) {
       messages.push({
         role: 'system',

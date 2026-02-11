@@ -74,9 +74,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
   for (const ev of events) {
     // 流结束：解析累积的内容，生成工具调用事件
     if (ev.type === 'stream_complete') {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:stream_complete',message:'stream_complete received',data:{bufferLen:contentBuffer.length,bufferPreview:contentBuffer.slice(0,200),suppressing},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
-      // #endregion
+
       try {
         if (contentBuffer) {
           // 尝试从累积内容中提取工具调用
@@ -84,9 +82,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
           
           if (toolCalls.length > 0) {
             for (const tc of toolCalls) {
-              // #region agent log
-              fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:complete',message:'emitting tool_call on stream_complete',data:{server:tc.server,tool:tc.tool,bufferLen:contentBuffer.length},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
-              // #endregion
+
               out.push(
                 createStreamEvent.toolCall(contentBuffer, {
                   serverName: tc.server,
@@ -99,9 +95,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
             // 兜底：尝试单个解析
             const tc = extractToolCallFromText(contentBuffer);
             if (tc?.server && tc.tool) {
-              // #region agent log
-              fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:complete',message:'emitting single tool_call on stream_complete',data:{server:tc.server,tool:tc.tool},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
-              // #endregion
+
               out.push(
                 createStreamEvent.toolCall(contentBuffer, {
                   serverName: tc.server,
@@ -113,9 +107,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
           }
         }
       } catch (e) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:complete',message:'error parsing tool calls',data:{error:String(e)},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
-        // #endregion
+
       }
       
       // 重置状态
@@ -142,9 +134,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
       if (startsWithToolPattern(contentBuffer) || containsToolStart(contentBuffer)) {
         suppressing = true;
         suppressionStartIndex = contentBuffer.length - content.length;
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:push',message:'starting suppression',data:{contentPreview:content.slice(0,50),bufferLen:contentBuffer.length,reason:'tool_pattern_matched'},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
-        // #endregion
+
         // 不输出任何内容
         continue;
       }
@@ -152,9 +142,7 @@ export function rewriteEventsWithToolCalls(events: StreamEvent[]): StreamEvent[]
 
     // 如果正在抑制，不输出内容
     if (suppressing) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ToolChannelParser.ts:push',message:'suppressing content',data:{contentPreview:content.slice(0,50)},timestamp:Date.now(),hypothesisId:'I'})}).catch(()=>{});
-      // #endregion
+
       continue;
     }
 

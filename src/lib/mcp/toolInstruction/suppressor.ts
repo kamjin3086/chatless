@@ -54,20 +54,13 @@ export interface ToolInstructionSuppressor {
   getState(): { active: boolean; mode?: SuppressionMode };
 }
 
-// #region agent log
-let __suppressorInstanceCount = 0;
-// #endregion
 
 export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolInstructionSuppressor {
   const guardWindow = Math.max(16, Math.min(256, opts?.guardWindow ?? 64));
   const maxBuffer = Math.max(2048, Math.min(131072, opts?.maxBuffer ?? 65536));
   
   const triggers = getSuppressionTriggers();
-  
-  // #region agent log
-  const instanceId = ++__suppressorInstanceCount;
-  fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'suppressor.ts:62',message:'suppressor created',data:{instanceId,totalInstances:__suppressorInstanceCount},timestamp:Date.now(),hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
+
   
   let buffer = '';
   let active = false;
@@ -192,9 +185,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
       const done = (seenJsonStart && braceDepth === 0) || (!seenJsonStart && isBoundary);
       
       if (done) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'suppressor.ts:processActive',message:'ending suppression',data:{instanceId,braceDepth,seenJsonStart,charIdx:i,char:ch,bufferLen:buffer.length},timestamp:Date.now(),hypothesisId:'H'})}).catch(()=>{});
-        // #endregion
+
         return { 
           ended: true, 
           tailAfter: buffer.slice(i + 1),
@@ -202,10 +193,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
         };
       }
     }
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'suppressor.ts:processActive',message:'not ended yet',data:{instanceId,prevBraceDepth,braceDepth,prevSeenJsonStart,seenJsonStart,bufferPreview:buffer.slice(0,100),bufferLen:buffer.length},timestamp:Date.now(),hypothesisId:'H'})}).catch(()=>{});
-    // #endregion
+
     return { ended: false, tailAfter: '' };
   };
   
@@ -230,9 +218,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
     
     // 快速路径：当缓冲中不包含任何可能触发工具指令的特征时，直接透传
     if (!active && !mightContainToolInstruction(buffer)) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'suppressor.ts:220',message:'fast path passthrough',data:{instanceId,bufferPreview:buffer.slice(0,200)},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
+
       visible += buffer;
       buffer = '';
       return { visible, started: false, ended: false };
@@ -241,9 +227,7 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
     // 1) 未在抑制态：检查触发
     if (!active) {
       const hit = findEarliestTrigger(buffer);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/9f8e7fe1-428e-4909-b4e4-b7238838d737',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'suppressor.ts:232',message:'trigger check',data:{instanceId,hitMode:hit?.mode||null,hitIdx:hit?.index,bufferPreview:buffer.slice(0,200)},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
+
       if (hit) {
         const before = buffer.slice(0, hit.index);
         const suppressedTail = buffer.slice(hit.index);
@@ -315,4 +299,3 @@ export function createToolInstructionSuppressor(opts?: SuppressorOptions): ToolI
     getState: () => ({ active, mode }),
   };
 }
-
