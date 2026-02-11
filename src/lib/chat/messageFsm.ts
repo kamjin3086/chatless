@@ -56,14 +56,63 @@ export function initModel(msg: Message): MessageModel {
 export function reduce(model: MessageModel, action: MessageAction): MessageModel {
   switch (action.type) {
     case 'TOKEN_APPEND': {
+      // —— 兜底修复：孤立的 </think>（无 <think>）——
+      // 运行证据：部分模型会输出思考文本 + "</think>"，但漏掉 "<think>" 开始标签。
+      // 结果：UI 看见 "</think>"，思考栏不出现。这里在 reducer 层“回填”成 think 段。
+      try {
+        const rawChunk = String(action.chunk || '');
+        // 重要：无论是否触发 salvage，都不应把 <think>/<\think> 字面量渲染到正文里
+        const chunk = rawChunk.replaceAll('</think>', '').replaceAll('<think>', '');
+
+        if (rawChunk.includes('</think>') && model.fsm !== 'RENDERING_THINK') {
+          const hasThinkSeg = (model.segments as any[]).some((s: any) => s && s.kind === 'think');
+          const hasOpenThinkInText = (model.segments as any[]).some(
+            (s: any) => s && s.kind === 'text' && String(s.text || '').includes('<think>')
+          );
+          const hasNonText = (model.segments as any[]).some((s: any) => s && s.kind !== 'text');
+
+          if (!hasThinkSeg && !hasOpenThinkInText && !hasNonText) {
+            const closeIdx = rawChunk.indexOf('</think>');
+            const beforeClose = closeIdx >= 0 ? rawChunk.slice(0, closeIdx) : rawChunk;
+            const afterClose = closeIdx >= 0 ? rawChunk.slice(closeIdx + '</think>'.length) : '';
+            const existingText = (model.segments as any[])
+              .filter((s: any) => s && s.kind === 'text')
+              .map((s: any) => String(s.text || ''))
+              .join('');
+
+            const thinkingText = existingText + beforeClose;
+            const nextSegs: any[] = [];
+            if (thinkingText && thinkingText.trim().length > 0) {
+              // duration 设为一个很小的正值，避免被当作“仍在思考中”（duration===0 会被当作活跃段）
+              nextSegs.push({ kind: 'think', text: thinkingText, duration: 0.1 });
+            }
+            // 思考结束后保证有 text 尾巴，承接后续正文
+            nextSegs.push({ kind: 'text', text: afterClose || '' });
+
+            return { ...model, segments: nextSegs as any, fsm: 'RENDERING_BODY' };
+          }
+        }
+
+        // 非 salvage 情况下：继续走正常 append，但使用“去标签”的 chunk，避免 '</think>' 泄漏到正文
+        if (!chunk) return model;
+      } catch {
+        // ignore: never block streaming
+      }
+
       if (model.fsm === 'RENDERING_THINK') {
         const base = [...model.segments];
-        return { ...model, segments: appendThinkText(base, action.chunk) as any };
+        const rawChunk = String(action.chunk || '');
+        const safeChunk = rawChunk.replaceAll('</think>', '').replaceAll('<think>', '');
+        if (!safeChunk) return model;
+        return { ...model, segments: appendThinkText(base, safeChunk) as any };
       }
       // 放开 TOOL_RUNNING 的返回：允许在工具执行期间继续渲染“安全正文”
       // 指令拦截交给抑制阀 + filterToolCallContent，避免误把指令残片渲染出来
       const base = ensureTextTail(model.segments, '');
-      const next = appendText(base, action.chunk);
+      const rawChunk = String(action.chunk || '');
+      const safeChunk = rawChunk.replaceAll('</think>', '').replaceAll('<think>', '');
+      if (!safeChunk) return model;
+      const next = appendText(base, safeChunk);
       return { ...model, segments: next as any };
     }
     case 'THINK_START': {

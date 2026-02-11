@@ -39,6 +39,19 @@ export function createGptOssChannelParser(): InlineThinkingParser {
       buffer = s.slice(-SAFE_TAIL);
       s = s.slice(0, -SAFE_TAIL);
     } else {
+      // ——【修复】短 buffer 快速路径 ——
+      // 如果 buffer 不可能是 <|channel|> 标签的前缀，立即作为 text 输出
+      // 避免 "</think>" 等其他标签被误保留而导致事件丢失
+      const channelPrefix = '<|channel|>';
+      const lastLt = buffer.lastIndexOf('<');
+      const couldBeChannelPrefix = lastLt >= 0 && channelPrefix.startsWith(buffer.slice(lastLt));
+      
+      if (!couldBeChannelPrefix && !buffer.includes('<|')) {
+        // 不可能匹配本解析器的标签，直接输出
+        const txt = buffer;
+        buffer = '';
+        return txt ? [{ type: 'text', text: txt }] : [];
+      }
       return out;
     }
 

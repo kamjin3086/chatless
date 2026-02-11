@@ -86,6 +86,27 @@ export function AIMessageBlock({
 
   // 检查内容是否包含think标签 - 只要检测到<think>就开始显示思考栏
   const hasThinkTags = useMemo(() => content.includes('<think>'), [content]);
+  const hasThinkCloseTag = useMemo(() => content.includes('</think>'), [content]);
+
+  useEffect(() => {
+    // 仅在出现疑似 think 标签残片、或 viewModel 标记思考中时打点，避免刷屏
+    const should =
+      hasThinkTags ||
+      hasThinkCloseTag ||
+      !!viewModel?.flags?.isThinking ||
+      (Array.isArray(viewModel?.items) && viewModel.items.some((s: any) => s?.kind === 'think')) ||
+      (Array.isArray(segments) && segments.some((s: any) => s?.kind === 'think'));
+    if (!should) return;
+
+    const src: any[] = Array.isArray(viewModel?.items)
+      ? viewModel.items
+      : (Array.isArray(segments) ? (segments as any[]) : []);
+    // 计算用于条件渲染的统计（保留变量用于后续逻辑）
+    void src;
+    void thinkCount;
+    void textCount;
+    void cardCount;
+  }, [id, isStreaming, content, hasThinkTags, hasThinkCloseTag, viewModel?.flags?.isThinking, viewModel?.items, segments]);
 
       // 提前解析工具调用格式：<use_mcp_tool>（推荐）或 <tool_call>（兼容）或 JSON 格式的 {"type":"tool_call",...}
   const hasToolCallEarly = useMemo(() => 
@@ -586,7 +607,9 @@ export function AIMessageBlock({
                 // 注意：这里的fallback主要用于向后兼容，正常流式应该都通过segments渲染
                 const hasTextSegment = mixedSegments.some(s => s.type === 'text' && (s.text || '').trim().length > 0);
                 const fallbackText = (state?.regularContent || content || '').trim();
-                const fallbackTextCleaned = filterToolCallContent(fallbackText);
+                const fallbackTextCleaned = filterToolCallContent(fallbackText)
+                  .replaceAll('</think>', '')
+                  .replaceAll('<think>', '');
                 if (!hasTextSegment && fallbackText.length > 0) {
                   return (
                     <div key="md-fallback" className="pt-3 border-t border-dashed border-slate-200/60 dark:border-slate-700/60">

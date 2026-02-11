@@ -95,14 +95,18 @@ export class ContentEventHandler implements EventHandler {
 
       for (const p of pieces) {
         if (p.type === 'text') {
-          const t = String(p.text || '');
-          if (t) {
+          const rawText = String(p.text || '');
+          if (rawText) {
+            // 注意：为了让 salvage/orchestrator 能“看见”原始的 </think>，TOKEN_APPEND 仍发送 rawText。
+            // 但 message.content（用于 UI fallback / early render）不应包含字面量 think 标签，否则会短暂/持续泄漏到正文。
+            const visibleText = rawText.replaceAll('</think>', '').replaceAll('<think>', '');
+
             try {
-              appender.append(t);
+              if (visibleText) appender.append(visibleText);
             } catch {
               // ignore
             }
-            store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: t });
+            store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: rawText });
           }
         } else if (p.type === 'think_start') {
           store.dispatchMessageAction(context.messageId, { type: 'THINK_START' } as any);
@@ -154,7 +158,8 @@ function splitInlineThinking(context: StreamContext, visibleChunk: string) {
     anyCtx._inlineThinking = createInlineThinkingOrchestrator();
   }
   const parser = anyCtx._inlineThinking as ReturnType<typeof createInlineThinkingOrchestrator>;
-  return parser.push(visibleChunk);
+  const out = parser.push(visibleChunk);
+  return out;
 }
 
 /**
