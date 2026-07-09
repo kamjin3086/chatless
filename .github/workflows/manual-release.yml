@@ -252,7 +252,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-      - name: Fetch release notes from private repo
+      - name: Fetch release notes from source repository
         if: ${{ steps.check.outputs.has_secrets == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

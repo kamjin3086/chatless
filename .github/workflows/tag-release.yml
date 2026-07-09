@@ -831,7 +831,7 @@ jobs:
           UPDATER_PROXY_PREFIX: https://gh-proxy.org/
           RELEASE_TAG: ${{ github.ref_name }}
           # 如果配置了 PUBLIC_RELEASE_REPO，则生成指向公开仓库的下载链接
-          # 这使得私有仓库构建的 update.json 可以在公开仓库中正常使用
+          # 这使得镜像仓库构建的 update.json 可以指向主发布仓库
           PUBLIC_RELEASE_REPO: ${{ secrets.PUBLIC_RELEASE_REPO }}
         run: pnpm run update:generate
         shell: bash
@@ -967,7 +967,7 @@ jobs:
             done
           fi
         shell: bash
-      - name: Fetch release notes from private repo
+      - name: Fetch release notes from source repository
         if: ${{ steps.check.outputs.has_secrets == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

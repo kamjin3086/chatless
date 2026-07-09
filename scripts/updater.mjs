@@ -16,7 +16,7 @@ async function main() {
 
   const { owner, repo } = resolveRepo();
   // 支持使用 PUBLIC_RELEASE_REPO 来生成指向公开仓库的 URL
-  // 格式: owner/repo (例如: kamjin3086/chatless-pro2)
+  // 格式: owner/repo (例如: kamjin3086/chatless)
   const targetRepo = resolveTargetRepo();
   const octokit = token ? new Octokit({ auth: token }) : new Octokit();
 
@@ -53,7 +53,7 @@ function resolveRepo() {
 /**
  * 解析目标仓库（用于生成下载 URL）
  * 优先使用 PUBLIC_RELEASE_REPO 环境变量，如果未设置则使用当前仓库
- * 这允许私有仓库构建后，生成指向公开仓库的下载链接
+ * 这允许在镜像仓库中构建后，生成指向主发布仓库的下载链接
  */
 function resolveTargetRepo() {
   const publicRepo = process.env.PUBLIC_RELEASE_REPO;
@@ -124,7 +124,7 @@ async function processRelease(octokit, options, tag, isAlpha, targetRepo) {
       return "x86_64";
     };
 
-    // 辅助函数：通过 GitHub API 获取签名文件内容（支持私有仓库）
+    // 辅助函数：通过 GitHub API 获取签名文件内容（支持需要认证的仓库）
     const getSignatureFromAsset = async (sigFileName) => {
       const sigAsset = assetMap.get(sigFileName);
       if (!sigAsset) {
@@ -494,7 +494,7 @@ async function uploadJsonAsset(octokit, options, releaseId, name, json) {
 }
 
 /**
- * 通过 GitHub API 获取 Release asset 内容（支持私有仓库）
+ * 通过 GitHub API 获取 Release asset 内容（支持需要认证的仓库）
  * @param {Octokit} octokit - GitHub API 客户端
  * @param {object} options - { owner, repo }
  * @param {number} assetId - Asset ID
