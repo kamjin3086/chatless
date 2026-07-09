@@ -145,7 +145,7 @@ export class SyncManager {
 
       // 获取远端元数据
       const metaResult: MetadataResult = await transport.getMetadata(metaPath);
-      let remoteMeta: SyncMetadataFile = metaResult.data ?? {
+      const remoteMeta: SyncMetadataFile = metaResult.data ?? {
         version: 1,
         updated_at: Date.now(),
         items: {},
