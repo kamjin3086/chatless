@@ -265,6 +265,45 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       if (timeMsg && timeMsg.trim()) hb.addSystem(timeMsg);
 
     } catch { /* ignore */ }
+
+    // Chat mode performs web search before calling the model. This keeps search
+    // usable with OpenAI-compatible endpoints that reject tools/tool_choice.
+    try {
+      const wsMod = await import('@/store/webSearchStore');
+      const cfg = wsMod.useWebSearchStore.getState();
+      const conv = useChatStore.getState().conversations.find((c: any) => c.id === conversationId);
+      const toolMode = (conv?.tool_mode || (useChatStore.getState() as any).sessionToolMode || 'chat') as string;
+      if (cfg.isWebSearchEnabled && toolMode === 'chat' && userContent.trim()) {
+        const searchProvider = cfg.getConversationProvider(conversationId);
+        const { getProviderCredentials, isMissingRequiredCredentials } = await import('@/lib/websearch/registry');
+        const keys = {
+          apiKeyGoogle: cfg.apiKeyGoogle, cseIdGoogle: cfg.cseIdGoogle,
+          apiKeyBing: cfg.apiKeyBing, apiKeyOllama: cfg.apiKeyOllama,
+          apiKeyTavily: cfg.apiKeyTavily, apiKeyBrave: cfg.apiKeyBrave,
+          searxngBaseUrl: cfg.searxngBaseUrl,
+        };
+        if (isMissingRequiredCredentials(searchProvider, keys)) {
+          hb.addSystem(`网络搜索未执行：${searchProvider} 的必要配置不完整。请提醒用户检查网络搜索设置。`);
+        } else {
+          const { apiKey, cseId } = getProviderCredentials(searchProvider, keys);
+          const { buildSearchRequest } = await import('@/lib/websearch/request');
+          const { invoke } = await import('@tauri-apps/api/core');
+          const request = buildSearchRequest(cfg, searchProvider, userContent, apiKey, cseId);
+          const results = await invoke<Array<{ source_title: string; snippet: string; url: string }>>(
+            'native_web_search', { request }
+          );
+          const sources = results.map((item, index) =>
+            `[${index + 1}] ${item.source_title}\nURL: ${item.url}\n摘要: ${item.snippet}`
+          ).join('\n\n');
+          hb.addSystem(
+            `以下是应用刚刚通过 ${searchProvider} 获取的网络搜索结果。请基于这些结果回答，并用对应 URL 标注来源；不要虚构未出现的信息。\n\n${sources}`
+          );
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      hb.addSystem(`网络搜索失败：${message}。请明确告知用户搜索失败，不要假装已获得实时结果。`);
+    }
     
     // 1. 添加系统提示词
     try {

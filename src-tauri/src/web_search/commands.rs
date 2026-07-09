@@ -23,7 +23,19 @@ pub struct WebSearchRequest {
   pub accept_language: Option<String>, // 请求 Accept-Language 头
   pub safe: Option<bool>,              // ddg 安全搜索
   pub site: Option<String>,            // ddg site 限定
-  pub max_results: Option<i32>,        // ollama 专用
+  pub max_results: Option<i32>,
+  pub base_url: Option<String>,
+  pub search_depth: Option<String>,
+  pub topic: Option<String>,
+  pub include_domains: Option<Vec<String>>,
+  pub exclude_domains: Option<Vec<String>>,
+  pub country: Option<String>,
+  pub search_lang: Option<String>,
+  pub safe_search: Option<String>,
+  pub extra_snippets: Option<bool>,
+  pub categories: Option<String>,
+  pub language: Option<String>,
+  pub time_range: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -66,11 +78,204 @@ pub async fn native_web_search(request: WebSearchRequest) -> Result<Vec<WebSearc
     "google" => call_google_search(client_ref, request).await,
     "bing" => call_bing_search(client_ref, request).await,
     "ollama" => call_ollama_search(client_ref, request).await,
+    "tavily" => call_tavily_search(client_ref, request).await,
+    "brave" => call_brave_search(client_ref, request).await,
+    "searxng" => call_searxng_search(client_ref, request).await,
     // DuckDuckGo：默认采用官方html端点解析（无需API Key，鲁棒性强）
     // 如未来需要，可替换为 duckduckgo crate 的实现
     "duckduckgo" => call_duckduckgo_search(client_ref, request).await,
     "custom_scrape" => call_custom_scraper(client_ref, request).await,
     other => Err(format!("Unsupported search provider: {}", other)),
+  }
+}
+
+async fn response_json(
+  res: reqwest::Response,
+  provider: &str,
+) -> Result<serde_json::Value, String> {
+  let status = res.status();
+  let text = res
+    .text()
+    .await
+    .map_err(|e| format!("{}: read response failed: {}", provider, e))?;
+  if !status.is_success() {
+    return Err(format!(
+      "{} search failed (HTTP {}): {}",
+      provider,
+      status,
+      sample_for_log(&text)
+    ));
+  }
+  serde_json::from_str(&text).map_err(|e| {
+    format!(
+      "{} returned invalid JSON: {}; body_head={}",
+      provider,
+      e,
+      sample_for_log(&text)
+    )
+  })
+}
+
+fn json_results(value: &serde_json::Value, path: &[&str], limit: usize) -> Vec<WebSearchResult> {
+  let mut current = value;
+  for key in path {
+    current = match current.get(key) {
+      Some(next) => next,
+      None => return Vec::new(),
+    };
+  }
+  current
+    .as_array()
+    .map(|items| {
+      items
+        .iter()
+        .filter_map(|item| {
+          let source_title = item
+            .get("title")
+            .or_else(|| item.get("name"))?
+            .as_str()?
+            .to_string();
+          let url = item
+            .get("url")
+            .or_else(|| item.get("link"))?
+            .as_str()?
+            .to_string();
+          let snippet = item
+            .get("content")
+            .or_else(|| item.get("description"))
+            .or_else(|| item.get("snippet"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+          Some(WebSearchResult {
+            snippet,
+            source_title,
+            url,
+          })
+        })
+        .take(limit)
+        .collect()
+    })
+    .unwrap_or_default()
+}
+
+async fn call_tavily_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
+  let api_key = request
+    .api_key
+    .filter(|v| !v.trim().is_empty())
+    .ok_or_else(|| "Tavily API key is missing".to_string())?;
+  let max_results = request.max_results.unwrap_or(5).clamp(1, 20);
+  let payload = serde_json::json!({
+    "query": request.query,
+    "max_results": max_results,
+    "search_depth": request.search_depth.unwrap_or_else(|| "basic".to_string()),
+    "topic": request.topic.unwrap_or_else(|| "general".to_string()),
+    "include_answer": false,
+    "include_raw_content": false,
+    "include_domains": request.include_domains.unwrap_or_default(),
+    "exclude_domains": request.exclude_domains.unwrap_or_default()
+  });
+  let res = client
+    .post("https://api.tavily.com/search")
+    .bearer_auth(api_key)
+    .json(&payload)
+    .send()
+    .await
+    .map_err(|e| format!("Tavily HTTP error: {}", e))?;
+  let json = response_json(res, "Tavily").await?;
+  let results = json_results(&json, &["results"], max_results as usize);
+  if results.is_empty() {
+    Err("Tavily returned no search results".to_string())
+  } else {
+    Ok(results)
+  }
+}
+
+async fn call_brave_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
+  let api_key = request
+    .api_key
+    .filter(|v| !v.trim().is_empty())
+    .ok_or_else(|| "Brave Search API key is missing".to_string())?;
+  let count = request.max_results.unwrap_or(5).clamp(1, 20);
+  let count_text = count.to_string();
+  let mut req = client
+    .get("https://api.search.brave.com/res/v1/web/search")
+    .header("Accept", "application/json")
+    .header("X-Subscription-Token", api_key)
+    .query(&[
+      ("q", request.query.as_str()),
+      ("count", count_text.as_str()),
+    ]);
+  if let Some(v) = request.country.as_deref().filter(|v| !v.is_empty()) {
+    req = req.query(&[("country", v)]);
+  }
+  if let Some(v) = request.search_lang.as_deref().filter(|v| !v.is_empty()) {
+    req = req.query(&[("search_lang", v)]);
+  }
+  if let Some(v) = request.safe_search.as_deref().filter(|v| !v.is_empty()) {
+    req = req.query(&[("safesearch", v)]);
+  }
+  if let Some(v) = request.extra_snippets {
+    req = req.query(&[("extra_snippets", v)]);
+  }
+  let res = req
+    .send()
+    .await
+    .map_err(|e| format!("Brave Search HTTP error: {}", e))?;
+  let json = response_json(res, "Brave Search").await?;
+  let results = json_results(&json, &["web", "results"], count as usize);
+  if results.is_empty() {
+    Err("Brave Search returned no search results".to_string())
+  } else {
+    Ok(results)
+  }
+}
+
+async fn call_searxng_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
+  let base = request
+    .base_url
+    .filter(|v| !v.trim().is_empty())
+    .ok_or_else(|| "SearXNG base URL is missing".to_string())?;
+  let parsed = Url::parse(base.trim()).map_err(|e| format!("Invalid SearXNG URL: {}", e))?;
+  if parsed.scheme() != "http" && parsed.scheme() != "https" {
+    return Err("SearXNG URL must use http or https".to_string());
+  }
+  let endpoint = format!("{}/search", base.trim_end_matches('/'));
+  let limit = request.max_results.unwrap_or(5).clamp(1, 20);
+  let safe = request.safe_search.unwrap_or_else(|| "0".to_string());
+  let mut req = client.get(endpoint).query(&[
+    ("q", request.query.as_str()),
+    ("format", "json"),
+    ("safesearch", safe.as_str()),
+  ]);
+  if let Some(v) = request.language.as_deref().filter(|v| !v.is_empty()) {
+    req = req.query(&[("language", v)]);
+  }
+  if let Some(v) = request.categories.as_deref().filter(|v| !v.is_empty()) {
+    req = req.query(&[("categories", v)]);
+  }
+  if let Some(v) = request.time_range.as_deref().filter(|v| !v.is_empty()) {
+    req = req.query(&[("time_range", v)]);
+  }
+  let res = req
+    .send()
+    .await
+    .map_err(|e| format!("SearXNG HTTP error: {}", e))?;
+  let json = response_json(res, "SearXNG").await?;
+  let results = json_results(&json, &["results"], limit as usize);
+  if results.is_empty() {
+    Err("SearXNG returned no results (ensure JSON format is enabled)".to_string())
+  } else {
+    Ok(results)
   }
 }
 
@@ -629,6 +834,18 @@ pub async fn duckrush_search_api(query: String) -> Result<DuckrushResponse, Stri
       safe: None,
       site: None,
       max_results: None,
+      base_url: None,
+      search_depth: None,
+      topic: None,
+      include_domains: None,
+      exclude_domains: None,
+      country: None,
+      search_lang: None,
+      safe_search: None,
+      extra_snippets: None,
+      categories: None,
+      language: None,
+      time_range: None,
     },
   )
   .await?;

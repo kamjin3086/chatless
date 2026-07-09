@@ -9,6 +9,9 @@ import { useWebSearchStore } from '@/store/webSearchStore';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 
+const splitList = (value: string): string[] =>
+  value.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean);
+
 export class WebSearchAdapter implements ToolAdapter {
   readonly server = WEB_SEARCH_SERVER_NAME;
 
@@ -43,6 +46,9 @@ export class WebSearchAdapter implements ToolAdapter {
       cseIdGoogle: cfg.cseIdGoogle,
       apiKeyBing: cfg.apiKeyBing,
       apiKeyOllama: (cfg as any).apiKeyOllama,
+      apiKeyTavily: cfg.apiKeyTavily,
+      apiKeyBrave: cfg.apiKeyBrave,
+      searxngBaseUrl: cfg.searxngBaseUrl,
     });
 
     if (missingKey) {
@@ -54,6 +60,9 @@ export class WebSearchAdapter implements ToolAdapter {
       cseIdGoogle: cfg.cseIdGoogle,
       apiKeyBing: cfg.apiKeyBing,
       apiKeyOllama: (cfg as any).apiKeyOllama,
+      apiKeyTavily: cfg.apiKeyTavily,
+      apiKeyBrave: cfg.apiKeyBrave,
+      searxngBaseUrl: cfg.searxngBaseUrl,
     });
 
     if (tool === 'fetch') {
@@ -82,6 +91,25 @@ export class WebSearchAdapter implements ToolAdapter {
         if (typeof (cfg as any).ollamaMaxResults === 'number') {
           request.maxResults = (cfg as any).ollamaMaxResults;
         }
+      } else if (providerToUse === 'tavily') {
+        request.maxResults = cfg.tavilyMaxResults;
+        request.searchDepth = cfg.tavilySearchDepth;
+        request.topic = cfg.tavilyTopic;
+        request.includeDomains = splitList(cfg.tavilyIncludeDomains);
+        request.excludeDomains = splitList(cfg.tavilyExcludeDomains);
+      } else if (providerToUse === 'brave') {
+        request.maxResults = cfg.braveCount;
+        request.country = cfg.braveCountry.trim();
+        request.searchLang = cfg.braveSearchLang.trim();
+        request.safeSearch = cfg.braveSafeSearch;
+        request.extraSnippets = cfg.braveExtraSnippets;
+      } else if (providerToUse === 'searxng') {
+        request.baseUrl = cfg.searxngBaseUrl.trim();
+        request.maxResults = cfg.searxngLimit;
+        request.language = cfg.searxngLanguage.trim();
+        request.categories = cfg.searxngCategories.trim();
+        request.safeSearch = String(cfg.searxngSafeSearch);
+        request.timeRange = cfg.searxngTimeRange;
       }
 
       result = await invoke('native_web_search', { request });

@@ -42,8 +42,6 @@ export async function composeChatOptions(
   // - chat 模式：仅允许 web_search（且仅当用户开启网络搜索）
   // - agent 模式：允许注入全部工具（skills + mcp + web_search）
     const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
-  const wsMod: any = await import('@/store/webSearchStore').catch(() => null);
-  const webSearchEnabled = !!wsMod?.useWebSearchStore?.getState?.().isWebSearchEnabled;
   const st = useChatStore.getState();
   const conv: any =
     conversationId ? st.conversations.find((c: any) => c.id === conversationId) : null;
@@ -52,46 +50,8 @@ export async function composeChatOptions(
 
   
   if (toolMode === 'chat') {
-    if (!webSearchEnabled) {
-      return refined;
-    }
-    
-    const { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOL_SCHEMA, WEB_FETCH_TOOL_SCHEMA } = await import('@/lib/mcp/nativeTools/webSearch');
-    const { shouldUseNativeToolCalls } = await import('@/lib/llm/types/tool-capability');
-    const useNativeTools = shouldUseNativeToolCalls(provider, model);
-    if (!useNativeTools) {
-      throw new Error(`Chat mode web_search requires native tool calling. Unsupported provider/model: ${provider}/${model}`);
-    }
-    
-    const normalizeParams = (p: any): { type: 'object'; properties: Record<string, unknown>; required: string[] } => {
-      if (!p || typeof p !== 'object') return { type: 'object', properties: {}, required: [] };
-      const props = (p as any).properties;
-      const req = (p as any).required;
-      return {
-        type: 'object',
-        properties: (props && typeof props === 'object') ? props : {},
-        required: Array.isArray(req) ? req : [],
-      };
-    };
-    
-    const tools = [
-      {
-        name: `${WEB_SEARCH_SERVER_NAME}__${WEB_SEARCH_TOOL_SCHEMA.name}`,
-        description: WEB_SEARCH_TOOL_SCHEMA.description,
-        parameters: normalizeParams((WEB_SEARCH_TOOL_SCHEMA as any)?.input_schema?.schema),
-      },
-      {
-        name: `${WEB_SEARCH_SERVER_NAME}__${WEB_FETCH_TOOL_SCHEMA.name}`,
-        description: WEB_FETCH_TOOL_SCHEMA.description,
-        parameters: normalizeParams((WEB_FETCH_TOOL_SCHEMA as any)?.input_schema?.schema),
-      },
-    ];
-    
-    (refined as any).tools = tools;
-    (refined as any).toolChoice = 'auto';
-    (refined as any).__useNativeTools = true;
-
-    
+    // Search results are injected before the model request by HistoryBuilder.
+    // Avoid tools/tool_choice here: many OpenAI-compatible endpoints reject them.
     return refined;
   }
   

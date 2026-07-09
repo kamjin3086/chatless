@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Globe, Check, Settings, ExternalLink } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { useWebSearchStore } from "@/store/webSearchStore";
+import { useWebSearchStore, type SearchProvider } from "@/store/webSearchStore";
 import { useRouter } from "next/navigation";
 import {
   ActionPanel,
@@ -24,45 +24,7 @@ import {
   ActionPanelDivider,
   ActionPanelFooter,
 } from "@/components/ui/action-panel";
-
-// 提供商配置类型
-interface ProviderConfig {
-  apiKeyGoogle: string;
-  cseIdGoogle: string;
-  apiKeyBing: string;
-  apiKeyOllama: string;
-}
-
-// 提供商列表
-function listAllProviders(): string[] {
-  return ["google", "bing", "duckduckgo", "ollama"];
-}
-
-// 提供商显示名称
-function providerLabel(p: string): string {
-  switch (p) {
-    case "google":
-      return "Google";
-    case "bing":
-      return "Bing";
-    case "duckduckgo":
-      return "DuckDuckGo";
-    case "ollama":
-      return "Ollama Web";
-    default:
-      return p;
-  }
-}
-
-// 检查提供商是否已配置
-function providerConfiguredMap(config: ProviderConfig): Record<string, boolean> {
-  return {
-    google: !!(config.apiKeyGoogle && config.cseIdGoogle),
-    bing: !!config.apiKeyBing,
-    duckduckgo: true,
-    ollama: !!config.apiKeyOllama,
-  };
-}
+import { listAllProviders, providerConfiguredMap, providerLabel } from "@/lib/websearch/registry";
 
 interface WebSearchToggleProps {
   conversationId?: string;
@@ -82,13 +44,16 @@ export function WebSearchToggle({
     cseIdGoogle: webSearch.cseIdGoogle,
     apiKeyBing: webSearch.apiKeyBing,
     apiKeyOllama: webSearch.apiKeyOllama,
+    apiKeyTavily: webSearch.apiKeyTavily,
+    apiKeyBrave: webSearch.apiKeyBrave,
+    searxngBaseUrl: webSearch.searxngBaseUrl,
   });
 
   const currentProvider = conversationId
     ? webSearch.getConversationProvider(conversationId)
     : webSearch.provider;
 
-  const handleProviderChange = (provider: string) => {
+  const handleProviderChange = (provider: SearchProvider) => {
     if (!configured[provider]) return;
     if (conversationId) {
       webSearch.setConversationProvider(conversationId, provider as any);

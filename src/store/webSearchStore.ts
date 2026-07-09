@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import StorageUtil from '@/lib/storage';
 
-export type SearchProvider = 'google' | 'bing' | 'custom_scrape' | 'ollama' | 'duckduckgo';
+export type SearchProvider =
+  | 'google' | 'bing' | 'ollama' | 'duckduckgo' | 'custom_scrape'
+  | 'tavily' | 'brave' | 'searxng';
 
 type ConversationProviderMap = Record<string, SearchProvider | undefined>;
 
-interface WebSearchConfig {
+export interface WebSearchConfig {
   isWebSearchEnabled: boolean;
   autoAuthorizeWebSearch: boolean;
   provider: SearchProvider;
@@ -13,19 +15,33 @@ interface WebSearchConfig {
   cseIdGoogle: string;
   apiKeyBing: string;
   apiKeyOllama: string;
-  // —— 高级参数（按提供商/通用） ——
-  // DuckDuckGo / Custom Scraper（HTML）
-  ddgLimit: number;               // 默认 5
-  ddgKl: string;                  // 例如 "us-en"（地区/语言）
-  ddgAcceptLanguage: string;      // 请求头 Accept-Language
-  ddgSafe: boolean;               // 安全搜索（true=开启，false=关闭）
-  ddgSite: string;                // site 限定（可为空）
-  // Ollama
-  ollamaMaxResults: number;       // 默认 5（不改则不传）
-  // 通用 fetch 降级选项
-  fetchMaxContentChars: number;   // 默认 2000
-  fetchMaxLinks: number;          // 默认 50
-  fetchUseReadability: boolean;   // 默认 true，启用“可读性”正文提取
+  apiKeyTavily: string;
+  apiKeyBrave: string;
+  searxngBaseUrl: string;
+  ddgLimit: number;
+  ddgKl: string;
+  ddgAcceptLanguage: string;
+  ddgSafe: boolean;
+  ddgSite: string;
+  ollamaMaxResults: number;
+  tavilyMaxResults: number;
+  tavilySearchDepth: 'basic' | 'advanced' | 'fast' | 'ultra-fast';
+  tavilyTopic: 'general' | 'news' | 'finance';
+  tavilyIncludeDomains: string;
+  tavilyExcludeDomains: string;
+  braveCount: number;
+  braveCountry: string;
+  braveSearchLang: string;
+  braveSafeSearch: 'off' | 'moderate' | 'strict';
+  braveExtraSnippets: boolean;
+  searxngLimit: number;
+  searxngLanguage: string;
+  searxngCategories: string;
+  searxngSafeSearch: 0 | 1 | 2;
+  searxngTimeRange: '' | 'day' | 'month' | 'year';
+  fetchMaxContentChars: number;
+  fetchMaxLinks: number;
+  fetchUseReadability: boolean;
   conversationProviders: ConversationProviderMap;
 }
 
@@ -39,6 +55,9 @@ interface WebSearchState extends WebSearchConfig {
   setOllamaApiKey: (apiKey: string) => void;
   setDdgAdvanced: (opts: Partial<Pick<WebSearchConfig, 'ddgLimit'|'ddgKl'|'ddgAcceptLanguage'|'ddgSafe'|'ddgSite'>>) => void;
   setOllamaAdvanced: (opts: Partial<Pick<WebSearchConfig, 'ollamaMaxResults'>>) => void;
+  setTavilyConfig: (opts: Partial<Pick<WebSearchConfig, 'apiKeyTavily'|'tavilyMaxResults'|'tavilySearchDepth'|'tavilyTopic'|'tavilyIncludeDomains'|'tavilyExcludeDomains'>>) => void;
+  setBraveConfig: (opts: Partial<Pick<WebSearchConfig, 'apiKeyBrave'|'braveCount'|'braveCountry'|'braveSearchLang'|'braveSafeSearch'|'braveExtraSnippets'>>) => void;
+  setSearxngConfig: (opts: Partial<Pick<WebSearchConfig, 'searxngBaseUrl'|'searxngLimit'|'searxngLanguage'|'searxngCategories'|'searxngSafeSearch'|'searxngTimeRange'>>) => void;
   setFetchAdvanced: (opts: Partial<Pick<WebSearchConfig, 'fetchMaxContentChars'|'fetchMaxLinks'>>) => void;
   setFetchReadability: (enabled: boolean) => void;
   setConversationProvider: (conversationId: string, provider: SearchProvider | undefined) => void;
@@ -53,142 +72,72 @@ const STORE_KEY = 'web_search_config';
 
 const defaultConfig: WebSearchConfig = {
   isWebSearchEnabled: false,
-  autoAuthorizeWebSearch: true, // 默认对 web_search 启用自动授权（可在设置里关闭）
-  // 默认搜索提供商：优先使用 DuckDuckGo（免费且无需密钥）
-  // 已有用户的选择会通过持久化配置覆盖此默认值
+  autoAuthorizeWebSearch: true,
   provider: 'duckduckgo',
-  apiKeyGoogle: '',
-  cseIdGoogle: '',
-  apiKeyBing: '',
-  apiKeyOllama: '',
-  // 高级参数默认
-  ddgLimit: 5,
-  ddgKl: '',
-  ddgAcceptLanguage: '',
-  ddgSafe: false,
-  ddgSite: '',
+  apiKeyGoogle: '', cseIdGoogle: '', apiKeyBing: '', apiKeyOllama: '',
+  apiKeyTavily: '', apiKeyBrave: '', searxngBaseUrl: '',
+  ddgLimit: 5, ddgKl: '', ddgAcceptLanguage: '', ddgSafe: false, ddgSite: '',
   ollamaMaxResults: 5,
-  fetchMaxContentChars: 2000,
-  fetchMaxLinks: 50,
-  fetchUseReadability: true,
-  conversationProviders: {}
+  tavilyMaxResults: 5, tavilySearchDepth: 'basic', tavilyTopic: 'general',
+  tavilyIncludeDomains: '', tavilyExcludeDomains: '',
+  braveCount: 5, braveCountry: '', braveSearchLang: '',
+  braveSafeSearch: 'moderate', braveExtraSnippets: false,
+  searxngLimit: 5, searxngLanguage: 'all', searxngCategories: 'general',
+  searxngSafeSearch: 0, searxngTimeRange: '',
+  fetchMaxContentChars: 2000, fetchMaxLinks: 50, fetchUseReadability: true,
+  conversationProviders: {},
 };
 
-export const useWebSearchStore = create<WebSearchState>((set, get) => ({
-  ...defaultConfig,
-  initialized: false,
-
-  toggleWebSearch: (enabled) => {
-    set({ isWebSearchEnabled: enabled });
+export const useWebSearchStore = create<WebSearchState>((set, get) => {
+  const savePatch = (patch: Partial<WebSearchConfig>) => {
+    set(patch);
     void get()._save();
-  },
+  };
+  return {
+    ...defaultConfig,
+    initialized: false,
+    toggleWebSearch: (isWebSearchEnabled) => savePatch({ isWebSearchEnabled }),
+    setAutoAuthorizeWebSearch: (autoAuthorizeWebSearch) => savePatch({ autoAuthorizeWebSearch }),
+    setSearchProvider: (provider) => savePatch({ provider }),
+    setGoogleCredentials: (apiKeyGoogle, cseIdGoogle) => savePatch({ apiKeyGoogle, cseIdGoogle }),
+    setBingCredentials: (apiKeyBing) => savePatch({ apiKeyBing }),
+    setOllamaApiKey: (apiKeyOllama) => savePatch({ apiKeyOllama }),
+    setDdgAdvanced: savePatch,
+    setOllamaAdvanced: savePatch,
+    setTavilyConfig: savePatch,
+    setBraveConfig: savePatch,
+    setSearxngConfig: savePatch,
+    setFetchAdvanced: savePatch,
+    setFetchReadability: (fetchUseReadability) => savePatch({ fetchUseReadability }),
+    setConversationProvider: (conversationId, provider) => {
+      const conversationProviders = { ...get().conversationProviders };
+      if (provider) conversationProviders[conversationId] = provider;
+      else delete conversationProviders[conversationId];
+      savePatch({ conversationProviders });
+    },
+    getConversationProvider: (conversationId) => get().conversationProviders[conversationId] || get().provider,
+    getAvailableProviders: () => {
+      const s = get();
+      const providers: SearchProvider[] = ['duckduckgo', 'custom_scrape'];
+      if (s.apiKeyGoogle && s.cseIdGoogle) providers.push('google');
+      if (s.apiKeyBing) providers.push('bing');
+      if (s.apiKeyOllama) providers.push('ollama');
+      if (s.apiKeyTavily) providers.push('tavily');
+      if (s.apiKeyBrave) providers.push('brave');
+      if (s.searxngBaseUrl) providers.push('searxng');
+      return providers;
+    },
+    _save: async () => {
+      const cfg = JSON.parse(JSON.stringify(get())) as WebSearchConfig;
+      await StorageUtil.setItem<WebSearchConfig>(STORE_KEY, cfg, STORE_FILE);
+    },
+    _load: async () => {
+      const saved = await StorageUtil.getItem<WebSearchConfig>(STORE_KEY, null, STORE_FILE);
+      set({ ...defaultConfig, ...(saved && typeof saved === 'object' ? saved : {}), initialized: true });
+    },
+  };
+});
 
-  setAutoAuthorizeWebSearch: (enabled) => {
-    set({ autoAuthorizeWebSearch: enabled });
-    void get()._save();
-  },
-
-  setSearchProvider: (provider) => {
-    set({ provider });
-    void get()._save();
-  },
-
-  setGoogleCredentials: (apiKey, cseId) => {
-    set({ apiKeyGoogle: apiKey, cseIdGoogle: cseId });
-    void get()._save();
-  },
-
-  setBingCredentials: (apiKey) => {
-    set({ apiKeyBing: apiKey });
-    void get()._save();
-  },
-
-  setOllamaApiKey: (apiKey) => {
-    set({ apiKeyOllama: apiKey });
-    void get()._save();
-  },
-
-  setDdgAdvanced: (opts) => {
-    set({
-      ddgLimit: typeof opts.ddgLimit === 'number' ? opts.ddgLimit : get().ddgLimit,
-      ddgKl: typeof opts.ddgKl === 'string' ? opts.ddgKl : get().ddgKl,
-      ddgAcceptLanguage: typeof opts.ddgAcceptLanguage === 'string' ? opts.ddgAcceptLanguage : get().ddgAcceptLanguage,
-      ddgSafe: typeof opts.ddgSafe === 'boolean' ? opts.ddgSafe : get().ddgSafe,
-      ddgSite: typeof opts.ddgSite === 'string' ? opts.ddgSite : get().ddgSite,
-    });
-    void get()._save();
-  },
-
-  setOllamaAdvanced: (opts) => {
-    set({
-      ollamaMaxResults: typeof opts.ollamaMaxResults === 'number' ? opts.ollamaMaxResults : get().ollamaMaxResults,
-    });
-    void get()._save();
-  },
-
-  setFetchAdvanced: (opts) => {
-    set({
-      fetchMaxContentChars: typeof opts.fetchMaxContentChars === 'number' ? opts.fetchMaxContentChars : get().fetchMaxContentChars,
-      fetchMaxLinks: typeof opts.fetchMaxLinks === 'number' ? opts.fetchMaxLinks : get().fetchMaxLinks,
-    });
-    void get()._save();
-  },
-
-  setFetchReadability: (enabled) => {
-    set({ fetchUseReadability: !!enabled });
-    void get()._save();
-  },
-
-  setConversationProvider: (conversationId, provider) => {
-    const map = { ...(get().conversationProviders || {}) };
-    if (!provider) {
-      delete map[conversationId];
-    } else {
-      map[conversationId] = provider;
-    }
-    set({ conversationProviders: map });
-    void get()._save();
-  },
-
-  getConversationProvider: (conversationId) => {
-    const map = get().conversationProviders || {};
-    return map[conversationId] || get().provider;
-  },
-
-  getAvailableProviders: () => {
-    const s = get();
-    const available: SearchProvider[] = [];
-    if (s.apiKeyGoogle && s.cseIdGoogle) available.push('google');
-    if (s.apiKeyBing) available.push('bing');
-    if (s.apiKeyOllama) available.push('ollama');
-    // DuckDuckGo 与 自定义抓取器总是可用
-    available.push('duckduckgo');
-    available.push('custom_scrape');
-    return available;
-  },
-
-  _save: async () => {
-    const { initialized: _initialized, _save: _a, _load: _b, getAvailableProviders: _c, getConversationProvider: _d, ...cfg } = get();
-    await StorageUtil.setItem<WebSearchConfig>(STORE_KEY, cfg as WebSearchConfig, STORE_FILE);
-  },
-
-  _load: async () => {
-    const saved = await StorageUtil.getItem<WebSearchConfig>(STORE_KEY, null, STORE_FILE);
-    if (saved && typeof saved === 'object') {
-      set({ ...(defaultConfig), ...(saved || {}), initialized: true });
-    } else {
-      set({ initialized: true });
-    }
-  },
-}));
-
-// 应用启动时加载配置
-void (async () => {
-	try {
-		await useWebSearchStore.getState()._load();
-	} catch (error) {
-		console.error('Failed to load web search settings:', error);
-	}
-})(); 
-
-
+void useWebSearchStore.getState()._load().catch((error) => {
+  console.error('Failed to load web search settings:', error);
+});

@@ -11,6 +11,9 @@ const PROVIDERS: ProviderMeta[] = [
   { id: 'google', label: 'Google' },
   { id: 'bing', label: 'Bing' },
   { id: 'ollama', label: 'Ollama' },
+  { id: 'tavily', label: 'Tavily' },
+  { id: 'brave', label: 'Brave Search' },
+  { id: 'searxng', label: 'SearXNG' },
   { id: 'custom_scrape', label: 'Custom Scraper' },
 ];
 
@@ -32,6 +35,9 @@ export type ProviderConfigKeys = {
   cseIdGoogle?: string;
   apiKeyBing?: string;
   apiKeyOllama?: string;
+  apiKeyTavily?: string;
+  apiKeyBrave?: string;
+  searxngBaseUrl?: string;
 };
 
 export function providerConfiguredMap(keys: ProviderConfigKeys): Record<SearchProvider, boolean> {
@@ -41,6 +47,9 @@ export function providerConfiguredMap(keys: ProviderConfigKeys): Record<SearchPr
     ollama: !!keys.apiKeyOllama,
     duckduckgo: true,
     custom_scrape: true,
+    tavily: !!keys.apiKeyTavily,
+    brave: !!keys.apiKeyBrave,
+    searxng: !!keys.searxngBaseUrl,
   };
 }
 
@@ -60,6 +69,10 @@ export function getProviderCredentials(id: SearchProvider, keys: ProviderConfigK
       return { apiKey: keys.apiKeyBing };
     case 'ollama':
       return { apiKey: keys.apiKeyOllama };
+    case 'tavily':
+      return { apiKey: keys.apiKeyTavily };
+    case 'brave':
+      return { apiKey: keys.apiKeyBrave };
     case 'duckduckgo':
     case 'custom_scrape':
     default:
@@ -72,6 +85,8 @@ export function isMissingRequiredCredentials(id: SearchProvider, keys: ProviderC
   if (id === 'google') return !(cred.apiKey && cred.cseId);
   if (id === 'bing') return !cred.apiKey;
   if (id === 'ollama') return !cred.apiKey;
+  if (id === 'tavily' || id === 'brave') return !cred.apiKey;
+  if (id === 'searxng') return !keys.searxngBaseUrl;
   return false; // duckduckgo/custom_scrape 不需要
 }
 
