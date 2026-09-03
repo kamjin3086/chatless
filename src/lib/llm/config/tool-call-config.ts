@@ -172,9 +172,59 @@ export const PROVIDER_CONFIGS: Record<string, ProviderToolCallConfig> = {
     note: '能力取决于底层模型，大多数支持',
     docsUrl: 'https://openrouter.ai/docs#tool-use',
   },
+
+  orcarouter: {
+    id: 'orcarouter',
+    displayName: 'OrcaRouter',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://docs.orcarouter.ai/advanced/tool-calling',
+  },
+
+  mixroute: {
+    id: 'mixroute',
+    displayName: 'MixRoute',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://docs.mixroute.ai',
+  },
+
+  novita: {
+    id: 'novita',
+    displayName: 'Novita',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://novita.ai/docs',
+  },
+
+  aihubmix: {
+    id: 'aihubmix',
+    displayName: 'AIHubMix',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://docs.aihubmix.com',
+  },
   
   // ========== OpenAI 兼容但需要特殊处理的 Provider ==========
   
+  lemonade: {
+    id: 'lemonade',
+    displayName: 'Lemonade',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '工具调用能力取决于 Lemonade 加载的底层模型',
+    docsUrl: 'https://lemonade-server.ai',
+  },
+
   lmstudio: {
     id: 'lmstudio',
     displayName: 'LM Studio',
@@ -377,6 +427,11 @@ export function inferProviderId(providerName: string): string {
   if (name.includes('deepseek')) return 'deepseek';
   if (name.includes('together')) return 'together';
   if (name.includes('openrouter')) return 'openrouter';
+  if (name.includes('orcarouter')) return 'orcarouter';
+  if (name.includes('mixroute')) return 'mixroute';
+  if (name.includes('novita')) return 'novita';
+  if (name.includes('aihubmix')) return 'aihubmix';
+  if (name.includes('lemonade')) return 'lemonade';
   if (name.includes('lmstudio') || name.includes('lm studio') || name.includes('lm-studio')) return 'lmstudio';
   if (name.includes('ollama')) return 'ollama';
   

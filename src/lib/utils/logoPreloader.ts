@@ -246,7 +246,7 @@ export function markLogosAsPreloaded(urls: string[]) {
 
 // —— 额外：应用启动即预加载通用 Provider 与常见品牌 Logo ——
 const COMMON_BRAND_KEYS = [
-  'openai','anthropic','google-ai','deepseek','qwen','mistral','groq','zhipu','moonshot','yi','llama','voyageai','cohere','perplexity','jina','stability','ideogram','flux','imagen','luma','runway','sora','veo','kling','pixverse','hunyuan','baichuan','reka','elevenlabs','topazlabs','clarity','cartesia','orpheus','playai','unreal-speech','together','openrouter','poe'
+  'openai','anthropic','google-ai','deepseek','qwen','mistral','groq','zhipu','moonshot','yi','llama','voyageai','cohere','perplexity','jina','stability','ideogram','flux','imagen','luma','runway','sora','veo','kling','pixverse','hunyuan','baichuan','reka','elevenlabs','topazlabs','clarity','cartesia','orpheus','playai','unreal-speech','together','openrouter','orcarouter','mixroute','novita','poe'
 ] as const;
 
 export async function preloadInitialLogos() {

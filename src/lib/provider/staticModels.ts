@@ -109,6 +109,33 @@ export const STATIC_PROVIDER_MODELS = [
     ]
   },
   {
+    providerName: "OrcaRouter",
+    models: [
+      { id: "orcarouter/auto", label: "Auto Router" },
+      { id: "deepseek/deepseek-chat", label: "DeepSeek Chat" },
+      { id: "qwen/qwen-plus", label: "Qwen Plus" },
+      { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4" },
+      { id: "openai/gpt-4.1-mini", label: "GPT-4.1 Mini" },
+    ]
+  },
+  {
+    providerName: "MixRoute",
+    models: [
+      { id: "deepseek-chat", label: "DeepSeek Chat" },
+      { id: "qwen-plus", label: "Qwen Plus" },
+      { id: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+      { id: "claude-sonnet-4", label: "Claude Sonnet 4" },
+    ]
+  },
+  {
+    providerName: "Novita",
+    models: [
+      { id: "deepseek/deepseek-v3-0324", label: "DeepSeek V3" },
+      { id: "qwen/qwen2.5-72b-instruct", label: "Qwen2.5 72B Instruct" },
+      { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct" },
+    ]
+  },
+  {
     providerName: "TokenFlux",
     models: [
     { id: "gpt-4.1", label: "GPT-4.1" },
@@ -535,6 +562,10 @@ export const STATIC_PROVIDER_MODELS = [
     ]
   },
   {
+    providerName: "Lemonade",
+    models: []
+  },
+  {
     providerName: "LM Studio",
     models: []
   },
@@ -828,6 +859,9 @@ const BRAND_LOGO_RULES: readonly BrandRule[] = [
   { logoKey: 'unreal-speech', patterns: [/unreal[- ]?speech/i] },
   { logoKey: 'together', patterns: [/together/i] },
   { logoKey: 'openrouter', patterns: [/openrouter/i] },
+  { logoKey: 'orcarouter', patterns: [/orcarouter/i] },
+  { logoKey: 'mixroute', patterns: [/mixroute/i] },
+  { logoKey: 'novita', patterns: [/novita/i] },
   { logoKey: 'poe', patterns: [/poe/i] },
 ];
 

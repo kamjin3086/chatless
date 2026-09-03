@@ -2,6 +2,7 @@
 // key 一律使用小写名称（与 ProviderSettings 中的 provider.name.toLowerCase() 对齐）
 export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
   // —— 本地 / 免密类（无强制密钥，但可提供使用文档或官网） ——
+  lemonade: 'https://lemonade-server.ai',
   'lm studio': 'https://lmstudio.ai',
   ollama: 'https://ollama.com',
 
@@ -21,6 +22,9 @@ export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
 
   // —— 常见 OpenAI 兼容聚合 / 代理（国际） —— //
   openrouter: 'https://openrouter.ai/keys',
+  orcarouter: 'https://www.orcarouter.ai/console',
+  mixroute: 'https://console.mixroute.ai/invite/4YtWjOYd',
+  novita: 'https://novita.ai/?ref=nwmwmjy&utm_source=affiliate',
   '302ai': 'https://302.ai',
   aihubmix: 'https://aihubmix.com',
   tokenflux: 'https://tokenflux.io',

@@ -5,6 +5,7 @@ import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '../types/stream-events';
 import { rewriteEventsWithToolCalls } from '../adapters/ToolChannelParser';
+import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -30,6 +31,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
     this.thinkingStrategy = ThinkingStrategyFactory.createStandardStrategy();
   }
 
+  private buildHeaders(apiKey?: string | null, extra: Record<string, string> = {}): Record<string, string> {
+    const h: Record<string, string> = {
+      ...extra,
+      ...getGatewayExtraHeaders(this.name, this.baseUrl),
+    };
+    if (apiKey) h.Authorization = `Bearer ${apiKey}`;
+    return h;
+  }
+
   async fetchModels(): Promise<Array<{ name: string; label?: string; aliases?: string[] }> | null> {
     // 通用兜底：按 OpenAI 兼容协议拉取 /models
     try {
@@ -38,7 +48,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       if (!base) throw new Error('no base url');
       const url = `${base}/models`;
       const { tauriFetch } = await import('@/lib/request');
-      const resp: any = await tauriFetch(url, { method: 'GET', headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, fallbackToBrowserOnError: true, verboseDebug: true, debugTag: 'ModelList' });
+      const resp: any = await tauriFetch(url, { method: 'GET', headers: this.buildHeaders(apiKey), fallbackToBrowserOnError: true, verboseDebug: true, debugTag: 'ModelList' });
       const items = Array.isArray(resp?.data) ? resp.data : (Array.isArray(resp) ? resp : []);
       if (Array.isArray(items) && items.length) {
         return items.map((it: any) => {
@@ -214,14 +224,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
           method: 'POST',
           rawResponse: true,
           browserHeaders: true,
-          headers: (() => {
-            const h: Record<string, string> = {
-              'Content-Type': 'application/json',
-              'Accept': 'application/x-ndjson, application/json, text/event-stream',
-            };
-            if (apiKey) h.Authorization = `Bearer ${apiKey}`;
-            return h;
-          })(),
+          headers: this.buildHeaders(apiKey, {
+            'Content-Type': 'application/json',
+            'Accept': 'application/x-ndjson, application/json, text/event-stream',
+          }),
           body,
           debugTag: 'OpenAICompatStream',
         });
@@ -234,14 +240,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
         try {
           resp = await fetch(url, {
             method: 'POST',
-            headers: (() => {
-              const h: Record<string, string> = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/x-ndjson, application/json, text/event-stream',
-              };
-              if (apiKey) h.Authorization = `Bearer ${apiKey}`;
-              return h;
-            })(),
+            headers: this.buildHeaders(apiKey, {
+              'Content-Type': 'application/json',
+              'Accept': 'application/x-ndjson, application/json, text/event-stream',
+            }),
             body: JSON.stringify(body),
           });
         } catch {
@@ -582,11 +584,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
         {
           url,
           method: 'POST',
-          headers: {
+          headers: this.buildHeaders(apiKey, {
             'Accept-Encoding': 'identity',
             'Content-Type': 'application/json',
-            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-          },
+          }),
           body,
           debugTag: 'OpenAICompatibleProvider',
         },

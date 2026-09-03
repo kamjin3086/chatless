@@ -21,6 +21,7 @@ export interface CatalogProviderDef {
 // 可添加的 Provider 清单（本地 / 热门 / 常见网关优先，冷门靠后）
 export const AVAILABLE_PROVIDERS_CATALOG: CatalogProviderDef[] = [
   // —— 本地 / 免密优先 ——
+  { id: 'lemonade', name: 'Lemonade', strategy: 'openai-compatible', requiresKey: false, defaultUrl: 'http://localhost:13305/api/v1', notes: '本地 Lemonade Server，需先在服务端加载模型' },
   { id: 'lmstudio', name: 'LM Studio', strategy: 'openai-compatible', requiresKey: false, defaultUrl: 'http://localhost:1234/v1' },
   { id: 'ollama', name: 'Ollama', strategy: 'ollama', requiresKey: false, defaultUrl: 'http://localhost:11434' },
 
@@ -99,6 +100,9 @@ export const AVAILABLE_PROVIDERS_CATALOG: CatalogProviderDef[] = [
 
   // —— 常见 OpenAI 兼容聚合 / 代理（国际） ——
   { id: 'openrouter', name: 'OpenRouter', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://openrouter.ai/api/v1' },
+  { id: 'orcarouter', name: 'OrcaRouter', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.orcarouter.ai/v1' },
+  { id: 'mixroute', name: 'MixRoute', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.mixroute.ai/v1' },
+  { id: 'novita', name: 'Novita', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.novita.ai/openai/v1' },
   { id: '302ai', name: '302AI', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.302.ai/v1' },
   { id: 'aihubmix', name: 'AIHubMix', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.aihubmix.com/v1' },
   { id: 'tokenflux', name: 'TokenFlux', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.tokenflux.io/v1' },
