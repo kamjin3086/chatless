@@ -40,6 +40,7 @@ export type ProviderType =
   | 'ollama'
   | 'azure'
   | 'openrouter'
+  | 'orcarouter'
   | 'together'
   | 'groq'
   | 'mistral'

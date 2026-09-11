@@ -99,6 +99,26 @@ export const STATIC_PROVIDER_MODELS = [
     ]
   },
   {
+    providerName: "OrcaRouter - API",
+    models: [
+    { id: "openai/gpt-5.5", label: "OpenAI: GPT-5.5" },
+    { id: "anthropic/claude-opus-4.8", label: "Anthropic: Claude Opus 4.8" },
+    { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+    { id: "deepseek/deepseek-v4-pro", label: "DeepSeek: DeepSeek V4 Pro" },
+    { id: "orcarouter/auto", label: "OrcaRouter Auto" }
+    ]
+  },
+  {
+    providerName: "OrcaRouter - Auth",
+    models: [
+    { id: "openai/gpt-5.5", label: "OpenAI: GPT-5.5" },
+    { id: "anthropic/claude-opus-4.8", label: "Anthropic: Claude Opus 4.8" },
+    { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+    { id: "deepseek/deepseek-v4-pro", label: "DeepSeek: DeepSeek V4 Pro" },
+    { id: "orcarouter/auto", label: "OrcaRouter Auto" }
+    ]
+  },
+  {
     providerName: "OpenRouter",
     models: [
     { id: "google/gemini-2.5-flash-preview", label: "Gemini 2.5 Flash Preview" },
@@ -827,6 +847,7 @@ const BRAND_LOGO_RULES: readonly BrandRule[] = [
   { logoKey: 'playai', patterns: [/playai/i] },
   { logoKey: 'unreal-speech', patterns: [/unreal[- ]?speech/i] },
   { logoKey: 'together', patterns: [/together/i] },
+  { logoKey: 'orcarouter', patterns: [/orcarouter/i] },
   { logoKey: 'openrouter', patterns: [/openrouter/i] },
   { logoKey: 'poe', patterns: [/poe/i] },
 ];

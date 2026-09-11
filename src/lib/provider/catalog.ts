@@ -6,6 +6,7 @@ export type CatalogStrategy =
   | 'gemini'               // Google AI
   | 'deepseek'             // DeepSeek
   | 'ollama'               // Ollama（本地部署）
+  | 'orcarouter'           // OrcaRouter（OpenAI 兼容网关，独立模型目录与认证）
   | 'multi';               // 多策略委派（例如 New API：按模型选择具体协议）
 
 export interface CatalogProviderDef {
@@ -98,6 +99,22 @@ export const AVAILABLE_PROVIDERS_CATALOG: CatalogProviderDef[] = [
   },
 
   // —— 常见 OpenAI 兼容聚合 / 代理（国际） ——
+  {
+    id: 'orcarouter',
+    name: 'OrcaRouter - API',
+    strategy: 'orcarouter',
+    requiresKey: true,
+    defaultUrl: 'https://api.orcarouter.ai/v1',
+    notes: '粘贴 sk-orca-… API Key 接入；模型目录取自 GET /v1/models',
+  },
+  {
+    id: 'orcarouter-oauth',
+    name: 'OrcaRouter - Auth',
+    strategy: 'orcarouter',
+    requiresKey: true,
+    defaultUrl: 'https://api.orcarouter.ai/v1',
+    notes: '通过 OAuth 2.0 + PKCE 登录 OrcaRouter 账号签发 sk-orca-… API Key',
+  },
   { id: 'openrouter', name: 'OpenRouter', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://openrouter.ai/api/v1' },
   { id: '302ai', name: '302AI', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.302.ai/v1' },
   { id: 'aihubmix', name: 'AIHubMix', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.aihubmix.com/v1' },

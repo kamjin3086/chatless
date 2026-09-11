@@ -20,6 +20,8 @@ export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
   'gpt-load anthropic': 'https://gptload.com',
 
   // —— 常见 OpenAI 兼容聚合 / 代理（国际） —— //
+  'orcarouter - api': 'https://www.orcarouter.ai/console/authorized-apps',
+  'orcarouter - auth': 'https://www.orcarouter.ai/console/authorized-apps',
   openrouter: 'https://openrouter.ai/keys',
   '302ai': 'https://302.ai',
   aihubmix: 'https://aihubmix.com',

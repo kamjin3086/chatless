@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Select, SelectTrigger } from "@/components/ui/select";
 import type { ProviderMetadata, ModelMetadata } from '@/lib/metadata/types';
 import { metadataService } from '@/lib/metadata/MetadataService';
@@ -13,6 +13,9 @@ import { ModelSelectContent } from './ModelSelectContent';
 import { ModelParametersDialog } from './ModelParametersDialog';
 import { PROVIDER_ICON_EXTS, getResolvedUrlForBase, isUrlKnownMissing, getModelBrandLogoSrc, prewarmModelBrandLogos } from '@/lib/utils/logoService';
 import { generateAvatarDataUrl } from '@/lib/avatar';
+import { isOrcaRouterProvider } from '@/lib/orcarouter/adapters';
+import { textCatalogKey, useOrcaCatalogStore } from '@/lib/orcarouter/catalogStore';
+import type { OrcaModality } from '@/lib/orcarouter/catalog';
 
 interface ModelSelectorProps {
   currentModelId: string | null;
@@ -20,14 +23,20 @@ interface ModelSelectorProps {
   onModelChange: (newModelId: string) => void;
   disabled?: boolean;
   currentProviderName?: string;
+  /** 当前输入区是否已附加图片：收窄到明确声明 image 输入的聊天模型。 */
+  hasImageAttachment?: boolean;
+  /** 当前输入区是否已附加文档：收窄到明确声明 file 输入的聊天模型。 */
+  hasDocumentAttachment?: boolean;
 }
 
-export function ModelSelector({ 
-  currentModelId, 
+export function ModelSelector({
+  currentModelId,
   allMetadata,
-  onModelChange, 
+  onModelChange,
   disabled = false,
-  currentProviderName
+  currentProviderName,
+  hasImageAttachment = false,
+  hasDocumentAttachment = false,
 }: ModelSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [recentModels, setRecentModels] = useState<Array<{provider: string; modelId: string}>>([]);
@@ -154,20 +163,72 @@ export function ModelSelector({
     return byScan;
   }, [sortedMetadata, currentModelId, currentProviderName]);
 
+  // 统一的“当前会话需要哪些输入模态”：只有真正附加了图片/文件时才收窄候选模型。
+  const requiredModalities = useMemo<OrcaModality[]>(() => {
+    const mods: OrcaModality[] = [];
+    if (hasImageAttachment) mods.push('image');
+    if (hasDocumentAttachment) mods.push('file');
+    return mods;
+  }, [hasImageAttachment, hasDocumentAttachment]);
+
+  // OrcaRouter 的模型目录按能力过滤：文本/多模态下拉都必须来自真实目录，绝不回退为自由输入。
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { ProviderRegistry } = await import('@/lib/llm');
+        const orca = ProviderRegistry.all().find((p) => isOrcaRouterProvider(p.name));
+        if (!orca) return;
+        const apiKey = await (orca as { readApiKey?: () => Promise<string | null> }).readApiKey?.();
+        const catalog = await useOrcaCatalogStore.getState().load(
+          textCatalogKey(requiredModalities),
+          { apiBase: (orca as any).baseUrl, apiKey: apiKey || undefined },
+        );
+        if (cancelled) return;
+
+        // 已选模型若不再兼容当前能力，必须清空并提示，不能静默保留错误值。
+        if (currentModelId && isOrcaRouterProvider(currentProviderName || '') &&
+            !catalog.models.some((m) => m.id === currentModelId)) {
+          toast.warning('当前模型不支持所选附件类型，请重新选择');
+          onModelChange('');
+        }
+      } catch (e) {
+        console.warn('[ModelSelector] OrcaRouter 目录加载失败', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requiredModalities, currentModelId, currentProviderName, onModelChange]);
+
+  /** 用真实目录（已按当前能力过滤）替换 OrcaRouter provider 的 models 列表。 */
+  const applyOrcaCatalog = useCallback((provider: ProviderMetadata): ProviderMetadata => {
+    const catalog = useOrcaCatalogStore.getState().get(textCatalogKey(requiredModalities));
+    if (!catalog) return provider;
+    const allowed = new Set(catalog.models.map((m) => m.id));
+    // options 绑定到当前能力过滤后的真实列表：不兼容的旧值不会出现在选项中。
+    const models = provider.models
+      .filter((m) => allowed.has(m.name))
+      .map((m) => ({ ...m, label: catalog.models.find((c) => c.id === m.name)?.label || m.label }));
+    return { ...provider, models };
+  }, [requiredModalities]);
+
   // 统一：仅显示可见且“已配置密钥或无需密钥”的提供商，提升选择效率
   const visibleProviders = useMemo(() => {
-    return sortedMetadata.filter((p: any) => {
-      if (p?.isVisible === false) return false;
-      // requiresApiKey=false → 一律显示（如本地 Ollama）
-      if (p?.requiresApiKey === false) return true;
-      // 需要密钥时：只显示已配置默认密钥或模型级密钥的
-      const hasProviderKey = !!(p?.default_api_key && String(p.default_api_key).trim());
-      if (hasProviderKey) return true;
-      // 模型级密钥（任一模型有 api_key 即视为可用）
-      const hasModelKey = Array.isArray(p?.models) && p.models.some((m: any) => !!(m?.api_key && String(m.api_key).trim()));
-      return hasModelKey;
-    });
-  }, [sortedMetadata]);
+    return sortedMetadata
+      .filter((p: any) => {
+        if (p?.isVisible === false) return false;
+        // requiresApiKey=false → 一律显示（如本地 Ollama）
+        if (p?.requiresApiKey === false) return true;
+        // 需要密钥时：只显示已配置默认密钥或模型级密钥的
+        const hasProviderKey = !!(p?.default_api_key && String(p.default_api_key).trim());
+        if (hasProviderKey) return true;
+        // 模型级密钥（任一模型有 api_key 即视为可用）
+        const hasModelKey = Array.isArray(p?.models) && p.models.some((m: any) => !!(m?.api_key && String(m.api_key).trim()));
+        return hasModelKey;
+      })
+      .map((p) => (isOrcaRouterProvider(p.name) ? applyOrcaCatalog(p) : p))
+      // 目录已加载但过滤后为空时，不展示空的 OrcaRouter 分组
+      .filter((p) => !isOrcaRouterProvider(p.name) || p.models.length > 0);
+  }, [sortedMetadata, applyOrcaCatalog]);
 
   const filteredModels = useMemo(() => {
     const query = searchQuery.toLowerCase();

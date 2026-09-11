@@ -13,6 +13,20 @@ export type ModelFetchRule = {
 };
 
 export const MODEL_FETCH_RULES: Record<string, ModelFetchRule> = {
+  "orcarouter - api": {
+    "autoLabelFromId": false,
+    "endpointSuffix": "/models",
+    "idPath": "id",
+    "labelPath": "name",
+    "modelsArrayPath": "data"
+  },
+  "orcarouter - auth": {
+    "autoLabelFromId": false,
+    "endpointSuffix": "/models",
+    "idPath": "id",
+    "labelPath": "name",
+    "modelsArrayPath": "data"
+  },
   "deepseek": {
     "autoLabelFromId": true,
     "endpointSuffix": "/models",

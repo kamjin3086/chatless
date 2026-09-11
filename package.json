@@ -14,6 +14,7 @@
     "verify": "pnpm lint:ci && pnpm typecheck && pnpm build",
     "format": "biome format src --write && biome organize-imports src --write",
     "test": "echo \"No tests specified yet\" && exit 0",
+    "test:orcarouter": "node --import tsx --test src/lib/orcarouter/__tests__/*.test.ts",
     "tauri": "tauri",
     "generate:settings-index": "node scripts/generate-settings-index.cjs",
     "update:app-info": "node scripts/update-app-info.js",

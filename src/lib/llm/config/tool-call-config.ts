@@ -172,7 +172,17 @@ export const PROVIDER_CONFIGS: Record<string, ProviderToolCallConfig> = {
     note: '能力取决于底层模型，大多数支持',
     docsUrl: 'https://openrouter.ai/docs#tool-use',
   },
-  
+
+  orcarouter: {
+    id: 'orcarouter',
+    displayName: 'OrcaRouter',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '网关按底层模型路由，工具调用能力取决于所选模型',
+    docsUrl: 'https://www.orcarouter.ai',
+  },
+
   // ========== OpenAI 兼容但需要特殊处理的 Provider ==========
   
   lmstudio: {
@@ -377,6 +387,7 @@ export function inferProviderId(providerName: string): string {
   if (name.includes('deepseek')) return 'deepseek';
   if (name.includes('together')) return 'together';
   if (name.includes('openrouter')) return 'openrouter';
+  if (name.includes('orcarouter')) return 'orcarouter';
   if (name.includes('lmstudio') || name.includes('lm studio') || name.includes('lm-studio')) return 'lmstudio';
   if (name.includes('ollama')) return 'ollama';
   

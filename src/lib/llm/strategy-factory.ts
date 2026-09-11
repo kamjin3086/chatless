@@ -6,6 +6,7 @@ import { GoogleAIProvider } from './providers/GoogleAIProvider';
 import { DeepSeekProvider } from './providers/DeepSeekProvider';
 import { OllamaProvider } from './providers/OllamaProvider';
 import { OpenAIResponsesProvider } from './providers/OpenAIResponsesProvider';
+import { OrcaRouterProvider } from './providers/OrcaRouterProvider';
 import type { CatalogProviderDef } from '@/lib/provider/catalog';
 
 /**
@@ -94,6 +95,12 @@ export function createProviderInstance(def: CatalogProviderDef, url: string, api
     case 'openai-compatible':
       { const inst = new OpenAICompatibleProvider(
           baseUrl || def.defaultUrl || 'https://api.openai.com/v1',
+          apiKey || undefined,
+          def.name
+        ); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+    case 'orcarouter':
+      { const inst = new OrcaRouterProvider(
+          baseUrl || def.defaultUrl || 'https://api.orcarouter.ai/v1',
           apiKey || undefined,
           def.name
         ); (inst as any).requiresKey = !!def.requiresKey; return inst; }

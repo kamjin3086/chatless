@@ -18,6 +18,8 @@ import { useStableProviderIcon } from './useStableProviderIcon';
 import { getAvatarSync } from '@/lib/utils/logoService';
 import { useRecentModelsHint } from './useRecentModelsHint';
 import { getProviderKeyDocLink } from '@/lib/provider/keyDocLinks';
+import { OrcaRouterConnectPanel } from './OrcaRouterConnectPanel';
+import { isOrcaRouterProvider } from '@/lib/orcarouter/adapters';
 
 // 导入 ProviderWithStatus 类型
 import type { ProviderWithStatus } from '@/hooks/useProviderManagement';
@@ -367,6 +369,13 @@ function ProviderSettingsImpl({
             onPreferenceChange={onPreferenceChange}
             showInlineMenu={false}
           />
+
+          {/* OrcaRouter：并列展示 API Key 与 PKCE 账号登录两种接入方式 */}
+          {isOrcaRouterProvider(provider.name) && (
+            <OrcaRouterConnectPanel
+              onCredentialChanged={() => onDefaultApiKeyBlur(provider.aliases?.[0] || provider.name)}
+            />
+          )}
 
           {/* 模型列表和配置 */}
           <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
