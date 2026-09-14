@@ -27,8 +27,8 @@ export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
   novita: 'https://novita.ai/?ref=nwmwmjy&utm_source=affiliate',
   '302ai': 'https://302.ai',
   aihubmix: 'https://aihubmix.com',
-  tokenflux: 'https://tokenflux.io',
-  ocoolai: 'https://ocoolai.com',
+  tokenflux: 'https://tokenflux.ai',
+  ocoolai: 'https://one.ocoolai.com',
   groq: 'https://console.groq.com/keys',
   mistral: 'https://console.mistral.ai/api-keys',
   perplexity: 'https://www.perplexity.ai/settings/api',
@@ -38,12 +38,10 @@ export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
   jina: 'https://jina.ai',
   together: 'https://api.together.xyz',
   fireworks: 'https://fireworks.ai',
-  'github models': 'https://docs.github.com/en/github-models',
 
   // —— 国内 / 区域主流与云厂商 —— //
   'moonshot ai': 'https://platform.moonshot.cn',
   zhipu: 'https://open.bigmodel.cn',
-  yi: 'https://platform.lingyiwanwu.com',
   modelscope: 'https://modelscope.cn',
   bailian: 'https://dashscope.aliyuncs.com',
   stepfun: 'https://platform.stepfun.com',

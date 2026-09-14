@@ -247,13 +247,6 @@ export const STATIC_PROVIDER_MODELS = [
     ]
   },
   {
-    providerName: "Yi",
-    models: [
-      { id: "yi-lightning", label: "Yi Lightning" },
-      { id: "yi-vision-v2", label: "Yi Vision v2" }
-    ]
-  },
-  {
     providerName: "StepFun",
     models: [
     { id: "step-1-8k", label: "Step 1 8K" },
@@ -357,13 +350,6 @@ export const STATIC_PROVIDER_MODELS = [
     { id: "DMXAPI-DeepSeek-V3", label: "DeepSeek V3" },
     { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet (20241022)" },
     { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" }
-    ]
-  },
-  {
-    providerName: "GitHub Models",
-    models: [
-    { id: "gpt-4o-mini", label: "GPT-4o Mini" },
-    { id: "gpt-4o", label: "GPT-4o" }
     ]
   },
   // —— 以下为新增补全，确保与 catalog 名称一一对应 ——

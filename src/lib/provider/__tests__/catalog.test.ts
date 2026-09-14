@@ -33,4 +33,36 @@ describe('AVAILABLE_PROVIDERS_CATALOG', () => {
     expect(novita?.requiresKey).toBe(true);
     expect(novita?.defaultUrl).toBe('https://api.novita.ai/openai/v1');
   });
+
+  it('drops retired official APIs from the catalog', () => {
+    const ids = AVAILABLE_PROVIDERS_CATALOG.map((p) => p.id);
+    expect(ids).not.toContain('yi');
+    expect(ids).not.toContain('github');
+  });
+
+  it('uses current live default URLs after domain and /v1 cleanup', () => {
+    const byId = Object.fromEntries(AVAILABLE_PROVIDERS_CATALOG.map((p) => [p.id, p]));
+    expect(byId.tokenflux?.defaultUrl).toBe('https://tokenflux.ai/v1');
+    expect(byId.ocoolai?.defaultUrl).toBe('https://one.ocoolai.com/v1');
+    expect(byId.silicon?.defaultUrl).toBe('https://api.siliconflow.cn/v1');
+    expect(byId.hyperbolic?.defaultUrl).toBe('https://api.hyperbolic.xyz/v1');
+    expect(byId.baichuan?.defaultUrl).toBe('https://api.baichuan-ai.com/v1');
+    expect(byId.hunyuan?.defaultUrl).toBe('https://api.hunyuan.cloud.tencent.com/v1');
+    expect(byId.qiniu?.defaultUrl).toBe('https://api.qnaigc.com/v1');
+    expect(byId.lanyun?.defaultUrl).toBe('https://maas-api.lanyun.net/v1');
+    expect(byId.infini?.defaultUrl).toBe('https://cloud.infini-ai.com/maas/v1');
+    expect(byId.xirang?.defaultUrl).toBe('https://wishub-x1.ctyun.cn/v1');
+    expect(byId.dmxapi?.defaultUrl).toBe('https://www.dmxapi.cn/v1');
+    expect(byId.alayanew?.defaultUrl).toBe('https://deepseek.alayanew.com/v1');
+    expect(byId.burncloud?.defaultUrl).toBe('https://ai.burncloud.com/v1');
+    expect(byId.ph8?.defaultUrl).toBe('https://ph8.co/v1');
+    expect(byId.voyageai?.defaultUrl).toBe('https://api.voyageai.com/v1');
+  });
+
+  it('annotates embedding-only and partially offline providers', () => {
+    const voyageai = AVAILABLE_PROVIDERS_CATALOG.find((p) => p.id === 'voyageai');
+    const ph8 = AVAILABLE_PROVIDERS_CATALOG.find((p) => p.id === 'ph8');
+    expect(voyageai?.notes).toMatch(/Embedding/i);
+    expect(ph8?.notes).toMatch(/海外模型已下线/);
+  });
 });
