@@ -34,6 +34,8 @@ export interface SettingsSyncDoc extends SyncDoc {
     showCloseConfirmation?: boolean;
     charFadeIntensity?: string;
     windowSizePreset?: string;
+    glassTheme?: boolean;
+    nightBrightness?: number;
   };
   
   // Markdown 偏好
@@ -90,6 +92,8 @@ export class SettingsAdapter extends BaseSyncAdapter<SettingsSyncItem, SettingsS
         showCloseConfirmation: uiState.showCloseConfirmation,
         charFadeIntensity: uiState.charFadeIntensity,
         windowSizePreset: uiState.windowSizePreset,
+        glassTheme: uiState.glassTheme,
+        nightBrightness: uiState.nightBrightness,
       },
       markdown: {
         fontSize: mdState.fontSize,
@@ -191,6 +195,12 @@ export class SettingsAdapter extends BaseSyncAdapter<SettingsSyncItem, SettingsS
       }
       if (ui.windowSizePreset !== undefined) {
         uiStore.setWindowSizePreset(ui.windowSizePreset as any);
+      }
+      if (ui.glassTheme !== undefined) {
+        uiStore.setGlassTheme(ui.glassTheme);
+      }
+      if (ui.nightBrightness !== undefined) {
+        uiStore.setNightBrightness(ui.nightBrightness);
       }
     }
     

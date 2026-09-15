@@ -3,15 +3,18 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { 
-} from "lucide-react";
 import { useState, useEffect } from "react";
 import { APP_INFO, getVersionInfo } from "@/config/app-info";
 import { getUpdateAvailability, UPDATE_AVAILABILITY_EVENT, checkForUpdatesSilently } from "@/lib/update/update-notifier";
-import {  } from "@/lib/utils/environment";
 import StorageUtil from "@/lib/storage";
 import { linkOpener } from "@/lib/utils/linkOpener";
 import { toast } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
+
+const aboutCardClass =
+  "glass-panel rounded-xl border border-slate-200/50 dark:border-slate-700/50 p-4";
+const aboutLinkClass =
+  "text-xs text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 hover:underline";
 
 export function AboutSupportSettings() {
   const [showCopied, setShowCopied] = useState(false);
@@ -139,22 +142,23 @@ export function AboutSupportSettings() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="about-support space-y-4">
       {/* 页面标题 */}
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">关于与支持</h2>
-        <div className="rounded-xl border border-slate-200/70 bg-gradient-to-br from-slate-50/50 to-blue-50/30 dark:from-slate-800/30 dark:to-blue-900/10 p-4 dark:border-slate-700/60 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">关于与支持</h2>
+        <div className={cn(aboutCardClass, "p-4")}>
           <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
             在此查看关于与支持相关信息，包括版本信息、更新检查、帮助中心等。
           </p>
-        </div>  </div>
+        </div>
+      </div>
       {/* 应用信息卡片 */}
-      <section className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+      <section className={cn(aboutCardClass, "p-6")}>
         <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
           {/* 左侧：Logo和艺术字 */}
           <div className="flex flex-col items-center text-center md:text-left md:items-start">
             {/* 应用Logo */}
-            <div className="w-14 h-14 bg-white dark:bg-gray-900 rounded-xl shadow-sm flex items-center justify-center mb-3">
+            <div className="w-14 h-14 rounded-xl border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center mb-3 bg-white/40 dark:bg-white/5">
               <img className="p-1.5" src="/logo.svg" alt="logo" width={56} height={56} />
             </div>
             
@@ -178,10 +182,10 @@ export function AboutSupportSettings() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
               v{versionInfo.version} · Build {versionInfo.build}
               {notLatest && (
-                <span className="ml-2 inline-flex items-center gap-1 text-blue-500">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+                <span className="ml-2 inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
                   当前不是最新版本（可用：{notLatest.version}）
-                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] font-semibold align-middle">NEW</span>
+                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded bg-slate-200/70 text-slate-600 dark:bg-white/10 dark:text-slate-300 text-[10px] font-semibold align-middle">NEW</span>
                 </span>
               )}
             </p>
@@ -194,7 +198,7 @@ export function AboutSupportSettings() {
                 onClick={handleCheckUpdate}
                 variant="outline"
                 size="sm"
-                className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="bg-white/50 dark:bg-white/5 border-slate-300/70 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-white/10"
               >
                 检查更新
               </Button>
@@ -225,56 +229,56 @@ export function AboutSupportSettings() {
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 帮助中心 */}
-          <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-sm transition-shadow">
-            <h3 className="font-medium text-gray-800 dark:text-gray-200 text-sm">帮助中心</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">帮助中心</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               查找使用教程和常见问题
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.helpCenter)}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              className={aboutLinkClass}
             >
               查看帮助 →
             </button>
           </div>
 
           {/* 提交反馈 */}
-          <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-sm transition-shadow">
-            <h3 className="font-medium text-gray-800 dark:text-gray-200 text-sm">意见反馈</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">意见反馈</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               分享使用体验，报告问题或提出建议
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.feedback)}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              className={aboutLinkClass}
             >
               提交反馈 →
             </button>
           </div>
 
           {/* 官方网站 */}
-          <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-sm transition-shadow">
-            <h3 className="font-medium text-gray-800 dark:text-gray-200 text-sm">官方网站</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">官方网站</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               了解更多产品信息和最新动态
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.website)}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              className={aboutLinkClass}
             >
               访问官网 →
             </button>
           </div>
 
           {/* 加入社区 */}
-          <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-sm transition-shadow">
-            <h3 className="font-medium text-gray-800 dark:text-gray-200 text-sm">用户社区</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">用户社区</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               与其他用户交流使用心得和技巧
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.community)}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              className={aboutLinkClass}
             >
               加入社区 →
             </button>

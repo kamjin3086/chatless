@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { Send, StopCircle, CornerDownLeft } from "lucide-react";
+import { Send, StopCircle } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
@@ -79,6 +79,8 @@ interface ChatInputProps {
   tokenCount?: number;
   disabled?: boolean;
   onStopGeneration?: () => void;
+  /** 停止按钮旁的提示文案（如二次确认强制中止） */
+  stopGenerationHint?: string | null;
   onBeforeSendMessage?: () => Promise<boolean>;
   selectedKnowledgeBaseId?: string; // 来自URL参数或父组件的知识库ID
   editingMessage?: EditingMessageData | null;
@@ -101,6 +103,7 @@ export function ChatInput({
   isLoading = false,
   disabled = false,
   onStopGeneration,
+  stopGenerationHint,
   onBeforeSendMessage,
   selectedKnowledgeBaseId,
   tokenCount = 0,
@@ -824,7 +827,10 @@ export function ChatInput({
   }, [textareaRef.current]);
 
   return (
-    <div className="input-area w-full bg-gradient-to-br from-white/40 via-slate-50/30 to-white/40 dark:from-gray-800/80 dark:via-slate-900/70 dark:to-gray-800/80 backdrop-blur-xl shadow-lg rounded-2xl mx-0 mb-4 p-2 sm:p-3 overflow-x-hidden border border-slate-200/40 dark:border-slate-700/40 max-w-full transition-all">
+    <div className={cn(
+      "input-area w-full max-w-full mb-2",
+      disabled && "opacity-45 pointer-events-none"
+    )}>
       {/* 编辑模式提示栏 */}
       {editingMessage && (
         <div className="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-300 dark:border-yellow-700 text-xs text-yellow-800 dark:text-yellow-200 rounded-md px-3 py-1 mb-2">
@@ -853,7 +859,41 @@ export function ChatInput({
 
       {/* 文档附加展示已移至下方彩色标签条 */}
 
-      <div className="relative flex w-full rounded-xl border border-slate-300/50 dark:border-slate-600/50 bg-white dark:bg-slate-900/90 backdrop-blur-sm shadow-sm hover:border-slate-400/60 dark:hover:border-slate-500/60 focus-within:border-blue-400/60 dark:focus-within:border-blue-500/60 focus-within:ring-2 focus-within:ring-blue-100/50 dark:focus-within:ring-blue-900/30 transition-all duration-200" onDragOver={(e)=>{ const dt=(e as React.DragEvent).dataTransfer; if (!dt) return; const hasFile = Array.from(dt.items||[]).some((it)=> it.kind==='file'); if (hasFile || dt.getData('text/uri-list')) { e.preventDefault(); dt.dropEffect='copy'; } }} onDrop={async (e)=>{ const dt=(e as React.DragEvent).dataTransfer; if (!dt) return; const files=Array.from(dt.files||[]); const imgs=files.filter(f=>f.type.startsWith('image/')); if (imgs.length>0){ e.preventDefault(); for (const f of imgs) await appendImageFromBlob(f, f.name||'dropped.png'); return; } const url = dt.getData('text/uri-list')||dt.getData('text/plain'); if (url && /^(https?:|data:)/i.test(url)){ e.preventDefault(); try{ const resp=await fetch(url); const blob=await resp.blob(); if (blob.type.startsWith('image/')) await appendImageFromBlob(blob, `dropped-${Date.now()}.${(blob.type.split('/')[1]||'png')}`);}catch{ /* noop */ }} } }>
+      <div
+        className="relative flex w-full overflow-hidden rounded-2xl border border-slate-300/40 dark:border-slate-600/40 bg-white/35 dark:bg-slate-900/35 hover:border-slate-400/50 dark:hover:border-slate-500/50 focus-within:border-sky-400/45 dark:focus-within:border-sky-400/40 focus-within:ring-0 transition-colors duration-200 composer-box"
+        onDragOver={(e) => {
+          const dt = (e as React.DragEvent).dataTransfer;
+          if (!dt) return;
+          const hasFile = Array.from(dt.items || []).some((it) => it.kind === "file");
+          if (hasFile || dt.getData("text/uri-list")) {
+            e.preventDefault();
+            dt.dropEffect = "copy";
+          }
+        }}
+        onDrop={async (e) => {
+          const dt = (e as React.DragEvent).dataTransfer;
+          if (!dt) return;
+          const files = Array.from(dt.files || []);
+          const imgs = files.filter((f) => f.type.startsWith("image/"));
+          if (imgs.length > 0) {
+            e.preventDefault();
+            for (const f of imgs) await appendImageFromBlob(f, f.name || "dropped.png");
+            return;
+          }
+          const url = dt.getData("text/uri-list") || dt.getData("text/plain");
+          if (url && /^(https?:|data:)/i.test(url)) {
+            e.preventDefault();
+            try {
+              const resp = await fetch(url);
+              const blob = await resp.blob();
+              if (blob.type.startsWith("image/"))
+                await appendImageFromBlob(blob, `dropped-${Date.now()}.${blob.type.split("/")[1] || "png"}`);
+            } catch {
+              /* noop */
+            }
+          }
+        }}
+      >
         {/* 顶部拖拽手柄：按住可向上/下调整高度，封顶 60vh */}
         <div
           className="absolute top-0 left-0 right-0 h-2 cursor-n-resize z-[3]"
@@ -1025,9 +1065,9 @@ export function ChatInput({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="开始对话吧… 输入 / 调用提示词 @ 指定MCP # 引用技能"
+          placeholder={disabled ? "请先选择模型" : "发送消息"}
           className={cn(
-            "relative z-[1] w-full pl-8 sm:pl-10 pr-32 sm:pr-36 py-[10px] pb-10 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[66px] placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:text-gray-400/80 dark:placeholder:text-gray-400/70",
+            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 py-[10px] pb-10 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[66px] placeholder:text-[13px] placeholder:text-gray-400/70 dark:placeholder:text-gray-500/60",
             (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-gray-900 dark:caret-gray-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-gray-900 dark:text-gray-100 tabular-nums"
           )}
           style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }}
@@ -1075,8 +1115,8 @@ export function ChatInput({
           }}
           onClose={()=>setSkillMentionOpen(false)}
         />
-        {/* 左下角工具栏：模式切换 + 附件 + 搜索 + MCP + 更多 */}
-        <div className="absolute left-2 sm:left-3 bottom-3 z-[2] flex items-center gap-1">
+        {/* 左下角工具栏：次要能力统一弱图标 */}
+        <div className="absolute left-2 sm:left-3 bottom-2.5 z-[2] flex items-center gap-0.5">
           {/* 模式选择器 */}
           <ChatModeSelector
             mode={currentToolMode as ChatMode}
@@ -1138,51 +1178,64 @@ export function ChatInput({
             disabled={disabled}
           />
         </div>
-        <div className="absolute right-2 sm:right-3 bottom-3 z-[2] flex items-center gap-1.5 sm:gap-2">
-       
-          <div className="p-0.5 text-gray-400" title="Shift+Enter 换行">
-                  <CornerDownLeft className="w-4 h-4" />
-                </div>
-            {/* Token 指示：放在按钮左侧，等宽数字 + 最小宽度，样式 T: 277 */}
+        <div className="absolute right-2 sm:right-3 bottom-2.5 z-[2] flex items-center gap-1.5 sm:gap-2">
             {tokenCount > 0 && (
-              <span className="text-xs text-gray-500 mr-2 select-none font-mono tabular-nums inline-flex items-center justify-end min-w-[64px]">
-                T: {tokenCount}
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 mr-1 select-none font-mono tabular-nums hidden sm:inline">
+                T:{tokenCount}
               </span>
             )}
             {effectiveLoading ? (
               <div className="flex items-center gap-2">
+                {stopGenerationHint && (
+                  <span className="hidden sm:inline text-[10px] text-amber-600 dark:text-amber-400 max-w-[180px] leading-tight text-right">
+                    {stopGenerationHint}
+                  </span>
+                )}
                 <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 select-none">
                   <span className="relative inline-flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-60 animate-ping" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500" />
                   </span>
-                  Agent 运行中
+                  {stopGenerationHint?.includes('再次点击') ? '等待强制停止' : 'Agent 运行中'}
                 </span>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={onStopGeneration}
-                  className="h-8 w-8 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-full"
-                  title="停止（停止生成/停止工具链路）"
+                  className={cn(
+                    "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                    stopGenerationHint?.includes('再次点击')
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-slate-600 dark:text-slate-300"
+                  )}
+                  title={stopGenerationHint || "停止（停止生成/停止工具链路）"}
+                  aria-label={stopGenerationHint || "停止生成"}
                 >
                   <StopCircle className="w-5 h-5" />
                 </Button>
               </div>
+            ) : disabled ? (
+              <div
+                className="composer-tool h-8 w-8 rounded-md text-slate-400/55 dark:text-slate-500/55 flex items-center justify-center"
+                aria-hidden
+              >
+                <Send className="w-4 h-4" />
+              </div>
             ) : (
-            <>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleSend}
-                disabled={disabled || effectiveLoading || (!inputValue.trim() && !attachedDocument)}
+                disabled={effectiveLoading || (!inputValue.trim() && !attachedDocument)}
                 className={cn(
-                  "h-8 w-8 rounded-full text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-opacity",
-                  (disabled || effectiveLoading || (!inputValue.trim() && !attachedDocument)) && 'opacity-0 pointer-events-none'
+                  "composer-tool composer-send h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                  (effectiveLoading || (!inputValue.trim() && !attachedDocument)) && "opacity-40 pointer-events-none"
                 )}
+                title="发送 (Enter)"
+                aria-label="发送消息"
               >
-                <Send className="w-5 h-5" />
+                <Send className="w-4 h-4" />
               </Button>
-            </>
           )}
           
         </div>

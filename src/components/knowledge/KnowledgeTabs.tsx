@@ -16,7 +16,7 @@ interface KnowledgeTabsProps {
 
 export function KnowledgeTabs({ activeTab, onTabChange }: KnowledgeTabsProps) {
   return (
-    <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4">
+    <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 glass-surface">
       {tabs.map((tab) => (
         <button
           key={tab.id}

@@ -205,7 +205,7 @@ export default function SampleDataManager() {
     <div className="space-y-6">
       {/* 确认对话框 */}
       {showResetConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 glass-scrim bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-md mx-4">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">

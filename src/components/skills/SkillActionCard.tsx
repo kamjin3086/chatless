@@ -265,7 +265,7 @@ export function SkillActionCard({
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleApprove(); }}
-              className="flex items-center gap-0.5 px-2.5 py-1 rounded-md bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md active:scale-95"
+              className="flex items-center gap-0.5 px-2.5 py-1 rounded-md bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md active:scale-95"
               title="确认执行"
             >
               <Play className="w-3.5 h-3.5 text-white" />

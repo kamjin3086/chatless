@@ -256,10 +256,10 @@ export function AttachmentMenu({
           size="icon"
           disabled={disabled}
           className={cn(
-            "h-8 w-8 shrink-0 rounded-lg transition-all duration-150",
+            "composer-tool h-8 w-8 shrink-0 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
             hasAnyAttachment
-              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
-              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              ? "glass-chip-ok"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
           title="附加内容"
         >

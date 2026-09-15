@@ -179,7 +179,7 @@ export default function HistoryList() {
 
   return (
     <>
-      <div className="flex-1 bg-white dark:bg-gray-900 flex flex-col">
+      <div className="flex-1 bg-white dark:bg-gray-900 flex flex-col glass-surface">
         {/* 统计信息条 - 更清晰的信息显示 */}
         <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/70 border-b border-gray-100 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-4">
@@ -191,7 +191,7 @@ export default function HistoryList() {
             </span>
           </div>
           {selectedItems.length > 0 && (
-            <span className="text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded">
+            <span className="text-slate-700 font-medium bg-slate-200/50 px-2 py-1 rounded dark:text-slate-200 dark:bg-white/10">
               已选择 {selectedItems.length} 个
             </span>
           )}

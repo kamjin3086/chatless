@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FolderPlus, Trash2, Edit2, Shield } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
@@ -85,24 +86,22 @@ export function FileSystemAuthSettings() {
 
       {/* 顶部工具栏 */}
       <div className="mt-3 flex items-center justify-between gap-2">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2.5"
           onClick={onAdd}
           disabled={loading}
-          className={cn(
-            "h-7 px-2 text-xs rounded flex items-center gap-1",
-            "bg-emerald-600 text-white hover:bg-emerald-700 transition-colors",
-            loading && "opacity-60 cursor-not-allowed"
-          )}
         >
           <FolderPlus className="h-3.5 w-3.5" />
           添加目录
-        </button>
+        </Button>
         <span className="text-[11px] text-slate-400">{filteredDirs.length} 个</span>
       </div>
 
       {/* 目录列表 */}
       <div className="mt-3 border border-slate-200/60 dark:border-slate-700/40 rounded-lg overflow-hidden">
-        <ScrollArea className="h-[240px]">
+        <ScrollArea className={filteredDirs.length === 0 ? "h-[88px]" : "h-[200px]"}>
           {filteredDirs.length === 0 ? (
             <div className="p-4 text-center text-[11px] text-slate-400">
               暂无白名单目录

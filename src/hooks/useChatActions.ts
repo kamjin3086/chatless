@@ -3,6 +3,7 @@
 // 后续可提取为专用 Hook 或工具文件以符合文件规模规范。
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
+import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useChatStore } from "@/store/chatStore";
@@ -20,6 +21,10 @@ import { usePromptStore } from '@/store/promptStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { performanceMonitor } from '@/lib/performance/PerformanceMonitor';
 import { StreamOrchestrator } from '@/lib/chat/stream';
+import {
+  startIdleGenerationWatch,
+  type IdleGenerationWatchHandle,
+} from '@/lib/chat/idleGenerationWatch';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { AgentLoopRunner } from '@/lib/mcp/agentLoop';
 import { useAuthorizationStore } from '@/store/authorizationStore';
@@ -62,9 +67,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
   // MCP 工具递归计数已迁移到 streamToolMiddleware
 
-  const [generationTimeout, setGenerationTimeout] = useState<NodeJS.Timeout | null>(null);
-  const lastActivityTimeRef = useRef<number>(Date.now());
   const [isStale, setIsStale] = useState(false);
+  const lastActivityTimeRef = useRef<number>(Date.now());
   
   // isGenerating 只代表“LLM SSE 正在流式输出”；工具阶段（running/pending_auth）也应视为“agent 正在运行”
   const hasBlockingTool = useChatStore((state) => {
@@ -109,8 +113,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     pendingUpdate: false
   });
   
-  // 全局计时器引用（未使用，移除以减噪）
-  const genTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const idleWatchRef = useRef<IdleGenerationWatchHandle | null>(null);
   const autoSaverRef = useRef<MessageAutoSaver | null>(null);
   
   // 添加内容变化检测变量
@@ -121,6 +124,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
   // stop 二次确认：第一次 stop 停生成/链路；短时间内再次 stop 则尝试强制取消正在运行的工具
   const stopArmRef = useRef<{ messageId: string; armedAt: number } | null>(null);
+  const [stopGenerationHint, setStopGenerationHint] = useState<string | null>(null);
 
   const navigateToSettings = useCallback((tab: string = 'localModels') => {
     router.push(`/settings?tab=${tab}`);
@@ -316,19 +320,21 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
           if (rendered && rendered.trim()) hb.addSystem(rendered);
         }
       }
-      
-      // 2. 添加MCP系统注入
-      try {
-        const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
-        // 传递 provider 和 model 以正确判断工具调用能力
-        const injection = await buildMcpSystemInjections(userContent, conversationId, provider, model);
-        for (const m of injection.systemMessages) {
-          const c = String((m as any).content || '');
-          // 避免重复注入时间（因为我们已经在顶部注入了）
-          if (c.startsWith('【当前时间】') || c.startsWith('当前时间：')) continue;
-          hb.addSystem(c);
-        }
-      } catch { /* 忽略MCP注入失败 */ }
+
+      const toolMode = (conv?.tool_mode || (useChatStore.getState() as any).sessionToolMode || 'chat') as string;
+
+      // 2. 添加MCP系统注入（agent 模式由 AgentLoopRunner Envelope 单次注入）
+      if (toolMode !== 'agent') {
+        try {
+          const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
+          const injection = await buildMcpSystemInjections(userContent, conversationId, provider, model);
+          for (const m of injection.systemMessages) {
+            const c = String((m as any).content || '');
+            if (c.startsWith('【当前时间】') || c.startsWith('当前时间：')) continue;
+            hb.addSystem(c);
+          }
+        } catch { /* 忽略MCP注入失败 */ }
+      }
     } catch { /* 忽略系统提示构建失败 */ }
     
     // 3. 处理历史消息
@@ -356,6 +362,11 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     hb.addUser(userContent, options?.images, options?.contextData);
     
     return hb.take();
+  }, []);
+
+  const stopGenerationIdleWatch = useCallback(() => {
+    idleWatchRef.current?.stop();
+    idleWatchRef.current = null;
   }, []);
 
   const handleSendMessage = useCallback(async (
@@ -510,8 +521,30 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       }
     } catch { /* 若校验不可用则继续，让 Provider 触发 onError */ }
 
-    // 如果选择了知识库，则优先走 RAG 流程
-    if (knowledgeBase) {
+    // 如果选择了知识库且为 Chat 模式，走 RAG 流程；Agent 模式使用 knowledge_* 工具
+    const toolModeForKb = (() => {
+      try {
+        const st = useChatStore.getState() as any;
+        const conv = (st.conversations || []).find((c: any) => c && c.id === finalConversationId);
+        return ((conv?.tool_mode as ('chat' | 'agent') | undefined) || st.sessionToolMode || 'chat') as 'chat' | 'agent';
+      } catch {
+        return 'chat';
+      }
+    })();
+
+    if (knowledgeBase && finalConversationId) {
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        useConversationAttachmentStore.getState().setKnowledgeBase(finalConversationId, {
+          id: knowledgeBase.id,
+          name: knowledgeBase.name,
+        });
+      } catch {
+        /* noop */
+      }
+    }
+
+    if (knowledgeBase && toolModeForKb === 'chat') {
       const handled = await runRagFlow({
         query: content,
         knowledgeBaseId: knowledgeBase.id,
@@ -556,6 +589,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     })();
 
     let streamCallbacks: StreamCallbacks | null = null;
+    let sendErrorNotified = false;
     if (toolModeForRun !== 'agent') {
       // 使用新的 StreamOrchestrator 架构（chat 模式）
       const orchestrator = new StreamOrchestrator({
@@ -568,7 +602,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         onUIUpdate: () => {},
         onError: (error) => {
           console.error('[StreamOrchestrator] 错误:', error);
-          toast.error('流式处理错误', { description: error.message });
         },
       });
 
@@ -582,21 +615,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         // 通知 UI
         try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
 
-        // 超时监控（chat 模式单轮）
-        if (genTimeoutRef.current) clearTimeout(genTimeoutRef.current);
-        genTimeoutRef.current = setInterval(() => {
-          if (Date.now() - lastActivityTimeRef.current > 120000) {
-            handleStopGeneration();
-            void updateMessage(assistantMessageId, {
-              status: 'error',
-              content: '响应超时',
-              thinking_duration: Math.floor((Date.now() - thinking_start_time) / 1000)
-            });
-            toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
-            if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
-          }
-        }, 5000);
-        setGenerationTimeout(genTimeoutRef.current);
+        lastActivityTimeRef.current = Date.now();
 
         // Token 计数重置
         setTokenCount(0);
@@ -621,24 +640,14 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       // 包装 onComplete
       const originalOnComplete = streamCallbacks.onComplete;
       streamCallbacks.onComplete = async () => {
-        try {
-          await originalOnComplete?.();
-        } finally {
-          if (genTimeoutRef.current) {
-            clearInterval(genTimeoutRef.current);
-            setGenerationTimeout(null);
-          }
-        }
+        await originalOnComplete?.();
       };
 
       // 包装 onError
       const originalOnError = streamCallbacks.onError;
       streamCallbacks.onError = (error: Error) => {
+        sendErrorNotified = true;
         originalOnError?.(error);
-        if (genTimeoutRef.current) {
-          clearInterval(genTimeoutRef.current);
-          setGenerationTimeout(null);
-        }
       };
 
       // 标记当前回调归属的流实例
@@ -696,23 +705,13 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
             options: composed,
             runtimeHooks: {
               onAgentStart: () => {
-                if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
-                genTimeoutRef.current = setInterval(() => {
-                  if (Date.now() - lastActivityTimeRef.current > 120000) {
-                    handleStopGeneration();
-                    void updateMessage(assistantMessageId, {
-                      status: 'error',
-                      content: '响应超时',
-                      thinking_duration: Math.floor((Date.now() - thinking_start_time) / 1000),
-                    });
-                    toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
-                    if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
-                  }
-                }, 5000);
-                setGenerationTimeout(genTimeoutRef.current);
-
+                lastActivityTimeRef.current = Date.now();
                 setTokenCount(0);
                 batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
+              },
+              onStreamError: () => {
+                sendErrorNotified = true;
+                stopGenerationIdleWatch();
               },
               onStreamEvent: (event: any) => {
                 lastActivityTimeRef.current = Date.now();
@@ -735,12 +734,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
                   performanceMonitor.end(perfId);
                 }
               },
-              onAgentEnd: () => {
-                if (genTimeoutRef.current) {
-                  clearInterval(genTimeoutRef.current);
-                  setGenerationTimeout(null);
-                }
-              },
             },
           });
           return;
@@ -750,13 +743,13 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         if (!streamCallbacks) throw new Error('streamCallbacks is not initialized');
         await gateway.stream(historyForLlm, streamCallbacks as any);
       } catch (err) {
+        if (!sendErrorNotified) {
+          showSendErrorToast(err, { providerName: effectiveProvider });
+        }
         const msg = err instanceof Error ? err.message : String(err);
         void updateMessage(assistantMessageId, {
           status: 'error',
           content: `发送失败：${msg}`,
-        });
-        toast.error('发送失败', {
-          description: msg,
         });
         return;
       }
@@ -787,6 +780,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   }, [selectedModelId, currentProviderName, handleSendMessage, checkApiKeyValidity, navigateToSettings]);
 
   const handleStopGeneration = useCallback(() => {
+    setStopGenerationHint('正在停止生成…');
     try {
       cancelStream();
     } catch {
@@ -799,11 +793,9 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       autoSaverRef.current = null;
     });
 
-    // 清理所有定时器
-    if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
+    stopGenerationIdleWatch();
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
     if (debouncedTokenUpdateRef.current) clearTimeout(debouncedTokenUpdateRef.current);
-    setGenerationTimeout(null);
     
     // 不清空 currentContentRef，保留已生成文本；也不重置 tokenCount，让用户看到该次统计
     
@@ -825,6 +817,13 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         // 停止不仅要停 SSE，还要停止整个 agent loop（阻止后续 follow-up / tool 链路继续推进）
         try {
           ToolCallCoordinator.getInstance().cancelMessage(lastAssistantMessage.id);
+        } catch {
+          // ignore
+        }
+        try {
+          void import('@tauri-apps/api/core').then(({ invoke }) =>
+            invoke('cancel_safe_shell', { executionId: lastAssistantMessage.id }).catch(() => {}),
+          );
         } catch {
           // ignore
         }
@@ -965,16 +964,73 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         });
       }
     }
-  }, [currentConversation, updateMessage]);
+  }, [currentConversation, updateMessage, currentConversationId]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setStopGenerationHint((prev) => {
+        if (prev === '正在停止生成…') return null;
+        return prev;
+      });
+    }
+  }, [isLoading]);
 
   // 清理函数
   useEffect(() => {
     return () => {
-      if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
+      idleWatchRef.current?.stop();
       if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
       if (debouncedTokenUpdateRef.current) clearTimeout(debouncedTokenUpdateRef.current);
     };
   }, []);
+
+  // 统一空闲超时：isGenerating 期间由 IdleWatch 监控；工具 running 时不误杀
+  useEffect(() => {
+    if (!isGenerating) {
+      setIsStale(false);
+      stopGenerationIdleWatch();
+      return;
+    }
+
+    setIsStale(false);
+    lastActivityTimeRef.current = Date.now();
+
+    const st = useChatStore.getState();
+    const cid = st.currentConversationId;
+    if (!cid) return;
+
+    stopGenerationIdleWatch();
+    idleWatchRef.current = startIdleGenerationWatch({
+      conversationId: cid,
+      getLastActivityMs: () => lastActivityTimeRef.current,
+      onIdle: () => {
+        setIsStale(true);
+        handleStopGeneration();
+        const currentState = useChatStore.getState();
+        const current = currentState.conversations.find((c) => c.id === currentState.currentConversationId);
+        const loadingMessage = current?.messages?.find((m) => m.status === 'loading');
+        if (loadingMessage) {
+          const content = currentContentRef.current || '';
+          void currentState.finalizeStreamedMessage(
+            loadingMessage.id,
+            'aborted',
+            content,
+            loadingMessage.model,
+          ).catch(() => {});
+          void updateMessage(loadingMessage.id, {
+            status: 'error',
+            content: content.trim() || '响应超时',
+          });
+        }
+        toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
+        stopGenerationIdleWatch();
+      },
+    });
+
+    return () => {
+      stopGenerationIdleWatch();
+    };
+  }, [isGenerating, handleStopGeneration, updateMessage, stopGenerationIdleWatch]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     if (currentConversationId && newTitle && newTitle.trim() !== '') {
@@ -1157,41 +1213,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     }
   }, [currentConversationId, currentConversation, currentProviderName, checkApiKeyValidity, updateMessage, updateMessageContentInMemory]);
 
-  useEffect(() => {
-    if (isGenerating) {
-      setIsStale(false);
-      lastActivityTimeRef.current = Date.now();
-      
-      if (generationTimeout) clearTimeout(generationTimeout);
-      
-      const timeout = setTimeout(() => {
-        if (Date.now() - lastActivityTimeRef.current > 120000) {
-          setIsStale(true);
-          const currentState = useChatStore.getState();
-          const current = currentState.conversations.find(c => c.id === currentState.currentConversationId);
-          const loadingMessage = current?.messages?.find(m => m.status === 'loading');
-          
-          if (loadingMessage) {
-            const content = currentContentRef.current || '';
-            currentState.finalizeStreamedMessage(loadingMessage.id, 'aborted', content, loadingMessage.model)
-              .catch(() => {});
-          }
-        }
-      }, 120000);
-      setGenerationTimeout(timeout);
-    } else {
-      if (generationTimeout) {
-        clearTimeout(generationTimeout);
-        setGenerationTimeout(null);
-      }
-      setIsStale(false);
-    }
-    
-    return () => {
-      if (generationTimeout) clearTimeout(generationTimeout);
-    };
-  }, [isGenerating]);
-
   // Placeholder handler for share（仍待实现）
   const handleShare = useCallback(() => {}, []);
 
@@ -1207,6 +1228,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     handleSendMessage,
     handleStopGeneration,
     handleEmptyStatePromptClick,
+    stopGenerationHint,
     handleTitleChange,
     handleDeleteConversation,
     handleRetryMessage,

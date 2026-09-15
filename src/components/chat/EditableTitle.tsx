@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 interface EditableTitleProps {
   initialTitle: string;
@@ -18,7 +17,6 @@ export function EditableTitle({
   onTitleChange,
   className,
   inputClassName,
-  buttonSize = "sm",
 }: EditableTitleProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(initialTitle);
@@ -44,7 +42,6 @@ export function EditableTitle({
       onTitleChange(title.trim());
       setIsEditing(false);
     } else {
-      // Revert to original if input is empty
       setTitle(initialTitle);
       setIsEditing(false);
     }
@@ -65,33 +62,49 @@ export function EditableTitle({
 
   if (isEditing) {
     return (
-      <div className="flex items-center gap-2">
-        <Input
+      <div className={cn("flex items-center gap-1 min-w-0 flex-1 max-w-[min(50vw,24rem)]", className)}>
+        <input
           ref={inputRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleConfirm}
-          className={inputClassName || "h-8"}
+          className={cn(
+            "min-w-0 flex-1 h-7 bg-transparent border-0 border-b border-slate-300/70 dark:border-slate-600/60 rounded-none px-0.5 text-xs text-slate-700 dark:text-slate-200",
+            "inline-edit outline-none focus:ring-0 shadow-none",
+            inputClassName
+          )}
         />
-        <Button onClick={handleConfirm} size={buttonSize} variant="ghost" className="text-green-600 hover:text-green-700 cursor-pointer">
-          <Check className="h-4 w-4" />
-        </Button>
-        <Button onClick={handleCancel} size={buttonSize} variant="ghost" className="text-red-600 hover:text-red-700 cursor-pointer">
-          <X className="h-4 w-4" />
-        </Button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleConfirm}
+          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          aria-label="确认"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleCancel}
+          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          aria-label="取消"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
     );
   }
 
   return (
     <span
-      className={className || "cursor-pointer hover:text-primary transition-colors"}
+      className={cn("cursor-pointer truncate hover:text-slate-700 dark:hover:text-slate-200 transition-colors", className)}
       onClick={handleStartEditing}
       onDoubleClick={handleStartEditing}
-      title="点击或双击编辑"
+      title="点击编辑标题"
     >
       {initialTitle}
     </span>
   );
-} 
+}

@@ -53,8 +53,8 @@ export function PromptCard({
   return (
     <div 
       className={cn(
-        "group flex flex-col p-3 rounded-lg border transition-colors duration-150",
-        "bg-white/80 dark:bg-slate-900/60",
+        "group flex flex-col p-3 rounded-lg border transition-colors duration-150 glass-panel",
+        "bg-white/40 dark:bg-slate-900/40",
         "border-slate-200/60 dark:border-slate-700/40",
         "hover:border-slate-300/80 dark:hover:border-slate-600/60",
         onClick && "cursor-pointer"
@@ -124,7 +124,7 @@ export function PromptCard({
           {shortcuts && shortcuts.length > 0 && shortcuts.slice(0, 1).map((s) => (
             <span
               key={s}
-              className="text-[10px] px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-mono"
+              className="text-[10px] px-1 py-0.5 rounded border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono"
             >
               /{s}
             </span>

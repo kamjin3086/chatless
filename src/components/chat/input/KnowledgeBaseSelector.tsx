@@ -82,9 +82,10 @@ export function KnowledgeBaseSelector({
           variant="ghost"
           size="icon-sm"
           className={cn(
-            "rounded-lg text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-gray-800/60 shrink-0 transition-all duration-200",
-            selectedKnowledgeBase &&
-              "text-blue-600 bg-gradient-to-br from-blue-50 to-indigo-50/80 dark:from-blue-900/30 dark:to-indigo-900/25 ring-1 ring-blue-400/30 dark:ring-blue-500/30 shadow-sm"
+            "composer-tool h-8 w-8 rounded-md shrink-0 border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+            selectedKnowledgeBase
+              ? "glass-chip-knowledge"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
           title={selectedKnowledgeBase ? "更换知识库" : "选择知识库"}
         >
@@ -96,7 +97,7 @@ export function KnowledgeBaseSelector({
         <ActionPanelHeader
           title="选择知识库"
           subtitle="AI 将基于所选知识库内容回答"
-          icon={<Database className="w-4 h-4 text-blue-500" />}
+          icon={<Database className="w-4 h-4 text-slate-500" />}
         />
 
         <ActionPanelSearch
@@ -161,7 +162,7 @@ function KnowledgeBaseItem({
           className={cn(
             "w-4 h-4",
             isSelected
-              ? "text-blue-500"
+              ? "text-slate-600 dark:text-slate-300"
               : "text-gray-500 dark:text-gray-400"
           )}
         />
@@ -171,7 +172,7 @@ function KnowledgeBaseItem({
       selected={isSelected}
       suffix={
         isSelected ? (
-          <Check className="w-4 h-4 text-blue-500" />
+          <Check className="w-4 h-4 text-slate-600 dark:text-slate-300" />
         ) : null
       }
       onClick={onSelect}

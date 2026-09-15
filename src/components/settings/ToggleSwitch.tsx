@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 
 interface ToggleSwitchProps {
   label: string;
@@ -23,7 +24,7 @@ export function ToggleSwitch({
   className,
 }: ToggleSwitchProps) {
   const id = useId();
-  
+
   return (
     <div className={cn("flex items-center justify-between gap-4 py-1", className)}>
       <div className="flex items-center gap-1.5 min-w-0">
@@ -42,25 +43,8 @@ export function ToggleSwitch({
           </div>
         )}
       </div>
-      
-      <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-        <input
-          type="checkbox"
-          id={id}
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="sr-only peer"
-        />
-        <div className={cn(
-          "w-9 h-5 rounded-full transition-colors duration-200",
-          "bg-slate-200 dark:bg-slate-700",
-          "peer-checked:bg-blue-500",
-          "after:content-[''] after:absolute after:top-0.5 after:left-0.5",
-          "after:bg-white after:rounded-full after:h-4 after:w-4",
-          "after:shadow-sm after:transition-transform after:duration-200",
-          "peer-checked:after:translate-x-4"
-        )} />
-      </label>
+
+      <Switch id={id} size="sm" checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }

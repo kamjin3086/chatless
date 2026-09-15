@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FolderDown, Trash2, HardDrive, ChevronDown, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
@@ -180,18 +181,16 @@ export function WorkspaceSettings() {
                 {formatConversationTitle(currentConversation.title)}
               </div>
             </div>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5"
               onClick={onExport}
               disabled={loading}
-              className={cn(
-                "h-7 px-2 text-xs rounded flex items-center gap-1",
-                "bg-indigo-600 text-white hover:bg-indigo-700 transition-colors",
-                loading && "opacity-60 cursor-not-allowed"
-              )}
             >
               <FolderDown className="h-3.5 w-3.5" />
               导出
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -229,10 +228,10 @@ export function WorkspaceSettings() {
                         <div className={cn(
                           "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
                           selectedIds.has(conv.id)
-                            ? "bg-indigo-600 border-indigo-600"
+                            ? "bg-slate-800 border-slate-800 dark:bg-slate-200 dark:border-slate-200"
                             : "border-slate-300 dark:border-slate-600"
                         )}>
-                          {selectedIds.has(conv.id) && <Check className="h-3 w-3 text-white" />}
+                          {selectedIds.has(conv.id) && <Check className="h-3 w-3 text-white dark:text-slate-900" />}
                         </div>
                         <span className="text-xs text-slate-700 dark:text-slate-200 truncate flex-1">
                           {formatConversationTitle(conv.title, 32)}
@@ -253,48 +252,42 @@ export function WorkspaceSettings() {
         {/* 批量操作按钮 */}
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5"
               onClick={onExport}
               disabled={loading}
-              className={cn(
-                "h-7 px-2 text-xs rounded flex items-center gap-1",
-                "bg-indigo-600 text-white hover:bg-indigo-700 transition-colors",
-                loading && "opacity-60 cursor-not-allowed"
-              )}
             >
               <FolderDown className="h-3.5 w-3.5" />
               导出选中
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5"
               onClick={onCleanSelected}
               disabled={loading}
-              className={cn(
-                "h-7 px-2 text-xs rounded flex items-center gap-1",
-                "border border-slate-200/60 dark:border-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors",
-                loading && "opacity-60 cursor-not-allowed"
-              )}
             >
               <Trash2 className="h-3.5 w-3.5" />
               清理选中
-            </button>
+            </Button>
           </div>
         )}
       </div>
 
       {/* 危险操作区 */}
       <div className="mt-4 pt-3 border-t border-slate-200/50 dark:border-slate-700/30">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 dark:text-rose-400 dark:hover:bg-rose-500/10"
           onClick={onClearAll}
           disabled={loading}
-          className={cn(
-            "h-7 px-2 text-xs rounded flex items-center gap-1",
-            "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors",
-            loading && "opacity-60 cursor-not-allowed"
-          )}
         >
           <Trash2 className="h-3.5 w-3.5" />
           清理全部工作区
-        </button>
+        </Button>
       </div>
     </SettingsCard>
   );

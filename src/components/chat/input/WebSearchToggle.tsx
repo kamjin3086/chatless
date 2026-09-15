@@ -75,10 +75,10 @@ export function WebSearchToggle({
           size="icon"
           disabled={disabled}
           className={cn(
-            "h-8 w-8 shrink-0 rounded-lg transition-all duration-150",
+            "composer-tool h-8 w-8 shrink-0 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
             isEnabled
-              ? "bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/50"
-              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              ? "glass-chip-search"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
           title="网络搜索"
         >
@@ -89,7 +89,7 @@ export function WebSearchToggle({
       <ActionPanelContent width="md" maxHeight="20rem">
         <ActionPanelHeader
           title="网络搜索"
-          icon={<Globe className={cn("w-4 h-4", isEnabled ? "text-sky-500" : "text-slate-400")} />}
+          icon={<Globe className={cn("w-4 h-4", isEnabled ? "text-sky-600 dark:text-sky-400" : "text-slate-400")} />}
           action={
             <div className="flex items-center gap-2">
               <span className={cn(
@@ -134,7 +134,7 @@ export function WebSearchToggle({
                   }
                   selected={isSelected}
                   disabled={!isConfigured}
-                  suffix={isSelected ? <Check className="w-4 h-4 text-sky-500" /> : null}
+                  suffix={isSelected ? <Check className="w-4 h-4 text-slate-600 dark:text-slate-300" /> : null}
                   onClick={() => handleProviderChange(provider)}
                 />
               );
@@ -149,7 +149,7 @@ export function WebSearchToggle({
         <ActionPanelFooter>
           <button
             onClick={handleGoToSettings}
-            className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 transition-colors"
+            className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />
             配置密钥

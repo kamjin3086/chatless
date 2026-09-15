@@ -5,31 +5,31 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-500/50 cursor-pointer",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-slate-400/40 cursor-pointer",
   {
     variants: {
       variant: {
         default:
-          "bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-sm hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800",
+          "bg-slate-800 text-white hover:bg-slate-900 active:bg-slate-950 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white dark:active:bg-slate-100",
         soft:
-          "bg-gradient-to-br from-blue-50 to-blue-100/80 text-blue-700 hover:from-blue-100 hover:to-blue-200/80 dark:from-blue-950/40 dark:to-blue-900/30 dark:text-blue-300 dark:hover:from-blue-900/50 dark:hover:to-blue-800/40",
+          "bg-slate-100/90 text-slate-700 hover:bg-slate-200/90 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/16",
         destructive:
-          "bg-gradient-to-b from-red-500 to-red-600 text-white shadow-sm hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800",
+          "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
         outline:
-          "border border-gray-200/80 bg-white/50 hover:bg-gray-50 hover:border-gray-300/80 dark:bg-gray-900/30 dark:border-gray-700/60 dark:hover:bg-gray-800/40 dark:hover:border-gray-600/70",
+          "border border-slate-200/80 bg-white/50 hover:bg-slate-50 hover:border-slate-300/80 dark:bg-white/5 dark:border-white/12 dark:hover:bg-white/10 dark:hover:border-white/18",
         secondary:
-          "bg-gradient-to-b from-gray-100 to-gray-200/80 text-gray-700 hover:from-gray-200 hover:to-gray-300/80 dark:from-gray-800 dark:to-gray-900/80 dark:text-gray-200 dark:hover:from-gray-700 dark:hover:to-gray-800",
+          "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/16",
         ghost:
-          "hover:bg-gray-100/80 hover:text-gray-900 dark:hover:bg-gray-800/60 dark:hover:text-gray-100",
-        link: "text-blue-600 underline-offset-4 hover:underline dark:text-blue-400",
+          "hover:bg-slate-100/80 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-slate-100",
+        link: "text-slate-600 underline-offset-4 hover:underline dark:text-slate-300",
         dialogPrimary:
-          "bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-sm hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800",
+          "bg-slate-800 text-white hover:bg-slate-900 active:bg-slate-950 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white",
         dialogSecondary:
-          "bg-white text-gray-700 border border-gray-200/80 hover:bg-gray-50 hover:border-gray-300/80 dark:bg-gray-800/60 dark:text-gray-200 dark:border-gray-700/60 dark:hover:bg-gray-700/70 dark:hover:border-gray-600/70",
+          "bg-white/70 text-slate-700 border border-slate-200/80 hover:bg-slate-50 hover:border-slate-300/80 dark:bg-white/8 dark:text-slate-200 dark:border-white/12 dark:hover:bg-white/12",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 text-xs has-[>svg]:px-2.5",
+        sm: "h-8 rounded-lg gap-1.5 px-3 text-xs has-[>svg]:px-2.5",
         lg: "h-11 rounded-lg px-6 has-[>svg]:px-4 text-base",
         icon: "size-9 p-0",
         "icon-sm": "size-8 p-0",

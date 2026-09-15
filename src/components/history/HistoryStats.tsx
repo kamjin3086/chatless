@@ -50,10 +50,10 @@ export default function HistoryStats() {
     <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100/60 dark:bg-gray-900/60">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {/* 总对话数 */}
-        <Card className="bg-white/80 dark:bg-gray-900/40 backdrop-blur-sm">
+        <Card className="glass-panel bg-white/40 dark:bg-slate-900/40 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">总对话数</CardTitle>
-            <MessageSquare className="h-4 w-4 text-blue-600" />
+            <MessageSquare className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalConversations}</div>
@@ -64,7 +64,7 @@ export default function HistoryStats() {
         </Card>
 
         {/* 收藏数 */}
-        <Card className="bg-white/80 dark:bg-gray-900/40 backdrop-blur-sm">
+        <Card className="glass-panel bg-white/40 dark:bg-slate-900/40 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">收藏对话</CardTitle>
             <Star className="h-4 w-4 text-yellow-600" />
@@ -78,7 +78,7 @@ export default function HistoryStats() {
         </Card>
 
         {/* 重要对话数 */}
-        <Card className="bg-white/80 dark:bg-gray-900/40 backdrop-blur-sm">
+        <Card className="glass-panel bg-white/40 dark:bg-slate-900/40 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">重要对话</CardTitle>
             <Flag className="h-4 w-4 text-red-600" />
@@ -92,7 +92,7 @@ export default function HistoryStats() {
         </Card>
 
         {/* 平均消息数 */}
-        <Card className="bg-white/80 dark:bg-gray-900/40 backdrop-blur-sm">
+        <Card className="glass-panel bg-white/40 dark:bg-slate-900/40 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">平均消息数</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
@@ -110,7 +110,7 @@ export default function HistoryStats() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* 模型使用统计 */}
-        <Card className="bg-white/80 dark:bg-gray-900/40 backdrop-blur-sm">
+        <Card className="glass-panel bg-white/40 dark:bg-slate-900/40 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-2">
               <Bot className="h-4 w-4" />
@@ -131,7 +131,7 @@ export default function HistoryStats() {
                       <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{count}</div>
                       <div className="w-16 bg-gray-200 rounded-full h-2">
                         <div 
-                          className="bg-blue-600 h-2 rounded-full" 
+                          className="bg-slate-600 dark:bg-slate-400 h-2 rounded-full" 
                           style={{ 
                             width: `${(count / stats.totalConversations) * 100}%` 
                           }}
@@ -148,7 +148,7 @@ export default function HistoryStats() {
         </Card>
 
         {/* 标签使用统计 */}
-        <Card className="bg-white/80 dark:bg-gray-900/40 backdrop-blur-sm">
+        <Card className="glass-panel bg-white/40 dark:bg-slate-900/40 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-2">
               <Calendar className="h-4 w-4" />

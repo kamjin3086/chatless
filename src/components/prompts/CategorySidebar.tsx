@@ -44,7 +44,7 @@ export function CategorySidebar({ onSelectCategory = () => {} }: CategorySidebar
   };
 
   return (
-    <div className="w-56 border-r border-gray-200 dark:border-gray-700 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-800 flex flex-col h-full">
+    <div className="w-56 border-r border-gray-200 dark:border-gray-700 overflow-y-auto custom-scrollbar bg-white dark:bg-gray-800 flex flex-col h-full glass-surface">
       {/* Header */}
       <div className="p-3 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <h3 className="font-medium text-gray-700 dark:text-gray-300 text-sm">分类</h3>

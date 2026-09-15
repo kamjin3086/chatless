@@ -7,6 +7,8 @@ import { initDatabaseService } from '@/lib/db';
 import { Sidebar } from './Sidebar';
 import { startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { ThemeInitializer } from './theme/ThemeInitializer';
+import { GlassThemeApplier } from './theme/GlassThemeApplier';
+import { NightBrightnessApplier } from './theme/NightBrightnessApplier';
 import { attachConsole } from '@tauri-apps/plugin-log';
 import { initializeSampleDataIfNeeded } from '@/lib/sampleDataInitializer';
 import { appCleanupService } from '@/lib/services/appCleanup';
@@ -238,20 +240,23 @@ export function TauriApp({ children }: TauriAppProps) {
   }, [loadConversations]);
 
   return (
-    <div className="flex h-full">
-      {/* 主题初始化组件 - 在客户端渲染时立即应用主题 */}
+    <>
       <ThemeInitializer />
-      {/* 启动更新提示（右下角通知） */}
+      <GlassThemeApplier />
+      <NightBrightnessApplier />
       <StartupUpdateToast />
-      
-      <Sidebar />
-      <div
-        className="flex-1 relative overflow-x-hidden"
-        style={{ marginLeft: 'var(--sidebar-width, 4.5rem)' }}
-      >
-        {children}
+      <div className="relative flex h-full custom-titlebar-content">
+        <Sidebar />
+        <div
+          className="glass-shell flex-1 relative"
+          style={{ marginLeft: 'var(--sidebar-width, 4.5rem)' }}
+        >
+          <div className="glass-shell-inner relative h-full min-h-0 overflow-x-hidden">
+            {children}
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

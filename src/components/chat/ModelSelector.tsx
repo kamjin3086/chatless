@@ -239,6 +239,15 @@ export function ModelSelector({
         // 忽略预热错误
         console.debug('logo prewarm skipped', e);
       }
+      // 免密 Provider（Ollama / LM Studio 等）打开面板时静默刷新模型列表
+      void (async () => {
+        try {
+          const { providerModelService } = await import('@/lib/provider/services/ProviderModelService');
+          await providerModelService.refreshNoKeyProviders();
+        } catch (e) {
+          console.debug('auto refresh no-key models skipped', e);
+        }
+      })();
     } else {
       // 关闭时清空搜索
       setSearchQuery('');
@@ -299,6 +308,22 @@ export function ModelSelector({
     ? SENTINEL_VALUE
     : (pairSelection || currentModelId || '');
 
+  const currentModelName = useMemo(() => {
+    if (!currentModelId) return '';
+    if (!currentProvider) return currentModelId;
+    return currentProvider.models.find((m) => m.name === currentModelId)?.label || currentModelId;
+  }, [currentProvider, currentModelId]);
+
+  const currentProviderLabel = currentProvider
+    ? (currentProvider.displayName || currentProvider.name)
+    : '';
+
+  const triggerTitle = currentModelId
+    ? (currentProviderLabel ? `${currentModelName} · ${currentProviderLabel}` : currentModelName)
+    : undefined;
+
+  const triggerPlaceholder = allMetadata.length === 0 ? '加载中...' : '选择模型';
+
   return (
     <>
       <Select
@@ -307,11 +332,15 @@ export function ModelSelector({
         disabled={disabled}
         onOpenChange={handleOpenChange}
       >
-        <SelectTrigger className="h-7 px-1.5 bg-transparent border-0 rounded text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 focus:ring-0">
-          <span className="inline-flex items-center gap-1.5">
+        <SelectTrigger
+          variant="ghost"
+          title={triggerTitle}
+          className="h-7 max-w-[50vw] min-w-0 overflow-hidden text-xs font-medium text-slate-600 dark:text-slate-300"
+        >
+          <span className="flex min-w-0 max-w-full items-center gap-1.5">
             {currentProvider && currentModelId ? (
               !useProviderIcon ? (
-                <div className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded-sm flex-shrink-0">
+                <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
                 <ModelBrandLogo
                   modelId={currentModelId}
                   providerName={currentProvider.name}
@@ -322,7 +351,7 @@ export function ModelSelector({
                 </div>
               ) : (
                 isImgSrc(providerCatalogSrc) ? (
-                  <div className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded-sm flex-shrink-0">
+                  <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
                   <Image
                     src={providerCatalogSrc}
                     alt={currentProvider.name}
@@ -337,7 +366,7 @@ export function ModelSelector({
                   />
                   </div>
                 ) : (
-                  <div className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded-sm flex-shrink-0">
+                  <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
                   <Image
                     src={providerAvatarSrc}
                     alt={currentProvider.name}
@@ -349,15 +378,19 @@ export function ModelSelector({
                 )
               )
             ) : null}
-            <span className="truncate max-w-[200px]">
-              {currentModelId
-                ? currentProvider
-                  ? `${(currentProvider.models.find(m=>m.name===currentModelId)?.label) || currentModelId} · ${((currentProvider as any).displayName || currentProvider.name)}`
-                  : currentModelId
-                : allMetadata.length === 0
-                  ? '加载中...'
-                  : '选择模型'}
-            </span>
+            {currentModelId ? (
+              <>
+                <span className="min-w-0 truncate">{currentModelName}</span>
+                {currentProviderLabel ? (
+                  <>
+                    <span className="shrink-0 text-slate-400 dark:text-slate-500">·</span>
+                    <span className="shrink-0 truncate">{currentProviderLabel}</span>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <span>{triggerPlaceholder}</span>
+            )}
           </span>
         </SelectTrigger>
         

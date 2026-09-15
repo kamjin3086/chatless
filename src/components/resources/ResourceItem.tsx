@@ -102,7 +102,7 @@ export function ResourceItem({
               {title}
             </p>
             {isChatFile && (
-              <span className="rounded px-1 py-0.5 text-[10px] bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+              <span className="rounded px-1 py-0.5 text-[10px] border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300">
                 聊天
               </span>
             )}
@@ -111,12 +111,12 @@ export function ResourceItem({
                 {knowledgeBases.slice(0, 2).map((kb, index) => (
                   <span 
                     key={`${kb.id}-${index}`} 
-                    className={`rounded px-1 py-0.5 text-[10px] ${
+                    className={`rounded px-1 py-0.5 text-[10px] border ${
                       kb.status === 'indexed' 
-                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
+                        ? 'border-emerald-200/70 bg-emerald-50/70 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-900/20 dark:text-emerald-400'
                         : kb.status === 'pending' || kb.status === 'indexing'
-                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
-                        : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
+                        ? 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300'
+                        : 'border-red-200/70 bg-red-50/70 text-red-700 dark:border-red-800/40 dark:bg-red-900/20 dark:text-red-400'
                     }`}
                   >
                     {kb.name}
@@ -197,11 +197,11 @@ export function ResourceItem({
 
       {/* 详情对话框 */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-lg dark:bg-slate-900 dark:border-slate-600">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-semibold truncate pr-8 text-gray-900 dark:text-gray-100">{title}</DialogTitle>
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b border-slate-200/40 dark:border-slate-700/40">
+            <DialogTitle className="text-lg font-semibold truncate pr-8 text-slate-900 dark:text-slate-100">{title}</DialogTitle>
           </DialogHeader>
-          <div className="text-sm space-y-4 max-h-96 overflow-y-auto text-gray-700 dark:text-gray-300">
+          <div className="text-sm space-y-4 px-6 py-4 max-h-96 overflow-y-auto text-slate-700 dark:text-slate-300">
             <div className="space-y-2">
               <p><strong>文件大小:</strong> {formatFileSize(fileSize)}</p>
               <p><strong>创建时间:</strong> {new Date(createdAt).toLocaleString('zh-CN')}</p>
@@ -213,14 +213,14 @@ export function ResourceItem({
                 <p className="font-medium mb-3">关联的知识库:</p>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {knowledgeBases.map((kb, index) => (
-                    <div key={`${kb.id}-${index}`} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded text-sm">
+                    <div key={`${kb.id}-${index}`} className="flex items-center justify-between p-2.5 glass-inset rounded-lg text-sm">
                       <span className="truncate mr-2">{kb.name}</span>
-                      <span className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
+                      <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 border ${
                         kb.status === 'indexed' 
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-800/60 dark:text-emerald-300'
+                          ? 'text-emerald-700 border-emerald-200/70 bg-emerald-50/50 dark:text-emerald-400 dark:border-emerald-800/40 dark:bg-emerald-900/20'
                           : kb.status === 'pending' || kb.status === 'indexing'
-                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-800/60 dark:text-yellow-300'
-                          : 'bg-red-100 text-red-700 dark:bg-red-800/60 dark:text-red-300'
+                          ? 'text-slate-600 border-slate-200/70 bg-slate-100/50 dark:text-slate-300 dark:border-slate-600/50 dark:bg-slate-800/40'
+                          : 'text-red-600 border-red-200/70 bg-red-50/50 dark:text-red-400 dark:border-red-800/40 dark:bg-red-900/20'
                       }`}>
                         {kb.status === 'indexed' ? '已索引' : kb.status === 'pending' ? '待处理' : kb.status === 'indexing' ? '处理中' : '失败'}
                       </span>

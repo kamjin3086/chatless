@@ -27,10 +27,21 @@ pub mod filesystem;
 fn exit(app: tauri::AppHandle, code: i32) {
   #[cfg(not(any(target_os = "android", target_os = "ios")))]
   {
-    use tauri_plugin_window_state::{AppHandleExt, StateFlags};
-    let _ = app.save_window_state(StateFlags::all());
+    use tauri_plugin_window_state::AppHandleExt;
+    let _ = app.save_window_state(persisted_window_state_flags());
   }
   std::process::exit(code);
+}
+
+/// Keep size/position, never restore the OS title bar (custom title bar owns chrome).
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn persisted_window_state_flags() -> tauri_plugin_window_state::StateFlags {
+  use tauri_plugin_window_state::StateFlags;
+  StateFlags::SIZE
+    | StateFlags::POSITION
+    | StateFlags::MAXIMIZED
+    | StateFlags::VISIBLE
+    | StateFlags::FULLSCREEN
 }
 
 #[path = "lib/onnx_logic.rs"]
@@ -105,15 +116,16 @@ pub fn run() {
     .setup(|app| {
       #[cfg(not(any(target_os = "android", target_os = "ios")))]
       {
-        let _ = app
-          .handle()
-          .plugin(tauri_plugin_window_state::Builder::default().build());
-        // 主动恢复一次，确保未被其他初始化逻辑覆盖
-        {
-          use tauri_plugin_window_state::{StateFlags, WindowExt};
-          if let Some(win) = app.get_webview_window("main") {
-            let _ = win.restore_state(StateFlags::all());
-          }
+        let flags = persisted_window_state_flags();
+        let _ = app.handle().plugin(
+          tauri_plugin_window_state::Builder::default()
+            .with_state_flags(flags)
+            .build(),
+        );
+        if let Some(win) = app.get_webview_window("main") {
+          use tauri_plugin_window_state::WindowExt;
+          let _ = win.restore_state(flags);
+          let _ = win.set_decorations(false);
         }
       }
       // 尝试在后台线程初始化 ONNX Runtime，避免阻塞启动

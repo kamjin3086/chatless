@@ -184,8 +184,8 @@ export const SkillInvocationCard: React.FC<SkillInvocationCardProps> = ({
           {/* 技能图标 */}
           <div className={cn(
             "flex items-center justify-center w-8 h-8 rounded-lg",
-            "bg-gradient-to-br from-violet-500 to-purple-600",
-            "text-white"
+            "bg-slate-100/80 dark:bg-slate-800/60",
+            "text-slate-600 dark:text-slate-300"
           )}>
             <Sparkles className="w-4 h-4" />
           </div>

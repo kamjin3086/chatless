@@ -385,7 +385,7 @@ export function SkillParameterForm({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+            <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>

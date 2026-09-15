@@ -100,7 +100,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
     while ((m = re.exec(src))) {
       out += esc(src.slice(last, m.index));
       const raw = esc(m[0]);
-      out += `<span class="rounded-sm bg-amber-100/70 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">${raw}</span>`;
+      out += `<span class="rounded-sm bg-slate-200/60 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200">${raw}</span>`;
       last = m.index + m[0].length;
     }
     out += esc(src.slice(last));
@@ -166,8 +166,8 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                   className={cn(
                     "w-7 h-7 rounded flex items-center justify-center transition-colors",
                     showHistory 
-                      ? "text-blue-500 bg-blue-50 dark:bg-blue-900/20" 
-                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-700 bg-slate-200/50 dark:text-slate-200 dark:bg-slate-700/50" 
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
                   )}
                   title={`查看历史 (${history.length})`}
                 >
@@ -187,11 +187,11 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
 
         {/* 历史面板 */}
         {showHistory && history.length > 0 && (
-          <div className="flex-shrink-0 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 p-3 max-h-48 overflow-y-auto">
+          <div className="flex-shrink-0 border-b border-slate-200/40 dark:border-slate-700/40 glass-inset p-3 max-h-48 overflow-y-auto">
             <div className="text-[10px] text-slate-400 mb-2">修改历史 (最近 {history.length} 次)</div>
             <div className="space-y-1.5">
               {history.map((h) => (
-                <div key={h.id} className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/40">
+                <div key={h.id} className="flex items-center justify-between p-2 rounded-lg glass-inset border border-slate-200/40 dark:border-slate-700/40">
                   <div className="min-w-0 flex-1">
                     <div className="text-xs text-slate-700 dark:text-slate-200 truncate">{h.name}</div>
                     <div className="text-[10px] text-slate-400">
@@ -200,7 +200,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                   </div>
                   <button
                     onClick={() => handleRestoreHistory(h)}
-                    className="h-6 px-2 text-[10px] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded flex items-center gap-1"
+                    className="h-6 px-2 text-[10px] text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-slate-700/50 rounded flex items-center gap-1"
                   >
                     <RotateCcw className="w-3 h-3" />
                     恢复
@@ -220,7 +220,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="提示词名称"
-              className="w-full h-8 px-3 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              className="glass-field w-full h-8 px-3 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
             />
           </div>
 
@@ -234,7 +234,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="简要说明用途"
-              className="w-full h-8 px-3 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-300"
+              className="glass-field w-full h-8 px-3 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
             />
           </div>
 
@@ -244,7 +244,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               <label className="text-xs text-slate-600 dark:text-slate-400">内容</label>
               <span className="text-[10px] text-slate-400">≈ {tokenEstimate} tokens · 用 {'{{变量}}'} 定义变量</span>
             </div>
-            <div className="relative rounded-lg border border-slate-200/60 dark:border-slate-700/40 bg-white/80 dark:bg-slate-800/60 min-h-[180px]">
+            <div className="relative rounded-lg border border-slate-200/50 dark:border-slate-700/40 glass-field min-h-[180px]">
               <div
                 ref={previewRef}
                 className="absolute inset-0 overflow-auto p-3 text-xs leading-5 whitespace-pre-wrap pointer-events-none select-none text-slate-700 dark:text-slate-200 font-mono"
@@ -255,7 +255,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onScroll={syncScroll}
-                className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-3 text-xs leading-5 text-transparent selection:bg-blue-500/20 caret-blue-500 font-mono min-h-[180px]"
+                className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-3 text-xs leading-5 text-transparent selection:bg-slate-400/25 caret-slate-600 dark:caret-slate-300 font-mono min-h-[180px]"
               />
             </div>
           </div>
@@ -268,12 +268,12 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               <input
                 onKeyDown={handleTagInput}
                 placeholder="回车添加"
-                className="w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+                className="glass-field w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
               />
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {tags.map((t) => (
-                    <span key={t} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                    <span key={t} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded border border-slate-200/60 bg-slate-100/60 dark:border-slate-600/50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300">
                       {t}
                       <button onClick={() => removeTag(t)} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
                     </span>
@@ -288,12 +288,12 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               <input
                 onKeyDown={handleShortcutInput}
                 placeholder="/指令名"
-                className="w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+                className="glass-field w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
               />
               {shortcuts.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {shortcuts.map((s) => (
-                    <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-mono">
+                    <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono">
                       /{s}
                       <button onClick={() => removeShortcut(s)} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
                     </span>
@@ -305,7 +305,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
         </div>
 
         {/* 底部操作区 */}
-        <div className="flex-shrink-0 p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="flex-shrink-0 p-3 border-t border-slate-200/40 dark:border-slate-700/40 glass-dialog-footer">
           <div className="flex items-center justify-between">
             {/* 左侧操作 */}
             <div className="flex items-center gap-1">
@@ -318,7 +318,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                       className={cn(
                         "h-7 px-2 text-xs rounded flex items-center gap-1 transition-colors",
                         initial?.favorite 
-                          ? "text-amber-500" 
+                          ? "text-slate-600 dark:text-slate-300" 
                           : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                       )}
                       title={initial?.favorite ? '取消收藏' : '收藏'}
@@ -359,7 +359,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               <button
                 onClick={handleSubmit}
                 disabled={!name.trim() || !content.trim()}
-                className="h-7 px-4 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="h-7 px-4 text-xs bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 保存
               </button>

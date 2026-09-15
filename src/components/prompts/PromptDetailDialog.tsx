@@ -55,8 +55,8 @@ export function PromptDetailDialog({
                 className={cn(
                   "w-7 h-7 rounded flex items-center justify-center transition-colors",
                   prompt.favorite 
-                    ? "text-amber-500" 
-                    : "text-slate-400 hover:text-amber-500"
+                    ? "text-slate-600 dark:text-slate-300" 
+                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 )}
               >
                 <Star className={cn("h-3.5 w-3.5", prompt.favorite && "fill-current")} />
@@ -89,7 +89,7 @@ export function PromptDetailDialog({
             {prompt.shortcuts?.map((s) => (
               <span
                 key={s}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-mono"
+                className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono"
               >
                 /{s}
               </span>
@@ -136,7 +136,7 @@ export function PromptDetailDialog({
             </button>
             <button
               onClick={() => { onApply?.(); onOpenChange(false); }}
-              className="h-7 px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded"
+              className="h-7 px-3 text-xs bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white rounded transition-colors"
             >
               应用到对话
             </button>

@@ -9,44 +9,49 @@ import {
   SettingsIcon,
   BookmarkIcon,
 } from '@/components/icons/SidebarIcons';
+import { shouldShowDevTools } from '@/lib/utils/environment';
+import { useEffect, useState, useMemo } from 'react';
+import { usePathname } from 'next/navigation';
+import { DockHoverScaler } from '@/components/ui/DockHoverScaler';
+import { useLocaleStore } from '@/store/localeStore';
 
-// 扩展图标组件 (技能+MCP)
 const ExtensionsIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <Plug2 {...props} />
 );
-import { shouldShowDevTools } from '@/lib/utils/environment';
-import { useEffect, useState } from 'react';
-import { DockHoverScaler } from '@/components/ui/DockHoverScaler';
-
-// 基础侧边栏导航项（精简后）
-const baseNavItems = [
-  { href: '/chat', label: '聊天', icon: ChatIcon },
-  { href: '/prompts', label: '提示词', icon: BookmarkIcon },
-  { href: '/knowledge', label: '知识', icon: DatabaseIcon },
-  { href: '/extensions', label: '扩展', icon: ExtensionsIcon },
-  { href: '/analytics', label: '统计', icon: AnalyticsIcon },
-  { href: '/settings', label: '设置', icon: SettingsIcon },
-];
-
-// 开发工具导航项
-const devNavItems = [
-  { href: '/dev-tools', label: '开发工具', icon: Wrench },
-];
 
 export function Sidebar() {
   const [showDevTools, setShowDevTools] = useState(false);
-  
+  const { t } = useLocaleStore();
+  const pathname = usePathname();
+
   useEffect(() => {
-    // 客户端检测是否显示开发工具
     setShowDevTools(shouldShowDevTools());
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      'page-paper',
+      Boolean(pathname?.startsWith('/settings')),
+    );
+  }, [pathname]);
   
-  // 合并导航项
-  const navItems = showDevTools ? [...baseNavItems, ...devNavItems] : baseNavItems;
+  const navItems = useMemo(() => {
+    const base = [
+      { href: '/chat', label: t('nav.chat'), icon: ChatIcon },
+      { href: '/prompts', label: t('nav.prompts'), icon: BookmarkIcon },
+      { href: '/knowledge', label: t('nav.knowledge'), icon: DatabaseIcon },
+      { href: '/extensions', label: t('nav.extensions'), icon: ExtensionsIcon },
+      { href: '/analytics', label: t('nav.analytics'), icon: AnalyticsIcon },
+      { href: '/settings', label: t('nav.settings'), icon: SettingsIcon },
+    ];
+    return showDevTools
+      ? [...base, { href: '/dev-tools', label: t('nav.devTools'), icon: Wrench }]
+      : base;
+  }, [showDevTools, t]);
   
   return (
     <div
-      className="fixed h-[calc(100vh-1rem)] bg-white/90 dark:bg-gray-900/90 flex flex-col items-center pt-2 pb-2 z-50"
+      className="glass-nav fixed top-0 h-[calc(100vh-1rem)] bg-white/90 dark:bg-gray-900/90 flex flex-col items-center pt-2 pb-2 z-50"
       style={{ width: 'var(--sidebar-width, 5rem)' }}
     >
       <DockHoverScaler

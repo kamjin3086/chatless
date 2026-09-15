@@ -87,13 +87,14 @@ export function ChatHeader({
 
   return (
     <>
-      <div className="h-9 px-2 border-b border-slate-200/30 dark:border-slate-700/20 flex items-center justify-between bg-white/90 dark:bg-slate-900/90">
-        {/* 左侧：侧边栏切换 + 新建 + 标题 */}
+      <div className="app-topbar h-8 px-3 border-b border-slate-200/20 dark:border-slate-700/15 flex items-center justify-between glass-surface">
+        {/* 左侧：侧栏开关 + 标题 */}
         <div className="flex items-center gap-1 flex-1 min-w-0">
           <button 
             onClick={toggleSidebar} 
             className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors" 
             title="侧边栏"
+            aria-label="切换侧边栏"
           >
             <PanelLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
@@ -102,7 +103,8 @@ export function ChatHeader({
             <button
               onClick={handleNewChat}
               className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-              title="新建"
+              title="新建对话"
+              aria-label="新建对话"
             >
               <PenLine className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             </button>
@@ -111,29 +113,30 @@ export function ChatHeader({
           <EditableTitle
             initialTitle={title}
             onTitleChange={onTitleChange}
-            className="text-xs text-slate-600 dark:text-slate-300 truncate ml-1"
+            className="text-xs text-slate-500 dark:text-slate-400 ml-0.5 min-w-0 max-w-[min(40vw,20rem)]"
             inputClassName="text-xs"
           />
           
           {tags?.map((tag, index) => (
             <span
               key={index}
-              className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 bg-slate-100/60 dark:bg-slate-800/40 rounded"
+              className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 bg-slate-100/60 dark:bg-slate-800/40 rounded hidden sm:inline"
             >
               {tag}
             </span>
           ))}
+          <div className="flex-1 h-8 min-w-2" data-tauri-drag-region />
         </div>
         
-        {/* 右侧：模型选择 + 提示词 + 更多 */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {/* 右侧：模型选择为主控件，按名称向左撑开 */}
+        <div className="flex items-center gap-0.5 shrink-0">
           <ModelSelector 
-            allMetadata={allMetadata}
-            currentModelId={currentModelId}
-            currentProviderName={currentProviderName}
-            onModelChange={handleModelChange}
-            disabled={isModelSelectorDisabled}
-          />
+              allMetadata={allMetadata}
+              currentModelId={currentModelId}
+              currentProviderName={currentProviderName}
+              onModelChange={handleModelChange}
+              disabled={isModelSelectorDisabled}
+            />
           
           <PromptPill />
 
@@ -142,6 +145,7 @@ export function ChatHeader({
               <button 
                 className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
                 title="更多"
+                aria-label="更多操作"
               >
                 <Ellipsis className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               </button>

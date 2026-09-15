@@ -26,7 +26,6 @@ interface ModeConfig {
   description: string;
   icon: React.ReactNode;
   color: string;
-  bgColor: string;
 }
 
 const MODES: ModeConfig[] = [
@@ -36,15 +35,13 @@ const MODES: ModeConfig[] = [
     description: "普通对话模式",
     icon: <MessageSquare className="w-4 h-4" />,
     color: "text-slate-600 dark:text-slate-400",
-    bgColor: "hover:bg-slate-100 dark:hover:bg-slate-800",
   },
   {
     id: "agent",
     label: "Agent",
     description: "智能体模式，可调用工具",
     icon: <Bot className="w-4 h-4" />,
-    color: "text-violet-600 dark:text-violet-400",
-    bgColor: "bg-violet-50 dark:bg-violet-950/40 hover:bg-violet-100 dark:hover:bg-violet-900/50",
+    color: "text-indigo-600 dark:text-indigo-400",
   },
 ];
 
@@ -75,10 +72,10 @@ export function ChatModeSelector({
           size="sm"
           disabled={disabled}
           className={cn(
-            "h-7 px-2.5 gap-1.5 rounded-lg text-xs font-medium transition-all duration-150",
+            "composer-tool h-8 px-2.5 gap-1.5 rounded-md text-xs font-medium border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
             mode === "agent"
-              ? "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/50"
-              : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              ? "glass-chip-agent"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
         >
           {currentMode.icon}

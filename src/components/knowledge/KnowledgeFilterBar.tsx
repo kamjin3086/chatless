@@ -35,7 +35,7 @@ export function KnowledgeFilterBar({
   onCreateKnowledgeBase,
 }: KnowledgeFilterBarProps) {
   return (
-    <div className="flex justify-between items-center px-4 md:px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+    <div className="flex justify-between items-center px-4 md:px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 glass-surface">
       <div className="flex gap-6">
         {filters.map((filter) => (
           <button

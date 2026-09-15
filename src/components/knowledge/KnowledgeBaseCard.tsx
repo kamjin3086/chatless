@@ -43,8 +43,8 @@ export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc,
           type="button"
           onClick={handleCardClick}
           className={cn(
-            "flex flex-col text-left w-full p-3 min-h-28 rounded-lg border transition-colors duration-150",
-            "bg-white/80 dark:bg-slate-900/60",
+            "flex flex-col text-left w-full p-3 min-h-28 rounded-lg border transition-colors duration-150 glass-panel",
+            "bg-white/40 dark:bg-slate-900/40",
             "border-slate-200/60 dark:border-slate-700/40",
             "hover:border-slate-300/80 dark:hover:border-slate-600/60",
             "focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600"

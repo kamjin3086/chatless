@@ -163,7 +163,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* 紧凑工具栏 */}
-      <header className="flex-shrink-0 h-10 px-3 border-b border-slate-200/50 dark:border-slate-700/30 flex items-center justify-between bg-white/90 dark:bg-slate-900/90">
+      <header className="flex-shrink-0 h-10 px-3 border-b border-slate-200/50 dark:border-slate-700/30 flex items-center justify-between glass-surface">
         {/* 左侧：搜索 */}
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -172,7 +172,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
             placeholder="搜索技能..."
             value={filterOptions.search || ''}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full h-7 pl-7 pr-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600"
+            className="glass-field w-full h-7 pl-7 pr-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           />
         </div>
         
@@ -182,7 +182,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           <select
             value={filterOptions.source || 'all'}
             onChange={(e) => handleSourceChange(e.target.value)}
-            className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
+            className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           >
             <option value="all">全部来源</option>
             <option value="local">本地</option>
@@ -192,7 +192,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           <select
             value={(filterOptions.status as string) || 'all'}
             onChange={(e) => handleStatusChange(e.target.value)}
-            className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
+            className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           >
             <option value="all">全部状态</option>
             <option value="installed">已安装</option>
@@ -253,7 +253,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
       </header>
 
       {/* 技能网格 */}
-      <main className="flex-1 overflow-y-auto p-4 bg-slate-50/80 dark:bg-slate-900/60">
+      <main className="flex-1 overflow-y-auto p-4 glass-surface">
         <SkillGrid
           skills={filteredSkills}
           selectedSkillId={selectedSkillId}

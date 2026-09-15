@@ -66,9 +66,8 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
     }
   }, [activeTab]);
   return (
-    <div className="w-44 border-r border-gray-200/40 dark:border-gray-800/40 overflow-y-auto custom-scrollbar bg-white/90 dark:bg-gray-900/90 flex flex-col h-full select-none">
-      {/* Header */}
-      <div className="px-3 py-2 flex items-center justify-between border-b border-gray-200/40 dark:border-gray-800/40 flex-shrink-0">
+    <div className="settings-rail w-44 shrink-0 border-r border-gray-200/40 dark:border-gray-800/40 overflow-y-auto custom-scrollbar flex flex-col h-full select-none">
+      <div className="px-3 pt-3 pb-1.5 flex items-center justify-between flex-shrink-0" data-tauri-drag-region>
         <h3 className="font-medium text-gray-800 dark:text-gray-200 text-sm">设置</h3>
       </div>
       
@@ -86,19 +85,19 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
               className={cn(
                 "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors duration-150",
                 isActive 
-                  ? "bg-blue-50/80 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium" 
+                  ? "bg-slate-200/55 dark:bg-white/10 text-slate-800 dark:text-slate-100 font-medium" 
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 hover:text-gray-900 dark:hover:text-gray-200"
               )}
             >
               <Icon className={cn(
                 "w-4 h-4 flex-shrink-0",
-                isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"
+                isActive ? "text-slate-700 dark:text-slate-200" : "text-gray-500 dark:text-gray-400"
               )} />
               <span className="truncate flex items-center gap-2 flex-1">
                 {tab.name}
                 {isAbout && showAboutDot && !isActive && (
                   <span
-                    className="ml-auto inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium leading-tight text-blue-600 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40"
+                    className="ml-auto inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium leading-tight text-slate-600 bg-slate-200/70 dark:text-slate-300 dark:bg-white/10"
                   >
                     NEW
                   </span>

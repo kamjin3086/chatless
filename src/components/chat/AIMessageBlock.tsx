@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from 'react';
-import { MemoizedMarkdown } from './MemoizedMarkdown';
+import { MessageTextContent } from './MessageTextContent';
 import { ThinkingBar } from '@/components/chat/ThinkingBar';
 // MessageStreamParser 已移除
 import FoldingLoader from '../ui/FoldingLoader';
@@ -21,6 +21,7 @@ import { extractFileChangesFromToolCards } from '@/lib/chat/extractFileChangesFr
 import { toast } from '@/components/ui/sonner';
 import { FileOpener } from '@/lib/utils/fileOpener';
 import { resolveAliasPath } from '@/lib/filesystemAllowlist/displayPathAliases';
+import { extractThinkAndRegular, splitThinkFromMarkdown } from '@/lib/markdown/splitThinkTags';
 
 interface AIMessageBlockProps {
   content: string;
@@ -36,6 +37,7 @@ interface AIMessageBlockProps {
     | { kind: 'image'; mimeType: string; data: string }
     | { kind: 'toolCard'; id: string; server: string; tool: string; args?: Record<string, unknown>; status: 'running' | 'success' | 'error' | 'pending_auth' | 'stopped'; resultPreview?: string; errorMessage?: string; schemaHint?: string; messageId: string }
   >;
+  citations?: import('@/lib/rag/evidenceTypes').Citation[];
   // 只读视图模型（优先级最高）
   viewModel?: {
     items: Array<any>;
@@ -51,6 +53,7 @@ export function AIMessageBlock({
   onStreamingComplete,
   id,
   segments,
+  citations,
   viewModel
 }: AIMessageBlockProps) {
   const [streamedState, _setStreamedState] = useState<null | {
@@ -143,66 +146,24 @@ export function AIMessageBlock({
     
 
     
-    // 如果内容不包含think标签，直接返回纯文本状态
-    // 注意：不再为没有think标签的消息显示思考栏，即使有thinking_duration
-    // 这避免了误将普通消息识别为思考过程
-    if (!hasThinkTags) {
-      const result = {
+    const { thinkingContent, regularContent } = extractThinkAndRegular(content);
+    if (!thinkingContent && !hasThinkTags) {
+      return {
         regularContent: content,
         thinkingContent: '',
         elapsedTime: 0,
         isThinking: false,
         isFinished: true
       };
-
-      return result;
     }
-    
-    // 包含think标签的内容使用原有逻辑
-    const thinkStart = content.indexOf('<think>');
-    const thinkEnd = content.indexOf('</think>');
-    
-    // 如果只有开始标签，提取思考内容到结尾
-    if (thinkStart !== -1 && thinkEnd === -1) {
-      const thinkingContent = content.substring(thinkStart + 7);
-      const regularContent = content.substring(0, thinkStart);
-      const result = {
-        regularContent,
-        thinkingContent,
-        elapsedTime: (thinkingDuration ?? 0) * 1000, // 转换为毫秒
-        isThinking: false,
-        isFinished: true
-      };
 
-      return result;
-    }
-    
-    // 如果有完整的think标签
-    if (thinkStart !== -1 && thinkEnd !== -1) {
-      const thinkingContent = content.substring(thinkStart + 7, thinkEnd);
-      // 确保正确处理换行符，避免内容丢失
-      const regularContent = (content.substring(0, thinkStart) + content.substring(thinkEnd + 8)).trim();
-      const result = {
-        regularContent,
-        thinkingContent,
-        elapsedTime: (thinkingDuration ?? 0) * 1000, // 转换为毫秒
-        isThinking: false,
-        isFinished: true
-      };
-
-      return result;
-    }
-    
-    // 如果没有think标签
-    const result = {
-      regularContent: content,
-      thinkingContent: '',
-      elapsedTime: 0,
+    return {
+      regularContent,
+      thinkingContent,
+      elapsedTime: (thinkingDuration ?? 0) * 1000,
       isThinking: false,
       isFinished: true
     };
-    
-    return result;
   }, [content, isStreaming, thinkingDuration, hasThinkTags]);
 
   // 计算实时经过的时间 - 使用定时器避免每次渲染都调用Date.now()
@@ -288,7 +249,17 @@ export function AIMessageBlock({
           duration: s.duration, 
           startTime: s.startTime 
         });
-        else if (s && s.kind === 'text') list.push({ type: 'text', text: s.text || '' });
+        else if (s && s.kind === 'text') {
+          const parts = splitThinkFromMarkdown(s.text || '');
+          if (parts.length === 0) {
+            list.push({ type: 'text', text: s.text || '' });
+          } else {
+            for (const part of parts) {
+              if (part.type === 'think') list.push({ type: 'think', text: part.text });
+              else list.push({ type: 'text', text: part.text });
+            }
+          }
+        }
         else if (s && s.kind === 'image') list.push({ type: 'image', data: s });
       }
       // 调试开关，默认关闭
@@ -301,24 +272,48 @@ export function AIMessageBlock({
           texts: list.filter(s=>s.type==='text').length 
         });
       } catch { /* noop */ }
+      if (!isStreaming) {
+        const merged: typeof list = [];
+        for (const item of list) {
+          const last = merged[merged.length - 1];
+          if (item.type === 'think' && last?.type === 'think') {
+            last.text = [last.text, item.text].filter(Boolean).join('\n');
+            last.duration = last.duration || item.duration;
+          } else {
+            merged.push({ ...item });
+          }
+        }
+        return merged;
+      }
       return list;
     }
+    if (!isStreaming && state?.thinkingContent) {
+      const parts = splitThinkFromMarkdown(content || '');
+      if (parts.length > 0) {
+        return parts.map((part) =>
+          part.type === 'think'
+            ? { type: 'think' as const, text: part.text, duration: thinkingDuration }
+            : { type: 'text' as const, text: part.text }
+        );
+      }
+    }
     return [];
-  }, [id, segments, viewModel?.items]); // 移除 content 和 state?.regularContent 依赖，它们不影响 segments 的结构
+  }, [id, segments, viewModel?.items, isStreaming, content, state?.thinkingContent, thinkingDuration]);
 
   // 计算当前处于“思考中”的 think 段索引：
   // 规则：从后往前找到第一个 type==='think' 且未结束的段（duration 为 undefined/null/0 视为未结束）。
   const activeThinkIndex = useMemo(() => {
+    if (!isStreaming) return -1;
     for (let i = mixedSegments.length - 1; i >= 0; i--) {
       const s: any = mixedSegments[i];
       if (s && s.type === 'think') {
         const d = s.duration;
         if (d === undefined || d === null || d === 0) return i;
-        break; // 遇到已完成的最后一个 think，则之前的都不再活跃
+        break;
       }
     }
     return -1;
-  }, [mixedSegments]);
+  }, [mixedSegments, isStreaming]);
 
   // 将连续的工具卡片分组，便于折叠展示
   // 改进：短文字（<80字符）不破坏工具调用的连续性，会被一起折叠
@@ -474,7 +469,7 @@ export function AIMessageBlock({
       {(mixedSegments.length > 0) && (
         <div className="relative min-w-0 max-w-full w-full">
           {groupedSegments.length > 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
               {groupedSegments.map((group, gIdx) => {
                 // 渲染工具卡片组（连续的卡片会被分组折叠）
                 if (group.type === 'cardGroup') {
@@ -494,18 +489,15 @@ export function AIMessageBlock({
                   // 是否为当前活跃的思考段：仅由activeThinkIndex决定，避免全局标志干扰
                   const isCurrentThinking = idx === activeThinkIndex;
                   
-                  // 计算时长：
-                  // 1. 如果已经有duration（已完成的think段），直接使用
-                  // 2. 如果正在进行中（isCurrentThinking），使用该段的startTime计算实时时长
-                  // 3. 否则使用startTime计算到当前的时长（降级处理）
+                  // 已结束的思考段禁止用 startTime 推算到现在，否则历史消息会显示成几百小时
                   let durationSeconds = 0;
                   if (seg.duration !== undefined && seg.duration !== null && seg.duration > 0) {
                     durationSeconds = seg.duration;
-                  } else if (isCurrentThinking && seg.startTime) {
-                    const _ = thinkTimerTick; // 触发重新计算
-                    durationSeconds = Math.floor((Date.now() - seg.startTime) / 1000);
-                  } else if (seg.startTime) {
-                    durationSeconds = Math.floor((Date.now() - seg.startTime) / 1000);
+                  } else if (isStreaming && isCurrentThinking && seg.startTime) {
+                    const _ = thinkTimerTick;
+                    durationSeconds = Math.max(0, Math.floor((Date.now() - seg.startTime) / 1000));
+                  } else if (thinkingDuration && thinkingDuration > 0) {
+                    durationSeconds = thinkingDuration;
                   }
                   
                   return (
@@ -585,13 +577,9 @@ export function AIMessageBlock({
                 const prevGroup = gIdx > 0 ? groupedSegments[gIdx - 1] : null;
                 const needSoftDivider = prevGroup?.type === 'cardGroup';
                 return (
-                  <div key={`md-wrap-${idx}`} className={needSoftDivider ? 'pt-3 border-t border-dashed border-slate-200/60 dark:border-slate-700/60' : undefined}>
+                  <div key={`md-wrap-${idx}`} className={needSoftDivider ? 'pt-2 border-t border-dashed border-slate-200/50 dark:border-slate-700/50' : undefined}>
                     <div className="markdown-content-area">
-                      {(() => {
-                        // 使用统一的StreamingMarkdown组件，支持流式和非流式markdown渲染
-                        const { StreamingMarkdown } = require('./StreamingMarkdown');
-                        return <StreamingMarkdown content={textContent} isStreaming={isStreaming} />;
-                      })()}
+                      <MessageTextContent text={textContent} isStreaming={isStreaming} citations={citations} />
                     </div>
                   </div>
                 );
@@ -606,12 +594,9 @@ export function AIMessageBlock({
                   .replaceAll('<think>', '');
                 if (!hasTextSegment && fallbackText.length > 0) {
                   return (
-                    <div key="md-fallback" className="pt-3 border-t border-dashed border-slate-200/60 dark:border-slate-700/60">
+                    <div key="md-fallback" className="pt-2 border-t border-dashed border-slate-200/50 dark:border-slate-700/50">
                       <div className="markdown-content-area">
-                        {(() => {
-                          const { StreamingMarkdown } = require('./StreamingMarkdown');
-                          return <StreamingMarkdown content={fallbackTextCleaned} isStreaming={isStreaming} />;
-                        })()}
+                        <MessageTextContent text={fallbackTextCleaned} isStreaming={isStreaming} citations={citations} />
                       </div>
                     </div>
                   );
@@ -651,7 +636,7 @@ export function AIMessageBlock({
       {/* 当没有任何结构化片段时，回退为渲染纯正文（兼容非流式RAG或历史消息） */}
       {(mixedSegments.length === 0) && !!(state?.regularContent || content) && (
         <div className="relative min-w-0 max-w-full w-full markdown-content-area">
-          <MemoizedMarkdown content={filterToolCallContent((state?.regularContent || content))} />
+          <MessageTextContent text={filterToolCallContent((state?.regularContent || content))} isStreaming={isStreaming} citations={citations} />
         </div>
       )}
 

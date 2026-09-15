@@ -14,8 +14,8 @@ interface SettingsCardProps {
 export function SettingsCard({ children, className, noPadding }: SettingsCardProps) {
   return (
     <div className={cn(
-      "rounded-lg border border-slate-200/60 dark:border-slate-700/40",
-      "bg-white/80 dark:bg-slate-900/60",
+      "settings-card glass-panel rounded-lg border border-slate-200/60 dark:border-slate-700/40",
+      "bg-white/40 dark:bg-slate-900/40",
       !noPadding && "p-4",
       "mb-4",
       className

@@ -9,9 +9,17 @@ import '@/commands/defaultCommands';
 import { useEffect, useRef } from "react";
 import { useGlobalFontSize } from "@/hooks/useGlobalFontSize";
 import { useUiPreferences } from "@/store/uiPreferences";
+import { useLocaleStore } from "@/store/localeStore";
+import { getHtmlLang } from "@/i18n";
 import { listen } from '@tauri-apps/api/event';
 import { useRouter } from "next/navigation";
 import { preloadInitialLogos } from '@/lib/utils/logoPreloader';
+import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
+import { isTauriEnvironment } from '@/lib/utils/environment';
+
+if (typeof window !== 'undefined' && isTauriEnvironment()) {
+  document.documentElement.classList.add('custom-titlebar');
+}
 
 // 动态导入系统托盘管理器
 const initializeTray = async () => {
@@ -157,9 +165,15 @@ export default function RootLayout({
 
   // 订阅 UI 偏好
   const { initialized, simpleMode, lowAnimationMode, sidebarWidth, sidebarIconSize } = useUiPreferences();
+  const { locale, initialized: localeInitialized } = useLocaleStore();
   
   // 获取 Next.js 路由实例
   const router = useRouter();
+
+  useEffect(() => {
+    if (!localeInitialized) return;
+    document.documentElement.lang = getHtmlLang(locale);
+  }, [locale, localeInitialized]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -213,8 +227,9 @@ export default function RootLayout({
   }, [initialized, simpleMode, lowAnimationMode, sidebarWidth, sidebarIconSize]);
 
   return (
-    <html lang="zh-CN" className="h-full">
+    <html lang={getHtmlLang(locale)} className="h-full">
       <body className={`${inter.variable} h-full bg-background text-foreground antialiased`}>
+        <WindowTitleBar />
         <TauriApp>
           {children}
         </TauriApp>

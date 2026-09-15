@@ -78,25 +78,25 @@ function ConversationItemImpl({
     >
       <li
         className={cn(
-          "group relative flex flex-col gap-0.5 px-2 py-1.5 rounded-md transition-colors duration-150 cursor-pointer",
+          "group relative flex flex-col gap-0 px-2 py-1.5 rounded-md transition-colors duration-150 cursor-pointer",
           isCurrent
-            ? "text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-900/20"
-            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/30 hover:text-slate-900 dark:hover:text-slate-200"
+            ? "text-slate-800 dark:text-slate-100"
+            : "text-slate-600 dark:text-slate-400 hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.04] hover:text-slate-800 dark:hover:text-slate-200"
         )}
         onClick={() => onSelect(conversation.id)}
       >
-        {/* 活动强调条 - 简化设计 */}
+        {/* 选中态：细线提示，不抢背景 */}
         {isCurrent && (
-          <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-blue-500 dark:bg-blue-400 rounded-r-full" />
+          <div className="absolute left-0 top-1.5 bottom-1.5 w-px bg-sky-500/70 dark:bg-sky-400/60 rounded-r-full" />
         )}
-        <div className="flex items-center gap-1.5 min-w-0 ml-1.5">
+        <div className="flex items-center gap-1.5 min-w-0 ml-1">
           {isRenaming ? (
             <Input
               value={renameInputValue}
               onChange={(e) => onRenameChange(e.target.value)}
               onBlur={onRenameBlur}
               onKeyDown={onRenameKeyDown}
-              className="h-6 px-2 py-0 text-[13px] bg-white dark:bg-slate-800 rounded-lg border-blue-400/60"
+              className="inline-edit h-6 w-full min-w-0 px-0 py-0 text-[13px] bg-transparent border-0 border-b border-slate-300/60 dark:border-slate-600/50 rounded-none shadow-none focus-visible:ring-0"
               autoFocus
             />
           ) : (
@@ -136,7 +136,7 @@ function ConversationItemImpl({
           )}
         </div>
 
-        <div className="flex items-center justify-between text-xs mt-0.5 ml-1.5 min-h-[14px]">
+        <div className="flex items-center justify-between text-xs mt-0 ml-1 min-h-[12px]">
           <div className="flex-1 min-w-0 flex items-center gap-1.5 pr-1">
             <span className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{compactTime}</span>
             {/* 模型名：使用opacity控制显示，min-h保证高度不跳动 */}

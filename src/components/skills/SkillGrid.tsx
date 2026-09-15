@@ -47,7 +47,7 @@ export function SkillGrid({
   if (skills.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 mb-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-lg glass-inset mb-3">
           <Sparkles className="h-5 w-5" />
         </div>
         <p className="text-xs font-medium text-slate-500">暂无技能</p>

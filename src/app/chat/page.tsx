@@ -5,6 +5,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
+import { ScrollToBottomButton } from '@/components/chat/ScrollToBottomButton';
 import { SessionParametersDialog } from '@/components/chat/SessionParametersDialog';
 import type { Message } from "@/types/chat";
 import { useChatStore } from "@/store/chatStore";
@@ -21,6 +22,7 @@ import { useChatActions } from '@/hooks/useChatActions';
 import { useScrollManagement } from '@/hooks/useScrollManagement';
 import type { ModelParameters } from '@/types/model-params';
 import { ModelParametersService } from '@/lib/model-parameters';
+import { resolveChatSetupState } from '@/lib/chat/resolveChatSetupState';
 
 type StoreMessage = any;
 
@@ -86,6 +88,7 @@ export default function ChatPage() {
     handleSendMessage,
     handleStopGeneration,
     handleEmptyStatePromptClick,
+    stopGenerationHint,
     handleTitleChange,
     handleDeleteConversation,
     handleRetryMessage,
@@ -119,7 +122,7 @@ export default function ChatPage() {
     handleScrollToTop,
     handleScrollToBottom,
     ensureBottomIfNear,
-    showScrollToBottom: _showScrollToBottom,
+    showScrollToBottom,
     hasNewMessageWhileAway,
     shouldFollowOutput
   } = useScrollManagement(
@@ -269,6 +272,9 @@ export default function ChatPage() {
     setCurrentSessionParameters(parameters);
   };
 
+  const setupState = resolveChatSetupState(llmInitialized, allMetadata, selectedModelId);
+  const canSend = setupState === 'ready';
+
   if (!isClient) {
     return <ChatInitializing />;
   }
@@ -298,7 +304,7 @@ export default function ChatPage() {
   //   );
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
+    <div className="flex flex-col h-full glass-surface">
       <ChatHeader
         title={currentConversation.title}
         tags={currentConversation.tags}
@@ -337,6 +343,8 @@ export default function ChatPage() {
               scrollParentRef={scrollContainerRef}
               onRegisterScrollToMessage={registerScrollToMessage}
               shouldFollowOutput={shouldFollowOutput}
+              onPromptClick={handleEmptyStatePromptClick}
+              setupState={setupState}
             initialTopMostItemIndex={(() => {
               const msgs = liveMessages;
               const idx = [...msgs].map((m)=>m.role).lastIndexOf('user');
@@ -346,16 +354,16 @@ export default function ChatPage() {
             {/* managedEndRef 已由组件内部渲染，无需此处额外 div */}
           </div>
           {/* 新消息指示器 - 用户查看历史消息时有新消息到达 */}
-          {/* <NewMessageIndicator
+          <NewMessageIndicator
             show={hasNewMessageWhileAway && !isInputAreaHovered}
             onClick={handleScrollToBottom}
-          /> */}
+          />
           
           {/* 回到底部按钮 - 用户向上滚动时显示 */}
-          {/* <ScrollToBottomButton 
+          <ScrollToBottomButton 
             show={showScrollToBottom && !hasNewMessageWhileAway && !isInputAreaHovered}
             onClick={handleScrollToBottom}
-          /> */}
+          />
           
           {/* 工具栏 - 超过3条消息时显示，且不在输入框区域时显示 */}
           <div 
@@ -371,15 +379,17 @@ export default function ChatPage() {
             />
           </div>
           <div 
-            className="px-3 py-1.5 bg-transparent"
+            className="bg-transparent"
             onMouseEnter={() => setIsInputAreaHovered(true)}
             onMouseLeave={() => setIsInputAreaHovered(false)}
           >
             <div className="mx-auto w-full">
             <ChatInput
               isLoading={isLoading}
+              disabled={!canSend}
               onSendMessage={handleSendMessage}
               onStopGeneration={handleStopGeneration}
+              stopGenerationHint={stopGenerationHint}
               onImageUpload={handleImageUpload}
               onFileUpload={handleFileUpload}
               selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}

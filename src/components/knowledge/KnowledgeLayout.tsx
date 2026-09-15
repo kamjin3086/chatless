@@ -23,7 +23,7 @@ export function KnowledgeLayout({
   onCreateKnowledgeBase,
 }: KnowledgeLayoutProps) {
   return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-white/95 to-gray-50/90 dark:from-gray-900/95 dark:to-gray-950/90 backdrop-blur-md border border-gray-200/60 dark:border-gray-800/60 overflow-hidden shadow-lg overflow-x-hidden">
+    <div className="flex flex-col h-full border border-slate-200/60 dark:border-slate-800/60 overflow-hidden overflow-x-hidden glass-surface">
       {/* 顶栏已移除，创建功能移动至筛选栏菜单 */}
       <KnowledgeTabs activeTab={activeTab} onTabChange={onTabChange} />
       <KnowledgeFilterBar 
@@ -33,7 +33,7 @@ export function KnowledgeLayout({
         onSortChange={onSortChange}
         onCreateKnowledgeBase={onCreateKnowledgeBase}
       />
-      <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 custom-scrollbar bg-gradient-to-br from-gray-50/80 to-slate-50/60 dark:from-gray-950/80 dark:to-slate-950/60">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 custom-scrollbar glass-surface">
         {children}
       </main>
     </div>

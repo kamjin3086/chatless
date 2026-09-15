@@ -28,6 +28,9 @@ export interface Message {
     name: string;
   };
 
+  /** 程序校验后的文档引用（Evidence RAG v2） */
+  citations?: import('@/lib/rag/evidenceTypes').Citation[];
+
   /** 图片数组，base64 Data URLs */
   images?: string[];
 

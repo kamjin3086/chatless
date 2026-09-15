@@ -71,6 +71,13 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
   const [rebuildDialogOpen, setRebuildDialogOpen] = useState(false);
   const [rebuildProgress, setRebuildProgress] = useState<number | null>(null);
   const [rebuildMessage, setRebuildMessage] = useState('');
+  const [indexStatus, setIndexStatus] = useState<{
+    total: number;
+    indexed: number;
+    pending: number;
+    failed: number;
+    needsRebuild: boolean;
+  } | null>(null);
   // 添加文档对话框状态
   const [addDocsOpen, setAddDocsOpen] = useState(false);
 
@@ -159,6 +166,8 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
       );
 
       setDocuments(docsWithChunk);
+      const status = await KnowledgeService.getKnowledgeBaseIndexStatus(knowledgeBase.id);
+      setIndexStatus(status);
       console.log(`[KnowledgeDetail] 加载到 ${docsWithChunk.length} 个文档`);
     } catch (error) {
       console.error('加载文档失败:', error);
@@ -406,9 +415,9 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg h-full flex flex-col">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg h-full flex flex-col glass-panel">
         {/* 头部 */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200/70 px-4 sm:px-5 dark:border-slate-700/60">
+        <div className="app-topbar flex h-12 shrink-0 items-center justify-between border-b border-slate-200/70 px-4 sm:px-5 dark:border-slate-700/60">
           <div className="flex items-center gap-2 sm:gap-3">
             <TooltipProvider delayDuration={100}>
               <Tooltip>
@@ -473,6 +482,22 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
             </div>
           </TooltipProvider>
         </div>
+
+        {indexStatus?.needsRebuild && (
+          <div className="mx-4 mt-3 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm text-amber-900 dark:text-amber-100">
+              <p className="font-medium">需要重建索引</p>
+              <p className="text-xs opacity-80 mt-0.5">
+                Evidence RAG v2 升级后旧索引已失效。待索引 {indexStatus.pending} 篇，已索引 {indexStatus.indexed}/{indexStatus.total} 篇。
+                未完成重建前检索将不可用。
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setRebuildDialogOpen(true)}>
+              <RotateCcw className="h-4 w-4 mr-1" />
+              一键重建
+            </Button>
+          </div>
+        )}
 
         {/* 内容区域 */}
         <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">

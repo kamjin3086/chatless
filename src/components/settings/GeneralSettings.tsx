@@ -4,33 +4,33 @@ import { useState, useEffect } from "react";
 import { SelectField } from "./SelectField";
 import { ToggleSwitch } from './ToggleSwitch';
 import { ShortcutField } from './ShortcutField';
+import { SliderField } from './SliderField';
 import { SettingsCard, SettingsPageHeader } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { PersonalizationSettings } from "./PersonalizationSettings";
 import { SlidersHorizontal, Monitor, MessageSquare } from "lucide-react";
-import StorageUtil from "@/lib/storage";
 import { useMarkdownFontSize } from "@/hooks/useMarkdownFontSize";
 import { useGlobalFontSize } from "@/hooks/useGlobalFontSize";
 import { useUiPreferences } from '@/store/uiPreferences';
 import { ThemeInitializer } from "@/lib/utils/themeInitializer";
+import { useLocaleStore } from '@/store/localeStore';
+import type { Locale } from '@/i18n/types';
 
 const THEME_KEY = "app_theme";
-const LANG_KEY = "app_lang";
 
 export function GeneralSettings() {
   const [theme, setTheme] = useState<string>("system");
-  const [lang, setLang] = useState<string>("zh");
   const [initialized, setInitialized] = useState(false);
+  const { locale, setLocale, t } = useLocaleStore();
   const { size: chatFontSize, setSize: setChatFontSize } = useMarkdownFontSize();
   const { size: globalFontSize, setSize: setGlobalFontSize } = useGlobalFontSize();
   const ui = useUiPreferences();
 
   useEffect(() => {
     const loadSettings = async () => {
+      const { default: StorageUtil } = await import('@/lib/storage');
       const savedTheme = await StorageUtil.getItem<string>(THEME_KEY, "system");
-      const savedLang = await StorageUtil.getItem<string>(LANG_KEY, "zh");
       setTheme(savedTheme || "system");
-      setLang(savedLang || "zh");
       setInitialized(true);
     };
     loadSettings();
@@ -40,18 +40,16 @@ export function GeneralSettings() {
     if (!initialized || typeof document === "undefined") return;
     ThemeInitializer.syncThemeToStorage(theme);
     ThemeInitializer.applyTheme(theme);
+    void import('@/lib/storage').then(({ default: StorageUtil }) => {
+      StorageUtil.setItem(THEME_KEY, theme);
+    });
   }, [theme, initialized]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    StorageUtil.setItem(LANG_KEY, lang);
-  }, [lang]);
 
   return (
     <div className="space-y-4">
       <SettingsPageHeader 
-        title="常规设置" 
-        description="界面语言、主题模式、字体大小等基础设置。"
+        title={t('settings.general.title')} 
+        description={t('settings.general.description')}
       />
 
       {/* 基础设置 */}
@@ -59,16 +57,16 @@ export function GeneralSettings() {
         <SettingsSectionHeader icon={SlidersHorizontal} title="基础选项" />
         <div className="space-y-2">
           <SelectField
-            label="界面语言"
+            label={t('settings.general.language')}
             options={[
               { value: "zh", label: "简体中文" },
               { value: "en", label: "English" },
             ]}
-            value={lang}
-            onChange={setLang}
+            value={locale}
+            onChange={(v) => setLocale(v as Locale)}
           />
           <SelectField
-            label="主题模式"
+            label={t('settings.general.theme')}
             options={[
               { value: "system", label: "跟随系统" },
               { value: "light", label: "亮色" },
@@ -76,6 +74,16 @@ export function GeneralSettings() {
             ]}
             value={theme}
             onChange={setTheme}
+          />
+          <SliderField
+            label={t('settings.general.nightBrightness')}
+            value={ui.nightBrightness}
+            onChange={ui.setNightBrightness}
+            min={50}
+            max={100}
+            step={1}
+            valueLabel={`${ui.nightBrightness}%`}
+            tooltip="仅暗色模式生效。100% 为当前默认亮度，调低可减轻夜间刺眼"
           />
         </div>
       </SettingsCard>
@@ -128,7 +136,12 @@ export function GeneralSettings() {
             onChange={(v) => setGlobalFontSize(v as any)}
           />
           <ToggleSwitch
-            label="关闭时显示确认"
+            label={t('settings.general.minimizeToTray')}
+            checked={ui.minimizeToTray}
+            onChange={ui.setMinimizeToTray}
+          />
+          <ToggleSwitch
+            label={t('settings.general.closeConfirm')}
             checked={ui.showCloseConfirmation}
             onChange={(v) => ui.setShowCloseConfirmation(v)}
           />

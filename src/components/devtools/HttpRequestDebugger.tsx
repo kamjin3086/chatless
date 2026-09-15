@@ -748,8 +748,8 @@ export default function HttpRequestDebugger() {
       
       {/* 保存请求对话框 */}
       {saveDialogOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-96 mx-4">
+        <div className="fixed inset-0 glass-scrim bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-96 mx-4 glass-overlay">
             <h3 className="text-lg font-semibold mb-4">保存请求</h3>
             <div className="space-y-4">
               <div>

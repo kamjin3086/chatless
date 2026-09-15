@@ -30,24 +30,6 @@
         },
         {
           "path": "$APPLOG/**/*"
-        },
-        {
-          "path": "$DOWNLOAD"
-        },
-        {
-          "path": "$DOWNLOAD/**/*"
-        },
-        {
-          "path": "$DESKTOP"
-        },
-        {
-          "path": "$DESKTOP/**/*"
-        },
-        {
-          "path": "$DOCUMENT"
-        },
-        {
-          "path": "$DOCUMENT/**/*"
         }
       ]
     },
@@ -59,15 +41,18 @@
     "fs:default",
     {
       "identifier": "http:default",
-      "dangerous": {
-        "all": true
-      },
       "allow": [
         {
-          "url": "http://*:*"
+          "url": "http://localhost:*"
         },
         {
-          "url": "https://*:*"
+          "url": "http://127.0.0.1:*"
+        },
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "http://*:*"
         }
       ]
     },
@@ -86,12 +71,31 @@
     "core:window:allow-is-visible",
     "core:window:allow-close",
     "core:window:allow-destroy",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-is-minimized",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-set-decorations",
+    "core:window:allow-is-decorated",
     "core:event:allow-emit",
     {
       "identifier": "opener:allow-open-path",
       "allow": [
         {
-          "path": "**"
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**/*"
+        },
+        {
+          "path": "$APPLOG"
+        },
+        {
+          "path": "$APPLOG/**/*"
         }
       ]
     },
