@@ -34,6 +34,17 @@ pub struct EnvironmentSetup {
   updated_path: String,
 }
 
+fn collect_python_script_dirs(root: std::path::PathBuf, paths: &mut Vec<String>) {
+  if let Ok(entries) = std::fs::read_dir(root) {
+    for entry in entries.flatten() {
+      let scripts = entry.path().join("Scripts");
+      if scripts.is_dir() {
+        paths.push(scripts.to_string_lossy().to_string());
+      }
+    }
+  }
+}
+
 impl EnvironmentSetup {
   pub fn new() -> Self {
     let original_path = env::var("PATH").unwrap_or_default();
@@ -85,9 +96,14 @@ impl EnvironmentSetup {
     #[cfg(target_os = "windows")]
     {
       let user_profile = env::var("USERPROFILE").unwrap_or_default();
+      let local_app = env::var("LOCALAPPDATA").unwrap_or_default();
       vec![
         r"C:\Program Files\nodejs".to_string(),
         format!(r"{}\AppData\Roaming\npm", user_profile),
+        format!(r"{}\.local\bin", user_profile),
+        format!(r"{}\.cargo\bin", user_profile),
+        format!(r"{}\Programs\uv", local_app),
+        format!(r"{}\pnpm", local_app),
       ]
     }
 
@@ -100,10 +116,15 @@ impl EnvironmentSetup {
   fn get_user_specific_paths(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut paths = Vec::new();
 
-    if let Ok(home) = env::var("HOME") {
+    let home = env::var("HOME")
+      .ok()
+      .or_else(|| env::var("USERPROFILE").ok());
+
+    if let Some(home) = home {
       let user_paths = [
         format!("{}/.npm-global/bin", home),
         format!("{}/.local/bin", home),
+        format!("{}/.cargo/bin", home),
         format!("{}/.nvm/versions/node/current/bin", home),
       ];
 
@@ -112,6 +133,16 @@ impl EnvironmentSetup {
           paths.push(path);
         }
       }
+    }
+
+    if let Ok(roaming) = env::var("APPDATA") {
+      collect_python_script_dirs(Path::new(&roaming).join("Python"), &mut paths);
+    }
+    if let Ok(local) = env::var("LOCALAPPDATA") {
+      collect_python_script_dirs(
+        Path::new(&local).join("Programs").join("Python"),
+        &mut paths,
+      );
     }
 
     Ok(paths)
@@ -124,60 +155,81 @@ impl EnvironmentSetup {
     Ok(())
   }
 
+  pub fn with_refreshed_path() -> Self {
+    let mut env = Self::new();
+    if let Err(e) = env.setup() {
+      warn!("[ENV] Failed to refresh PATH: {}", e);
+    }
+    env
+  }
+
   pub fn get_updated_path(&self) -> &str {
     &self.updated_path
   }
 
   pub fn verify_tool_availability(&self, tool_name: &str) -> bool {
-    let paths: Vec<&str> = self.updated_path.split(PATH_SEPARATOR).collect();
+    self.resolve_tool_path(tool_name).is_some()
+  }
 
-    for path in paths {
-      if self.tool_exists_in_directory(path, tool_name) {
-        return true;
+  /// Resolve a tool to a real executable path (e.g. `npx.cmd` on Windows).
+  pub fn resolve_tool_path(&self, tool_name: &str) -> Option<String> {
+    if tool_name.contains('/') || tool_name.contains('\\') {
+      let p = Path::new(tool_name);
+      if p.exists() {
+        return Some(tool_name.to_string());
+      }
+    }
+
+    for dir in self.updated_path.split(PATH_SEPARATOR) {
+      if let Some(found) = Self::find_tool_in_directory(dir, tool_name) {
+        return Some(found.to_string_lossy().to_string());
       }
     }
 
     warn!("[ENV] Tool {} not found in PATH", tool_name);
-    false
+    None
   }
 
-  /// Helper: check if a tool exists inside a directory, taking platform-specific
-  /// executable extensions into account (e.g. `.exe`, `.cmd` on Windows).
-  fn tool_exists_in_directory(&self, dir: &str, tool_name: &str) -> bool {
-    // Clean quotes occasionally present around Windows paths with spaces, e.g. "C:\Program Files\nodejs".
+  fn find_tool_in_directory(dir: &str, tool_name: &str) -> Option<std::path::PathBuf> {
     let dir_clean = dir.trim_matches('"');
     if dir_clean.is_empty() {
-      return false;
+      return None;
     }
 
     let base = Path::new(dir_clean);
     if !base.exists() {
-      // 降低噪音：路径扫描的逐项日志仅在 trace 输出
       trace!("[ENV] Skipping non-existent PATH entry: {}", dir_clean);
-      return false;
+      return None;
     }
     trace!("[ENV] Scanning {} for {}", dir_clean, tool_name);
 
     #[cfg(windows)]
     {
-      // On Windows search for PATHEXT variations.
       let pathext = std::env::var("PATHEXT").unwrap_or(".EXE;.CMD;.BAT;.COM".into());
-      for ext in pathext.split(';') {
-        let ext = ext.trim();
-        if ext.is_empty() {
-          continue;
-        }
-        let ext = ext.trim_start_matches('.');
+      let mut exts: Vec<String> = pathext
+        .split(';')
+        .map(|s| s.trim().trim_start_matches('.').to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+      // Node shims are typically `.cmd`; prefer them before `.ps1` if present.
+      const PREFERRED: [&str; 3] = ["CMD", "EXE", "BAT"];
+      exts.sort_by_key(|e| {
+        PREFERRED
+          .iter()
+          .position(|p| e.eq_ignore_ascii_case(p))
+          .unwrap_or(PREFERRED.len())
+      });
+      for ext in exts {
         let file_name = format!("{}.{}", tool_name, ext.to_lowercase());
         let candidate = base.join(&file_name);
         if candidate.exists() {
           trace!("[ENV] Found {} at: {}", tool_name, candidate.display());
-          return true;
+          return Some(candidate);
         }
       }
-      // Fallback: plain name (rarely used on Windows)
-      if base.join(tool_name).exists() {
-        return true;
+      let plain = base.join(tool_name);
+      if plain.exists() {
+        return Some(plain);
       }
     }
 
@@ -186,28 +238,23 @@ impl EnvironmentSetup {
       let candidate = base.join(tool_name);
       if candidate.exists() {
         trace!("[ENV] Found {} at: {}", tool_name, candidate.display());
-        return true;
+        return Some(candidate);
       }
     }
 
-    false
+    None
   }
 
   /// 检查工具的详细可用性（由 lib.rs 中的 Tauri 命令调用）
   #[allow(dead_code)]
   pub fn check_tool_availability_detailed(&self, tool_name: &str) -> ToolAvailability {
-    let paths: Vec<&str> = self.updated_path.split(PATH_SEPARATOR).collect();
-
-    for dir in paths {
-      if self.tool_exists_in_directory(dir, tool_name) {
-        let joined = Path::new(dir.trim_matches('"')).join(tool_name);
-        return ToolAvailability {
-          tool_name: tool_name.to_string(),
-          available: true,
-          path: Some(joined.to_string_lossy().to_string()),
-          error_message: None,
-        };
-      }
+    if let Some(path) = self.resolve_tool_path(tool_name) {
+      return ToolAvailability {
+        tool_name: tool_name.to_string(),
+        available: true,
+        path: Some(path),
+        error_message: None,
+      };
     }
 
     ToolAvailability {
@@ -285,8 +332,7 @@ pub fn setup_environment() -> Result<(), Box<dyn std::error::Error>> {
 /// 获取环境健康状态（由 lib.rs 中的 Tauri 命令调用）
 #[allow(dead_code)]
 pub fn get_environment_health() -> EnvironmentHealth {
-  let env_setup = EnvironmentSetup::new();
-  env_setup.perform_health_check()
+  EnvironmentSetup::with_refreshed_path().perform_health_check()
 }
 
 /// 检查 MCP 服务是否可以正常运行（由 lib.rs 中的 Tauri 命令调用）
@@ -299,8 +345,7 @@ pub fn can_run_mcp_services() -> bool {
 /// 专门检查 npx 是否可用（由 lib.rs 中的 Tauri 命令调用）
 #[allow(dead_code)]
 pub fn check_npx_availability() -> ToolAvailability {
-  let env_setup = EnvironmentSetup::new();
-  env_setup.check_tool_availability_detailed("npx")
+  EnvironmentSetup::with_refreshed_path().check_tool_availability_detailed("npx")
 }
 
 #[cfg(test)]
@@ -318,6 +363,19 @@ mod tests {
     let env_setup = EnvironmentSetup::new();
     let paths = env_setup.get_platform_specific_paths();
     assert!(!paths.is_empty());
+  }
+
+  #[cfg(windows)]
+  #[test]
+  fn resolve_cmd_uses_real_executable() {
+    let env_setup = EnvironmentSetup::with_refreshed_path();
+    let path = env_setup
+      .resolve_tool_path("cmd")
+      .expect("cmd.exe should be on PATH");
+    assert!(
+      path.to_ascii_lowercase().ends_with("cmd.exe"),
+      "expected cmd.exe, got {path}"
+    );
   }
 }
 

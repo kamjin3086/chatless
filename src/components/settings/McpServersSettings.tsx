@@ -22,7 +22,8 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Settings
+  Settings,
+  RefreshCw
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -43,7 +44,7 @@ import {
 } from "@/components/ui/tooltip";
 import { McpToolListTip } from '@/components/mcp/McpToolListTip';
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { McpEnvironmentStatus } from "./McpEnvironmentStatus";
+import { McpEnvironmentStatus, useMcpEnvironmentHealth } from "./McpEnvironmentStatus";
 import AdvancedMcpSettingsDialog from "./AdvancedMcpSettingsDialog";
 import ServerConfigDialog from "./ServerConfigDialog";
 import { getAuthorizationConfig } from "@/lib/mcp/authorizationConfig";
@@ -56,6 +57,35 @@ type SavedServer = {
   config: McpServerConfig;
   enabled?: boolean; // 新增：是否在聊天中默认可用（全局开关）
 };
+
+function isStdioPackageRunner(config: McpServerConfig): boolean {
+  if (config.type !== "stdio") return false;
+  const cmd = String(config.command || "").toLowerCase();
+  if (cmd === "npx" || cmd === "uvx" || cmd === "bunx") return true;
+  const inner = String(config.args?.[1] || "").toLowerCase();
+  return (cmd === "cmd" || cmd === "cmd.exe") && ["npx", "uvx", "bunx"].includes(inner);
+}
+
+function formatMcpConnectError(e: unknown): string {
+  const raw = trimToastDescription(e);
+  const s = String(e).toLowerCase();
+  if (
+    s.includes("program not found") ||
+    s.includes("executable not found") ||
+    s.includes("not found in path") ||
+    s.includes("无法自动修复")
+  ) {
+    return `${raw}\n请安装 Node.js（npx）或 uv（uvx）后再次刷新。`;
+  }
+  return raw;
+}
+
+function notifyStdioRefresh(config: McpServerConfig) {
+  if (!isStdioPackageRunner(config)) return;
+  toast.info("正在刷新连接", {
+    description: "若运行程序或依赖缺失，将尝试修复并重新下载，可能需要 1–3 分钟。",
+  });
+}
 
 export function McpServersSettings() {
   const [servers, setServers] = useState<SavedServer[]>([]);
@@ -79,6 +109,7 @@ export function McpServersSettings() {
   // 使用zustand store管理MCP状态
   const serverStatuses = useMcpServerStatuses();
   const { setServerStatuses } = useMcpStore();
+  const envHealth = useMcpEnvironmentHealth();
 
   // —— 删除确认对话框 ——
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -426,8 +457,8 @@ export function McpServersSettings() {
       const s = next.find(x=>x.name===name);
       if (s) {
         // 首次配置为 npx/stdio 时，提示可能需要下载
-        if (s.config.type === 'stdio' && (s.config.command||'') === 'npx') {
-          toast.info('正在连接（可能需要首次下载）', { description: 'npx 将自动下载 MCP 服务器依赖，这可能需要 1-3 分钟，请耐心等待…' });
+        if (s.config.type === 'stdio' && isStdioPackageRunner(s.config)) {
+          notifyStdioRefresh(s.config);
         }
         await serverManager.startServer(s.name, s.config);
         setError("");
@@ -437,7 +468,7 @@ export function McpServersSettings() {
     } catch (e) {
       setError(String(e));
       // 失败时状态由 ServerManager 更新
-      toast.error("保存成功但连接失败", { description: trimToastDescription(e) });
+      toast.error("保存成功但连接失败", { description: formatMcpConnectError(e) });
     }
   };
 
@@ -464,16 +495,14 @@ export function McpServersSettings() {
     setError("");
     // 状态由 ServerManager.updateStatus 控制
     try {
-      if (s.config.type === 'stdio' && (s.config.command||'') === 'npx') {
-        toast.info('正在连接（可能需要首次下载）', { description: 'npx 将自动下载 MCP 服务器依赖，这可能需要 1-3 分钟，请耐心等待…' });
-      }
+      notifyStdioRefresh(s.config);
       await serverManager.startServer(s.name, s.config);
       setError("");
       toast.success("连接成功", { description: `${s.name} · 连接成功` });
     } catch (e) {
       setError(String(e));
       // 失败时状态由 ServerManager 更新
-      toast.error("连接失败", { description: trimToastDescription(e) });
+      toast.error("连接失败", { description: formatMcpConnectError(e) });
     }
     setLoadingMap(prev => ({ ...prev, [s.name]: false }));
   };
@@ -539,17 +568,18 @@ export function McpServersSettings() {
     };
     const testConnect = async () => {
       try {
+        notifyStdioRefresh(config);
         await serverManager.startServer(name || 'mcp-test', config);
         const tools = await serverManager.listTools(name || 'mcp-test').catch(()=>[]);
         setError("");
         toast.success("测试连接成功", { description: `Tools: ${Array.isArray(tools)?tools.length:0}` });
       } catch (e) {
         setError(String(e));
-        toast.error("测试连接失败", { description: trimToastDescription(e) });
+        toast.error("测试连接失败", { description: formatMcpConnectError(e) });
       }
     };
     return (
-      <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-4 bg-white dark:bg-gray-900 shadow-sm">
+      <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-4 bg-white dark:bg-gray-900 shadow-sm glass-panel">
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-gray-50 dark:border-slate-700 pb-3">
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{isAdding ? '新增服务器' : '编辑服务器'}</h3>
@@ -721,7 +751,7 @@ export function McpServersSettings() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button 
-                        className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 text-sm" 
+                        className="px-3 py-1.5 rounded-lg border border-slate-200/70 text-slate-700 hover:bg-slate-100/60 dark:border-slate-600/50 dark:text-slate-200 dark:hover:bg-slate-800/40 transition-colors text-sm" 
                         onClick={applyEditingJson}
                       >
                         应用到表单
@@ -765,7 +795,7 @@ export function McpServersSettings() {
                     清空
                   </button>
                   <button 
-                    className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 text-sm" 
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 transition-all duration-200 text-sm" 
                     onClick={async()=>{
                       try {
                         const raw = JSON.parse(addingJsonText||"{}");
@@ -817,7 +847,7 @@ export function McpServersSettings() {
           <Tooltip>
             <TooltipTrigger asChild>
               <button 
-                className="px-4 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all duration-200 shadow-sm hover:shadow-md text-sm" 
+                className="px-4 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white transition-colors text-sm" 
                 onClick={persistEdit}
               >
                 保存
@@ -830,7 +860,7 @@ export function McpServersSettings() {
           <Tooltip>
             <TooltipTrigger asChild>
               <button 
-                className="px-4 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 text-sm" 
+                className="px-4 py-1.5 rounded-lg border border-slate-200/70 text-slate-700 hover:bg-slate-100/60 dark:border-slate-600/50 dark:text-slate-200 dark:hover:bg-slate-800/40 transition-colors text-sm" 
                 onClick={testConnect}
               >
                 测试连接
@@ -850,9 +880,13 @@ export function McpServersSettings() {
     <TooltipProvider>
       <div className="space-y-3 p-4">
         {/* 环境状态检查 */}
-        <McpEnvironmentStatus />
+        <McpEnvironmentStatus
+          health={envHealth.health}
+          loading={envHealth.loading}
+          error={envHealth.error}
+        />
 
-        {/* 紧凑工具栏 */}
+        {/* 紧凑工具栏：刷新与设置同一行右对齐 */}
         <div className="flex items-center justify-between gap-2 py-2 border-b border-slate-200/50 dark:border-slate-700/30">
           {/* 左侧操作按钮组 */}
           <div className="flex gap-1.5">
@@ -923,24 +957,38 @@ export function McpServersSettings() {
             </Tooltip>
           </div>
 
-          {/* 右侧齿轮按钮 */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="w-7 h-7 rounded flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-                onClick={() => setAdvDialogOpen(true)}
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent><p className="text-xs">高级设置</p></TooltipContent>
-          </Tooltip>
+          {/* 右侧：刷新与高级设置上下对齐 */}
+          <div className="flex items-center gap-1.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="w-7 h-7 rounded flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  onClick={() => void envHealth.reload()}
+                  title="重新检测"
+                >
+                  <RefreshCw className={cn("w-4 h-4", envHealth.loading && "animate-spin")} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">重新检测依赖</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="w-7 h-7 rounded flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  onClick={() => setAdvDialogOpen(true)}
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">高级设置</p></TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         {renderEditor()}
 
       {importOpen && (
-        <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-6 space-y-4 bg-white dark:bg-gray-900 shadow-lg backdrop-blur-sm">
+        <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-6 space-y-4 bg-white dark:bg-gray-900 shadow-lg backdrop-blur-sm glass-panel">
           {/* 头部区域 */}
           <div className="flex items-start justify-between">
             <div>
@@ -1034,7 +1082,7 @@ export function McpServersSettings() {
               <button 
                 className={`px-6 py-2 rounded-lg text-white transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md ${
                   importText.trim() 
-                    ? 'bg-blue-600 hover:bg-blue-700' 
+                    ? 'bg-slate-800 hover:bg-slate-900' 
                     : 'bg-gray-400 cursor-not-allowed'
                 }`}
                 onClick={importFromJson}
@@ -1056,16 +1104,16 @@ export function McpServersSettings() {
           const tools = st === 'connected' ? (toolsCache?.tools || []) : [];
           
           return (
-            <div key={s.name} className="border border-slate-200/60 dark:border-slate-700/40 rounded-lg p-3 bg-white/80 dark:bg-slate-900/60 hover:border-slate-300/60 dark:hover:border-slate-600/50 transition-colors">
+            <div key={s.name} className="border border-slate-200/60 dark:border-slate-700/40 rounded-lg p-3 glass-panel bg-white/40 dark:bg-slate-900/40 hover:border-slate-300/60 dark:hover:border-slate-600/50 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
                   <span>{s.name}</span>
                   <span className={cn(
                     "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded",
                     st === 'connected' 
-                      ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+                      ? 'text-emerald-700 dark:text-emerald-400 border border-emerald-200/70 bg-emerald-50/60 dark:border-emerald-800/40 dark:bg-emerald-900/20'
                       : st === 'connecting' 
-                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                        ? 'text-slate-600 dark:text-slate-300 border border-slate-200/70 bg-slate-100/70 dark:border-slate-600/50 dark:bg-slate-800/40'
                         : st === 'error' 
                           ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
                           : 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800'
@@ -1141,7 +1189,7 @@ export function McpServersSettings() {
         })}
       </div>
             {exportText && (
-        <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-6 space-y-4 bg-white dark:bg-gray-900 shadow-sm">
+        <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-6 space-y-4 bg-white dark:bg-gray-900 shadow-sm glass-panel">
           <div className="border-b border-gray-100 pb-4">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">导出 JSON</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">可复制保存为 mcp.json</p>

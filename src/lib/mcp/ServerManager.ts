@@ -1,5 +1,5 @@
 import { McpClient } from "./McpClient";
-import { MCP_CONNECT_TIMEOUT_MS, MCP_STARTUP_CONNECT_TIMEOUT_MS, MCP_INIT_TIMEOUT_MS } from "./constants";
+import { MCP_CONNECT_TIMEOUT_MS, MCP_STDIO_CONNECT_TIMEOUT_MS, MCP_STARTUP_CONNECT_TIMEOUT_MS, MCP_INIT_TIMEOUT_MS } from "./constants";
 import { useMcpStore } from "@/store/mcpStore";
 import { RESERVED_MCP_SERVER_NAMES } from "./serverNamePolicy";
 
@@ -30,7 +30,12 @@ class ServerManager {
     }
     
     // 根据是否为启动阶段选择超时时间
-    const connectTimeout = isStartup ? MCP_STARTUP_CONNECT_TIMEOUT_MS : MCP_CONNECT_TIMEOUT_MS;
+    const isStdio = String(config?.type || "") === "stdio";
+    const connectTimeout = isStartup
+      ? MCP_STARTUP_CONNECT_TIMEOUT_MS
+      : isStdio
+        ? MCP_STDIO_CONNECT_TIMEOUT_MS
+        : MCP_CONNECT_TIMEOUT_MS;
     const initTimeout = isStartup ? Math.min(MCP_INIT_TIMEOUT_MS, 5000) : MCP_INIT_TIMEOUT_MS;
     
     try {
