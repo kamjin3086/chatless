@@ -34,7 +34,7 @@ import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/t
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { detectSkillIntent } from './intentDetector';
-import { CORE_TOOL_POLICY_MD } from './promptTemplates';
+import { AGENT_MINIMAL_SYSTEM_PROMPT } from './promptTemplates';
 import { getToolDoc, buildFirstFollowUpPromptFromDoc, buildForcedAnswerPromptFromDoc } from './toolDocLoader';
 import { getPersistedKnowledgeBaseReference } from './persistedKnowledgeBase';
 
@@ -49,8 +49,7 @@ import { getPersistedKnowledgeBaseReference } from './persistedKnowledgeBase';
  *    - 返回 useNativeTools: true
  * 
  * 2. 如果不支持原生工具调用：
- *    - 注入完整的工具描述到 System Prompt
- *    - 依赖正则解析提取工具调用
+ *    - 保持普通聊天，不把文本内容解释为可执行调用
  *    - 返回 useNativeTools: false
  */
 export async function buildInitialPrompt(
@@ -76,8 +75,7 @@ export async function buildInitialPrompt(
     note: toolStrategy.note,
   });
 
-  // 不支持 native tool 的模型：仍然注入工具提示，依靠文本解析提取工具调用
-  // 不抛错，允许用户继续使用不支持原生工具调用 API 的模型
+  // Models without native tool support remain ordinary chat models.
   
   // 1. 时间上下文（高优先级）
   await injectTimeContext(messages, context.userContent, signals.isTimeRelated);
@@ -143,9 +141,7 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   const skillIntent = detectSkillIntent(context.userContent || '');
   const shouldExposeSkills = skillIntent.shouldPreloadSkill;
   const shouldExposeWebSearch =
-    !!signals.webSearchEnabled &&
-    // 只在"明显需要实时信息"的场景下注入，避免所有请求都默认携带 web_search（会分散模型注意力）
-    (signals.isTimeRelated || (signals.hasExplicitMention && signals.mentionedServers.some((s) => s.toLowerCase() === WEB_SEARCH_SERVER_NAME)));
+    !!signals.webSearchEnabled;
 
   // 构建原生工具定义（用于 native tool API 或文本注入）
   const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
@@ -156,25 +152,15 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     conversationId: context.conversationId,
   });
 
-  // 注入工具策略说明
+  // Keep the default contract small. Native schemas carry the detailed
+  // operation surface; prompt text must not become a second tool protocol.
   messages.push({
     role: 'system',
-    content: CORE_TOOL_POLICY_MD
+    content: AGENT_MINIMAL_SYSTEM_PROMPT
   });
 
-  // 对于不支持 native tool 的模型：将工具 schema 转换为文本格式注入
-  // 这让模型知道有哪些工具可用、参数是什么，从而能够生成正确的工具调用格式
-
-  if (!useNativeTools && Array.isArray(nativeTools) && nativeTools.length > 0) {
-    const toolSchemaText = buildToolSchemaPrompt(nativeTools);
-
-    if (toolSchemaText) {
-      messages.push({
-        role: 'system',
-        content: toolSchemaText
-      });
-    }
-  }
+  // Models without native tool support remain chat-only. Do not inject a
+  // textual fallback protocol that can be mistaken for an executable call.
 
   // 5.1 会话附加内容：工作目录（临时授权）
   try {
@@ -232,7 +218,9 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   }
   
   // 8. Skills 索引注入（始终）
-  await injectSkillsIndex(messages);
+  if (shouldExposeSkills) {
+    await injectSkillsIndex(messages);
+  }
   
   return {
     systemMessages: messages,
@@ -366,7 +354,12 @@ async function buildNativeToolDefinitions(params: {
   // ========== 1. 核心层：始终加载 ==========
   
   // 1.1 核心文件工具（read, write, ls）
+  const coreToolStart = tools.length;
   await addToolsFromGroup('core');
+  if (!params.includeWebSearch) {
+    tools.splice(coreToolStart, tools.length - coreToolStart,
+      ...tools.slice(coreToolStart).filter((tool) => !tool.name.startsWith(`${WEB_SEARCH_SERVER_NAME}__`)));
+  }
   
   // 1.2 工具发现工具（让 AI 知道还有什么）
   for (const tool of TOOLS_REGISTRY_TOOLS) {
@@ -443,7 +436,6 @@ async function buildNativeToolDefinitions(params: {
 
   // ========== 4. MCP 服务器工具（外部服务） ==========
   
-  const TOOL_LIMIT = 15;
   for (const server of params.servers) {
     if (RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase())) {
       continue;
@@ -452,7 +444,7 @@ async function buildNativeToolDefinitions(params: {
       const serverTools = await persistentCache.getToolsWithCache(server);
       if (!Array.isArray(serverTools)) continue;
 
-      for (const tool of serverTools.slice(0, TOOL_LIMIT)) {
+      for (const tool of serverTools) {
         if (!tool?.name) continue;
         const fullName = `${server}__${tool.name}`;
         const doc = await getToolDoc({ toolFullName: fullName });

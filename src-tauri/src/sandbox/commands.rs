@@ -12,12 +12,14 @@ use tauri::Manager;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 
 lazy_static! {
-  static ref RUNNING_SHELLS: Mutex<HashMap<String, Arc<tokio::sync::Mutex<tokio::process::Child>>>> =
+  // Store only the OS process id.  Waiting for a child must never hold a lock
+  // that cancellation needs in order to terminate it.
+  static ref RUNNING_SHELLS: Mutex<HashMap<String, u32>> =
     Mutex::new(HashMap::new());
 }
 
@@ -69,6 +71,28 @@ fn default_max_output() -> usize {
   1024 * 1024 // 1MB
 }
 
+async fn kill_process_tree(pid: u32) -> std::io::Result<()> {
+  if pid == 0 {
+    return Ok(());
+  }
+  #[cfg(windows)]
+  {
+    let status = Command::new("taskkill")
+      .args(["/PID", &pid.to_string(), "/T", "/F"])
+      .status()
+      .await?;
+    if status.success() { Ok(()) } else { Err(std::io::Error::new(std::io::ErrorKind::Other, "taskkill failed")) }
+  }
+  #[cfg(not(windows))]
+  {
+    let status = Command::new("kill")
+      .args(["-TERM", &pid.to_string()])
+      .status()
+      .await?;
+    if status.success() { Ok(()) } else { Err(std::io::Error::new(std::io::ErrorKind::Other, "kill failed")) }
+  }
+}
+
 /// 取消正在运行的 shell 命令（best-effort）
 #[tauri::command]
 pub async fn cancel_safe_shell(execution_id: String) -> Result<bool, String> {
@@ -84,9 +108,8 @@ pub async fn cancel_safe_shell(execution_id: String) -> Result<bool, String> {
     map.remove(&id)
   };
 
-  if let Some(child_arc) = handle {
-    let mut child = child_arc.lock().await;
-    let _ = child.kill().await;
+  if let Some(pid) = handle {
+    let _ = kill_process_tree(pid).await;
     return Ok(true);
   }
 
@@ -225,22 +248,20 @@ pub async fn run_safe_shell(
   }
 
   // 启动进程
-  let child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
-  let child = Arc::new(tokio::sync::Mutex::new(child));
+  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let pid = child.id().unwrap_or_default();
 
   // 注册到全局 map（用于 cancel）
   let exec_id = options.execution_id.clone().unwrap_or_default();
   if !exec_id.trim().is_empty() {
     if let Ok(mut map) = RUNNING_SHELLS.lock() {
-      map.insert(exec_id.clone(), child.clone());
+      map.insert(exec_id.clone(), pid);
     }
   }
 
   // 获取输出流
-  let (stdout, stderr) = {
-    let mut guard = child.lock().await;
-    (guard.stdout.take(), guard.stderr.take())
-  };
+  let stdout = child.stdout.take();
+  let stderr = child.stderr.take();
 
   // 异步读取输出
   let max_output = options.max_output_size;
@@ -286,8 +307,7 @@ pub async fn run_safe_shell(
   // 等待命令完成（带超时）
   let timeout_duration = Duration::from_millis(options.timeout_ms);
   let wait_result = timeout(timeout_duration, async {
-    let mut guard = child.lock().await;
-    guard.wait().await
+    child.wait().await
   })
   .await;
 
@@ -332,10 +352,8 @@ pub async fn run_safe_shell(
     Err(_) => {
       // 超时，尝试终止进程
       log::warn!("[Sandbox] Command timed out after {}ms", options.timeout_ms);
-      {
-        let mut guard = child.lock().await;
-        let _ = guard.kill().await;
-      }
+      let _ = kill_process_tree(pid).await;
+      let _ = child.wait().await;
 
       Ok(ShellResult {
         success: false,

@@ -9,6 +9,10 @@ import { AgentRunEventStore, type AgentRunStatus } from './AgentRunEventStore';
 
 const contextWindowManager = new ContextWindowManager();
 
+function contextWindowForModel(model: string): number {
+  return /qwen3\.8[-_]?flash[-_]?next/i.test(String(model || '')) ? 262_144 : 8_192;
+}
+
 export class AgentRunControlPlane {
   readonly eventLog = new ConversationEventLog();
   private seq = 0;
@@ -48,7 +52,9 @@ export class AgentRunControlPlane {
     const compacted = await contextWindowManager.compact(messages, {
       provider,
       model,
-      maxInputTokens: 96_000,
+      contextWindowTokens: contextWindowForModel(model),
+      reserveOutputTokens: 8_192,
+      safetyMarginRatio: 0.08,
       keepLastN: 24,
       allowSummarize: true,
     });
@@ -78,7 +84,21 @@ export class AgentRunControlPlane {
   buildLlmMessages(baseHistory: LlmMessage[], renderMode: RenderMode = 'text_wrapper'): LlmMessage[] {
     const projected = this.eventLog.renderForModel(renderMode);
     if (projected.length === 0) return baseHistory;
-    return [...baseHistory, ...projected];
+    // History builders may already contain the current user turn. Consume one
+    // matching user event from the event projection to avoid sending it twice.
+    const existingUsers = new Map<string, number>();
+    for (const message of baseHistory) {
+      if (message.role !== 'user') continue;
+      existingUsers.set(message.content, (existingUsers.get(message.content) || 0) + 1);
+    }
+    const filtered = projected.filter((message) => {
+      if (message.role !== 'user') return true;
+      const count = existingUsers.get(message.content) || 0;
+      if (count <= 0) return true;
+      existingUsers.set(message.content, count - 1);
+      return false;
+    });
+    return [...baseHistory, ...filtered];
   }
 
   /**

@@ -1,13 +1,12 @@
 // 调试期间保留有限 console，勿全局禁用 no-console
-// Chat/Agent dispatch remains here until the pending Agent UI refactor moves
-// generation orchestration into a dedicated action module.
+// Conversation actions delegate generation to the unified Agent runtime.
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useChatStore } from "@/store/chatStore";
-import { cancelStream, type Message as LlmMessage, StreamCallbacks } from '@/lib/llm';
+import { type Message as LlmMessage, StreamCallbacks } from '@/lib/llm';
 import { ChatGateway } from '@/lib/chat/ChatGateway';
 import { HistoryBuilder } from '@/lib/chat/HistoryBuilder';
 import type { Message, Conversation } from "@/types/chat";
@@ -25,7 +24,7 @@ import {
   type IdleGenerationWatchHandle,
 } from '@/lib/chat/idleGenerationWatch';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
-import { AgentLoopRunner } from '@/lib/mcp/agentLoop';
+import { AgentSession } from '@/lib/mcp/agentLoop';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { getProcessSandbox } from '@/lib/skills/sandbox';
 // 动态导入 Title 相关函数，避免静态未用告警
@@ -269,44 +268,9 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
     } catch { /* ignore */ }
 
-    // Chat mode performs web search before calling the model. This keeps search
-    // usable with OpenAI-compatible endpoints that reject tools/tool_choice.
-    try {
-      const wsMod = await import('@/store/webSearchStore');
-      const cfg = wsMod.useWebSearchStore.getState();
-      const conv = useChatStore.getState().conversations.find((c: any) => c.id === conversationId);
-      const toolMode = (conv?.tool_mode || (useChatStore.getState() as any).sessionToolMode || 'chat') as string;
-      if (cfg.isWebSearchEnabled && toolMode === 'chat' && userContent.trim()) {
-        const searchProvider = cfg.getConversationProvider(conversationId);
-        const { getProviderCredentials, isMissingRequiredCredentials } = await import('@/lib/websearch/registry');
-        const keys = {
-          apiKeyGoogle: cfg.apiKeyGoogle, cseIdGoogle: cfg.cseIdGoogle,
-          apiKeyBing: cfg.apiKeyBing, apiKeyOllama: cfg.apiKeyOllama,
-          apiKeyTavily: cfg.apiKeyTavily, apiKeyBrave: cfg.apiKeyBrave,
-          searxngBaseUrl: cfg.searxngBaseUrl,
-        };
-        if (isMissingRequiredCredentials(searchProvider, keys)) {
-          hb.addSystem(`网络搜索未执行：${searchProvider} 的必要配置不完整。请提醒用户检查网络搜索设置。`);
-        } else {
-          const { apiKey, cseId } = getProviderCredentials(searchProvider, keys);
-          const { buildSearchRequest } = await import('@/lib/websearch/request');
-          const { invoke } = await import('@tauri-apps/api/core');
-          const request = buildSearchRequest(cfg, searchProvider, userContent, apiKey, cseId);
-          const results = await invoke<Array<{ source_title: string; snippet: string; url: string }>>(
-            'native_web_search', { request }
-          );
-          const sources = results.map((item, index) =>
-            `[${index + 1}] ${item.source_title}\nURL: ${item.url}\n摘要: ${item.snippet}`
-          ).join('\n\n');
-          hb.addSystem(
-            `以下是应用刚刚通过 ${searchProvider} 获取的网络搜索结果。请基于这些结果回答，并用对应 URL 标注来源；不要虚构未出现的信息。\n\n${sources}`
-          );
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      hb.addSystem(`网络搜索失败：${message}。请明确告知用户搜索失败，不要假装已获得实时结果。`);
-    }
+    // Web search is a native tool in the unified Agent runtime.  Do not run a
+    // hidden pre-search here: the model must decide whether current information
+    // is needed and the result must remain part of the structured run history.
     
     // 1. 添加系统提示词
     try {
@@ -320,20 +284,10 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         }
       }
 
-      const toolMode = (conv?.tool_mode || (useChatStore.getState() as any).sessionToolMode || 'chat') as string;
 
       // 2. 添加MCP系统注入（agent 模式由 AgentLoopRunner Envelope 单次注入）
-      if (toolMode !== 'agent') {
-        try {
-          const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
-          const injection = await buildMcpSystemInjections(userContent, conversationId, provider, model);
-          for (const m of injection.systemMessages) {
-            const c = String((m as any).content || '');
-            if (c.startsWith('【当前时间】') || c.startsWith('当前时间：')) continue;
-            hb.addSystem(c);
-          }
-        } catch { /* 忽略MCP注入失败 */ }
-      }
+      // MCP and Skills are assembled by AgentLoopRunner once per run.  Keeping
+      // them out of this history builder prevents duplicate, stale injections.
     } catch { /* 忽略系统提示构建失败 */ }
     
     // 3. 处理历史消息
@@ -381,7 +335,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       sourceContent?: string
     },
     knowledgeBase?: { id: string; name: string },
-    options?: { conversation?: Conversation, conversationId?: string, images?: string[] }
+    options?: { conversation?: Conversation, conversationId?: string, images?: string[], planOnly?: boolean }
   ) => {
     const modelToUse = selectedModelId;
     if (!modelToUse) {
@@ -509,8 +463,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
     const thinking_start_time = Date.now();
     const assistantMessageId = uuidv4();
-    // 为本次生成定义一个“流实例ID”，并在回调中校验，避免并发/二次流导致的串写
-    const streamInstanceId = uuidv4();
     const assistantMessage: Message = {
       id: assistantMessageId,
       conversation_id: finalConversationId,
@@ -568,92 +520,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
     // 调试信息已移除，避免控制台噪音
 
-    // agent/chat 分流：agent 使用 while(true) AgentLoop；chat 使用单轮 StreamOrchestrator
-    const hasKnowledgeSources = Boolean(
-      knowledgeBase?.id || documentData?.documentReference
-    );
-    const toolModeForRun = (() => {
-      try {
-        const st = useChatStore.getState() as any;
-        const conv = (st.conversations || []).find((c: any) => c && c.id === finalConversationId);
-        const currentMode = ((conv?.tool_mode as ('chat' | 'agent') | undefined) || st.sessionToolMode || 'chat') as 'chat' | 'agent';
-        if (hasKnowledgeSources && currentMode !== 'agent') {
-          // Route this message immediately; the UI effect persists the same
-          // mode asynchronously, so a fast send cannot enter legacy Chat mode.
-          void st.setConversationToolMode?.(finalConversationId, 'agent');
-          return 'agent';
-        }
-        return currentMode;
-      } catch {
-        return hasKnowledgeSources ? 'agent' : 'chat';
-      }
-    })();
-
-    let streamCallbacks: StreamCallbacks | null = null;
     let sendErrorNotified = false;
-    if (toolModeForRun !== 'agent') {
-      // 使用新的 StreamOrchestrator 架构（chat 模式）
-      const orchestrator = new StreamOrchestrator({
-        messageId: assistantMessageId,
-        conversationId: finalConversationId,
-        provider: effectiveProvider,
-        model: modelToUse,
-        originalUserContent: content,
-        historyForLlm: historyForLlm as any,
-        onUIUpdate: () => {},
-        onError: (error) => {
-          console.error('[StreamOrchestrator] 错误:', error);
-        },
-      });
-
-      streamCallbacks = orchestrator.createCallbacks();
-
-      // 包装 onStart 以保留现有逻辑
-      const originalOnStart = streamCallbacks.onStart;
-      streamCallbacks.onStart = () => {
-        originalOnStart?.();
-
-        // 通知 UI
-        try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
-
-        lastActivityTimeRef.current = Date.now();
-
-        // Token 计数重置
-        setTokenCount(0);
-        batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
-      };
-
-      // 包装 onEvent 以保留性能监控
-      const originalOnEvent = streamCallbacks.onEvent;
-      streamCallbacks.onEvent = (event: any) => {
-        if ((streamCallbacks as any).__instanceId !== streamInstanceId) return;
-        lastActivityTimeRef.current = Date.now();
-
-        const perfId = `onEvent_${event?.type}`;
-        performanceMonitor.start(perfId, { type: event?.type, messageId: assistantMessageId });
-        try {
-          originalOnEvent?.(event);
-        } finally {
-          performanceMonitor.end(perfId);
-        }
-      };
-
-      // 包装 onComplete
-      const originalOnComplete = streamCallbacks.onComplete;
-      streamCallbacks.onComplete = async () => {
-        await originalOnComplete?.();
-      };
-
-      // 包装 onError
-      const originalOnError = streamCallbacks.onError;
-      streamCallbacks.onError = (error: Error) => {
-        sendErrorNotified = true;
-        originalOnError?.(error);
-      };
-
-      // 标记当前回调归属的流实例
-      (streamCallbacks as any).__instanceId = streamInstanceId;
-    }
 
     if (modelToUse) {
       // 参数优先级：会话参数（可覆盖/可显式禁用） > 模型级参数 > 系统默认
@@ -694,9 +561,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
         const composed = await composeChatOptions(effectiveProvider, modelToUse, baseOptions, currentConversationId || null, content);
 
-        if (toolModeForRun === 'agent') {
-          try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
-          await AgentLoopRunner.run({
+        try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
+        await AgentSession.getInstance().run({
             assistantMessageId,
             conversationId: finalConversationId,
             provider: effectiveProvider,
@@ -704,6 +570,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
             historyForLlm: historyForLlm as any,
             originalUserContent: content,
             options: composed,
+            planOnly: options?.planOnly,
             runtimeHooks: {
               onAgentStart: () => {
                 lastActivityTimeRef.current = Date.now();
@@ -736,13 +603,9 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
                 }
               },
             },
-          });
-          return;
-        }
+        });
+        return;
 
-        const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
-        if (!streamCallbacks) throw new Error('streamCallbacks is not initialized');
-        await gateway.stream(historyForLlm, streamCallbacks as any);
       } catch (err) {
         if (!sendErrorNotified) {
           showSendErrorToast(err, { providerName: effectiveProvider });
@@ -782,12 +645,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
   const handleStopGeneration = useCallback(() => {
     setStopGenerationHint('正在停止生成…');
-    try {
-      cancelStream();
-    } catch {
-      // 取消流失败，忽略
-    }
-    
     // 停止并尽量落盘当前内容，防止丢尾部
     autoSaverRef.current?.stop();
     void autoSaverRef.current?.flush().catch(() => {}).finally(() => {
@@ -829,7 +686,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
           // ignore
         }
         try {
-          AgentLoopRunner.cancel({ assistantMessageId: lastAssistantMessage.id });
+          AgentSession.getInstance().stop(lastAssistantMessage.id);
         } catch {
           // ignore
         }
@@ -966,6 +823,18 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       }
     }
   }, [currentConversation, updateMessage, currentConversationId]);
+
+  const handleSteerCurrentRun = useCallback((input: string): boolean => {
+    const message = currentConversation?.messages
+      ?.filter((item: Message) => item.role === 'assistant' && item.status === 'loading')
+      .pop();
+    if (!message?.id) return false;
+    return AgentSession.getInstance().steer(message.id, input);
+  }, [currentConversation]);
+
+  const handleResumeRun = useCallback((runId: string): Promise<string | undefined> => {
+    return AgentSession.getInstance().resume(runId);
+  }, []);
 
   useEffect(() => {
     if (!isLoading) {
@@ -1134,19 +1003,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       return;
     }
 
-    // 重试必须沿用原会话的运行模式。Agent 会话若回退到
-    // StreamOrchestrator，会跳过工具循环、范围校验和引用收尾，导致重试结果与首次回答的语义不一致。
-    const hasKnowledgeSources = Boolean(
-      (userMsg as any).knowledge_base_reference?.id || (userMsg as any).document_reference
-    );
-    const retryToolMode = (() => {
-      const mode = ((conv as any).tool_mode || (st as any).sessionToolMode || 'chat') as 'chat' | 'agent';
-      if (hasKnowledgeSources && mode !== 'agent') {
-        void (st as any).setConversationToolMode?.(conv.id, 'agent');
-        return 'agent';
-      }
-      return mode;
-    })();
+    // Regeneration uses the same unified runtime as the original turn.
+    const retryToolMode = 'agent' as const;
 
     if (retryToolMode === 'agent') {
       try {
@@ -1179,7 +1037,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
           userMsg.content,
         );
         try { notifyStreamStart(conv.id); } catch { /* noop */ }
-        await AgentLoopRunner.run({
+        await AgentSession.getInstance().run({
           assistantMessageId: newAssistantId,
           conversationId: conv.id,
           provider: effectiveProvider,
@@ -1320,6 +1178,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     isGenerating,
     handleSendMessage,
     handleStopGeneration,
+    handleSteerCurrentRun,
+    handleResumeRun,
     handleEmptyStatePromptClick,
     stopGenerationHint,
     handleTitleChange,

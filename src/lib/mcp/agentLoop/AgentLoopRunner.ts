@@ -1,5 +1,6 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
-import { cancelStream, streamChat } from '@/lib/llm';
+import { streamChat } from '@/lib/llm';
+import { ProviderRegistry } from '@/lib/llm/ProviderRegistry';
 import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
 import type { OnToolCall } from '@/lib/chat/stream/types';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
@@ -36,8 +37,8 @@ const DEFAULT_PIPELINE = new ToolExecutionPipeline({ adapters: createDefaultAdap
 // Agent Loop 配置
 // MAX_BUDGET: 加权预算上限（读取类工具消耗少，写入/执行类消耗多）
 const MAX_BUDGET = 50;
+const MAX_MODEL_STEPS = 50;
 const MAX_SAME_ATTEMPTS = 3;      // 同一工具+参数的最大重试次数
-const MAX_CONSECUTIVE_EMPTY = 3;  // 连续空结果的最大次数
 
 /**
  * 获取工具的预算消耗权重
@@ -81,7 +82,19 @@ function getToolBudgetCost(server: string, tool: string): number {
   return 1.0;
 }
 
-const activeLoops = new Map<string, AbortController>();
+const activeLoops = new Map<string, { controller: AbortController; provider: string }>();
+const steeringInputs = new Map<string, string[]>();
+
+/** Queue a user steering message for the next safe model boundary. */
+export function queueAgentSteering(assistantMessageId: string, input: string): boolean {
+  const id = String(assistantMessageId || '').trim();
+  const text = String(input || '').trim();
+  if (!id || !text || !activeLoops.has(id)) return false;
+  const pending = steeringInputs.get(id) || [];
+  pending.push(text);
+  steeringInputs.set(id, pending);
+  return true;
+}
 
 /**
  * 从工具结果中移除内部引导字段（这些字段不应暴露给用户）
@@ -522,28 +535,28 @@ async function ensureAssistantLoading(assistantMessageId: string) {
 }
 
 export class AgentLoopRunner {
+  static steer(assistantMessageId: string, input: string): boolean {
+    return queueAgentSteering(assistantMessageId, input);
+  }
   static cancel(params: AgentLoopCancelParams) {
     const id = String(params.assistantMessageId || '').trim();
     if (!id) return;
-    const ctrl = activeLoops.get(id);
-    if (ctrl) {
+    const active = activeLoops.get(id);
+    if (active) {
       try {
-        ctrl.abort();
+        active.controller.abort();
       } catch {
         // ignore
       }
+      // Cancel only the provider selected by this run.  The old global
+      // interpreter cancellation could terminate an unrelated conversation.
+      try { ProviderRegistry.get(active.provider)?.cancelStream?.(); } catch { /* ignore */ }
     }
     void AgentRunEventStore.setRunStatus(id, 'cancelled').catch(() => {});
     try {
       void import('@tauri-apps/api/core').then(({ invoke }) =>
         invoke('cancel_safe_shell', { executionId: id }).catch(() => {}),
       );
-    } catch {
-      // ignore
-    }
-    // best-effort：同时停止当前全局 stream（Tauri 桌面端是单流解释器）
-    try {
-      cancelStream();
     } catch {
       // ignore
     }
@@ -558,33 +571,53 @@ export class AgentLoopRunner {
     const baseHistory: LlmMessage[] = [...(params.historyForLlm || [])] as LlmMessage[];
     const baseOptions: Record<string, any> = { ...(params.options || {}), conversationId, messageId: assistantMessageId };
     const hooks = params.runtimeHooks;
+    const planOnly = Boolean(params.planOnly || (params.options as any)?.planOnly);
 
     if (!assistantMessageId || !conversationId || !provider || !model) return;
 
     // 单实例：同一 assistantMessageId 只允许一个 loop
     if (activeLoops.has(assistantMessageId)) return;
     const ctrl = new AbortController();
-    activeLoops.set(assistantMessageId, ctrl);
+    activeLoops.set(assistantMessageId, { controller: ctrl, provider });
+    steeringInputs.set(assistantMessageId, []);
 
     const attemptByKey = new Map<string, number>();
-    const consecutiveEmpty = { n: 0 };
     const controlPlane = new AgentRunControlPlane(assistantMessageId, conversationId, assistantMessageId);
     let streamFailed = false;
+    let terminalStatus: 'waiting_input' | 'waiting_approval' | 'paused' | undefined;
 
     await setAgentRunState({ assistantMessageId, conversationId, running: true });
 
     try {
       await controlPlane.start();
-      if (originalUserContent.trim()) {
+      // The history builder normally already contains the current user turn.
+      // Record it only when a caller starts from an older checkpoint; otherwise
+      // the first model request would contain the same input twice.
+      const currentUserAlreadyInHistory = baseHistory.some((message) =>
+        message.role === 'user' && message.content === originalUserContent
+      );
+      if (originalUserContent.trim() && !currentUserAlreadyInHistory) {
         await controlPlane.record({ type: 'user_message', content: originalUserContent });
       }
       await controlPlane.record({ type: 'context_change', kind: 'environment', content: 'agent_run_started' });
+      if (planOnly) {
+        await controlPlane.record({
+          type: 'context_change',
+          kind: 'permissions',
+          content: 'plan_only_mode: only bounded reads/searches and interaction tools may execute; writes, shell, and unknown side effects are blocked',
+        });
+      }
       try {
         await hooks?.onAgentStart?.({ assistantMessageId, conversationId });
       } catch {
         // ignore
       }
       // 强制注入工具定义（agent 模式）
+      try {
+        const { useToolLoadRequestStore } = await import('@/store/toolLoadRequestStore');
+        const loadState = useToolLoadRequestStore.getState();
+        if (loadState.conversationId !== conversationId) loadState.reset(conversationId);
+      } catch { /* keep the catalog best-effort */ }
       const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
       const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
       const envelope = buildAgentPromptEnvelope(injection);
@@ -607,10 +640,23 @@ export class AgentLoopRunner {
         toolOptions.__useNativeTools = false;
       }
       const renderMode = capability.renderMode;
+      const refreshNativeToolOptions = async () => {
+        if (!capability.useNativeTools) return;
+        const refreshed = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
+        if (!refreshed.useNativeTools || !Array.isArray(refreshed.nativeTools)) return;
+        toolOptions.tools = refreshed.nativeTools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        }));
+        toolOptions.toolChoice = 'auto';
+        toolOptions.__useNativeTools = true;
+      };
 
       let round = 0;
       let budgetUsed = 0;  // 加权预算消耗
       let forceNoTools = false;
+      let knowledgeToolCalls = 0;
 
       const markStreamFailed = async (reason: string) => {
         streamFailed = true;
@@ -626,6 +672,14 @@ export class AgentLoopRunner {
       while (true) {
         if (isCancelled(assistantMessageId, ctrl.signal)) {
           controlPlane.markCancelled();
+          break;
+        }
+        const queuedSteering = steeringInputs.get(assistantMessageId)?.splice(0) || [];
+        for (const steering of queuedSteering) {
+          await controlPlane.record({ type: 'user_message', content: steering });
+        }
+        if (round >= MAX_MODEL_STEPS) {
+          terminalStatus = 'paused';
           break;
         }
         round += 1;
@@ -648,6 +702,30 @@ export class AgentLoopRunner {
                 return;
               }
 
+              if (String(req.server).toLowerCase() === 'knowledge' && knowledgeToolCalls >= 12) {
+                const limitedResult = {
+                  ok: false,
+                  error: { code: 'KNOWLEDGE_TOOL_BUDGET', message: '本次运行的文档工具调用已达到 12 次上限，请继续运行以读取剩余内容。' },
+                };
+                results.set(key, {
+                  cardIdOrKey: key,
+                  callId,
+                  server: req.server,
+                  tool: req.tool,
+                  args: req.args,
+                  result: limitedResult,
+                });
+                try {
+                  useChatStore.getState().dispatchMessageAction(assistantMessageId, {
+                    type: 'TOOL_RESULT', server: req.server, tool: req.tool, ok: false,
+                    errorMessage: limitedResult.error.message, cardId: req.cardId,
+                  } as any);
+                  if (req.lockKey) coordinator.markToolCallComplete(req.lockKey, 'failed');
+                } catch { /* ignore */ }
+                return;
+              }
+              if (String(req.server).toLowerCase() === 'knowledge') knowledgeToolCalls += 1;
+
               // 执行工具（不触发旧的 continueWithToolResult 递归续写）
               const inv = new ToolInvocation({
                 assistantMessageId,
@@ -662,6 +740,8 @@ export class AgentLoopRunner {
                 callId: req.callId,
                 cardId: req.cardId,
                 lockKey: req.lockKey,
+                providerData: (req as any).providerData,
+                planOnly: params.planOnly,
               });
               await controlPlane.record({
                 type: 'tool_call_requested',
@@ -670,6 +750,7 @@ export class AgentLoopRunner {
                 server: req.server,
                 tool: req.tool,
                 args: req.args,
+                providerData: (req as any).providerData,
               });
               const out = await DEFAULT_PIPELINE.run(inv);
               if (isCancelled(assistantMessageId, ctrl.signal) || isPipelineSkipped(out)) {
@@ -852,6 +933,15 @@ export class AgentLoopRunner {
           break;
         }
 
+        const waiting = Array.from(results.values()).find((entry) => {
+          const status = (entry.result as any)?.status;
+          return status === 'waiting_input' || status === 'waiting_approval';
+        });
+        if (waiting) {
+          terminalStatus = (waiting.result as any).status;
+          break;
+        }
+
         // 计算本轮预算消耗 + 熔断（空结果/重复失败）
         let roundCost = 0;
         let toolLoopTripped = false;
@@ -866,16 +956,22 @@ export class AgentLoopRunner {
             attemptByKey.set(attemptKey, next);
             if (next >= MAX_SAME_ATTEMPTS) toolLoopTripped = true;
 
-            consecutiveEmpty.n += 1;
-            if (consecutiveEmpty.n >= MAX_CONSECUTIVE_EMPTY) toolLoopTripped = true;
+            // Empty output is a valid result. Only the exact same call/result
+            // repeated three times is treated as a loop; the model may change
+            // its query or use another tool after one empty response.
           } else {
             attemptByKey.delete(attemptKey);
-            consecutiveEmpty.n = 0;
           }
         }
         
         // 更新总预算消耗
         budgetUsed += roundCost;
+
+        // tools__load changes the session catalog. Apply it before the next
+        // model step instead of waiting for another user message.
+        if (Array.from(results.values()).some((r) => r.server === 'tools' && r.tool === 'load')) {
+          try { await refreshNativeToolOptions(); } catch { /* keep the prior catalog */ }
+        }
 
         if (toolLoopTripped) {
           const batch = Array.from(results.values());
@@ -897,8 +993,11 @@ export class AgentLoopRunner {
       }
     } finally {
       activeLoops.delete(assistantMessageId);
+      steeringInputs.delete(assistantMessageId);
       const finalStatus = controlPlane.isCancelled() || isCancelled(assistantMessageId, ctrl.signal)
         ? 'cancelled'
+        : terminalStatus
+          ? terminalStatus
         : streamFailed
           ? 'failed'
           : 'completed';

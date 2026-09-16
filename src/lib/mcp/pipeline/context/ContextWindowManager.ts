@@ -7,18 +7,43 @@ import { chat } from '@/lib/llm';
  */
 export function estimateTokens(messages: LlmMessage[]): number {
   let chars = 0;
-  for (const m of messages) chars += String(m.content || '').length;
-  // 经验值：英文约 4 chars/token；中文更密，取 2.5 更保守
+  for (const m of messages) {
+    // Include protocol fields and provider opaque data.  Counting only visible
+    // text makes a tool-heavy turn look cheap and is the main source of silent
+    // context overflows in the old runner.
+    chars += JSON.stringify({
+      role: m.role,
+      content: m.content,
+      tool_call_id: m.tool_call_id,
+      tool_calls: m.tool_calls,
+      name: m.name,
+      providerData: m.providerData,
+      raw: m.raw,
+    }).length;
+  }
+  // Conservative estimate for mixed English/Chinese and JSON syntax.
   return Math.ceil(chars / 2.5);
+}
+
+/** Conservative context limits when an endpoint does not expose metadata. */
+export function resolveContextWindowTokens(_provider: string, model: string): number {
+  const normalized = String(model || '').toLowerCase();
+  if (/qwen3\.8[-_]?flash[-_]?next/.test(normalized)) return 262_144;
+  return 8_192;
 }
 
 export type CompactOptions = {
   provider: string;
   model: string;
   /** 触发压缩阈值（估算 token） */
-  maxInputTokens: number;
+  maxInputTokens?: number;
+  /** Reported model context window. Used when maxInputTokens is omitted. */
+  contextWindowTokens?: number;
+  /** Output reservation and safety margin are counted outside the input budget. */
+  reserveOutputTokens?: number;
+  safetyMarginRatio?: number;
   /** 保留最近 N 条 messages */
-  keepLastN: number;
+  keepLastN?: number;
   /** 是否允许调用一次 LLM 生成摘要 */
   allowSummarize?: boolean;
 };
@@ -33,11 +58,23 @@ export type CompactOptions = {
 export class ContextWindowManager {
   async compact(messages: LlmMessage[], opts: CompactOptions): Promise<LlmMessage[]> {
     const list = Array.isArray(messages) ? messages : [];
-    if (estimateTokens(list) <= opts.maxInputTokens) return list;
+    const contextWindow = Math.max(1, opts.contextWindowTokens ?? opts.maxInputTokens ?? 8192);
+    const reserve = Math.max(0, opts.reserveOutputTokens ?? Math.min(4096, Math.floor(contextWindow * 0.2)));
+    const safety = Math.max(0, Math.min(0.5, opts.safetyMarginRatio ?? 0.08));
+    const budget = Math.max(1, opts.maxInputTokens ?? Math.floor((contextWindow - reserve) * (1 - safety)));
+    if (estimateTokens(list) <= budget) return list;
 
-    const keepN = Math.max(4, Math.floor(opts.keepLastN));
-    const tail = list.slice(Math.max(0, list.length - keepN));
-    const head = list.slice(0, Math.max(0, list.length - keepN));
+    const keepN = Math.max(4, Math.floor(opts.keepLastN ?? 24));
+    let split = Math.max(0, list.length - keepN);
+    // Never split an assistant tool request from the tool results that answer
+    // it.  If the tentative tail starts in the middle of such a turn, move the
+    // split point back to the assistant message.
+    while (split > 0 && list[split]?.role === 'tool') split -= 1;
+    if (split > 0 && list[split - 1]?.role === 'assistant' && list[split - 1]?.tool_calls?.length) {
+      split -= 1;
+    }
+    const tail = list.slice(split);
+    const head = list.slice(0, split);
 
     const summary =
       opts.allowSummarize && head.length > 0

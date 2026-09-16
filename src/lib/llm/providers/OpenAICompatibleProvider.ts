@@ -4,7 +4,7 @@ import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '../types/stream-events';
-import { ToolChannelParser } from '../adapters/ToolChannelParser';
+import { toOpenAIMessage } from './messageMapping';
 import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
 import { 
   type ToolDefinition, 
@@ -23,7 +23,6 @@ export class OpenAICompatibleProvider extends BaseProvider {
   private aborted: boolean = false;
   private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private thinkingStrategy: ThinkingModeStrategy;
-  private toolChannelParser = new ToolChannelParser();
 
   constructor(baseUrl: string, apiKey?: string, displayName: string = 'OpenAI-Compatible') {
     super(displayName, baseUrl, apiKey);
@@ -131,18 +130,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           const hasContent = !!String(m.content || '').trim();
           return hasContent || hasToolCalls;
         })
-        .map((m) => {
-        const anyMsg: any = m as any;
-        const msg: any = { role: m.role, content: m.content };
-        if (m.role === 'tool') {
-          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
-          if (anyMsg.name) msg.name = anyMsg.name;
-        }
-        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
-          msg.tool_calls = anyMsg.tool_calls;
-        }
-        return msg;
-      }),
+        .map(toOpenAIMessage),
       stream: true,
       ...mapped,
     };
@@ -188,8 +176,6 @@ export class OpenAICompatibleProvider extends BaseProvider {
       this.aborted = false;
       // 重置策略状态
       this.thinkingStrategy.reset();
-    this.toolChannelParser.reset();
-      this.toolChannelParser.reset();
       
       // 优先：Tauri HTTP（跨域/证书更稳健）
       let resp: any = null;
@@ -260,6 +246,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         name: string;
         arguments: string;
       }> = new Map();
+      let reasoningContent = '';
       
       const processDelta = (json: any) => {
         if (!json) return;
@@ -289,6 +276,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
         
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
+        if (reasoningPiece) reasoningContent += reasoningPiece;
         const contentPiece: string | undefined =
           (typeof delta.content === 'string' ? delta.content : undefined) ||
           (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
@@ -308,7 +296,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const isDone = json === '[DONE]' || json?.done === true || !!json?.choices?.[0]?.finish_reason;
         if (isDone) {
           // 完成前，发送所有累积的工具调用
-          this.emitPendingToolCalls(toolCallState, cb);
+          this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
 
           
           const result = this.thinkingStrategy.processToken({ done: true });
@@ -351,8 +339,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
         while ((idx = buffer.indexOf('\n')) >= 0) {
           const line = buffer.slice(0, idx).trim();
           buffer = buffer.slice(idx + 1);
-          if (!line || line === '[DONE]') { 
+          if (!line || line === '[DONE]') {
             if (line === '[DONE]') { 
+              this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               const result = this.thinkingStrategy.processToken({ done: true });
               if (!cb.onEvent) {
                 throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
@@ -379,14 +368,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   /**
-   * 统一的事件分发入口：
-   * - 先通过 ToolChannelParser 剥离工具指令 → 生成 tool_call 事件
-   * - 再将纯净的事件流交给上层回调（Native-only：必须 onEvent）
+   * Dispatch structured provider events.  Text/JSON embedded in model output
+   * is deliberately never interpreted as an executable tool call.
    */
   private dispatchEvents(rawEvents: StreamEvent[] | undefined, cb: StreamCallbacks, _isDone: boolean = false) {
     if (!rawEvents || rawEvents.length === 0) return;
-    const events = this.toolChannelParser.rewriteEvents(rawEvents);
-    if (!events.length) return;
+    const events = rawEvents;
 
     if (!cb.onEvent) {
       throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
@@ -402,12 +389,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
   private async processSSEResponse(resp: Response, cb: StreamCallbacks): Promise<void> {
     // 重置策略状态
     this.thinkingStrategy.reset();
-    this.toolChannelParser.reset();
     
     cb.onStart?.();
 
     // SSE 工具调用增量状态（LM Studio/OpenAI compat streaming：delta.tool_calls 分块发送，需要累积）
     const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
+    let reasoningContent = '';
     let didComplete = false;
     const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
       if (didComplete) return;
@@ -439,7 +426,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       
       if (payload === '[DONE]') {
         // 完成前，发送所有累积的工具调用
-        this.emitPendingToolCalls(toolCallState, cb);
+        this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
         const result = this.thinkingStrategy.processToken({ done: true });
         this.dispatchEvents(result.events || [], cb, true);
         completeOnce('DONE', { toolCallsCount: toolCallState.size });
@@ -472,6 +459,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
         
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
+        if (reasoningPiece) reasoningContent += reasoningPiece;
         const contentPiece: string | undefined =
           (typeof delta.content === 'string' ? delta.content : undefined) ||
           (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
@@ -490,7 +478,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
         // 检查 finish_reason：完成前同样冲刷工具调用
         if (finishReason && finishReason !== 'null') {
-          this.emitPendingToolCalls(toolCallState, cb);
+          this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
           completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
@@ -510,7 +498,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
             processLine(buffer);
           }
           // reader done：确保发射累积工具调用
-          this.emitPendingToolCalls(toolCallState, cb);
+          this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
           completeOnce('reader_done', { toolCallsCount: toolCallState.size });
@@ -544,11 +532,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
   ) {
     // 重置策略状态
     this.thinkingStrategy.reset();
-    this.toolChannelParser.reset();
     
     try {
       // SSE fallback 工具调用增量状态（与 processSSEResponse 保持一致）
       const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
+      let reasoningContent = '';
       let didComplete = false;
       const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
         if (didComplete) return;
@@ -577,7 +565,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
             const payload = rawData.startsWith('data:') ? rawData.substring(5).trim() : rawData.trim();
             if (!payload) return;
             if (payload === '[DONE]') {
-              this.emitPendingToolCalls(toolCallState, cb);
+              this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               const result = this.thinkingStrategy.processToken({ done: true });
               this.dispatchEvents(result.events || [], cb, true);
               completeOnce('DONE', { toolCallsCount: toolCallState.size });
@@ -609,6 +597,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
               }
               
               const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
+              if (reasoningPiece) reasoningContent += reasoningPiece;
               const contentPiece: string | undefined =
                 (typeof delta.content === 'string' ? delta.content : undefined) ||
                 (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
@@ -631,7 +620,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
               }
               
               if (finishReason && finishReason !== 'null') {
-                this.emitPendingToolCalls(toolCallState, cb);
+                this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
                 const result = this.thinkingStrategy.processToken({ done: true });
                 this.dispatchEvents(result.events || [], cb, true);
                 completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
@@ -657,7 +646,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
    */
   private emitPendingToolCalls(
     toolCallState: Map<number, { id: string; name: string; arguments: string }>,
-    cb: StreamCallbacks
+    cb: StreamCallbacks,
+    reasoningContent?: string
   ): void {
     if (toolCallState.size === 0) return;
     
@@ -679,7 +669,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
             serverName,
             toolName,
             arguments: tc.arguments,
-          }
+          },
+          reasoningContent ? { reasoning_content: reasoningContent } : undefined
         );
         cb.onEvent(toolEvent);
       }

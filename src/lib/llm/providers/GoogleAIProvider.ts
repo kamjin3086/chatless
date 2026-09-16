@@ -3,6 +3,7 @@ import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
+import { createStreamEvent } from '../types/stream-events';
 
 /**
  * Google AI Provider
@@ -132,19 +133,48 @@ export class GoogleAIProvider extends BaseProvider {
       generationConfig.stopSequences = (opts as any).stop;
     }
 
-    const body: any = {
-      contents: messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }]
-      })),
-      generationConfig,
-    };
+    const systemParts = messages
+      .filter((m) => m.role === 'system' || m.role === 'developer')
+      .map((m) => ({ text: m.content }));
+    const contents = messages
+      .filter((m) => m.role !== 'system' && m.role !== 'developer')
+      .map((m: any) => {
+        if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+          return {
+            role: 'model',
+            parts: m.tool_calls.map((call: any) => ({
+              functionCall: {
+                name: call.function?.name,
+                args: (() => { try { return JSON.parse(call.function?.arguments || '{}'); } catch { return {}; } })(),
+              },
+              ...(call.providerData?.thoughtSignature ? { thoughtSignature: call.providerData.thoughtSignature } : {}),
+            })),
+          };
+        }
+        if (m.role === 'tool') {
+          let response: unknown = m.content;
+          try { response = JSON.parse(m.content); } catch { /* plain text response */ }
+          return {
+            role: 'user',
+            parts: [{ functionResponse: { name: m.name || 'tool', response } }],
+          };
+        }
+        return { role: 'user', parts: [{ text: m.content || '' }] };
+      });
+    const body: any = { contents, generationConfig };
+    if (systemParts.length) body.systemInstruction = { parts: systemParts };
 
     // 移除顶层 responseModalities，统一走 generationConfig.responseModalities
 
     // 透传策略附加/调用方指定的工具（如 image_generation），避免把未知扩展透传
     if (Array.isArray((opts as any).tools) && (opts as any).tools.length > 0) {
-      body.tools = (opts as any).tools;
+      body.tools = [{
+        functionDeclarations: (opts as any).tools.map((tool: any) => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        })),
+      }];
     }
     
     // 避免把未知字段（如 mcpServers/extensions）透传给 Gemini，统一丢弃未知扩展
@@ -153,7 +183,6 @@ export class GoogleAIProvider extends BaseProvider {
     
     // 特定透传（保持向后兼容）
     if ((opts as any).safetySettings) body.safetySettings = (opts as any).safetySettings;
-    if ((opts as any).tools) body.tools = (opts as any).tools;
 
     console.log('[GoogleAIProvider] Starting chat stream with:', {
       model: normalizedModel,
@@ -165,6 +194,7 @@ export class GoogleAIProvider extends BaseProvider {
     // 重置已处理集合和策略状态
     this.processedPayloads.clear();
     this.thinkingStrategy.reset();
+    let functionCallSequence = 0;
 
     try {
       await this.sseClient.startConnection(
@@ -209,6 +239,22 @@ export class GoogleAIProvider extends BaseProvider {
                 // 提取文本内容
                 if (candidate.content?.parts && Array.isArray(candidate.content.parts)) {
                   for (const part of candidate.content.parts) {
+                    const functionCall = (part as any)?.functionCall;
+                    if (functionCall?.name) {
+                      const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
+                      const normalized = normalizeToolCallServerAndTool({ serverName: 'default', toolName: String(functionCall.name) });
+                      const signature = (part as any)?.thoughtSignature || (part as any)?.thought_signature
+                        || functionCall.thoughtSignature || functionCall.thought_signature;
+                      cb.onEvent?.(createStreamEvent.toolCall(
+                        `call_${String(functionCall.name)}_${++functionCallSequence}`,
+                        {
+                          serverName: normalized.serverName,
+                          toolName: normalized.toolName,
+                          arguments: JSON.stringify(functionCall.args || {}),
+                        },
+                        signature ? { thought_signature: signature, thoughtSignature: signature } : undefined,
+                      ));
+                    }
                     const piece = typeof part.text === 'string' ? part.text : undefined;
                     if (piece && piece.length > 0) {
                       const result = this.thinkingStrategy.processToken({

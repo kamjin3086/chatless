@@ -22,6 +22,8 @@ export type AgentLoopRunParams = {
   originalUserContent: string;
   /** 透传给 provider 的 options（温度/最大tokens/会话参数等） */
   options?: Record<string, unknown>;
+  /** Planning mode permits bounded reads/searches but blocks side effects. */
+  planOnly?: boolean;
   /** UI/监控侧 hook：用于复用 useChatActions 的超时监控、性能监控、token 计数等 */
   runtimeHooks?: AgentLoopRuntimeHooks;
 };

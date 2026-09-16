@@ -13,6 +13,7 @@ export type ConversationEvent =
       server: string;
       tool: string;
       args?: Record<string, unknown>;
+      providerData?: Record<string, unknown>;
     }
   | {
       type: 'tool_call_output';
@@ -75,6 +76,7 @@ export class ConversationEventLog {
     if (mode === 'tool_role') {
       // 最小协议化实现：tool_call_requested -> assistant.tool_calls；tool_call_output -> role=tool（tool_call_id）
       const pending: ToolCallRequest[] = [];
+      let pendingProviderData: Record<string, unknown> | undefined;
       let didEmitAssistantForPending = false;
 
       for (const e of this.events) {
@@ -99,7 +101,11 @@ export class ConversationEventLog {
               name: `${e.server}__${e.tool}`,
               arguments: safeJson(e.args || {}),
             },
+            providerData: e.providerData,
           });
+          if (e.providerData && typeof e.providerData === 'object') {
+            pendingProviderData = e.providerData;
+          }
           didEmitAssistantForPending = false;
           continue;
         }
@@ -107,8 +113,14 @@ export class ConversationEventLog {
           const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : undefined;
 
           if (pending.length > 0 && !didEmitAssistantForPending) {
-            out.push({ role: 'assistant', content: '', tool_calls: [...pending] });
+            out.push({
+              role: 'assistant',
+              content: '',
+              tool_calls: [...pending],
+              providerData: pendingProviderData,
+            });
             pending.splice(0, pending.length);
+            pendingProviderData = undefined;
             didEmitAssistantForPending = true;
           }
 
@@ -125,7 +137,7 @@ export class ConversationEventLog {
           }
 
           const content = typeof e.output === 'string' ? e.output : safeJson(e.output);
-          out.push({ role: 'tool', content, tool_call_id: id });
+          out.push({ role: 'tool', content, tool_call_id: id, name: `${e.server}__${e.tool}` });
           continue;
         }
       }

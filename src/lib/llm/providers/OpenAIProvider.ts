@@ -3,6 +3,7 @@ import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { createStreamEvent } from '../types/stream-events';
+import { toOpenAIMessage } from './messageMapping';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -77,18 +78,7 @@ export class OpenAIProvider extends BaseProvider {
     // 构建请求体
     const body: Record<string, unknown> = {
       model,
-      messages: messages.map(m => {
-        const anyMsg: any = m as any;
-        const msg: any = { role: m.role, content: m.content };
-        if (m.role === 'tool') {
-          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
-          if (anyMsg.name) msg.name = anyMsg.name;
-        }
-        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
-          msg.tool_calls = anyMsg.tool_calls;
-        }
-        return msg;
-      }),
+      messages: messages.map(toOpenAIMessage),
       stream: true,
       ...mapped,
     };
@@ -119,6 +109,7 @@ export class OpenAIProvider extends BaseProvider {
         name: string;
         arguments: string;
       }> = new Map();
+      let reasoningContent = '';
       
       await this.sseClient.startConnection(
         {
@@ -142,7 +133,7 @@ export class OpenAIProvider extends BaseProvider {
             if (!jsonStr) return;
             if (jsonStr === '[DONE]') {
               // 完成前，发送所有累积的工具调用
-              this.emitPendingToolCalls(toolCallState, cb);
+              this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               cb.onComplete?.();
               this.sseClient.stopConnection();
               return;
@@ -150,6 +141,9 @@ export class OpenAIProvider extends BaseProvider {
             try {
               const json = JSON.parse(jsonStr);
               const delta = json?.choices?.[0]?.delta;
+              if (typeof delta?.reasoning_content === 'string') {
+                reasoningContent += delta.reasoning_content;
+              }
               
               // 处理工具调用增量
               if (delta?.tool_calls) {
@@ -206,7 +200,8 @@ export class OpenAIProvider extends BaseProvider {
    */
   private emitPendingToolCalls(
     toolCallState: Map<number, { id: string; name: string; arguments: string }>,
-    cb: StreamCallbacks
+    cb: StreamCallbacks,
+    reasoningContent?: string
   ): void {
     if (toolCallState.size === 0) return;
     
@@ -229,7 +224,8 @@ export class OpenAIProvider extends BaseProvider {
             serverName,
             toolName,
             arguments: tc.arguments,
-          }
+          },
+          reasoningContent ? { reasoning_content: reasoningContent } : undefined
         );
         cb.onEvent(toolEvent);
       }

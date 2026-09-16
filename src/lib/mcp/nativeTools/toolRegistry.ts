@@ -18,6 +18,7 @@ import { SYSTEM_SERVER_NAME, SYSTEM_PROMPT_TOOLS } from './systemPrompts';
 import { SKILL_SERVER_NAME, SKILL_UNIFIED_TOOLS } from './skillUnifiedTools';
 import { CODING_PACK_SERVER_NAME, CODING_PACK_TOOLS } from './codingPack';
 import { KNOWLEDGE_SERVER_NAME, KNOWLEDGE_TOOLS } from './knowledge';
+import { INTERACTION_SERVER_NAME, INTERACTION_TOOLS } from './interaction';
 
 // ============ 工具组定义 ============
 
@@ -65,6 +66,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       ...CORE_FS_TOOLS.map(t => ({ server: FILESYSTEM_SERVER_NAME, tool: t })),
       ...CORE_SHELL_TOOLS.map(t => ({ server: SHELL_EXECUTOR_SERVER_NAME, tool: t })),
       ...CORE_WEB_TOOLS.map(t => ({ server: WEB_SEARCH_SERVER_NAME, tool: t })),
+      ...INTERACTION_TOOLS.map(t => ({ server: INTERACTION_SERVER_NAME, tool: t })),
     ],
   },
   {
@@ -168,9 +170,26 @@ export const TOOLS_LOAD_TOOL: McpTool = {
   },
 };
 
+export const TOOLS_SEARCH_TOOL: McpTool = {
+  name: 'search',
+  description: 'Search the complete tool catalog by name or description. Results can be loaded for the next model step.',
+  input_schema: {
+    schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Tool or capability keywords.' },
+        cursor: { type: 'number', description: 'Zero-based result offset.' },
+        limit: { type: 'number', description: 'Maximum results (default 20, max 50).' },
+      },
+      required: ['query'],
+    },
+  },
+};
+
 export const TOOLS_REGISTRY_TOOLS: McpTool[] = [
   TOOLS_DISCOVER_TOOL,
   TOOLS_LOAD_TOOL,
+  TOOLS_SEARCH_TOOL,
 ];
 
 // ============ 意图检测 ============

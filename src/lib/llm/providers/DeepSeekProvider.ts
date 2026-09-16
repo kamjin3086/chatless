@@ -3,6 +3,9 @@ import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
+import { createStreamEvent } from '../types/stream-events';
+import { toOpenAIMessage } from './messageMapping';
+import { toOpenAITools, toOpenAIToolChoice, type ToolDefinition } from '../types/tool-schema';
 
 /**
  * DeepSeek（深度寻求）模型服务 Provider
@@ -43,7 +46,7 @@ export class DeepSeekProvider extends BaseProvider {
     const url = `${this.baseUrl.replace(/\/$/, '')}/chat/completions`;
 
     // 过滤扩展字段，避免把 mcpServers/extensions 传入
-    const { extensions, mcpServers, ...restOpts } = (opts as any) || {};
+    const { extensions, mcpServers, tools: toolDefs, toolChoice, parallelToolCalls, ...restOpts } = (opts as any) || {};
     const mapped: any = { ...restOpts };
     if (opts.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxTokens;
     if (opts.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxOutputTokens;
@@ -57,20 +60,14 @@ export class DeepSeekProvider extends BaseProvider {
     const body = {
       model,
       stream: true,
-      messages: messages.map((m) => {
-        const anyMsg: any = m as any;
-        const msg: any = { role: m.role, content: m.content };
-        if (m.role === 'tool') {
-          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
-          if (anyMsg.name) msg.name = anyMsg.name;
-        }
-        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
-          msg.tool_calls = anyMsg.tool_calls;
-        }
-        return msg;
-      }),
+      messages: messages.map(toOpenAIMessage),
       ...mapped,
     };
+    if (Array.isArray(toolDefs) && toolDefs.length > 0) {
+      (body as any).tools = toOpenAITools(toolDefs as ToolDefinition[]);
+      if (toolChoice) (body as any).tool_choice = toOpenAIToolChoice(toolChoice);
+      if (parallelToolCalls !== undefined) (body as any).parallel_tool_calls = parallelToolCalls;
+    }
 
     // 准备请求头
     const headers: Record<string, string> = {
@@ -89,6 +86,8 @@ export class DeepSeekProvider extends BaseProvider {
 
     // 重置策略状态
     this.thinkingStrategy.reset();
+    const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
+    let reasoningContent = '';
     
     try {
       await this.sseClient.startConnection(
@@ -108,6 +107,7 @@ export class DeepSeekProvider extends BaseProvider {
 
             // DeepSeek 与 OpenAI 一样, 以 "[DONE]" 结束
             if (rawData.trim() === '[DONE]') {
+              this.emitPendingToolCalls(toolCallState, reasoningContent, cb);
               const result = this.thinkingStrategy.processToken({ done: true });
               // Native-only Agent：必须使用结构化事件（onEvent），不允许降级回文本
               if (!cb.onEvent) {
@@ -125,8 +125,24 @@ export class DeepSeekProvider extends BaseProvider {
 
             try {
               const json = JSON.parse(rawData);
-              const token = json?.choices?.[0]?.delta?.content;
-              const reasoningToken = json?.choices?.[0]?.delta?.reasoning_content;
+              const delta = json?.choices?.[0]?.delta || {};
+              const token = delta?.content;
+              const reasoningToken = delta?.reasoning_content;
+              if (typeof reasoningToken === 'string') reasoningContent += reasoningToken;
+              if (Array.isArray(delta?.tool_calls)) {
+                for (const tc of delta.tool_calls) {
+                  const index = tc.index ?? 0;
+                  const state = toolCallState.get(index) || {
+                    id: tc.id || `call_${index}`,
+                    name: tc.function?.name || '',
+                    arguments: tc.function?.arguments || '',
+                  };
+                  if (tc.id) state.id = tc.id;
+                  if (tc.function?.name) state.name += tc.function.name;
+                  if (tc.function?.arguments) state.arguments += tc.function.arguments;
+                  toolCallState.set(index, state);
+                }
+              }
               
               // 直接传递原始字段给Strategy，让Strategy自己处理
               // 新架构的DeepSeekReasoningStrategy会正确识别reasoning_content字段
@@ -143,6 +159,10 @@ export class DeepSeekProvider extends BaseProvider {
                 if (result.events && result.events.length > 0) {
                   result.events.forEach(event => cb.onEvent!(event));
                 }
+              }
+              if (json?.choices?.[0]?.finish_reason) {
+                this.emitPendingToolCalls(toolCallState, reasoningContent, cb);
+                toolCallState.clear();
               }
             } catch (err) {
               console.warn('[DeepSeekProvider] Failed to parse SSE chunk:', err);
@@ -173,5 +193,23 @@ export class DeepSeekProvider extends BaseProvider {
    */
   cancelStream(): void {
     this.sseClient.stopConnection();
+  }
+
+  private emitPendingToolCalls(
+    state: Map<number, { id: string; name: string; arguments: string }>,
+    reasoningContent: string,
+    cb: StreamCallbacks,
+  ): void {
+    if (!cb.onEvent) return;
+    const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
+    for (const [, tc] of state) {
+      if (!tc.name) continue;
+      const normalized = normalizeToolCallServerAndTool({ serverName: 'default', toolName: tc.name });
+      cb.onEvent(createStreamEvent.toolCall(tc.id, {
+        serverName: normalized.serverName,
+        toolName: normalized.toolName,
+        arguments: tc.arguments,
+      }, reasoningContent ? { reasoning_content: reasoningContent } : undefined));
+    }
   }
 }

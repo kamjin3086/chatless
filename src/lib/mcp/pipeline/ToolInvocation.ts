@@ -13,6 +13,8 @@ export type ToolInvocationParams = {
   callId?: string;
   cardId?: string;
   lockKey?: string;
+  providerData?: Record<string, unknown>;
+  planOnly?: boolean;
 };
 
 function stableStringify(value: unknown): string {
@@ -126,6 +128,8 @@ export class ToolInvocation {
   readonly originalUserContent: string;
   readonly callId?: string;
   readonly lockKey?: string;
+  readonly providerData?: Record<string, unknown>;
+  readonly planOnly: boolean;
 
   cardId?: string;
 
@@ -142,6 +146,8 @@ export class ToolInvocation {
     this.callId = params.callId;
     this.cardId = params.cardId;
     this.lockKey = params.lockKey;
+    this.providerData = params.providerData;
+    this.planOnly = Boolean(params.planOnly);
   }
 
   ensureCardId(): string {

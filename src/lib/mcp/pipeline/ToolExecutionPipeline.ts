@@ -143,6 +143,20 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
   return !autoAuth;
 }
 
+function isPlanOnlyAllowed(server: string, tool: string): boolean {
+  const srv = normalizeServerName(server).toLowerCase();
+  const tl = String(tool || '').toLowerCase();
+  if (srv === 'interaction') return tl === 'ask_user' || tl === 'update_plan';
+  if (isFilesystemServer(srv)) return /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(tl);
+  if (srv === 'knowledge') return /^(list|search|read)$/.test(tl);
+  if (srv === 'web_search' || srv === 'web') return /^(search|fetch)$/.test(tl);
+  if (srv === 'tools') return tl === 'discover' || tl === 'search';
+  if (srv === 'ctx') return tl === 'get';
+  if (srv === 'skill') return /^(list|guide|use|read_file|list_files|check_deps)$/.test(tl);
+  if (srv === 'system') return /^(list_prompts|get_prompt)$/.test(tl);
+  return false;
+}
+
 function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
   const tl = String(tool || '').toLowerCase();
   if (tl === 'delete_file' || tl === 'delete' || tl === 'rm') return 'delete';
@@ -213,6 +227,21 @@ export class ToolExecutionPipeline {
       markError({ assistantMessageId, server, tool, cardId }, msg);
       this.coordinator.markToolCallComplete(callKey, 'failed');
       return { error: 'NO_ADAPTER', message: msg };
+    }
+
+    if (invocation.planOnly && !isPlanOnlyAllowed(server, tool)) {
+      const blocked = {
+        ok: false,
+        error: {
+          code: 'PLAN_ONLY_BLOCKED',
+          message: `计划模式禁止执行有副作用的工具: ${server}.${tool}`,
+          server,
+          tool,
+        },
+      };
+      markError({ assistantMessageId, server, tool, cardId }, blocked.error.message);
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      return blocked;
     }
 
     // 预加载：shell 授权记忆（用于 needsAuthorization 的同步判断）
@@ -299,6 +328,8 @@ export class ToolExecutionPipeline {
           callId: invocation.callId,
           cardId,
           lockKey: invocation.lockKey,
+          providerData: invocation.providerData,
+          planOnly: invocation.planOnly,
         });
       } catch {
         // ignore: best-effort（解析失败则保持原参数，让后续校验/授权处理）
@@ -625,7 +656,18 @@ export class ToolExecutionPipeline {
     }
 
     const cfg = await getAgentExperienceConfig();
-    const maxRetries = typeof cfg.maxToolRetries === 'number' ? Math.max(0, Math.min(5, cfg.maxToolRetries)) : 0;
+    const srvForRetry = normalizeServerName(server).toLowerCase();
+    const toolForRetry = String(tool || '').toLowerCase();
+    const isReadOnlyRetry =
+      (isFilesystemServer(srvForRetry) && /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(toolForRetry)) ||
+      (srvForRetry === 'knowledge' && /^(list|search|read)$/.test(toolForRetry)) ||
+      (srvForRetry === 'web_search' && /^(search|fetch)$/.test(toolForRetry)) ||
+      (srvForRetry === 'tools' && toolForRetry === 'discover');
+    // A timeout after a write, shell command, or unknown MCP operation does not
+    // tell us whether the side effect happened. Never replay those calls.
+    const maxRetries = isReadOnlyRetry && typeof cfg.maxToolRetries === 'number'
+      ? Math.max(0, Math.min(5, cfg.maxToolRetries))
+      : 0;
 
     const toolId = { server, tool };
 
@@ -740,7 +782,7 @@ export class ToolExecutionPipeline {
           hints,
           // 新增：结构化错误（便于 UI/模型直接读懂）
           errorDetails: {
-            code: 'TOOL_EXEC_FAILED',
+            code: isReadOnlyRetry ? 'TOOL_EXEC_FAILED' : 'TOOL_RESULT_UNKNOWN',
             message: lastErr,
             hints,
             attempts: attempt + 1,
@@ -748,6 +790,7 @@ export class ToolExecutionPipeline {
             server,
             tool,
           },
+          resultStatus: isReadOnlyRetry ? 'failed' : 'unknown',
         };
         markError({ assistantMessageId, server, tool, cardId }, lastErr);
         try {

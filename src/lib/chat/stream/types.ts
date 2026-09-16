@@ -11,6 +11,8 @@ export type OnToolCall = (params: {
   callId?: string;
   cardId: string;
   lockKey: string;
+  /** Provider opaque fields (reasoning/signatures) required for replay. */
+  providerData?: Record<string, unknown>;
   /** 若提供，则表示无需真正执行工具，直接把该结果交给上层 AgentLoop 处理 */
   preResult?: unknown;
 }) => Promise<void> | void;

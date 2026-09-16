@@ -9,6 +9,7 @@ import { UserFsAdapter } from './UserFsAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
 import { CodingPackAdapter } from './CodingPackAdapter';
 import { KnowledgeAdapter } from './KnowledgeAdapter';
+import { InteractionAdapter } from './InteractionAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 
 /**
@@ -30,6 +31,7 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new ShellExecutorAdapter(),
     new CodingPackAdapter(),
     new KnowledgeAdapter(),
+    new InteractionAdapter(),
     new SystemToolAdapter(),
     new McpAdapter(),
   ];
@@ -46,10 +48,10 @@ export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
 export { CodingPackAdapter } from './CodingPackAdapter';
 export { KnowledgeAdapter } from './KnowledgeAdapter';
+export { InteractionAdapter } from './InteractionAdapter';
 
 // 保留旧导出以兼容可能的外部引用（标记为 deprecated）
 /** @deprecated 使用 SkillUnifiedAdapter 代替 */
 export { SkillUnifiedAdapter as SkillsToolAdapter } from './SkillUnifiedAdapter';
 /** @deprecated 使用 SkillUnifiedAdapter 代替 */
 export { SkillUnifiedAdapter as SkillsFsAdapter } from './SkillUnifiedAdapter';
-

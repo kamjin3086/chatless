@@ -274,6 +274,14 @@ export const PROVIDER_CONFIGS: Record<string, ProviderToolCallConfig> = {
  * pattern 使用正则表达式匹配模型名称
  */
 export const MODEL_CONFIGS: ModelToolCallConfig[] = [
+  // Verified local OpenAI-compatible endpoint.  Capability is tied to the
+  // model contract, not the display name of a provider such as "homelab".
+  {
+    pattern: '^qwen3\\.8[-_]?flash[-_]?next',
+    capability: 'native',
+    overrideProvider: true,
+    note: 'Qwen3.8 Flash Next 原生工具调用已通过 OpenAI-compatible 契约验证',
+  },
   // ========== GPT-OSS / Harmony 格式模型 ==========
   // GPT-OSS 使用 OpenAI Harmony 格式，不支持原生 OpenAI 工具调用 API
   // 参考: https://github.com/openai/harmony

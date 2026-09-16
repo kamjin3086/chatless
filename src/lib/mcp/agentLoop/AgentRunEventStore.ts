@@ -2,7 +2,7 @@ import type { ConversationEvent } from '@/lib/mcp/pipeline/context/ConversationE
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import { generateId } from '@/lib/utils/id';
 
-export type AgentRunStatus = 'running' | 'completed' | 'cancelled' | 'failed';
+export type AgentRunStatus = 'running' | 'waiting_input' | 'waiting_approval' | 'paused' | 'completed' | 'cancelled' | 'failed' | 'interrupted';
 
 export class AgentRunEventStore {
   private static async db() {
@@ -34,6 +34,44 @@ export class AgentRunEventStore {
       `UPDATE agent_runs SET status = ?, ended_at = COALESCE(?, ended_at) WHERE id = ?`,
       [status, endedAt, runId],
     );
+  }
+
+  static async getRunStatus(runId: string): Promise<AgentRunStatus | undefined> {
+    const db = await this.db();
+    const rows = await db.select<{ status: AgentRunStatus }>(
+      `SELECT status FROM agent_runs WHERE id = ? LIMIT 1`,
+      [runId],
+    );
+    return rows[0]?.status;
+  }
+
+  static async saveCheckpoint(params: {
+    runId: string;
+    seq: number;
+    kind: string;
+    payload: unknown;
+  }): Promise<void> {
+    const db = await this.db();
+    await db.execute(
+      `INSERT OR REPLACE INTO agent_run_checkpoints (id, run_id, seq, kind, payload, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [generateId(), params.runId, params.seq, params.kind, JSON.stringify(params.payload), Date.now()],
+    );
+  }
+
+  static async loadLatestCheckpoint(runId: string): Promise<{ seq: number; kind: string; payload: unknown } | null> {
+    const db = await this.db();
+    const rows = await db.select<{ seq: number; kind: string; payload: string }>(
+      `SELECT seq, kind, payload FROM agent_run_checkpoints WHERE run_id = ? ORDER BY seq DESC LIMIT 1`,
+      [runId],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    try {
+      return { seq: row.seq, kind: row.kind, payload: JSON.parse(row.payload) };
+    } catch {
+      return { seq: row.seq, kind: row.kind, payload: row.payload };
+    }
   }
 
   static async appendEvent(params: {
@@ -93,7 +131,7 @@ export class AgentRunEventStore {
     }
   }
 
-  /** 应用启动时：将所有遗留 running run 标记为 cancelled */
+  /** 应用启动时：保留运行记录并标记为可继续的 interrupted。 */
   static async markAllStaleRunsCancelled(): Promise<string[]> {
     const db = await this.db();
     const rows = await db.select<{ id: string; conversation_id: string; assistant_message_id: string }>(
@@ -102,7 +140,7 @@ export class AgentRunEventStore {
     if (rows.length === 0) return [];
     const now = Date.now();
     await db.execute(
-      `UPDATE agent_runs SET status = 'cancelled', ended_at = ? WHERE status = 'running'`,
+      `UPDATE agent_runs SET status = 'interrupted', ended_at = ? WHERE status = 'running'`,
       [now],
     );
     for (const row of rows) {
@@ -114,7 +152,7 @@ export class AgentRunEventStore {
   static async getCancelledAssistantMessageIds(conversationId: string): Promise<Set<string>> {
     const db = await this.db();
     const rows = await db.select<{ assistant_message_id: string }>(
-      `SELECT assistant_message_id FROM agent_runs WHERE conversation_id = ? AND status = 'cancelled'`,
+      `SELECT assistant_message_id FROM agent_runs WHERE conversation_id = ? AND status IN ('cancelled', 'interrupted')`,
       [conversationId],
     );
     return new Set(rows.map((r) => r.assistant_message_id));

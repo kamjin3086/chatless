@@ -99,6 +99,8 @@ export interface ToolCallRequest {
     name: string;
     arguments: string;
   };
+  /** Provider-specific opaque data that must round-trip across tool turns. */
+  providerData?: unknown;
 }
 
 /**

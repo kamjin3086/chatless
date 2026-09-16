@@ -101,12 +101,35 @@ export class AnthropicProvider extends BaseProvider {
     if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;
     if (o.minP !== undefined && mapped.min_p === undefined) mapped.min_p = o.minP;
 
+    const systemMessages = messages.filter((m) => m.role === 'system' || m.role === 'developer');
+    const anthropicMessages = messages
+      .filter((m) => m.role !== 'system' && m.role !== 'developer')
+      .map((m: any) => {
+        if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+          const content: any[] = [];
+          if (m.content) content.push({ type: 'text', text: m.content });
+          for (const call of m.tool_calls) {
+            let input: unknown = {};
+            try { input = JSON.parse(call.function?.arguments || '{}'); } catch { /* keep empty object */ }
+            content.push({ type: 'tool_use', id: call.id, name: call.function?.name, input });
+          }
+          return { role: 'assistant', content };
+        }
+        if (m.role === 'tool') {
+          return {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content || '' }],
+          };
+        }
+        return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content || '' };
+      });
     const body: Record<string, unknown> = {
       model,
-      messages,
+      messages: anthropicMessages,
       stream: true,
       ...mapped,
     };
+    if (systemMessages.length) body.system = systemMessages.map((m) => m.content).join('\n\n');
     
     // 添加原生工具调用支持（如果提供了工具定义）
     if (toolDefs && Array.isArray(toolDefs) && toolDefs.length > 0) {
