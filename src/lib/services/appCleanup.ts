@@ -82,7 +82,7 @@ export class AppCleanupService {
   }
 
   /**
-   * 设置窗口关闭事件监听
+   * 设置窗口关闭与最小化事件监听
    */
   async setupWindowCloseListener(): Promise<void> {
     if (typeof window === 'undefined') return;
@@ -93,37 +93,59 @@ export class AppCleanupService {
       const currentWindow = getCurrentWindow();
 
       await currentWindow.onCloseRequested(async (event) => {
-        // 检查是否启用确认对话框
         const { useUiPreferences } = await import('@/store/uiPreferences');
+        const { useLocaleStore } = await import('@/store/localeStore');
         const uiPreferences = useUiPreferences.getState();
+        const t = useLocaleStore.getState().t;
         
         if (uiPreferences.showCloseConfirmation) {
-          // 显示确认对话框
-          const confirmed = await confirm('确定要关闭应用吗？', {
-            title: '确认关闭'
+          const confirmed = await confirm(t('dialog.closeApp.message'), {
+            title: t('dialog.closeApp.title'),
           });
 
           if (!confirmed) {
-            // 用户取消关闭，阻止窗口关闭
             event.preventDefault();
             return;
           }
         }
 
-        // 退出前显式保存窗口状态
         try {
-          const { saveWindowState, StateFlags } = await import('@tauri-apps/plugin-window-state');
-          await saveWindowState(StateFlags.ALL);
+          const { savePersistedWindowState } = await import('@/lib/window/windowState');
+          await savePersistedWindowState();
         } catch (error) {
           console.warn('⚠️ 保存窗口状态失败（onCloseRequested）:', error);
         }
 
-        // 用户确认关闭或设置中禁用了确认对话框，执行清理操作
         await this.cleanup();
       });
+
+      await this.setupMinimizeToTrayListener(currentWindow);
     } catch (error) {
       console.warn('⚠️ 设置窗口关闭监听器失败:', error);
       this.setupFallbackCloseListener();
+    }
+  }
+
+  /**
+   * 原生最小化按钮 → 隐藏到系统托盘
+   */
+  private async setupMinimizeToTrayListener(currentWindow: import('@tauri-apps/api/window').Window): Promise<void> {
+    try {
+      await currentWindow.onResized(async () => {
+        const { useUiPreferences } = await import('@/store/uiPreferences');
+        if (!useUiPreferences.getState().minimizeToTray) return;
+
+        try {
+          const minimized = await currentWindow.isMinimized();
+          if (minimized) {
+            await currentWindow.hide();
+          }
+        } catch (error) {
+          console.warn('⚠️ 最小化到托盘失败:', error);
+        }
+      });
+    } catch (error) {
+      console.warn('⚠️ 设置最小化到托盘监听器失败:', error);
     }
   }
 
@@ -138,8 +160,8 @@ export class AppCleanupService {
       setTimeout(() => {
         void (async () => {
           try {
-            const { saveWindowState, StateFlags } = await import('@tauri-apps/plugin-window-state');
-            await saveWindowState(StateFlags.ALL);
+            const { savePersistedWindowState } = await import('@/lib/window/windowState');
+            await savePersistedWindowState();
           } catch (error) {
             console.warn('⚠️ 保存窗口状态失败（beforeunload）:', error);
           }

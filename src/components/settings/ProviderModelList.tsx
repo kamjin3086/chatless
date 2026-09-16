@@ -2,9 +2,8 @@
 import React from "react";
 import type { ModelMetadata } from "@/lib/metadata/types";
 import type { ProviderWithStatus } from "@/hooks/useProviderManagement";
-import { Input } from "@/components/ui/input";
 import { ProviderAddModelDialog } from "./ProviderAddModelDialog";
-import { Brain, Workflow, Camera, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { Brain, Workflow, Camera, ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
 import { getModelCapabilities } from "@/lib/provider/staticModels";
 import { ProviderModelItem } from "./ProviderModelItem";
 import { toast } from "@/components/ui/sonner";
@@ -12,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { StrategyValue } from "@/lib/provider/strategyInference";
+import { isNoKeyProvider, NO_KEY_MODEL_REFRESH_MIN_INTERVAL_MS } from "@/lib/provider/modelFetchPolicy";
 
 interface ProviderModelListProps {
   provider: ProviderWithStatus;
@@ -33,22 +33,8 @@ export function ProviderModelList(props: ProviderModelListProps) {
     onModelApiKeyChange, onModelApiKeyBlur, onOpenParameters,
   } = props;
 
-  // 搜索框展开状态
-  const [searchOpen, setSearchOpen] = React.useState(false);
-  const searchWrapRef = React.useRef<HTMLDivElement | null>(null);
-
-  // 点击外部关闭搜索框
-  React.useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (searchOpen && searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
-        setSearchOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [searchOpen]);
-
   const rootRef = React.useRef<HTMLDivElement | null>(null);
+
   const getScroller = () => {
     let node: HTMLElement | null = rootRef.current;
     while (node) {
@@ -146,7 +132,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
       const prevMinH = root ? root.style.minHeight : '';
       if (root) root.style.minHeight = `${root.offsetHeight}px`;
       const { providerModelService } = await import('@/lib/provider/services/ProviderModelService');
-      await providerModelService.fetchIfNeeded(provider.name);
+      await providerModelService.fetchIfNeeded(provider.name, { force: true });
       const { modelRepository } = await import('@/lib/provider/ModelRepository');
       const latest = await modelRepository.get(provider.name);
       toast.success('已刷新模型列表', { description: `${latest?.length || 0} 个模型` });
@@ -161,6 +147,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
   };
 
   // 载入策略覆盖，用于回显
+  const modelIdsKey = modelsForDisplay.map((m) => m.name).join('\n');
   React.useEffect(() => {
     (async () => {
       try {
@@ -172,7 +159,24 @@ export function ProviderModelList(props: ProviderModelListProps) {
         setStrategyMap(map);
       } catch (e) { console.warn(e); }
     })();
-  }, [provider.name, modelsForDisplay]);
+    // modelsForDisplay 用 id 签名，避免同列表新数组引用导致整表重刷
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider.name, modelIdsKey]);
+
+  // 免密（本地）Provider：展开模型列表时静默拉取，2 分钟内不重复
+  React.useEffect(() => {
+    if (!isNoKeyProvider(provider)) return;
+    void (async () => {
+      try {
+        const { providerModelService } = await import('@/lib/provider/services/ProviderModelService');
+        await providerModelService.fetchIfNeeded(provider.name, {
+          minIntervalMs: NO_KEY_MODEL_REFRESH_MIN_INTERVAL_MS,
+        });
+      } catch (e) {
+        console.debug('auto refresh no-key models skipped', e);
+      }
+    })();
+  }, [provider.name, provider.requiresApiKey]);
 
   const renderItem = (model: ModelMetadata) => (
     <div key={model.name} className="flex items-center gap-2 w-full">
@@ -226,13 +230,55 @@ export function ProviderModelList(props: ProviderModelListProps) {
   const [filterThinking, setFilterThinking] = React.useState(false);
   const [filterTools, setFilterTools] = React.useState(false);
   const [filterVision, setFilterVision] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const searchRef = React.useRef<HTMLInputElement | null>(null);
+  const listAreaRef = React.useRef<HTMLDivElement | null>(null);
+  const listContentRef = React.useRef<HTMLDivElement | null>(null);
+  const searchVisible = searchOpen || !!modelSearch.trim();
 
-  // —— 分页 ——
-  const PAGE_SIZE = 12; // 一页更少条目，避免内部滚动条，滚动交给页面
+  const [pageSize, setPageSize] = React.useState(12);
   const [page, setPage] = React.useState(1);
 
-  // 仅在筛选条件变化时重置分页，刷新模型列表时保持当前页，避免视觉跳动
-  React.useEffect(() => { setPage(1); }, [modelSearch, filterThinking, filterTools, filterVision]);
+  React.useEffect(() => {
+    if (searchVisible) searchRef.current?.focus();
+  }, [searchVisible]);
+
+  React.useEffect(() => {
+    const root = rootRef.current;
+    const area = listAreaRef.current;
+    if ((!root && !area) || typeof ResizeObserver === "undefined") return;
+    let raf = 0;
+    const measure = () => {
+      const areaEl = listAreaRef.current;
+      const rootEl = rootRef.current;
+      const contentH = listContentRef.current?.offsetHeight ?? 0;
+      let h = areaEl?.clientHeight ?? 0;
+      // 列表区域若跟着内容收缩，改用根容器剩余高度，避免每页被算成 3 条
+      if (rootEl) {
+        const toolbar = rootEl.firstElementChild as HTMLElement | null;
+        const fromRoot = rootEl.clientHeight - (toolbar?.offsetHeight ?? 0) - 8;
+        const collapsed = h > 0 && contentH > 0 && Math.abs(h - contentH) < 12;
+        if (fromRoot > h + 24 || collapsed) h = Math.max(h, fromRoot);
+      }
+      if (h < 80) return;
+      // 28px 分组标题 + 16px 底部留白，避免最后一条贴边
+      const next = Math.max(1, Math.min(30, Math.floor((h - 44) / 36)));
+      setPageSize((prev) => (prev === next ? prev : next));
+    };
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(measure);
+    });
+    if (area) ro.observe(area);
+    if (root) ro.observe(root);
+    measure();
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [modelsForDisplay.length]);
+
+  React.useEffect(() => { setPage(1); }, [modelSearch, filterThinking, filterTools, filterVision, provider.name]);
 
   // —— 归类 ——
   const SERIES_ORDER = [
@@ -304,86 +350,184 @@ export function ProviderModelList(props: ProviderModelListProps) {
     return ka.lower.localeCompare(kb.lower);
   };
 
+  const filtered = modelsForDisplay.filter((m) => {
+    const textOk = (m.label || m.name || '').toLowerCase().includes(modelSearch.toLowerCase());
+    if (!textOk) return false;
+    if (!filterThinking && !filterTools && !filterVision) return true;
+    const caps = getModelCapabilities(m.name);
+    if (filterThinking && !caps.supportsThinking) return false;
+    if (filterTools && !caps.supportsFunctionCalling) return false;
+    if (filterVision && !caps.supportsVision) return false;
+    return true;
+  }).sort(compareModels);
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pageItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const groups = new Map<Series, ModelMetadata[]>();
+  for (const x of pageItems) {
+    const series = detectSeries(x);
+    if (!groups.has(series)) groups.set(series, []);
+    groups.get(series)!.push(x);
+  }
+  const orderedSeries: Series[] = [...SERIES_ORDER, '未归类'];
+
+  React.useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
   return (
-    <div ref={rootRef} className="space-y-1.5">
-      {/* 紧凑工具栏 */}
-      <div className="flex items-center justify-between py-1 px-2 bg-slate-50/30 dark:bg-slate-900/10 rounded">
-        <div className="flex items-center gap-1.5">
-          {/* 能力筛选按钮组 */}
-          <div className="flex items-center gap-0.5">
-            <button 
-              type="button" 
-              onClick={()=>setFilterThinking(v=>!v)} 
-              className={`p-0.5 h-5 w-5 rounded flex items-center justify-center transition-colors ${filterThinking? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
-              title="仅显示支持思考的模型"
-            >
-              <Brain className="w-3 h-3"/>
-            </button>
-            <button 
-              type="button" 
-              onClick={()=>setFilterTools(v=>!v)} 
-              className={`p-0.5 h-5 w-5 rounded flex items-center justify-center transition-colors ${filterTools? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
-              title="仅显示支持工具调用的模型"
-            >
-              <Workflow className="w-3 h-3"/>
-            </button>
-            <button 
-              type="button" 
-              onClick={()=>setFilterVision(v=>!v)} 
-              className={`p-0.5 h-5 w-5 rounded flex items-center justify-center transition-colors ${filterVision? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`} 
-              title="仅显示支持视觉的模型"
-            >
-              <Camera className="w-3 h-3"/>
-            </button>
-          </div>
-          {/* 搜索框 */}
-          <div ref={searchWrapRef} className="h-5 flex items-center">
-            {searchOpen ? (
-              <Input 
-                value={modelSearch} 
-                onChange={(e) => setModelSearch(e.target.value)} 
-                placeholder="筛选模型" 
-                className="h-5 text-[11px] w-32 rounded border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800" 
-                autoFocus 
-              />
-            ) : (
-              <button 
-                onClick={() => setSearchOpen(true)} 
-                className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" 
-                title="筛选模型"
+    <div ref={rootRef} className="flex flex-col flex-1 min-h-0 h-full overflow-hidden gap-2">
+      <div className="flex items-center gap-2 shrink-0 min-h-8">
+        <h3 className="text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400 shrink-0">模型</h3>
+        {modelsForDisplay.length > 0 && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                className="w-6 h-6 flex items-center justify-center rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                title="上一页"
               >
-                <svg className="w-3 h-3 text-slate-500 dark:text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
-                </svg>
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
+              <span className="px-0.5 h-6 flex items-center justify-center text-xs text-slate-500 dark:text-slate-400 min-w-[36px] tabular-nums">
+                {safePage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                title="下一页"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums whitespace-nowrap">
+              {total} 个
+            </span>
+            {batchMode && isMultiStrategyProvider && (
+              (() => {
+                const ids = pageItems.map((x) => x.name);
+                const allChecked = ids.length > 0 && ids.every((id) => !!checked[id]);
+                const anyChecked = ids.some((id) => !!checked[id]);
+                const label = allChecked ? "取消本页" : (anyChecked ? "反选" : "全选本页");
+                return (
+                  <button
+                    type="button"
+                    className="px-1.5 h-6 text-[11px] rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+                    onClick={() => {
+                      if (allChecked) { setAll(ids, false); return; }
+                      setChecked((prev) => {
+                        const next: Record<string, boolean> = { ...prev };
+                        for (const id of ids) next[id] = !prev[id];
+                        return next;
+                      });
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })()
             )}
           </div>
-          {/* 刷新模型列表按钮 - 移到工具栏上方 */}
-          <button 
-            className="h-5 w-5 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 transition-colors" 
+        )}
+        {searchVisible && (
+          <div className="relative flex-1 min-w-[8rem] max-w-xs">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <input
+              ref={searchRef}
+              value={modelSearch}
+              onChange={(e) => setModelSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  if (modelSearch) setModelSearch("");
+                  else setSearchOpen(false);
+                }
+              }}
+              placeholder="筛选模型"
+              className="w-full h-8 pl-7 pr-7 text-sm rounded-lg border border-slate-200/80 dark:border-slate-700/70 bg-slate-50/80 dark:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-400/50"
+            />
+            <button
+              type="button"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-md"
+              title="关闭搜索"
+              onClick={() => {
+                setModelSearch("");
+                setSearchOpen(false);
+              }}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        <div className="ml-auto flex items-center gap-0.5 shrink-0">
+          {modelsForDisplay.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  if (searchVisible && !modelSearch.trim()) setSearchOpen(false);
+                  else setSearchOpen(true);
+                }}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${searchVisible ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                title="筛选模型"
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterThinking((v) => !v)}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterThinking ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                title="仅显示支持思考的模型"
+              >
+                <Brain className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTools((v) => !v)}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterTools ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                title="仅显示支持工具调用的模型"
+              >
+                <Workflow className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterVision((v) => !v)}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterVision ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                title="仅显示支持视觉的模型"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+          <button
+            className="h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             onClick={refreshModels}
             title="刷新模型列表"
           >
-            <RefreshCw className="w-3 h-3" />
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
-        </div>
-        <div className="flex items-center gap-1 md:flex-nowrap flex-wrap">
-          {isMultiStrategyProvider && (
-            <Button 
-              variant="outline" 
-              className="h-5 px-1.5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" 
-              onClick={()=>setBatchMode(v=>!v)}
+          {isMultiStrategyProvider && modelsForDisplay.length > 0 && (
+            <Button
+              variant="outline"
+              className="h-8 px-2.5 text-xs rounded-lg"
+              onClick={() => setBatchMode((v) => !v)}
             >
-              {batchMode? '退出' : '批量'}
+              {batchMode ? "退出批量" : "批量"}
             </Button>
           )}
           {!batchMode && !isOllama && (
-            <ProviderAddModelDialog providerName={provider.name} onAdded={() => setModelSearch('')} />
+            <ProviderAddModelDialog providerName={provider.name} onAdded={() => setModelSearch("")} />
           )}
           {isMultiStrategyProvider && batchMode && (
             <>
               <Select value={batchStrategy} onValueChange={(v:any)=>{ if (v === '__clear__') { const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void clearBatch(); } return; } if (v === '__auto__') { void applyAutoInfer(); return; } setBatchStrategy(v); const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void applyBatch(v); } }}>
-                <SelectTrigger className="w-32 h-5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder="选择策略"/></SelectTrigger>
+                <SelectTrigger className="w-32 h-8 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder="选择策略"/></SelectTrigger>
                 <SelectContent className="rounded min-w-[140px]">
                   <SelectItem value="__auto__" className="text-[11px] py-1.5">自动推断</SelectItem>
                   <SelectItem value="openai-compatible" className="text-[11px] py-1.5">OpenAI Compatible</SelectItem>
@@ -395,11 +539,11 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   <SelectItem value="__clear__" className="text-[11px] py-1.5 text-red-600">清除覆盖</SelectItem>
                 </SelectContent>
               </Select>
-              <Button className="h-5 px-1.5 text-[10px] rounded bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/40 border border-blue-200/50 dark:border-blue-800/40 transition-colors" onClick={() => applyBatch()}>应用</Button>
-              <Button variant="secondary" className="h-5 px-1.5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>清除</Button>
+              <Button variant="outline" className="h-8 px-1.5 text-[10px] rounded" onClick={() => applyBatch()}>应用</Button>
+              <Button variant="secondary" className="h-8 px-1.5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>清除</Button>
               <Button
                 variant="ghost"
-                className="h-5 px-1.5 text-[10px] rounded transition-colors"
+                className="h-8 px-1.5 text-[10px] rounded transition-colors"
                 onClick={() => {
                   const ids = modelsForDisplay.map(m => m.name);
                   const allChecked = ids.every(id => !!checked[id]);
@@ -428,138 +572,54 @@ export function ProviderModelList(props: ProviderModelListProps) {
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div ref={listAreaRef} className="flex-1 min-h-0 overflow-hidden pb-4">
         {modelsForDisplay && modelsForDisplay.length > 0 ? (
-          (() => {
-            const filtered = modelsForDisplay.filter((m) => {
-              const textOk = (m.label || m.name || '').toLowerCase().includes(modelSearch.toLowerCase());
-              if (!textOk) return false;
-              if (!filterThinking && !filterTools && !filterVision) return true;
-              const caps = getModelCapabilities(m.name);
-              if (filterThinking && !caps.supportsThinking) return false;
-              if (filterTools && !caps.supportsFunctionCalling) return false;
-              if (filterVision && !caps.supportsVision) return false;
-              return true;
-            }).sort(compareModels);
-
-            const total = filtered.length;
-            const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-            const safePage = Math.min(Math.max(1, page), totalPages);
-            const start = (safePage - 1) * PAGE_SIZE;
-            const pageItems = filtered.slice(start, start + PAGE_SIZE);
-
-            const groups = new Map<Series, ModelMetadata[]>();
-            for (const x of pageItems) {
-              const series = detectSeries(x);
-              if (!groups.has(series)) groups.set(series, []);
-              groups.get(series)!.push(x);
-            }
-
-            const orderedSeries: Series[] = [...SERIES_ORDER, '未归类'];
-
-            return (
-              <>
-                {/* 分组渲染 */}
-                {orderedSeries.map(series => {
-                  const list = groups.get(series) || [];
-                  if (list.length === 0) return null;
-                  return (
-                    <div key={series} className="mt-1">
-                      <div className="flex items-center justify-between px-2 py-1 bg-slate-50/50 dark:bg-slate-900/20 rounded-t border-x border-t border-slate-200/50 dark:border-slate-700/50">
-                        <div className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 tracking-wide">{series}</div>
-                        {batchMode && isMultiStrategyProvider ? (
-                          (() => {
-                            const groupIds = list.map(x => x.name);
-                            const allChecked = groupIds.every(id => !!checked[id]);
-                            const next = !allChecked;
-                            return (
-                              <button
-                                type="button"
-                                className="text-[9px] px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-                                onClick={() => setAll(groupIds, next)}
-                              >
-                                {allChecked ? '取消' : '全选'}
-                              </button>
-                            );
-                          })()
-                        ) : null}
-                        
-                      </div>
-                      <div className="space-y-0 border-x border-b border-slate-200/50 dark:border-slate-700/50 rounded-b p-1 bg-white/40 dark:bg-slate-900/20">
-                        {list.sort(compareModels).map(renderItem)}
-                      </div>
+          total === 0 ? (
+            <div className="px-1 py-10 text-center">
+              <p className="text-xs text-slate-400 dark:text-slate-500">没有符合筛选条件的模型</p>
+            </div>
+          ) : (
+            <div ref={listContentRef} className="space-y-2">
+              {orderedSeries.map((series) => {
+                const list = groups.get(series) || [];
+                if (list.length === 0) return null;
+                return (
+                  <div key={series}>
+                    <div className="flex items-center justify-between px-1 pb-0.5">
+                      <div className="text-xs font-medium text-slate-400 dark:text-slate-500">{series}</div>
+                      {batchMode && isMultiStrategyProvider ? (
+                        (() => {
+                          const groupIds = list.map((x) => x.name);
+                          const allChecked = groupIds.every((id) => !!checked[id]);
+                          const next = !allChecked;
+                          return (
+                            <button
+                              type="button"
+                              className="text-[11px] px-1.5 py-0.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              onClick={() => setAll(groupIds, next)}
+                            >
+                              {allChecked ? "取消" : "全选"}
+                            </button>
+                          );
+                        })()
+                      ) : null}
                     </div>
-                  );
-                })}
-                
-                {/* 分页控件 - 移到底部 */}
-                <div className="flex items-center justify-between gap-2 text-[10px] px-2 py-1 mt-1 bg-slate-50/30 dark:bg-slate-900/10 rounded">
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 dark:text-slate-400">共 {total} 个</span>
-                    {batchMode && isMultiStrategyProvider && (
-                      (() => {
-                        const ids = pageItems.map(x=>x.name);
-                        const allChecked = ids.every(id => !!checked[id]);
-                        const anyChecked = ids.some(id => !!checked[id]);
-                        const label = allChecked ? '取消本页' : (anyChecked ? '反选' : '全选本页');
-                        return (
-                          <button
-                            className="px-1.5 py-0.5 text-[9px] rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 transition-colors"
-                            onClick={()=>{
-                              if (allChecked) { setAll(ids, false); return; }
-                              setChecked(prev => {
-                                const next: Record<string, boolean> = { ...prev };
-                                for (const id of ids) next[id] = !prev[id];
-                                return next;
-                              });
-                            }}
-                          >{label}</button>
-                        );
-                      })()
-                    )}
+                    <div className="space-y-0.5">
+                      {[...list].sort(compareModels).map(renderItem)}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-0.5">
-                    <button 
-                      className="w-5 h-5 flex items-center justify-center rounded disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 transition-colors" 
-                      disabled={safePage<=1} 
-                      onClick={()=>setPage(p=>Math.max(1,p-1))}
-                      title="上一页"
-                    >
-                      <ChevronLeft className="w-3 h-3" />
-                    </button>
-                    <span className="px-1.5 h-5 flex items-center justify-center text-slate-600 dark:text-slate-400 min-w-[32px]">{safePage}/{totalPages}</span>
-                    <button 
-                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" 
-                      disabled={safePage>=totalPages} 
-                      onClick={()=>setPage(p=>Math.min(totalPages,p+1))}
-                      title="下一页"
-                    >
-                      <ChevronRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            );
-          })()
+                );
+              })}
+            </div>
+          )
         ) : (
-          (()=>{
-            const noModels = provider.models && provider.models.length === 0;
-            const connecting = provider.displayStatus === 'CONNECTING';
-            const noKey = provider.displayStatus === 'NO_KEY';
-            if (noModels && !connecting) {
-              return (
-                <div className="text-xs text-gray-500 dark:text-gray-400 py-2 pl-2 flex items-center justify-between">
-                  <span>未找到可用模型。核对提供商是否需要v1路径或使用↗菜单‘调试网络请求’功能拉取模型。</span>
-                  <button className="px-2 py-1 border rounded" onClick={refreshModels}>刷新模型</button>
-                </div>
-              );
-            }
-            return (
-              <p className="text-xs text-gray-500 dark:text-gray-400 py-2 pl-2">
-                {noModels ? '正在加载模型...' : (noKey ? '已显示已知/静态模型。配置 API 密钥后可拉取最新模型。' : '')}
-              </p>
-            );
-          })()
+          <div className="px-1 py-10 text-center">
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              {provider.displayStatus === "NO_KEY"
+                ? "填写密钥后可拉取模型，也可手动添加"
+                : "暂无模型，可刷新列表或手动添加"}
+            </p>
+          </div>
         )}
       </div>
     </div>

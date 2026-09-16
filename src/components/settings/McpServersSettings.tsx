@@ -77,7 +77,7 @@ function formatMcpConnectError(e: unknown): string {
   ) {
     return `${raw}\n请安装 Node.js（npx）或 uv（uvx）后再次刷新。`;
   }
-  return raw;
+  return raw || String(e);
 }
 
 function notifyStdioRefresh(config: McpServerConfig) {

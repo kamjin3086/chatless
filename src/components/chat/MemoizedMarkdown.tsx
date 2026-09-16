@@ -9,6 +9,7 @@ import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 // import { getThemeStyles } from '@/lib/markdown/themes';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
 import { preprocessMarkdownForSafeRender } from './markdownPreprocess';
+import { streamdownRemarkPlugins } from '@/lib/markdown/remarkPlugins';
 import { replaceAliasPathsForDisplayWithContext } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 interface MemoizedMarkdownProps {
@@ -172,7 +173,7 @@ export const MemoizedMarkdown = memo(({ content, className, sizeOverride, resolv
   return (
     <div className={cn("whitespace-normal", containerClass, className)}>
       {/* 关键：禁用 Streamdown 的交互控件/潜在 HTML 预览，确保只展示为 Markdown + 代码块，不执行/不渲染 HTML */}
-      <Streamdown components={renderers} controls={false} rehypePlugins={[]} remarkPlugins={[]}>
+      <Streamdown components={renderers} controls={false} remarkPlugins={streamdownRemarkPlugins}>
         {contentForRender}
       </Streamdown>
     </div>

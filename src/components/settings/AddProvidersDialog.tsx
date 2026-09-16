@@ -162,9 +162,14 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
     })().catch(console.error);
   }, [open]);
 
+  const LOCAL_RECOMMENDED_IDS = new Set(['lemonade', 'lmstudio', 'ollama']);
+
   const catalog = useMemo(() => {
     const k = keyword.trim().toLowerCase();
-    return AVAILABLE_PROVIDERS_CATALOG.filter((c) => c.name.toLowerCase().includes(k));
+    const filtered = AVAILABLE_PROVIDERS_CATALOG.filter((c) => c.name.toLowerCase().includes(k));
+    const local = filtered.filter((c) => LOCAL_RECOMMENDED_IDS.has(c.id));
+    const rest = filtered.filter((c) => !LOCAL_RECOMMENDED_IDS.has(c.id));
+    return { local, rest, all: filtered };
   }, [keyword]);
 
   const filteredCustoms = useMemo(() => {
@@ -454,7 +459,35 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
           <div ref={listRef} className="h-[60vh] overflow-y-auto rounded-md bg-white/70 dark:bg-gray-900/20 space-y-1.5 px-1">
             {activeTab === 'builtIn' && (
               <>
-                {catalog.map((c) => {
+                {catalog.local.length > 0 && (
+                  <>
+                    <div className="px-2 pt-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                      本地推荐
+                    </div>
+                    {catalog.local.map((c) => {
+                      const checked = visibleMap[c.name] ?? false;
+                      return (
+                        <label key={c.id} className="flex items-center gap-2.5 py-2 px-2 rounded-md hover:bg-blue-50/60 dark:hover:bg-blue-900/20 border border-blue-100/60 dark:border-blue-900/30">
+                          <Checkbox checked={checked} onCheckedChange={(v)=>toggle(c.name, !!v)} id={`chk-${c.id}`} />
+                          <ProviderIcon id={c.id} name={c.name} />
+                          <div className="flex-1 min-w-0">
+                            <label htmlFor={`chk-${c.id}`} className="font-medium truncate cursor-pointer select-none">{c.name}</label>
+                            <div className="text-xs text-gray-500 truncate">
+                              {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? '· 需要密钥' : '· 免密'}
+                            </div>
+                            {c.notes ? <div className="text-[11px] text-gray-400 truncate">{c.notes}</div> : null}
+                          </div>
+                        </label>
+                      );
+                    })}
+                    {catalog.rest.length > 0 && (
+                      <div className="px-2 pt-2 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        更多提供商
+                      </div>
+                    )}
+                  </>
+                )}
+                {catalog.rest.map((c) => {
                   const checked = visibleMap[c.name] ?? false;
                   return (
                     <label key={c.id} className="flex items-center gap-2.5 py-2 px-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/40 border border-transparent">
@@ -465,11 +498,12 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                         <div className="text-xs text-gray-500 truncate">
                           {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? '· 需要密钥' : ''}
                         </div>
+                        {c.notes ? <div className="text-[11px] text-gray-400 truncate">{c.notes}</div> : null}
                       </div>
                     </label>
                   );
                 })}
-                {catalog.length === 0 && (
+                {catalog.all.length === 0 && (
                   <div className="py-6 text-center text-sm text-gray-500">未找到匹配的提供商</div>
                 )}
               </>

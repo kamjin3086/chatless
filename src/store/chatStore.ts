@@ -5,6 +5,7 @@ import { Message, Conversation } from "@/types/chat";
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import { startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
+import { AgentRunEventStore } from '@/lib/mcp/agentLoop/AgentRunEventStore';
 
 const getDatabaseService = () => {
   const service = DatabaseService.getInstance();
@@ -194,9 +195,19 @@ export const useChatStore = create<ChatState & ChatActions>()(
           startupMonitor.endPhase('数据处理');
 
           console.debug(`🔄 [STORE] Loaded ${loadedConversations.length} conversations.`);
+
+          // 清理上次异常退出遗留的 running AgentRun，避免幽灵 loading
+          let staleAssistantIds: string[] = [];
+          try {
+            staleAssistantIds = await AgentRunEventStore.markAllStaleRunsCancelled();
+          } catch (e) {
+            console.warn('[LOAD-CONVERSATIONS] 清理遗留 AgentRun 失败:', e);
+          }
+
           set({ 
             conversations: loadedConversations, 
-            isLoadingConversations: false 
+            isLoadingConversations: false,
+            agentRuns: {},
           });
 
           if (!get().currentConversationId && loadedConversations.length > 0) {
@@ -261,6 +272,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
             return segs;
           };
 
+          const cancelledAssistantIds = await AgentRunEventStore.getCancelledAssistantMessageIds(conversationId);
+
           const processed: Message[] = messages.map((msg: any) => {
             let doc_ref = undefined;
             if (msg.document_reference) {
@@ -278,6 +291,14 @@ export const useChatStore = create<ChatState & ChatActions>()(
                 try { kb_ref = JSON.parse(msg.knowledge_base_reference); } catch { /* noop */ }
               }
             }
+            let citations_parsed = undefined;
+            if (msg.citations) {
+              if (typeof msg.citations === 'object' && Array.isArray(msg.citations)) {
+                citations_parsed = msg.citations;
+              } else if (typeof msg.citations === 'string') {
+                try { citations_parsed = JSON.parse(msg.citations); } catch { /* noop */ }
+              }
+            }
             const base: Message = {
               id: msg.id,
               conversation_id: msg.conversation_id,
@@ -289,6 +310,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
               model: msg.model || undefined,
               document_reference: doc_ref,
               knowledge_base_reference: kb_ref,
+              citations: citations_parsed,
               context_data: msg.context_data || undefined,
               thinking_start_time: msg.thinking_start_time,
               thinking_duration: msg.thinking_duration,
@@ -310,8 +332,64 @@ export const useChatStore = create<ChatState & ChatActions>()(
                 (base as any).segments_vm = { items: segs.map((s:any)=>({ ...s })), flags: { isThinking: false, isComplete: true, hasToolCalls: true } };
               }
             } catch { /* noop */ }
+            // 若 AgentRun 已 cancelled 但消息仍为 loading，修正状态
+            if (
+              base.role === 'assistant' &&
+              base.status === 'loading' &&
+              cancelledAssistantIds.has(base.id)
+            ) {
+              base.status = 'aborted' as any;
+            }
             return base;
           });
+
+          // Citation rows are snapshots, so they remain renderable after the
+          // source document changes or is removed. Re-check the current
+          // hashes when a conversation is restored and mark only affected
+          // citations as stale; the saved quote/locator is left untouched.
+          try {
+            const citationDocIds = Array.from(new Set(
+              processed.flatMap((message) => (message.citations || [])
+                .map((citation: any) => String(citation?.documentId || '').trim())
+                .filter(Boolean)),
+            ));
+            if (citationDocIds.length) {
+              const placeholders = citationDocIds.map(() => '?').join(',');
+              const rows = await dbService.getDbManager().select<{ id: string; file_hash?: string }>(
+                `SELECT id, file_hash FROM documents WHERE id IN (${placeholders})`,
+                citationDocIds,
+              );
+              const currentHashes = new Map((rows || []).map((row) => [String(row.id), String(row.file_hash || '')]));
+              const attachmentStore = await import('@/store/conversationAttachmentStore');
+              const sessionDocuments = attachmentStore.useConversationAttachmentStore
+                .getState().getSessionDocuments(conversationId);
+              for (const message of processed) {
+                if (!message.citations?.length) continue;
+                for (const citation of message.citations as any[]) {
+                  const snapshotHash = String(citation?.documentHash || '').trim();
+                  if (!snapshotHash) continue;
+                  const currentHash = currentHashes.get(String(citation.documentId));
+                  const sessionDocument = sessionDocuments.find((doc) => doc.id === citation.documentId);
+                  const availableHash = currentHash || sessionDocument?.documentHash;
+                  citation.stale = !availableHash || availableHash !== snapshotHash;
+                }
+              }
+            }
+          } catch (citationError) {
+            console.warn('[STORE] citation freshness check failed:', citationError);
+          }
+
+          // 持久化修正后的 cancelled 状态
+          const messageRepoForFix = dbService.getMessageRepository();
+          for (const msg of processed) {
+            if (msg.role === 'assistant' && msg.status === 'aborted' && cancelledAssistantIds.has(msg.id)) {
+              try {
+                await messageRepoForFix.updateMessage(msg.id, { status: 'aborted' });
+              } catch {
+                // best-effort
+              }
+            }
+          }
 
           set(state => {
             const target = state.conversations.find(c => c.id === conversationId);
@@ -971,6 +1049,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
           }
           if ('knowledge_base_reference' in dbUpdates && dbUpdates.knowledge_base_reference) {
             dbUpdates.knowledge_base_reference = JSON.stringify(dbUpdates.knowledge_base_reference);
+          }
+          if ('citations' in dbUpdates) {
+            dbUpdates.citations = dbUpdates.citations ? JSON.stringify(dbUpdates.citations) : null;
           }
 
           for (let i = 0; i < MAX_RETRIES; i++) {

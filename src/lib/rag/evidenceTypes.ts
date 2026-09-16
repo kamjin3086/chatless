@@ -17,6 +17,7 @@ export interface SourceLocator {
 export interface SourceBlock {
   id: string;
   documentId: string;
+  knowledgeBaseId?: string;
   blockIndex: number;
   type: SourceBlockType;
   text: string;

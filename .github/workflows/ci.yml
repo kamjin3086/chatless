@@ -38,8 +38,7 @@ on:
 jobs:
   # 作业1：前端快速检查
   frontend-checks:
-    # if: github.event_name != 'workflow_dispatch' || (github.event.inputs.test_type == 'basic' || github.event.inputs.test_type == 'full')
-    if: false  # ✅ 暂时禁用，后续可恢复上面的 if 条件
+    if: github.event_name != 'workflow_dispatch' || (github.event.inputs.test_type == 'basic' || github.event.inputs.test_type == 'full')
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
@@ -56,16 +55,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run linting
-        run: pnpm lint
+        run: pnpm lint:ci
       - name: Type check
-        run: pnpm tsc --noEmit
-      - name: Build Frontend
-        run: pnpm build
+        run: pnpm typecheck
+      - name: Run unit tests
+        run: pnpm test
 
   # 作业2：后端快速检查 (cargo check)
   backend-check:
-    # if: github.event_name != 'workflow_dispatch' || (github.event.inputs.test_type == 'basic' || github.event.inputs.test_type == 'full')
-    if: false  # ✅ 暂时禁用，后续可恢复上面的 if 条件
+    if: github.event_name != 'workflow_dispatch' || (github.event.inputs.test_type == 'basic' || github.event.inputs.test_type == 'full')
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code

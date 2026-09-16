@@ -348,9 +348,8 @@ export const useScrollManagement = (
     };
   }, [messagesContainerRef, shouldFollowOutput]);
 
-  // 简化：直接返回计算值，不再使用基于时间的防抖
-  // 界面抖动的根本解决方案在 ChatMessage.tsx 中通过检测工具调用状态实现
-  const computedFollowOutput = shouldFollowOutput && (isLoading || contentChangeTimeoutRef.current !== null);
+  // 简化：Virtuoso 作为唯一滚动跟随控制者
+  const computedFollowOutput = shouldFollowOutput;
 
   return {
     messageRefs,

@@ -134,11 +134,13 @@ export class OllamaThinkingStrategy extends BaseStreamingStrategy {
     // 记录进入时的thinking状态
     const wasInThinkingMode = this.detectedThinkStart;
     
-    // 1. 处理thinking内容
-    if (this.shouldProcessThinking(token)) {
-      events.push(...this.processThinkingStream(token));
-      
-      // 检查是否从thinking模式退出了（找到了</think>闭合标签）
+    // 1. 处理thinking内容（仅解析一次）
+    const thinkingContent = this.extractThinkingContent(token);
+    if (thinkingContent) {
+      events.push(...this.processThinkingStream(thinkingContent));
+    }
+
+    if (thinkingContent || wasInThinkingMode || this.detectedThinkStart) {
       const exitedThinkingMode = wasInThinkingMode && !this.detectedThinkStart;
       
       if (exitedThinkingMode) {

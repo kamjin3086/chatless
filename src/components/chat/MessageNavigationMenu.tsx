@@ -79,7 +79,7 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
       align="start"
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
-      <DropdownMenuLabel>
+      <DropdownMenuLabel className="text-sm text-slate-800 dark:text-slate-100">
         <div className="flex items-center justify-between">
           <span>消息导航 ({messages.length}条)</span>
           <DropdownMenu>

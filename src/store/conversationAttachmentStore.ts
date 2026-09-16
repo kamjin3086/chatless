@@ -10,6 +10,16 @@ import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 
 type ConversationId = string;
 
+export interface SessionDocument {
+  id: string;
+  name: string;
+  fileType: string;
+  fileSize: number;
+  content: string;
+  documentHash?: string;
+  addedAt: number;
+}
+
 interface ConversationAttachmentState {
   /**
    * 会话级默认工作区（系统自动创建并注入为 @WorkDir）
@@ -24,6 +34,17 @@ interface ConversationAttachmentState {
    * - 输入框下方彩色标签条只展示这类“用户主动挂载”
    */
   mountedDirByConversation: Record<ConversationId, string | undefined>;
+
+  /** 会话挂载的知识库（Agent knowledge_* 工具注入条件） */
+  knowledgeBaseByConversation: Record<ConversationId, { id: string; name: string } | undefined>;
+  sessionDocumentsByConversation: Record<ConversationId, SessionDocument[]>;
+
+  setKnowledgeBase: (conversationId: string, kb: { id: string; name: string }) => void;
+  clearKnowledgeBase: (conversationId: string) => void;
+  getKnowledgeBase: (conversationId: string) => { id: string; name: string } | undefined;
+  setSessionDocument: (conversationId: string, document: Omit<SessionDocument, 'addedAt'>) => void;
+  clearSessionDocuments: (conversationId: string) => void;
+  getSessionDocuments: (conversationId: string) => SessionDocument[];
 
   /** 设置系统默认 @WorkDir（自动） */
   setWorkingDir: (conversationId: string, absolutePath: string) => void;
@@ -43,6 +64,58 @@ function normalizePath(p: string): string {
 export const useConversationAttachmentStore = create<ConversationAttachmentState>((set, get) => ({
   workingDirByConversation: {},
   mountedDirByConversation: {},
+  knowledgeBaseByConversation: {},
+  sessionDocumentsByConversation: {},
+
+  setKnowledgeBase: (conversationId, kb) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid || !kb?.id) return;
+    set((state) => ({
+      knowledgeBaseByConversation: { ...state.knowledgeBaseByConversation, [cid]: kb },
+    }));
+  },
+
+  clearKnowledgeBase: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return;
+    set((state) => {
+      const next = { ...state.knowledgeBaseByConversation };
+      delete next[cid];
+      return { knowledgeBaseByConversation: next };
+    });
+  },
+
+  getKnowledgeBase: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return undefined;
+    return get().knowledgeBaseByConversation[cid];
+  },
+
+  setSessionDocument: (conversationId, document) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid || !document?.id || !document.content?.trim()) return;
+    set((state) => {
+      const existing = state.sessionDocumentsByConversation[cid] || [];
+      const next = existing.filter((item) => item.id !== document.id);
+      next.push({ ...document, addedAt: Date.now() });
+      return { sessionDocumentsByConversation: { ...state.sessionDocumentsByConversation, [cid]: next.slice(-8) } };
+    });
+  },
+
+  clearSessionDocuments: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return;
+    set((state) => {
+      const next = { ...state.sessionDocumentsByConversation };
+      delete next[cid];
+      return { sessionDocumentsByConversation: next };
+    });
+  },
+
+  getSessionDocuments: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    return cid ? get().sessionDocumentsByConversation[cid] || [] : [];
+  },
 
   setWorkingDir: (conversationId, absolutePath) => {
     const cid = String(conversationId || '').trim();

@@ -1,6 +1,6 @@
 // 调试期间保留有限 console，勿全局禁用 no-console
-// NOTE: 由于在聊天流程中集成 RAG 流式逻辑，临时超出 500 行限制。
-// 后续可提取为专用 Hook 或工具文件以符合文件规模规范。
+// Chat/Agent dispatch remains here until the pending Agent UI refactor moves
+// generation orchestration into a dedicated action module.
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
@@ -13,7 +13,6 @@ import { HistoryBuilder } from '@/lib/chat/HistoryBuilder';
 import type { Message, Conversation } from "@/types/chat";
 import { exportConversationMarkdown } from '@/lib/chat/actions/download';
 // import { retryAssistantMessage } from '@/lib/chat/actions/retry';
-import { runRagFlow } from '@/lib/chat/actions/ragFlow';
 import { MessageAutoSaver } from '@/lib/chat/MessageAutoSaver';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { composeChatOptions } from '@/lib/chat/OptionComposer';
@@ -43,7 +42,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   const addMessage = useChatStore((state) => state.addMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
   const deleteMessage = useChatStore((state) => state.deleteMessage);
-  const updateMessageContentInMemory = useChatStore((state) => state.updateMessageContentInMemory);
   const updateConversation = useChatStore((state) => state.updateConversation);
   const setInputDraft = useChatStore((s)=>s.setInputDraft);
   const notifyStreamStart = useChatStore((s)=>s.notifyStreamStart);
@@ -131,7 +129,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   }, [router]);
 
   // 将错误信息压缩为短文本，避免右下角提示过长
-  // 注意：目前新架构中 onError 由 StreamOrchestrator 统一处理，此函数暂时保留供重试等场景使用
+  // onError is handled by StreamOrchestrator; this helper remains for retry
+  // and provider setup paths.
   // const _briefErrorText = useCallback((err: unknown, maxLen: number = 180): string => trimToastDescription(err, maxLen) || '', []);
 
   const checkApiKeyValidity = useCallback(async (providerName: string, modelId: string): Promise<boolean> => {
@@ -379,6 +378,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         summary: string 
       }; 
       contextData: string 
+      sourceContent?: string
     },
     knowledgeBase?: { id: string; name: string },
     options?: { conversation?: Conversation, conversationId?: string, images?: string[] }
@@ -474,6 +474,22 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       knowledge_base_reference: knowledgeBase,
       images: options?.images
     };
+    if (documentData?.sourceContent?.trim()) {
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const { sha256Hex } = await import('@/lib/utils/sha256');
+        useConversationAttachmentStore.getState().setSessionDocument(finalConversationId, {
+          id: `attachment_${finalConversationId}_${documentData.documentReference.fileName}`,
+          name: documentData.documentReference.fileName,
+          fileType: documentData.documentReference.fileType,
+          fileSize: documentData.documentReference.fileSize,
+          content: documentData.sourceContent,
+          documentHash: await sha256Hex(documentData.sourceContent),
+        });
+      } catch {
+        /* session attachment is best-effort; message context remains available */
+      }
+    }
     await addMessage(newMessage);
 
     // 标题生成改为在首次 AI 回复完成后触发，避免并发与限流压力。
@@ -521,45 +537,20 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       }
     } catch { /* 若校验不可用则继续，让 Provider 触发 onError */ }
 
-    // 如果选择了知识库且为 Chat 模式，走 RAG 流程；Agent 模式使用 knowledge_* 工具
-    const toolModeForKb = (() => {
-      try {
-        const st = useChatStore.getState() as any;
-        const conv = (st.conversations || []).find((c: any) => c && c.id === finalConversationId);
-        return ((conv?.tool_mode as ('chat' | 'agent') | undefined) || st.sessionToolMode || 'chat') as 'chat' | 'agent';
-      } catch {
-        return 'chat';
-      }
-    })();
-
-    if (knowledgeBase && finalConversationId) {
+    if (finalConversationId) {
       try {
         const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-        useConversationAttachmentStore.getState().setKnowledgeBase(finalConversationId, {
-          id: knowledgeBase.id,
-          name: knowledgeBase.name,
-        });
+        if (knowledgeBase) {
+          useConversationAttachmentStore.getState().setKnowledgeBase(finalConversationId, {
+            id: knowledgeBase.id,
+            name: knowledgeBase.name,
+          });
+        } else {
+          useConversationAttachmentStore.getState().clearKnowledgeBase(finalConversationId);
+        }
       } catch {
         /* noop */
       }
-    }
-
-    if (knowledgeBase && toolModeForKb === 'chat') {
-      const handled = await runRagFlow({
-        query: content,
-        knowledgeBaseId: knowledgeBase.id,
-        assistantMessageId,
-        thinkingStartTime: thinking_start_time,
-        conversationId: finalConversationId,
-        currentContentRef,
-        updateMessage,
-        updateMessageContentInMemory,
-        setTokenCount,
-        modelId: modelToUse,
-        provider: effectiveProvider,
-        apiKey: undefined, // API密钥会从设置中自动获取
-      });
-      if (handled) return;
     }
 
     // 构建历史消息（含系统提示词 + MCP 上下文【混合模式】）
@@ -578,13 +569,23 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     // 调试信息已移除，避免控制台噪音
 
     // agent/chat 分流：agent 使用 while(true) AgentLoop；chat 使用单轮 StreamOrchestrator
+    const hasKnowledgeSources = Boolean(
+      knowledgeBase?.id || documentData?.documentReference
+    );
     const toolModeForRun = (() => {
       try {
         const st = useChatStore.getState() as any;
         const conv = (st.conversations || []).find((c: any) => c && c.id === finalConversationId);
-        return ((conv?.tool_mode as ('chat' | 'agent') | undefined) || st.sessionToolMode || 'chat') as 'chat' | 'agent';
+        const currentMode = ((conv?.tool_mode as ('chat' | 'agent') | undefined) || st.sessionToolMode || 'chat') as 'chat' | 'agent';
+        if (hasKnowledgeSources && currentMode !== 'agent') {
+          // Route this message immediately; the UI effect persists the same
+          // mode asynchronously, so a fast send cannot enter legacy Chat mode.
+          void st.setConversationToolMode?.(finalConversationId, 'agent');
+          return 'agent';
+        }
+        return currentMode;
       } catch {
-        return 'chat';
+        return hasKnowledgeSources ? 'agent' : 'chat';
       }
     })();
 
@@ -1133,6 +1134,89 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       return;
     }
 
+    // 重试必须沿用原会话的运行模式。Agent 会话若回退到
+    // StreamOrchestrator，会跳过工具循环、范围校验和引用收尾，导致重试结果与首次回答的语义不一致。
+    const hasKnowledgeSources = Boolean(
+      (userMsg as any).knowledge_base_reference?.id || (userMsg as any).document_reference
+    );
+    const retryToolMode = (() => {
+      const mode = ((conv as any).tool_mode || (st as any).sessionToolMode || 'chat') as 'chat' | 'agent';
+      if (hasKnowledgeSources && mode !== 'agent') {
+        void (st as any).setConversationToolMode?.(conv.id, 'agent');
+        return 'agent';
+      }
+      return mode;
+    })();
+
+    if (retryToolMode === 'agent') {
+      try {
+        const modelParams = await ModelParametersService.getModelParameters(effectiveProvider, modelToUse);
+        const modelOpts = ModelParametersService.convertToChatOptions(modelParams);
+        let sessionOpts: Record<string, any> = {};
+        if (sessionParameters) {
+          sessionOpts = ModelParametersService.convertToChatOptions(sessionParameters);
+        }
+        const filteredModelOpts: Record<string, any> = { ...modelOpts };
+        const maybeDelete = (flag: boolean | undefined, key: string) => {
+          if (flag === false && key in filteredModelOpts) delete filteredModelOpts[key];
+        };
+        if (sessionParameters) {
+          const sp: any = sessionParameters;
+          maybeDelete(sp.enableTemperature, 'temperature');
+          maybeDelete(sp.enableMaxTokens, 'maxTokens');
+          maybeDelete(sp.enableTopP, 'topP');
+          maybeDelete(sp.enableTopK, 'topK');
+          maybeDelete(sp.enableMinP, 'minP');
+          maybeDelete(sp.enableFrequencyPenalty, 'frequencyPenalty');
+          maybeDelete(sp.enablePresencePenalty, 'presencePenalty');
+          maybeDelete(sp.enableStopSequences, 'stop');
+        }
+        const composed = await composeChatOptions(
+          effectiveProvider,
+          modelToUse,
+          { ...filteredModelOpts, ...sessionOpts },
+          conv.id,
+          userMsg.content,
+        );
+        try { notifyStreamStart(conv.id); } catch { /* noop */ }
+        await AgentLoopRunner.run({
+          assistantMessageId: newAssistantId,
+          conversationId: conv.id,
+          provider: effectiveProvider,
+          model: modelToUse,
+          historyForLlm: historyForLlm as any,
+          originalUserContent: userMsg.content,
+          options: composed,
+          runtimeHooks: {
+            onAgentStart: () => {
+              lastActivityTimeRef.current = Date.now();
+              setTokenCount(0);
+              batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
+            },
+            onStreamError: () => {
+              stopGenerationIdleWatch();
+            },
+            onStreamEvent: (event: any) => {
+              lastActivityTimeRef.current = Date.now();
+              const t = String(event?.type || '');
+              if (t === 'content_token' || t === 'thinking_token') {
+                batchUpdateRef.current.tokenCount += 1;
+                if (batchUpdateRef.current.tokenCount >= 10) {
+                  const delta = batchUpdateRef.current.tokenCount;
+                  batchUpdateRef.current.tokenCount = 0;
+                  setTokenCount((prev) => prev + delta);
+                }
+              }
+            },
+          },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '重试失败';
+        void updateMessage(newAssistantId, { status: 'error', content: message });
+      }
+      return;
+    }
+
     // —— 使用新架构：StreamOrchestrator（带早期抑制阀与GPT‑OSS工具指令识别） ——
     const thinking_start_time = Date.now();
     const streamInstanceId = uuidv4();
@@ -1211,7 +1295,16 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         void updateMessage(newAssistantId, { status: 'error', content: (err instanceof Error ? err.message : '重试失败') });
       }
     }
-  }, [currentConversationId, currentConversation, currentProviderName, checkApiKeyValidity, updateMessage, updateMessageContentInMemory]);
+  }, [
+    currentConversationId,
+    currentConversation,
+    currentProviderName,
+    sessionParameters,
+    notifyStreamStart,
+    stopGenerationIdleWatch,
+    checkApiKeyValidity,
+    updateMessage,
+  ]);
 
   // Placeholder handler for share（仍待实现）
   const handleShare = useCallback(() => {}, []);

@@ -11,6 +11,13 @@ import {
   RetrievedChunk
 } from './types';
 import { streamChat, chat, type Message as LLMMessage, type StreamCallbacks } from '../llm';
+import { retrieveEvidence, KnowledgeRetrievalError } from './retrieveEvidence';
+import { formatEvidenceContext } from './EvidenceBuilder';
+import { applyCitations, evidenceToRetrievedLike } from './CitationService';
+import { loadKnowledgeBaseConfig } from '../knowledgeBaseConfig';
+
+const ABSTENTION_ANSWER =
+  '根据当前知识库内容，未找到与您问题相关的依据，无法基于知识库作答。请尝试换用关键词，或确认相关文档已完成索引重建。';
 
 /**
  * RAG (Retrieval-Augmented Generation) 服务
@@ -24,9 +31,15 @@ export class RAGService {
   private config: RAGConfig;
   private isInitialized = false;
 
+  private embeddingModelName(): string {
+    return this.embeddingService.isInitialized()
+      ? this.embeddingService.getStrategyName()
+      : 'unavailable';
+  }
+
   constructor(config: RAGConfig) {
     this.config = config;
-    
+
     // 初始化各个服务组件
     this.embeddingService = new EmbeddingService({
       config: config.embedding,
@@ -62,10 +75,15 @@ export class RAGService {
 
     try {
       console.log('正在初始化RAG服务...');
-      
-      // 初始化嵌入服务
-      await this.embeddingService.initialize();
-      
+
+      // Embeddings are an optional enhancement. A missing local model or an
+      // unavailable Ollama endpoint must not disable lexical retrieval.
+      try {
+        await this.embeddingService.initialize();
+      } catch (error) {
+        console.warn('[RAG] embedding unavailable; continuing with lexical retrieval:', error);
+      }
+
       console.log('RAG服务初始化完成');
       this.isInitialized = true;
     } catch (error) {
@@ -90,81 +108,45 @@ export class RAGService {
     console.log('开始RAG查询:', params.query);
 
     try {
-      // 1. 生成查询嵌入向量
-      console.log('生成查询嵌入向量...');
-      const queryEmbedding = await this.embeddingService.generateEmbedding(params.query);
-
-      // 2. 执行向量检索
-      console.log('执行向量检索...');
-      const searchResults = await this.retrievalService.search(queryEmbedding, {
-        topK: params.topK || this.config.retrieval.defaultTopK,
-        threshold: params.similarityThreshold || this.config.retrieval.defaultSimilarityThreshold,
-        includeEmbeddings: false,
-        filter: params.knowledgeBaseIds && params.knowledgeBaseIds.length > 0 ? { knowledgeBaseId: params.knowledgeBaseIds.length === 1 ? params.knowledgeBaseIds[0] : params.knowledgeBaseIds } : undefined
-      });
-      console.log('[RAG] 原始检索结果数量:', searchResults.length);
-      if (searchResults.length > 0) {
-        console.log('[RAG] 第一个原始结果样例:', searchResults[0]);
-      }
-
-      // 转换搜索结果为检索片段格式
-      const retrievalResults = this.convertToRetrievedChunks(searchResults);
-      console.log('[RAG] 转换后的检索结果数量:', retrievalResults.length);
-      if (retrievalResults.length > 0) {
-        console.log('[RAG] 第一个结果样例:', {
-          id: retrievalResults[0].id,
-          contentLength: retrievalResults[0].content?.length || 0,
-          content: retrievalResults[0].content?.substring(0, 100) + '...',
-          score: retrievalResults[0].score,
-          knowledgeBaseName: retrievalResults[0].knowledgeBaseName
-        });
-      }
-
-      // 3. 构建上下文
-      console.log('构建上下文...');
-      // 补充知识库名称（若缺失）
-      try {
-        await this.ensureKnowledgeBaseNames(retrievalResults);
-      } catch (e) {
-        console.warn('[RAG] 知识库名称补充失败（不影响检索）:', e);
-      }
-
-      const { context, usedChunks, truncated } = this.contextBuilder.buildContext(
-        retrievalResults,
-        params.query
-      );
-      console.log('[RAG] 构建上下文完成:', {
-        contextLength: context.length,
-        usedChunksCount: usedChunks.length,
-        truncated,
-        contextPreview: context.substring(0, 200) + '...'
-      });
-
-      // 4. 生成回答
-      console.log('生成回答...');
-      const answer = await this.generateAnswer(params.query, context);
-
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-
-      // 5. 构建结果
-      const result: RAGQueryResult = {
+      const retrievalConfig = await this.resolveRetrievalConfig(params);
+      const { evidence } = await retrieveEvidence({
         query: params.query,
-        answer,
+        knowledgeBaseIds: params.knowledgeBaseIds || [],
+        embeddingService: this.embeddingService,
+        retrievalService: this.retrievalService,
+        topK: retrievalConfig.topK,
+        similarityThreshold: retrievalConfig.threshold,
+      });
+
+      if (evidence.length === 0) {
+        return this.buildAbstentionResult(params.query, startTime);
+      }
+
+      const context = formatEvidenceContext(evidence);
+      const rawAnswer = await this.generateAnswer(params.query, context, 'evidence');
+      const { displayAnswer, citations } = applyCitations(rawAnswer, evidence);
+      const usedChunks = evidenceToRetrievedLike(evidence);
+      const endTime = Date.now();
+
+      return {
+        query: params.query,
+        answer: displayAnswer,
         chunks: usedChunks,
+        evidence,
+        citations,
         metadata: {
           timestamp: startTime,
-          duration,
-          knowledgeBaseCount: this.getUniqueKnowledgeBaseCount(usedChunks),
-          totalChunks: retrievalResults.length,
+          duration: endTime - startTime,
+          knowledgeBaseCount: new Set(evidence.map((e) => e.knowledgeBaseId).filter(Boolean)).size,
+          totalChunks: evidence.length,
           llmProvider: this.config.llm?.provider,
-          embeddingModel: this.embeddingService.getStrategyName()
-        }
+          embeddingModel: this.embeddingModelName(),
+        },
       };
-
-      console.log(`RAG查询完成，耗时 ${duration}ms`);
-      return result;
     } catch (error) {
+      if (error instanceof KnowledgeRetrievalError) {
+        throw new RAGError(error.message, error.code, error);
+      }
       console.error('RAG查询失败:', error);
       throw new RAGError(
         '查询失败',
@@ -201,6 +183,46 @@ export class RAGService {
     }
   }
 
+  private buildAbstentionResult(query: string, startTime: number): RAGQueryResult {
+    return {
+      query,
+      answer: ABSTENTION_ANSWER,
+      chunks: [],
+      evidence: [],
+      citations: [],
+      metadata: {
+        timestamp: startTime,
+        duration: Date.now() - startTime,
+        knowledgeBaseCount: 0,
+        totalChunks: 0,
+        embeddingModel: this.embeddingModelName(),
+      },
+    };
+  }
+
+  private async resolveRetrievalConfig(params: RAGQueryParams): Promise<{ topK: number; threshold: number }> {
+    try {
+      const kbConfig = await loadKnowledgeBaseConfig();
+      return {
+        topK: params.topK ?? kbConfig.retrieval.topK ?? this.config.retrieval.defaultTopK,
+        threshold:
+          params.similarityThreshold ??
+          kbConfig.retrieval.similarityThreshold ??
+          this.config.retrieval.defaultSimilarityThreshold,
+      };
+    } catch {
+      return {
+        topK: params.topK ?? this.config.retrieval.defaultTopK,
+        threshold: params.similarityThreshold ?? this.config.retrieval.defaultSimilarityThreshold,
+      };
+    }
+  }
+
+  private getEvidenceSystemPrompt(): string {
+    return `你是一个知识库助手。你只能根据用户消息中提供的 Evidence 块作答。
+规则：仅使用 Evidence 原文；引用用 [[E编号]]；证据不足时明确说明无法作答。`;
+  }
+
   /**
    * 流式RAG查询
    */
@@ -212,51 +234,41 @@ export class RAGService {
     const startTime = Date.now();
 
     try {
-      // 进度报告：开始查询
       yield {
         type: 'progress',
         data: {
           status: 'embedding',
-          message: '正在生成查询嵌入向量...',
-          progress: 10,
-          currentStep: '嵌入生成',
-          totalSteps: 4,
-          completedSteps: 0
-        }
+          message: '正在检索知识库...',
+          progress: 15,
+          currentStep: '检索',
+          totalSteps: 3,
+          completedSteps: 0,
+        },
       };
 
-      // 1. 生成查询嵌入向量
-      const queryEmbedding = await this.embeddingService.generateEmbedding(params.query);
-
-      yield {
-        type: 'progress',
-        data: {
-          status: 'retrieving',
-          message: '正在检索相关知识片段...',
-          progress: 30,
-          currentStep: '向量检索',
-          totalSteps: 4,
-          completedSteps: 1
-        }
-      };
-
-      // 2. 执行向量检索
-      const searchResults = await this.retrievalService.search(queryEmbedding, {
-        topK: params.topK || this.config.retrieval.defaultTopK,
-        threshold: params.similarityThreshold || this.config.retrieval.defaultSimilarityThreshold,
-        includeEmbeddings: false,
-        filter: params.knowledgeBaseIds && params.knowledgeBaseIds.length > 0 ? { knowledgeBaseId: params.knowledgeBaseIds.length === 1 ? params.knowledgeBaseIds[0] : params.knowledgeBaseIds } : undefined
+      const retrievalConfig = await this.resolveRetrievalConfig(params);
+      const { evidence } = await retrieveEvidence({
+        query: params.query,
+        knowledgeBaseIds: params.knowledgeBaseIds || [],
+        embeddingService: this.embeddingService,
+        retrievalService: this.retrievalService,
+        topK: retrievalConfig.topK,
+        similarityThreshold: retrievalConfig.threshold,
       });
 
-      // 转换搜索结果为检索片段格式
-      const retrievalResults = this.convertToRetrievedChunks(searchResults);
+      yield { type: 'evidence', data: evidence };
 
-      // 发送检索到的片段
-      for (const chunk of retrievalResults) {
-        yield {
-          type: 'chunk',
-          data: chunk
-        };
+      if (evidence.length === 0) {
+        const abstention = this.buildAbstentionResult(params.query, startTime);
+        yield { type: 'answer', data: abstention.answer };
+        yield { type: 'complete', data: abstention };
+        return;
+      }
+
+      const context = formatEvidenceContext(evidence);
+      const usedChunks = evidenceToRetrievedLike(evidence);
+      for (const chunk of usedChunks) {
+        yield { type: 'chunk', data: chunk };
       }
 
       yield {
@@ -264,173 +276,105 @@ export class RAGService {
         data: {
           status: 'generating',
           message: '正在生成回答...',
-          progress: 70,
+          progress: 60,
           currentStep: 'LLM生成',
-          totalSteps: 4,
-          completedSteps: 2
-        }
+          totalSteps: 3,
+          completedSteps: 1,
+        },
       };
 
-      // 3. 构建上下文
-      const { context, usedChunks } = this.contextBuilder.buildContext(
-        retrievalResults,
-        params.query
-      );
+      const { systemPrompt, userPrompt } = this.promptTemplate.buildPrompt(params.query, context, 'evidence');
+      const messages: LLMMessage[] = [
+        { role: 'system', content: systemPrompt || this.getEvidenceSystemPrompt() },
+        { role: 'user', content: userPrompt },
+      ];
 
-      // 4. 生成回答（根据是否需要流式）
-      if (params.stream) {
-        // 使用流式方式生成回答
-        const messages: LLMMessage[] = [
-          {
-            role: 'system',
-            content: `你是一个知识库助手，基于提供的上下文信息回答用户问题。请确保回答准确、简洁，并且基于给定的上下文。如果上下文中没有相关信息，请明确说明。`
-          },
-          {
-            role: 'user',
-            content: this.promptTemplate.buildPrompt(params.query, context).fullPrompt
-          }
-        ];
-
-        // 队列存储实时生成的token
-        const tokenQueue: string[] = [];
-        let streamDone = false;
-        let streamError: Error | null = null;
-        let fullAnswer = '';
-
-        // 检查LLM配置
-        if (!this.config.llm?.provider || !this.config.llm?.model) {
-          throw new Error('RAG服务LLM配置缺失：请先调用updateLLMConfig设置provider和model');
-        }
-
-        // 启动流式聊天
-        streamChat(
-          this.config.llm.provider,
-          this.config.llm.model,
-          messages,
-          {
-            onStart: () => {
-              /* no-op */
-            },
-            onToken: (token: string) => {
-              tokenQueue.push(token);
-              fullAnswer += token;
-            },
-            onComplete: () => {
-              streamDone = true;
-            },
-            onError: (err: Error) => {
-              streamError = err;
-              streamDone = true;
-            }
-          },
-          {
-            temperature: this.config.llm?.temperature || 0.7,
-            apiKey: this.config.llm?.apiKey
-          }
-        ).catch((err) => {
-          // 处理初始化阶段可能抛出的同步错误
-          streamError = err instanceof Error ? err : new Error(String(err));
-          streamDone = true;
-        });
-
-        // 持续输出 tokenQueue 中的内容，直到流结束
-        while (!streamDone || tokenQueue.length > 0) {
-          if (tokenQueue.length > 0) {
-            const token = tokenQueue.shift() as string;
-            yield {
-              type: 'answer',
-              data: token
-            } as RAGStreamResponse;
-          } else {
-            // 若当前队列为空，稍作等待
-            await new Promise((resolve) => setTimeout(resolve, 20));
-          }
-        }
-
-        // 如果流式过程中出现错误，则抛出
-        if (streamError) {
-          yield {
-            type: 'error',
-            data: streamError
-          } as RAGStreamResponse;
-          return;
-        }
-
-        // 完成进度
-        yield {
-          type: 'progress',
-          data: {
-            status: 'completed',
-            message: '查询完成',
-            progress: 100,
-            currentStep: '完成',
-            totalSteps: 4,
-            completedSteps: 4
-          }
-        } as RAGStreamResponse;
-
-        // 发送最终结果
-        const endTime = Date.now();
-        const result: RAGQueryResult = {
-          query: params.query,
-          answer: fullAnswer,
-          chunks: usedChunks,
-          metadata: {
-            timestamp: startTime,
-            duration: endTime - startTime,
-            knowledgeBaseCount: this.getUniqueKnowledgeBaseCount(usedChunks),
-            totalChunks: retrievalResults.length,
-            llmProvider: this.config.llm?.provider,
-            embeddingModel: this.embeddingService.getStrategyName()
-          }
-        };
-
-        yield {
-          type: 'complete',
-          data: result
-        } as RAGStreamResponse;
-      } else {
-        // 非流式，一次性生成回答
-        const answer = await this.generateAnswer(params.query, context);
-
-        yield {
-          type: 'progress',
-          data: {
-            status: 'completed',
-            message: '查询完成',
-            progress: 100,
-            currentStep: '完成',
-            totalSteps: 4,
-            completedSteps: 4
-          }
-        } as RAGStreamResponse;
-
-        // 发送最终结果
-        const endTime = Date.now();
-        const result: RAGQueryResult = {
-          query: params.query,
-          answer,
-          chunks: usedChunks,
-          metadata: {
-            timestamp: startTime,
-            duration: endTime - startTime,
-            knowledgeBaseCount: this.getUniqueKnowledgeBaseCount(usedChunks),
-            totalChunks: retrievalResults.length,
-            llmProvider: this.config.llm?.provider,
-            embeddingModel: this.embeddingService.getStrategyName()
-          }
-        };
-
-        yield {
-          type: 'complete',
-          data: result
-        } as RAGStreamResponse;
+      if (!this.config.llm?.provider || !this.config.llm?.model) {
+        throw new Error('RAG服务LLM配置缺失');
       }
 
+      const tokenQueue: string[] = [];
+      let streamDone = false;
+      let streamError: Error | null = null;
+      let fullAnswer = '';
+
+      streamChat(
+        this.config.llm.provider,
+        this.config.llm.model,
+        messages,
+        {
+          onToken: (token: string) => {
+            tokenQueue.push(token);
+            fullAnswer += token;
+          },
+          onComplete: () => {
+            streamDone = true;
+          },
+          onError: (err: Error) => {
+            streamError = err;
+            streamDone = true;
+          },
+        },
+        {
+          temperature: this.config.llm?.temperature ?? 0.3,
+          apiKey: this.config.llm?.apiKey,
+        }
+      ).catch((err) => {
+        streamError = err instanceof Error ? err : new Error(String(err));
+        streamDone = true;
+      });
+
+      while (!streamDone || tokenQueue.length > 0) {
+        if (tokenQueue.length > 0) {
+          yield { type: 'answer', data: tokenQueue.shift() as string };
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+      }
+
+      if (streamError) {
+        yield { type: 'error', data: streamError };
+        return;
+      }
+
+      const { displayAnswer, citations } = applyCitations(fullAnswer, evidence);
+      const endTime = Date.now();
+      const result: RAGQueryResult = {
+        query: params.query,
+        answer: displayAnswer,
+        chunks: usedChunks,
+        evidence,
+        citations,
+        metadata: {
+          timestamp: startTime,
+          duration: endTime - startTime,
+          knowledgeBaseCount: new Set(evidence.map((e) => e.knowledgeBaseId).filter(Boolean)).size,
+          totalChunks: evidence.length,
+          llmProvider: this.config.llm?.provider,
+          embeddingModel: this.embeddingModelName(),
+        },
+      };
+
+      yield {
+        type: 'progress',
+        data: {
+          status: 'completed',
+          message: '查询完成',
+          progress: 100,
+          currentStep: '完成',
+          totalSteps: 3,
+          completedSteps: 3,
+        },
+      };
+      yield { type: 'complete', data: result };
     } catch (error) {
+      if (error instanceof KnowledgeRetrievalError) {
+        yield { type: 'error', data: new RAGError(error.message, error.code, error) };
+        return;
+      }
       yield {
         type: 'error',
-        data: error instanceof Error ? error : new Error(String(error))
+        data: error instanceof Error ? error : new Error(String(error)),
       };
     }
   }
@@ -438,29 +382,17 @@ export class RAGService {
   /**
    * 生成LLM回答
    */
-  private async generateAnswer(query: string, context: string): Promise<string> {
+  private async generateAnswer(query: string, context: string, templateName = 'evidence'): Promise<string> {
     // 如果没有配置LLM，返回默认回答
     if (!this.config.llm || !this.config.llm.provider || !this.config.llm.model) {
       return this.generateFallbackAnswer(context);
     }
 
     try {
-      // 构建提示词
-          const { fullPrompt } = this.promptTemplate.buildPrompt(query, context);
-      console.log('[RAG] 构建的完整提示词长度:', fullPrompt.length);
-      console.log('[RAG] 上下文长度:', context.length);
-      console.log('[RAG] 提示词预览:', fullPrompt.substring(0, 500) + '...');
-      
-      // 构建消息格式
+      const { systemPrompt, userPrompt } = this.promptTemplate.buildPrompt(query, context, templateName);
       const messages: LLMMessage[] = [
-        {
-          role: 'system',
-          content: `你是一个知识库助手，基于提供的上下文信息回答用户问题。请确保回答准确、简洁，并且基于给定的上下文。如果上下文中没有相关信息，请明确说明。`
-        },
-        {
-          role: 'user',
-          content: fullPrompt
-        }
+        { role: 'system', content: systemPrompt || this.getEvidenceSystemPrompt() },
+        { role: 'user', content: userPrompt },
       ];
 
       // 使用现有的LLM服务进行对话
@@ -486,7 +418,7 @@ export class RAGService {
    * 流式生成LLM回答
    */
   private async generateAnswerStream(
-    query: string, 
+    query: string,
     context: string,
     onToken: (token: string) => void,
     onComplete: (fullAnswer: string) => void,
@@ -508,7 +440,7 @@ export class RAGService {
     try {
       // 构建提示词
           const { fullPrompt } = this.promptTemplate.buildPrompt(query, context);
-      
+
       // 构建消息格式
       const messages: LLMMessage[] = [
         {
@@ -522,7 +454,7 @@ export class RAGService {
       ];
 
       let fullAnswer = '';
-      
+
       const callbacks: StreamCallbacks = {
         onStart: () => {
           console.log('开始生成RAG回答...');
@@ -577,7 +509,7 @@ export class RAGService {
     const lines = context.split('\n').filter(line => line.trim() !== '');
     const maxLines = 3;
     const summary = lines.slice(0, maxLines).join('\n');
-    
+
     if (lines.length > maxLines) {
       return `基于知识库内容，我找到了以下相关信息：\n\n${summary}\n\n...(还有更多相关内容)`;
     } else {
@@ -647,8 +579,16 @@ export class RAGService {
     return {
       isInitialized: this.isInitialized,
       embeddingReady: this.embeddingService.isInitialized(),
-      embeddingStrategy: this.embeddingService.getStrategyName(),
+      embeddingStrategy: this.embeddingModelName(),
     };
+  }
+
+  getEmbeddingService(): EmbeddingService {
+    return this.embeddingService;
+  }
+
+  getRetrievalServiceInstance(): RetrievalService {
+    return this.retrievalService;
   }
 
   /**
@@ -674,7 +614,7 @@ export class RAGService {
    */
   async batchQuery(queries: string[], baseParams: Omit<RAGQueryParams, 'query'>): Promise<RAGQueryResult[]> {
     const results: RAGQueryResult[] = [];
-    
+
     for (const query of queries) {
       try {
         const result = await this.query({ ...baseParams, query });
@@ -691,7 +631,7 @@ export class RAGService {
             duration: 0,
             knowledgeBaseCount: 0,
             totalChunks: 0,
-            embeddingModel: this.embeddingService.getStrategyName()
+          embeddingModel: this.embeddingModelName()
           }
         });
       }
@@ -747,4 +687,4 @@ export function createRAGService(config?: Partial<RAGConfig>): RAGService {
   const defaultConfig = createDefaultRAGConfig();
   const finalConfig = { ...defaultConfig, ...config };
   return new RAGService(finalConfig);
-} 
+}

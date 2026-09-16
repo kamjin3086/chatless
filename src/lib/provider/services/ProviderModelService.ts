@@ -8,6 +8,11 @@ import { ProviderRegistry } from "@/lib/llm";
 import { specializedStorage } from "@/lib/storage";
 import { MODEL_FETCH_RULES, type ModelFetchRule } from "@/config/modelFetchRules";
 import { tauriFetch } from "@/lib/request";
+import {
+  refreshNoKeyProviderModels,
+  shouldSkipModelFetch,
+  type FetchModelsOptions,
+} from "@/lib/provider/modelFetchPolicy";
 
 const DEFAULT_TTL = 24 * 60 * 60 * 1000;
 
@@ -81,6 +86,7 @@ function parseModelNameForSort(name: string, label?: string): {
  */
 export class ProviderModelService {
   private inflight = new Map<string, Promise<void>>();
+  private lastFetchAt = new Map<string, number>();
 
   /**
    * 拉取并写入该 provider 的模型列表。
@@ -89,12 +95,33 @@ export class ProviderModelService {
    * - 若 fetchModels 返回 null：视为暂不支持/失败，回退到“现有缓存 ∪ 静态模型”的并集；
    * - 排序与去重由本服务统一完成，策略无需关心；
    * - 保存后通过事件总线通知订阅者（provider 模型变化）。
+   * 兼容旧调用：第二个参数可以是 TTL 毫秒数，或 { ttl, force, minIntervalMs }。
    */
-  async fetchIfNeeded(name: string, ttl: number = DEFAULT_TTL): Promise<void> {
+  async fetchIfNeeded(name: string, ttlOrOptions: number | FetchModelsOptions = DEFAULT_TTL): Promise<void> {
+    const options: FetchModelsOptions = typeof ttlOrOptions === 'number'
+      ? { ttl: ttlOrOptions }
+      : (ttlOrOptions || {});
+    const ttl = options.ttl ?? DEFAULT_TTL;
+    if (shouldSkipModelFetch(this.lastFetchAt.get(name), Date.now(), options)) {
+      return;
+    }
     if (this.inflight.has(name)) return this.inflight.get(name)!;
-    const p = this._fetchImpl(name, ttl).finally(() => this.inflight.delete(name));
+    const p = this._fetchImpl(name, ttl).finally(() => {
+      this.lastFetchAt.set(name, Date.now());
+      this.inflight.delete(name);
+    });
     this.inflight.set(name, p);
     return p;
+  }
+
+  /** 静默刷新所有免密 Provider 的模型列表（带默认节流；force 时立即拉取）。 */
+  async refreshNoKeyProviders(options?: { force?: boolean }): Promise<void> {
+    const list = await providerRepository.getAll();
+    await refreshNoKeyProviderModels(
+      list,
+      (providerName, fetchOptions) => this.fetchIfNeeded(providerName, fetchOptions),
+      options
+    );
   }
 
   private async _fetchImpl(name: string, ttl: number): Promise<void> {

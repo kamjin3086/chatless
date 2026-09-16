@@ -152,67 +152,53 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
       }
     }
 
-    // 使用预过滤优化查询
-    const maxCandidates = this.config.queryOptimization.maxCandidates;
-    const query = `
-      SELECT id, content, embedding, metadata, norm
-      FROM ${this.tableName} 
-      WHERE ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT ${maxCandidates}
-    `;
-
     try {
-      // 使用DatabaseService执行查询
-      const rows = await this.executeWithRetry<any[]>(
-        () => this.dbManager.select<any>(query, params),
-        'vector_search_query'
-      );
+      const searchStartedAt = Date.now();
+      const maxCandidates = this.config.queryOptimization.maxCandidates;
+      const query = `
+        SELECT id, content, embedding, metadata, norm
+        FROM ${this.tableName}
+        WHERE ${whereClause}
+        LIMIT ? OFFSET ?
+      `;
+      const scanBatchSize = 512;
+      let offset = 0;
+      let scanned = 0;
+      let results: Array<{ id: string; content: string; score: number; metadata: any; embedding?: number[] }> = [];
 
-      console.log('[VectorStore] 数据库查询返回结果数量:', rows?.length || 0);
-      if (rows && rows.length > 0) {
-        console.log('[VectorStore] 第一个数据库结果样例:', {
-          id: rows[0].id,
-          contentLength: rows[0].content?.length || 0,
-          hasEmbedding: !!rows[0].embedding,
-          embeddingType: typeof rows[0].embedding,
-          metadata: rows[0].metadata
-        });
+      // Scan in bounded batches and retain only the current Top-K. This keeps
+      // 50k-vector searches out of the WebView heap while still examining all
+      // vectors compatible with the requested fingerprint/dimension.
+      while (true) {
+        const rows = await this.executeWithRetry<any[]>(
+          () => this.dbManager.select<any>(query, [...params, scanBatchSize, offset]),
+          'vector_search_query'
+        );
+        if (!rows?.length) break;
+        scanned += rows.length;
+        const batchResults = await this.computeSimilaritiesParallel(queryEmbedding, rows);
+        results = [...results, ...batchResults]
+          .sort((a, b) => b.score - a.score)
+          .slice(0, Math.max(topK, 1));
+        offset += rows.length;
+        if (rows.length < scanBatchSize) break;
+      }
+      if (scanned > maxCandidates) {
+        console.debug(`[VectorStore] scanned ${scanned} embeddings (profile hint ${maxCandidates})`);
       }
 
-      if (!rows || rows.length === 0) {
-        console.log('[VectorStore] 数据库查询无结果，直接返回空数组');
-        return [];
-      }
-
-      // 并行计算相似度
-      const results = await this.computeSimilaritiesParallel(queryEmbedding, rows);
-      console.log('[VectorStore] 相似度计算完成，结果数量:', results.length);
-      if (results.length > 0) {
-        const scores = results.map(r => r.score).sort((a, b) => b - a);
-        console.log('[VectorStore] 相似度分数分布:', {
-          max: Math.max(...scores),
-          min: Math.min(...scores),
-          avg: scores.reduce((a, b) => a + b, 0) / scores.length,
-          scores: scores.slice(0, 5) // 显示前5个最高分数
-        });
-      }
-
-      // 按相似度排序并应用阈值
+      // Apply threshold after the bounded scan so a low-scoring early batch
+      // cannot hide a later result that belongs in Top-K.
       let filteredResults = results.sort((a, b) => b.score - a.score);
-      console.log('[VectorStore] 排序后结果数量:', filteredResults.length);
-      
       if (threshold !== undefined) {
-        const beforeFilter = filteredResults.length;
         filteredResults = filteredResults.filter(r => r.score >= threshold);
-        console.log(`[VectorStore] 阈值过滤 (>=${threshold}): ${beforeFilter} -> ${filteredResults.length}`);
       }
 
       // 返回前K个结果
       const finalResults = filteredResults.slice(0, topK);
 
       // 更新性能指标
-      this.updateMetrics('searchLatency', Date.now() - Date.now());
+      this.updateMetrics('searchLatency', Date.now() - searchStartedAt);
 
       return finalResults.map(r => ({
         id: r.id,
@@ -539,10 +525,7 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
     metadata: any;
     embedding?: number[];
   }>> {
-    console.log('[VectorStore] 开始计算相似度，行数:', rows.length);
-    console.log('[VectorStore] SimilarityCalculator.cosine 是否可用:', !!(SimilarityCalculator as any).cosine);
-    
-    const mapped = rows.map((row, index): {
+    const mapped = rows.map((row): {
       id: string;
       content: string;
       score: number;
@@ -550,9 +533,6 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
       embedding?: number[];
     } | null => {
       try {
-        // 调试原始embedding数据
-        console.log(`[VectorStore] 行${index} 原始embedding类型:`, typeof row.embedding, '长度:', row.embedding?.length || 0);
-        
         let embedding: number[];
         
         // 根据数据类型选择合适的反序列化方法
@@ -564,15 +544,11 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
               // 可能是浮点数组，或是字节数组
               if (parsed.length === queryEmbedding.length) {
                 embedding = parsed;
-                console.log(`[VectorStore] 行${index} JSON解析为浮点数组，维度:`, embedding.length);
               } else {
                 const recovered = this.tryRecoverFloat32FromJsonBytes(parsed, queryEmbedding.length);
                 if (recovered) {
                   embedding = recovered;
-                  console.log(`[VectorStore] 行${index} JSON字节数组还原成功，维度:`, embedding.length);
                 } else {
-                  // 不是字节数组且维度不匹配，丢弃该行
-                  console.warn(`[VectorStore] 行${index} JSON解析后维度不匹配，期望 ${queryEmbedding.length}，实际 ${parsed.length}，已跳过`);
                   return null;
                 }
               }
@@ -584,7 +560,6 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
                 bytes[i] = binaryString.charCodeAt(i);
               }
               embedding = this.deserializeEmbedding(bytes);
-              console.log(`[VectorStore] 行${index} Base64解析成功，维度:`, embedding.length);
             }
           } catch {
             // 如果JSON解析失败，尝试Base64解码
@@ -594,27 +569,18 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
               bytes[i] = binaryString.charCodeAt(i);
             }
             embedding = this.deserializeEmbedding(bytes);
-            console.log(`[VectorStore] 行${index} Base64解析成功，维度:`, embedding.length);
           }
         } else if (row.embedding instanceof Uint8Array) {
           embedding = this.deserializeEmbedding(row.embedding);
-          console.log(`[VectorStore] 行${index} Uint8Array解析成功，维度:`, embedding.length);
         } else {
           // 直接转换为Uint8Array
           embedding = this.deserializeEmbedding(new Uint8Array(row.embedding));
-          console.log(`[VectorStore] 行${index} 直接转换成功，维度:`, embedding.length);
         }
         
-        if (!embedding || embedding.length === 0) {
-          console.warn(`[VectorStore] 行${index} 向量解析失败或为空`);
-          return null;
-        }
+        if (!embedding || embedding.length === 0) return null;
         
         // 最终维度校验，不匹配则跳过该行
-        if (embedding.length !== queryEmbedding.length) {
-          console.warn(`[VectorStore] 行${index} 维度不匹配，期望 ${queryEmbedding.length} 实际 ${embedding.length}，已跳过`);
-          return null;
-        }
+        if (embedding.length !== queryEmbedding.length) return null;
         
         let similarity = 0;
         if ((SimilarityCalculator as any).cosine) {
@@ -624,8 +590,6 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
           similarity = this.calculateCosineSimilarity(queryEmbedding, embedding);
         }
         
-        console.log(`[VectorStore] 行${index} 相似度计算完成:`, similarity);
-        
         return {
           id: row.id,
           content: row.content,
@@ -633,8 +597,7 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
           metadata: JSON.parse(row.metadata || '{}'),
           embedding
         };
-      } catch (error) {
-        console.error(`[VectorStore] 行${index} 处理失败:`, error);
+      } catch {
         return null;
       }
     });
@@ -665,4 +628,4 @@ export class OptimizedSQLiteVectorStore extends AbstractVectorStore {
     const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
     return magnitude === 0 ? 0 : dotProduct / magnitude;
   }
-} 
+}

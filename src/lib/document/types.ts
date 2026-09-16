@@ -30,11 +30,14 @@ export interface ExtractionResult {
   metadata: DocumentMetadata;
   success: boolean;
   error?: string;
+  parsed?: import('../rag/evidenceTypes').ParsedDocument;
 }
 
 export interface ExtractedDocument {
   content: string;
   metadata: ExtractedDocumentMetadata;
+  /** Structured blocks when the native parser succeeded. */
+  parsed?: import('../rag/evidenceTypes').ParsedDocument;
 }
 
 export interface ExtractedDocumentMetadata {

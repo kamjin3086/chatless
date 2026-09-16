@@ -1,12 +1,22 @@
-import { 
-  RetrievalStrategy, 
-  VectorSearchResult, 
+import {
+  RetrievalStrategy,
+  VectorSearchResult,
   SearchOptions,
   HybridSearchOptions,
-  RetrievalError 
+  RetrievalError
 } from './types';
 import { VectorStoreFactory, VectorStoreCreationOptions, VectorStoreType } from './VectorStoreFactory';
 import { SimilarityCalculator } from './similarity';
+import { LexicalRetriever } from './LexicalRetriever';
+import { reciprocalRankFusion } from './RRFFusion';
+import {
+  BM25_CANDIDATE_K,
+  DENSE_CANDIDATE_K,
+  FINAL_EVIDENCE_K,
+  RRF_OUTPUT_K,
+  RRF_RANK_CONSTANT,
+} from '@/lib/rag/constants';
+import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
 export class RetrievalService {
   private currentStrategy: RetrievalStrategy | null = null;
@@ -42,110 +52,134 @@ export class RetrievalService {
   ): Promise<VectorSearchResult[]> {
     console.log('[RetrievalService] 开始向量搜索，查询向量维度:', queryEmbedding.length);
     console.log('[RetrievalService] 搜索选项:', options);
-    
+
     await this.ensureInitialized();
     console.log('[RetrievalService] 初始化完成，当前策略:', this.currentStrategy?.constructor.name);
-    
+
     if (!this.currentStrategy) {
       console.error('[RetrievalService] 错误：当前策略为空');
       return [];
     }
-    
+
     try {
       const results = await this.currentStrategy.search(queryEmbedding, options);
       console.log('[RetrievalService] 向量搜索完成，结果数量:', results.length);
       return results;
     } catch (error) {
       console.error('[RetrievalService] 向量搜索失败:', error);
-      return [];
+      // Let the evidence layer classify this as a semantic-search failure
+      // and explicitly fall back to lexical retrieval. Returning [] here
+      // would make a database/model error indistinguishable from no matches.
+      throw error instanceof RetrievalError
+        ? error
+        : new RetrievalError(`向量搜索失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * 混合搜索（向量 + 文本）
+   * Hybrid retrieval: Dense Top-K + BM25 Top-K → RRF → final Top-K
+   */
+  async searchByQuery(
+    queryText: string,
+    queryEmbedding: number[],
+    options: {
+      knowledgeBaseIds?: string[];
+      topK?: number;
+      /** Deprecated compatibility field; RRF does not threshold raw scores. */
+      threshold?: number;
+      embeddingFingerprint?: string;
+    } = {}
+  ): Promise<VectorSearchResult[]> {
+    const kbIds = options.knowledgeBaseIds?.filter(Boolean);
+    const filter: Record<string, string | string[]> = {};
+    if (kbIds?.length) {
+      filter.knowledgeBaseId = kbIds.length === 1 ? kbIds[0] : kbIds;
+    }
+    if (options.embeddingFingerprint) {
+      filter.embeddingFingerprint = options.embeddingFingerprint;
+    }
+
+    const [rawDenseResults, bm25Results] = await Promise.all([
+      this.search(queryEmbedding, {
+        topK: DENSE_CANDIDATE_K,
+        includeEmbeddings: false,
+        filter: Object.keys(filter).length ? filter : undefined,
+      }),
+      new LexicalRetriever().search(queryText, {
+        knowledgeBaseIds: kbIds,
+        topK: BM25_CANDIDATE_K,
+      }),
+    ]);
+    const denseResults = await this.restrictDenseResultsToMappings(rawDenseResults, kbIds);
+
+    const fused = reciprocalRankFusion([denseResults, bm25Results], RRF_RANK_CONSTANT);
+    const finalK = options.topK ?? FINAL_EVIDENCE_K;
+    return fused.slice(0, RRF_OUTPUT_K).slice(0, finalK).map((item) => ({
+      id: item.id,
+      content: (item as VectorSearchResult).content,
+      score: item.rrfScore,
+      metadata: (item as VectorSearchResult).metadata,
+    }));
+  }
+
+  /**
+   * Vector rows are retired asynchronously and carry their scope in JSON
+   * metadata. Re-check the durable mapping before fusion so a concurrent
+   * detach cannot leak a vector after its document left the knowledge base.
+   */
+  private async restrictDenseResultsToMappings(
+    results: VectorSearchResult[],
+    knowledgeBaseIds?: string[],
+  ): Promise<VectorSearchResult[]> {
+    if (!results.length || !knowledgeBaseIds?.length) return results;
+
+    const pairs = results
+      .map((result) => ({
+        documentId: String(result.metadata?.documentId || ''),
+        knowledgeBaseId: String(result.metadata?.knowledgeBaseId || ''),
+      }))
+      .filter((pair) => pair.documentId && pair.knowledgeBaseId && knowledgeBaseIds.includes(pair.knowledgeBaseId));
+    if (!pairs.length) return [];
+
+    const db = DatabaseService.getInstance().getDbManager();
+    const clauses = pairs.map(() => '(rc.document_id = ? AND rc.knowledge_base_id = ?)').join(' OR ');
+    const params = pairs.flatMap((pair) => [pair.documentId, pair.knowledgeBaseId]);
+    const rows = await db.select<{ document_id: string; knowledge_base_id: string }>(
+      `SELECT rc.document_id, rc.knowledge_base_id
+         FROM retrieval_chunks rc
+         JOIN doc_knowledge_mappings m
+           ON m.document_id = rc.document_id
+          AND m.knowledge_base_id = rc.knowledge_base_id
+        WHERE ${clauses}`,
+      params,
+    );
+    const allowed = new Set((rows || []).map((row) => `${row.document_id}\u0000${row.knowledge_base_id}`));
+    return results.filter((result) => {
+      const documentId = String(result.metadata?.documentId || '');
+      const knowledgeBaseId = String(result.metadata?.knowledgeBaseId || '');
+      return allowed.has(`${documentId}\u0000${knowledgeBaseId}`);
+    });
+  }
+
+  /**
+   * @deprecated Use searchByQuery (RRF hybrid) instead.
    */
   async hybridSearch(
     queryEmbedding: number[],
     queryText: string,
     options: HybridSearchOptions = {}
   ): Promise<VectorSearchResult[]> {
-    const {
-      textWeight = 0.3,
-      vectorWeight = 0.7,
-      topK = 10,
-      textSearchOptions = {}
-    } = options;
-
-    // 执行向量搜索
-    const vectorResults = await this.search(queryEmbedding, {
-      ...options,
-      topK: Math.max(topK * 2, 20) // 获取更多候选结果
+    const kbFilter = options.filter?.knowledgeBaseId;
+    const knowledgeBaseIds = Array.isArray(kbFilter)
+      ? kbFilter
+      : kbFilter
+        ? [kbFilter]
+        : undefined;
+    return this.searchByQuery(queryText, queryEmbedding, {
+      knowledgeBaseIds,
+      topK: options.topK ?? 10,
+      threshold: options.threshold,
     });
-
-    // 执行文本搜索（基于关键词匹配）
-    const textResults = await this.textSearch(queryText, {
-      ...options,
-      topK: Math.max(topK * 2, 20)
-    });
-
-    // 合并和重新排序结果
-    const hybridResults = this.combineResults(
-      vectorResults,
-      textResults,
-      vectorWeight,
-      textWeight
-    );
-
-    // 返回前K个结果
-    return hybridResults.slice(0, topK);
-  }
-
-  /**
-   * 文本搜索（基于关键词匹配）
-   */
-  private async textSearch(
-    queryText: string,
-    options: SearchOptions = {}
-  ): Promise<VectorSearchResult[]> {
-    // 这里可以实现基于关键词的文本搜索
-    // 暂时返回空结果，因为主要依赖向量搜索
-    return [];
-  }
-
-  /**
-   * 合并向量搜索和文本搜索结果
-   */
-  private combineResults(
-    vectorResults: VectorSearchResult[],
-    textResults: VectorSearchResult[],
-    vectorWeight: number,
-    textWeight: number
-  ): VectorSearchResult[] {
-    const resultMap = new Map<string, VectorSearchResult>();
-
-    // 添加向量搜索结果
-    vectorResults.forEach(result => {
-      resultMap.set(result.id, {
-        ...result,
-        score: result.score * vectorWeight
-      });
-    });
-
-    // 添加文本搜索结果，如果已存在则合并分数
-    textResults.forEach(result => {
-      const existing = resultMap.get(result.id);
-      if (existing) {
-        existing.score += result.score * textWeight;
-      } else {
-        resultMap.set(result.id, {
-          ...result,
-          score: result.score * textWeight
-        });
-      }
-    });
-
-    // 按分数排序
-    return Array.from(resultMap.values()).sort((a, b) => b.score - a.score);
   }
 
   /**
@@ -237,7 +271,7 @@ export class RetrievalService {
     candidateVectors: number[][],
     metric: string = 'cosine'
   ): number[] {
-    return candidateVectors.map(candidate => 
+    return candidateVectors.map(candidate =>
       this.calculateSimilarity(queryVector, candidate, metric)
     );
   }
@@ -259,13 +293,13 @@ export class RetrievalService {
     }));
 
     // 过滤阈值
-    const filteredResults = threshold !== undefined 
+    const filteredResults = threshold !== undefined
       ? results.filter(result => result.score >= threshold)
       : results;
 
     // 排序并返回前K个
     const isDistanceMetric = ['euclidean', 'manhattan'].includes(metric);
-    filteredResults.sort((a, b) => 
+    filteredResults.sort((a, b) =>
       isDistanceMetric ? a.score - b.score : b.score - a.score
     );
 
@@ -305,7 +339,7 @@ export class RetrievalService {
     options: SearchOptions = {}
   ): Promise<VectorSearchResult[]> {
     await this.ensureInitialized();
-    
+
     // 首先获取文档的向量
     const results = await this.search([], {
       filter: { id: documentId },
@@ -329,12 +363,12 @@ export class RetrievalService {
    */
   async getMetrics(): Promise<any> {
     await this.ensureInitialized();
-    
+
     // 如果当前策略是 AbstractVectorStore 的实例，获取详细度量
     if (this.currentStrategy && 'getMetrics' in this.currentStrategy) {
       return (this.currentStrategy as any).getMetrics();
     }
-    
+
     return null;
   }
 
@@ -346,11 +380,11 @@ export class RetrievalService {
     dimension: number = 384
   ): Promise<any> {
     await this.ensureInitialized();
-    
+
     if (this.currentStrategy && 'benchmark' in this.currentStrategy) {
       return await (this.currentStrategy as any).benchmark(testVectorCount, dimension);
     }
-    
+
     throw new RetrievalError('当前向量存储策略不支持基准测试');
   }
 
@@ -359,9 +393,9 @@ export class RetrievalService {
    */
   async optimize(): Promise<void> {
     await this.ensureInitialized();
-    
+
     if (this.currentStrategy && 'compactMemory' in this.currentStrategy) {
       await (this.currentStrategy as any).compactMemory();
     }
   }
-} 
+}

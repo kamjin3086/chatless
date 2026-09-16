@@ -13,14 +13,9 @@ export function ProviderRenameModelDialog({ providerName, modelName, currentLabe
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <DropdownMenuItem className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md cursor-pointer" onSelect={(e:any)=>e?.preventDefault?.()}>
-          <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
-            <Pencil className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">重命名</span>
-            <span className="text-xs text-gray-500">修改模型显示名称</span>
-          </div>
+        <DropdownMenuItem className="cursor-pointer" onSelect={(e: any) => e?.preventDefault?.()}>
+          <Pencil />
+          重命名
         </DropdownMenuItem>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[420px]">

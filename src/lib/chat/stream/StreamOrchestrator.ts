@@ -18,6 +18,7 @@ import { StreamResponseLogger } from './response-logger';
 import { useChatStore } from '@/store/chatStore';
 import { cleanToolCallInstructionsForDisplay } from '@/lib/chat/tool-call-cleanup';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
 
 
 /**
@@ -135,6 +136,7 @@ export class StreamOrchestrator {
 
       onError: (error: Error) => {
         console.error('[StreamOrchestrator] 流式错误:', error);
+        let rolledBack = false;
         try {
           const store = useChatStore.getState();
           // 错误分支同样需要在结束前冲刷抑制阀缓冲，避免尾部文本丢失
@@ -196,26 +198,38 @@ export class StreamOrchestrator {
             const hasSegs = Array.isArray(msg?.segments) && msg.segments.length > 0;
 
             if (!hasText && !hasSegs) {
-              // 1) 删除这个无意义的 AI 气泡
-              try { void store.deleteMessage(this.context.messageId); } catch { /* noop */ }
-              // 1.1) 同时删除刚刚发送的 user 消息（避免用户回显后再次发送产生重复）
-              try {
-                const conv2 = store.conversations.find(c => c.id === this.context.conversationId);
-                const msgs = conv2?.messages || [];
-                const aIndex = msgs.findIndex((m: any) => m.id === this.context.messageId);
-                if (aIndex > 0) {
-                  const prev = msgs[aIndex - 1] as any;
-                  const sameText = String(prev?.content || '').trim() === String(this.config.originalUserContent || '').trim();
-                  if (prev?.role === 'user' && sameText) {
-                    void store.deleteMessage(prev.id);
+              if (!this.config.skipEmptyBubbleRollback) {
+                rolledBack = true;
+                // 1) 删除这个无意义的 AI 气泡
+                try { void store.deleteMessage(this.context.messageId); } catch { /* noop */ }
+                // 1.1) 同时删除刚刚发送的 user 消息（避免用户回显后再次发送产生重复）
+                try {
+                  const conv2 = store.conversations.find(c => c.id === this.context.conversationId);
+                  const msgs = conv2?.messages || [];
+                  const aIndex = msgs.findIndex((m: any) => m.id === this.context.messageId);
+                  if (aIndex > 0) {
+                    const prev = msgs[aIndex - 1] as any;
+                    const sameText = String(prev?.content || '').trim() === String(this.config.originalUserContent || '').trim();
+                    if (prev?.role === 'user' && sameText) {
+                      void store.deleteMessage(prev.id);
+                    }
                   }
+                } catch { /* noop */ }
+                // 2) 回显用户输入到输入框与草稿
+                const text = String(this.config.originalUserContent || '').trim();
+                if (text) {
+                  try { if (this.context.conversationId) store.setInputDraft(this.context.conversationId, text); } catch { /* noop */ }
+                  try { window.dispatchEvent(new CustomEvent('chat-input-fill', { detail: text })); } catch { /* noop */ }
                 }
-              } catch { /* noop */ }
-              // 2) 回显用户输入到输入框与草稿
-              const text = String(this.config.originalUserContent || '').trim();
-              if (text) {
-                try { if (this.context.conversationId) store.setInputDraft(this.context.conversationId, text); } catch { /* noop */ }
-                try { window.dispatchEvent(new CustomEvent('chat-input-fill', { detail: text })); } catch { /* noop */ }
+              } else {
+                let contentToPersist = (error as any)?.userMessage || (error?.message || '请求失败');
+                try { contentToPersist = cleanToolCallInstructionsForDisplay(String(contentToPersist)); } catch { /* noop */ }
+                void store.updateMessage(this.context.messageId, {
+                  status: 'error',
+                  content: contentToPersist,
+                  thinking_start_time: this.context.thinkingStartTime || undefined,
+                  thinking_duration,
+                });
               }
             } else {
               // 有部分输出：把状态标为 error，并尽量保留已生成内容
@@ -249,7 +263,12 @@ export class StreamOrchestrator {
           }
         } catch { /* 忽略状态修复中的非致命错误 */ }
 
-        // 通知上层（用于 toast 与清理定时器）
+        // 统一弹出用户可见错误提示（含网络不可达）；不依赖上层 config.onError
+        try {
+          showSendErrorToast(error, { rolledBack, providerName: this.config.provider });
+        } catch { /* noop */ }
+
+        // 通知上层（用于清理定时器等）
         this.config.onError?.(error);
       },
     };

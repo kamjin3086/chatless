@@ -78,6 +78,7 @@ export class DocumentExtractionService {
       return {
         text: processedText,
         metadata,
+        parsed: extractedDoc.parsed,
         success: true
       };
 
@@ -132,6 +133,7 @@ export class DocumentExtractionService {
       return {
         text: processedText,
         metadata,
+        parsed: extractedDoc.parsed,
         success: true
       };
 

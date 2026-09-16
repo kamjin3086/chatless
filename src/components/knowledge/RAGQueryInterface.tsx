@@ -1,375 +1,80 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, Bot, Database, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, AlertCircle, CheckCircle, Loader2, Bot, Settings } from 'lucide-react';
-import { RAGService } from '@/lib/rag/RAGService';
-import { createDefaultRAGConfig } from '@/lib/rag/RAGService';
-import { initializeLLM } from '@/lib/llm';
-import type { RAGQueryResult, RAGQueryProgress, RetrievedChunk } from '@/lib/rag/types';
-import { metadataService } from '@/lib/metadata/MetadataService';
+import { KnowledgeService, type KnowledgeBase } from '@/lib/knowledgeService';
 
-interface KnowledgeBase {
-  id: string;
-  name: string;
-  description: string;
-}
-
+/**
+ * Knowledge-base Q&A now starts an Agent conversation. Keeping this page as a
+ * small launcher prevents the legacy one-shot RAG generator from becoming a
+ * second production path with different citation and scope semantics.
+ */
 export function RAGQueryInterface() {
+  const router = useRouter();
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
-  const [selectedKbIds, setSelectedKbIds] = useState<string[]>([]);
-  const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<RAGQueryResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<RAGQueryProgress | null>(null);
-  const [streamingAnswer, setStreamingAnswer] = useState('');
-  
-  // LLM配置状态
-  const [llmProviders, setLlmProviders] = useState<any[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<string>('');
-  const [selectedModel, setSelectedModel] = useState<string>('');
-  const [llmInitialized, setLlmInitialized] = useState(false);
-  
-  const ragServiceRef = useRef<RAGService | null>(null);
+  const [selectedKbId, setSelectedKbId] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  // 初始化
   useEffect(() => {
-    initializeComponents();
+    let cancelled = false;
+    void (async () => {
+      try {
+        await KnowledgeService.initDb();
+        const bases = await KnowledgeService.getAllKnowledgeBases();
+        if (!cancelled) setKnowledgeBases(bases);
+      } catch (error) {
+        console.error('[KnowledgeQALauncher] 加载知识库失败:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const initializeComponents = async () => {
-    try {
-      // 初始化LLM
-      const llmReady = await initializeLLM();
-      setLlmInitialized(llmReady);
-      
-      // 获取LLM提供商
-      const metadata = await metadataService.get();
-      setLlmProviders(metadata);
-      
-      // 设置默认提供商和模型
-      if (metadata.length > 0) {
-        const defaultProvider = metadata[0];
-        setSelectedProvider(defaultProvider.name);
-        if (defaultProvider.models.length > 0) {
-          setSelectedModel(defaultProvider.models[0].name);
-        }
-      }
-
-      // 模拟知识库数据（替代knowledgeService）
-      setKnowledgeBases([
-        { id: '1', name: '技术文档', description: '技术相关文档' },
-        { id: '2', name: '产品手册', description: '产品使用手册' },
-        { id: '3', name: '研究资料', description: '研究相关资料' }
-      ]);
-
-      // 初始化RAG服务
-      const config = createDefaultRAGConfig();
-      
-      // 配置LLM设置
-      if (metadata.length > 0) {
-        config.llm = {
-          provider: metadata[0].name,
-          model: metadata[0].models[0]?.name || '',
-          maxTokens: 2048,
-          temperature: 0.7
-        };
-      }
-      
-      ragServiceRef.current = new RAGService(config);
-      await ragServiceRef.current.initialize();
-      
-    } catch (err) {
-      console.error('初始化失败:', err);
-      setError('初始化失败，请刷新页面重试');
-    }
-  };
-
-  const updateLLMConfig = async () => {
-    if (!ragServiceRef.current || !selectedProvider || !selectedModel) return;
-    
-    try {
-      await ragServiceRef.current.updateConfig({
-        llm: {
-          provider: selectedProvider,
-          model: selectedModel,
-          maxTokens: 2048,
-          temperature: 0.7
-        }
-      });
-    } catch (err) {
-      console.error('更新LLM配置失败:', err);
-    }
-  };
-
-  // 当LLM选择改变时更新配置
-  useEffect(() => {
-    updateLLMConfig();
-  }, [selectedProvider, selectedModel]);
-
-  const handleQuery = async () => {
-    if (!query.trim() || !ragServiceRef.current) return;
-
-    setIsLoading(true);
-    setError(null);
-    setResult(null);
-    setProgress(null);
-    setStreamingAnswer('');
-
-    try {
-      const ragService = ragServiceRef.current;
-      
-      // 使用流式查询
-      const queryParams = {
-        query: query.trim(),
-        knowledgeBaseIds: selectedKbIds.length > 0 ? selectedKbIds : undefined,
-        topK: 5,
-        similarityThreshold: 0.3,
-        stream: true
-      };
-
-      for await (const response of ragService.queryStream(queryParams)) {
-        switch (response.type) {
-          case 'progress':
-            setProgress(response.data as RAGQueryProgress);
-            break;
-            
-          case 'chunk':
-            // 检索到的片段，可以实时显示
-            console.log('检索到片段:', response.data);
-            break;
-            
-          case 'answer':
-            // 流式回答token
-            setStreamingAnswer(prev => prev + (response.data as string));
-            break;
-            
-          case 'complete':
-            // 查询完成
-            const finalResult = response.data as RAGQueryResult;
-            setResult(finalResult);
-            setProgress(null);
-            break;
-            
-          case 'error':
-            throw response.data as Error;
-        }
-      }
-      
-    } catch (err) {
-      console.error('查询失败:', err);
-      setError(err instanceof Error ? err.message : '查询失败，请重试');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getSelectedModels = () => {
-    const provider = llmProviders.find(p => p.name === selectedProvider);
-    return provider?.models || [];
+  const openAgent = () => {
+    const query = selectedKbId
+      ? `?knowledgeBase=${encodeURIComponent(selectedKbId)}&mode=agent`
+      : '?mode=agent';
+    router.push(`/chat${query}`);
   };
 
   return (
-    <div className="space-y-6">
-      {/* LLM配置区域 */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            <CardTitle>AI模型配置</CardTitle>
-            <Badge variant={llmInitialized ? "default" : "secondary"}>
-              {llmInitialized ? "已连接" : "未连接"}
-            </Badge>
-          </div>
-          <CardDescription>
-            选择用于生成回答的AI模型
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">AI提供商</label>
-              <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择AI提供商" />
-                </SelectTrigger>
-                <SelectContent>
-                  {llmProviders.map((provider) => (
-                    <SelectItem key={provider.name} value={provider.name}>
-                      {provider.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium">模型</label>
-              <Select value={`${selectedProvider}::${selectedModel}`} onValueChange={(val)=>{
-                const parts = val.split('::');
-                const m = parts.length===2? parts[1]: val;
-                setSelectedModel(m);
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择模型" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getSelectedModels().map((model: any) => (
-                    <SelectItem key={`${selectedProvider}::${model.name}`} value={`${selectedProvider}::${model.name}`}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 查询区域 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>智能问答</CardTitle>
-          <CardDescription>
-            基于知识库内容进行智能问答，支持多知识库联合检索
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* 知识库选择 */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">知识库选择</label>
-            <Select value={selectedKbIds.join(',')} onValueChange={(value) => setSelectedKbIds(value ? value.split(',') : [])}>
-              <SelectTrigger>
-                <SelectValue placeholder="选择知识库（留空则搜索所有）" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">所有知识库</SelectItem>
-                {knowledgeBases.map((kb) => (
-                  <SelectItem key={kb.id} value={kb.id}>
-                    {kb.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 查询输入 */}
-          <div className="flex gap-2">
-            <Input
-              placeholder="输入您的问题..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleQuery()}
-              disabled={isLoading}
-            />
-            <Button 
-              onClick={handleQuery} 
-              disabled={!query.trim() || isLoading || !llmInitialized}
-              className="flex items-center gap-2"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Search className="w-4 h-4" />
-              )}
-              查询
-            </Button>
-          </div>
-
-          {/* 进度显示 */}
-          {progress && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>{progress.message}</span>
-                <span>{progress.completedSteps}/{progress.totalSteps}</span>
-              </div>
-              {/* 简单的进度条实现 */}
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${progress.progress}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 错误显示 */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* 结果显示 */}
-      {(streamingAnswer || result) && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bot className="w-5 h-5" />
-              <CardTitle>AI回答</CardTitle>
-              {result && (
-                <Badge variant="outline">
-                  {result.metadata.duration}ms
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="prose prose-sm max-w-none dark:prose-invert">
-              {streamingAnswer && (
-                <div className="whitespace-pre-wrap">{streamingAnswer}</div>
-              )}
-              {result && !streamingAnswer && (
-                <div className="whitespace-pre-wrap">{result.answer}</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 来源片段显示 */}
-      {result && result.chunks.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>相关来源</CardTitle>
-            <CardDescription>
-              找到 {result.chunks.length} 个相关片段，来自 {result.metadata.knowledgeBaseCount} 个知识库
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {result.chunks.map((chunk, index) => (
-                <div key={chunk.id} className="border rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">#{index + 1}</Badge>
-                      <span className="text-sm font-medium">{chunk.knowledgeBaseName}</span>
-                      {chunk.documentName && (
-                        <span className="text-sm text-muted-foreground">/ {chunk.documentName}</span>
-                      )}
-                    </div>
-                    <Badge variant="outline">
-                      相似度: {(chunk.score * 100).toFixed(1)}%
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {chunk.content}
-                  </p>
-                </div>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Bot className="w-5 h-5" />
+          <CardTitle>使用 Agent 问答</CardTitle>
+        </div>
+        <CardDescription>
+          Agent 会按需列出资料、检索原文并继续阅读长文档，回答中保留可核对引用。
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Database className="w-4 h-4 text-slate-400 shrink-0" />
+          <Select value={selectedKbId} onValueChange={setSelectedKbId} disabled={loading || knowledgeBases.length === 0}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder={loading ? '正在加载知识库…' : '可选：先挂载一个知识库'} />
+            </SelectTrigger>
+            <SelectContent>
+              {knowledgeBases.map((kb) => (
+                <SelectItem key={kb.id} value={kb.id}>{kb.name}</SelectItem>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            </SelectContent>
+          </Select>
+          {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+        </div>
+        <Button onClick={openAgent} className="gap-2">
+          打开 Agent 对话
+          <ArrowRight className="w-4 h-4" />
+        </Button>
+      </CardContent>
+    </Card>
   );
-} 
+}

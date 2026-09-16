@@ -1,5 +1,4 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
-import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
 import { cancelStream, streamChat } from '@/lib/llm';
 import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
 import type { OnToolCall } from '@/lib/chat/stream/types';
@@ -9,6 +8,18 @@ import { createDefaultAdapters } from '@/lib/mcp/pipeline/adapters';
 import { useChatStore } from '@/store/chatStore';
 
 import type { AgentLoopCancelParams, AgentLoopRunParams } from './types';
+import { AgentRunControlPlane } from './AgentRunControlPlane';
+import { AgentRunEventStore } from './AgentRunEventStore';
+import { buildAgentPromptEnvelope, dedupeEnvelopeSystemPrefix } from './buildAgentPromptEnvelope';
+import { resolveAgentToolCapability } from './resolveAgentToolCapability';
+import { applyCitations } from '@/lib/rag/CitationService';
+import { listEvidence } from '@/lib/rag/EvidenceRegistry';
+import {
+  buildToolRoleAppendix as buildSharedToolRoleAppendix,
+  classifyToolResult,
+  isPipelineSkipped,
+  stableStringify,
+} from '@/lib/mcp/shared/toolResultGuards';
 
 type BufferedToolResult = {
   cardIdOrKey: string;
@@ -71,80 +82,6 @@ function getToolBudgetCost(server: string, tool: string): number {
 }
 
 const activeLoops = new Map<string, AbortController>();
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
-  if (typeof value === 'symbol') return value.toString();
-  if (typeof value === 'function') return '[function]';
-  if (typeof value !== 'object') return '[unknown]';
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  const parts = keys.map((k) => `${k}:${stableStringify(obj[k])}`);
-  return `{${parts.join(',')}}`;
-}
-
-function classifyToolResult(result: unknown): 'success' | 'empty' | 'tool_error' {
-  const isEmpty =
-    !result ||
-    (typeof result === 'string' && result.trim().length === 0) ||
-    (Array.isArray(result) && result.length === 0);
-  if (isEmpty) return 'empty';
-
-  if (result && typeof result === 'object') {
-    const r: any = result as any;
-    // 结构化 error：认为是工具错误
-    if (r.error) return 'tool_error';
-
-    // ok=false：并不一定是“致命错误”（例如文件批量删除部分失败）
-    // 若结果包含 deleted/failed/matched 等可行动细节，视为 success，避免 agent loop 误判为重复失败而熔断。
-    if (typeof r.ok === 'boolean' && r.ok === false) {
-      const hasActionableDetail =
-        typeof r.failedCount === 'number' ||
-        typeof r.deletedCount === 'number' ||
-        typeof r.matchedCount === 'number' ||
-        Array.isArray(r.failed) ||
-        Array.isArray(r.deleted) ||
-        Array.isArray(r.matches);
-      if (!hasActionableDetail) return 'tool_error';
-    }
-    if (typeof r.success === 'boolean' && r.success === false) return 'tool_error';
-  }
-  return 'success';
-}
-
-function summarizeToolOutput(output: unknown): unknown {
-  try {
-    if (typeof output === 'string') {
-      const s = output;
-      if (s.length > 4000) return `${s.slice(0, 4000)}\n... (truncated, ${s.length} chars)`;
-      return s;
-    }
-    if (Array.isArray(output)) {
-      const arr = output as any[];
-      if (arr.length <= 60) return output;
-      return { summary: `Array(${arr.length}) truncated`, head: arr.slice(0, 30), tail: arr.slice(-10) };
-    }
-    if (output && typeof output === 'object') {
-      const s = safeJson(output);
-      if (s.length > 8000) return { summary: `Object truncated (${s.length} chars)`, preview: s.slice(0, 8000) };
-      return output;
-    }
-  } catch {
-    // ignore
-  }
-  return output;
-}
 
 /**
  * 从工具结果中移除内部引导字段（这些字段不应暴露给用户）
@@ -555,26 +492,8 @@ function buildGuidanceSystemMessage(batch: BufferedToolResult[]): LlmMessage | n
 }
 
 function buildToolRoleAppendix(batch: BufferedToolResult[]): { assistantMsg: LlmMessage; toolMsgs: LlmMessage[]; guidanceMsg: LlmMessage | null } {
-  const tool_calls: ToolCallRequest[] = batch.map((r) => ({
-    id: r.callId,
-    type: 'function',
-    function: {
-      name: `${r.server}__${r.tool}`,
-      arguments: safeJson(r.args || {}),
-    },
-  }));
-  const assistantMsg: LlmMessage = { role: 'assistant', content: '', tool_calls };
-  
-  // 工具结果中移除内部字段，避免 LLM 将其输出给用户
-  const toolMsgs: LlmMessage[] = batch.map((r) => ({
-    role: 'tool',
-    tool_call_id: r.callId,
-    content: typeof r.result === 'string' ? r.result : safeJson(summarizeToolOutput(stripInternalFields(r.result))),
-  })) as any;
-  
-  // 生成引导 system 消息（单独传递，不混入工具结果）
+  const { assistantMsg, toolMsgs } = buildSharedToolRoleAppendix(batch, { stripInternal: stripInternalFields });
   const guidanceMsg = buildGuidanceSystemMessage(batch);
-  
   return { assistantMsg, toolMsgs, guidanceMsg };
 }
 
@@ -614,6 +533,14 @@ export class AgentLoopRunner {
         // ignore
       }
     }
+    void AgentRunEventStore.setRunStatus(id, 'cancelled').catch(() => {});
+    try {
+      void import('@tauri-apps/api/core').then(({ invoke }) =>
+        invoke('cancel_safe_shell', { executionId: id }).catch(() => {}),
+      );
+    } catch {
+      // ignore
+    }
     // best-effort：同时停止当前全局 stream（Tauri 桌面端是单流解释器）
     try {
       cancelStream();
@@ -628,7 +555,7 @@ export class AgentLoopRunner {
     const provider = String(params.provider || '').trim();
     const model = String(params.model || '').trim();
     const originalUserContent = String(params.originalUserContent || '');
-    let historyForLlm: LlmMessage[] = (params.historyForLlm || []) as any;
+    const baseHistory: LlmMessage[] = [...(params.historyForLlm || [])] as LlmMessage[];
     const baseOptions: Record<string, any> = { ...(params.options || {}), conversationId, messageId: assistantMessageId };
     const hooks = params.runtimeHooks;
 
@@ -641,10 +568,17 @@ export class AgentLoopRunner {
 
     const attemptByKey = new Map<string, number>();
     const consecutiveEmpty = { n: 0 };
+    const controlPlane = new AgentRunControlPlane(assistantMessageId, conversationId, assistantMessageId);
+    let streamFailed = false;
 
     await setAgentRunState({ assistantMessageId, conversationId, running: true });
 
     try {
+      await controlPlane.start();
+      if (originalUserContent.trim()) {
+        await controlPlane.record({ type: 'user_message', content: originalUserContent });
+      }
+      await controlPlane.record({ type: 'context_change', kind: 'environment', content: 'agent_run_started' });
       try {
         await hooks?.onAgentStart?.({ assistantMessageId, conversationId });
       } catch {
@@ -653,26 +587,47 @@ export class AgentLoopRunner {
       // 强制注入工具定义（agent 模式）
       const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
       const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
+      const envelope = buildAgentPromptEnvelope(injection);
+      const capability = resolveAgentToolCapability(provider, model);
+      const conversationHistory = dedupeEnvelopeSystemPrefix(baseHistory, envelope.prefixMessages);
 
       // 复用工具清单（避免每轮都计算）
       const toolOptions: Record<string, any> = { ...baseOptions };
-      if (injection.useNativeTools && injection.nativeTools && injection.nativeTools.length > 0) {
-        toolOptions.tools = injection.nativeTools.map((t: any) => ({
+      if (capability.useNativeTools && injection.useNativeTools && envelope.tools.length > 0) {
+        toolOptions.tools = envelope.tools.map((t) => ({
           name: t.name,
           description: t.description,
           parameters: t.parameters,
         }));
         toolOptions.toolChoice = 'auto';
         toolOptions.__useNativeTools = true;
+      } else {
+        delete toolOptions.tools;
+        toolOptions.toolChoice = 'none';
+        toolOptions.__useNativeTools = false;
       }
+      const renderMode = capability.renderMode;
 
       let round = 0;
       let budgetUsed = 0;  // 加权预算消耗
       let forceNoTools = false;
 
+      const markStreamFailed = async (reason: string) => {
+        streamFailed = true;
+        const short = String(reason || 'unknown').slice(0, 200);
+        await controlPlane.record({
+          type: 'context_change',
+          kind: 'other',
+          content: `agent_stream_failed: ${short}`,
+        }).catch(() => {});
+      };
+
       // while(true) agent loop
       while (true) {
-        if (isCancelled(assistantMessageId, ctrl.signal)) break;
+        if (isCancelled(assistantMessageId, ctrl.signal)) {
+          controlPlane.markCancelled();
+          break;
+        }
         round += 1;
 
         // 进入每一轮 stream 前，确保 message.status=loading（避免 Stop 闪烁）
@@ -702,14 +657,35 @@ export class AgentLoopRunner {
                 args: req.args || {},
                 provider,
                 model,
-                historyForLlm,
+                historyForLlm: controlPlane.buildLlmMessages(conversationHistory, renderMode),
                 originalUserContent,
                 callId: req.callId,
                 cardId: req.cardId,
                 lockKey: req.lockKey,
               });
+              await controlPlane.record({
+                type: 'tool_call_requested',
+                callId,
+                cardId: req.cardId,
+                server: req.server,
+                tool: req.tool,
+                args: req.args,
+              });
               const out = await DEFAULT_PIPELINE.run(inv);
+              if (isCancelled(assistantMessageId, ctrl.signal) || isPipelineSkipped(out)) {
+                return;
+              }
               results.set(key, { cardIdOrKey: key, callId, server: req.server, tool: req.tool, args: req.args, result: out });
+              await controlPlane.record({
+                type: 'tool_call_output',
+                callId,
+                cardId: req.cardId,
+                server: req.server,
+                tool: req.tool,
+                args: req.args,
+                output: out,
+                isError: !!(out as any)?.error,
+              });
             } catch (e) {
               const msg = e instanceof Error ? e.message : String(e);
               results.set(key, {
@@ -738,13 +714,14 @@ export class AgentLoopRunner {
           provider,
           model,
           originalUserContent,
-          historyForLlm,
+          historyForLlm: controlPlane.buildLlmMessages(conversationHistory, renderMode),
           onUIUpdate: () => {},
-          onError: () => {},
+          onError: (error) => {
+            void markStreamFailed(error?.message || 'stream_error');
+          },
           onToolCall,
-          // AgentLoop 模式下，跳过每轮流完成时的标题生成
-          // 标题生成会在整个 AgentLoop 结束后统一处理，避免与主模型并发抢占资源
           skipTitleGeneration: true,
+          skipEmptyBubbleRollback: true,
         });
 
         const callbacks = orchestrator.createCallbacks();
@@ -795,12 +772,19 @@ export class AgentLoopRunner {
           } catch {
             // ignore
           }
+          streamFailed = true;
         };
 
         // Loop guard：超过预算上限时强制本轮不再允许工具
         const budgetExceeded = budgetUsed >= MAX_BUDGET;
         const options = forceNoTools || budgetExceeded ? { ...toolOptions, toolChoice: 'none' } : { ...toolOptions };
-        let messages: LlmMessage[] = historyForLlm;
+        let messages: LlmMessage[] = await controlPlane.assembleRoundMessages({
+          prefixMessages: envelope.prefixMessages,
+          baseHistory: conversationHistory,
+          renderMode,
+          provider,
+          model,
+        });
         if (forceNoTools || budgetExceeded) {
           messages = [
             ...messages,
@@ -818,16 +802,55 @@ export class AgentLoopRunner {
 
         try {
           await streamChat(provider, model, messages, callbacks, options);
-        } catch {
-          // stream 错误：由 StreamOrchestrator.onError/handleComplete 负责收尾；loop 退出
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          const err = e instanceof Error ? e : new Error(msg);
+          await markStreamFailed(msg);
+          try {
+            await useChatStore.getState().updateMessage(assistantMessageId, {
+              status: 'error',
+              content: msg,
+            });
+          } catch {
+            // ignore
+          }
+          try {
+            const { showSendErrorToast } = await import('@/lib/chat/showSendErrorToast');
+            showSendErrorToast(err, { providerName: provider });
+          } catch {
+            // ignore
+          }
+          try {
+            hooks?.onStreamError?.(err, { assistantMessageId, conversationId, round });
+          } catch {
+            // ignore
+          }
           break;
         }
 
-        if (isCancelled(assistantMessageId, ctrl.signal)) break;
+        if (streamFailed) {
+          break;
+        }
+
+        if (isCancelled(assistantMessageId, ctrl.signal)) {
+          controlPlane.markCancelled();
+          break;
+        }
 
         // 等待本轮工具（若有）
-        if (pending.length === 0) break;
+        if (pending.length === 0) {
+          const finalContent = orchestrator.getContext().content;
+          if (finalContent?.trim()) {
+            await controlPlane.record({ type: 'assistant_message', content: finalContent });
+          }
+          break;
+        }
         await Promise.allSettled(pending);
+
+        if (isCancelled(assistantMessageId, ctrl.signal)) {
+          controlPlane.markCancelled();
+          break;
+        }
 
         // 计算本轮预算消耗 + 熔断（空结果/重复失败）
         let roundCost = 0;
@@ -855,30 +878,64 @@ export class AgentLoopRunner {
         budgetUsed += roundCost;
 
         if (toolLoopTripped) {
+          const batch = Array.from(results.values());
+          const guidanceMsg = buildGuidanceSystemMessage(batch);
+          if (guidanceMsg && (guidanceMsg as any).content) {
+            await controlPlane.record({
+              type: 'context_change',
+              kind: 'other',
+              content: String((guidanceMsg as any).content),
+            });
+          }
           forceNoTools = true;
         }
 
-        // 生成 tool_role messages，进入下一轮
-        const batch = Array.from(results.values()).sort((a, b) => a.cardIdOrKey.localeCompare(b.cardIdOrKey));
-        const { assistantMsg, toolMsgs, guidanceMsg } = buildToolRoleAppendix(batch);
-        // 注意顺序：assistant → tool results → (optional) guidance system message
-        // guidance 作为 system 消息注入，LLM 会将其视为内部指令而非需要转述的内容
-        historyForLlm = [...historyForLlm, assistantMsg, ...toolMsgs];
-        if (guidanceMsg) {
-          historyForLlm = [...historyForLlm, guidanceMsg];
-        }
-
-        // 若已触发熔断，则让下一轮走一次“纯文本回复”，然后退出
+        // 工具结果已写入 EventLog；下一轮从事件投影构建历史
         if (forceNoTools) {
           // 下一轮会 toolChoice=none，stream 完成后 pending 为空，会 break
         }
       }
     } finally {
       activeLoops.delete(assistantMessageId);
+      const finalStatus = controlPlane.isCancelled() || isCancelled(assistantMessageId, ctrl.signal)
+        ? 'cancelled'
+        : streamFailed
+          ? 'failed'
+          : 'completed';
+      if (finalStatus === 'cancelled') {
+        await controlPlane.recordCancelled().catch(() => {});
+      }
+      await controlPlane.finish(finalStatus).catch(() => {});
+      // Agent answers use the same deterministic citation path as the legacy
+      // RAG flow. Resolve markers while the run-scoped evidence registry is
+      // still alive, then persist the citation snapshot with the message.
+      try {
+        const evidence = listEvidence(assistantMessageId);
+        if (evidence.length) {
+          const st = useChatStore.getState();
+          const conv = st.conversations.find((c) => c.id === conversationId);
+          const message = conv?.messages?.find((m: any) => m.id === assistantMessageId) as any;
+          if (message?.content) {
+            const { displayAnswer, citations } = applyCitations(String(message.content), evidence);
+            if (displayAnswer !== message.content || citations.length) {
+              st.updateMessageContentInMemory(assistantMessageId, displayAnswer);
+              await st.updateMessage(assistantMessageId, { content: displayAnswer, citations } as any);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[AgentLoopRunner] citation finalization failed:', error);
+      }
       try {
         await hooks?.onAgentEnd?.({ assistantMessageId, conversationId });
       } catch {
         // ignore
+      }
+      try {
+        const { clearEvidenceRegistry } = await import('@/lib/rag/EvidenceRegistry');
+        clearEvidenceRegistry(assistantMessageId);
+      } catch {
+        /* noop */
       }
       await setAgentRunState({ assistantMessageId, conversationId, running: false });
 
@@ -915,4 +972,3 @@ export class AgentLoopRunner {
     }
   }
 }
-

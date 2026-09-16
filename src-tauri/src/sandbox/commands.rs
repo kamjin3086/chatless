@@ -113,14 +113,36 @@ pub async fn run_safe_shell(
     .app_data_dir()
     .map_err(|e| format!("无法获取应用数据目录: {}", e))?;
 
-  // 创建校验器，限制工作目录
-  let validator = CommandValidator::new().with_allowed_working_dirs(vec![
-    app_data_dir.to_string_lossy().to_string(),
-    // 也允许临时目录
-    std::env::temp_dir().to_string_lossy().to_string(),
-  ]);
+  // 创建校验器，限制工作目录并启用严格模式
+  let validator = CommandValidator::new()
+    .with_strict_mode(true)
+    .with_allowed_commands(vec![
+      "git".into(),
+      "node".into(),
+      "npm".into(),
+      "pnpm".into(),
+      "yarn".into(),
+      "python".into(),
+      "python3".into(),
+      "pip".into(),
+      "cargo".into(),
+      "rustc".into(),
+      "go".into(),
+      "echo".into(),
+      "dir".into(),
+      "type".into(),
+      "where".into(),
+      "which".into(),
+      "cat".into(),
+      "ls".into(),
+      "pwd".into(),
+      "cd".into(),
+    ])
+    .with_allowed_working_dirs(vec![
+      app_data_dir.to_string_lossy().to_string(),
+      std::env::temp_dir().to_string_lossy().to_string(),
+    ]);
 
-  // 构建完整命令用于校验
   let full_command = if options.args.is_empty() {
     options.command.clone()
   } else {

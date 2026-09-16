@@ -376,7 +376,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
   const handleUse = () => {
     if (!knowledgeBase) return;
     // 跳转到聊天页并携带 knowledgeBase 查询参数
-    router.push(`/chat?knowledgeBase=${knowledgeBase.id}`);
+    router.push(`/chat?knowledgeBase=${knowledgeBase.id}&mode=agent`);
     toast.success('已切换到聊天，可开始使用该知识库');
   };
 
@@ -488,8 +488,8 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
             <div className="text-sm text-amber-900 dark:text-amber-100">
               <p className="font-medium">需要重建索引</p>
               <p className="text-xs opacity-80 mt-0.5">
-                Evidence RAG v2 升级后旧索引已失效。待索引 {indexStatus.pending} 篇，已索引 {indexStatus.indexed}/{indexStatus.total} 篇。
-                未完成重建前检索将不可用。
+                待索引 {indexStatus.pending} 篇，失败 {indexStatus.failed} 篇，已建立关键词索引 {indexStatus.indexed}/{indexStatus.total} 篇。
+                未索引文档不会出现在检索结果中。
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={() => setRebuildDialogOpen(true)}>
@@ -675,4 +675,4 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
       />
     </>
   );
-} 
+}

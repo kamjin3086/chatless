@@ -58,20 +58,23 @@ export class GoogleAIProvider extends BaseProvider {
       const { tauriFetch } = await import('@/lib/request');
       const { judgeApiReachable } = await import('./healthcheck');
       const resp: any = await tauriFetch(`${url}?key=${encodeURIComponent(fakeKey)}`, {
-        method: 'POST', rawResponse: true, browserHeaders: true,
+        method: 'POST',
+        rawResponse: true,
         headers: { 'Content-Type': 'application/json' },
-        body, timeout: 5000, fallbackToBrowserOnError: true, debugTag: 'GoogleAI-HealthCheck', verboseDebug: true, includeBodyInLogs: true
+        body,
+        timeout: 8000,
+        fallbackToBrowserOnError: false,
+        debugTag: 'GoogleAI-HealthCheck',
       });
       const status = (resp?.status ?? 0) as number;
       const text = (await resp.text?.()) || '';
-      const judged = judgeApiReachable(status, text);
+      const contentType = resp?.headers?.get?.('content-type') || '';
+      const judged = judgeApiReachable(status, text, contentType);
       if (judged.ok) return { ok: true, message: judged.message, meta: { status } };
-      return { ok: false, reason: 'UNKNOWN', message: `HTTP ${status}`, meta: { status } };
+      return { ok: false, reason: judged.reason || 'UNKNOWN', message: judged.message || `HTTP ${status}`, meta: { status } };
     } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (/timeout|abort/i.test(msg)) return { ok: false, reason: 'TIMEOUT', message: '连接超时' };
-      if (/network|fetch|ENOTFOUND|ECONN/i.test(msg)) return { ok: false, reason: 'NETWORK', message: '网络错误' };
-      return { ok: false, reason: 'UNKNOWN', message: msg };
+      const { classifyNetworkError } = await import('./healthcheck');
+      return classifyNetworkError(e);
     }
   }
 

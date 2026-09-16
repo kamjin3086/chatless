@@ -16,6 +16,8 @@ import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
 import { AGENT_CONTEXT_SERVER_NAME, AGENT_CONTEXT_TOOLS } from './agentContext';
 import { SYSTEM_SERVER_NAME, SYSTEM_PROMPT_TOOLS } from './systemPrompts';
 import { SKILL_SERVER_NAME, SKILL_UNIFIED_TOOLS } from './skillUnifiedTools';
+import { CODING_PACK_SERVER_NAME, CODING_PACK_TOOLS } from './codingPack';
+import { KNOWLEDGE_SERVER_NAME, KNOWLEDGE_TOOLS } from './knowledge';
 
 // ============ 工具组定义 ============
 
@@ -23,7 +25,9 @@ export type ToolGroupId =
   | 'core'      // 核心：始终加载（fs + shell + web）
   | 'ctx'       // 上下文管理（复杂任务）
   | 'skill'     // 技能系统
-  | 'prompt';   // 提示词管理
+  | 'prompt'    // 提示词管理
+  | 'coding'    // Coding Pack（默认关闭）
+  | 'knowledge'; // 知识库（会话挂载 KB + Agent 模式）
 
 export interface ToolGroup {
   id: ToolGroupId;
@@ -103,6 +107,31 @@ export const TOOL_GROUPS: ToolGroup[] = [
     ],
     tools: SYSTEM_PROMPT_TOOLS.map(t => ({ server: SYSTEM_SERVER_NAME, tool: t })),
   },
+  {
+    id: 'coding',
+    name: 'Coding Pack',
+    description: '项目挂载、glob/grep、patch 预览、git 只读、诊断（默认关闭）',
+    intentKeywords: [
+      /代码库|代码库|repository|repo/i,
+      /glob|grep|ripgrep|搜索文件/i,
+      /patch|diff|apply_patch/i,
+      /git\s+(status|diff|log)/i,
+      /lint|test|诊断|diagnostic/i,
+      /挂载项目|attach.*project/i,
+    ],
+    tools: CODING_PACK_TOOLS.map(t => ({ server: CODING_PACK_SERVER_NAME, tool: t })),
+  },
+  {
+    id: 'knowledge',
+    name: '知识库',
+    description: 'knowledge_search / knowledge_read（会话挂载知识库时）',
+    intentKeywords: [
+      /知识库|knowledge\s*base/i,
+      /检索|搜索.*文档|查.*资料/i,
+      /knowledge_search|knowledge_read/i,
+    ],
+    tools: KNOWLEDGE_TOOLS.map(t => ({ server: KNOWLEDGE_SERVER_NAME, tool: t })),
+  },
 ];
 
 // ============ 工具发现工具定义 ============
@@ -130,7 +159,7 @@ export const TOOLS_LOAD_TOOL: McpTool = {
       properties: {
         group: {
           type: 'string',
-          enum: ['ctx', 'skill', 'prompt'],
+          enum: ['ctx', 'skill', 'prompt', 'coding', 'knowledge'],
           description: '要加载的工具组 ID',
         },
       },

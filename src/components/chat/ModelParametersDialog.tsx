@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { X, Plus, RotateCcw, Settings, Check, HelpCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { specializedStorage } from "@/lib/storage";
 import type { ModelParameters } from "@/types/model-params";
 import { DEFAULT_MODEL_PARAMETERS, MODEL_PARAMETER_LIMITS } from "@/types/model-params";
@@ -20,6 +20,123 @@ interface CustomParameter {
   key: string;
   value: string;
   asString: boolean; // 是否强制作为字符串处理
+}
+
+function calcPercent(value: number, min: number, max: number) {
+  if (max === min) return 0;
+  return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+}
+
+function ParamHelp({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className="inline-flex shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <HelpCircle className="w-3.5 h-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="start" className="max-w-xs">
+        <p>{text}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function sliderTrackStyle(enabled: boolean, value: number, min: number, max: number): CSSProperties {
+  const pct = calcPercent(value, min, max);
+  if (!enabled) return { background: "rgba(148, 163, 184, 0.22)" };
+  return {
+    background: `linear-gradient(to right, var(--glass-accent) 0%, var(--glass-accent) ${pct}%, rgba(148, 163, 184, 0.22) ${pct}%, rgba(148, 163, 184, 0.22) 100%)`,
+  };
+}
+
+function ParamSliderRow({
+  enabled,
+  onEnabledChange,
+  label,
+  help,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+  inputMin,
+  inputMax,
+}: {
+  enabled: boolean;
+  onEnabledChange: (v: boolean) => void;
+  label: string;
+  help: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (v: number) => void;
+  inputMin: number;
+  inputMax: number;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <Checkbox checked={enabled} onCheckedChange={(checked) => onEnabledChange(Boolean(checked))} />
+      <div className="flex items-center gap-1.5 w-44 shrink-0 min-w-0">
+        <Label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">
+          {label}
+        </Label>
+        <ParamHelp text={help} />
+      </div>
+      <input
+        type="range"
+        className="param-slider flex-1 min-w-0 h-1.5 rounded-full appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={!enabled}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={sliderTrackStyle(enabled, value, min, max)}
+      />
+      <Input
+        type="number"
+        className="w-[4.75rem] h-7 shrink-0 px-2 text-xs tabular-nums"
+        min={inputMin}
+        max={inputMax}
+        step={step}
+        value={value}
+        disabled={!enabled}
+        onChange={(e) => onChange(parseFloat(e.target.value || "0"))}
+      />
+    </div>
+  );
+}
+
+function ParamToggleRow({
+  enabled,
+  onEnabledChange,
+  label,
+  help,
+  value,
+  onValueChange,
+}: {
+  enabled: boolean;
+  onEnabledChange: (v: boolean) => void;
+  label: string;
+  help: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <Checkbox checked={enabled} onCheckedChange={(checked) => onEnabledChange(Boolean(checked))} />
+      <div className="flex items-center gap-1.5 w-44 shrink-0 min-w-0">
+        <Label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">
+          {label}
+        </Label>
+        <ParamHelp text={help} />
+      </div>
+      <div className="flex-1" />
+      <Switch size="sm" checked={value} onCheckedChange={onValueChange} disabled={!enabled} />
+    </div>
+  );
 }
 
 interface ModelParametersDialogProps {
@@ -44,7 +161,7 @@ export function ModelParametersDialog({
   const [hasChanges, setHasChanges] = useState(false);
   const [customParameters, setCustomParameters] = useState<CustomParameter[]>([]);
   const [savedParameters, setSavedParameters] = useState<ModelParameters | null>(null);
-  const [advancedEditorOpen, setAdvancedEditorOpen] = useState(true);
+  const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
   const [advancedJsonText, setAdvancedJsonText] = useState<string>('{}');
   const [advancedJsonError, setAdvancedJsonError] = useState<string>('');
   
@@ -219,12 +336,6 @@ export function ModelParametersDialog({
     }
   };
 
-  // 计算滑动条百分比
-  const calcPercent = (value: number, min: number, max: number) => {
-    if (max === min) return 0;
-    return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-  };
-
   // 自定义参数相关函数
   const convertValue = (value: string, asString: boolean = false): any => {
     if (asString) return value;
@@ -332,598 +443,255 @@ export function ModelParametersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 max-h-[85vh] overflow-hidden">
         {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <Settings className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  模型参数设置
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  配置此模型的参数设置，这些设置将仅应用于此特定模型。
-                </DialogDescription>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300">
-                    {modelLabel || modelId}
-                  </Badge>
-                  {hasChanges && (
-                    <Badge variant="outline" className="text-xs text-blue-600 border-blue-200 dark:text-blue-400 dark:border-blue-800">
-                      已修改
-                    </Badge>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-gray-500">此处设置为该模型的默认参数，影响所有会话。你仍可在"会话参数设置"中临时覆盖。</p>
-              </div>
+        <DialogHeader className="px-5 py-3.5 border-b border-slate-200/40 dark:border-slate-700/40">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <Settings className="w-4 h-4 mt-0.5 shrink-0 text-slate-500 dark:text-slate-400" />
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                模型参数设置
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                配置此模型的参数设置，这些设置将仅应用于此特定模型。
+              </DialogDescription>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate" title={modelLabel || modelId}>
+                {modelLabel || modelId}
+                {hasChanges ? " · 已修改" : ""}
+              </p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                此处设置为该模型的默认参数，影响所有会话。你仍可在「会话参数设置」中临时覆盖。
+              </p>
             </div>
           </div>
         </DialogHeader>
 
         {/* Content */}
-        <div className="px-6 py-2.5 space-y-3 max-h-[60vh] overflow-y-auto">
-          
-          {/* Temperature */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={parameters.enableTemperature !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableTemperature: Boolean(checked) }))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Temperature</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>控制输出的随机性。数值越低越确定，越高越有创意。常用范围：0.5–1.0。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1">
-                <input
-                  type="range"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                  min={MODEL_PARAMETER_LIMITS.temperature.min}
-                  max={MODEL_PARAMETER_LIMITS.temperature.max}
-                  step={MODEL_PARAMETER_LIMITS.temperature.step}
-                value={parameters.temperature || 0}
-                onChange={(e) => setParameters(prev => ({ ...prev, temperature: parseFloat(e.target.value) || 0 }))}
-                style={{
-                  background: parameters.enableTemperature === false
-                    ? '#e5e7eb'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.temperature || 0, MODEL_PARAMETER_LIMITS.temperature.min, MODEL_PARAMETER_LIMITS.temperature.max)}%, #e5e7eb ${calcPercent(parameters.temperature || 0, MODEL_PARAMETER_LIMITS.temperature.min, MODEL_PARAMETER_LIMITS.temperature.max)}%, #e5e7eb 100%)`
-                }}
-                  disabled={parameters.enableTemperature === false}
-                />
-              </div>
-                <Input
-                  type="number"
-              className="w-20 h-8 text-sm"
-              min={MODEL_PARAMETER_LIMITS.temperature.inputMin}
-              max={MODEL_PARAMETER_LIMITS.temperature.inputMax}
-              value={parameters.temperature || 0}
-                  step={MODEL_PARAMETER_LIMITS.temperature.step}
-              onChange={(e) => setParameters(prev => ({ ...prev, temperature: parseFloat(e.target.value || '0') }))}
-                  disabled={parameters.enableTemperature === false}
-                />
-              </div>
-
-          {/* Max Tokens */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={parameters.enableMaxTokens !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableMaxTokens: Boolean(checked) }))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Max Tokens</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>限制单次回复能生成的最大 Token 数。控制输出长度的硬性限制。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1">
-                <input
-                  type="range"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                  min={MODEL_PARAMETER_LIMITS.maxTokens.min}
-                  max={MODEL_PARAMETER_LIMITS.maxTokens.max}
-                  step={MODEL_PARAMETER_LIMITS.maxTokens.step}
-                value={parameters.maxTokens || 0}
-                onChange={(e) => setParameters(prev => ({ ...prev, maxTokens: parseInt(e.target.value) || 0 }))}
-                style={{
-                  background: parameters.enableMaxTokens === false
-                    ? '#e5e7eb'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.maxTokens || 0, MODEL_PARAMETER_LIMITS.maxTokens.min, MODEL_PARAMETER_LIMITS.maxTokens.max)}%, #e5e7eb ${calcPercent(parameters.maxTokens || 0, MODEL_PARAMETER_LIMITS.maxTokens.min, MODEL_PARAMETER_LIMITS.maxTokens.max)}%, #e5e7eb 100%)`
-                }}
-                  disabled={parameters.enableMaxTokens === false}
-                />
-              </div>
-                <Input
-                  type="number"
-              className="w-20 h-8 text-sm"
-              min={MODEL_PARAMETER_LIMITS.maxTokens.inputMin}
-              max={MODEL_PARAMETER_LIMITS.maxTokens.inputMax}
-              value={parameters.maxTokens || 0}
-                  step={MODEL_PARAMETER_LIMITS.maxTokens.step}
-              onChange={(e) => setParameters(prev => ({ ...prev, maxTokens: parseInt(e.target.value || '0') }))}
-                  disabled={parameters.enableMaxTokens === false}
-                />
-              </div>
-
-          {/* Top P */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={parameters.enableTopP !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableTopP: Boolean(checked) }))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Top P</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>从累计概率最高的候选中采样。越低越保守。与 Temperature 一般二选一调节。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1">
-                <input
-                  type="range"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                  min={MODEL_PARAMETER_LIMITS.topP.min}
-                  max={MODEL_PARAMETER_LIMITS.topP.max}
-                  step={MODEL_PARAMETER_LIMITS.topP.step}
-                value={parameters.topP || 0}
-                onChange={(e) => setParameters(prev => ({ ...prev, topP: parseFloat(e.target.value) || 0 }))}
-                style={{
-                  background: parameters.enableTopP === false
-                    ? '#e5e7eb'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.topP || 0, MODEL_PARAMETER_LIMITS.topP.min, MODEL_PARAMETER_LIMITS.topP.max)}%, #e5e7eb ${calcPercent(parameters.topP || 0, MODEL_PARAMETER_LIMITS.topP.min, MODEL_PARAMETER_LIMITS.topP.max)}%, #e5e7eb 100%)`
-                }}
-                  disabled={parameters.enableTopP === false}
-                />
-              </div>
-                <Input
-                  type="number"
-              className="w-20 h-8 text-sm"
-              min={MODEL_PARAMETER_LIMITS.topP.inputMin}
-              max={MODEL_PARAMETER_LIMITS.topP.inputMax}
-              value={parameters.topP || 0}
-                  step={MODEL_PARAMETER_LIMITS.topP.step}
-              onChange={(e) => setParameters(prev => ({ ...prev, topP: parseFloat(e.target.value || '0') }))}
-                  disabled={parameters.enableTopP === false}
-                />
-              </div>
-
-          {/* Top K - 仅在Provider支持时显示 */}
+        <TooltipProvider delayDuration={200}>
+        <div className="px-5 py-3 space-y-2.5 max-h-[60vh] overflow-y-auto">
+          <ParamSliderRow
+            enabled={parameters.enableTemperature !== false}
+            onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableTemperature: v }))}
+            label="Temperature"
+            help="控制输出的随机性。数值越低越确定，越高越有创意。常用范围：0.5–1.0。"
+            min={MODEL_PARAMETER_LIMITS.temperature.min}
+            max={MODEL_PARAMETER_LIMITS.temperature.max}
+            step={MODEL_PARAMETER_LIMITS.temperature.step}
+            value={parameters.temperature || 0}
+            onChange={(v) => setParameters((prev) => ({ ...prev, temperature: v }))}
+            inputMin={MODEL_PARAMETER_LIMITS.temperature.inputMin}
+            inputMax={MODEL_PARAMETER_LIMITS.temperature.inputMax}
+          />
+          <ParamSliderRow
+            enabled={parameters.enableMaxTokens !== false}
+            onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableMaxTokens: v }))}
+            label="Max Tokens"
+            help="限制单次回复能生成的最大 Token 数。控制输出长度的硬性限制。"
+            min={MODEL_PARAMETER_LIMITS.maxTokens.min}
+            max={MODEL_PARAMETER_LIMITS.maxTokens.max}
+            step={MODEL_PARAMETER_LIMITS.maxTokens.step}
+            value={parameters.maxTokens || 0}
+            onChange={(v) => setParameters((prev) => ({ ...prev, maxTokens: Math.round(v) }))}
+            inputMin={MODEL_PARAMETER_LIMITS.maxTokens.inputMin}
+            inputMax={MODEL_PARAMETER_LIMITS.maxTokens.inputMax}
+          />
+          <ParamSliderRow
+            enabled={parameters.enableTopP !== false}
+            onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableTopP: v }))}
+            label="Top P"
+            help="从累计概率最高的候选中采样。越低越保守。与 Temperature 一般二选一调节。"
+            min={MODEL_PARAMETER_LIMITS.topP.min}
+            max={MODEL_PARAMETER_LIMITS.topP.max}
+            step={MODEL_PARAMETER_LIMITS.topP.step}
+            value={parameters.topP || 0}
+            onChange={(v) => setParameters((prev) => ({ ...prev, topP: v }))}
+            inputMin={MODEL_PARAMETER_LIMITS.topP.inputMin}
+            inputMax={MODEL_PARAMETER_LIMITS.topP.inputMax}
+          />
           {providerSupport.topK && (
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={(parameters as any).enableTopK !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableTopK: Boolean(checked) } as any))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Top K</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>只考虑概率最高的 K 个候选词。与 Temperature 一般二选一调节。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1">
-              <input
-                type="range"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                min={MODEL_PARAMETER_LIMITS.topK.min}
-                max={MODEL_PARAMETER_LIMITS.topK.max}
-                step={MODEL_PARAMETER_LIMITS.topK.step}
-                value={(parameters as any).topK || 0}
-                onChange={(e) => setParameters(prev => ({ ...prev, topK: parseInt(e.target.value) || 0 } as any))}
-                style={{
-                  background: (parameters as any).enableTopK === false
-                    ? '#e5e7eb'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent((parameters as any).topK || 0, MODEL_PARAMETER_LIMITS.topK.min, MODEL_PARAMETER_LIMITS.topK.max)}%, #e5e7eb ${calcPercent((parameters as any).topK || 0, MODEL_PARAMETER_LIMITS.topK.min, MODEL_PARAMETER_LIMITS.topK.max)}%, #e5e7eb 100%)`
-                }}
-                disabled={(parameters as any).enableTopK === false}
-              />
-            </div>
-            <Input
-              type="number"
-              className="w-20 h-8 text-sm"
-              min={MODEL_PARAMETER_LIMITS.topK.inputMin}
-              max={MODEL_PARAMETER_LIMITS.topK.inputMax}
-              value={(parameters as any).topK || 0}
+            <ParamSliderRow
+              enabled={(parameters as any).enableTopK !== false}
+              onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableTopK: v } as any))}
+              label="Top K"
+              help="只考虑概率最高的 K 个候选词。与 Temperature 一般二选一调节。"
+              min={MODEL_PARAMETER_LIMITS.topK.min}
+              max={MODEL_PARAMETER_LIMITS.topK.max}
               step={MODEL_PARAMETER_LIMITS.topK.step}
-              onChange={(e) => setParameters(prev => ({ ...prev, topK: parseInt(e.target.value || '0') } as any))}
-              disabled={(parameters as any).enableTopK === false}
+              value={(parameters as any).topK || 0}
+              onChange={(v) => setParameters((prev) => ({ ...prev, topK: Math.round(v) } as any))}
+              inputMin={MODEL_PARAMETER_LIMITS.topK.inputMin}
+              inputMax={MODEL_PARAMETER_LIMITS.topK.inputMax}
             />
-          </div>
           )}
-
-          {/* Min P - 仅在Provider支持时显示 */}
           {providerSupport.minP && (
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={(parameters as any).enableMinP !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableMinP: Boolean(checked) } as any))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Min P</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>设置最低概率阈值，低于此值的候选词会被过滤。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1">
-              <input
-                type="range"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                min={MODEL_PARAMETER_LIMITS.minP.min}
-                max={MODEL_PARAMETER_LIMITS.minP.max}
-                step={MODEL_PARAMETER_LIMITS.minP.step}
-                value={(parameters as any).minP || 0}
-                onChange={(e) => setParameters(prev => ({ ...prev, minP: parseFloat(e.target.value) || 0 } as any))}
-                style={{
-                  background: (parameters as any).enableMinP === false
-                    ? '#e5e7eb'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent((parameters as any).minP || 0, MODEL_PARAMETER_LIMITS.minP.min, MODEL_PARAMETER_LIMITS.minP.max)}%, #e5e7eb ${calcPercent((parameters as any).minP || 0, MODEL_PARAMETER_LIMITS.minP.min, MODEL_PARAMETER_LIMITS.minP.max)}%, #e5e7eb 100%)`
-                }}
-                disabled={(parameters as any).enableMinP === false}
-              />
-            </div>
-            <Input
-              type="number"
-              className="w-20 h-8 text-sm"
-              min={MODEL_PARAMETER_LIMITS.minP.inputMin}
-              max={MODEL_PARAMETER_LIMITS.minP.inputMax}
-              value={(parameters as any).minP || 0}
+            <ParamSliderRow
+              enabled={(parameters as any).enableMinP !== false}
+              onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableMinP: v } as any))}
+              label="Min P"
+              help="设置最低概率阈值，低于此值的候选词会被过滤。"
+              min={MODEL_PARAMETER_LIMITS.minP.min}
+              max={MODEL_PARAMETER_LIMITS.minP.max}
               step={MODEL_PARAMETER_LIMITS.minP.step}
-              onChange={(e) => setParameters(prev => ({ ...prev, minP: parseFloat(e.target.value || '0') } as any))}
-              disabled={(parameters as any).enableMinP === false}
+              value={(parameters as any).minP || 0}
+              onChange={(v) => setParameters((prev) => ({ ...prev, minP: v } as any))}
+              inputMin={MODEL_PARAMETER_LIMITS.minP.inputMin}
+              inputMax={MODEL_PARAMETER_LIMITS.minP.inputMax}
             />
-            </div>
           )}
+          <ParamSliderRow
+            enabled={parameters.enableFrequencyPenalty !== false}
+            onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableFrequencyPenalty: v }))}
+            label="Frequency Penalty"
+            help="增大可降低重复词汇的概率。"
+            min={MODEL_PARAMETER_LIMITS.frequencyPenalty.min}
+            max={MODEL_PARAMETER_LIMITS.frequencyPenalty.max}
+            step={MODEL_PARAMETER_LIMITS.frequencyPenalty.step}
+            value={parameters.frequencyPenalty || 0}
+            onChange={(v) => setParameters((prev) => ({ ...prev, frequencyPenalty: v }))}
+            inputMin={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMin}
+            inputMax={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMax}
+          />
+          <ParamSliderRow
+            enabled={parameters.enablePresencePenalty !== false}
+            onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enablePresencePenalty: v }))}
+            label="Presence Penalty"
+            help="增大可鼓励模型引入新话题。"
+            min={MODEL_PARAMETER_LIMITS.presencePenalty.min}
+            max={MODEL_PARAMETER_LIMITS.presencePenalty.max}
+            step={MODEL_PARAMETER_LIMITS.presencePenalty.step}
+            value={parameters.presencePenalty || 0}
+            onChange={(v) => setParameters((prev) => ({ ...prev, presencePenalty: v }))}
+            inputMin={MODEL_PARAMETER_LIMITS.presencePenalty.inputMin}
+            inputMax={MODEL_PARAMETER_LIMITS.presencePenalty.inputMax}
+          />
 
-          {/* Frequency Penalty */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={parameters.enableFrequencyPenalty !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableFrequencyPenalty: Boolean(checked) }))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Frequency Penalty</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>增大可降低重复词汇的概率。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1">
-                <input
-                  type="range"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                  min={MODEL_PARAMETER_LIMITS.frequencyPenalty.min}
-                  max={MODEL_PARAMETER_LIMITS.frequencyPenalty.max}
-                  step={MODEL_PARAMETER_LIMITS.frequencyPenalty.step}
-                value={parameters.frequencyPenalty || 0}
-                onChange={(e) => setParameters(prev => ({ ...prev, frequencyPenalty: parseFloat(e.target.value) || 0 }))}
-                style={{
-                  background: parameters.enableFrequencyPenalty === false
-                    ? '#e5e7eb'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.frequencyPenalty || 0, MODEL_PARAMETER_LIMITS.frequencyPenalty.min, MODEL_PARAMETER_LIMITS.frequencyPenalty.max)}%, #e5e7eb ${calcPercent(parameters.frequencyPenalty || 0, MODEL_PARAMETER_LIMITS.frequencyPenalty.min, MODEL_PARAMETER_LIMITS.frequencyPenalty.max)}%, #e5e7eb 100%)`
-                }}
-                  disabled={parameters.enableFrequencyPenalty === false}
-                />
-              </div>
-                <Input
-                  type="number"
-              className="w-20 h-8 text-sm"
-              min={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMin}
-              max={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMax}
-              value={parameters.frequencyPenalty || 0}
-                  step={MODEL_PARAMETER_LIMITS.frequencyPenalty.step}
-              onChange={(e) => setParameters(prev => ({ ...prev, frequencyPenalty: parseFloat(e.target.value || '0') }))}
-                  disabled={parameters.enableFrequencyPenalty === false}
-                />
-              </div>
-
-          {/* Presence Penalty */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={parameters.enablePresencePenalty !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enablePresencePenalty: Boolean(checked) }))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Presence Penalty</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>增大可鼓励模型引入新话题。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1">
-                <input
-                  type="range"
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                  min={MODEL_PARAMETER_LIMITS.presencePenalty.min}
-                  max={MODEL_PARAMETER_LIMITS.presencePenalty.max}
-                  step={MODEL_PARAMETER_LIMITS.presencePenalty.step}
-                value={parameters.presencePenalty || 0}
-                onChange={(e) => setParameters(prev => ({ ...prev, presencePenalty: parseFloat(e.target.value) || 0 }))}
-                style={{
-                  background: parameters.enablePresencePenalty === false
-                    ? '#e5e7eb'
-                    : `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${calcPercent(parameters.presencePenalty || 0, MODEL_PARAMETER_LIMITS.presencePenalty.min, MODEL_PARAMETER_LIMITS.presencePenalty.max)}%, #e5e7eb ${calcPercent(parameters.presencePenalty || 0, MODEL_PARAMETER_LIMITS.presencePenalty.min, MODEL_PARAMETER_LIMITS.presencePenalty.max)}%, #e5e7eb 100%)`
-                }}
-                  disabled={parameters.enablePresencePenalty === false}
-                />
-              </div>
-                <Input
-                  type="number"
-              className="w-20 h-8 text-sm"
-              min={MODEL_PARAMETER_LIMITS.presencePenalty.inputMin}
-              max={MODEL_PARAMETER_LIMITS.presencePenalty.inputMax}
-              value={parameters.presencePenalty || 0}
-                  step={MODEL_PARAMETER_LIMITS.presencePenalty.step}
-              onChange={(e) => setParameters(prev => ({ ...prev, presencePenalty: parseFloat(e.target.value || '0') }))}
-                  disabled={parameters.enablePresencePenalty === false}
-                />
-              </div>
-
-          {/* Thinking */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={(parameters as any).enableThinking === true}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableThinking: Boolean(checked) } as any))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">启用思考模式</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>启用后，模型会展示思考过程（如Ollama的thinking字段）。关闭则直接输出结果。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1 flex items-center gap-2">
-              <Label className={cn(
-                "text-sm",
-                (parameters as any).enableThinking === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-              )}>
-                {(parameters as any).thinking ? "已启用" : "已禁用"}
-              </Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setParameters(prev => ({ ...prev, thinking: !(prev as any).thinking } as any))}
-                disabled={(parameters as any).enableThinking === false}
-                className={cn(
-                  "ml-auto px-3",
-                  (parameters as any).thinking ? "bg-green-50 text-green-600 border-green-200" : ""
-                )}
-              >
-                {(parameters as any).thinking ? "开启" : "关闭"}
-              </Button>
-            </div>
-          </div>
-
-          {/* Streaming */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={(parameters as any).enableStreaming !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableStreaming: Boolean(checked) } as any))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">启用流式响应</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>启用后，模型会实时流式输出内容。关闭则等待全部生成完成后一次性返回。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1 flex items-center gap-2">
-              <Label className={cn(
-                "text-sm",
-                (parameters as any).enableStreaming === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300"
-              )}>
-                {(parameters as any).streaming ? "已启用" : "已禁用"}
-              </Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setParameters(prev => ({ ...prev, streaming: !(prev as any).streaming } as any))}
-                disabled={(parameters as any).enableStreaming === false}
-                className={cn(
-                  "ml-auto px-3",
-                  (parameters as any).streaming ? "bg-blue-50 text-blue-600 border-blue-200" : ""
-                )}
-              >
-                {(parameters as any).streaming ? "开启" : "关闭"}
-              </Button>
-            </div>
-          </div>
+          <ParamToggleRow
+            enabled={(parameters as any).enableThinking === true}
+            onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableThinking: v } as any))}
+            label="思考模式"
+            help="启用后，模型会展示思考过程。关闭则直接输出结果。"
+            value={!!(parameters as any).thinking}
+            onValueChange={(v) => setParameters((prev) => ({ ...prev, thinking: v } as any))}
+          />
+          <ParamToggleRow
+            enabled={(parameters as any).enableStreaming !== false}
+            onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableStreaming: v } as any))}
+            label="流式响应"
+            help="启用后实时流式输出。关闭则等待全部生成完成后一次性返回。"
+            value={(parameters as any).streaming !== false}
+            onValueChange={(v) => setParameters((prev) => ({ ...prev, streaming: v } as any))}
+          />
 
           {/* Format - 仅在Provider支持时显示 */}
           {providerSupport.format && (
-          <div className="flex items-center gap-3">
-            <Checkbox 
-              checked={(parameters as any).enableFormat !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableFormat: Boolean(checked) } as any))}
-            />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">输出格式</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>指定模型输出格式。选择"json"可强制模型返回JSON格式的内容。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="flex-1 flex items-center gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Checkbox
+                checked={(parameters as any).enableFormat !== false}
+                onCheckedChange={(checked) => setParameters((prev) => ({ ...prev, enableFormat: Boolean(checked) } as any))}
+              />
+              <div className="flex items-center gap-1.5 w-44 shrink-0">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">输出格式</Label>
+                <ParamHelp text='指定模型输出格式。选择 "json" 可强制返回 JSON。' />
+              </div>
+              <div className="flex-1" />
               <select
-                value={(parameters as any).format || 'none'}
-                onChange={(e) => setParameters(prev => ({ ...prev, format: e.target.value === 'none' ? undefined : e.target.value } as any))}
+                value={(parameters as any).format || "none"}
+                onChange={(e) =>
+                  setParameters((prev) => ({
+                    ...prev,
+                    format: e.target.value === "none" ? undefined : e.target.value,
+                  } as any))
+                }
                 disabled={(parameters as any).enableFormat === false}
-                className={cn(
-                  "ml-auto px-3 py-1.5 text-sm border rounded-md",
-                  (parameters as any).enableFormat === false 
-                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-                )}
+                className="h-7 px-2 text-xs rounded-md border border-slate-200/70 dark:border-slate-600/50 bg-transparent text-slate-700 dark:text-slate-200 disabled:opacity-40"
               >
                 <option value="none">无限制</option>
                 <option value="json">JSON</option>
               </select>
             </div>
-          </div>
           )}
 
-          {/* Stop Sequences */}
-          <div className="flex items-center gap-3">
-            <Checkbox 
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Checkbox
               checked={parameters.enableStopSequences !== false}
-              onCheckedChange={(checked) => setParameters(prev => ({ ...prev, enableStopSequences: Boolean(checked) }))}
+              onCheckedChange={(checked) => setParameters((prev) => ({ ...prev, enableStopSequences: Boolean(checked) }))}
             />
-            <div className="flex items-center gap-3 min-w-32">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Stop Sequences</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="start" className="max-w-xs">
-                    <p>当生成包含这些序列时停止生成。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            <div className="flex items-center gap-1.5 w-44 shrink-0">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">Stop Sequences</Label>
+              <ParamHelp text="当生成包含这些序列时停止生成。" />
             </div>
-            <div className="flex-1 flex gap-2">
-                <Input
-                  value={newStopSequence}
-                  onChange={(e) => setNewStopSequence(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="输入停止序列..."
-                className="flex-1 text-sm"
-                  disabled={parameters.enableStopSequences === false}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addStopSequence}
-                  disabled={parameters.enableStopSequences === false || !newStopSequence.trim()}
-                  className="px-3"
+            <Input
+              value={newStopSequence}
+              onChange={(e) => setNewStopSequence(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="输入停止序列…"
+              className="flex-1 h-7 min-w-0 text-xs"
+              disabled={parameters.enableStopSequences === false}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={addStopSequence}
+              disabled={parameters.enableStopSequences === false || !newStopSequence.trim()}
+              className="h-7 w-7 p-0 shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+          {stopSequences.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pl-[calc(1rem+0.625rem+11rem)]">
+              {stopSequences.map((sequence, index) => (
+                <Badge
+                  key={index}
+                  variant="secondary"
+                  className="flex items-center gap-1 bg-slate-100/80 text-slate-600 dark:bg-white/8 dark:text-slate-300"
                 >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            {stopSequences.length > 0 && (
-            <div className="flex flex-wrap gap-2 ml-20">
-                {stopSequences.map((sequence, index) => (
-                  <Badge 
-                    key={index} 
-                    variant="secondary" 
-                    className="flex items-center gap-1 bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                  <span className="text-xs">{sequence}</span>
+                  <button
+                    onClick={() => removeStopSequence(index)}
+                    className="ml-0.5 text-slate-400 hover:text-rose-500 transition-colors"
                   >
-                    <span className="text-xs">{sequence}</span>
-                    <button
-                      onClick={() => removeStopSequence(index)}
-                      className="ml-1 hover:text-red-500 transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
 
-          {/* 自定义参数 */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">自定义参数</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addCustomParameter}>
-                <Plus className="w-4 h-4 mr-1" />
-                添加参数
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">自定义参数</Label>
+              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={addCustomParameter}>
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                添加
               </Button>
             </div>
-            
             {customParameters.map((param, index) => (
-              <div key={index} className="flex items-center gap-2 p-3 border border-gray-200 dark:border-gray-700 rounded-md">
+              <div key={index} className="flex items-center gap-2 min-w-0">
                 <Input
-                  placeholder="参数名称"
+                  placeholder="名称"
                   value={param.key}
-                  onChange={(e) => updateCustomParameter(index, 'key', e.target.value)}
-                  className="w-32 h-8 text-sm"
+                  onChange={(e) => updateCustomParameter(index, "key", e.target.value)}
+                  className="w-32 h-7 text-xs shrink-0"
                 />
                 <Input
-                  placeholder="参数值"
+                  placeholder="值"
                   value={param.value}
-                  onChange={(e) => updateCustomParameter(index, 'value', e.target.value)}
-                  className="flex-1 h-8 text-sm"
+                  onChange={(e) => updateCustomParameter(index, "value", e.target.value)}
+                  className="flex-1 h-7 min-w-0 text-xs"
                 />
-                <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 shrink-0 text-xs text-slate-500">
                   <Checkbox
                     checked={param.asString}
-                    onCheckedChange={(checked) => updateCustomParameter(index, 'asString', Boolean(checked))}
+                    onCheckedChange={(checked) => updateCustomParameter(index, "asString", Boolean(checked))}
                   />
-                  <Label className="text-xs text-gray-500 whitespace-nowrap">Treat as string</Label>
-                </div>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
+                  字符串
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
                   size="sm"
                   onClick={() => removeCustomParameter(index)}
-                  className="text-red-500 hover:text-red-700"
+                  className="h-7 w-7 p-0 text-slate-400 hover:text-rose-500"
                 >
                   <X className="w-4 h-4" />
                 </Button>
@@ -931,117 +699,64 @@ export function ModelParametersDialog({
             ))}
           </div>
 
-          {/* 参数预览 */}
-          <div className="space-y-2">
+          <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">参数预览</Label>
-              <Badge variant="secondary" className="text-xs">JSON</Badge>
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">参数预览</Label>
+              <span className="text-[10px] uppercase tracking-wide text-slate-400">JSON</span>
             </div>
-            <pre className="text-xs bg-gray-50 dark:bg-gray-800 p-3 rounded-md border overflow-auto max-h-32">
+            <pre className="text-[11px] leading-5 p-2.5 rounded-lg border border-slate-200/40 dark:border-slate-700/40 bg-transparent overflow-auto max-h-24 text-slate-600 dark:text-slate-300">
 {JSON.stringify(previewJson, null, 2)}
             </pre>
           </div>
 
-          {/* 高级参数（JSON） */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">高级设置 (JSON)</Label>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-xs">
-                      <p>高级参数会被直接合并到请求选项（遵循各 Provider 的字段定义）。请仅在清楚目标模型/Provider 支持字段时使用；配置不当可能导致请求失败或被策略引擎覆盖。</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">高级设置</Label>
+                <ParamHelp text="高级参数会直接合并到请求选项。仅在清楚目标模型支持字段时使用。" />
               </div>
-              <div className="flex items-center gap-2">
-                {/* <Button variant="outline" size="sm" onClick={() => setAppliedPreviewOpen(v => !v)}>
-                  {appliedPreviewOpen ? '隐藏预览' : '显示应用预览'}
-                </Button> */}
-                <Button variant="ghost" size="sm" onClick={() => setAdvancedEditorOpen(v => !v)}>
-                  {advancedEditorOpen ? '收起' : '展开'}
-                </Button>
-              </div>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setAdvancedEditorOpen((v) => !v)}>
+                {advancedEditorOpen ? "收起" : "展开"}
+              </Button>
             </div>
-            <div className={cn("overflow-hidden transition-all duration-200", advancedEditorOpen ? "max-h-[320px] opacity-100" : "max-h-0 opacity-0")}> 
+            {advancedEditorOpen && (
               <textarea
-                value={advancedJsonText === '{}' ? '' : advancedJsonText}
-                onChange={(e) => setAdvancedJsonText(e.target.value && e.target.value.trim().length > 0 ? e.target.value : '{}')}
-                className="w-full h-40 text-xs font-mono p-3 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                placeholder={`{
-  "generationConfig": { 
-    "thinkingConfig": { "thinkingBudget": 1024 }
-  }
-}`}
+                value={advancedJsonText === "{}" ? "" : advancedJsonText}
+                onChange={(e) =>
+                  setAdvancedJsonText(e.target.value && e.target.value.trim().length > 0 ? e.target.value : "{}")
+                }
+                className="w-full h-32 text-xs font-mono p-2.5 rounded-lg border border-slate-200/50 dark:border-slate-700/50 bg-transparent"
+                placeholder={`{\n  "generationConfig": { "thinkingConfig": { "thinkingBudget": 1024 } }\n}`}
               />
-            </div>
-            {advancedJsonError ? (
-              <p className="text-xs text-red-500">JSON 格式错误：{advancedJsonError}</p>
-            ) : (
-              <p className="text-xs text-gray-500">将作为高级选项直接合并到请求选项中（遵循各 Provider 字段）。</p>
             )}
-            {/* <div className={cn("mt-2 space-y-2 overflow-hidden transition-all duration-200", appliedPreviewOpen ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0")}> 
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-gray-500">实际应用参数预览（保存前计算）</Label>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-gray-500 flex items-center gap-1">
-                      <input type="checkbox" className="scale-90" checked={allowEditApplied} onChange={(e)=>setAllowEditApplied(e.target.checked)} />
-                      允许直接编辑
-                    </label>
-                    <Button size="sm" variant="outline" onClick={applyPreviewIntoForm} className="h-6 text-xs">将预览应用到表单</Button>
-                  </div>
-                </div>
-                {allowEditApplied ? (
-                  <textarea
-                    className="w-full max-h-48 h-40 text-xs font-mono p-3 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                    value={appliedOptionsJson}
-                    onChange={(e)=>setAppliedOptionsJson(e.target.value)}
-                  />
-                ) : (
-                  <pre className="mt-1 max-h-48 overflow-auto text-xs bg-gray-50 dark:bg-gray-900/40 p-3 rounded border border-gray-100 dark:border-gray-800 whitespace-pre-wrap">{appliedOptionsJson}</pre>
-                )}
-            </div> */}
+            {advancedJsonError ? (
+              <p className="text-xs text-rose-500">JSON 格式错误：{advancedJsonError}</p>
+            ) : (
+              <p className="text-xs text-slate-400">将作为高级选项直接合并到请求中。</p>
+            )}
           </div>
         </div>
+        </TooltipProvider>
 
-        {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/20">
-          <div className="flex items-center gap-2 w-full">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleReset}
-              className="flex items-center gap-2 border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-            >
-              <RotateCcw className="w-4 h-4" />
+        <DialogFooter className="glass-dialog-footer px-5 py-3 border-t border-slate-200/40 dark:border-slate-700/40">
+          <div className="flex items-center gap-2 w-full min-w-0">
+            <Button variant="ghost" size="sm" onClick={handleReset} className="h-8 text-xs text-slate-600 dark:text-slate-300">
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
               重置为系统默认
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleClearSession}
-              className="flex items-center gap-2 ml-auto border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-            >
+            <Button variant="ghost" size="sm" onClick={handleClearSession} className="h-8 text-xs text-slate-600 dark:text-slate-300">
               清除模型参数
             </Button>
-            <div className="ml-auto" />
-            <Button 
-              onClick={handleSave} 
-              disabled={isLoading}
-              className="ml-auto flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white shadow-sm"
-            >
+            <div className="flex-1" />
+            <Button onClick={handleSave} disabled={isLoading} className="h-8 glass-btn-accent">
               {isLoading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   保存中...
                 </>
               ) : (
                 <>
-                  <Check className="w-4 h-4" />
+                  <Check className="w-3.5 h-3.5" />
                   应用
                 </>
               )}

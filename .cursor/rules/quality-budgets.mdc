@@ -1,0 +1,36 @@
+---
+description: 轻量、兼容、正确性与安全预算。任何功能突破预算必须改为可选包或删除等价成本的旧实现。
+alwaysApply: true
+---
+
+# 质量预算
+
+保持轻量、兼容、高性能。数字回归时，功能让路或降为可选包。
+
+## 性能与体积
+
+- Core 安装包增幅控制在约 10–15% 内；不把 ONNX 大模型打进默认安装包
+- 冷启动 P95 回归 < 10%；测两套：无 MCP/RAG，以及全功能
+- 流式首 token 不因审计/日志层明显变慢
+- 可选服务（MCP、ORT、远程目录）不得阻塞首屏
+
+## 正确性
+
+- 禁止用模拟 embedding 冒充本地 RAG；模型不可用就明确禁用
+- Chat 模式与 prompt tool fallback 必须保持可用
+- 测试必须真实收集并失败即失败；禁止 `MODULE_NOT_FOUND` 被吞掉仍绿
+- 不把 CI / lint / 签名校验设为 `continue-on-error`
+
+## 安全（纵深，但不为安全牺牲兼容）
+
+- 工具副作用走运行时策略，不靠模型自律
+- 收紧 CSP 与 HTTP/FS/Opener 默认范围；用户授权目录另开
+- Shell 以工作区 + 审批 + 尽量白名单为主，不只靠危险命令黑名单
+- Trace/日志默认不含 prompt、tool args、文件内容
+
+## 兼容
+
+- 保留 Ollama、LM Studio、OpenAI-compatible、无 tools 端点
+- 依赖升级按兼容矩阵整组进行，不追 latest；Next major 不与 Harness 绑定
+- 禁止未 pin 的 git `branch = main` 依赖进入发布路径
+- 不引入 Redux、RSC 全面服务端化、next-intl、Qdrant 必选后端等重型方案

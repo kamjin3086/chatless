@@ -5,6 +5,7 @@ import { Streamdown } from 'streamdown';
 import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
 import { preprocessMarkdownForSafeRender } from './markdownPreprocess';
+import { streamdownRemarkPlugins } from '@/lib/markdown/remarkPlugins';
 import { replaceAliasPathsForDisplayWithContext } from '@/lib/filesystemAllowlist/displayPathAliases';
 
 interface StreamingMarkdownProps {
@@ -225,8 +226,7 @@ export const StreamingMarkdown = React.memo(function StreamingMarkdown({
         isAnimating={isStreaming}
         components={renderers}
         controls={true}
-        rehypePlugins={[]}
-        remarkPlugins={[]}
+        remarkPlugins={streamdownRemarkPlugins}
       >
         {safe}
       </Streamdown>

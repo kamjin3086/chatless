@@ -131,11 +131,13 @@ export class StandardThinkingStrategy extends BaseStreamingStrategy {
 
     const wasInThinkingMode = this.detectedThinkStart;
 
-    // 1) 先处理 thinking（开放标签流式）
-    if (this.shouldProcessThinking(token)) {
-      events.push(...this.processThinkingStream(token));
+    // 1) 先处理 thinking（开放标签流式）— 仅解析一次
+    const thinkingContent = this.extractThinkingContent(token);
+    if (thinkingContent) {
+      events.push(...this.processThinkingStream(thinkingContent));
+    }
 
-      // 若刚刚因 </think> 退出 thinking，tagBuffer 里可能已存有 </think> 后的正文
+    if (thinkingContent || wasInThinkingMode || this.detectedThinkStart) {
       const exitedThinkingMode = wasInThinkingMode && !this.detectedThinkStart;
       if (exitedThinkingMode) {
         if (this.tagBuffer.length > 0) {

@@ -1,9 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import React from 'react';
-import { CheckCircle, XCircle, KeyRound, Loader2, AlertTriangle } from 'lucide-react';
 import { ProviderStrategySelector } from './ProviderStrategySelector';
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"; // 使用 shadcn 折叠组件
 import { ProviderHeader } from "./ProviderHeader";
 import { isDevelopmentEnvironment } from '@/lib/utils/environment';
 import ModelFetchDebugger from './ModelFetchDebugger';
@@ -15,9 +13,9 @@ import { AVAILABLE_PROVIDERS_CATALOG } from '@/lib/provider/catalog';
 import { toast } from '@/components/ui/sonner';
 import { AdvancedSettingsDialog } from './AdvancedSettingsDialog';
 import { useStableProviderIcon } from './useStableProviderIcon';
-import { getAvatarSync } from '@/lib/utils/logoService';
 import { useRecentModelsHint } from './useRecentModelsHint';
 import { getProviderKeyDocLink } from '@/lib/provider/keyDocLinks';
+import { useProviderMetaStore } from '@/store/providerMetaStore';
 
 // 导入 ProviderWithStatus 类型
 import type { ProviderWithStatus } from '@/hooks/useProviderManagement';
@@ -40,7 +38,7 @@ interface ProviderSettingsProps {
 
 function ProviderSettingsImpl({
   provider,
-  isConnecting,
+  isConnecting: _isConnecting,
   isInitialChecking,
   onUrlChange,
   onDefaultApiKeyChange,
@@ -48,21 +46,12 @@ function ProviderSettingsImpl({
   onModelApiKeyChange,
   onModelApiKeyBlur,
   onRefresh,
-  onOpenChange,
-  open,
   onPreferenceChange
 }: ProviderSettingsProps) {
-  // 受控/非受控展开状态：存在 open 则受控，否则本地管理
-  const isControlled = open !== undefined;
-  const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(false);
-  const isOpen = isControlled ? (open) : uncontrolledOpen;
-  const setIsOpen = (next: boolean) => {
-    if (!isControlled) setUncontrolledOpen(next);
-    onOpenChange?.(next);
-  };
-  // 保留最小状态集
-  const [modelSearch, setModelSearch] = useState(''); // 模型搜索输入框的值
+  const [modelSearch, setModelSearch] = useState('');
   const _lastUsedMap = useRecentModelsHint(provider.name); // 保留以便后续使用
+  const connectingNow = useProviderMetaStore((s) => s.connectingSet.has(provider.name));
+  const checking = connectingNow;
   
   // 模型参数设置弹窗状态
   const [parametersDialogOpen, setParametersDialogOpen] = useState(false);
@@ -108,7 +97,6 @@ function ProviderSettingsImpl({
 
   // 稳定的图标加载：先显示头像，后台预取真实图标，命中后平滑替换（仅切换一次）
   const { iconSrc } = useStableProviderIcon(provider);
-  const fallbackAvatarSrc = React.useMemo(() => getAvatarSync(provider.name.toLowerCase(), provider.name, 20), [provider.name]);
 
   // 处理打开模型参数设置弹窗
   const handleOpenParameters = (modelId: string, modelLabel?: string) => {
@@ -151,65 +139,7 @@ function ProviderSettingsImpl({
     toast.success('已重置为默认地址', { description: defaultUrl });
   };
 
-  // 优先判断是否正在进行初始检查 或 单个正在连接
-  // const currentlyChecking = isConnecting || isInitialChecking; // <-- REMOVE THIS LINE or modify its usage
-  // Display text/icon should primarily depend on isConnecting (individual status)
-  // Button disabling can still use isInitialChecking
-  const isGloballyInitializing = isInitialChecking; // Keep for disabling elements globally
-
-  // 新的状态显示逻辑：默认不显示状态，按需显示
-  let statusText: string | undefined;
-  let StatusIcon: any = undefined;
-  let badgeVariant: "secondary" | "destructive" | "outline" = "secondary";
-  let badgeClasses = "";
-
-  // 优先显示配置状态（持久化）
-  if (provider.configStatus) {
-    switch (provider.configStatus) {
-      case 'NO_KEY':
-        statusText = '未配置密钥';
-        StatusIcon = KeyRound;
-        badgeVariant = 'secondary';
-        // 需求：去掉边框，增加不明显的底色
-        badgeClasses = "text-gray-700 dark:text-gray-200 bg-gray-100/60 dark:bg-gray-800/40 px-2 py-1 text-xs font-medium rounded";
-        break;
-      case 'NO_FETCHER':
-        statusText = '未实现检查';
-        StatusIcon = AlertTriangle;
-        badgeVariant = 'secondary';
-        badgeClasses = "text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 text-xs font-medium";
-        break;
-    }
-  }
-  // 其次显示临时状态（检查后显示）
-  else if (provider.temporaryStatus) {
-    switch (provider.temporaryStatus) {
-      case 'CONNECTING':
-        statusText = '检查中...';
-        StatusIcon = Loader2;
-        badgeVariant = 'secondary';
-        badgeClasses = "text-yellow-700 dark:text-yellow-300 bg-yellow-100/60 dark:bg-yellow-900/30 px-2 py-1 text-xs font-medium";
-        break;
-      case 'CONNECTED':
-        statusText = '网络可达';
-        StatusIcon = CheckCircle;
-        badgeVariant = 'secondary';
-        badgeClasses = "text-green-700 dark:text-green-300 bg-green-100/60 dark:bg-green-900/30 px-2 py-1 text-xs font-medium";
-        break;
-      case 'NOT_CONNECTED':
-        statusText = '检查失败';
-        StatusIcon = XCircle;
-        badgeVariant = 'secondary';
-        badgeClasses = "text-red-700 dark:text-red-300 bg-red-100/60 dark:bg-red-900/30 px-2 py-1 text-xs font-medium";
-        break;
-    }
-  }
-  // 默认不显示状态，只显示检查时间（如果有）
-  else {
-    // 不显示状态徽章，只在tooltip中显示检查时间
-    statusText = undefined;
-    StatusIcon = undefined;
-  }
+  const isGloballyInitializing = isInitialChecking;
 
   // 本地 state 用于输入框内容（以本地为单一真实来源，失焦时提交保存）
   const [localUrl, setLocalUrl] = useState(provider.api_base_url);
@@ -237,7 +167,17 @@ function ProviderSettingsImpl({
         }
         unsubscribe = modelRepository.subscribe(provider.name, async () => {
           const latest = await modelRepository.get(provider.name);
-          setLocalRepoModels((latest || []).map((m: any) => ({ name: m.name, label: m.label || m.name, aliases: m.aliases || [], api_key: (m).apiKey })) as any);
+          const next = (latest || []).map((m: any) => ({ name: m.name, label: m.label || m.name, aliases: m.aliases || [], api_key: (m).apiKey })) as any;
+          setLocalRepoModels((prev) => {
+            if (
+              prev &&
+              prev.length === next.length &&
+              prev.every((m, i) => m.name === next[i].name && m.label === next[i].label)
+            ) {
+              return prev;
+            }
+            return next;
+          });
         });
       } catch (e) {
         console.error(e);
@@ -252,18 +192,26 @@ function ProviderSettingsImpl({
 
   const modelsForDisplay: ModelMetadata[] = (localRepoModels ?? provider.models ?? []) as any;
 
-  // 使用 ref 来跟踪是否是用户正在输入
-  // 当切换到不同 provider 或其数据变更时，刷新本地初始值
+  // URL / 密钥仅随 provider 本身变化同步；模型列表刷新不得重置输入框，否则光标会跳
   useEffect(() => {
-      setLocalUrl(provider.api_base_url);
+    setLocalUrl(provider.api_base_url);
     setLocalDefaultApiKey(provider.default_api_key || '');
-    const obj: { [modelName: string]: string } = {};
-    const list = (localRepoModels ?? provider.models ?? []) as any;
-    list.forEach((m: ModelMetadata) => {
-      obj[m.name] = m.api_key || '';
+  }, [provider.name, provider.api_base_url, provider.default_api_key]);
+
+  useEffect(() => {
+    const list = (localRepoModels ?? provider.models ?? []) as ModelMetadata[];
+    setLocalModelApiKeys((prev) => {
+      const next: { [modelName: string]: string } = {};
+      let changed = false;
+      for (const m of list) {
+        const value = m.api_key || prev[m.name] || '';
+        next[m.name] = value;
+        if (prev[m.name] !== value) changed = true;
+      }
+      if (!changed && Object.keys(prev).length === Object.keys(next).length) return prev;
+      return next;
     });
-    setLocalModelApiKeys(obj);
-  }, [provider.name, provider.api_base_url, provider.default_api_key, localRepoModels]);
+  }, [provider.name, provider.models, localRepoModels]);
 
   // 是否显示 API Key 相关字段 (Ollama 等不需要)
   const showApiKeyFields = provider.requiresApiKey !== false;
@@ -320,60 +268,42 @@ function ProviderSettingsImpl({
 
   return (
     <>
-      <Collapsible open={isOpen} onOpenChange={(open)=>{ setIsOpen(open); onOpenChange?.(open); }} className="border border-slate-200/70 dark:border-slate-700/70 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
+      <div className="provider-detail h-full min-h-0 flex flex-col overflow-hidden">
         <ProviderHeader
           provider={provider}
-          isOpen={isOpen}
-          isConnecting={isConnecting}
+          isConnecting={checking}
           isGloballyInitializing={isGloballyInitializing}
-          statusText={statusText || ''}
-          StatusIcon={StatusIcon}
-          badgeVariant={badgeVariant}
-          badgeClasses={badgeClasses}
           resolvedIconSrc={iconSrc}
-          iconError={false}
-          iconIsCatalog={false}
-          iconExtIdx={0}
-          iconExts={[] as readonly string[]}
-          setIconExtIdx={() => 0}
-          setIconError={() => {}}
-          fallbackAvatarSrc={fallbackAvatarSrc}
-          onOpenToggle={() => setIsOpen(!isOpen)}
           onRefresh={onRefresh}
           onOpenFetchDebugger={isDevelopmentEnvironment() ? (() => setFetchDebuggerOpen(true)) : undefined}
           hasFetchRule={hasFetchRule}
           onOpenSettings={() => setAdvancedDialogOpen(true)}
           onResetUrl={handleResetUrl}
-          onPreferenceChange={onPreferenceChange}
         />
 
-      <CollapsibleContent className="px-3 pb-3 pt-2 bg-slate-50/30 dark:bg-slate-900/30 border-t border-slate-200/70 dark:border-slate-700/70">
-        
-        <div className="space-y-3">
-          <ProviderConnectionSection
-            provider={provider}
-            localUrl={localUrl}
-            setLocalUrl={setLocalUrl}
-            onUrlChange={onUrlChange}
-            /* onUrlBlur removed */
-            onResetUrl={handleResetUrl}
-            showApiKeyFields={showApiKeyFields}
-            localDefaultApiKey={localDefaultApiKey}
-            setLocalDefaultApiKey={setLocalDefaultApiKey}
-            docUrl={docUrl}
-            onDefaultApiKeyChange={onDefaultApiKeyChange}
-            onDefaultApiKeyBlur={onDefaultApiKeyBlur}
-            endpointPreview={endpointPreview}
-            onPreferenceChange={onPreferenceChange}
-            showInlineMenu={false}
-          />
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="px-5 pt-3 pb-2 shrink-0">
+            <ProviderConnectionSection
+              provider={provider}
+              localUrl={localUrl}
+              setLocalUrl={setLocalUrl}
+              onUrlChange={onUrlChange}
+              showApiKeyFields={showApiKeyFields}
+              localDefaultApiKey={localDefaultApiKey}
+              setLocalDefaultApiKey={setLocalDefaultApiKey}
+              docUrl={docUrl}
+              onDefaultApiKeyChange={onDefaultApiKeyChange}
+              onDefaultApiKeyBlur={onDefaultApiKeyBlur}
+              endpointPreview={endpointPreview}
+              isConnecting={checking}
+            />
+          </div>
 
-          {/* 模型列表和配置 */}
-          <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-            {isMultiStrategyProvider && (
-              <ProviderStrategySelector providerName={provider.name} value={defaultStrategy as any} onChange={(v)=>setDefaultStrategy(v)} />
-            )}
-            <div className={isMultiStrategyProvider ? "mt-2" : ""}>
+          <div className="px-5 pb-5 flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex-1 min-h-0 flex flex-col overflow-hidden">
+              {isMultiStrategyProvider && (
+                <ProviderStrategySelector providerName={provider.name} value={defaultStrategy as any} onChange={(v)=>setDefaultStrategy(v)} />
+              )}
               <ProviderModelList
                 provider={provider}
                 modelsForDisplay={modelsForDisplay}
@@ -386,11 +316,10 @@ function ProviderSettingsImpl({
                 onModelApiKeyBlur={onModelApiKeyBlur}
                 onOpenParameters={handleOpenParameters}
               />
-              </div>
+            </div>
           </div>
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
 
 
     {/* 模型参数设置弹窗 */}
@@ -425,12 +354,16 @@ export const ProviderSettings = React.memo(ProviderSettingsImpl, (prev, next) =>
     prev.provider.api_base_url === next.provider.api_base_url &&
     prev.provider.default_api_key === next.provider.default_api_key &&
     prev.provider.displayStatus === next.provider.displayStatus &&
+    prev.provider.configStatus === next.provider.configStatus &&
+    prev.provider.temporaryStatus === next.provider.temporaryStatus &&
+    prev.provider.lastResult === next.provider.lastResult &&
+    prev.provider.lastMessage === next.provider.lastMessage &&
+    prev.provider.lastCheckedAt === next.provider.lastCheckedAt &&
     (prev.provider.preferences?.useBrowserRequest ?? false) === (next.provider.preferences?.useBrowserRequest ?? false)
   );
   return (
     sameProviderCore &&
     prev.isConnecting === next.isConnecting &&
-    prev.isInitialChecking === next.isInitialChecking &&
-    prev.open === next.open
+    prev.isInitialChecking === next.isInitialChecking
   );
 });

@@ -66,6 +66,7 @@ interface ChatInputProps {
         summary: string;
       };
       contextData: string;
+      sourceContent?: string;
     },
     knowledgeBase?: {
       id: string;
@@ -125,6 +126,7 @@ export function ChatInput({
   const [attachedDocument, setAttachedDocument] = useState<{
     name: string;
     content: string;
+    fullContent: string;
     summary: string;
     fileSize: number;
   } | null>(null);
@@ -132,7 +134,7 @@ export function ChatInput({
   // 知识库选择相关状态
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState<KnowledgeBase | null>(null);
   const [allKnowledgeBases, setAllKnowledgeBases] = useState<KnowledgeBase[]>([]);
-  
+
   // 加载知识库列表
   useEffect(() => {
     (async () => {
@@ -145,15 +147,15 @@ export function ChatInput({
       }
     })();
   }, []);
-  
+
   // 知识库选项（用于上拉选择）
-  const knowledgeBaseOptions = useMemo(() => 
+  const knowledgeBaseOptions = useMemo(() =>
     allKnowledgeBases.map(kb => ({ id: kb.id, label: kb.name })),
     [allKnowledgeBases]
   );
-  
+
   // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
-  
+
   const _webSearch = useWebSearchStore();
   const _router = useRouter();
   const setConversationToolMode = useChatStore((s: any) => s.setConversationToolMode);
@@ -162,14 +164,14 @@ export function ChatInput({
     const conv = id ? s.conversations.find((c: any) => c.id === id) : null;
     return (conv?.tool_mode as ('chat'|'agent') | undefined) || s.sessionToolMode || 'chat';
   });
-  
+
   // MCP 服务器状态
   const [_mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
     all: [],
     connected: [],
     enabled: [],
   });
-  
+
   // 加载 MCP 服务器状态
   useEffect(() => {
     (async () => {
@@ -183,7 +185,7 @@ export function ChatInput({
       }
     })();
   }, []);
-  
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // —— 输入框高度控制：默认自适应，支持顶部拖拽，最大不超过视口 40% ——
   const MIN_INPUT_HEIGHT = 66; // 与样式中的 min-h 保持一致
@@ -210,6 +212,15 @@ export function ChatInput({
 
   // === 会话内草稿：仅在切换会话/失焦/卸载时提交，避免输入过程中重渲染导致光标跳动 ===
   const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
+
+  // Knowledge sources are exposed through Agent-only knowledge tools. Keep
+  // manually mounted KBs and session documents from silently falling back to
+  // the legacy single-turn chat path.
+  useEffect(() => {
+    if ((selectedKnowledgeBase || attachedDocument) && currentConvId && currentToolMode === 'chat') {
+      void setConversationToolMode(currentConvId, 'agent');
+    }
+  }, [attachedDocument, currentConvId, currentToolMode, selectedKnowledgeBase, setConversationToolMode]);
   // 统一的“agent 是否仍在运行”信号：不要只依赖父组件 isLoading（它只覆盖 LLM stream 阶段）
   const storeAgentRunning = useChatStore((s: any) => {
     const cid = conversationId || s.currentConversationId;
@@ -328,9 +339,15 @@ export function ChatInput({
     }
   };
 
-  // 移除知识库选择
-  const _handleRemoveKnowledgeBase = () => {
+  // 移除知识库选择；如果知识库来自深链接，同时清掉 URL，避免参数 effect 立刻重新挂载它。
+  const removeSelectedKnowledgeBase = () => {
     setSelectedKnowledgeBase(null);
+    if (selectedKnowledgeBaseId && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('knowledgeBase');
+      const query = params.toString();
+      _router.replace(`${window.location.pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    }
   };
 
   const adjustTextareaHeight = () => {
@@ -434,7 +451,7 @@ export function ChatInput({
   const [skillMentionOpen, setSkillMentionOpen] = useState<boolean>(false);
   const [textareaScroll, setTextareaScroll] = useState<number>(0);
   const overlayRef = useRef<HTMLDivElement>(null);
-  
+
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -442,12 +459,12 @@ export function ChatInput({
     setOverlayFont(cs.fontFamily);
     setOverlayFontSize(cs.fontSize);
     setOverlayLineHeight(cs.lineHeight);
-    
+
     // 监听textarea滚动，同步到覆盖层
     const handleScroll = () => {
       setTextareaScroll(el.scrollTop);
     };
-    
+
     el.addEventListener('scroll', handleScroll);
     return () => el.removeEventListener('scroll', handleScroll);
   }, [textareaRef.current]);
@@ -612,7 +629,7 @@ export function ChatInput({
         }
       } catch { /* noop */ }
     }
-    
+
     // 规则（明确区分）：
     // - chat -> agent 只能通过：手动切换，或在 @/# 面板中“选择”了 MCP/Skill（见面板 onSelect）
     // - 仅输入文本中包含 @xxx / #xxx 不触发自动切换
@@ -653,7 +670,8 @@ export function ChatInput({
           fileSize: attachedDocument.fileSize,
           summary: attachedDocument.summary
         },
-        contextData: attachedDocument.content
+        contextData: attachedDocument.content,
+        sourceContent: attachedDocument.fullContent
       }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined);
     } else {
       // 普通消息，如果有选中的知识库则传递
@@ -702,15 +720,15 @@ export function ChatInput({
         fr.onerror = reject;
         fr.readAsDataURL(file);
       });
-      
+
       // 将Data URL转换为纯base64字符串（Ollama API要求）
       const base64Data = dataUrl.split(',')[1];
-      
-      setAttachedImages(prev => [...prev, { 
-        name: file.name, 
+
+      setAttachedImages(prev => [...prev, {
+        name: file.name,
         dataUrl, // 保留原始Data URL用于UI显示
         base64Data, // 纯base64数据用于API调用
-        fileSize: file.size 
+        fileSize: file.size
       }]);
     }
     e.target.value = "";
@@ -729,7 +747,7 @@ export function ChatInput({
       e.target.value = "";
       return;
     }
-    
+
     if (supportedTypes.includes(fileExtension || '')) {
       // 处理文档解析
       await handleDocumentParsing(file);
@@ -737,17 +755,17 @@ export function ChatInput({
       // 处理其他类型文件上传
       onFileUpload(file);
     }
-    
+
     e.target.value = "";
   };
 
   const handleDocumentParsing = async (file: File) => {
     setIsParsingDocument(true);
-    
+
     try {
       // 使用DocumentParser解析文件
       const result = await DocumentParser.parseFileObject(file, { maxFileSize: 20 * 1024 * 1024, timeoutMs: 30_000 });
-      
+
       if (result.success && result.content) {
         const summary = DocumentParser.getDocumentSummary(result.content, 150);
         // 生成安全预览，防止误把超长文本拼进后续提示词
@@ -756,6 +774,7 @@ export function ChatInput({
         setAttachedDocument({
           name: file.name,
           content: DocumentParser.cleanDocumentContent(preview),
+          fullContent: DocumentParser.cleanDocumentContent(result.content),
           summary,
           fileSize: file.size
         });
@@ -770,7 +789,7 @@ export function ChatInput({
       if (textareaRef.current) {
         textareaRef.current.focus();
       }
-      
+
     } catch (error) {
       console.error('文档解析失败:', error);
       toast.error(`文档解析失败`, {
@@ -1134,7 +1153,13 @@ export function ChatInput({
             selectedKnowledgeBase={selectedKnowledgeBase}
             onPickImage={() => imageInputRef.current?.click()}
             onPickDocument={() => fileInputRef.current?.click()}
-            onSelectKnowledgeBase={setSelectedKnowledgeBase}
+            onSelectKnowledgeBase={(kb) => {
+              if (kb) {
+                setSelectedKnowledgeBase(kb);
+              } else {
+                removeSelectedKnowledgeBase();
+              }
+            }}
             conversationId={conversationId}
           />
 
@@ -1237,7 +1262,7 @@ export function ChatInput({
                 <Send className="w-4 h-4" />
               </Button>
           )}
-          
+
         </div>
       </div>
 
@@ -1247,7 +1272,7 @@ export function ChatInput({
         webSearchEnabled={false}
         selectedKnowledgeBase={selectedKnowledgeBase}
         availableKnowledgeBases={knowledgeBaseOptions}
-        onRemoveKnowledgeBase={() => setSelectedKnowledgeBase(null)}
+        onRemoveKnowledgeBase={removeSelectedKnowledgeBase}
         onSelectKnowledgeBase={(id) => {
           const kb = allKnowledgeBases.find(k => k.id === id);
           if (kb) setSelectedKnowledgeBase(kb);
@@ -1270,4 +1295,4 @@ export function ChatInput({
       {/* 会话参数弹窗已迁移到上层 Chat 页面统一挂载 */}
     </div>
   );
-} 
+}

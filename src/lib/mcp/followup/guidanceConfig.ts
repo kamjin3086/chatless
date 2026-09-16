@@ -5,7 +5,7 @@ import type { GuidanceRule } from './types';
  *
  * 设计原则：
  * - 大部分引导现在通过 AgentLoopRunner.buildGuidanceSystemMessage() 以 system 消息形式注入
- * - 这里仅保留用于 FollowUpDispatcher（非 AgentLoop 路径）的兼容规则
+ * - 这里仅保留 ToolCallOrchestrator / AgentLoopRunner 共用的兼容规则占位
  * - 规则返回空字符串表示"不需要额外引导"（避免与 system 消息重复）
  *
  * 注意：

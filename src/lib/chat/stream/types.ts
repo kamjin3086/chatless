@@ -108,6 +108,10 @@ export interface StreamOrchestratorConfig {
    * 由 AgentLoopRunner 在整个循环结束后统一处理
    */
   skipTitleGeneration?: boolean;
+  /**
+   * Agent 模式：错误时不删除空气泡与用户消息（保留用户问题）
+   */
+  skipEmptyBubbleRollback?: boolean;
 }
 
 /**

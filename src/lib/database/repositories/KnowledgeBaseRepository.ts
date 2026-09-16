@@ -38,6 +38,39 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
   }
 
   /**
+   * 检查 vector_embeddings 表是否存在（兼容旧库/未索引知识库）
+   */
+  private async hasVectorEmbeddingsTable(): Promise<boolean> {
+    try {
+      const rows = await this.dbManager.select<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'vector_embeddings'`
+      );
+      return Array.isArray(rows) && rows.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 软删除与知识库关联的向量数据（表不存在时跳过）
+   */
+  private async softDeleteVectorsByKnowledgeBaseId(
+    transaction: { execute: DatabaseManager['execute'] },
+    knowledgeBaseId: string
+  ): Promise<number> {
+    if (!(await this.hasVectorEmbeddingsTable())) {
+      console.warn('[KnowledgeBaseRepository] vector_embeddings 表不存在，跳过向量软删除');
+      return 0;
+    }
+    const result = await transaction.execute(
+      `UPDATE vector_embeddings SET is_deleted = 1
+       WHERE json_extract(metadata, '$.knowledgeBaseId') = ?`,
+      [knowledgeBaseId]
+    );
+    return result.rowsAffected ?? 0;
+  }
+
+  /**
    * 创建知识库
    */
   async createKnowledgeBase(
@@ -98,7 +131,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     if (updates.description !== undefined) dbUpdates.description = updates.description;
     if (updates.icon !== undefined) dbUpdates.icon = updates.icon;
     if (updates.isEncrypted !== undefined) dbUpdates.is_encrypted = updates.isEncrypted;
-    
+
     const updated = await this.update(id, dbUpdates);
     return this.mapToKnowledgeBase(updated);
   }
@@ -108,15 +141,11 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
    */
   async deleteKnowledgeBase(id: string): Promise<boolean> {
     console.log(`[deleteKnowledgeBase] 开始删除知识库: ${id}`);
-    
+
     return await this.executeTransaction(async (transaction) => {
-      // 1. 删除向量嵌入数据（软删除）
-      const vectorsResult = await transaction.execute(
-        `UPDATE vector_embeddings SET is_deleted = 1 
-         WHERE json_extract(metadata, '$.knowledgeBaseId') = ?`,
-        [id]
-      );
-      console.log(`[deleteKnowledgeBase] 标记删除向量数据: ${vectorsResult.rowsAffected} 条`);
+      // 1. 删除向量嵌入数据（软删除，表不存在时跳过）
+      const vectorsAffected = await this.softDeleteVectorsByKnowledgeBaseId(transaction, id);
+      console.log(`[deleteKnowledgeBase] 标记删除向量数据: ${vectorsAffected} 条`);
 
       // 2. 删除知识片段
       const chunksResult = await transaction.execute(
@@ -124,6 +153,16 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
         [id]
       );
       console.log(`[deleteKnowledgeBase] 删除知识片段: ${chunksResult.rowsAffected} 条`);
+
+      // 清理新检索链路的原文块、FTS 行和检索分块，避免删除知识库后
+      // 残留结果仍能被全文检索命中。迁移在数据库服务初始化时完成。
+      await transaction.execute(
+        `DELETE FROM retrieval_chunks_fts
+          WHERE chunk_id IN (SELECT id FROM retrieval_chunks WHERE knowledge_base_id = ?)`,
+        [id],
+      );
+      await transaction.execute('DELETE FROM retrieval_chunks WHERE knowledge_base_id = ?', [id]);
+      await transaction.execute('DELETE FROM source_blocks WHERE knowledge_base_id = ?', [id]);
 
       // 3. 删除文档映射
       const mappingResult = await transaction.execute(
@@ -139,7 +178,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
       );
       console.log(`[deleteKnowledgeBase] 删除知识库记录: ${result.rowsAffected} 条`);
 
-      console.log(`[deleteKnowledgeBase] 删除完成: vectors=${vectorsResult.rowsAffected}, chunks=${chunksResult.rowsAffected}, mapping=${mappingResult.rowsAffected}, kb=${result.rowsAffected}`);
+      console.log(`[deleteKnowledgeBase] 删除完成: vectors=${vectorsAffected}, chunks=${chunksResult.rowsAffected}, mapping=${mappingResult.rowsAffected}, kb=${result.rowsAffected}`);
 
       return result.rowsAffected > 0;
     });
@@ -152,12 +191,12 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
   async cleanupOrphanedVectors(): Promise<number> {
     try {
       console.log('[cleanupOrphanedVectors] 开始清理孤立的向量数据...');
-      
+
       // 找出孤立的向量数据（没有对应的knowledge_chunks记录）
       const orphanedVectors = await this.dbManager.select(`
-        SELECT ve.id 
+        SELECT ve.id
         FROM vector_embeddings ve
-        LEFT JOIN knowledge_chunks kc ON 
+        LEFT JOIN knowledge_chunks kc ON
           json_extract(ve.metadata, '$.documentId') = kc.document_id AND
           json_extract(ve.metadata, '$.knowledgeBaseId') = kc.knowledge_base_id
         WHERE kc.id IS NULL AND ve.is_deleted = 0
@@ -173,7 +212,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
       // 软删除孤立的向量数据
       const vectorIds = orphanedVectors.map(v => v.id);
       const placeholders = vectorIds.map(() => '?').join(',');
-      
+
       const result = await this.dbManager.execute(
         `UPDATE vector_embeddings SET is_deleted = 1 WHERE id IN (${placeholders})`,
         vectorIds
@@ -212,7 +251,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
       const orphanedResult = await this.dbManager.select(`
         SELECT COUNT(*) as count
         FROM vector_embeddings ve
-        LEFT JOIN knowledge_chunks kc ON 
+        LEFT JOIN knowledge_chunks kc ON
           json_extract(ve.metadata, '$.documentId') = kc.document_id AND
           json_extract(ve.metadata, '$.knowledgeBaseId') = kc.knowledge_base_id
         WHERE kc.id IS NULL AND ve.is_deleted = 0
@@ -244,7 +283,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     chunkCount: number;
   }> {
     const stats = await this.dbManager.select(`
-      SELECT 
+      SELECT
         (SELECT COUNT(*) FROM doc_knowledge_mappings WHERE knowledge_base_id = ?) as documentCount,
         (SELECT COUNT(*) FROM knowledge_chunks WHERE knowledge_base_id = ?) as chunkCount
     `, [knowledgeBaseId, knowledgeBaseId]);
@@ -257,7 +296,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
    */
   async searchKnowledgeBases(query: string): Promise<KnowledgeBase[]> {
     const knowledgeBases = await this.dbManager.select(`
-      SELECT * FROM knowledge_bases 
+      SELECT * FROM knowledge_bases
       WHERE name LIKE ? OR description LIKE ?
       ORDER BY updated_at DESC
     `, [`%${query}%`, `%${query}%`]);
@@ -279,19 +318,19 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     try {
       const { DocumentSyncService } = await import('../../services/documentSync');
       const ensured = await DocumentSyncService.ensureDocumentInDatabase(documentId);
-      
+
       if (!ensured) {
         throw new Error(`文档不存在且无法同步: ${documentId}`);
       }
     } catch (importError) {
       console.warn('无法导入DocumentSyncService，跳过自动同步:', importError);
-      
+
       // 验证文档是否存在
       const documentExists = await this.dbManager.select(
         'SELECT id FROM documents WHERE id = ?',
         [documentId]
       );
-      
+
       if (documentExists.length === 0) {
         throw new Error(`文档不存在: ${documentId}`);
       }
@@ -302,7 +341,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
       'SELECT id FROM knowledge_bases WHERE id = ?',
       [knowledgeBaseId]
     );
-    
+
     if (knowledgeBaseExists.length === 0) {
       throw new Error(`知识库不存在: ${knowledgeBaseId}`);
     }
@@ -312,19 +351,19 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
       'SELECT id FROM doc_knowledge_mappings WHERE document_id = ? AND knowledge_base_id = ?',
       [documentId, knowledgeBaseId]
     );
-    
+
     if (existingMapping.length > 0) {
       // 如果映射已存在，更新状态并返回
       await this.dbManager.execute(
         'UPDATE doc_knowledge_mappings SET status = ?, indexed_at = ? WHERE document_id = ? AND knowledge_base_id = ?',
         [status, Date.now(), documentId, knowledgeBaseId]
       );
-      
+
       const updatedMapping = await this.dbManager.select(
         'SELECT * FROM doc_knowledge_mappings WHERE document_id = ? AND knowledge_base_id = ?',
         [documentId, knowledgeBaseId]
       );
-      
+
       return this.mapToDocMapping(updatedMapping[0]);
     }
 
@@ -337,7 +376,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     };
 
     await this.dbManager.execute(`
-      INSERT INTO doc_knowledge_mappings 
+      INSERT INTO doc_knowledge_mappings
       (id, document_id, knowledge_base_id, indexed_at, status)
       VALUES (?, ?, ?, ?, ?)
     `, [
@@ -364,45 +403,62 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     documentId: string,
     knowledgeBaseId: string
   ): Promise<boolean> {
-    try {
+    return await this.executeTransaction(async (transaction) => {
       console.log(`[removeDocumentFromKnowledgeBase] 开始删除文档: ${documentId} from ${knowledgeBaseId}`);
 
-      // 1. 先删除向量嵌入数据
-      const vectorsResult = await this.dbManager.execute(
-        `UPDATE vector_embeddings SET is_deleted = 1 
-         WHERE json_extract(metadata, '$.documentId') = ? 
-         AND json_extract(metadata, '$.knowledgeBaseId') = ?`,
-        [documentId, knowledgeBaseId]
-      );
-      console.log(`[removeDocumentFromKnowledgeBase] 标记删除向量数据: ${vectorsResult.rowsAffected} 条`);
+      let vectorsAffected = 0;
+      if (await this.hasVectorEmbeddingsTable()) {
+        const vectorsResult = await transaction.execute(
+          `UPDATE vector_embeddings SET is_deleted = 1
+           WHERE json_extract(metadata, '$.documentId') = ?
+           AND json_extract(metadata, '$.knowledgeBaseId') = ?`,
+          [documentId, knowledgeBaseId]
+        );
+        vectorsAffected = vectorsResult.rowsAffected ?? 0;
+      }
+      console.log(`[removeDocumentFromKnowledgeBase] 标记删除向量数据: ${vectorsAffected} 条`);
 
       // 2. 删除知识片段
-      const chunksResult = await this.dbManager.execute(
+      const chunksResult = await transaction.execute(
         'DELETE FROM knowledge_chunks WHERE document_id = ? AND knowledge_base_id = ?',
         [documentId, knowledgeBaseId]
       );
       console.log(`[removeDocumentFromKnowledgeBase] 删除知识片段: ${chunksResult.rowsAffected} 条`);
 
+      await transaction.execute(
+        `DELETE FROM retrieval_chunks_fts
+          WHERE chunk_id IN (
+            SELECT id FROM retrieval_chunks
+             WHERE document_id = ? AND knowledge_base_id = ?
+          )`,
+        [documentId, knowledgeBaseId],
+      );
+      await transaction.execute(
+        'DELETE FROM retrieval_chunks WHERE document_id = ? AND knowledge_base_id = ?',
+        [documentId, knowledgeBaseId],
+      );
+      await transaction.execute(
+        'DELETE FROM source_blocks WHERE document_id = ? AND knowledge_base_id = ?',
+        [documentId, knowledgeBaseId],
+      );
+
       // 3. 删除映射关系
-      const mappingResult = await this.dbManager.execute(
+      const mappingResult = await transaction.execute(
         'DELETE FROM doc_knowledge_mappings WHERE document_id = ? AND knowledge_base_id = ?',
         [documentId, knowledgeBaseId]
       );
       console.log(`[removeDocumentFromKnowledgeBase] 删除映射关系: ${mappingResult.rowsAffected} 条`);
 
       // 4. 更新知识库的更新时间
-      await this.dbManager.execute(
+      await transaction.execute(
         'UPDATE knowledge_bases SET updated_at = ? WHERE id = ?',
         [Date.now(), knowledgeBaseId]
       );
 
-      console.log(`[removeDocumentFromKnowledgeBase] 删除完成: vectors=${vectorsResult.rowsAffected}, chunks=${chunksResult.rowsAffected}, mapping=${mappingResult.rowsAffected}`);
-      
-      return mappingResult.rowsAffected > 0;
-    } catch (error) {
-      console.error('[removeDocumentFromKnowledgeBase] 删除失败:', error);
-      throw error;
-    }
+      console.log(`[removeDocumentFromKnowledgeBase] 删除完成: vectors=${vectorsAffected}, chunks=${chunksResult.rowsAffected}, mapping=${mappingResult.rowsAffected}`);
+
+      return (mappingResult.rowsAffected ?? 0) > 0 || (chunksResult.rowsAffected ?? 0) > 0;
+    });
   }
 
   /**
@@ -410,8 +466,8 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
    */
   async getKnowledgeBaseDocuments(knowledgeBaseId: string): Promise<DocKnowledgeMapping[]> {
     const mappings = await this.dbManager.select(`
-      SELECT * FROM doc_knowledge_mappings 
-      WHERE knowledge_base_id = ? 
+      SELECT * FROM doc_knowledge_mappings
+      WHERE knowledge_base_id = ?
       ORDER BY indexed_at DESC
     `, [knowledgeBaseId]);
 
@@ -423,8 +479,8 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
    */
   async getDocumentKnowledgeBases(documentId: string): Promise<DocKnowledgeMapping[]> {
     const mappings = await this.dbManager.select(`
-      SELECT * FROM doc_knowledge_mappings 
-      WHERE document_id = ? 
+      SELECT * FROM doc_knowledge_mappings
+      WHERE document_id = ?
       ORDER BY indexed_at DESC
     `, [documentId]);
 
@@ -440,7 +496,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     status: 'pending' | 'indexing' | 'indexed' | 'failed'
   ): Promise<void> {
     await this.dbManager.execute(`
-      UPDATE doc_knowledge_mappings 
+      UPDATE doc_knowledge_mappings
       SET status = ?, indexed_at = ?
       WHERE document_id = ? AND knowledge_base_id = ?
     `, [status, Date.now(), documentId, knowledgeBaseId]);
@@ -454,7 +510,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     knowledgeBaseId: string
   ): Promise<boolean> {
     const mappings = await this.dbManager.select(`
-      SELECT id FROM doc_knowledge_mappings 
+      SELECT id FROM doc_knowledge_mappings
       WHERE document_id = ? AND knowledge_base_id = ?
     `, [documentId, knowledgeBaseId]);
 
@@ -499,8 +555,8 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
    */
   async getKnowledgeChunks(knowledgeBaseId: string): Promise<any[]> {
     return await this.dbManager.select(`
-      SELECT * FROM knowledge_chunks 
-      WHERE knowledge_base_id = ? 
+      SELECT * FROM knowledge_chunks
+      WHERE knowledge_base_id = ?
       ORDER BY document_id, chunk_index
     `, [knowledgeBaseId]);
   }
@@ -577,4 +633,4 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
   private generateId(): string {
     return `kb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
-} 
+}

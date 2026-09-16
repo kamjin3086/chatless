@@ -36,6 +36,7 @@ import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatfor
 import { detectSkillIntent } from './intentDetector';
 import { CORE_TOOL_POLICY_MD } from './promptTemplates';
 import { getToolDoc, buildFirstFollowUpPromptFromDoc, buildForcedAnswerPromptFromDoc } from './toolDocLoader';
+import { getPersistedKnowledgeBaseReference } from './persistedKnowledgeBase';
 
 /**
  * 构建初始调用阶段的提示词
@@ -152,6 +153,7 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     includeSkills: shouldExposeSkills,
     includeWebSearch: shouldExposeWebSearch,
     userContent: context.userContent || '',
+    conversationId: context.conversationId,
   });
 
   // 注入工具策略说明
@@ -184,6 +186,21 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
         messages.push({
           role: 'system',
           content: `【当前会话工作目录】\n- @WorkDir -> ${wd}\n- 需要在该目录及其子目录中读写文件时，可使用 filesystem，并使用 @WorkDir/... 的别名路径或绝对路径。`,
+        });
+      }
+      let kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
+      if (!kb?.id) {
+        kb = await getPersistedKnowledgeBaseReference(convId);
+      }
+      const attachments = useConversationAttachmentStore.getState().getSessionDocuments(convId);
+      if (kb?.id || attachments.length) {
+        messages.push({
+          role: 'system',
+          content:
+            '【文档检索规则】\n' +
+            '当前会话有可访问的知识库或临时附件。需要查资料时先使用 knowledge__list/knowledge__search，再用 knowledge__read 读取完整原文。\n' +
+            '文档事实只能引用工具返回的 evidenceId，引用格式为 [[E1]]；不要编造文档、页码或引用。\n' +
+            '如果只读取了部分长文档，必须说明覆盖范围；文档没有依据时明确说无法确认。一般知识和推断要与文档事实分开。',
         });
       }
     }
@@ -305,7 +322,8 @@ async function buildNativeToolDefinitions(params: {
   servers: string[];
   includeWebSearch: boolean;
   includeSkills: boolean;
-  userContent?: string; // 用于意图检测
+  userContent?: string;
+  conversationId?: string;
 }): Promise<NativeToolDefinition[]> {
   const tools: NativeToolDefinition[] = [];
 
@@ -377,6 +395,29 @@ async function buildNativeToolDefinitions(params: {
   // 技能触发 → 注入技能工具
   if (params.includeSkills && !detectedGroups.includes('skill')) {
     detectedGroups.push('skill');
+  }
+
+  if (await (await import('@/lib/codingPack/config')).isCodingPackEnabled()) {
+    if (detectComplexTaskIntent(userContent) || /代码|git|glob|grep|patch|仓库|repo/i.test(userContent)) {
+      if (!detectedGroups.includes('coding')) detectedGroups.push('coding');
+    }
+  }
+
+  try {
+    const convId = params.conversationId || '';
+    if (convId) {
+      const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+      let kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
+      if (!kb?.id) {
+        kb = await getPersistedKnowledgeBaseReference(convId);
+      }
+      const attachments = useConversationAttachmentStore.getState().getSessionDocuments(convId);
+      if ((kb?.id || attachments.length > 0) && !detectedGroups.includes('knowledge')) {
+        detectedGroups.push('knowledge');
+      }
+    }
+  } catch {
+    /* ignore */
   }
 
   // ========== 3. AI 请求层：加载 AI 主动请求的工具组 ==========

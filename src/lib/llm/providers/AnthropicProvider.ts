@@ -32,29 +32,35 @@ export class AnthropicProvider extends BaseProvider {
   }
 
   async checkConnection(): Promise<CheckResult> {
-    // Claude v1：用错误密钥走 /messages 判定是否可达
     const base = this.baseUrl.replace(/\/$/, '');
     const url = `${base}/messages`;
-    const fakeKey = 'invalid_test_key_for_healthcheck';
-    const body = { model: 'claude-3-opus-20240229', messages: [{ role: 'user', content: 'ping' }], stream: false } as any;
+    const apiKey = await this.getApiKey();
+    const body = { model: 'claude-3-opus-20240229', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, stream: false } as any;
     try {
       const { tauriFetch } = await import('@/lib/request');
       const { judgeApiReachable } = await import('./healthcheck');
       const resp: any = await tauriFetch(url, {
-        method: 'POST', rawResponse: true, browserHeaders: true,
-        headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01', 'x-api-key': fakeKey },
-        body, timeout: 5000, fallbackToBrowserOnError: true, debugTag: 'Anthropic-HealthCheck', verboseDebug: true, includeBodyInLogs: true
+        method: 'POST',
+        rawResponse: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          'x-api-key': apiKey || 'invalid_test_key_for_healthcheck',
+        },
+        body,
+        timeout: 8000,
+        fallbackToBrowserOnError: false,
+        debugTag: 'Anthropic-HealthCheck',
       });
       const status = (resp?.status ?? 0) as number;
       const text = (await resp.text?.()) || '';
-      const judged = judgeApiReachable(status, text);
+      const contentType = resp?.headers?.get?.('content-type') || '';
+      const judged = judgeApiReachable(status, text, contentType);
       if (judged.ok) return { ok: true, message: judged.message, meta: { status } };
-      return { ok: false, reason: 'UNKNOWN', message: `HTTP ${status}`, meta: { status } };
+      return { ok: false, reason: judged.reason || 'UNKNOWN', message: judged.message || `HTTP ${status}`, meta: { status } };
     } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (/timeout|abort/i.test(msg)) return { ok: false, reason: 'TIMEOUT', message: '连接超时' };
-      if (/network|fetch|ENOTFOUND|ECONN/i.test(msg)) return { ok: false, reason: 'NETWORK', message: '网络错误' };
-      return { ok: false, reason: 'UNKNOWN', message: msg };
+      const { classifyNetworkError } = await import('./healthcheck');
+      return classifyNetworkError(e);
     }
   }
 

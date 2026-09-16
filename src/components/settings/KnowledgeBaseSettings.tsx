@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { SettingsCard } from "./SettingsCard";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
-import { SelectField } from "./SelectField";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { InputField } from "./InputField";
 import { toast } from "@/components/ui/sonner";
@@ -21,7 +20,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { UniversalModelManager } from "./UniversalModelManager";
-import { Database, FileText, Search, Brain, HardDrive, Zap } from "lucide-react";
+import { EmbeddingServiceStatus } from "./EmbeddingServiceStatus";
+import { FileText, Brain, HardDrive } from "lucide-react";
 import { 
   KnowledgeBaseConfig, 
   getKnowledgeBaseConfigManager, 
@@ -102,69 +102,10 @@ export function KnowledgeBaseSettings() {
       <SettingsCard>
         <SettingsSectionHeader icon={Brain} title="嵌入模型管理" />
         <UniversalModelManager />
-      </SettingsCard>
-
-      {/* 优化预设 */}
-      <SettingsCard>
-        <SettingsSectionHeader icon={Zap} title="优化预设" />
-        <SelectField
-          label="性能预设"
-          options={[
-            { value: 'memory_optimized', label: '小型·内存优化' },
-            { value: 'balanced', label: '中型·平衡模式' },
-            { value: 'performance', label: '大型·性能优化' },
-          ]}
-          value={settings.vectorStore.performanceProfile}
-          onChange={(value) => updateSettings('vectorStore', 'performanceProfile', value)}
-        />
-      </SettingsCard>
-      {/* 向量存储设置 */}
-      <CollapsibleCard title="向量存储设置" icon={Database}>
-        <div className="space-y-6">
-          <p className="text-xs text-gray-600 dark:text-gray-400">
-            已自动优化向量存储的性能和兼容性，也可根据实际情况进行调整。
-          </p>
-          
-          <SelectField
-            label="性能配置"
-            options={[
-              { value: 'memory_optimized', label: '内存优化（≤ 5K 向量 ≈ 5 000 条）' },
-              { value: 'balanced', label: '平衡模式（5K-50K 向量 ≈ 5 000-50 000 条）' },
-              { value: 'performance', label: '性能优化（> 50K 向量 ≈ 50 000 条以上）' },
-            ]}
-            value={settings.vectorStore.performanceProfile}
-            onChange={(value) => updateSettings('vectorStore', 'performanceProfile', value)}
-            description="K 代表向量条数，选择最接近您知识库规模的预设。"
-          />
-
-          <InputField
-            label="缓存大小"
-            type="number"
-            value={settings.vectorStore.cacheSize.toString()}
-            onChange={(e) => updateSettings('vectorStore', 'cacheSize', parseInt(e.target.value) || 256)}
-            description="向量查询缓存大小（单位：MB）。数值越大，重复查询速度越快，但占用内存也会增加。"
-            min="64"
-            max="2048"
-          />
-
-          <InputField
-            label="批处理大小"
-            type="number"
-            value={settings.vectorStore.batchSize.toString()}
-            onChange={(e) => updateSettings('vectorStore', 'batchSize', parseInt(e.target.value) || 100)}
-            description="每次批量写入/计算的向量条数。数值越大，索引速度越快，但会占用更多内存。单位：条"
-            min="10"
-            max="1000"
-          />
-
-          <ToggleSwitch
-            label="启用并行处理"
-            description="使用多线程加速向量计算，可能增加内存使用"
-            checked={settings.vectorStore.enableParallelProcessing}
-            onChange={(checked) => updateSettings('vectorStore', 'enableParallelProcessing', checked)}
-          />
+        <div className="mt-4 border-t border-slate-200/60 dark:border-slate-700/40 pt-4">
+          <EmbeddingServiceStatus />
         </div>
-      </CollapsibleCard>
+      </SettingsCard>
 
       {/* 文档处理设置 */}
       <CollapsibleCard title="文档处理设置" icon={FileText}>
@@ -199,33 +140,6 @@ export function KnowledgeBaseSettings() {
               ))}
             </div>
           </div>
-
-          <InputField
-            label="文本分块大小"
-            type="number"
-            value={settings.documentProcessing.chunkSize.toString()}
-            onChange={(e) => updateSettings('documentProcessing', 'chunkSize', parseInt(e.target.value) || 1000)}
-            description="将长文档分割为小块的字符数，影响检索精度"
-            min="200"
-            max="4000"
-          />
-
-          <InputField
-            label="分块重叠"
-            type="number"
-            value={settings.documentProcessing.chunkOverlap.toString()}
-            onChange={(e) => updateSettings('documentProcessing', 'chunkOverlap', parseInt(e.target.value) || 200)}
-            description="相邻文本块之间的重叠字符数，保持上下文连贯性"
-            min="0"
-            max="500"
-          />
-
-          <ToggleSwitch
-            label="启用OCR识别"
-            description="对图片和扫描PDF进行OCR文字识别(实验性功能)"
-            checked={settings.documentProcessing.enableOCR}
-            onChange={(checked) => updateSettings('documentProcessing', 'enableOCR', checked)}
-          />
 
           {/* —— 新增：文档解析/拼接策略 —— */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2" />
@@ -276,49 +190,6 @@ export function KnowledgeBaseSettings() {
         </div>
       </CollapsibleCard>
 
-      {/* 检索配置 */}
-      <CollapsibleCard title="检索配置" icon={Search}>
-        <div className="space-y-6">
-          <InputField
-            label="检索结果数量(Top-K)"
-            type="number"
-            value={settings.retrieval.topK.toString()}
-            onChange={(e) => updateSettings('retrieval', 'topK', parseInt(e.target.value) || 5)}
-            description="每次检索返回的相关文档片段数量"
-            min="1"
-            max="20"
-          />
-
-          <InputField
-            label="相似度阈值"
-            type="number"
-            step="0.1"
-            value={settings.retrieval.similarityThreshold.toString()}
-            onChange={(e) => updateSettings('retrieval', 'similarityThreshold', parseFloat(e.target.value) || 0.7)}
-            description="文档片段相似度的最低阈值(0-1)，过低可能包含不相关内容"
-            min="0.1"
-            max="1.0"
-          />
-
-          <ToggleSwitch
-            label="启用语义排序"
-            description="使用高级算法对检索结果进行语义重排序"
-            checked={settings.retrieval.enableSemanticRanking}
-            onChange={(checked) => updateSettings('retrieval', 'enableSemanticRanking', checked)}
-          />
-
-          <InputField
-            label="最大上下文长度"
-            type="number"
-            value={settings.retrieval.maxContextLength.toString()}
-            onChange={(e) => updateSettings('retrieval', 'maxContextLength', parseInt(e.target.value) || 4000)}
-            description="传递给AI模型的最大上下文字符数"
-            min="1000"
-            max="8000"
-          />
-        </div>
-      </CollapsibleCard>
-
       {/* 存储管理 */}
       <CollapsibleCard title="存储管理" icon={HardDrive}>
         <div className="space-y-6">
@@ -362,12 +233,6 @@ export function KnowledgeBaseSettings() {
         </div>
       </CollapsibleCard>
 
-      {/* 性能提示 */}
-      <div className="text-[10px] text-slate-500 dark:text-slate-400 px-3 py-2 bg-slate-50/80 dark:bg-slate-800/40 rounded-lg">
-        <span className="font-medium">提示：</span>
-        小型(&lt;1K文档)用内存优化，中型(1K-10K)用平衡模式，大型(&gt;10K)用性能优化
-      </div>
-
       {/* 重置按钮 */}
       <div className="flex justify-end pt-2">
         <AlertDialog>
@@ -394,4 +259,4 @@ export function KnowledgeBaseSettings() {
       </div>
     </div>
   );
-} 
+}

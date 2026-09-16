@@ -145,7 +145,7 @@ export default function KnowledgePage() {
     toast.info('知识库启用成功', {
       description: '已在聊天中启用该知识库'
     });
-    router.push(`/chat?knowledgeBase=${id}`);
+    router.push(`/chat?knowledgeBase=${id}&mode=agent`);
   };
 
   const createKnowledgeBase = async (name: string, description: string) => {

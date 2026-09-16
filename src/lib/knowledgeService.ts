@@ -16,6 +16,7 @@ export interface KnowledgeChunk {
 
 // 获取数据库服务实例
 const getDatabaseService = () => DatabaseService.getInstance();
+let interruptedIndexingRecovered = false;
 
 /**
  * 知识库服务 - 重构版本
@@ -43,6 +44,17 @@ export const KnowledgeService = {
         await dbService.initialize(DATABASE_CONFIG.MAIN_DATABASE);
         
         console.log('[KnowledgeService] 数据库服务初始化完成');
+      }
+
+      // A process can exit while a mapping is in `indexing`. Convert that
+      // transient state back to an actionable pending task exactly once per
+      // process; the knowledge-base UI can then resume it through Rebuild.
+      if (!interruptedIndexingRecovered) {
+        await dbService.getDbManager().execute(
+          `UPDATE doc_knowledge_mappings SET status = 'pending'
+             WHERE status = 'indexing'`,
+        );
+        interruptedIndexingRecovered = true;
       }
     } catch (error) {
       console.error('[KnowledgeService] 数据库初始化失败:', error);
@@ -182,9 +194,25 @@ export const KnowledgeService = {
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       console.log(`开始删除知识库: ${id}`);
+      const affectedMappings = await knowledgeBaseRepo.getKnowledgeBaseDocuments(id);
       const result = await knowledgeBaseRepo.deleteKnowledgeBase(id);
       
       if (result) {
+        try {
+          const { UnifiedFileService } = await import('./unifiedFileService');
+          const affectedDocumentIds = [...new Set(affectedMappings.map((mapping) => mapping.documentId))];
+          await Promise.all(affectedDocumentIds.map(async (documentId) => {
+            const remainingMappings = await knowledgeBaseRepo.getDocumentKnowledgeBases(documentId);
+            const remainingIndexed = remainingMappings.find((item) => item.status === 'indexed');
+            const remaining = remainingIndexed || remainingMappings[0];
+            await UnifiedFileService.updateFile(documentId, {
+              knowledgeBaseId: remaining?.knowledgeBaseId,
+              isIndexed: remaining?.status === 'indexed',
+            });
+          }));
+        } catch (syncError) {
+          console.warn('[KnowledgeService] 删除知识库后同步文件关联失败:', syncError);
+        }
         console.log(`知识库删除成功: ${id}`);
       } else {
         console.warn(`知识库删除失败（未找到）: ${id}`);
@@ -309,6 +337,12 @@ export const KnowledgeService = {
           throw new Error(`文档索引失败: ${indexingResult.error || '未知错误'}`);
         }
 
+        // 删除/移除挂载关系可能与索引并发发生；不要把已撤销关系同步回文件记录。
+        const stillMounted = await knowledgeBaseRepo.isDocumentInKnowledgeBase(documentId, knowledgeBaseId);
+        if (!stillMounted) {
+          throw new Error('文档已从知识库移除，放弃本次索引发布');
+        }
+
         // 5. 更新映射状态为已索引
         options.onProgress?.(95, '更新索引状态...');
         await knowledgeBaseRepo.updateDocumentMappingStatus(
@@ -372,11 +406,14 @@ export const KnowledgeService = {
         // 同步清除 UnifiedFileService 中的文件记录的知识库关联
         try {
           const { UnifiedFileService } = await import('./unifiedFileService');
+          const remainingMappings = await knowledgeBaseRepo.getDocumentKnowledgeBases(documentId);
+          const remainingIndexed = remainingMappings.find((item) => item.status === 'indexed');
+          const remaining = remainingIndexed || remainingMappings[0];
           await UnifiedFileService.updateFile(documentId, {
-            knowledgeBaseId: undefined,
-            isIndexed: false
+            knowledgeBaseId: remaining?.knowledgeBaseId,
+            isIndexed: remaining?.status === 'indexed',
           });
-          console.log(`[KnowledgeService] 已清除文件记录的知识库关联: ${documentId}`);
+          console.log(`[KnowledgeService] 已同步文件剩余知识库关联: ${documentId}`);
         } catch (syncError) {
           console.warn(`[KnowledgeService] ⚠️ 清除文件记录关联失败，但不影响移除结果:`, syncError);
         }
@@ -430,10 +467,6 @@ export const KnowledgeService = {
   },
 
   /**
-   * 获取知识库统计信息
-   */
-  
-  /**
    * 重新构建（重嵌入）指定知识库的全部文档。
    * 主要场景：用户切换嵌入模型 / 分词策略后需要刷新索引。
    */
@@ -446,29 +479,31 @@ export const KnowledgeService = {
     try {
       const dbService = getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
-      // TODO: 清理旧向量，如有必要可在向量存储层提供删除接口
 
       // 1. 获取知识库中的所有文档映射
       const mappings = await this.getKnowledgeBaseDocuments(knowledgeBaseId);
       const totalDocs = mappings.length;
+      const progressDenominator = Math.max(totalDocs, 1);
       let current = 0;
 
-      for (const m of mappings as any) {
-        const mapping = m?.mapping;
-        if (!mapping) continue;
+      for (const entry of mappings as any) {
+        // getKnowledgeBaseDocuments returns mappings directly. Keep the
+        // nested fallback for callers still passing the old
+        // `{ mapping, document }` shape, but never silently skip a valid
+        // mapping (the previous implementation rebuilt zero documents).
+        const mapping = entry?.mapping || entry;
+        if (!mapping?.documentId) continue;
         current += 1;
-        const progBase = Math.floor((current - 1) / totalDocs * 100);
+        const progBase = Math.floor((current - 1) / progressDenominator * 100);
         options.onProgress?.(progBase, `准备重建文档 ${current}/${totalDocs}`);
 
-        // 删除旧向量
-                const docId = mapping.documentId;
-        // TODO: 若向量存储支持，删除 docId 旧向量
+        const docId = mapping.documentId;
         await knowledgeBaseRepo.updateDocumentMappingStatus(docId, knowledgeBaseId, 'indexing');
 
         // 重新索引文档
         await this.addDocumentToKnowledgeBase(docId, knowledgeBaseId, {
           onProgress: (p, m) => {
-            const overall = progBase + p / totalDocs;
+            const overall = progBase + p / progressDenominator;
             options.onProgress?.(Math.min(99, Math.floor(overall)), m);
           },
           skipIfExists: false,
@@ -480,6 +515,50 @@ export const KnowledgeService = {
     } catch (err) {
       console.error('[KnowledgeService] rebuildKnowledgeBase error', err);
       throw err;
+    }
+  },
+
+  async getKnowledgeBaseIndexStatus(knowledgeBaseId: string): Promise<{
+    total: number;
+    indexed: number;
+    pending: number;
+    failed: number;
+    needsRebuild: boolean;
+  }> {
+    try {
+      const dbService = getDatabaseService();
+      const db = dbService.getDbManager();
+      const rows = await db.select<{ status: string; chunk_count: number }>(
+        `SELECT m.status, COUNT(rc.id) AS chunk_count
+           FROM doc_knowledge_mappings m
+           LEFT JOIN retrieval_chunks rc
+             ON rc.document_id = m.document_id
+            AND rc.knowledge_base_id = m.knowledge_base_id
+          WHERE m.knowledge_base_id = ?
+          GROUP BY m.document_id, m.status`,
+        [knowledgeBaseId]
+      );
+      const counts = { total: 0, indexed: 0, pending: 0, failed: 0 };
+      for (const row of rows || []) {
+        const hasChunks = Number(row.chunk_count || 0) > 0;
+        counts.total += 1;
+        if (row.status === 'indexed' && hasChunks) counts.indexed += 1;
+        else if (row.status === 'indexed' && !hasChunks) counts.pending += 1;
+        else if (row.status === 'pending' || row.status === 'indexing') counts.pending += 1;
+        else if (row.status === 'failed') counts.failed += 1;
+      }
+      const chunkRows = await db.select<{ n: number }>(
+        `SELECT COUNT(*) as n FROM retrieval_chunks WHERE knowledge_base_id = ?`,
+        [knowledgeBaseId]
+      );
+      const retrievalChunks = Number(chunkRows?.[0]?.n || 0);
+      return {
+        ...counts,
+        needsRebuild: counts.pending > 0 || counts.failed > 0 || (counts.total > 0 && retrievalChunks === 0),
+      };
+    } catch (error) {
+      console.error('[KnowledgeService] getKnowledgeBaseIndexStatus error', error);
+      return { total: 0, indexed: 0, pending: 0, failed: 0, needsRebuild: true };
     }
   },
 
@@ -731,4 +810,4 @@ export const KnowledgeService = {
 
   // 注意：旧的队列系统相关方法已被移除
   // 新架构使用Repository模式
-}; 
+};

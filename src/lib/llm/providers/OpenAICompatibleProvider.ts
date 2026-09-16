@@ -4,7 +4,7 @@ import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '../types/stream-events';
-import { rewriteEventsWithToolCalls } from '../adapters/ToolChannelParser';
+import { ToolChannelParser } from '../adapters/ToolChannelParser';
 import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
 import { 
   type ToolDefinition, 
@@ -23,6 +23,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
   private aborted: boolean = false;
   private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private thinkingStrategy: ThinkingModeStrategy;
+  private toolChannelParser = new ToolChannelParser();
 
   constructor(baseUrl: string, apiKey?: string, displayName: string = 'OpenAI-Compatible') {
     super(displayName, baseUrl, apiKey);
@@ -67,40 +68,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   async checkConnection(): Promise<CheckResult> {
-    // 与 OpenAI 类似，使用错误密钥做一次标准请求，判断是否可达
-    const base = this.baseUrl.replace(/\/$/, '');
-    const url = `${base}/chat/completions`;
-    const fakeKey = 'invalid_test_key_for_healthcheck';
-    const body = { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'ping' }], stream: false };
-    try {
-      const { tauriFetch } = await import('@/lib/request');
-      const { judgeApiReachable } = await import('./healthcheck');
-      const resp: any = await tauriFetch(url, {
-        method: 'POST',
-        rawResponse: true,
-        browserHeaders: true,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fakeKey}` },
-        body,
-        timeout: 5000,
-        fallbackToBrowserOnError: true,
-        debugTag: 'OpenAICompat-HealthCheck',
-        verboseDebug: true,
-        includeBodyInLogs: true
-      });
-      const status = (resp?.status ?? 0) as number;
-      const text = (await resp.text?.()) || '';
-      const judged = judgeApiReachable(status, text);
-      if (!judged.ok) {
-        console.log('[OpenAICompatibleProvider] judged unreachable', { status, text: (text||'').slice(0,200) });
-      }
-      if (judged.ok) return { ok: true, message: judged.message, meta: { status } };
-      return { ok: false, reason: 'UNKNOWN', message: `HTTP ${status}`, meta: { status } };
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (/timeout|abort/i.test(msg)) return { ok: false, reason: 'TIMEOUT', message: '连接超时' };
-      if (/network|fetch|ENOTFOUND|ECONN/i.test(msg)) return { ok: false, reason: 'NETWORK', message: '网络错误' };
-      return { ok: false, reason: 'UNKNOWN', message: msg };
-    }
+    const apiKey = await this.getApiKey();
+    const { probeOpenAICompatibleBase } = await import('./healthcheck');
+    return probeOpenAICompatibleBase(this.baseUrl, {
+      apiKey,
+      debugTag: 'OpenAICompat-HealthCheck',
+    });
   }
 
   async chatStream(
@@ -215,6 +188,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
       this.aborted = false;
       // 重置策略状态
       this.thinkingStrategy.reset();
+    this.toolChannelParser.reset();
+      this.toolChannelParser.reset();
       
       // 优先：Tauri HTTP（跨域/证书更稳健）
       let resp: any = null;
@@ -410,7 +385,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
    */
   private dispatchEvents(rawEvents: StreamEvent[] | undefined, cb: StreamCallbacks, _isDone: boolean = false) {
     if (!rawEvents || rawEvents.length === 0) return;
-    const events = rewriteEventsWithToolCalls(rawEvents);
+    const events = this.toolChannelParser.rewriteEvents(rawEvents);
     if (!events.length) return;
 
     if (!cb.onEvent) {
@@ -427,6 +402,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
   private async processSSEResponse(resp: Response, cb: StreamCallbacks): Promise<void> {
     // 重置策略状态
     this.thinkingStrategy.reset();
+    this.toolChannelParser.reset();
     
     cb.onStart?.();
 
@@ -568,6 +544,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
   ) {
     // 重置策略状态
     this.thinkingStrategy.reset();
+    this.toolChannelParser.reset();
     
     try {
       // SSE fallback 工具调用增量状态（与 processSSEResponse 保持一致）

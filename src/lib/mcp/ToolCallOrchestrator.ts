@@ -4,9 +4,16 @@ import type { Message as LlmMessage } from '@/lib/llm/types';
 import { ToolCallCoordinator } from './ToolCallCoordinator';
 import { ToolExecutionPipeline, ToolInvocation } from './pipeline';
 import { createDefaultAdapters } from './pipeline/adapters';
-import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
 import { streamChat } from '@/lib/llm';
 import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
+import { ensureChatRunPlane } from '@/lib/mcp/agentLoop/ChatRunEventRecorder';
+import {
+  buildToolRoleAppendix,
+  classifyToolResult,
+  isPipelineSkipped,
+  stableStringify,
+  type BufferedToolResult,
+} from '@/lib/mcp/shared/toolResultGuards';
 
 
 // 防止重复调用的缓存
@@ -22,14 +29,6 @@ const DEFAULT_PIPELINE = new ToolExecutionPipeline({ adapters: createDefaultAdap
 // - Gate continuation until all expected tool cards for that message are done
 // - Resume generation by appending assistant.tool_calls + role=tool messages
 // ============================================================
-type BufferedToolResult = {
-  cardIdOrKey: string;
-  callId: string;
-  server: string;
-  tool: string;
-  args?: Record<string, unknown>;
-  result: unknown;
-};
 
 const bufferedResultsByMessage = new Map<string, Map<string, BufferedToolResult>>();
 const expectedToolCardIdsByMessage = new Map<string, Set<string>>();
@@ -47,57 +46,6 @@ function makeAttemptKey(params: { conversationId: string; server: string; tool: 
   return `${params.conversationId}:${params.server}.${params.tool}:${stableStringify(params.args || {})}`;
 }
 
-function classifyToolResult(result: unknown): 'success' | 'empty' | 'tool_error' {
-  const isEmpty =
-    !result ||
-    (typeof result === 'string' && result.trim().length === 0) ||
-    (Array.isArray(result) && result.length === 0);
-  if (isEmpty) return 'empty';
-
-  if (result && typeof result === 'object') {
-    const r: any = result as any;
-    if (r.error) return 'tool_error';
-    if (typeof r.ok === 'boolean' && r.ok === false) return 'tool_error';
-    if (typeof r.success === 'boolean' && r.success === false) return 'tool_error';
-    
-    // 检测 Cloudflare/验证页面拦截（web__fetch 返回的空内容页面）
-    if (r.title && typeof r.title === 'string') {
-      const title = r.title.toLowerCase();
-      if (
-        title.includes('just a moment') ||
-        title.includes('checking your browser') ||
-        title.includes('cloudflare') ||
-        title.includes('access denied') ||
-        title.includes('403 forbidden') ||
-        title.includes('please wait')
-      ) {
-        // 有 title 但表明被拦截，视为失败
-        return 'tool_error';
-      }
-    }
-    
-    // web__fetch 返回结构：content 为空但有 title，视为无效结果
-    if (r.title && r.content === '' && Array.isArray(r.links) && r.links.length === 0) {
-      return 'empty';
-    }
-  }
-  return 'success';
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
-  if (typeof value === 'symbol') return value.toString();
-  if (typeof value === 'function') return '[function]';
-  if (typeof value !== 'object') return '[unknown]';
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  const parts = keys.map((k) => `${k}:${stableStringify(obj[k])}`);
-  return `{${parts.join(',')}}`;
-}
-
 function recordExpectedToolCardId(assistantMessageId: string, cardIdOrKey: string) {
   try {
     const id = String(cardIdOrKey || '').trim();
@@ -108,38 +56,6 @@ function recordExpectedToolCardId(assistantMessageId: string, cardIdOrKey: strin
   } catch {
     /* noop */
   }
-}
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function summarizeToolOutput(output: unknown): unknown {
-  // Keep tool payloads small & stable for context
-  try {
-    if (typeof output === 'string') {
-      const s = output;
-      if (s.length > 4000) return `${s.slice(0, 4000)}\n... (truncated, ${s.length} chars)`;
-      return s;
-    }
-    if (Array.isArray(output)) {
-      const arr = output as any[];
-      if (arr.length <= 60) return output;
-      return { summary: `Array(${arr.length}) truncated`, head: arr.slice(0, 30), tail: arr.slice(-10) };
-    }
-    if (output && typeof output === 'object') {
-      const s = safeJson(output);
-      if (s.length > 8000) return { summary: `Object truncated (${s.length} chars)`, preview: s.slice(0, 8000) };
-      return output;
-    }
-  } catch {
-    // ignore
-  }
-  return output;
 }
 
 function filterArtifactMessages(messages: LlmMessage[]): LlmMessage[] {
@@ -170,24 +86,6 @@ function filterArtifactMessages(messages: LlmMessage[]): LlmMessage[] {
     out.push(m);
   }
   return out;
-}
-
-function buildToolRoleAppendix(batch: BufferedToolResult[]): { assistantMsg: LlmMessage; toolMsgs: LlmMessage[] } {
-  const tool_calls: ToolCallRequest[] = batch.map((r) => ({
-    id: r.callId,
-    type: 'function',
-    function: {
-      name: `${r.server}__${r.tool}`,
-      arguments: safeJson(r.args || {}),
-    },
-  }));
-  const assistantMsg: LlmMessage = { role: 'assistant', content: '', tool_calls };
-  const toolMsgs: LlmMessage[] = batch.map((r) => ({
-    role: 'tool',
-    tool_call_id: r.callId,
-    content: typeof r.result === 'string' ? r.result : safeJson(summarizeToolOutput(r.result)),
-  })) as any;
-  return { assistantMsg, toolMsgs };
 }
 
 async function resumeAssistantWithToolRole(params: {
@@ -291,6 +189,10 @@ export async function executeToolCall(params: {
 
     return;
   }
+
+  if (coordinator.isMessageCancelled(assistantMessageId)) {
+    return;
+  }
   
   // 防重复调用：使用统一协调器
   const lockResult = lockKey
@@ -351,6 +253,19 @@ export async function executeToolCall(params: {
   const effectiveTool = (server === 'filesystem' && tool === 'list') ? 'dir' : tool;
   const effectiveArgs = normalizeArgs(server, args || {});
 
+  const chatPlane = await ensureChatRunPlane(conversationId, assistantMessageId);
+  const effectiveCallId = (callId && String(callId).trim()) ? String(callId).trim() : `call_${callKey}`.slice(0, 64);
+  if (chatPlane) {
+    await chatPlane.record({
+      type: 'tool_call_requested',
+      callId: effectiveCallId,
+      cardId,
+      server,
+      tool: effectiveTool,
+      args: effectiveArgs,
+    });
+  }
+
   // 重复调用检查移至授权判定之后，避免绕过授权开关
 
   // —— 统一管线：全部进入 ToolExecutionPipeline（web_search 已纳入 WebSearchAdapter）——
@@ -371,6 +286,9 @@ export async function executeToolCall(params: {
     });
     try {
       const result = await DEFAULT_PIPELINE.run(inv);
+      if (coordinator.isMessageCancelled(assistantMessageId) || isPipelineSkipped(result)) {
+        return;
+      }
       // 若该卡片已被用户“停止/跳过”，则不要触发 follow-up（由 UI 侧合成触发，避免重复）
       try {
         if (coordinator.isToolCardCancelled(assistantMessageId, String(inv.cardId || ''))) {
@@ -487,6 +405,20 @@ export async function continueWithToolResult(params: {
     (callId && String(callId).trim()) ||
     `${server}.${tool}:${stableStringify(args || {})}`;
   const effectiveCallId = (callId && String(callId).trim()) ? String(callId).trim() : `call_${bufKey}`.slice(0, 64);
+
+  const chatPlane = await ensureChatRunPlane(conversationId, assistantMessageId);
+  if (chatPlane) {
+    await chatPlane.record({
+      type: 'tool_call_output',
+      callId: effectiveCallId,
+      cardId,
+      server,
+      tool,
+      args,
+      output: result,
+      isError: kind === 'tool_error' || kind === 'empty',
+    });
+  }
 
   let buf = bufferedResultsByMessage.get(assistantMessageId);
   if (!buf) {

@@ -8,6 +8,9 @@ import { migration_006 } from './scripts/006_add_core_indexes';
 import { migration_007 } from './scripts/007_add_message_versioning';
 import { migration_008 } from './scripts/008_add_conversation_tool_mode';
 import { migration_009 } from './scripts/009_add_prompt_sync_fields';
+import { migration_010 } from './scripts/010_add_vector_embeddings';
+import { migration_011 } from './scripts/011_add_agent_run_events';
+import { migration_012 } from './scripts/012_evidence_rag_v2';
 // 合并到 v2 后，这里不再注册 v3/v4
 /**
  * 迁移注册器
@@ -36,6 +39,9 @@ export class MigrationRegistry {
     this.register(migration_007);
     this.register(migration_008);
     this.register(migration_009);
+    this.register(migration_010);
+    this.register(migration_011);
+    this.register(migration_012);
     // v3+v4 已合并到 v2，无需注册
   }
 

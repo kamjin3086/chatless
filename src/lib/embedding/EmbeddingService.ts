@@ -1,18 +1,19 @@
-import { 
-  EmbeddingStrategy, 
-  EmbeddingConfig, 
-  EmbeddingServiceOptions, 
+import {
+  EmbeddingStrategy,
+  EmbeddingConfig,
+  EmbeddingServiceOptions,
   EmbeddingResult,
-  EmbeddingError 
+  EmbeddingError
 } from './types';
 import { OllamaStrategy } from './strategies/OllamaStrategy';
-import { TauriOrtStrategy } from './strategies/TauriOrtStrategy';
+import { LocalOnnxEmbeddingStrategy } from './strategies/LocalOnnxEmbeddingStrategy';
 import { modelConfigService } from './ModelConfigService';
+import type { EmbeddingInferenceSource } from './strategies/LocalOnnxEmbeddingStrategy';
 
 /**
  * 嵌入服务主类
  * 使用策略模式支持不同的嵌入生成方式
- * 
+ *
  * 支持的策略：
  * - ollama: 通过Ollama服务运行模型
  * - local-onnx: 本地ONNX模型（基于Rust后端）
@@ -43,9 +44,10 @@ export class EmbeddingService {
 
   private async initializeStrategy(): Promise<void> {
     try {
-      this.strategy = await this.createStrategy(this.options.config);
-      await this.strategy.initialize();
-      
+      const strategy = await this.createStrategy(this.options.config);
+      await strategy.initialize();
+      this.strategy = strategy;
+
       const strategyName = this.strategy.getName();
       console.info('嵌入服务初始化完成，使用策略:', strategyName);
     } catch (error) {
@@ -61,9 +63,8 @@ export class EmbeddingService {
   private async createStrategy(config: EmbeddingConfig): Promise<EmbeddingStrategy> {
     switch (config.strategy) {
       case 'local-onnx':
-        // 使用基于 Rust ORT 后端的本地ONNX策略，传入模型名称
-        return new TauriOrtStrategy(config.modelName);
-      
+        return new LocalOnnxEmbeddingStrategy(config);
+
       case 'ollama':
         // 动态获取配置的 Ollama URL
         let apiUrl = config.apiUrl;
@@ -72,11 +73,11 @@ export class EmbeddingService {
           apiUrl = await OllamaConfigService.getOllamaUrl();
           console.log(`[EmbeddingService] 使用配置的 Ollama URL: ${apiUrl}`);
         }
-        
+
         // 从ModelConfigService获取正确的维度信息
         const modelName = config.modelName || 'nomic-embed-text';
         const dimension = await modelConfigService.getModelDimensions(modelName);
-        
+
         return new OllamaStrategy({
           apiUrl,
           modelName,
@@ -84,7 +85,7 @@ export class EmbeddingService {
           timeout: config.timeout || 30000,
           maxBatchSize: config.maxBatchSize || 10
         });
-      
+
       default:
         throw new EmbeddingError(`不支持的嵌入策略: ${config.strategy}`);
     }
@@ -114,7 +115,7 @@ export class EmbeddingService {
       // 缓存结果
       if (this.options.enableCache !== false) {
         this.cache.set(text, embedding);
-        
+
         // 限制缓存大小
         const maxCacheSize = this.options.cacheSize || 1000;
         if (this.cache.size > maxCacheSize) {
@@ -169,13 +170,13 @@ export class EmbeddingService {
       let newEmbeddings: number[][] = [];
       if (uncachedTexts.length > 0) {
         newEmbeddings = await this.strategy.generateEmbeddings(uncachedTexts);
-        
+
         // 缓存新结果
         if (this.options.enableCache !== false) {
           uncachedTexts.forEach((text, index) => {
             this.cache.set(text, newEmbeddings[index]);
           });
-          
+
           // 限制缓存大小
           const maxCacheSize = this.options.cacheSize || 1000;
           while (this.cache.size > maxCacheSize) {
@@ -192,7 +193,7 @@ export class EmbeddingService {
       // 合并结果
       const results: number[][] = new Array(texts.length);
       let newIndex = 0;
-      
+
       texts.forEach((text, index) => {
         if (resultMap.has(index)) {
           // 使用缓存的结果
@@ -238,33 +239,69 @@ export class EmbeddingService {
     if (!this.strategy) {
       throw new EmbeddingError('嵌入服务未初始化');
     }
-    
+
     const strategyName = this.strategy.getName();
-    
+
     // 映射技术名称到用户友好名称
     const friendlyNames: Record<string, string> = {
       'OllamaStrategy': 'Ollama 服务',
-      'TauriOrtStrategy': '本地离线推理',
+      'LocalOnnxEmbeddingStrategy': '本地离线推理',
+      'TauriOrtStrategy': '本地离线推理（模拟）',
       'OrtEmbeddingStrategy': '本地离线推理',
-      'WebEmbeddingStrategy': '在线推理',
       // 如果没有匹配，根据策略类型返回友好名称
     };
-    
+
     // 先尝试精确匹配
     if (friendlyNames[strategyName]) {
       return friendlyNames[strategyName];
     }
-    
+
     // 如果没有精确匹配，根据策略类型判断
     if (strategyName.toLowerCase().includes('ollama')) {
       return 'Ollama 服务';
-    } else if (strategyName.toLowerCase().includes('ort') || 
+    } else if (strategyName.toLowerCase().includes('ort') ||
                strategyName.toLowerCase().includes('onnx') ||
                strategyName.toLowerCase().includes('tauri')) {
       return '本地离线推理';
     } else {
       return '未知服务';
     }
+  }
+
+  /**
+   * 获取当前推理来源（仅 local-onnx 有意义）
+   */
+  getEmbeddingSource(): EmbeddingInferenceSource | 'ollama' | 'unknown' {
+    if (!this.strategy) return 'unknown';
+    if (this.options.config.strategy === 'ollama') return 'ollama';
+    const s = this.strategy as { getEmbeddingSource?: () => EmbeddingInferenceSource };
+    return typeof s.getEmbeddingSource === 'function' ? s.getEmbeddingSource() : 'unknown';
+  }
+
+  isUsableForRag(): boolean {
+    const src = this.getEmbeddingSource();
+    return src === 'real' || src === 'ollama';
+  }
+
+  /**
+   * Stable identity for vectors produced by the current model and preprocessing.
+   * Retrieval must never fuse vectors from a different model or dimension.
+   */
+  getEmbeddingFingerprint(): string | null {
+    if (!this.strategy || !this.isUsableForRag()) return null;
+    const config = this.options.config;
+    const model = config.modelName || config.modelPath || 'default';
+    return `${config.strategy}:${model}:${this.getDimension()}:${this.getMaxInputTokens()}:v1`;
+  }
+
+  getMaxInputTokens(): number {
+    const strategy = this.strategy as (EmbeddingStrategy & { getMaxInputTokens?: () => number }) | null;
+    if (strategy?.getMaxInputTokens) return strategy.getMaxInputTokens();
+    if (this.options.config.maxLength) return this.options.config.maxLength;
+    const model = this.options.config.modelName
+      ? modelConfigService.getModelContextLength(this.options.config.modelName)
+      : undefined;
+    return model || 512;
   }
 
   /**
@@ -308,12 +345,13 @@ export class EmbeddingService {
       }
 
       // 创建新策略
-      this.strategy = await this.createStrategy(config);
-      await this.strategy.initialize();
-      
+      const nextStrategy = await this.createStrategy(config);
+      await nextStrategy.initialize();
+      this.strategy = nextStrategy;
+
       // 清理缓存（因为不同策略的嵌入可能不兼容）
       this.clearCache();
-      
+
       console.log(`已切换到新的嵌入策略: ${this.strategy.getName()}`);
     } catch (error) {
       console.error('切换嵌入策略失败:', error);
@@ -363,4 +401,4 @@ export function createEmbeddingService(config?: Partial<EmbeddingServiceOptions>
   };
 
   return new EmbeddingService(options);
-} 
+}

@@ -116,10 +116,12 @@ describe('标签解析 - 避免误吞左尖括号', () => {
       };
       const result1 = strategy.processToken(token1);
       
-      // 没有闭合标签时，不应该输出 thinking 内容
-      // 内容应该被缓冲
+      // 开放标签流式模式：未闭合时也会实时输出 thinking token
       const thinkingEvents = result1.events.filter(e => e.type === 'thinking_token');
-      expect(thinkingEvents.length).toBe(0);
+      expect(thinkingEvents.length).toBe(1);
+      expect(thinkingEvents[0]).toEqual(
+        expect.objectContaining({ type: 'thinking_token', content: '这是思考' })
+      );
       
       // 当 done 时，应该正确处理
       const token2 = {

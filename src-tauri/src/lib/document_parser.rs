@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use docx_rust::DocxFile;
+use docx_rust::{document::BodyContent, DocxFile};
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::fs;
 use std::path::Path;
@@ -34,7 +34,11 @@ impl DocumentParser {
       ));
     }
 
-    match path.extension().and_then(std::ffi::OsStr::to_str) {
+    let extension = path
+      .extension()
+      .and_then(std::ffi::OsStr::to_str)
+      .map(|ext| ext.to_ascii_lowercase());
+    match extension.as_deref() {
       Some("pdf") => Self::extract_pdf_text(file_path_str),
       Some("docx") => Self::extract_docx_text(file_path_str),
       Some("md") | Some("markdown") => Self::extract_markdown_text(file_path_str),
@@ -67,24 +71,29 @@ impl DocumentParser {
     let docx_file =
       DocxFile::from_file(file_path).map_err(|e| anyhow::anyhow!("无法打开 DOCX 文件: {:?}", e))?;
 
-    let debug_content = {
-      let docx = docx_file
-        .parse()
-        .map_err(|e| anyhow::anyhow!("解析 DOCX 文件失败: {:?}", e))?;
-      format!("{:?}", docx.document.body.content)
-    };
-
-    let extracted_text = Self::extract_text_from_debug_string(&debug_content);
-    let cleaned_text = extracted_text
-      .lines()
-      .map(|line| line.trim())
-      .filter(|line| !line.is_empty())
-      .collect::<Vec<&str>>()
-      .join("\n");
-
-    if cleaned_text.is_empty() && file_path.metadata()?.len() > 0 {
-      return Ok("[文档可能包含复杂格式、图片或其他无法提取的内容]".to_string());
+    let docx = docx_file
+      .parse()
+      .map_err(|e| anyhow::anyhow!("解析 DOCX 文件失败: {:?}", e))?;
+    let mut paragraphs = Vec::new();
+    for content in &docx.document.body.content {
+      match content {
+        BodyContent::Paragraph(paragraph) => {
+          let text = paragraph.text().trim().to_string();
+          if !text.is_empty() { paragraphs.push(text); }
+        }
+        BodyContent::Table(table) => {
+          let cells = table.iter_text().map(|text| text.to_string()).collect::<Vec<_>>();
+          let text = cells.join(" | ").trim().to_string();
+          if !text.is_empty() { paragraphs.push(text); }
+        }
+        BodyContent::Sdt(sdt) => {
+          let text = sdt.text().trim().to_string();
+          if !text.is_empty() { paragraphs.push(text); }
+        }
+        _ => {}
+      }
     }
+    let cleaned_text = paragraphs.join("\n");
 
     Ok(cleaned_text)
   }
@@ -281,32 +290,6 @@ impl DocumentParser {
       }
     }
     Ok(out.trim().to_string())
-  }
-
-  /// 从调试字符串中提取文本内容
-  fn extract_text_from_debug_string(debug_str: &str) -> String {
-    let mut text = String::new();
-    let pattern = "text: \"";
-    let mut start_pos = 0;
-
-    while let Some(found_pos) = debug_str[start_pos..].find(pattern) {
-      let absolute_pos = start_pos + found_pos + pattern.len();
-
-      if let Some(end_quote_pos) = debug_str[absolute_pos..].find('"') {
-        let text_content = &debug_str[absolute_pos..absolute_pos + end_quote_pos];
-
-        if !text_content.trim().is_empty() {
-          text.push_str(text_content);
-          text.push(' ');
-        }
-
-        start_pos = absolute_pos + end_quote_pos + 1;
-      } else {
-        break;
-      }
-    }
-
-    text.trim().to_string()
   }
 
   /// 解析Markdown内容（从字符串）

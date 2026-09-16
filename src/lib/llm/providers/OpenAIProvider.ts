@@ -29,38 +29,12 @@ export class OpenAIProvider extends BaseProvider {
   }
 
   async checkConnection(): Promise<CheckResult> {
-    // 采用“无成本连通性检查”策略：构造一次标准 API 请求，携带显式错误密钥，
-    // 只要服务端返回可识别的鉴权错误（401/403/带有"auth"/"key"提示），即可判定 API 可达。
-    const base = this.baseUrl.replace(/\/$/, '');
-    const url = `${base}/chat/completions`;
-    const fakeKey = 'invalid_test_key_for_healthcheck';
-    const body = { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'ping' }], stream: false };
-    try {
-      const { tauriFetch } = await import('@/lib/request');
-      const { judgeApiReachable } = await import('./healthcheck');
-      const resp: any = await tauriFetch(url, {
-        method: 'POST',
-        rawResponse: true,
-        browserHeaders: true,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fakeKey}` },
-        body,
-        timeout: 5000,
-        fallbackToBrowserOnError: true,
-        debugTag: 'OpenAI-HealthCheck',
-        verboseDebug: true,
-        includeBodyInLogs: true
-      });
-      const status = (resp?.status ?? 0) as number;
-      const text = (await resp.text?.()) || '';
-      const judged = judgeApiReachable(status, text);
-      if (judged.ok) return { ok: true, message: judged.message, meta: { status } };
-      return { ok: false, reason: 'UNKNOWN', message: `HTTP ${status}`, meta: { status } };
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (/timeout|abort/i.test(msg)) return { ok: false, reason: 'TIMEOUT', message: '连接超时' };
-      if (/network|fetch|ENOTFOUND|ECONN/i.test(msg)) return { ok: false, reason: 'NETWORK', message: '网络错误' };
-      return { ok: false, reason: 'UNKNOWN', message: msg };
-    }
+    const apiKey = await this.getApiKey();
+    const { probeOpenAICompatibleBase } = await import('./healthcheck');
+    return probeOpenAICompatibleBase(this.baseUrl, {
+      apiKey,
+      debugTag: 'OpenAI-HealthCheck',
+    });
   }
 
   async chatStream(

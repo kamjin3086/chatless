@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ProviderMetadata } from '@/lib/metadata/types';
 import { toast } from '@/components/ui/sonner';
 
@@ -14,8 +14,8 @@ import { useProviderStore } from '@/store/providerStore';
 import { mapToProviderWithStatus } from '@/lib/provider/transform';
 import { preloadProviderAndModelLogos } from '@/lib/utils/logoPreloader';
 
-// Dev mode flag for debug logging (currently unused, can be removed if not needed)
-// const DEV_MODE = isDevelopmentEnvironment();
+// 设置布局与 AI 模型页会各调一次 hook；连通性检查只跑一轮，避免状态点连闪
+let didInitProviderConfigCheck = false;
 
 // --- 类型定义 ---
 // (可以考虑移到单独的 types 文件)
@@ -37,7 +37,7 @@ export interface ProviderWithStatus extends ProviderMetadata {
   // 新增：上次稳定结果（用于悬浮提示）
   lastResult?: 'CONNECTED' | 'NOT_CONNECTED' | 'UNKNOWN';
   lastMessage?: string | null;
-  
+
   healthCheckPath?: string;
   authenticatedHealthCheckPath?: string;
   isUserAdded?: boolean;
@@ -57,54 +57,50 @@ export function useProviderManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 合并 Repository 数据与 StatusStore，以 StatusStore 为最终展示状态
-  const providers = useProviderStore(s => s.providers)
-    .map(mapToProviderWithStatus)
-    .filter((p:any)=>p.isVisible!==false)
-    .map(p=>{
-      const st = statusMap[p.name];
-      if(!st) return p;
-      
-      // 新的状态显示逻辑
-      let displayStatus: string | undefined;
-      let statusTooltip: string | undefined;
-      
-      // 优先显示配置状态（显示为徽章）
-      if (st.configStatus) {
-        displayStatus = st.configStatus;
-        statusTooltip = st.temporaryMessage ?? undefined;
-      }
-      // 其次显示临时状态（检查后显示）
-      else if (st.temporaryStatus) {
-        displayStatus = st.temporaryStatus;
-        statusTooltip = st.temporaryMessage ?? undefined;
-      }
-      // 默认不显示状态徽章，也不显示检查时间提示（改为在刷新按钮悬浮时显示）
-      else {
-        displayStatus = undefined;
-        statusTooltip = undefined;
-      }
-      
-      return { 
-        ...p, 
-        displayStatus, 
-        isConnected: st.temporaryStatus === 'CONNECTED', 
-        statusTooltip,
-        lastCheckedAt: st.lastCheckedAt,
-        lastResult: (st as any).lastResult,
-        lastMessage: (st as any).lastMessage,
-        temporaryStatus: st.temporaryStatus,
-        configStatus: st.configStatus,
-        temporaryMessage: st.temporaryMessage
-      } as ProviderWithStatus;
-    });
-
   const {
     providers: repoProviders,
     isLoading: repoLoading,
     init: initProviders,
     refreshAll: storeRefreshAll,
   } = useProviderStore();
+
+  // 合并 Repository 数据与 StatusStore；依赖不变时保持引用，避免设置页整表重挂
+  const providers = useMemo(() => {
+    return repoProviders
+      .map(mapToProviderWithStatus)
+      .filter((p: any) => p.isVisible !== false)
+      .map((p) => {
+        const st = statusMap[p.name];
+        if (!st) return p;
+
+        let displayStatus: string | undefined;
+        let statusTooltip: string | undefined;
+
+        if (st.configStatus) {
+          displayStatus = st.configStatus;
+          statusTooltip = st.temporaryMessage ?? undefined;
+        } else if (st.temporaryStatus) {
+          displayStatus = st.temporaryStatus;
+          statusTooltip = st.temporaryMessage ?? undefined;
+        } else {
+          displayStatus = undefined;
+          statusTooltip = undefined;
+        }
+
+        return {
+          ...p,
+          displayStatus,
+          isConnected: st.temporaryStatus === 'CONNECTED',
+          statusTooltip,
+          lastCheckedAt: st.lastCheckedAt,
+          lastResult: (st as any).lastResult,
+          lastMessage: (st as any).lastMessage,
+          temporaryStatus: st.temporaryStatus,
+          configStatus: st.configStatus,
+          temporaryMessage: st.temporaryMessage,
+        } as ProviderWithStatus;
+      });
+  }, [repoProviders, statusMap]);
   const setConnecting = useProviderMetaStore(s=>s.setConnecting);
 
   // 页面卸载取消标记
@@ -137,19 +133,18 @@ export function useProviderManagement() {
       setIsLoading(repoLoading);
       try { preloadProviderAndModelLogos(converted as any).catch(()=>{}); } catch { /* noop */ }
     })();
-     
+
   }, [repoProviders, repoLoading]);
 
   // 初始化时对"检查过期"的 Provider 进行一次静默检查
-  const didInitCheckRef = useRef(false);
   useEffect(() => {
-    if (didInitCheckRef.current) return;
-    didInitCheckRef.current = true;
+    if (didInitProviderConfigCheck) return;
+    didInitProviderConfigCheck = true;
     (async () => {
       try {
         const { providerRepository } = await import('@/lib/provider/ProviderRepository');
         const list = await providerRepository.getAll();
-        
+
         // 初始化配置状态：仅依据“输入框（持久化的 apiKey）是否为空”来显示未配置密钥
         const configStatusUpdates: Record<string, any> = {};
         list.forEach(p => {
@@ -162,13 +157,13 @@ export function useProviderManagement() {
             };
           }
         });
-        
+
         if (Object.keys(configStatusUpdates).length > 0) {
           const { bulkSet } = useProviderStatusStore.getState();
           // 不持久化：仅用于 UI 显示
           bulkSet(configStatusUpdates, false);
         }
-        
+
         const STALE_MS = 10 * 60 * 1000; // 10 分钟
         const now = Date.now();
         const stale = list.filter(p => !p.lastChecked || (now - (p.lastChecked || 0)) > STALE_MS);
@@ -202,9 +197,7 @@ export function useProviderManagement() {
     const repoName = provider.name;
     if (cancelledRef.current) return;
 
-    // 不再写入“检查中”临时状态，避免文案串入通知
-    setStatusStore(provider.name, { lastCheckedAt: Date.now() }, false);
-
+    // 检查过程中不要提前写入 lastCheckedAt，避免沿用旧的 CONNECTED 结果闪「连接正常」
     const { checkController } = await import('@/lib/provider/check-controller');
 
     await new Promise<void>((resolve) => {
@@ -217,7 +210,7 @@ export function useProviderManagement() {
         if (p.name !== repoName) return;
         setConnecting(provider.name, false);
         console.log('[ProviderCheck] success', repoName, p.status, p.message);
-        
+
         // 根据检查结果设置状态
         const now = Date.now();
         if (p.status === 'NO_KEY') {
@@ -245,21 +238,27 @@ export function useProviderManagement() {
           };
           run();
         } else {
-          // 不再在行内用徽章展示检查态；这里只记录lastCheckedAt
-          setStatusStore(provider.name, { lastCheckedAt: now }, false);
+          setStatusStore(provider.name, {
+            lastCheckedAt: now,
+            lastResult: p.status === 'CONNECTED' ? 'CONNECTED' : 'NOT_CONNECTED',
+            lastMessage: p.message ?? null,
+          }, false);
           // 统一改用通知反馈结果：标题为 Provider 名称，描述为标准化文案
           if (showToast) {
             const title = provider.displayName || provider.name;
             if (p.status === 'CONNECTED') {
-              toast.success(title, { description: 'API 基本可用，密钥请使用时再确认' ,duration: 5000});
+              toast.success(title, { description: p.message || '接口可访问', duration: 4000 });
             } else {
-              toast.error(title, { description: 'API 无法访问，请检查网络状态，服务地址或API策略' ,duration: 5000});
+              toast.error(title, {
+                description: p.message || '无法连接，请检查服务是否启动以及地址和端口',
+                duration: 5000,
+              });
             }
           }
         }
-        
+
         // 移除重复通知与临时状态清理
-        
+
         offStart(); offSuccess(); offFail(); offTimeout(); offCancel();
         resolve();
       });
@@ -267,11 +266,18 @@ export function useProviderManagement() {
         if (p.name !== repoName) return;
         setConnecting(provider.name, false);
         console.log('[ProviderCheck] fail', repoName, p.message);
-        
-        // 仅通知，不写入临时失败徽章
-        setStatusStore(provider.name, { lastCheckedAt: Date.now() }, false);
 
-        if (showToast) toast.error(`${provider.displayName || provider.name}`, { description: 'API 无法访问，请检查地址或API策略' });
+        setStatusStore(provider.name, {
+          lastCheckedAt: Date.now(),
+          lastResult: 'NOT_CONNECTED',
+          lastMessage: p.message ?? '无法连接',
+        }, false);
+
+        if (showToast) {
+          toast.error(`${provider.displayName || provider.name}`, {
+            description: p.message || '无法连接，请检查服务是否启动以及地址和端口',
+          });
+        }
         offStart(); offSuccess(); offFail(); offTimeout(); offCancel();
         resolve();
       });
@@ -279,11 +285,16 @@ export function useProviderManagement() {
         if (p.name !== repoName) return;
         setConnecting(provider.name, false);
         console.log('[ProviderCheck] timeout', repoName);
-        
-        // 仅通知，不写入临时超时徽章
-        setStatusStore(provider.name, { lastCheckedAt: Date.now() }, false);
 
-        if (showToast) toast.error(`${provider.displayName || provider.name}`, { description: 'API 无法访问，请检查地址或API策略' });
+        setStatusStore(provider.name, {
+          lastCheckedAt: Date.now(),
+          lastResult: 'NOT_CONNECTED',
+          lastMessage: '连接超时',
+        }, false);
+
+        if (showToast) {
+          toast.error(`${provider.displayName || provider.name}`, { description: '连接超时' });
+        }
         offStart(); offSuccess(); offFail(); offTimeout(); offCancel();
         resolve();
       });
@@ -350,79 +361,55 @@ export function useProviderManagement() {
   }, [ollamaModels, hasOnlineFetched]);
 
   // --- 其他处理函数 ---
-  
-  // 处理URL保存后的状态更新
-  const updateProviderStatusAfterUrlChange = useCallback((providerName: string, _newUrl: string) => {
-    setStatusStore(providerName, {
-      temporaryMessage: 'URL已更改，请刷新',
-      lastCheckedAt: Date.now(),
-    }, false);
-  }, [setStatusStore]);
 
   const handleServiceUrlChange = useCallback(async (providerName: string, newUrl: string) => {
-    // 移除立即更新providers状态的代码，避免在用户输入时重置输入框
-    // setProviders(prev =>
-    //     prev.map(p =>
-    //         p.name === providerName ? { ...p, api_base_url: newUrl, displayStatus: 'UNKNOWN', isConnected: undefined, statusTooltip: 'URL已更改，请刷新' } : p
-    //     )
-    // );
-    
     try {
-      // 处理空URL的情况
       const effectiveUrl = newUrl.trim() || (providerName === 'Ollama' ? 'http://localhost:11434' : '');
-      // 始终写入（避免因本地 state 未同步导致跳过写入的情况）
-      
-      // 统一用用例写入
+      const current = providers.find(
+        (p) => p.name === providerName || p.aliases?.includes(providerName)
+      );
+      const prevUrl = (current?.api_base_url || '').trim().replace(/\/$/, '');
+      const nextUrl = effectiveUrl.replace(/\/$/, '');
+      if (prevUrl === nextUrl) return;
+
       const { updateProviderConfigUseCase } = await import('@/lib/provider/usecases/UpdateProviderConfig');
       await updateProviderConfigUseCase.execute(providerName, { url: effectiveUrl });
 
-      // 如果是 Ollama，同时保存到 OllamaConfigService
       if (providerName === 'Ollama') {
         const { OllamaConfigService } = await import('@/lib/config/OllamaConfigService');
-        // 如果URL为空，清除配置而不是保存空字符串
         if (!newUrl.trim()) {
           const config = await OllamaConfigService.getConfig();
           delete config.api_base_url;
           await OllamaConfigService.setConfig(config);
-          console.log(`[useProviderManagement] Ollama URL 已清除，将使用默认值`);
         } else {
           await OllamaConfigService.setOllamaUrl(newUrl);
-          console.log(`[useProviderManagement] Ollama URL 已保存到 OllamaConfigService: ${newUrl}`);
         }
       }
 
-      // 保存成功后更新状态
-      updateProviderStatusAfterUrlChange(providerName, effectiveUrl);
-
-      toast.success("服务地址已保存", { description: "请手动刷新以检测新地址。" });
-
-      // 同步更新 ProviderRegistry 中的 Provider 实例 baseUrl
       try {
         const strat = ProviderRegistry.get(providerName);
         if (strat) {
           (strat as any).baseUrl = effectiveUrl;
-          console.log(`[useProviderManagement] Updated ProviderRegistry baseUrl for ${providerName} → ${effectiveUrl}`);
         }
-        
-        // 如果是Ollama，同时更新llm/index中的OllamaProvider
         if (providerName === 'Ollama') {
           const { updateOllamaProviderUrl } = await import('@/lib/llm');
           await updateOllamaProviderUrl(effectiveUrl);
-          console.log(`[useProviderManagement] 已同步更新 llm/index 中的 OllamaProvider URL: ${effectiveUrl}`);
         }
-      } catch (e) { console.warn('Update ProviderRegistry baseUrl error', e);} 
+      } catch (e) { console.warn('Update ProviderRegistry baseUrl error', e);}
 
       if (providerName === 'Ollama') {
-          // 更新模型缓存，但不自动检查 Provider 状态；等待用户手动刷新
-          try { await refreshOllamaModels(effectiveUrl); } catch {/* noop */}
+        try { await refreshOllamaModels(effectiveUrl); } catch {/* noop */}
       }
-      
+
+      toast.success("地址已保存");
+      if (current) {
+        void handleSingleProviderRefresh(current, false);
+      }
     } catch (error: any) {
       console.error("Error updating provider URL:", error);
-      toast.error("更新 URL 失败", { description: error?.message || "无法保存 URL 更改。" });
-      // loadData(true); 
+      toast.error("地址保存失败", { description: error?.message || "请检查后重试。" });
     }
-  }, [refreshOllamaModels, handleSingleProviderRefresh, providers, updateProviderStatusAfterUrlChange]); 
+  }, [refreshOllamaModels, handleSingleProviderRefresh, providers]);
 
   const handleProviderDefaultApiKeyChange = useCallback(async (providerName: string, apiKey: string) => {
     const finalApiKey = apiKey && apiKey.trim() ? apiKey.trim() : null;
@@ -434,8 +421,8 @@ export function useProviderManagement() {
         return;
       }
     }
-    
-    
+
+
     try {
       const { updateProviderConfigUseCase } = await import('@/lib/provider/usecases/UpdateProviderConfig');
       await updateProviderConfigUseCase.execute(providerName, { apiKey: finalApiKey });
@@ -444,7 +431,7 @@ export function useProviderManagement() {
       toast.error("更新 API 密钥失败", { description: error?.message || "无法保存密钥更改。" });
       // loadData(true);
     }
-  }, [handleSingleProviderRefresh, providers]); 
+  }, [handleSingleProviderRefresh, providers]);
 
   const handleModelApiKeyChange = useCallback(async (providerName: string, modelName: string, apiKey: string) => {
     const finalApiKey = apiKey || null;
@@ -470,19 +457,19 @@ export function useProviderManagement() {
       toast.error("更新模型 API 密钥失败", { description: error?.message || "无法保存密钥更改。" });
       // loadData(true);
     }
-  }, []); 
+  }, []);
 
   const handleGlobalRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
       await storeRefreshAll();
-      
+
       // 全局刷新后，重新加载所有提供商的最新模型数据
       const { providerRepository } = await import('@/lib/provider/ProviderRepository');
-      
+
       await providerRepository.getAll();
-      
-      
+
+
       toast.success("提供商刷新完成");
     } catch (e:any) {
       console.error("Global refresh failed", e);
@@ -520,7 +507,7 @@ export function useProviderManagement() {
       // 回滚交由仓库订阅完成
     }
   }, []);
-  
+
   return {
     providers,
     isLoading,

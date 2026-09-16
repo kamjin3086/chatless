@@ -1,6 +1,7 @@
 import { providerStatusService } from './services/ProviderStatusService';
 import { providerModelService } from './services/ProviderModelService';
 import type { ProviderEntity } from './types';
+import { useProviderMetaStore } from '@/store/providerMetaStore';
 
 type CheckReason = 'blur' | 'url_saved' | 'manual' | 'init' | 'pref_changed';
 
@@ -46,6 +47,12 @@ class CheckController {
     return this.bus.on(evt, cb);
   }
 
+  private markConnecting(name: string, on: boolean) {
+    try {
+      useProviderMetaStore.getState().setConnecting(name, on);
+    } catch { /* noop */ }
+  }
+
   requestCheck(name: string, opts: RequestOptions) {
     const { debounceMs = 300, minIntervalMs = 2000 } = opts;
     const now = Date.now();
@@ -67,23 +74,27 @@ class CheckController {
     this.debounceTimers.delete(name);
     const p = this.inflight.get(name);
     if (p) {
-      // 无法真正取消 Promise，但发出取消事件用于 UI 清理
       this.bus.emit('cancel', { name, status: 'UNKNOWN' });
     }
+    this.markConnecting(name, false);
   }
 
   private async run(name: string, opts: RequestOptions) {
     this.lastRunAt.set(name, Date.now());
     console.log('[ProviderCheck] run -> start', name, opts);
-    this.bus.emit('start', { name, status: 'UNKNOWN' });
+    let started = false;
 
     try {
-      // 统一避免并发：同一 provider 若仍在进行中，取消之前的并复用最新一次
+      // 先取消上一轮监听，再发出 start，避免当前这次检查被误当成 cancel 而卡在「正在检测」
       const prev = this.inflight.get(name);
       if (prev) {
         console.log('[ProviderCheck] cancel previous inflight', name);
         this.bus.emit('cancel', { name, status: 'UNKNOWN' });
       }
+
+      started = true;
+      this.markConnecting(name, true);
+      this.bus.emit('start', { name, status: 'UNKNOWN' });
 
       const promise = providerStatusService.refresh(name).finally(() => {
         this.inflight.delete(name);
@@ -114,7 +125,6 @@ class CheckController {
         message: (updated as any).lastMessage ?? null,
       });
       console.log('[ProviderCheck] success event emitted', name, status);
-      // 将稳定结果写入状态存储，确保“最后检查时间/结果”立即更新
       try {
         const { useProviderStatusStore } = await import('@/store/providerStatusStore');
         const stable: 'CONNECTED' | 'NOT_CONNECTED' | 'UNKNOWN' = (status === 'CONNECTED' || status === 'NOT_CONNECTED') ? status : 'UNKNOWN';
@@ -125,7 +135,6 @@ class CheckController {
         }, false);
       } catch { /* noop */ }
 
-      // 成功后：按需异步拉取模型，做节流
       if (status === 'CONNECTED' && (opts.withModels ?? true)) {
         const lastFetch = this.lastModelFetchAt.get(name) || 0;
         if (Date.now() - lastFetch > 60_000) {
@@ -139,6 +148,8 @@ class CheckController {
       const msg = e?.message || String(e ?? '');
       console.log('[ProviderCheck] catch', name, msg);
       this.bus.emit('fail', { name, status: 'NOT_CONNECTED', message: msg });
+    } finally {
+      if (started) this.markConnecting(name, false);
     }
   }
 }

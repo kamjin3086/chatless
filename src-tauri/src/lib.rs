@@ -50,6 +50,9 @@ pub mod onnx_logic;
 #[path = "lib/document_parser.rs"]
 pub mod document_parser;
 
+#[path = "lib/document_structured.rs"]
+pub mod document_structured;
+
 #[path = "lib/sse.rs"]
 pub mod sse;
 
@@ -106,6 +109,12 @@ fn generate_embedding_command(texts: Vec<String>) -> Result<Vec<Vec<f32>>, Strin
     })
     .collect();
   Ok(embeddings)
+}
+
+/// 应用退出时释放 ONNX 等资源
+#[tauri::command]
+fn cleanup_on_exit(state: tauri::State<onnx_logic::OnnxState>) -> Result<(), String> {
+  onnx_logic::release_onnx_session(state)
 }
 
 pub fn run() {
@@ -220,6 +229,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       greet,
       generate_embedding_command,
+      cleanup_on_exit,
       exit,
       set_log_level,
       // —— Environment Check Commands ——
@@ -240,6 +250,8 @@ pub fn run() {
       document_parser::parse_document_from_binary,
       document_parser::parse_document_content,
       document_parser::get_supported_file_types,
+      document_structured::parse_document_structured,
+      document_structured::tokenize_for_fts_command,
       // ONNX commands
       onnx_logic::init_onnx_session,
       onnx_logic::tokenize_batch,

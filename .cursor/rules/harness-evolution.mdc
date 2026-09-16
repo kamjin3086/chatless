@@ -1,0 +1,34 @@
+---
+description: Agent Harness 演进约束。跟上现代 harness 靠收口运行内核，不靠重写或引入重型编排框架。
+alwaysApply: true
+---
+
+# Harness 演进
+
+Chatless 已有 Agent 骨架（StreamEvent、AgentLoop、Tool pipeline、MCP、Skills）。短板是未收口为可持久化控制平面。演进原则：渐进接线，禁止推倒重来。
+
+## 必须保留
+
+- Chat / Agent 双模式
+- native + prompt tool-call 双轨，兼容 Ollama / LM Studio / 老旧 compatible 端点
+- 本地优先：Tauri + SQLite + 可选本地 embedding
+- ToolCard 审批、filesystem allowlist、停止/取消
+- 现有 Skills（SKILL.md）资产；现代化应兼容而非替换
+- 多 Provider 策略委派与参数修正
+
+## 优先收口（P0/P1），不要另起炉灶
+
+- 持久化 AgentRun / 事件日志；历史从事件投影，不只靠 `message.content`
+- 把已有 `ConversationEventLog`、`ContextWindowManager`、`PromptEnvelopeBuilder` 接到主路径
+- 统一 AgentLoop 与旧 `ToolCallOrchestrator` 的重复逻辑
+- per-run 取消与解析器状态；先队列隔离，再谈并行
+- Provider 能力协商：tools、usage、structured output、continuation；缺能力则降级
+
+## 禁止
+
+- 引入 LangGraph / 云端 Agent SDK / 微服务作为核心运行时
+- 单 Agent 还不能恢复、审计、取消时就做 swarm / subagent 平台
+- 用重写 UI 框架或 RSC 来“现代化 harness”
+- 破坏 compatible 回退路径去对齐某一家最新 API
+
+Subagent、Worktree、A2A、Computer Use 都是可选 adapter，且排在单 Agent 可恢复之后。

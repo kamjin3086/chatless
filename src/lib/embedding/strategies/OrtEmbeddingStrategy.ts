@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { EmbeddingStrategy, EmbeddingError } from '../types';
 
 // NOTE: Rust 端需要实现对应的 `init_onnx_session`, `generate_embedding`, `release_onnx_session` 命令。
-// 该策略在调用失败时会自动回退到模拟嵌入，避免阻塞前端功能。
+// 推理失败直接抛错，由上层把语义检索标记为不可用并保留词法检索。
 
 interface OrtStrategyConfig {
   modelPath: string;
@@ -15,6 +15,7 @@ interface OrtStrategyConfig {
 interface TokenizationOutput {
   input_ids: number[][];
   attention_mask: number[][];
+  token_type_ids: number[][];
 }
 
 export class OrtEmbeddingStrategy implements EmbeddingStrategy {
@@ -29,6 +30,10 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
 
   getDimension(): number {
     return this.dimension;
+  }
+
+  getMaxInputTokens(): number {
+    return this.config.maxLength || 512;
   }
 
   /**
@@ -67,6 +72,7 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
         input: {
           input_ids: tokenized.input_ids,
           attention_mask: tokenized.attention_mask,
+          token_type_ids: tokenized.token_type_ids,
         },
         timeout: this.config.timeout || 30000,
       });
@@ -86,4 +92,4 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
     }
     this.isInitialized = false;
   }
-} 
+}

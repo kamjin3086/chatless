@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { writeFile, readFile, exists, mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { StorageUtil } from './storage';
+import { buildSafePhysicalFileName, validatePathLength } from './filesystem/safeFileName';
 
 // 统一文件接口
 export interface UnifiedFile {
@@ -150,9 +151,13 @@ export class UnifiedFileService {
         fileSize = file.length;
       }
 
-      // 生成安全的文件名
-      const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '-');
+      // 生成安全的物理文件名（短 basename + 保留扩展名）
+      const safeFileName = buildSafePhysicalFileName(fileName, id);
       const filePath = await join(filesDir, `${id}_${safeFileName}`);
+      const pathCheck = validatePathLength(filePath);
+      if (!pathCheck.ok) {
+        throw new Error(pathCheck.message || '文件路径过长');
+      }
 
       // 写入文件
       await writeFile(filePath, fileData);
@@ -289,6 +294,17 @@ export class UnifiedFileService {
 
       const file = files[fileIndex];
 
+      // Keep the durable document/index tables in sync before mutating the
+      // file index. If this fails, leave the file available so the user can
+      // retry instead of creating an unreachable stale index.
+      try {
+        const { getDatabaseService } = await import('./db');
+        await getDatabaseService().getDocumentRepository().deleteDocument(id);
+      } catch (databaseError) {
+        console.error(`删除文件对应的文档索引失败 (ID: ${id}):`, databaseError);
+        return false;
+      }
+
       // 删除物理文件
       try {
         if (await exists(file.filePath)) {
@@ -408,4 +424,4 @@ export class UnifiedFileService {
 }
 
 // 导出向后兼容的接口
-export const UnifiedFileManager = UnifiedFileService; 
+export const UnifiedFileManager = UnifiedFileService;

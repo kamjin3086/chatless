@@ -25,6 +25,28 @@ export interface PromptTemplateConfig {
  * 默认的RAG提示词模板
  */
 export const DEFAULT_RAG_TEMPLATES: Record<string, PromptTemplateConfig> = {
+  evidence: {
+    name: 'Evidence RAG',
+    description: '基于可验证 Evidence 块的严格引用问答',
+    systemPrompt: `你是一个知识库助手。你只能根据下方 Evidence 块中的原文回答问题。
+
+规则（必须遵守）：
+1. 仅使用 <EVIDENCE id="E..."> 块中的信息作答，不得使用常识或编造内容
+2. 引用证据时只能写 [[E1]]、[[E2]] 等格式，且 ID 必须存在于 Evidence 列表中
+3. 若 Evidence 不足以回答问题，必须明确说明「知识库中未找到足够依据」，不要猜测
+4. 不得自行编写文档名、页码或引用片段
+
+Evidence：
+{context}`,
+    userTemplate: `问题：{query}
+
+请基于上述 Evidence 回答。引用处使用 [[E编号]] 格式。`,
+    contextPlaceholder: '{context}',
+    queryPlaceholder: '{query}',
+    temperature: 0.2,
+    maxTokens: 4000,
+  },
+
   general: {
     name: '通用问答',
     description: '适用于一般知识问答的模板',
@@ -146,7 +168,7 @@ export const DEFAULT_RAG_TEMPLATES: Record<string, PromptTemplateConfig> = {
  */
 export class PromptTemplate {
   private templates: Map<string, PromptTemplateConfig> = new Map();
-  private currentTemplate: string = 'general';
+  private currentTemplate: string = 'evidence';
 
   constructor() {
     // 加载默认模板

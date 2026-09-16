@@ -81,9 +81,10 @@ export abstract class BaseStreamingStrategy implements ThinkingModeStrategy {
   processToken(token: ThinkingToken): ProcessedOutput {
     const events: StreamEvent[] = [];
     
-    // 1. 处理thinking内容（实时流式输出）
-    if (this.shouldProcessThinking(token)) {
-      events.push(...this.processThinkingStream(token));
+    // 1. 处理thinking内容（实时流式输出）— 仅解析一次，避免有状态解析器重复消费
+    const thinkingContent = this.extractThinkingContent(token);
+    if (thinkingContent && thinkingContent.length > 0) {
+      events.push(...this.processThinkingStream(thinkingContent));
     }
     
     // 2. 处理content内容
@@ -110,9 +111,8 @@ export abstract class BaseStreamingStrategy implements ThinkingModeStrategy {
    * - 每个thinking token：立即发送thinking_token事件
    * - 同时缓冲内容用于后续批量解析
    */
-  protected processThinkingStream(token: ThinkingToken): StreamEvent[] {
+  protected processThinkingStream(thinkingContent: string): StreamEvent[] {
     const events: StreamEvent[] = [];
-    const thinkingContent = this.extractThinkingContent(token);
     
     if (!thinkingContent) return events;
     

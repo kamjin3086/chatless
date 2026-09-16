@@ -7,6 +7,15 @@ const DEFAULT_TTL = 24 * 60 * 60 * 1000; // 24 小时
 
 type Listener = (provider: string) => void;
 
+function isSameModelList(a: ModelEntity[] | undefined, b: ModelEntity[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name) return false;
+    if ((a[i] as any).label !== (b[i] as any).label) return false;
+  }
+  return true;
+}
+
 export class ModelRepository {
   private listeners: Set<Listener> = new Set();
 
@@ -60,6 +69,11 @@ export class ModelRepository {
       if (!uniqueById.has(m.name)) uniqueById.set(m.name, m);
     }
     const normalized = Array.from(uniqueById.values());
+
+    const inMem = await defaultCacheManager.get<ModelEntity[]>(this.key(provider));
+    if (isSameModelList(inMem, normalized)) {
+      return;
+    }
 
     await defaultCacheManager.set(this.key(provider), normalized, { ttl });
     try {
