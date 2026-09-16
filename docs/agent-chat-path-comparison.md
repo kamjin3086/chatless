@@ -1,35 +1,64 @@
-# Agent 模式 vs Chat 模式：工具续写路径对照
+# Agent 运行路径：当前实现与审查结论
 
-> M3 设计门结论：**差异超过 3 处用户可感知行为，本轮不合并循环**，仅共享 EventLog（已实现）。以下供后续是否抽取 `resumeRound` 时参考。
+更新于 2026-09-16。本文替代旧的“双模式不合并”说明。
 
-## 路径概览
+## 当前执行路径
 
-| 维度 | Agent (`AgentLoopRunner`) | Chat (`ToolCallOrchestrator`) |
-|------|---------------------------|-------------------------------|
-| 循环 | `while(true)` 多轮 | `continueWithToolResult` 轻量递归 |
-| 事件日志 | `AgentRunControlPlane` + SQLite | `ChatRunEventRecorder` 写同一表 |
-| 发模型历史 | Envelope prefix + 事件投影 compact | `historyForLlm` + `buildToolRoleAppendix` |
-| 工具注入 | `forceInject` + Envelope tools | 意图检测 + 可选 native tools |
+普通发送和重新生成都由 `useChatActions → AgentLoopRunner` 驱动。
+普通聊天是没有工具调用的运行。工具执行复用 `ToolExecutionPipeline`。
+`AgentRunControlPlane` 负责事件顺序与模型历史投影，`AgentRunEventStore` 保存运行事件。
 
-## 用户可感知差异（>3 → 不合并）
+本次走读基于 `a770528`。结论：该提交有可复用的改进，但不能视为此前 Agent 重构计划已经完成。
+尤其不能把新增接口、状态枚举或 checkpoint 表等同于恢复能力已经接通。
 
-1. **标题生成**：Agent 在整轮 Loop 结束后统一生成；Chat 可在单轮流完成后触发（`StreamOrchestrator`）。
-2. **工具轮次预算**：Agent `MAX_BUDGET` 加权预算；Chat `MAX_RESUME_ROUNDS=8` + 连续空结果熔断。
-3. **Stop / 取消**：Agent `AgentLoopRunner.cancel` + `agentRuns`；Chat `ToolCallCoordinator.cancelMessage` + stream cancel。
-4. **模式默认**：新会话默认 `chat`；Agent 需显式切换。
-5. **系统注入**：Agent 强制 MCP 注入；Chat 按意图注入，普通聊天不带 tools。
+## 本次删除与修正
 
-## 已共享
+- 删除 `AgentSession`：它重复保存状态、长期持有 UI 闭包；`respond` 无法启动续写，`resume` 只是重跑旧参数。
+  发送、重新生成和停止直接调用现有循环。删除没有 UI 调用方的恢复/追加 hook。
+- 删除未接通用户回答和计划展示的 `interaction__ask_user/update_plan` 占位工具。
+  模型仍可用普通回复询问用户；这不等同于可恢复的工具等待。
+- 删除不可达的 Chat 重试分支、随机重试 nonce，以及已经先取消命令后又提示“二次点击”的旧 Stop 分支。
+- 删除按工具名称加权的执行预算、空结果次数熔断、逐工具“下一步必须”提示与强制收尾提示。
+  保留 50 个模型步骤、12 次知识工具调用上限，达到上限保存暂停状态。
+- 流回调只收集工具请求；等待协议完成并排空异步回调后才保存请求和执行。
+  兼容 Tauri Provider 仅注册监听就返回的行为；OpenAI-compatible 半截工具流、长度截断不作为成功完成。
+- 同一模型回复中的请求先全部落盘，再按调用顺序执行。保留中间助手正文与工具结果顺序。
+  参数错误也写入结果，供模型修正；执行结果未知时停止派发，并标记剩余调用未执行。
+- 事件写入串行化，持久化成功后才进入模型投影。请求写入失败不执行，结果写入失败不继续派发。
+  最终状态保存失败向调用方报告。故障不能标记为成功。
+- 去掉按全文内容去重用户消息的做法：只在入口识别历史末尾的当前输入，保留重复的追加指令。
+- 压缩不再用消息数量冒充摘要；失败、空摘要和超预算都保留原记录并报错。
+  计算包含固定提示、工具定义和协议数据；默认窗口 8K，不根据模型名称猜测 262K。
+  可通过模型高级参数 `contextWindowTokens` 显式配置，运行时消费此值，不下发给 Provider。
+- 修复 DeepSeek 第一段工具名称/参数重复拼接、Gemini 助手角色错误、非对象工具结果和调用 ID 重复。
+  消息映射保留图片，不允许工具附加数据覆盖原生调用 ID/函数。
+- Shell 输出按有界字节块读取，达到显示上限后继续排空；删除重复 stdout/stderr 行读取逻辑。
+- 输入入口已统一：删除 Chat/Agent 模式选择，保留按会话保存的“仅规划”开关；运行中输入进入当前循环的下一安全边界。
+- 工具活动默认为紧凑记录，审批只解析具体调用；卡片不再启动递归续写，失效审批只能通过新回合重新检查。
+- 工具目录改为 `tools__search` 分页搜索；匹配组按会话记录并在下一模型步生效，删除关键词意图预加载。
+- Tauri SSE 事件和取消按 `request_id` 隔离；同一 Provider/模型端点在 Agent loop 中顺序排队。
 
-- `agent_run_events` 持久化（Chat / Agent 均写入）
-- 启动时 `markAllStaleRunsCancelled` 清理幽灵 run
-- Tool 执行管线 `ToolExecutionPipeline` + adapters
+## 尚未闭环的能力
 
-## 明确不做
+以下是实际缺口，不应以本次单元测试通过代替验收：
 
-- 用 `AgentLoopRunner` 替换 Chat 单轮体验
-- 复活已删除的 `FollowUpDispatcher`
+1. **请求隔离与取消**：Agent loop、SSE 事件和端点排队已按请求/端点隔离；解释器内部仍保留旧的 `activeProvider` 兼容字段，真实多端点取消和委派 Provider 仍需桌面实测。
+2. **持久化恢复与审批**：事件记录仍走前端 SQL；尚无 Rust 单事务发布运行/调用状态、具体审批的持久化响应或未知副作用核对流程。旧运行只能查看或作为新回合背景，不能精确断点恢复。
+3. **上下文与长任务**：估算不是模型 tokenizer；图片按序列化大小保守计算。尚未接通端点报告窗口、持久化压缩检查点、分段摘要、输出附件和大规模连续阅读恢复。不能压缩的超长轮次会明确报错。
+4. **完整 Provider 协议**：本次覆盖部分 OpenAI-compatible/DeepSeek 工具流和 Gemini 消息映射；Responses、Anthropic thinking、Gemini 所有原始内容块/签名跨重启的完整契约仍需验证。
+5. **工具目录与权限**：目录搜索和加载状态已按会话隔离，关键词预加载及卡片递归路径已删除；撤销权限后的桌面流程和管理操作审批仍需实机验证。
+6. **界面**：统一输入、仅规划、运行中补充、紧凑活动记录和失效审批提示已接通；“继续”仍复用重新生成创建新运行，暂停原因和未知副作用核对入口还需补齐。
+7. **Shell 生命周期**：本次修正输出排空、请求取消锁和 SSE 隔离；跨平台进程树、超时清理、取消结果确认及输出附件仍需实机验证。
 
-## 若未来合并
+保留已有迁移文件与表，不通过改写历史迁移或删除用户数据来清理未接通功能；无调用方 checkpoint 读写 API 已移除。
 
-仅建议抽取 **只读** 共享模块（如 `buildToolRoleAppendix`、熔断计数），Chat 仍自行 `streamChat` 一次，不进入 `while(true)`。
+## 验证范围
+
+- 确定性回归：半截流、异步回调顺序、串行写入、请求/结果落盘失败、未知副作用、重复输入、停止与追加指令。
+- 上下文：8K/32K/262K、小历史、工具与协议预算、完整工具轮次、压缩失败/空摘要/超预算。
+- Provider：内存 SSE/NDJSON 流测试及消息映射测试；不代表真实服务契约测试。
+- Rust：有界双工流验证大段无换行输出仍被完整排空，并保留未截断文本的换行与 UTF-8。
+
+真实 SQLite 崩溃恢复、多 Provider 并发、Qwen 任务评测和 Tauri 桌面端到端验收未在本次走读中执行。
+
+协议参考：[DeepSeek thinking](https://api-docs.deepseek.com/guides/thinking_mode/)、[Gemini function calling](https://ai.google.dev/gemini-api/docs/function-calling)。

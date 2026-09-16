@@ -9,14 +9,11 @@ import { AgentRunEventStore, type AgentRunStatus } from './AgentRunEventStore';
 
 const contextWindowManager = new ContextWindowManager();
 
-function contextWindowForModel(model: string): number {
-  return /qwen3\.8[-_]?flash[-_]?next/i.test(String(model || '')) ? 262_144 : 8_192;
-}
-
 export class AgentRunControlPlane {
   readonly eventLog = new ConversationEventLog();
   private seq = 0;
   private cancelled = false;
+  private writes: Promise<void> = Promise.resolve();
 
   constructor(
     readonly runId: string,
@@ -37,35 +34,22 @@ export class AgentRunControlPlane {
     }
   }
 
-  async record(event: ConversationEvent): Promise<void> {
-    this.eventLog.append(event);
-    this.seq += 1;
-    await AgentRunEventStore.appendEvent({
-      runId: this.runId,
-      conversationId: this.conversationId,
-      seq: this.seq,
-      event,
+  record(event: ConversationEvent): Promise<void> {
+    // Serialize sequence allocation and persistence. Failed writes poison the
+    // queue so later events cannot hide a missing durable boundary.
+    this.writes = this.writes.then(async () => {
+      const seq = this.seq + 1;
+      await AgentRunEventStore.appendEvent({
+        runId: this.runId, conversationId: this.conversationId, seq, event,
+      });
+      this.seq = seq;
+      this.eventLog.append(event);
     });
+    return this.writes;
   }
 
   async compactHistory(messages: LlmMessage[], provider: string, model: string): Promise<LlmMessage[]> {
-    const compacted = await contextWindowManager.compact(messages, {
-      provider,
-      model,
-      contextWindowTokens: contextWindowForModel(model),
-      reserveOutputTokens: 8_192,
-      safetyMarginRatio: 0.08,
-      keepLastN: 24,
-      allowSummarize: true,
-    });
-    if (compacted.length < messages.length) {
-      await this.record({
-        type: 'context_change',
-        kind: 'other',
-        content: `compacted history: ${messages.length} -> ${compacted.length} messages`,
-      });
-    }
-    return compacted;
+    return contextWindowManager.compact(messages, { provider, model, allowSummarize: true });
   }
 
   markCancelled(): void {
@@ -84,21 +68,9 @@ export class AgentRunControlPlane {
   buildLlmMessages(baseHistory: LlmMessage[], renderMode: RenderMode = 'text_wrapper'): LlmMessage[] {
     const projected = this.eventLog.renderForModel(renderMode);
     if (projected.length === 0) return baseHistory;
-    // History builders may already contain the current user turn. Consume one
-    // matching user event from the event projection to avoid sending it twice.
-    const existingUsers = new Map<string, number>();
-    for (const message of baseHistory) {
-      if (message.role !== 'user') continue;
-      existingUsers.set(message.content, (existingUsers.get(message.content) || 0) + 1);
-    }
-    const filtered = projected.filter((message) => {
-      if (message.role !== 'user') return true;
-      const count = existingUsers.get(message.content) || 0;
-      if (count <= 0) return true;
-      existingUsers.set(message.content, count - 1);
-      return false;
-    });
-    return [...baseHistory, ...filtered];
+    // Repeated user text can be an intentional correction or repeated request.
+    // The caller owns the boundary between base history and this run's events.
+    return [...baseHistory, ...projected];
   }
 
   /**
@@ -110,9 +82,18 @@ export class AgentRunControlPlane {
     renderMode: RenderMode;
     provider: string;
     model: string;
+    contextWindowTokens?: number;
+    reserveOutputTokens?: number;
+    tools?: unknown;
   }): Promise<LlmMessage[]> {
     const variable = this.buildLlmMessages(params.baseHistory, params.renderMode);
-    const compactedVariable = await this.compactHistory(variable, params.provider, params.model);
+    const compactedVariable = await contextWindowManager.compact(variable, {
+      provider: params.provider, model: params.model,
+      contextWindowTokens: params.contextWindowTokens,
+      reserveOutputTokens: params.reserveOutputTokens,
+      prefixMessages: params.prefixMessages, tools: params.tools,
+      allowSummarize: true,
+    });
     return [...params.prefixMessages, ...compactedVariable];
   }
 
@@ -121,6 +102,8 @@ export class AgentRunControlPlane {
   }
 
   async finish(status: AgentRunStatus): Promise<void> {
+    // Drain failure diagnostics queued by stream callbacks before closing the run.
+    await this.writes.catch(() => {});
     await AgentRunEventStore.setRunStatus(this.runId, status);
   }
 }

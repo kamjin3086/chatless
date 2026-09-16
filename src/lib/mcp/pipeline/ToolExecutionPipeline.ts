@@ -119,11 +119,6 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
     return false;
   }
 
-  // ctx (Agent Context): auto-approve
-  if (srv === 'ctx') {
-    return false;
-  }
-
   // tools: auto-approve
   if (srv === 'tools') {
     return false;
@@ -146,12 +141,10 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
 function isPlanOnlyAllowed(server: string, tool: string): boolean {
   const srv = normalizeServerName(server).toLowerCase();
   const tl = String(tool || '').toLowerCase();
-  if (srv === 'interaction') return tl === 'ask_user' || tl === 'update_plan';
   if (isFilesystemServer(srv)) return /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(tl);
   if (srv === 'knowledge') return /^(list|search|read)$/.test(tl);
   if (srv === 'web_search' || srv === 'web') return /^(search|fetch)$/.test(tl);
   if (srv === 'tools') return tl === 'discover' || tl === 'search';
-  if (srv === 'ctx') return tl === 'get';
   if (srv === 'skill') return /^(list|guide|use|read_file|list_files|check_deps)$/.test(tl);
   if (srv === 'system') return /^(list_prompts|get_prompt)$/.test(tl);
   return false;
@@ -176,8 +169,7 @@ function isDirectoryScopedFilesystemTool(tool: string): boolean {
 /**
  * 统一工具执行管线：去重 -> 授权 -> 执行 -> 更新卡片 -> 返回结果
  *
- * 注意：follow-up / multi-tool gate 仍由现有 `continueWithToolResult` 承担，
- * 后续会在 `followup-gate` / `context-envelope` 阶段收敛。
+ * 多工具顺序和下一模型步由 AgentLoopRunner 统一承担；Pipeline 只负责一次调用。
  */
 export class ToolExecutionPipeline {
   private coordinator = ToolCallCoordinator.getInstance();

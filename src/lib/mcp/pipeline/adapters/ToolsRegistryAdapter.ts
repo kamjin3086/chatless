@@ -27,17 +27,17 @@ export class ToolsRegistryAdapter implements ToolAdapter {
 
     switch (tool) {
       case 'discover':
-        return this.handleDiscover();
+        return this.handleDiscover(invocation.conversationId);
       case 'load':
-        return this.handleLoad(args);
+        return this.handleLoad(args, invocation.conversationId);
       case 'search':
-        return this.handleSearch(args);
+        return this.handleSearch(args, invocation.conversationId);
       default:
         return { ok: false, error: `Unknown tools command: ${tool}` };
     }
   }
 
-  private handleSearch(args: Record<string, unknown>): unknown {
+  private handleSearch(args: Record<string, unknown>, conversationId?: string): unknown {
     const query = String(args.query || '').trim().toLowerCase();
     const offset = Math.max(0, Number(args.cursor || 0));
     const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
@@ -49,19 +49,27 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       description: tool.description || '',
     }))).filter((item) => `${item.server} ${item.name} ${item.description}`.toLowerCase().includes(query));
     const page = matches.slice(offset, offset + limit);
+    const groupsToLoad = [...new Set(page.map((item) => item.group as ToolGroupId))];
+    if (groupsToLoad.length > 0) {
+      const state = useToolLoadRequestStore.getState();
+      for (const group of groupsToLoad) {
+        state.requestLoad(group, conversationId);
+      }
+    }
     return {
       ok: true,
       query,
       results: page,
+      loadedGroups: groupsToLoad,
       nextCursor: offset + page.length < matches.length ? offset + page.length : null,
       total: matches.length,
-      hint: '调用 tools__load({group}) 后，工具会在下一模型步生效。',
+      hint: groupsToLoad.length > 0 ? '匹配能力将在下一模型步生效。' : '没有匹配的工具。',
     };
   }
 
-  private handleDiscover(): unknown {
+  private handleDiscover(conversationId?: string): unknown {
     // 获取当前已加载的组
-    const loadedGroups = useToolLoadRequestStore.getState().loadedGroups;
+    const loadedGroups = this.getStateFor(conversationId).loadedGroups;
     
     // 获取所有可用组
     const allGroups = getGroupsSummary();
@@ -88,11 +96,11 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     };
   }
 
-  private handleLoad(args: Record<string, unknown>): unknown {
+  private handleLoad(args: Record<string, unknown>, conversationId?: string): unknown {
     const rawGroup = args.group;
     const groupId = typeof rawGroup === 'string' ? rawGroup : '';
     
-    const validGroups: ToolGroupId[] = ['ctx', 'skill', 'prompt', 'coding', 'knowledge'];
+    const validGroups: ToolGroupId[] = ['skill', 'prompt', 'coding', 'knowledge'];
     if (!validGroups.includes(groupId as ToolGroupId)) {
       // 对已废弃的组给出友好提示
       if (groupId === 'fs_extra' || groupId === 'shell' || groupId === 'web') {
@@ -110,7 +118,8 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     }
 
     // 检查是否已加载
-    const loadedGroups = useToolLoadRequestStore.getState().loadedGroups;
+    const state = this.getStateFor(conversationId);
+    const loadedGroups = state.loadedGroups;
     if (loadedGroups.includes(groupId as ToolGroupId)) {
       return {
         ok: true,
@@ -120,10 +129,9 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     }
 
     // 记录加载请求，下一轮对话时会注入
-    useToolLoadRequestStore.getState().requestLoad(groupId as ToolGroupId);
+    useToolLoadRequestStore.getState().requestLoad(groupId as ToolGroupId, conversationId);
 
     const groupNames: Record<string, string> = {
-      ctx: '上下文管理（save_research, save_plan 等）',
       skill: '技能系统（查询、管理技能）',
       prompt: '提示词管理（列出、创建、编辑、删除）',
       coding: '代码工具（搜索、诊断、git 只读）',
@@ -135,5 +143,11 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       message: `已请求加载工具组: ${groupNames[groupId] || groupId}`,
       note: '工具将在下一轮对话中可用。请继续你的任务。',
     };
+  }
+
+  private getStateFor(conversationId?: string) {
+    const store = useToolLoadRequestStore.getState();
+    const session = store.sessions[String(conversationId || '__default__')];
+    return session || { requestedGroups: [], loadedGroups: ['core' as ToolGroupId] };
   }
 }

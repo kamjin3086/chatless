@@ -20,6 +20,9 @@ export type AgentLoopRunParams = {
   /** 不包含本次 assistant 消息的历史（通常截止到本次 user 输入） */
   historyForLlm: LlmMessage[];
   originalUserContent: string;
+  /** Optional prior run whose completed events should be supplied as context for a new run. */
+  continuationRunId?: string;
+  continuationPrompt?: string;
   /** 透传给 provider 的 options（温度/最大tokens/会话参数等） */
   options?: Record<string, unknown>;
   /** Planning mode permits bounded reads/searches but blocks side effects. */

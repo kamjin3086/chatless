@@ -388,9 +388,7 @@ export class StreamOrchestrator {
     // 通知UI更新完成
     this.config.onUIUpdate?.(contentToPersist);
 
-    // 标题生成（通用路径）：在任意一次助手首次完成后尝试生成
-    // MCP 递归链已在 Orchestrator 外部（ToolCallOrchestrator）增加一次调用，此处作为通用兜底；
-    // 由于包含 isDefaultTitle 判定，不会重复生成。
+    // 标题生成（通用路径）：在任意一次助手首次完成后尝试生成。
     // 
     // 重要：AgentLoop 模式下（skipTitleGeneration=true），跳过此处的标题生成，
     // 由 AgentLoopRunner 在整个循环结束后统一处理，避免与主模型并发抢占资源。

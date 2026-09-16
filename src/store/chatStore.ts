@@ -135,7 +135,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
       agentRuns: {},
       lastUsedModelPerChat: {},
       sessionLastSelectedModel: null,
-      sessionToolMode: 'chat',
+      sessionToolMode: 'agent',
       _messagesLoaded: {},
       inputDrafts: {},
       streamStartCounter: 0,
@@ -183,7 +183,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
               created_at: convAny.created_at || convAny.created_at,
               updated_at: convAny.updated_at || convAny.updated_at,
               model_id: convAny.model_id || convAny.model_id || 'default',
-              tool_mode: (convAny.tool_mode as any) || 'chat',
+              tool_mode: (convAny.tool_mode as any) || 'agent',
               model_provider: convAny.model_provider || null,
               model_full_id: convAny.model_full_id || (convAny.model_provider ? `${convAny.model_provider}/${convAny.model_id}` : convAny.model_id),
               is_important: convAny.is_important === true || convAny.is_important === 1,
@@ -197,9 +197,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
           console.debug(`🔄 [STORE] Loaded ${loadedConversations.length} conversations.`);
 
           // 清理上次异常退出遗留的 running AgentRun，避免幽灵 loading
-          let staleAssistantIds: string[] = [];
           try {
-            staleAssistantIds = await AgentRunEventStore.markAllStaleRunsCancelled();
+            await AgentRunEventStore.markAllStaleRunsCancelled();
           } catch (e) {
             console.warn('[LOAD-CONVERSATIONS] 清理遗留 AgentRun 失败:', e);
           }
@@ -214,7 +213,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
             console.log(`🔄 [LOAD-CONVERSATIONS] 设置当前会话: ${loadedConversations[0].id}`);
             set({ currentConversationId: loadedConversations[0].id });
             // 默认工具模式沿用当前会话
-            set({ sessionToolMode: loadedConversations[0].tool_mode || 'chat' });
+            set({ sessionToolMode: loadedConversations[0].tool_mode || 'agent' });
           }
 
           console.log(`[LOAD-CONVERSATIONS] 会话加载完成，总计: ${loadedConversations.length} 个`);
@@ -407,7 +406,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       createConversation: async (title, modelId, providerName) => {
         const now = Date.now();
-        const mode = (get().sessionToolMode || 'chat') as 'chat' | 'agent';
+        const mode = (get().sessionToolMode || 'agent') as 'chat' | 'agent';
         const newConversation: Conversation = {
           id: uuidv4(),
           title,

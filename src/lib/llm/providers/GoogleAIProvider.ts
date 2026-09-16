@@ -1,3 +1,5 @@
+import { toGeminiContent } from './messageMapping';
+import { normalizeToolCallServerAndTool } from '@/lib/mcp/normalizeToolCallName';
 import { BaseProvider, CheckResult, LlmMessage, StreamCallbacks } from './BaseProvider';
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
@@ -138,29 +140,7 @@ export class GoogleAIProvider extends BaseProvider {
       .map((m) => ({ text: m.content }));
     const contents = messages
       .filter((m) => m.role !== 'system' && m.role !== 'developer')
-      .map((m: any) => {
-        if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
-          return {
-            role: 'model',
-            parts: m.tool_calls.map((call: any) => ({
-              functionCall: {
-                name: call.function?.name,
-                args: (() => { try { return JSON.parse(call.function?.arguments || '{}'); } catch { return {}; } })(),
-              },
-              ...(call.providerData?.thoughtSignature ? { thoughtSignature: call.providerData.thoughtSignature } : {}),
-            })),
-          };
-        }
-        if (m.role === 'tool') {
-          let response: unknown = m.content;
-          try { response = JSON.parse(m.content); } catch { /* plain text response */ }
-          return {
-            role: 'user',
-            parts: [{ functionResponse: { name: m.name || 'tool', response } }],
-          };
-        }
-        return { role: 'user', parts: [{ text: m.content || '' }] };
-      });
+      .map(toGeminiContent);
     const body: any = { contents, generationConfig };
     if (systemParts.length) body.systemInstruction = { parts: systemParts };
 
@@ -195,6 +175,7 @@ export class GoogleAIProvider extends BaseProvider {
     this.processedPayloads.clear();
     this.thinkingStrategy.reset();
     let functionCallSequence = 0;
+    const responseId = crypto.randomUUID();
 
     try {
       await this.sseClient.startConnection(
@@ -241,12 +222,11 @@ export class GoogleAIProvider extends BaseProvider {
                   for (const part of candidate.content.parts) {
                     const functionCall = (part as any)?.functionCall;
                     if (functionCall?.name) {
-                      const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
                       const normalized = normalizeToolCallServerAndTool({ serverName: 'default', toolName: String(functionCall.name) });
                       const signature = (part as any)?.thoughtSignature || (part as any)?.thought_signature
                         || functionCall.thoughtSignature || functionCall.thought_signature;
                       cb.onEvent?.(createStreamEvent.toolCall(
-                        `call_${String(functionCall.name)}_${++functionCallSequence}`,
+                        `call_${responseId}_${++functionCallSequence}`,
                         {
                           serverName: normalized.serverName,
                           toolName: normalized.toolName,
@@ -278,6 +258,11 @@ export class GoogleAIProvider extends BaseProvider {
                   }
                 }
                 
+                if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+                  cb.onError?.(new Error(`Gemini response incomplete: ${candidate.finishReason}`));
+                  this.sseClient.stopConnection();
+                  return;
+                }
                 // 检查是否完成
                 if (candidate.finishReason === 'STOP') {
                   console.log('[GoogleAIProvider] Stream completed (finishReason: STOP)');

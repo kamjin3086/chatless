@@ -1,4 +1,3 @@
-import { AgentContextAdapter } from './AgentContextAdapter';
 import { FilesystemAdapter } from './FilesystemAdapter';
 import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
@@ -9,7 +8,6 @@ import { UserFsAdapter } from './UserFsAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
 import { CodingPackAdapter } from './CodingPackAdapter';
 import { KnowledgeAdapter } from './KnowledgeAdapter';
-import { InteractionAdapter } from './InteractionAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 
 /**
@@ -23,7 +21,6 @@ import type { ToolAdapter } from '../ToolAdapter';
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
     new ToolsRegistryAdapter(),
-    new AgentContextAdapter(),
     new WebSearchAdapter(),
     new SkillUnifiedAdapter(),
     new UserFsAdapter(),
@@ -31,13 +28,11 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new ShellExecutorAdapter(),
     new CodingPackAdapter(),
     new KnowledgeAdapter(),
-    new InteractionAdapter(),
     new SystemToolAdapter(),
     new McpAdapter(),
   ];
 }
 
-export { AgentContextAdapter } from './AgentContextAdapter';
 export { FilesystemAdapter } from './FilesystemAdapter';
 export { McpAdapter } from './McpAdapter';
 export { ShellExecutorAdapter } from './ShellExecutorAdapter';
@@ -48,7 +43,6 @@ export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
 export { CodingPackAdapter } from './CodingPackAdapter';
 export { KnowledgeAdapter } from './KnowledgeAdapter';
-export { InteractionAdapter } from './InteractionAdapter';
 
 // 保留旧导出以兼容可能的外部引用（标记为 deprecated）
 /** @deprecated 使用 SkillUnifiedAdapter 代替 */

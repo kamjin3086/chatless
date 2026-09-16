@@ -1,3 +1,4 @@
+import { normalizeToolCallServerAndTool } from '@/lib/mcp/normalizeToolCallName';
 import { BaseProvider, CheckResult, LlmMessage, StreamCallbacks } from './BaseProvider';
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
@@ -249,7 +250,14 @@ export class OpenAICompatibleProvider extends BaseProvider {
       let reasoningContent = '';
       
       const processDelta = (json: any) => {
-        if (!json) return;
+        if (!json || didComplete) return;
+        const finishReason = json?.choices?.[0]?.finish_reason;
+        if (finishReason === 'length' || finishReason === 'content_filter') {
+          toolCallState.clear();
+          didComplete = true;
+          cb.onError?.(new Error(`Response incomplete: ${finishReason}`));
+          return;
+        }
         // 1) 先提取内容（包含最终 message.content），避免因 finish_reason 过早 return 丢失末帧内容
         const delta = json?.choices?.[0]?.delta ?? {};
 
@@ -331,6 +339,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           }
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
+          if (!didComplete && toolCallState.size > 0) throw new Error('Tool response ended before a completion marker');
           completeOnce('reader_done', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
           break;
         }
@@ -340,7 +349,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           const line = buffer.slice(0, idx).trim();
           buffer = buffer.slice(idx + 1);
           if (!line || line === '[DONE]') {
-            if (line === '[DONE]') { 
+            if (line === '[DONE]' && !didComplete) {
               this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               const result = this.thinkingStrategy.processToken({ done: true });
               if (!cb.onEvent) {
@@ -413,6 +422,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     let buffer = '';
     
     const processLine = (line: string) => {
+      if (didComplete) return;
       const trimmedLine = line.trim();
       if (!trimmedLine) return;
       
@@ -437,6 +447,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const json = JSON.parse(payload);
         const delta = json?.choices?.[0]?.delta ?? {};
         const finishReason = json?.choices?.[0]?.finish_reason;
+        if (finishReason === 'length' || finishReason === 'content_filter') {
+          cb.onError?.(new Error(`Response incomplete: ${finishReason}`));
+          toolCallState.clear();
+          didComplete = true;
+          return;
+        }
 
         
         // SSE：累积 tool_calls（LM Studio 文档 Streaming）
@@ -497,8 +513,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
           if (buffer.trim()) {
             processLine(buffer);
           }
-          // reader done：确保发射累积工具调用
-          this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
+          if (!didComplete && toolCallState.size > 0) {
+            throw new Error('Tool response ended before a completion marker');
+          }
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
           completeOnce('reader_done', { toolCallsCount: toolCallState.size });
@@ -562,6 +579,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           onData: (rawData: string) => {
             // —— 诊断：统计 —— 
             // 注意：SSE 由后端拆“行”，这里统计的是每个 data 行
+            if (didComplete) return;
             const payload = rawData.startsWith('data:') ? rawData.substring(5).trim() : rawData.trim();
             if (!payload) return;
             if (payload === '[DONE]') {
@@ -576,7 +594,14 @@ export class OpenAICompatibleProvider extends BaseProvider {
               const json = JSON.parse(payload);
               const delta = json?.choices?.[0]?.delta ?? {};
               const finishReason = json?.choices?.[0]?.finish_reason;
-              
+              if (finishReason === 'length' || finishReason === 'content_filter') {
+                cb.onError?.(new Error(`Response incomplete: ${finishReason}`));
+                toolCallState.clear();
+                didComplete = true;
+                this.sseClient.stopConnection();
+                return;
+              }
+
               // SSE fallback：累积 tool_calls
               if (delta?.tool_calls) {
                 for (const tc of delta.tool_calls) {
@@ -656,7 +681,6 @@ export class OpenAICompatibleProvider extends BaseProvider {
       
       // 解析服务器和工具名称（格式: server__tool 或 server.tool 或直接工具名）
       // 关键：避免出现 server=default 导致 “服务器 default 配置未找到”
-      const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
       const n = normalizeToolCallServerAndTool({ serverName: 'default', toolName: tc.name });
       const serverName = n.serverName;
       const toolName = n.toolName;

@@ -322,7 +322,7 @@ function ChatMessageComponent({
               aria-label="重试生成"
             >
               <RefreshCcw className="w-3 h-3" />
-              重试
+              {String(content || '').includes('[用户停止了生成]') ? '继续' : '重试'}
             </button>
           </div>
         )}
@@ -355,8 +355,8 @@ function ChatMessageComponent({
                         ? "text-red-500 hover:text-red-600 dark:text-red-400"
                         : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                     )}
-                    title="重试"
-                    aria-label="重试生成"
+                    title={String(content || '').includes('[用户停止了生成]') || status === 'aborted' ? '继续' : '重试'}
+                    aria-label={String(content || '').includes('[用户停止了生成]') || status === 'aborted' ? '继续任务' : '重试生成'}
                   >
                     <RefreshCcw className="w-3 h-3" />
                   </button>
@@ -463,4 +463,4 @@ export const ChatMessage = React.memo(
       prev.viewModel === next.viewModel
     );
   }
-); 
+);

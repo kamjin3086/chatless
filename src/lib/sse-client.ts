@@ -29,6 +29,8 @@ export interface SSEConnectionConfig {
   body?: any;
   /** 调试标签，用于日志输出 */
   debugTag?: string;
+  /** 请求级 ID；Tauri 事件和取消均按该 ID 隔离。 */
+  requestId?: string;
 }
 
 // 导入公共的浏览器兜底工具
@@ -47,6 +49,7 @@ export class SSEClient {
   private abortController: AbortController | null = null;
   // 通用停止标志：一旦触发，立即停止向上游分发任何数据
   private stopping = false;
+  private requestId: string | null = null;
 
   constructor(debugTag: string = 'SSEClient') {
     this.debugTag = debugTag;
@@ -70,8 +73,12 @@ export class SSEClient {
       method = 'POST',
       headers: rawHeaders = {},
       body,
-      debugTag = this.debugTag
+      debugTag = this.debugTag,
+      requestId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : `sse-${Date.now()}-${Math.random().toString(16).slice(2)}`
     } = config;
+    this.requestId = requestId;
 
     // 确保 SSE 流不被 gzip 压缩，Tauri 侧无法自动解压
     const headers: Record<string, string> = {
@@ -106,18 +113,8 @@ export class SSEClient {
         console.warn(`[${debugTag}] failed to read network preferences for proxy`, e);
       }
 
-      // 启动Tauri SSE连接
-      await invoke('start_sse', {
-        url,
-        method,
-        headers,
-        body,
-        // 注意：Tauri 参数名需要 snake_case
-        proxy_url
-      });
-
       // 监听SSE事件 - 只传递原始数据，不进行任何解析
-      const unlistenEvent = await listen<string>('sse-event', (e) => {
+      const unlistenEvent = await listen<string>(`sse-event-${requestId}`, (e) => {
         const data = e.payload;
         if (!data) return;
         // 若已停止或未连接，立即丢弃数据，避免晚到事件污染上层
@@ -128,12 +125,12 @@ export class SSEClient {
       });
 
       // 监听SSE状态
-      const unlistenStatus = await listen<string>('sse-status', (e) => {
+      const unlistenStatus = await listen<string>(`sse-status-${requestId}`, (e) => {
         console.debug(`[${debugTag}] SSE Status:`, e.payload);
       });
 
       // 监听SSE错误
-      const unlistenError = await listen<string>('sse-error', (e) => {
+      const unlistenError = await listen<string>(`sse-error-${requestId}`, (e) => {
         console.error(`[${debugTag}] SSE Error:`, e.payload);
         
         // 为HTTP 400错误提供更友好的提示
@@ -162,6 +159,17 @@ export class SSEClient {
       // 保存监听器
       this.unlisteners = [unlistenEvent, unlistenStatus, unlistenError];
       this.isConnected = true;
+
+      // 先注册监听器，再启动后端请求，避免首个事件在监听器建立前丢失。
+      await invoke('start_sse', {
+        url,
+        method,
+        headers,
+        body,
+        // 注意：Tauri 参数名需要 snake_case
+        proxy_url,
+        request_id: requestId,
+      });
 
       // 安全护栏：设置绝对超时（30分钟）防止连接无限悬挂
       const hardTimeout = setTimeout(() => {
@@ -420,7 +428,7 @@ export class SSEClient {
       } else {
         // 通知后端停止Tauri SSE
         try {
-          await invoke('stop_sse');
+          await invoke('stop_sse', { request_id: this.requestId });
         } catch (error) {
           console.warn(`[${this.debugTag}] Failed to stop SSE:`, error);
         }
@@ -430,6 +438,7 @@ export class SSEClient {
     // 无论何种模式，尝试中止可能存在的 fetch 流
     try { this.abortController?.abort(); } catch { /* noop */ }
     this.abortController = null;
+    this.requestId = null;
 
     // isConnected 已在前面置为 false
   }
@@ -536,4 +545,4 @@ export class SSEClient {
  */
 export function createSSEClient(debugTag: string): SSEClient {
   return new SSEClient(debugTag);
-} 
+}

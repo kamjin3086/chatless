@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use tauri::AppHandle;
 use tauri::Manager;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use std::sync::Mutex;
@@ -266,43 +266,8 @@ pub async fn run_safe_shell(
   // 异步读取输出
   let max_output = options.max_output_size;
 
-  let stdout_handle = tokio::spawn(async move {
-    let mut output = String::new();
-    if let Some(stdout) = stdout {
-      let mut reader = BufReader::new(stdout).lines();
-      while let Ok(Some(line)) = reader.next_line().await {
-        if output.len() + line.len() < max_output {
-          if !output.is_empty() {
-            output.push('\n');
-          }
-          output.push_str(&line);
-        } else {
-          output.push_str("\n[输出已截断]");
-          break;
-        }
-      }
-    }
-    output
-  });
-
-  let stderr_handle = tokio::spawn(async move {
-    let mut output = String::new();
-    if let Some(stderr) = stderr {
-      let mut reader = BufReader::new(stderr).lines();
-      while let Ok(Some(line)) = reader.next_line().await {
-        if output.len() + line.len() < max_output {
-          if !output.is_empty() {
-            output.push('\n');
-          }
-          output.push_str(&line);
-        } else {
-          output.push_str("\n[输出已截断]");
-          break;
-        }
-      }
-    }
-    output
-  });
+  let stdout_handle = tokio::spawn(drain_output(stdout, max_output));
+  let stderr_handle = tokio::spawn(drain_output(stderr, max_output));
 
   // 等待命令完成（带超时）
   let timeout_duration = Duration::from_millis(options.timeout_ms);
@@ -487,5 +452,47 @@ fn create_unavailable_result(runtime: &str, error: Option<String>) -> RuntimeChe
     error,
     install_hint,
     download_url,
+  }
+}
+
+// Keep draining after the display cap. Closing a full output pipe can block or
+// terminate the child; lines() also allows an unbounded single-line allocation.
+async fn drain_output<R: AsyncRead + Unpin>(reader: Option<R>, limit: usize) -> String {
+  let Some(mut reader) = reader else { return String::new(); };
+  let mut kept = Vec::new();
+  let mut buffer = [0_u8; 8192];
+  let mut truncated = false;
+  while let Ok(count) = reader.read(&mut buffer).await {
+    if count == 0 { break; }
+    let available = limit.saturating_sub(kept.len()).min(count);
+    kept.extend_from_slice(&buffer[..available]);
+    truncated |= available < count;
+  }
+  let mut output = String::from_utf8_lossy(&kept).into_owned();
+  if truncated { output.push_str("\n[输出已截断]"); }
+  output
+}
+
+#[cfg(test)]
+mod output_tests {
+  use super::drain_output;
+  use tokio::io::AsyncWriteExt;
+  use tokio::time::{timeout, Duration};
+
+  #[tokio::test]
+  async fn drains_beyond_cap_without_newlines() {
+    let (reader, mut writer) = tokio::io::duplex(64);
+    let producer = tokio::spawn(async move {
+      writer.write_all(&vec![b'x'; 100_000]).await.unwrap();
+    });
+    let output = timeout(Duration::from_secs(2), drain_output(Some(reader), 100)).await.unwrap();
+    producer.await.unwrap();
+    assert_eq!(output, format!("{}\n[输出已截断]", "x".repeat(100)));
+  }
+
+  #[tokio::test]
+  async fn preserves_line_endings_and_utf8() {
+    let data = "第一行\r\nsecond\n".as_bytes();
+    assert_eq!(drain_output(Some(data), 100).await, "第一行\r\nsecond\n");
   }
 }

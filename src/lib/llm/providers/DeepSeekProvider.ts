@@ -1,3 +1,4 @@
+import { normalizeToolCallServerAndTool } from '@/lib/mcp/normalizeToolCallName';
 import { BaseProvider, CheckResult, LlmMessage, StreamCallbacks } from './BaseProvider';
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
@@ -134,8 +135,8 @@ export class DeepSeekProvider extends BaseProvider {
                   const index = tc.index ?? 0;
                   const state = toolCallState.get(index) || {
                     id: tc.id || `call_${index}`,
-                    name: tc.function?.name || '',
-                    arguments: tc.function?.arguments || '',
+                    name: '',
+                    arguments: '',
                   };
                   if (tc.id) state.id = tc.id;
                   if (tc.function?.name) state.name += tc.function.name;
@@ -159,6 +160,12 @@ export class DeepSeekProvider extends BaseProvider {
                 if (result.events && result.events.length > 0) {
                   result.events.forEach(event => cb.onEvent!(event));
                 }
+              }
+              if (['length', 'content_filter'].includes(json?.choices?.[0]?.finish_reason)) {
+                toolCallState.clear();
+                cb.onError?.(new Error('DeepSeek response incomplete'));
+                this.sseClient.stopConnection();
+                return;
               }
               if (json?.choices?.[0]?.finish_reason) {
                 this.emitPendingToolCalls(toolCallState, reasoningContent, cb);
@@ -201,7 +208,6 @@ export class DeepSeekProvider extends BaseProvider {
     cb: StreamCallbacks,
   ): void {
     if (!cb.onEvent) return;
-    const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
     for (const [, tc] of state) {
       if (!tc.name) continue;
       const normalized = normalizeToolCallServerAndTool({ serverName: 'default', toolName: tc.name });

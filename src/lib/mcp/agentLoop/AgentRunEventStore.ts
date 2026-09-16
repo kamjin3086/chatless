@@ -45,35 +45,6 @@ export class AgentRunEventStore {
     return rows[0]?.status;
   }
 
-  static async saveCheckpoint(params: {
-    runId: string;
-    seq: number;
-    kind: string;
-    payload: unknown;
-  }): Promise<void> {
-    const db = await this.db();
-    await db.execute(
-      `INSERT OR REPLACE INTO agent_run_checkpoints (id, run_id, seq, kind, payload, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [generateId(), params.runId, params.seq, params.kind, JSON.stringify(params.payload), Date.now()],
-    );
-  }
-
-  static async loadLatestCheckpoint(runId: string): Promise<{ seq: number; kind: string; payload: unknown } | null> {
-    const db = await this.db();
-    const rows = await db.select<{ seq: number; kind: string; payload: string }>(
-      `SELECT seq, kind, payload FROM agent_run_checkpoints WHERE run_id = ? ORDER BY seq DESC LIMIT 1`,
-      [runId],
-    );
-    const row = rows[0];
-    if (!row) return null;
-    try {
-      return { seq: row.seq, kind: row.kind, payload: JSON.parse(row.payload) };
-    } catch {
-      return { seq: row.seq, kind: row.kind, payload: row.payload };
-    }
-  }
-
   static async appendEvent(params: {
     runId: string;
     conversationId: string;
@@ -131,7 +102,7 @@ export class AgentRunEventStore {
     }
   }
 
-  /** 应用启动时：保留运行记录并标记为可继续的 interrupted。 */
+  /** 应用启动时：保留运行记录并标记为 interrupted（尚不支持精确断点恢复）。 */
   static async markAllStaleRunsCancelled(): Promise<string[]> {
     const db = await this.db();
     const rows = await db.select<{ id: string; conversation_id: string; assistant_message_id: string }>(

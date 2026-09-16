@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { Send, StopCircle } from "lucide-react";
+import { ListChecks, Send, StopCircle } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,6 @@ import { toast } from '@/components/ui/sonner';
 // 输入框上方“长条附加项”已移除：保留输入框下方彩色标签条即可
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
-import { ChatModeSelector, type ChatMode } from './input/ChatModeSelector';
 import { AttachmentMenu } from './input/AttachmentMenu';
 import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
 import { WebSearchToggle } from './input/WebSearchToggle';
@@ -25,7 +24,6 @@ import { useChatStore } from '@/store/chatStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
 import { useUiSession } from '@/store/uiSession';
-import { useWebSearchStore } from '@/store/webSearchStore';
 import { useRouter } from 'next/navigation';
 import { detectTauriEnvironment } from "@/lib/utils/environment";
 import { getProcessSandbox } from "@/lib/skills/sandbox";
@@ -72,7 +70,7 @@ interface ChatInputProps {
       id: string;
       name: string;
     },
-    options?: { images?: string[] }
+    options?: { images?: string[]; planOnly?: boolean }
   ) => void;
   onImageUpload?: (file: File) => void;
   onFileUpload?: (file: File) => void;
@@ -156,14 +154,7 @@ export function ChatInput({
 
   // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
 
-  const _webSearch = useWebSearchStore();
   const _router = useRouter();
-  const setConversationToolMode = useChatStore((s: any) => s.setConversationToolMode);
-  const currentToolMode = useChatStore((s: any) => {
-    const id = s.currentConversationId;
-    const conv = id ? s.conversations.find((c: any) => c.id === id) : null;
-    return (conv?.tool_mode as ('chat'|'agent') | undefined) || s.sessionToolMode || 'chat';
-  });
 
   // MCP 服务器状态
   const [_mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
@@ -187,11 +178,14 @@ export function ChatInput({
   }, []);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
   // —— 输入框高度控制：默认自适应，支持顶部拖拽，最大不超过视口 40% ——
   const MIN_INPUT_HEIGHT = 66; // 与样式中的 min-h 保持一致
   const [maxInputHeight, setMaxInputHeight] = useState<number>(Math.floor(window.innerHeight * 0.4));
-  const sessionManualHeight = useUiSession((s)=> s.chatInputHeight);
-  const setSessionManualHeight = useUiSession((s)=> s.setChatInputHeight);
+  const sessionManualHeight = useUiSession((s: any)=> s.chatInputHeight);
+  const setSessionManualHeight = useUiSession((s: any)=> s.setChatInputHeight);
+  const planOnly = useUiSession((s: any) => s.getPlanOnly(currentConvId));
+  const setPlanOnly = useUiSession((s: any) => s.setPlanOnly);
   const [manualHeight, setManualHeight] = useState<number | null>(sessionManualHeight);
   const [resizing, setResizing] = useState<{ startY: number; startH: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,49 +205,17 @@ export function ChatInput({
   };
 
   // === 会话内草稿：仅在切换会话/失焦/卸载时提交，避免输入过程中重渲染导致光标跳动 ===
-  const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
-
-  // Knowledge sources are exposed through Agent-only knowledge tools. Keep
-  // manually mounted KBs and session documents from silently falling back to
-  // the legacy single-turn chat path.
-  useEffect(() => {
-    if ((selectedKnowledgeBase || attachedDocument) && currentConvId && currentToolMode === 'chat') {
-      void setConversationToolMode(currentConvId, 'agent');
-    }
-  }, [attachedDocument, currentConvId, currentToolMode, selectedKnowledgeBase, setConversationToolMode]);
   // 统一的“agent 是否仍在运行”信号：不要只依赖父组件 isLoading（它只覆盖 LLM stream 阶段）
   const storeAgentRunning = useChatStore((s: any) => {
     const cid = conversationId || s.currentConversationId;
     if (!cid) return false;
     const conv = (s.conversations || []).find((c: any) => c && c.id === cid);
-    const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
-    // 1) 任意消息仍为 loading
-    if (msgs.some((m) => m && m.status === 'loading')) return true;
-    // 2) 任意 toolCard 仍在运行/等待授权（即使 stream 已结束）
-    for (const m of msgs) {
-      const segs: any[] = Array.isArray(m?.segments) ? m.segments : [];
-      for (const seg of segs) {
-        if (seg?.kind === 'toolCard' && (seg.status === 'running' || seg.status === 'pending_auth')) {
-          return true;
-        }
-      }
-    }
-    return false;
+    const lastAssistant = [...(Array.isArray(conv?.messages) ? conv.messages : [])]
+      .reverse()
+      .find((m: any) => m?.role === 'assistant' && m.id);
+    return Boolean(lastAssistant?.id && s.agentRuns?.[lastAssistant.id]?.running);
   });
-  // AgentLoop 运行态：用于避免“仍在 loop 中但 Stop 按钮闪烁”
-  const agentRunActive = useChatStore((s: any) => {
-    const cid = conversationId || s.currentConversationId;
-    if (!cid) return false;
-    const conv = (s.conversations || []).find((c: any) => c && c.id === cid);
-    const toolMode = (conv?.tool_mode as ('chat' | 'agent') | undefined) || s.sessionToolMode || 'chat';
-    if (toolMode !== 'agent') return false;
-    const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
-    const lastAssistant = [...msgs].reverse().find((m) => m && m.role === 'assistant' && m.id);
-    if (!lastAssistant?.id) return false;
-    const runs = s.agentRuns || {};
-    return !!runs[String(lastAssistant.id)]?.running;
-  });
-  const effectiveLoading = isLoading || storeAgentRunning || agentRunActive;
+  const effectiveLoading = isLoading || storeAgentRunning;
   const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
   // 仅展示用户主动挂载的目录（通过 + 号选择），不展示系统自动 @WorkDir
   const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;
@@ -561,7 +523,6 @@ export function ChatInput({
 
   const handleSend = async () => {
     if (!inputValue.trim() && !attachedDocument) return;
-    if (effectiveLoading) return;
 
     // 发送前检查
     if (onBeforeSendMessage) {
@@ -636,7 +597,7 @@ export function ChatInput({
 
     if (attachedImages.length > 0) {
       const imagesData = attachedImages.map(img => img.base64Data);
-      onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData });
+      onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData, planOnly });
     } else if (editingMessage) {
       // 编辑模式下，保留原引用信息
       const docRef = editingMessage.documentReference
@@ -648,7 +609,8 @@ export function ChatInput({
       onSendMessage(
         userMessage,
         docRef,
-        editingMessage.knowledgeBaseReference
+        editingMessage.knowledgeBaseReference,
+        { planOnly }
       );
       // 退出编辑模式
       onCancelEdit?.();
@@ -672,10 +634,16 @@ export function ChatInput({
         },
         contextData: attachedDocument.content,
         sourceContent: attachedDocument.fullContent
-      }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined);
+      }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
     } else {
       // 普通消息，如果有选中的知识库则传递
-      onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined);
+      onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
+    }
+
+    // 补充已经写入运行队列后即可清空文字草稿；图片被拒绝排队时保留附件，避免误丢。
+    if (effectiveLoading && attachedImages.length === 0) {
+      setInputValue('');
+      setAttachedDocument(null);
     }
 
     // 不立即把高度重置为 auto，保持用户手动高度（或让 onStart 信号处理）
@@ -1103,13 +1071,6 @@ export function ChatInput({
             setInputValue(next);
             setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
             setMentionOpen(false);
-            // 显式使用 @mcp：自动切到 agent（仅此情形）
-            try {
-              const convId = currentConvId || conversationId || '';
-              if (convId && currentToolMode === 'chat') {
-                void setConversationToolMode?.(convId, 'agent');
-              }
-            } catch { /* ignore */ }
           }}
           onClose={()=>setMentionOpen(false)}
         />
@@ -1124,26 +1085,26 @@ export function ChatInput({
             setInputValue(next);
             setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
             setSkillMentionOpen(false);
-            // 显式使用 #skill：自动切到 agent（仅此情形）
-            try {
-              const convId = currentConvId || conversationId || '';
-              if (convId && currentToolMode === 'chat') {
-                void setConversationToolMode?.(convId, 'agent');
-              }
-            } catch { /* ignore */ }
           }}
           onClose={()=>setSkillMentionOpen(false)}
         />
         {/* 左下角工具栏：次要能力统一弱图标 */}
         <div className="absolute left-2 sm:left-3 bottom-2.5 z-[2] flex items-center gap-0.5">
-          {/* 模式选择器 */}
-          <ChatModeSelector
-            mode={currentToolMode as ChatMode}
-            onModeChange={(mode) => {
-              void setConversationToolMode?.(conversationId || '', mode);
-            }}
+          {/* 仅规划开关：运行期间锁定，避免同一回合改变执行语义 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setPlanOnly(!planOnly, currentConvId)}
             disabled={disabled || effectiveLoading}
-          />
+            className={cn(
+              "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-slate-100 dark:hover:bg-slate-800",
+              planOnly && "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40"
+            )}
+            title={planOnly ? "仅规划：关闭后才会执行写入和命令" : "仅规划"}
+            aria-label={planOnly ? "关闭仅规划" : "开启仅规划"}
+          >
+            <ListChecks className="w-4 h-4" />
+          </Button>
 
           {/* 附件菜单 */}
           <AttachmentMenu
@@ -1221,17 +1182,27 @@ export function ChatInput({
                     <span className="absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-60 animate-ping" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500" />
                   </span>
-                  {stopGenerationHint?.includes('再次点击') ? '等待强制停止' : 'Agent 运行中'}
+                  {'处理中'}
                 </span>
+                {(inputValue.trim() || attachedDocument) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleSend}
+                    className="composer-tool h-8 w-8 rounded-md border-0 bg-transparent text-slate-600 shadow-none hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    title="排队补充"
+                    aria-label="排队补充"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={onStopGeneration}
                   className={cn(
                     "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
-                    stopGenerationHint?.includes('再次点击')
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-slate-600 dark:text-slate-300"
+                    "text-slate-600 dark:text-slate-300"
                   )}
                   title={stopGenerationHint || "停止（停止生成/停止工具链路）"}
                   aria-label={stopGenerationHint || "停止生成"}
@@ -1251,10 +1222,10 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={handleSend}
-                disabled={effectiveLoading || (!inputValue.trim() && !attachedDocument)}
+                disabled={!inputValue.trim() && !attachedDocument}
                 className={cn(
                   "composer-tool composer-send h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
-                  (effectiveLoading || (!inputValue.trim() && !attachedDocument)) && "opacity-40 pointer-events-none"
+                  ((!inputValue.trim() && !attachedDocument)) && "opacity-40 pointer-events-none"
                 )}
                 title="发送 (Enter)"
                 aria-label="发送消息"

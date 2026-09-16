@@ -21,8 +21,6 @@ import { SHELL_EXECUTOR_SERVER_NAME } from '@/lib/mcp/nativeTools/shellExecutor'
 import { 
   TOOLS_DISCOVER_SERVER_NAME, 
   TOOLS_REGISTRY_TOOLS,
-  detectToolGroupIntents,
-  detectComplexTaskIntent,
   getToolsForGroup,
   type ToolGroupId,
 } from '@/lib/mcp/nativeTools/toolRegistry';
@@ -33,7 +31,6 @@ import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
-import { detectSkillIntent } from './intentDetector';
 import { AGENT_MINIMAL_SYSTEM_PROMPT } from './promptTemplates';
 import { getToolDoc, buildFirstFollowUpPromptFromDoc, buildForcedAnswerPromptFromDoc } from './toolDocLoader';
 import { getPersistedKnowledgeBaseReference } from './persistedKnowledgeBase';
@@ -136,10 +133,8 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   // 4. 构建工具信息（仅在不支持原生工具调用时注入）
   const toolInfoParts: string[] = [];
   
-  // Skills：根据意图检测决定是否注入
-  // 动态加载策略：只在检测到 skill 相关意图时才注入，减少工具数量
-  const skillIntent = detectSkillIntent(context.userContent || '');
-  const shouldExposeSkills = skillIntent.shouldPreloadSkill;
+  // Skills 通过 tools__search / tools__load 按需发现，不根据用户措辞预加载。
+  const shouldExposeSkills = false;
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled;
 
@@ -302,9 +297,9 @@ async function injectTimeContext(
  * 
  * ## 动态加载策略
  * 
- * 1. 核心层（始终加载）：fs__read, fs__write, fs__ls, tools__discover
- * 2. 意图检测层：根据用户输入自动注入匹配的工具组
- * 3. AI 请求层：AI 通过 tools__load 请求的工具组
+ * 1. 核心层（始终加载）：有界文件工具、Shell 与可选联网工具
+ * 2. 发现层：tools__search 分页返回完整能力目录
+ * 3. 会话层：搜索匹配的能力组在下一模型步生效
  */
 async function buildNativeToolDefinitions(params: {
   servers: string[];
@@ -361,7 +356,7 @@ async function buildNativeToolDefinitions(params: {
       ...tools.slice(coreToolStart).filter((tool) => !tool.name.startsWith(`${WEB_SEARCH_SERVER_NAME}__`)));
   }
   
-  // 1.2 工具发现工具（让 AI 知道还有什么）
+  // 1.2 能力搜索工具（不预加载管理类工具）
   for (const tool of TOOLS_REGISTRY_TOOLS) {
     const fullName = `${TOOLS_DISCOVER_SERVER_NAME}__${tool.name}`;
     tools.push({
@@ -371,30 +366,9 @@ async function buildNativeToolDefinitions(params: {
     });
   }
 
-  // ========== 2. 意图检测层：根据用户输入自动注入 ==========
-  
-  const userContent = params.userContent || '';
-  const detectedGroups = detectToolGroupIntents(userContent);
+  // ========== 2. 显式会话范围：不根据关键词替模型预先选择能力 ==========
   const loadedGroups: ToolGroupId[] = ['core'];
-  
-  // 检测复杂任务 → 注入上下文管理工具
-  if (detectComplexTaskIntent(userContent) && !detectedGroups.includes('ctx')) {
-    detectedGroups.push('ctx');
-  }
-  
-  // 注意：网络搜索工具已包含在 'core' 组中，无需单独注入
-  // params.includeWebSearch 仅作为功能开关，不影响工具组加载
-  
-  // 技能触发 → 注入技能工具
-  if (params.includeSkills && !detectedGroups.includes('skill')) {
-    detectedGroups.push('skill');
-  }
-
-  if (await (await import('@/lib/codingPack/config')).isCodingPackEnabled()) {
-    if (detectComplexTaskIntent(userContent) || /代码|git|glob|grep|patch|仓库|repo/i.test(userContent)) {
-      if (!detectedGroups.includes('coding')) detectedGroups.push('coding');
-    }
-  }
+  const detectedGroups: ToolGroupId[] = [];
 
   try {
     const convId = params.conversationId || '';
@@ -416,10 +390,12 @@ async function buildNativeToolDefinitions(params: {
   // ========== 3. AI 请求层：加载 AI 主动请求的工具组 ==========
   
   const store = useToolLoadRequestStore.getState();
+  const conversationId = params.conversationId || undefined;
+  const session = store.sessions[String(conversationId || '__default__')] || { loadedGroups: ['core' as ToolGroupId], requestedGroups: [] };
   // 关键：已加载的组需要在后续轮次持续注入（否则会出现“上一轮能用、下一轮工具不见了”）
   // 说明：store.loadedGroups 会随着 tools__load 或意图检测逐步累积；这里把它作为“粘性工具组”基础集合。
-  const stickyLoaded = (store.loadedGroups || []).filter((g) => g && g !== 'core');
-  const pendingRequests = store.getPendingRequests();
+  const stickyLoaded = (session.loadedGroups || []).filter((g) => g && g !== 'core');
+  const pendingRequests = store.getPendingRequests(conversationId);
   
   // 合并所有需要加载的组
   const groupsToLoad = [...new Set([...stickyLoaded, ...detectedGroups, ...pendingRequests])];
@@ -432,7 +408,7 @@ async function buildNativeToolDefinitions(params: {
   }
 
   // 更新已加载状态
-  store.markLoaded(loadedGroups);
+  store.markLoaded(loadedGroups, conversationId);
 
   // ========== 4. MCP 服务器工具（外部服务） ==========
   

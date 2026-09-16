@@ -113,12 +113,13 @@ export class ConversationEventLog {
           const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : undefined;
 
           if (pending.length > 0 && !didEmitAssistantForPending) {
-            out.push({
-              role: 'assistant',
-              content: '',
-              tool_calls: [...pending],
-              providerData: pendingProviderData,
-            });
+            const previous = out.at(-1);
+            if (previous?.role === 'assistant' && !previous.tool_calls?.length) {
+              previous.tool_calls = [...pending];
+              previous.providerData = pendingProviderData;
+            } else {
+              out.push({ role: 'assistant', content: '', tool_calls: [...pending], providerData: pendingProviderData });
+            }
             pending.splice(0, pending.length);
             pendingProviderData = undefined;
             didEmitAssistantForPending = true;
