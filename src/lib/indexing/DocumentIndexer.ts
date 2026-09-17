@@ -136,19 +136,9 @@ export class DocumentIndexer {
     };
 
     try {
-      // 0. embedding 是增强能力，不是文档可搜索的前置条件。
-      // 未安装模型时仍然建立 FTS 索引，避免导入流程整体不可用。
-      if (!this.embeddingService || !this.isInitialized) {
-        try {
-          await this.initializeEmbeddingService();
-        } catch (error) {
-          console.warn('[DocumentIndexer] embedding unavailable; continuing with lexical index:', error);
-          this.embeddingService = null;
-          this.isInitialized = false;
-        }
-      }
-
-      // 1. 文档内容提取
+      // 1. 文档内容提取。Embedding is deliberately not initialized here:
+      // lexical search is the durable baseline and must become available even
+      // when a local model is unavailable or slow to load.
       task.status = IndexingStatus.EXTRACTING;
       task.progress = 10;
       options.progressCallback?.(task);
@@ -209,12 +199,7 @@ export class DocumentIndexer {
 
       const { mergeSourceBlocksToChunks } = await import('../chunking/strategies/StructuredBlockMerger');
       const { PARSER_VERSION, CHUNK_SCHEMA_VERSION } = await import('../rag/constants');
-      const embeddingMaxTokens = this.embeddingService?.isUsableForRag()
-        ? this.embeddingService.getMaxInputTokens()
-        : undefined;
-      const chunkMaxTokens = embeddingMaxTokens
-        ? Math.max(64, Math.min(800, embeddingMaxTokens - 16))
-        : undefined;
+      const chunkMaxTokens = 800;
       const retrievalChunks = mergeSourceBlocksToChunks(
         parsed,
         documentId,
@@ -240,7 +225,7 @@ export class DocumentIndexer {
           chunkSchemaVersion: CHUNK_SCHEMA_VERSION,
         };
       });
-      const embeddingFingerprint = this.embeddingService?.getEmbeddingFingerprint() || null;
+      let embeddingFingerprint: string | null = null;
 
       // 3. 先发布原文和 FTS。embedding 是增强能力，失败不能让文档消失。
       task.status = IndexingStatus.STORING;
@@ -263,11 +248,23 @@ export class DocumentIndexer {
         }
       }
 
-      // 4. 可选生成嵌入（始终使用 searchText）。
+      // 4. Publish first, then initialize and generate optional embeddings.
+      // A failure here is a semantic-index failure only; the searchable
+      // lexical batch published above remains active.
       task.status = IndexingStatus.EMBEDDING;
       task.progress = 70;
       options.progressCallback?.(task);
       let validChunks: typeof retrievalChunks = [];
+      if (!this.embeddingService || !this.isInitialized) {
+        try {
+          await this.initializeEmbeddingService();
+        } catch (error) {
+          console.warn('[DocumentIndexer] embedding unavailable; keeping lexical index:', error);
+          this.embeddingService = null;
+          this.isInitialized = false;
+        }
+      }
+      embeddingFingerprint = this.embeddingService?.getEmbeddingFingerprint() || null;
       if (this.embeddingService?.isUsableForRag()) {
         try {
           const embeddings = await this.embeddingService.generateEmbeddings(
