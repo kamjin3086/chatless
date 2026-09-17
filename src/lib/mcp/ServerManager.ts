@@ -210,34 +210,10 @@ class ServerManager {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.warn(`[MCP] ✗ ${serverName}.${toolName}: ${errorMessage}`);
-      
-      // 自愈策略：检测SSE会话失效/400错误时，尝试重连
-      const shouldReconnect = /400|401|404|session|deserializ|decode|expected value/i.test(errorMessage);
-      if (shouldReconnect) {
-        console.warn(`[MCP] 会话异常，尝试重连 ${serverName}...`);
-        try {
-          const { Store } = await import('@tauri-apps/plugin-store');
-          const cfgStore = await Store.load('mcp_servers.json');
-          const srvList: Array<{ name: string; config: any; enabled?: boolean }> = (await cfgStore.get('servers')) || [];
-          const found = srvList.find(s => s.name === serverName);
-          if (found) {
-            console.debug(`[MCP] 强制重连 ${serverName}...`);
-            await this.reconnect(serverName, found.config);
-            
-            // 重连成功后重新获取客户端并重试调用
-            const newClient = this.clients.get(serverName);
-            if (newClient) {
-              console.debug(`[MCP] 重连成功，重试 ${serverName}.${toolName}`);
-              const retryResult = await newClient.callTool(toolName, args);
-              console.debug(`[MCP] 重试成功 ${serverName}.${toolName}`);
-              return retryResult;
-            }
-          }
-        } catch (reconnectError) {
-          console.error(`[MCP] 重连失败: ${serverName}`, reconnectError);
-        }
-      }
-      
+      // A transport failure after a tool request leaves its effect unknown.
+      // Reconnecting is safe for a later request, but replaying this call can
+      // duplicate writes or external actions.  The executor records the
+      // unknown result and asks the user/model to verify it instead.
       throw error;
     }
   }

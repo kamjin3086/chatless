@@ -181,8 +181,13 @@ pub async fn start_sse(
               app.emit(&event_name("status"), "cancelled").ok();
               break;
           },
-          Some(item) = stream.next() => {
+          item = stream.next() => {
               match item {
+                  // `StreamExt::next()` resolves to None at transport EOF.  A
+                  // `Some(item) = ...` pattern disables that branch instead,
+                  // leaving the cancellation receiver pending forever.
+                  None => break,
+                  Some(item) => match item {
                   Ok(bytes) => {
                       line_buffer.extend_from_slice(&bytes);
                       while let Some(pos) = line_buffer.iter().position(|byte| *byte == b'\n') {
@@ -208,9 +213,9 @@ pub async fn start_sse(
                       app.emit(&event_name("error"), e.to_string()).ok();
                       break;
                   }
+                }
               }
           },
-          else => break,
       }
     }
 

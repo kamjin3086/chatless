@@ -1,5 +1,5 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
-import { streamChat } from '@/lib/llm';
+import { cancelStream, streamChat } from '@/lib/llm';
 import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
 import type { OnToolCall } from '@/lib/chat/stream/types';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
@@ -27,11 +27,35 @@ const activeLoops = new Map<string, {
   provider: string;
   conversationId: string;
   shellExecutionIds: Set<string>;
+  modelRequestIds: Set<string>;
   controlPlane?: AgentRunControlPlane;
 }>();
-const steeringInputs = new Map<string, string[]>();
+type SteeringInput = { inputId: string; content: string };
+const steeringInputs = new Map<string, SteeringInput[]>();
 // 一个本地模型端点只允许一个请求进入 Provider；不同端点仍可并行。
 const endpointTails = new Map<string, Promise<void>>();
+
+/**
+ * Serialize inference only. Tool execution and approvals deliberately happen
+ * outside this queue so a slow shell command cannot block another chat request
+ * to the same model endpoint.
+ */
+async function scheduleModelRequest<T>(endpointKey: string, signal: AbortSignal, work: () => Promise<T>): Promise<T | undefined> {
+  const previous = endpointTails.get(endpointKey) || Promise.resolve();
+  let release!: () => void;
+  const mine = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.catch(() => {}).then(() => mine);
+  endpointTails.set(endpointKey, tail);
+  const aborted = new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+  try {
+    await Promise.race([previous.catch(() => {}), aborted]);
+    if (signal.aborted) return undefined;
+    return await work();
+  } finally {
+    release();
+    if (endpointTails.get(endpointKey) === tail) endpointTails.delete(endpointKey);
+  }
+}
 
 /** Queue a user steering message for the next safe model boundary. */
 export async function queueAgentSteering(assistantMessageId: string, input: string): Promise<boolean> {
@@ -41,9 +65,10 @@ export async function queueAgentSteering(assistantMessageId: string, input: stri
   if (!id || !text || !active?.controlPlane) return false;
   // Confirming a queued supplement only after this append succeeds gives it
   // the same durable boundary as the original user turn.
-  await active.controlPlane.record({ type: 'user_message', content: text });
+  const inputId = `steer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  await active.controlPlane.record({ type: 'queued_user_input', inputId, content: text });
   const pending = steeringInputs.get(id) || [];
-  pending.push(text);
+  pending.push({ inputId, content: text });
   steeringInputs.set(id, pending);
   return true;
 }
@@ -83,8 +108,11 @@ export class AgentLoopRunner {
         // ignore
       }
       // Providers used by the legacy interpreter keep mutable stream state.
-      // Do not call their global cancellation hook here: aborting one run must
-      // never terminate a different conversation using the same provider.
+      // Cancel each request by its own id.  The interpreter maps this to the
+      // provider instance that owns the transport rather than a global stream.
+      for (const requestId of active.modelRequestIds) {
+        try { cancelStream(requestId); } catch { /* ignore */ }
+      }
       try {
         void import('@tauri-apps/api/core').then(({ invoke }) => Promise.all(
           [...active.shellExecutionIds].map((executionId) => invoke('cancel_safe_shell', { executionId }).catch(() => false)),
@@ -112,25 +140,14 @@ export class AgentLoopRunner {
       throw new Error('当前会话已有运行中的任务');
     }
     const ctrl = new AbortController();
-    activeLoops.set(assistantMessageId, { controller: ctrl, provider, conversationId, shellExecutionIds: new Set() });
+    activeLoops.set(assistantMessageId, { controller: ctrl, provider, conversationId, shellExecutionIds: new Set(), modelRequestIds: new Set() });
     steeringInputs.set(assistantMessageId, []);
 
     const providerInstance = (await import('@/lib/llm/ProviderRegistry')).ProviderRegistry.get(provider) as any;
     const providerEndpoint = String(providerInstance?.baseUrl || provider);
-    const endpointKey = `${providerEndpoint}\u0000${model}`;
-    const previousEndpointRun = endpointTails.get(endpointKey) || Promise.resolve();
-    let releaseEndpoint!: () => void;
-    const endpointTurn = new Promise<void>((resolve) => { releaseEndpoint = resolve; });
-    const endpointTail = previousEndpointRun.then(() => endpointTurn);
-    endpointTails.set(endpointKey, endpointTail);
-    await previousEndpointRun;
-    if (ctrl.signal.aborted) {
-      activeLoops.delete(assistantMessageId);
-      steeringInputs.delete(assistantMessageId);
-      releaseEndpoint();
-      if (endpointTails.get(endpointKey) === endpointTail) endpointTails.delete(endpointKey);
-      return;
-    }
+    // A configured endpoint, rather than its display name or model label, is
+    // the actual inference bottleneck.  Do not keep this lease while tools run.
+    const endpointKey = providerEndpoint.trim().replace(/\/$/, '') || provider;
 
     const controlPlane = new AgentRunControlPlane(assistantMessageId, conversationId, assistantMessageId);
     const active = activeLoops.get(assistantMessageId);
@@ -199,6 +216,18 @@ export class AgentLoopRunner {
             previousHistory = previousHistory.slice(1);
           }
           conversationHistory = [...conversationHistory, ...previousHistory];
+          // Queued supplements were persisted before acknowledgement.  If a
+          // run stopped before its next safe boundary, deliver them in this
+          // new run instead of silently losing the user's correction.
+          const delivered = new Set(previousEvents
+            .filter((event): event is Extract<typeof event, { type: 'user_message' }> => event.type === 'user_message')
+            .map((event) => event.inputId)
+            .filter((inputId): inputId is string => Boolean(inputId)));
+          for (const event of previousEvents) {
+            if (event.type === 'queued_user_input' && !delivered.has(event.inputId)) {
+              await controlPlane.record({ type: 'user_message', inputId: event.inputId, content: event.content });
+            }
+          }
         } catch (error) {
           throw new Error(`无法继续该任务：运行记录不可用或已损坏。${error instanceof Error ? ` ${error.message}` : ''}`);
         }
@@ -235,9 +264,13 @@ export class AgentLoopRunner {
           controlPlane.markCancelled();
           break;
         }
-        // queueAgentSteering persisted supplements before acknowledging them;
-        // consuming this queue only controls the next safe dispatch boundary.
-        steeringInputs.get(assistantMessageId)?.splice(0);
+        // A queued supplement is only projected as a user message at a safe
+        // model boundary, after all tool results from the current response.
+        // This preserves native tool-call ordering.
+        const queued = steeringInputs.get(assistantMessageId)?.splice(0) || [];
+        for (const input of queued) {
+          await controlPlane.record({ type: 'user_message', inputId: input.inputId, content: input.content });
+        }
         if (round >= MAX_MODEL_STEPS) {
           terminalStatus = 'paused';
           break;
@@ -350,11 +383,20 @@ export class AgentLoopRunner {
         // protocol completion, and drain asynchronous event handlers in order.
         try {
           if (!ctrl.signal.aborted) {
-            void streamChat(provider, model, messages, callbacks, toolOptions).catch((error) => {
-              callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
-            });
-            await streamDone;
-            await callbackQueue;
+            const requestId = `agent-${assistantMessageId}-${round}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            activeLoops.get(assistantMessageId)?.modelRequestIds.add(requestId);
+            try {
+              await scheduleModelRequest(endpointKey, ctrl.signal, async () => {
+                if (ctrl.signal.aborted) return;
+                void streamChat(provider, model, messages, callbacks, { ...toolOptions, __requestId: requestId }).catch((error) => {
+                  callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
+                });
+                await streamDone;
+                await callbackQueue;
+              });
+            } finally {
+              activeLoops.get(assistantMessageId)?.modelRequestIds.delete(requestId);
+            }
           }
         } finally {
           ctrl.signal.removeEventListener('abort', abortStream);
@@ -467,8 +509,6 @@ export class AgentLoopRunner {
     } finally {
       activeLoops.delete(assistantMessageId);
       steeringInputs.delete(assistantMessageId);
-      releaseEndpoint();
-      if (endpointTails.get(endpointKey) === endpointTail) endpointTails.delete(endpointKey);
       const finalStatus = controlPlane.isCancelled() || isCancelled(assistantMessageId, ctrl.signal)
         ? 'cancelled'
         : terminalStatus

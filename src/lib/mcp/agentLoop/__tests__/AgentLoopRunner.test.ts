@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   stream: vi.fn(), execute: vi.fn(), append: vi.fn(), status: vi.fn(),
   store: { conversations: [], setAgentRunState: vi.fn(), updateMessage: vi.fn(), dispatchMessageAction: vi.fn() },
 }));
-vi.mock('@/lib/llm', () => ({ streamChat: mocks.stream, chat: vi.fn() }));
+vi.mock('@/lib/llm', () => ({ streamChat: mocks.stream, cancelStream: vi.fn(), chat: vi.fn() }));
 vi.mock('@/lib/llm/ProviderRegistry', () => ({ ProviderRegistry: { get: () => ({ cancelStream: vi.fn() }) } }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/mcp/pipeline', () => ({
@@ -125,6 +125,11 @@ describe('AgentLoopRunner execution boundaries', () => {
       .map(([p]) => p.event)
       .find((event) => event.type === 'tool_call_output' && event.callId === 'b');
     expect(bOutput.output.error.code).toBe('NOT_DISPATCHED');
+    const followUpHistory = mocks.stream.mock.calls[1][2] as Message[];
+    const firstToolResult = followUpHistory.findIndex((message) => message.role === 'tool');
+    const supplement = followUpHistory.findIndex((message) => message.role === 'user' && message.content === 'do something else');
+    expect(firstToolResult).toBeGreaterThanOrEqual(0);
+    expect(supplement).toBeGreaterThan(firstToolResult);
   });
 
   it('does not execute when persisting the request fails', async () => {

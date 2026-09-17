@@ -4,7 +4,8 @@ import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
 export type ContextChangeKind = 'permissions' | 'environment' | 'tools' | 'other';
 
 export type ConversationEvent =
-  | { type: 'user_message'; content: string }
+  | { type: 'user_message'; content: string; inputId?: string }
+  | { type: 'queued_user_input'; inputId: string; content: string }
   | { type: 'assistant_message'; content: string }
   | {
       type: 'tool_call_requested';
@@ -89,6 +90,7 @@ export class ConversationEventLog {
       let didEmitAssistantForPending = false;
 
       for (const e of this.events) {
+        if (e.type === 'queued_user_input') continue;
         if (e.type === 'user_message') {
           out.push({ role: 'user', content: e.content });
           continue;
@@ -155,11 +157,37 @@ export class ConversationEventLog {
         }
       }
 
+      // A run can stop after persisting a model request (or execution start)
+      // and before a durable result exists.  Preserve that fact in the next
+      // model context instead of silently omitting it, which could invite an
+      // unsafe replay of a write or external action.
+      if (pending.length > 0) {
+        out.push({ role: 'assistant', content: '', tool_calls: [...pending], providerData: pendingProviderData });
+        for (const request of pending) {
+          out.push({
+            role: 'tool',
+            content: safeJson({
+              ok: false,
+              resultStatus: 'unknown',
+              error: {
+                code: 'EXECUTION_UNKNOWN',
+                message: 'The previous run ended before this tool result was durably recorded. Verify its effect before retrying.',
+              },
+            }),
+            tool_call_id: request.id,
+            name: request.function.name,
+          });
+        }
+      }
+
       return out;
     }
 
     // 默认 text_wrapper（与旧逻辑兼容）
+    const pendingTextRequests: Array<Extract<ConversationEvent, { type: 'tool_call_requested' }>> = [];
+    const completedTextCalls = new Set<string>();
     for (const e of this.events) {
+      if (e.type === 'queued_user_input') continue;
       if (e.type === 'user_message') {
         out.push({ role: 'user', content: e.content });
         continue;
@@ -175,6 +203,7 @@ export class ConversationEventLog {
         continue;
       }
       if (e.type === 'tool_call_output') {
+        if (e.callId) completedTextCalls.add(e.callId);
         const content = [
           '【工具调用结果】',
           `工具: ${e.server}.${e.tool}`,
@@ -185,10 +214,22 @@ export class ConversationEventLog {
         continue;
       }
       if (e.type === 'tool_call_requested') {
-        // 对模型来说通常不需要显式回放“请求”，留给 tool_output 即可。
+        pendingTextRequests.push(e);
         continue;
       }
       if (e.type === 'tool_call_started') continue;
+    }
+    for (const request of pendingTextRequests) {
+      if (request.callId && completedTextCalls.has(request.callId)) continue;
+      out.push({
+        role: 'user',
+        content: [
+          '【工具调用结果】',
+          `工具: ${request.server}.${request.tool}`,
+          `参数: ${safeJson(request.args || {})}`,
+          '结果: {"ok":false,"resultStatus":"unknown","error":{"code":"EXECUTION_UNKNOWN","message":"上次运行结束前未保存结果；请先核对影响，不能自动重试。"}}',
+        ].join('\n'),
+      });
     }
     return out;
   }

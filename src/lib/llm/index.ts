@@ -213,10 +213,10 @@ export async function streamChat(
   return inst.streamChat(provider, model, messages as any, callbacks as any, options);
 }
 
-export function cancelStream() {
+export function cancelStream(requestId?: string) {
   const inst = getInterpreter();
   if (inst) {
-    inst.cancelStream();
+    inst.cancelStream(requestId);
   }
 }
 
