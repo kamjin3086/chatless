@@ -69,6 +69,24 @@ function boundedNeighbor(value: unknown, fallback = NEIGHBOR_BLOCK_WINDOW): numb
   return Math.min(32, nonNegativeInt(value, fallback));
 }
 
+function parseDocumentCursor(value: unknown, documentId: string): number {
+  const raw = String(value || '').trim();
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw) as { documentId?: string; index?: unknown };
+    if (parsed.documentId && parsed.documentId !== documentId) return 0;
+    return nonNegativeInt(parsed.index);
+  } catch {
+    // Keep existing numeric cursors readable while new cursors carry a
+    // document identity and cannot accidentally be used for another file.
+    return nonNegativeInt(raw);
+  }
+}
+
+function formatDocumentCursor(documentId: string, index: number): string {
+  return JSON.stringify({ documentId, index });
+}
+
 function registerDeliveredText(params: {
   runId: string;
   documentId: string;
@@ -322,14 +340,23 @@ export class KnowledgeAdapter implements ToolAdapter {
         // collapse repeated paragraphs: repeated source text is still a real
         // position in a document and must remain readable in order.
         const uniqueChunkRows = chunkRows;
-        const start = nonNegativeInt((args as any).cursor);
+        const start = parseDocumentCursor((args as any).cursor, documentId);
         const limit = boundedLimit((args as any).limit);
+        const page = (args as any).page != null ? Number((args as any).page) : undefined;
+        const pageRows = page == null ? uniqueChunkRows : uniqueChunkRows.filter((row) => {
+          try {
+            const metadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata || {};
+            return metadata.pageStart === page || metadata.pageEnd === page;
+          } catch {
+            return false;
+          }
+        });
         let used = 0;
         const selected: any[] = [];
-        for (let i = start; i < uniqueChunkRows.length; i += 1) {
-          const text = String(uniqueChunkRows[i].source_text || '');
+        for (let i = start; i < pageRows.length; i += 1) {
+          const text = String(pageRows[i].source_text || '');
           if (selected.length && used + text.length > limit) break;
-          selected.push(uniqueChunkRows[i]);
+          selected.push(pageRows[i]);
           used += text.length;
         }
         const next = start + selected.length;
@@ -367,8 +394,9 @@ export class KnowledgeAdapter implements ToolAdapter {
           documentId,
           evidenceId,
           text,
-          nextCursor: next < uniqueChunkRows.length ? String(next) : undefined,
-          complete: next >= uniqueChunkRows.length,
+          page,
+          nextCursor: next < pageRows.length ? formatDocumentCursor(documentId, next) : undefined,
+          complete: next >= pageRows.length,
         };
       }
       const blocks = await EvidenceStore.getSourceBlocks([documentId], kbIds);
@@ -377,7 +405,9 @@ export class KnowledgeAdapter implements ToolAdapter {
       ).values());
       const page = (args as any).page != null ? Number((args as any).page) : undefined;
       const filtered = page != null ? uniqueBlocks.filter((b) => b.page === page) : uniqueBlocks;
-      const text = filtered.map((b) => b.text).join('\n');
+      const maxChars = boundedLimit((args as any).limit);
+      const fullText = filtered.map((b) => b.text).join('\n');
+      const text = fullText.slice(0, maxChars);
       const document = await db.select<{ title: string; file_hash: string }>(
         'SELECT title, file_hash FROM documents WHERE id = ? LIMIT 1', [documentId],
       );
@@ -397,6 +427,7 @@ export class KnowledgeAdapter implements ToolAdapter {
         page,
         evidenceId,
         text,
+        truncated: fullText.length > maxChars,
       };
     }
 
