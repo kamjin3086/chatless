@@ -47,13 +47,22 @@ async function scheduleModelRequest<T>(endpointKey: string, signal: AbortSignal,
   const tail = previous.catch(() => {}).then(() => mine);
   endpointTails.set(endpointKey, tail);
   const aborted = new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+  let acquired = false;
   try {
     await Promise.race([previous.catch(() => {}), aborted]);
-    if (signal.aborted) return undefined;
+    if (signal.aborted) {
+      // Preserve this cancelled waiter's position until the active request
+      // releases the endpoint. Otherwise the next waiter can overlap it.
+      void previous.catch(() => {}).finally(release);
+      return undefined;
+    }
+    acquired = true;
     return await work();
   } finally {
-    release();
-    if (endpointTails.get(endpointKey) === tail) endpointTails.delete(endpointKey);
+    if (acquired) release();
+    void tail.finally(() => {
+      if (endpointTails.get(endpointKey) === tail) endpointTails.delete(endpointKey);
+    });
   }
 }
 

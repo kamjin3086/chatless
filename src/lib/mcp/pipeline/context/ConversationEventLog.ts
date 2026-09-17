@@ -86,6 +86,8 @@ export class ConversationEventLog {
     if (mode === 'tool_role') {
       // 最小协议化实现：tool_call_requested -> assistant.tool_calls；tool_call_output -> role=tool（tool_call_id）
       const pending: ToolCallRequest[] = [];
+      const requested = new Map<string, ToolCallRequest>();
+      const completed = new Set<string>();
       let pendingProviderData: Record<string, unknown> | undefined;
       let didEmitAssistantForPending = false;
 
@@ -114,6 +116,7 @@ export class ConversationEventLog {
             },
             providerData: e.providerData,
           });
+          requested.set(id, pending[pending.length - 1]);
           if (e.providerData && typeof e.providerData === 'object') {
             pendingProviderData = e.providerData;
           }
@@ -125,6 +128,7 @@ export class ConversationEventLog {
         }
         if (e.type === 'tool_call_output') {
           const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : undefined;
+          if (id) completed.add(id);
 
           if (pending.length > 0 && !didEmitAssistantForPending) {
             const previous = out.at(-1);
@@ -163,7 +167,9 @@ export class ConversationEventLog {
       // unsafe replay of a write or external action.
       if (pending.length > 0) {
         out.push({ role: 'assistant', content: '', tool_calls: [...pending], providerData: pendingProviderData });
-        for (const request of pending) {
+      }
+      for (const request of requested.values()) {
+        if (!completed.has(request.id)) {
           out.push({
             role: 'tool',
             content: safeJson({

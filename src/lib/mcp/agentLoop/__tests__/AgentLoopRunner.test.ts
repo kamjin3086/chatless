@@ -200,4 +200,22 @@ describe('AgentLoopRunner execution boundaries', () => {
     expect(mocks.execute).not.toHaveBeenCalled();
     expect(mocks.status).toHaveBeenLastCalledWith('run', 'cancelled');
   });
+
+  it('does not let a later request bypass a cancelled endpoint waiter', async () => {
+    const callbacks: StreamCallbacks[] = [];
+    mocks.stream.mockImplementation(async (_p, _m, _history, cb) => { callbacks.push(cb); });
+    const first = AgentLoopRunner.run({ ...params, assistantMessageId: 'first', conversationId: 'one' });
+    await vi.waitFor(() => expect(callbacks).toHaveLength(1));
+    const second = AgentLoopRunner.run({ ...params, assistantMessageId: 'second', conversationId: 'two' });
+    AgentLoopRunner.cancel({ assistantMessageId: 'second' });
+    await second;
+    const third = AgentLoopRunner.run({ ...params, assistantMessageId: 'third', conversationId: 'three' });
+    await Promise.resolve();
+    expect(callbacks).toHaveLength(1);
+    finish(callbacks[0]);
+    await first;
+    await vi.waitFor(() => expect(callbacks).toHaveLength(2));
+    finish(callbacks[1]);
+    await third;
+  });
 });

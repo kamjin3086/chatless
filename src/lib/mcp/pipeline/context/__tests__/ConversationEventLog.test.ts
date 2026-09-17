@@ -26,4 +26,17 @@ describe('ConversationEventLog recovery boundaries', () => {
       content: expect.stringContaining('EXECUTION_UNKNOWN'),
     });
   });
+
+  it('preserves a later unknown call after an earlier result was saved', () => {
+    const log = new ConversationEventLog();
+    for (const callId of ['a', 'b']) {
+      log.append({ type: 'tool_call_requested', callId, server: 'files', tool: 'write', args: { path: callId } });
+    }
+    log.append({ type: 'tool_call_output', callId: 'a', server: 'files', tool: 'write', output: { ok: true } });
+    log.append({ type: 'tool_call_started', callId: 'b', server: 'files', tool: 'write' });
+
+    const messages = log.renderForModel('tool_role');
+    expect(messages.filter((message) => message.role === 'tool').map((message) => message.tool_call_id)).toEqual(['a', 'b']);
+    expect(messages.at(-1)?.content).toContain('EXECUTION_UNKNOWN');
+  });
 });
