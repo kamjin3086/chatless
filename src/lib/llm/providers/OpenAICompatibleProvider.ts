@@ -657,6 +657,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
           },
           onClose: () => {
             try { console.debug('[OpenAICompatibleProvider] SSE closed'); } catch { /* noop */ }
+            if (!didComplete) {
+              didComplete = true;
+              cb.onError?.(new Error('SSE transport ended before a completion marker'));
+            }
           }
         }
       );

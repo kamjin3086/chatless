@@ -957,6 +957,9 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         originalUserContent: userMsg.content,
         continuationRunId: continueStoppedRun ? target.id : undefined,
         continuationPrompt: continueStoppedRun ? '继续完成尚未完成的任务。不要重复已经完成的操作。' : undefined,
+        // Regenerating revises the answer from the existing record.  It must
+        // never silently repeat a prior write, shell command, or MCP action.
+        regenerate: !continueStoppedRun,
         options: composed,
         runtimeHooks: {
           onAgentStart: () => {

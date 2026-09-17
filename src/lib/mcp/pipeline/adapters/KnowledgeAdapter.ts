@@ -312,7 +312,7 @@ export class KnowledgeAdapter implements ToolAdapter {
         return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: '文档不存在或当前会话未挂载该文档。' };
       }
       const chunkRows = await db.select<any>(
-        `SELECT id, source_text, source_start_block, source_end_block, metadata FROM retrieval_chunks
+        `SELECT id, knowledge_base_id, source_text, source_start_block, source_end_block, metadata FROM retrieval_chunks
           WHERE document_id = ? AND knowledge_base_id IN (${kbIds.map(() => '?').join(',')})
           ORDER BY source_start_block`,
         [documentId, ...kbIds],
@@ -337,13 +337,28 @@ export class KnowledgeAdapter implements ToolAdapter {
         const document = await db.select<{ title: string; file_hash: string }>(
           'SELECT title, file_hash FROM documents WHERE id = ? LIMIT 1', [documentId],
         );
+        const selectedKbIds = [...new Set(selected.map((row) => String(row.knowledge_base_id || '')).filter(Boolean))];
+        const sourceBlockIds = selected.length && selectedKbIds.length
+          ? (await db.select<{ id: string }>(
+              `SELECT id FROM source_blocks
+                WHERE document_id = ? AND knowledge_base_id IN (${selectedKbIds.map(() => '?').join(',')})
+                  AND block_index >= ? AND block_index <= ?
+                ORDER BY block_index`,
+              [
+                documentId,
+                ...selectedKbIds,
+                Math.min(...selected.map((row) => Number(row.source_start_block))),
+                Math.max(...selected.map((row) => Number(row.source_end_block))),
+              ],
+            )).map((row) => row.id)
+          : [];
         const evidenceId = registerDeliveredText({
           runId,
           documentId,
           documentName: document[0]?.title || documentId,
           documentHash: document[0]?.file_hash,
-          knowledgeBaseId: kbIds[0],
-          sourceBlockIds: selected.map((row) => row.id),
+          knowledgeBaseId: selectedKbIds[0] || kbIds[0],
+          sourceBlockIds,
           locator: { paragraphIndex: start },
           quote: text,
         });

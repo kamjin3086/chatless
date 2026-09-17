@@ -132,6 +132,7 @@ export class AgentLoopRunner {
     const baseOptions: Record<string, any> = { ...(params.options || {}), conversationId, messageId: assistantMessageId };
     const hooks = params.runtimeHooks;
     const planOnly = Boolean(params.planOnly || (params.options as any)?.planOnly);
+    const regenerate = Boolean(params.regenerate);
 
     if (!assistantMessageId || !conversationId || !provider || !model) throw new Error('运行参数不完整');
 
@@ -191,7 +192,7 @@ export class AgentLoopRunner {
       // Runtime-only options must not leak into provider request bodies.
       delete toolOptions.contextWindowTokens;
       delete toolOptions.planOnly;
-      if (capability.useNativeTools && injection.useNativeTools && envelope.tools.length > 0) {
+      if (!regenerate && capability.useNativeTools && injection.useNativeTools && envelope.tools.length > 0) {
         toolOptions.tools = envelope.tools.map((t) => ({
           name: t.name,
           description: t.description,
@@ -233,7 +234,7 @@ export class AgentLoopRunner {
         }
       }
       const refreshNativeToolOptions = async () => {
-        if (!capability.useNativeTools) return;
+        if (regenerate || !capability.useNativeTools) return;
         const refreshed = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
         if (!refreshed.useNativeTools || !Array.isArray(refreshed.nativeTools)) return;
         toolOptions.tools = refreshed.nativeTools.map((t) => ({

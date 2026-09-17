@@ -23,6 +23,8 @@ export type AgentLoopRunParams = {
   /** Optional prior run whose completed events should be supplied as context for a new run. */
   continuationRunId?: string;
   continuationPrompt?: string;
+  /** A regeneration reuses recorded context but may only produce an answer. */
+  regenerate?: boolean;
   /** 透传给 provider 的 options（温度/最大tokens/会话参数等） */
   options?: Record<string, unknown>;
   /** Planning mode permits bounded reads/searches but blocks side effects. */

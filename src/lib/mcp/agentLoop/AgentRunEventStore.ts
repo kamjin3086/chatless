@@ -103,7 +103,9 @@ export class AgentRunEventStore {
   static async loadEvents(runId: string): Promise<ConversationEvent[]> {
     const db = await this.db();
     const rows = await db.select<{ payload: string }>(
-      `SELECT payload FROM agent_run_events WHERE run_id = ? ORDER BY seq ASC`,
+      // The migration repairs duplicate sequences, but deterministic fallback
+      // ordering keeps a partially migrated legacy database explainable.
+      `SELECT payload FROM agent_run_events WHERE run_id = ? ORDER BY seq ASC, created_at ASC, id ASC`,
       [runId],
     );
     const out: ConversationEvent[] = [];

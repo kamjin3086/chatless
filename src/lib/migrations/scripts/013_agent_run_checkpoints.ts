@@ -29,7 +29,25 @@ export const migration_013: Migration = {
     },
     {
       type: 'rawSQL',
-      sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_run_events_run_seq_unique ON agent_run_events(run_id, seq);`,
+      // Older development builds could write duplicate sequence numbers before
+      // event insertion moved into a Rust transaction. Repair deterministically
+      // before creating the uniqueness boundary, otherwise the migration can
+      // never be applied to the database that needs it most.
+      sql: [
+        'DROP INDEX IF EXISTS idx_agent_run_events_run_seq_unique;',
+        `CREATE TABLE IF NOT EXISTS agent_run_event_seq_repair (
+          id TEXT PRIMARY KEY,
+          seq INTEGER NOT NULL
+        );`,
+        'DELETE FROM agent_run_event_seq_repair;',
+        `INSERT INTO agent_run_event_seq_repair (id, seq)
+         SELECT id, ROW_NUMBER() OVER (PARTITION BY run_id ORDER BY seq, created_at, id)
+         FROM agent_run_events;`,
+        `UPDATE agent_run_events
+           SET seq = (SELECT seq FROM agent_run_event_seq_repair repair WHERE repair.id = agent_run_events.id);`,
+        'DROP TABLE IF EXISTS agent_run_event_seq_repair;',
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_run_events_run_seq_unique ON agent_run_events(run_id, seq);',
+      ],
     },
   ],
   down: [

@@ -132,7 +132,14 @@ export class SSEClient {
         // a protocol marker which some compatible endpoints never send.
         if (e.payload === 'closed' || e.payload === 'cancelled') {
           this.isConnected = false;
-          callbacks.onClose?.();
+          if (callbacks.onClose) {
+            callbacks.onClose();
+          } else if (!this.stopping) {
+            // A provider must either recognise its completion marker or turn
+            // transport EOF into an error. Leaving callers without either
+            // signal makes the agent wait forever after a truncated stream.
+            callbacks.onError?.(new Error('SSE transport ended before the provider completed the response'));
+          }
         }
       });
 

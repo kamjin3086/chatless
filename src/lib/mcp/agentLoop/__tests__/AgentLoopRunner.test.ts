@@ -176,6 +176,11 @@ describe('AgentLoopRunner execution boundaries', () => {
     await expect(AgentLoopRunner.run(params)).resolves.toBeUndefined();
   });
 
+  it('does not expose tools while regenerating a prior answer', async () => {
+    await AgentLoopRunner.run({ ...params, assistantMessageId: 'regenerate', regenerate: true });
+    expect(mocks.stream.mock.calls[0][4]).toMatchObject({ toolChoice: 'none', __useNativeTools: false });
+  });
+
   it('retains steering received during a final text response', async () => {
     mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => {
       await AgentLoopRunner.steer('run', 'write'); finish(cb);
