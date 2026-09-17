@@ -338,7 +338,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         toast.info('当前步骤完成后再发送图片', { description: '图片会保留在输入框中。' });
         return;
       }
-      if (activeAssistant?.id && AgentLoopRunner.steer(activeAssistant.id, steeringContent)) {
+      if (activeAssistant?.id && await AgentLoopRunner.steer(activeAssistant.id, steeringContent)) {
         toast.info('补充已排队', { description: '当前步骤完成后交给模型处理。' });
         return;
       }

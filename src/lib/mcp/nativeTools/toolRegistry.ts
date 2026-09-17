@@ -77,7 +77,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     id: 'coding',
     name: 'Coding Pack',
-    description: '项目挂载、glob/grep、patch 预览、git 只读、诊断（默认关闭）',
+    description: 'glob/grep、patch 预览、git 只读与诊断（默认关闭）',
     tools: CODING_PACK_TOOLS.map(t => ({ server: CODING_PACK_SERVER_NAME, tool: t })),
   },
   {

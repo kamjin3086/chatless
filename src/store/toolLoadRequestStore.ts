@@ -9,74 +9,72 @@ import type { ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
 interface SessionLoadState {
   requestedGroups: ToolGroupId[];
   loadedGroups: ToolGroupId[];
+  loadedMcpServers: string[];
 }
 
 interface ToolLoadRequestState {
-  /** 当前会话快照，兼容尚未传入 conversationId 的旧调用方 */
-  requestedGroups: ToolGroupId[];
-  loadedGroups: ToolGroupId[];
-  conversationId: string | null;
   sessions: Record<string, SessionLoadState>;
   requestLoad: (groupId: ToolGroupId, conversationId?: string) => void;
   markLoaded: (groupIds: ToolGroupId[], conversationId?: string) => void;
+  loadMcpServer: (server: string, conversationId?: string) => void;
   reset: (conversationId?: string) => void;
   getPendingRequests: (conversationId?: string) => ToolGroupId[];
+  getLoadedMcpServers: (conversationId?: string) => string[];
 }
 
-const emptySession = (): SessionLoadState => ({ requestedGroups: [], loadedGroups: ['core'] });
+const emptySession = (): SessionLoadState => ({ requestedGroups: [], loadedGroups: ['core'], loadedMcpServers: [] });
 const sessionKey = (id?: string | null): string => String(id || '__default__');
 
 export const useToolLoadRequestStore = create<ToolLoadRequestState>((set, get) => ({
-  requestedGroups: [],
-  loadedGroups: ['core'],
-  conversationId: null,
   sessions: {},
 
   requestLoad: (groupId, conversationId) => {
-    const id = conversationId ?? get().conversationId;
-    const key = sessionKey(id);
+    const key = sessionKey(conversationId);
     const current = get().sessions[key] || emptySession();
     if (current.requestedGroups.includes(groupId) || current.loadedGroups.includes(groupId)) return;
     const next = { ...current, requestedGroups: [...current.requestedGroups, groupId] };
     set((state) => ({
       sessions: { ...state.sessions, [key]: next },
-      conversationId: id || null,
-      requestedGroups: next.requestedGroups,
-      loadedGroups: next.loadedGroups,
     }));
   },
 
   markLoaded: (groupIds, conversationId) => {
-    const id = conversationId ?? get().conversationId;
-    const key = sessionKey(id);
+    const key = sessionKey(conversationId);
     const current = get().sessions[key] || emptySession();
     const next = {
       requestedGroups: current.requestedGroups,
       loadedGroups: [...new Set([...current.loadedGroups, ...groupIds])],
+      loadedMcpServers: current.loadedMcpServers,
     };
     set((state) => ({
       sessions: { ...state.sessions, [key]: next },
-      conversationId: id || null,
-      requestedGroups: next.requestedGroups,
-      loadedGroups: next.loadedGroups,
     }));
   },
 
+  loadMcpServer: (server, conversationId) => {
+    const key = sessionKey(conversationId);
+    const current = get().sessions[key] || emptySession();
+    const normalized = String(server || '').trim();
+    if (!normalized || current.loadedMcpServers.includes(normalized)) return;
+    const next = { ...current, loadedMcpServers: [...current.loadedMcpServers, normalized] };
+    set((state) => ({ sessions: { ...state.sessions, [key]: next } }));
+  },
+
   reset: (conversationId) => {
-    const id = conversationId || null;
-    const key = sessionKey(id);
+    const key = sessionKey(conversationId);
     const next = emptySession();
     set((state) => ({
       sessions: { ...state.sessions, [key]: next },
-      conversationId: id,
-      requestedGroups: next.requestedGroups,
-      loadedGroups: next.loadedGroups,
     }));
   },
 
   getPendingRequests: (conversationId) => {
-    const id = conversationId ?? get().conversationId;
-    const current = get().sessions[sessionKey(id)] || emptySession();
+    const current = get().sessions[sessionKey(conversationId)] || emptySession();
     return current.requestedGroups.filter((group) => !current.loadedGroups.includes(group));
+  },
+
+  getLoadedMcpServers: (conversationId) => {
+    const current = get().sessions[sessionKey(conversationId)] || emptySession();
+    return current.loadedMcpServers;
   },
 }));

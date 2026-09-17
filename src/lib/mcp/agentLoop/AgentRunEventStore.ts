@@ -13,13 +13,31 @@ export class AgentRunEventStore {
     return svc.getDbManager();
   }
 
+  private static isTauriRuntime(): boolean {
+    return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  }
+
+  private static async native<T>(command: string, args: Record<string, unknown>): Promise<T | undefined> {
+    if (!this.isTauriRuntime()) return undefined;
+    const db = await this.db();
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<T>(command, { db: db.getConnectionUrl(), ...args });
+  }
+
   static async ensureRun(params: {
     runId: string;
     conversationId: string;
     assistantMessageId: string;
   }): Promise<void> {
-    const db = await this.db();
     const now = Date.now();
+    const native = await this.native<void>('agent_create_run', {
+      runId: params.runId,
+      conversationId: params.conversationId,
+      assistantMessageId: params.assistantMessageId,
+      startedAt: now,
+    });
+    if (native !== undefined || this.isTauriRuntime()) return;
+    const db = await this.db();
     await db.execute(
       `INSERT OR IGNORE INTO agent_runs (id, conversation_id, assistant_message_id, status, started_at)
        VALUES (?, ?, ?, 'running', ?)`,
@@ -28,8 +46,10 @@ export class AgentRunEventStore {
   }
 
   static async setRunStatus(runId: string, status: AgentRunStatus): Promise<void> {
-    const db = await this.db();
     const endedAt = status === 'running' ? null : Date.now();
+    const native = await this.native<void>('agent_set_run_status', { runId, status, endedAt });
+    if (native !== undefined || this.isTauriRuntime()) return;
+    const db = await this.db();
     await db.execute(
       `UPDATE agent_runs SET status = ?, ended_at = COALESCE(?, ended_at) WHERE id = ?`,
       [status, endedAt, runId],
@@ -50,22 +70,34 @@ export class AgentRunEventStore {
     conversationId: string;
     seq: number;
     event: ConversationEvent;
-  }): Promise<void> {
+  }): Promise<number> {
+    const eventId = generateId();
+    const createdAt = Date.now();
+    const native = await this.native<number>('agent_append_event', {
+      eventId,
+      runId: params.runId,
+      conversationId: params.conversationId,
+      eventType: params.event.type,
+      payload: JSON.stringify(params.event),
+      createdAt,
+    });
+    if (native !== undefined || this.isTauriRuntime()) return native as number;
     const db = await this.db();
     const eventType = params.event.type;
     await db.execute(
       `INSERT INTO agent_run_events (id, run_id, conversation_id, seq, event_type, payload, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
-        generateId(),
+        eventId,
         params.runId,
         params.conversationId,
         params.seq,
         eventType,
         JSON.stringify(params.event),
-        Date.now(),
+        createdAt,
       ],
     );
+    return params.seq;
   }
 
   static async loadEvents(runId: string): Promise<ConversationEvent[]> {
@@ -78,8 +110,8 @@ export class AgentRunEventStore {
     for (const row of rows) {
       try {
         out.push(JSON.parse(row.payload) as ConversationEvent);
-      } catch {
-        // skip corrupt row
+      } catch (error) {
+        throw new Error(`agent run ${runId} contains corrupt event data: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     return out;

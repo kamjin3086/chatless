@@ -6,7 +6,6 @@ import { syncFilesystemAllowlistToBackend } from '@/lib/filesystemAllowlist/back
 import { getProcessSandbox } from '@/lib/skills/sandbox';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
-import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 
@@ -59,21 +58,6 @@ export class CodingPackAdapter implements ToolAdapter {
     const tool = String(invocation.tool || '').toLowerCase();
     const args = invocation.args || {};
     const conversationId = invocation.conversationId;
-
-    if (tool === 'attach') {
-      const path = String((args as any).path || '').trim();
-      if (!path) return { ok: false, error: 'path is required' };
-      if (conversationId) {
-        useConversationAttachmentStore.getState().setMountedDir(conversationId, path);
-      }
-      await ensureAllowlistedDirectory({
-        path,
-        source: 'attachment',
-        permissions: { read: true, write: true, create: true, delete: false },
-        reconnect: true,
-      });
-      return { ok: true, path };
-    }
 
     const root = await resolveCodingRoot(
       conversationId || '',

@@ -2,20 +2,6 @@ import type { McpTool } from '@/lib/mcp/McpClient';
 
 export const CODING_PACK_SERVER_NAME = 'code';
 
-export const CODING_PROJECT_ATTACH_TOOL: McpTool = {
-  name: 'attach',
-  description: '挂载项目目录到当前会话（写入 allowlist，不扫描整机）',
-  input_schema: {
-    schema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: '项目根目录绝对路径' },
-      },
-      required: ['path'],
-    },
-  },
-};
-
 export const CODING_GLOB_TOOL: McpTool = {
   name: 'glob',
   description: '在授权目录内递归匹配文件（只读，结果截断）',
@@ -98,7 +84,6 @@ export const CODING_DIAGNOSTICS_TOOL: McpTool = {
 };
 
 export const CODING_PACK_TOOLS: McpTool[] = [
-  CODING_PROJECT_ATTACH_TOOL,
   CODING_GLOB_TOOL,
   CODING_GREP_TOOL,
   CODING_APPLY_PATCH_TOOL,

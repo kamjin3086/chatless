@@ -104,6 +104,27 @@ describe('AgentLoopRunner execution boundaries', () => {
     const history = mocks.stream.mock.calls[1][2] as Message[];
     expect(history.find((m) => m.tool_calls)?.content).toBe('I will write both.');
     expect(history.filter((m) => m.role === 'tool').map((m) => m.tool_call_id)).toEqual(['a', 'b']);
+    const started = mocks.append.mock.calls.filter(([p]) => p.event.type === 'tool_call_started').map(([p]) => p.event.callId);
+    expect(started).toEqual(['a', 'b']);
+  });
+
+  it('delivers steering before dispatching later calls from the completed response', async () => {
+    mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => {
+      tool(cb, 'a'); tool(cb, 'b'); finish(cb);
+    });
+    let release!: () => void;
+    mocks.execute.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve({ ok: true }); }));
+    const running = AgentLoopRunner.run(params);
+    await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(1));
+    await expect(AgentLoopRunner.steer('run', 'do something else')).resolves.toBe(true);
+    release();
+    await running;
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    const bOutput = mocks.append.mock.calls
+      .map(([p]) => p.event)
+      .find((event) => event.type === 'tool_call_output' && event.callId === 'b');
+    expect(bOutput.output.error.code).toBe('NOT_DISPATCHED');
   });
 
   it('does not execute when persisting the request fails', async () => {
@@ -152,7 +173,7 @@ describe('AgentLoopRunner execution boundaries', () => {
 
   it('retains steering received during a final text response', async () => {
     mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => {
-      AgentLoopRunner.steer('run', 'write'); finish(cb);
+      await AgentLoopRunner.steer('run', 'write'); finish(cb);
     });
     await AgentLoopRunner.run(params);
     expect(mocks.stream.mock.calls[1][2].filter((m: Message) => m.role === 'user')).toHaveLength(2);

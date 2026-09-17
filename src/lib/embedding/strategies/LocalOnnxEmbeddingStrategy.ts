@@ -1,16 +1,15 @@
-import { invoke } from '@tauri-apps/api/core';
 import { exists } from '@tauri-apps/plugin-fs';
 import { EmbeddingStrategy, EmbeddingConfig, EmbeddingError } from '../types';
 import { OrtEmbeddingStrategy } from './OrtEmbeddingStrategy';
 import { OnnxModelDownloader } from '../OnnxModelDownloader';
 import { modelConfigService } from '../ModelConfigService';
 
-export type EmbeddingInferenceSource = 'real' | 'mock' | 'unavailable';
+export type EmbeddingInferenceSource = 'real' | 'unavailable';
 
 /**
  * 本地 ONNX 嵌入策略（生产路径）
  * - 模型文件存在时走 OrtEmbeddingStrategy（真实 ORT 推理）
- * - 无模型或推理失败时标记为 unavailable；测试环境可显式使用 mock
+ * - 无模型或推理失败时标记为 unavailable。没有伪造向量回退。
  */
 export class LocalOnnxEmbeddingStrategy implements EmbeddingStrategy {
   private ortStrategy: OrtEmbeddingStrategy | null = null;
@@ -19,7 +18,6 @@ export class LocalOnnxEmbeddingStrategy implements EmbeddingStrategy {
   private modelId: string;
   private dimension = 384;
   private source: EmbeddingInferenceSource = 'unavailable';
-  private readonly allowTestMock = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
 
   constructor(config: EmbeddingConfig) {
     this.config = config;
@@ -59,11 +57,11 @@ export class LocalOnnxEmbeddingStrategy implements EmbeddingStrategy {
       } catch (error) {
         console.warn('[LocalOnnx] 真实模型加载失败:', error);
         this.ortStrategy = null;
-        this.source = this.allowTestMock ? 'mock' : 'unavailable';
+        this.source = 'unavailable';
       }
     } else {
       console.warn(`[LocalOnnx] 未找到模型文件 (id=${this.modelId})，语义检索不可用。请在设置中下载嵌入模型。`);
-      this.source = this.allowTestMock ? 'mock' : 'unavailable';
+      this.source = 'unavailable';
     }
 
     this.isInitialized = true;
@@ -84,15 +82,12 @@ export class LocalOnnxEmbeddingStrategy implements EmbeddingStrategy {
         return await this.ortStrategy.generateEmbeddings(texts);
       } catch (error) {
         console.warn('[LocalOnnx] 真实推理失败:', error);
-        this.source = this.allowTestMock ? 'mock' : 'unavailable';
+        this.source = 'unavailable';
         await this.ortStrategy.cleanup().catch(() => {});
         this.ortStrategy = null;
       }
     }
 
-    if (this.source === 'mock' && this.allowTestMock) {
-      return await invoke('generate_embedding_command', { texts });
-    }
     throw new EmbeddingError('本地 ONNX embedding 模型不可用');
   }
 

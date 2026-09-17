@@ -16,6 +16,15 @@ export type ConversationEvent =
       providerData?: Record<string, unknown>;
     }
   | {
+      /** Persisted immediately before the executor can cause an effect. */
+      type: 'tool_call_started';
+      callId?: string;
+      cardId?: string;
+      server: string;
+      tool: string;
+      args?: Record<string, unknown>;
+    }
+  | {
       type: 'tool_call_output';
       callId?: string;
       cardId?: string;
@@ -109,6 +118,9 @@ export class ConversationEventLog {
           didEmitAssistantForPending = false;
           continue;
         }
+        if (e.type === 'tool_call_started') {
+          continue;
+        }
         if (e.type === 'tool_call_output') {
           const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : undefined;
 
@@ -176,6 +188,7 @@ export class ConversationEventLog {
         // 对模型来说通常不需要显式回放“请求”，留给 tool_output 即可。
         continue;
       }
+      if (e.type === 'tool_call_started') continue;
     }
     return out;
   }

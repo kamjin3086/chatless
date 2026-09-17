@@ -1,6 +1,5 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
 import { streamChat } from '@/lib/llm';
-import { ProviderRegistry } from '@/lib/llm/ProviderRegistry';
 import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
 import type { OnToolCall } from '@/lib/chat/stream/types';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
@@ -23,16 +22,26 @@ const DEFAULT_PIPELINE = new ToolExecutionPipeline({ adapters: createDefaultAdap
 
 const MAX_MODEL_STEPS = 50;
 
-const activeLoops = new Map<string, { controller: AbortController; provider: string; conversationId: string }>();
+const activeLoops = new Map<string, {
+  controller: AbortController;
+  provider: string;
+  conversationId: string;
+  shellExecutionIds: Set<string>;
+  controlPlane?: AgentRunControlPlane;
+}>();
 const steeringInputs = new Map<string, string[]>();
 // 一个本地模型端点只允许一个请求进入 Provider；不同端点仍可并行。
 const endpointTails = new Map<string, Promise<void>>();
 
 /** Queue a user steering message for the next safe model boundary. */
-export function queueAgentSteering(assistantMessageId: string, input: string): boolean {
+export async function queueAgentSteering(assistantMessageId: string, input: string): Promise<boolean> {
   const id = String(assistantMessageId || '').trim();
   const text = String(input || '').trim();
-  if (!id || !text || !activeLoops.has(id)) return false;
+  const active = activeLoops.get(id);
+  if (!id || !text || !active?.controlPlane) return false;
+  // Confirming a queued supplement only after this append succeeds gives it
+  // the same durable boundary as the original user turn.
+  await active.controlPlane.record({ type: 'user_message', content: text });
   const pending = steeringInputs.get(id) || [];
   pending.push(text);
   steeringInputs.set(id, pending);
@@ -60,7 +69,7 @@ async function ensureAssistantLoading(assistantMessageId: string) {
 }
 
 export class AgentLoopRunner {
-  static steer(assistantMessageId: string, input: string): boolean {
+  static steer(assistantMessageId: string, input: string): Promise<boolean> {
     return queueAgentSteering(assistantMessageId, input);
   }
   static cancel(params: AgentLoopCancelParams) {
@@ -73,18 +82,16 @@ export class AgentLoopRunner {
       } catch {
         // ignore
       }
-      // Cancel only the provider selected by this run.  The old global
-      // interpreter cancellation could terminate an unrelated conversation.
-      try { ProviderRegistry.get(active.provider)?.cancelStream?.(); } catch { /* ignore */ }
+      // Providers used by the legacy interpreter keep mutable stream state.
+      // Do not call their global cancellation hook here: aborting one run must
+      // never terminate a different conversation using the same provider.
+      try {
+        void import('@tauri-apps/api/core').then(({ invoke }) => Promise.all(
+          [...active.shellExecutionIds].map((executionId) => invoke('cancel_safe_shell', { executionId }).catch(() => false)),
+        )).catch(() => {});
+      } catch { /* ignore */ }
     }
     void AgentRunEventStore.setRunStatus(id, 'cancelled').catch(() => {});
-    try {
-      void import('@tauri-apps/api/core').then(({ invoke }) =>
-        invoke('cancel_safe_shell', { executionId: id }).catch(() => {}),
-      );
-    } catch {
-      // ignore
-    }
   }
 
   static async run(params: AgentLoopRunParams): Promise<void> {
@@ -105,10 +112,12 @@ export class AgentLoopRunner {
       throw new Error('当前会话已有运行中的任务');
     }
     const ctrl = new AbortController();
-    activeLoops.set(assistantMessageId, { controller: ctrl, provider, conversationId });
+    activeLoops.set(assistantMessageId, { controller: ctrl, provider, conversationId, shellExecutionIds: new Set() });
     steeringInputs.set(assistantMessageId, []);
 
-    const endpointKey = `${provider}\u0000${model}`;
+    const providerInstance = (await import('@/lib/llm/ProviderRegistry')).ProviderRegistry.get(provider) as any;
+    const providerEndpoint = String(providerInstance?.baseUrl || provider);
+    const endpointKey = `${providerEndpoint}\u0000${model}`;
     const previousEndpointRun = endpointTails.get(endpointKey) || Promise.resolve();
     let releaseEndpoint!: () => void;
     const endpointTurn = new Promise<void>((resolve) => { releaseEndpoint = resolve; });
@@ -124,6 +133,8 @@ export class AgentLoopRunner {
     }
 
     const controlPlane = new AgentRunControlPlane(assistantMessageId, conversationId, assistantMessageId);
+    const active = activeLoops.get(assistantMessageId);
+    if (active) active.controlPlane = controlPlane;
     let streamFailed = false;
     let runError: unknown;
     let terminalStatus: 'paused' | undefined;
@@ -152,12 +163,6 @@ export class AgentLoopRunner {
       } catch {
         // ignore
       }
-      // 强制注入工具定义（agent 模式）
-      try {
-        const { useToolLoadRequestStore } = await import('@/store/toolLoadRequestStore');
-        const loadState = useToolLoadRequestStore.getState();
-        if (loadState.conversationId !== conversationId) loadState.reset(conversationId);
-      } catch { /* keep the catalog best-effort */ }
       const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
       const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
       const envelope = buildAgentPromptEnvelope(injection);
@@ -194,8 +199,8 @@ export class AgentLoopRunner {
             previousHistory = previousHistory.slice(1);
           }
           conversationHistory = [...conversationHistory, ...previousHistory];
-        } catch {
-          // 缺少或损坏的旧运行只能退化为普通新回合。
+        } catch (error) {
+          throw new Error(`无法继续该任务：运行记录不可用或已损坏。${error instanceof Error ? ` ${error.message}` : ''}`);
         }
       }
       const refreshNativeToolOptions = async () => {
@@ -230,10 +235,9 @@ export class AgentLoopRunner {
           controlPlane.markCancelled();
           break;
         }
-        const queuedSteering = steeringInputs.get(assistantMessageId)?.splice(0) || [];
-        for (const steering of queuedSteering) {
-          await controlPlane.record({ type: 'user_message', content: steering });
-        }
+        // queueAgentSteering persisted supplements before acknowledging them;
+        // consuming this queue only controls the next safe dispatch boundary.
+        steeringInputs.get(assistantMessageId)?.splice(0);
         if (round >= MAX_MODEL_STEPS) {
           terminalStatus = 'paused';
           break;
@@ -385,11 +389,15 @@ export class AgentLoopRunner {
         }
         // Unknown/MCP side effects are ordered. Read-only parallel execution can
         // be added once adapters expose reliable effect metadata.
+        let steeringPreempted = false;
         for (const [key, req] of requests) {
           const callId = req.callId || key;
           let out: unknown = req.preResult;
           let executed = false;
-          if (terminalStatus) {
+          if (steeringInputs.get(assistantMessageId)?.length) {
+            steeringPreempted = true;
+            out = { ok: false, error: { code: 'NOT_DISPATCHED', message: '收到用户补充，调用未执行，等待模型重新决定。' } };
+          } else if (terminalStatus) {
             out = { ok: false, error: { code: 'NOT_DISPATCHED', message: '运行已暂停，调用未执行' } };
           } else if (isCancelled(assistantMessageId, ctrl.signal)) {
             out = { ok: false, error: { code: 'CANCELLED', message: '调用已取消' } };
@@ -406,6 +414,13 @@ export class AgentLoopRunner {
               providerData: req.providerData, planOnly,
             });
             try {
+              await controlPlane.record({
+                type: 'tool_call_started', callId, cardId: req.cardId,
+                server: req.server, tool: req.tool, args: req.args,
+              });
+              if (req.server === 'shell' || req.server === 'shell_executor') {
+                activeLoops.get(assistantMessageId)?.shellExecutionIds.add(`shell:${assistantMessageId}:${req.cardId}`);
+              }
               executed = true;
               out = await DEFAULT_PIPELINE.run(inv);
               if (isPipelineSkipped(out)) {
@@ -416,6 +431,8 @@ export class AgentLoopRunner {
               // happened. Never retry it automatically or continue dispatching.
               out = { ok: false, error: { code: 'EXECUTION_UNKNOWN', message: String(error) } };
               terminalStatus = 'paused';
+            } finally {
+              activeLoops.get(assistantMessageId)?.shellExecutionIds.delete(`shell:${assistantMessageId}:${req.cardId}`);
             }
           }
           if ((out as any)?.resultStatus === 'unknown') terminalStatus = 'paused';
@@ -431,9 +448,10 @@ export class AgentLoopRunner {
               ok: false, errorMessage: (out as any)?.error?.message || String((out as any)?.error || '调用未执行'),
             });
           }
-          catalogChanged ||= req.server === 'tools' && (req.tool === 'load' || req.tool === 'search') && !toolFailed;
+          catalogChanged ||= req.server === 'tools' && req.tool === 'search' && !toolFailed;
           coordinator.markToolCallComplete(req.lockKey, toolFailed ? 'failed' : 'completed');
         }
+        if (steeringPreempted) continue;
         if (terminalStatus || isCancelled(assistantMessageId, ctrl.signal)) break;
 
         // tools__load changes the session catalog. Apply it before the next

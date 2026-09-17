@@ -98,9 +98,6 @@ function inferFromBareToolName(toolName: string): Normalized | null {
   }
 
   // Tools Registry 工具
-  if (t === 'discover' || t === 'load') {
-    return { serverName: 'tools', toolName: t };
-  }
   if (t.startsWith('tools_')) {
     return { serverName: 'tools', toolName: t.slice('tools_'.length) };
   }

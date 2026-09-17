@@ -76,12 +76,11 @@ pub async fn start_sse(
     match crate::http_client::HttpClientManager::build_custom_client(cfg) {
       Ok(client) => client,
       Err(e) => {
-        app
-          .emit(
-            &event_name("error"),
-            format!("Failed to build HTTP client with proxy: {}", e),
-          )
-          .ok();
+        app.emit(&event_name("error"), format!("Failed to build HTTP client with proxy: {}", e)).ok();
+        app.emit(&event_name("status"), "closed").ok();
+        if let Ok(mut guard) = state.sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
         return Err(format!("Failed to build HTTP client with proxy: {}", e));
       }
     }
@@ -89,9 +88,11 @@ pub async fn start_sse(
     match crate::http_client::get_minimal_client() {
       Ok(client) => (*client).clone(), // 从Arc<Client>转换为Client
       Err(e) => {
-        app
-          .emit(&event_name("error"), format!("Failed to get HTTP client: {}", e))
-          .ok();
+        app.emit(&event_name("error"), format!("Failed to get HTTP client: {}", e)).ok();
+        app.emit(&event_name("status"), "closed").ok();
+        if let Ok(mut guard) = state.sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
         return Err(format!("Failed to get HTTP client: {}", e));
       }
     }
@@ -130,11 +131,26 @@ pub async fn start_sse(
       }
     }
 
-    // 发送请求
-    let res = match req_builder.send().await {
+    // Cancellation must also interrupt DNS/TLS/response-header wait, not only
+    // the already-open response stream.
+    let response = tokio::select! {
+      _ = shutdown_rx.recv() => {
+        app.emit(&event_name("status"), "cancelled").ok();
+        if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
+        return;
+      },
+      result = req_builder.send() => result,
+    };
+    let res = match response {
       Ok(r) => r,
       Err(e) => {
         app.emit(&event_name("error"), e.to_string()).ok();
+        app.emit(&event_name("status"), "closed").ok();
+        if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
         return;
       }
     };
@@ -146,6 +162,10 @@ pub async fn start_sse(
       let body_text = res.text().await.unwrap_or_default();
       let full_msg = format!("HTTP {}: {}", status, body_text);
       app.emit(&event_name("error"), full_msg).ok();
+      app.emit(&event_name("status"), "closed").ok();
+      if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
+        guard.remove(&request_id);
+      }
       return;
     }
     app
@@ -154,24 +174,24 @@ pub async fn start_sse(
 
     let mut stream = res.bytes_stream();
     // 跨 chunk 行缓冲，避免一行在两个 chunk 之间被拆分导致上层解析失败
-    let mut line_buffer = String::new();
+    let mut line_buffer = Vec::<u8>::new();
     loop {
       tokio::select! {
           _ = shutdown_rx.recv() => {
-              app.emit(&event_name("status"), "Connection closed by user.").ok();
+              app.emit(&event_name("status"), "cancelled").ok();
               break;
           },
           Some(item) = stream.next() => {
               match item {
                   Ok(bytes) => {
-                      let chunk = String::from_utf8_lossy(&bytes);
-                      line_buffer.push_str(&chunk);
-                      while let Some(pos) = line_buffer.find('\n') {
-                          let mut line = line_buffer[..pos].to_string();
-                          // 移除已消费内容与换行符
-                          line_buffer.drain(..pos+1);
-                          if line.ends_with('\r') { line.pop(); }
-
+                      line_buffer.extend_from_slice(&bytes);
+                      while let Some(pos) = line_buffer.iter().position(|byte| *byte == b'\n') {
+                          let mut raw_line: Vec<u8> = line_buffer.drain(..=pos).collect();
+                          raw_line.pop(); // newline
+                          if raw_line.last() == Some(&b'\r') { raw_line.pop(); }
+                          // Decode only after receiving the full line. A UTF-8
+                          // character may legitimately span transport chunks.
+                          let line = String::from_utf8_lossy(&raw_line);
                           let payload = if let Some(data) = line.strip_prefix("data:") {
                               data.trim()
                           } else {
@@ -198,7 +218,7 @@ pub async fn start_sse(
     // 这会导致前端永远收不到收尾信号，从而出现“服务端已完成但前端还在加载/追赶输出”的现象。
     // 在结束前补一次冲刷，确保最后一行也会被发出。
     {
-      let line = line_buffer.trim().to_string();
+      let line = String::from_utf8_lossy(&line_buffer).trim().to_string();
       if !line.is_empty() {
         let payload = if let Some(data) = line.strip_prefix("data:") {
           data.trim()
@@ -212,7 +232,7 @@ pub async fn start_sse(
     }
 
     // 连接自然结束
-    app.emit(&event_name("status"), "Connection closed.").ok();
+    app.emit(&event_name("status"), "closed").ok();
     if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
       guard.remove(&request_id);
     }

@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 
 type ConversationId = string;
@@ -61,7 +62,7 @@ function normalizePath(p: string): string {
   return String(p || '').trim().replace(/\\/g, '/');
 }
 
-export const useConversationAttachmentStore = create<ConversationAttachmentState>((set, get) => ({
+export const useConversationAttachmentStore = create<ConversationAttachmentState>()(persist((set, get) => ({
   workingDirByConversation: {},
   mountedDirByConversation: {},
   knowledgeBaseByConversation: {},
@@ -183,5 +184,14 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     if (!cid) return undefined;
     return get().mountedDirByConversation[cid];
   },
+}), {
+  name: 'conversation-knowledge-mounts',
+  // A mounted knowledge base is a user-controlled access decision and must
+  // survive restart.  Attachment source text stays out of localStorage until
+  // it is moved to the document store; it is never silently re-granted from
+  // old chat history.
+  partialize: (state) => ({
+    knowledgeBaseByConversation: state.knowledgeBaseByConversation,
+  }),
 }));
 

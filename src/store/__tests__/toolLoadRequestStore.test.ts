@@ -21,8 +21,16 @@ describe('tool loading scope', () => {
     store.markLoaded(['knowledge'], 'conversation-a');
     store.reset('conversation-b');
 
-    expect(useToolLoadRequestStore.getState().loadedGroups).toEqual(['core']);
+    expect(useToolLoadRequestStore.getState().sessions['conversation-b'].loadedGroups).toEqual(['core']);
     expect(store.getPendingRequests('conversation-a')).toEqual([]);
     expect(store.getPendingRequests('conversation-b')).toEqual([]);
+  });
+
+  it('keeps discovered MCP servers scoped to the requesting conversation', () => {
+    const store = useToolLoadRequestStore.getState();
+    store.loadMcpServer('research-server', 'conversation-a');
+
+    expect(store.getLoadedMcpServers('conversation-a')).toEqual(['research-server']);
+    expect(store.getLoadedMcpServers('conversation-b')).toEqual([]);
   });
 });

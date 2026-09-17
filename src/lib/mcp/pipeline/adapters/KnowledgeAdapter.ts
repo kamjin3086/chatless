@@ -6,7 +6,6 @@ import { registerEvidence, readEvidence } from '@/lib/rag/EvidenceRegistry';
 import { EvidenceStore } from '@/lib/rag/evidenceStore';
 import { NEIGHBOR_BLOCK_WINDOW } from '@/lib/rag/constants';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
-import { getPersistedKnowledgeBaseReference } from '@/lib/mcp/injection/persistedKnowledgeBase';
 import type { Evidence } from '@/lib/rag/evidenceTypes';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
@@ -16,13 +15,10 @@ const MAX_KNOWLEDGE_CALLS = 12;
 
 async function resolveMountedScope(conversationId: string, raw?: unknown): Promise<string[]> {
   const mounted = useConversationAttachmentStore.getState().getKnowledgeBase(conversationId);
-  let mountedId = mounted?.id;
-  // The attachment store is intentionally transient. Rehydrate the last
-  // persisted knowledge-base reference when the app was restarted or the
-  // conversation was switched before the tool call.
-  if (!mountedId) {
-    mountedId = (await getPersistedKnowledgeBaseReference(conversationId))?.id;
-  }
+  // A historical selection is not an access grant.  In particular, clearing
+  // a mount must take effect immediately and must never be undone by a past
+  // user message during a later tool call.
+  const mountedId = mounted?.id;
   if (!mountedId) return [];
   const requested = Array.isArray(raw) ? raw.map(String).filter(Boolean) : [];
   return requested.length ? (requested.includes(mountedId) ? [mountedId] : []) : [mountedId];
@@ -71,6 +67,29 @@ function boundedLimit(value: unknown, fallback = 8000): number {
 
 function boundedNeighbor(value: unknown, fallback = NEIGHBOR_BLOCK_WINDOW): number {
   return Math.min(32, nonNegativeInt(value, fallback));
+}
+
+function registerDeliveredText(params: {
+  runId: string;
+  documentId: string;
+  documentName: string;
+  documentHash?: string;
+  knowledgeBaseId?: string;
+  sourceBlockIds?: string[];
+  locator?: Evidence['locator'];
+  quote: string;
+}): string {
+  return registerEvidence(params.runId, [{
+    id: '',
+    documentId: params.documentId,
+    documentName: params.documentName,
+    documentHash: params.documentHash,
+    knowledgeBaseId: params.knowledgeBaseId,
+    sourceBlockIds: params.sourceBlockIds || [],
+    locator: params.locator || {},
+    quote: params.quote,
+    score: 0,
+  }])[0].id;
 }
 
 export class KnowledgeAdapter implements ToolAdapter {
@@ -190,7 +209,12 @@ export class KnowledgeAdapter implements ToolAdapter {
       }
       evidence = [...evidence, ...sessionSearch(sessionDocuments, query, limit)].slice(0, limit);
 
-      const registered = registerEvidence(runId, evidence);
+      // The citation registry represents text the model actually received.
+      // Search returns snippets, so do not register a longer hidden window.
+      const registered = registerEvidence(runId, evidence.map((item) => ({
+        ...item,
+        quote: item.quote.slice(0, 400),
+      })));
       const hasKnowledgeEvidence = evidence.some((ev) => !ev.documentId.startsWith('attachment_'));
       return {
         ok: true,
@@ -201,27 +225,28 @@ export class KnowledgeAdapter implements ToolAdapter {
           page: ev.locator.page,
           section: ev.locator.sectionPath?.join(' > '),
           score: ev.score,
-          snippet: ev.quote.slice(0, 400),
+          snippet: ev.quote,
         })),
       };
     }
 
     if (tool === 'read') {
-      const evidenceId = String((args as any).evidenceId || '').trim();
+      const requestedEvidenceId = String((args as any).evidenceId || '').trim();
       const before = boundedNeighbor((args as any).before);
       const after = boundedNeighbor((args as any).after);
 
-      if (evidenceId) {
-        const ev = readEvidence(runId, evidenceId);
+      if (requestedEvidenceId) {
+        const ev = readEvidence(runId, requestedEvidenceId);
         if (!ev) {
-          return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: `未找到 ${evidenceId}，请先 knowledge_search` };
+          return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: `未找到 ${requestedEvidenceId}，请先 knowledge_search` };
         }
         const sessionDoc = sessionDocuments.find((doc) => doc.id === ev.documentId);
         if (sessionDoc) {
           const start = nonNegativeInt((args as any).cursor);
           const limit = boundedLimit((args as any).limit);
           const text = sessionDoc.content.slice(start, start + limit);
-          return { ok: true, evidenceId, document: ev.documentName, text, nextCursor: start + limit < sessionDoc.content.length ? String(start + limit) : undefined, complete: start + limit >= sessionDoc.content.length };
+          const delivered = registerEvidence(runId, [{ ...ev, quote: text }])[0];
+          return { ok: true, evidenceId: delivered.id, document: ev.documentName, text, nextCursor: start + limit < sessionDoc.content.length ? String(start + limit) : undefined, complete: start + limit >= sessionDoc.content.length };
         }
         if (!kbIds.length) {
           return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: '该引用已不在当前会话的可访问资料范围内，请重新搜索。' };
@@ -242,11 +267,17 @@ export class KnowledgeAdapter implements ToolAdapter {
         );
         const fullText = (window.length ? window : scopedBlocks).map((b) => b.text).join('\n');
         const maxChars = boundedLimit((args as any).limit);
+        const text = fullText.slice(0, maxChars);
+        const delivered = registerEvidence(runId, [{
+          ...ev,
+          sourceBlockIds: window.map((block) => block.id),
+          quote: text,
+        }])[0];
         return {
           ok: true,
-          evidenceId,
+          evidenceId: delivered.id,
           document: ev.documentName,
-          text: fullText.slice(0, maxChars),
+          text,
           truncated: fullText.length > maxChars,
         };
       }
@@ -260,7 +291,11 @@ export class KnowledgeAdapter implements ToolAdapter {
         const start = nonNegativeInt((args as any).cursor);
         const limit = boundedLimit((args as any).limit);
         const text = sessionDoc.content.slice(start, start + limit);
-        return { ok: true, documentId, text, nextCursor: start + limit < sessionDoc.content.length ? String(start + limit) : undefined, complete: start + limit >= sessionDoc.content.length };
+        const evidenceId = registerDeliveredText({
+          runId, documentId, documentName: sessionDoc.name, documentHash: sessionDoc.documentHash,
+          locator: { lineStart: sessionDoc.content.slice(0, start).split('\n').length }, quote: text,
+        });
+        return { ok: true, documentId, evidenceId, text, nextCursor: start + limit < sessionDoc.content.length ? String(start + limit) : undefined, complete: start + limit >= sessionDoc.content.length };
       }
       if (!kbIds.length) {
         return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: '文档不存在或当前会话未挂载该文档。' };
@@ -277,18 +312,16 @@ export class KnowledgeAdapter implements ToolAdapter {
         return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: '文档不存在或当前会话未挂载该文档。' };
       }
       const chunkRows = await db.select<any>(
-        `SELECT id, source_text, metadata FROM retrieval_chunks
+        `SELECT id, source_text, source_start_block, source_end_block, metadata FROM retrieval_chunks
           WHERE document_id = ? AND knowledge_base_id IN (${kbIds.map(() => '?').join(',')})
           ORDER BY source_start_block`,
         [documentId, ...kbIds],
       );
       if (chunkRows.length) {
-        const uniqueChunkRows = Array.from(new Map(
-          chunkRows.map((row) => [
-            `${row.source_start_block}:${row.source_end_block}:${String(row.source_text || '')}`,
-            row,
-          ]),
-        ).values());
+        // Each row is already scoped to the mounted knowledge base.  Do not
+        // collapse repeated paragraphs: repeated source text is still a real
+        // position in a document and must remain readable in order.
+        const uniqueChunkRows = chunkRows;
         const start = nonNegativeInt((args as any).cursor);
         const limit = boundedLimit((args as any).limit);
         let used = 0;
@@ -300,10 +333,25 @@ export class KnowledgeAdapter implements ToolAdapter {
           used += text.length;
         }
         const next = start + selected.length;
+        const text = selected.map((row) => row.source_text).join('\n\n');
+        const document = await db.select<{ title: string; file_hash: string }>(
+          'SELECT title, file_hash FROM documents WHERE id = ? LIMIT 1', [documentId],
+        );
+        const evidenceId = registerDeliveredText({
+          runId,
+          documentId,
+          documentName: document[0]?.title || documentId,
+          documentHash: document[0]?.file_hash,
+          knowledgeBaseId: kbIds[0],
+          sourceBlockIds: selected.map((row) => row.id),
+          locator: { paragraphIndex: start },
+          quote: text,
+        });
         return {
           ok: true,
           documentId,
-          text: selected.map((row) => row.source_text).join('\n\n'),
+          evidenceId,
+          text,
           nextCursor: next < uniqueChunkRows.length ? String(next) : undefined,
           complete: next >= uniqueChunkRows.length,
         };
@@ -314,11 +362,26 @@ export class KnowledgeAdapter implements ToolAdapter {
       ).values());
       const page = (args as any).page != null ? Number((args as any).page) : undefined;
       const filtered = page != null ? uniqueBlocks.filter((b) => b.page === page) : uniqueBlocks;
+      const text = filtered.map((b) => b.text).join('\n');
+      const document = await db.select<{ title: string; file_hash: string }>(
+        'SELECT title, file_hash FROM documents WHERE id = ? LIMIT 1', [documentId],
+      );
+      const evidenceId = registerDeliveredText({
+        runId,
+        documentId,
+        documentName: document[0]?.title || documentId,
+        documentHash: document[0]?.file_hash,
+        knowledgeBaseId: kbIds[0],
+        sourceBlockIds: filtered.map((block) => block.id),
+        locator: { page, lineStart: filtered[0]?.lineStart, lineEnd: filtered.at(-1)?.lineEnd },
+        quote: text,
+      });
       return {
         ok: true,
         documentId,
         page,
-        text: filtered.map((b) => b.text).join('\n'),
+        evidenceId,
+        text,
       };
     }
 

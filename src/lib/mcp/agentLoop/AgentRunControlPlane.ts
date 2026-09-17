@@ -38,11 +38,14 @@ export class AgentRunControlPlane {
     // Serialize sequence allocation and persistence. Failed writes poison the
     // queue so later events cannot hide a missing durable boundary.
     this.writes = this.writes.then(async () => {
-      const seq = this.seq + 1;
-      await AgentRunEventStore.appendEvent({
-        runId: this.runId, conversationId: this.conversationId, seq, event,
+      const expectedSeq = this.seq + 1;
+      const assigned = await AgentRunEventStore.appendEvent({
+        runId: this.runId, conversationId: this.conversationId, seq: expectedSeq, event,
       });
-      this.seq = seq;
+      // Older test adapters and third-party callers returned void.  The Rust
+      // store returns the authoritative sequence; retain the expected value
+      // only for that backwards-compatible in-memory path.
+      this.seq = typeof assigned === 'number' ? assigned : expectedSeq;
       this.eventLog.append(event);
     });
     return this.writes;

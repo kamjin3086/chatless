@@ -294,20 +294,10 @@ pub fn parse_file_structured(file_path_str: &str) -> Result<ParsedDocument> {
       parse_plain_paragraphs(&input, document_id, None, None, &mut blocks);
     }
     "pdf" => {
-      let text = pdf_extract::extract_text(path)
+      let pages = pdf_extract::extract_text_by_pages(path)
         .with_context(|| format!("从PDF提取文本失败: {}", file_path_str))?;
-      if text.contains('\u{000c}') {
-        for (i, page_text) in text.split('\u{000c}').enumerate() {
-          parse_plain_paragraphs(
-            page_text,
-            document_id,
-            Some((i + 1) as u32),
-            None,
-            &mut blocks,
-          );
-        }
-      } else {
-        parse_plain_paragraphs(&text, document_id, None, None, &mut blocks);
+      for (i, page_text) in pages.iter().enumerate() {
+        parse_plain_paragraphs(page_text, document_id, Some((i + 1) as u32), None, &mut blocks);
       }
     }
     "docx" => {

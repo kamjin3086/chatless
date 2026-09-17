@@ -26,6 +26,45 @@ export const EvidenceStore = {
   }): Promise<void> {
     const db = DatabaseService.getInstance().getDbManager();
     const ftsTexts = await Promise.all(params.chunks.map((c) => tokenizeForFts(c.searchText)));
+    const contentHashes = await Promise.all(params.chunks.map((c) => sha256Hex(c.sourceText)));
+    const createdAt = Date.now();
+    // The SQL plugin uses a connection pool. A WebView-side transaction cannot
+    // guarantee that BEGIN, the writes, and COMMIT reach one connection, so
+    // desktop publication is a single Rust SQLx transaction.
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('publish_document_index', {
+        db: db.getConnectionUrl(),
+        documentId: params.documentId,
+        knowledgeBaseId: params.knowledgeBaseId,
+        createdAt,
+        blocks: params.blocks.map((block) => ({
+          id: block.id,
+          blockIndex: block.blockIndex,
+          type: block.type,
+          text: block.text,
+          page: block.page,
+          sectionPath: block.sectionPath,
+          lineStart: block.lineStart,
+          lineEnd: block.lineEnd,
+          charStart: block.charStart,
+          charEnd: block.charEnd,
+          metadata: block.metadata || {},
+        })),
+        chunks: params.chunks.map((chunk, index) => ({
+          id: chunk.id,
+          sourceStartBlock: chunk.sourceStartBlock,
+          sourceEndBlock: chunk.sourceEndBlock,
+          sourceText: chunk.sourceText,
+          searchText: chunk.searchText,
+          metadata: chunk.metadata || {},
+          contentHash: contentHashes[index],
+          chunkIndex: chunk.metadata.chunkIndex ?? index,
+          ftsText: ftsTexts[index] || chunk.searchText,
+        })),
+      });
+      return;
+    }
     await db.executeTransaction(async (tx) => {
       const mapping = await tx.select(
         `SELECT id FROM doc_knowledge_mappings
@@ -53,7 +92,6 @@ export const EvidenceStore = {
         [params.documentId, params.knowledgeBaseId]
       );
 
-      const now = Date.now();
       for (const block of params.blocks) {
         await tx.execute(
           `INSERT INTO source_blocks (
@@ -74,14 +112,13 @@ export const EvidenceStore = {
             block.charStart ?? null,
             block.charEnd ?? null,
             JSON.stringify(block.metadata || {}),
-            now,
+            createdAt,
           ]
         );
       }
 
       for (let index = 0; index < params.chunks.length; index += 1) {
         const chunk = params.chunks[index];
-        const contentHash = await sha256Hex(chunk.sourceText);
         await tx.execute(
           `INSERT INTO retrieval_chunks (
             id, document_id, knowledge_base_id, source_start_block, source_end_block,
@@ -96,7 +133,7 @@ export const EvidenceStore = {
             chunk.sourceText,
             chunk.searchText,
             JSON.stringify(chunk.metadata || {}),
-            now,
+            createdAt,
           ]
         );
         await tx.execute(
@@ -109,9 +146,9 @@ export const EvidenceStore = {
             params.documentId,
             chunk.sourceText,
             chunk.metadata.chunkIndex ?? 0,
-            contentHash,
+            contentHashes[index],
             JSON.stringify(chunk.metadata || {}),
-            now,
+            createdAt,
           ]
         );
         const ftsText = ftsTexts[index] || chunk.searchText;

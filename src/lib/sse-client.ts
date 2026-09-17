@@ -127,6 +127,13 @@ export class SSEClient {
       // 监听SSE状态
       const unlistenStatus = await listen<string>(`sse-status-${requestId}`, (e) => {
         console.debug(`[${debugTag}] SSE Status:`, e.payload);
+        // Tauri owns the transport lifetime.  Treat its terminal status as a
+        // real stream completion rather than leaving the provider waiting for
+        // a protocol marker which some compatible endpoints never send.
+        if (e.payload === 'closed' || e.payload === 'cancelled') {
+          this.isConnected = false;
+          callbacks.onClose?.();
+        }
       });
 
       // 监听SSE错误
@@ -166,9 +173,11 @@ export class SSEClient {
         method,
         headers,
         body,
-        // 注意：Tauri 参数名需要 snake_case
-        proxy_url,
-        request_id: requestId,
+        // Tauri commands use camelCase argument names unless explicitly
+        // annotated otherwise.  Keeping this contract here makes the event
+        // name and the backend cancellation key the same request id.
+        proxyUrl: proxy_url,
+        requestId,
       });
 
       // 安全护栏：设置绝对超时（30分钟）防止连接无限悬挂
@@ -428,7 +437,7 @@ export class SSEClient {
       } else {
         // 通知后端停止Tauri SSE
         try {
-          await invoke('stop_sse', { request_id: this.requestId });
+          await invoke('stop_sse', { requestId: this.requestId });
         } catch (error) {
           console.warn(`[${this.debugTag}] Failed to stop SSE:`, error);
         }

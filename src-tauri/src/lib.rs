@@ -1,6 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use anyhow::Result;
-use crc32fast;
 use log::LevelFilter;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::path::BaseDirectory;
@@ -56,6 +55,9 @@ pub mod document_structured;
 #[path = "lib/sse.rs"]
 pub mod sse;
 
+#[path = "lib/agent_runtime.rs"]
+pub mod agent_runtime;
+
 #[path = "lib/http_client.rs"]
 pub mod http_client;
 
@@ -88,27 +90,6 @@ fn get_environment_health() -> env_setup::EnvironmentHealth {
 #[tauri::command]
 fn can_run_mcp_services() -> bool {
   env_setup::can_run_mcp_services()
-}
-
-/// Tauri 命令：使用模拟数据生成嵌入向量（用于测试和回退）
-#[tauri::command]
-fn generate_embedding_command(texts: Vec<String>) -> Result<Vec<Vec<f32>>, String> {
-  // 为每个输入文本生成一个384维的模拟嵌入向量
-  let embeddings = texts
-    .iter()
-    .map(|text| {
-      // 使用文本的哈希值或其他属性来生成确定性的、但看起来随机的向量
-      let hash = crc32fast::hash(text.as_bytes());
-      let mut vec = vec![0.0f32; 384];
-      let mut val = (hash as f32) / (u32::MAX as f32) - 0.5;
-      for i in 0..384 {
-        vec[i] = val;
-        val = (val * 1.1 + 0.1).sin();
-      }
-      vec
-    })
-    .collect();
-  Ok(embeddings)
 }
 
 /// 应用退出时释放 ONNX 等资源
@@ -228,7 +209,6 @@ pub fn run() {
     .manage(filesystem::state::FilesystemAllowlistState::default())
     .invoke_handler(tauri::generate_handler![
       greet,
-      generate_embedding_command,
       cleanup_on_exit,
       exit,
       set_log_level,
@@ -262,6 +242,10 @@ pub fn run() {
       sse::stop_sse,
       sse::start_local_sse_server,
       sse::start_local_mcp_sse,
+      agent_runtime::agent_create_run,
+      agent_runtime::agent_append_event,
+      agent_runtime::agent_set_run_status,
+      agent_runtime::publish_document_index,
       // —— HTTP Client Commands ——
       http_client::get_http_client_info,
       http_client::test_http_client,

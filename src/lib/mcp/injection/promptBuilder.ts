@@ -26,14 +26,13 @@ import {
 } from '@/lib/mcp/nativeTools/toolRegistry';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
-import { getGlobalEnabledServers, getAllConfiguredServers } from '../chatIntegration';
+import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
 import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { AGENT_MINIMAL_SYSTEM_PROMPT } from './promptTemplates';
 import { getToolDoc, buildFirstFollowUpPromptFromDoc, buildForcedAnswerPromptFromDoc } from './toolDocLoader';
-import { getPersistedKnowledgeBaseReference } from './persistedKnowledgeBase';
 
 /**
  * 构建初始调用阶段的提示词
@@ -104,9 +103,15 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     // ignore
   }
   
-  // 2. 服务器工具默认收敛：仅在显式 @mention 时才启用外部 MCP server（避免默认把所有 connected/global tools 灌给模型）
-  //    内置能力仍通过 filesystem/shell_executor 暴露。
+  // 2. External MCP tools are only injected after an explicit mention or a
+  //    tools__search result. The search itself covers every enabled server,
+  //    without dumping that entire directory into each model request.
   let enabled: string[] = [];
+  const conversationId = context.conversationId || undefined;
+  const requestedServers = conversationId
+    ? useToolLoadRequestStore.getState().getLoadedMcpServers(conversationId)
+    : [];
+  const configuredEnabled = await getEnabledConfiguredServers();
   if (signals.hasExplicitMention && signals.mentionedServers.length > 0) {
     const globalEnabled = await getGlobalEnabledServers();
     const all = await getAllConfiguredServers();
@@ -119,13 +124,17 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
       // 内置保留 server（filesystem/skills/web_search/shell_executor）不走外部 mcp 连接列表
       .filter((n) => !RESERVED_MCP_SERVER_NAMES.has(String(n || '').toLowerCase()));
 
-    if (mentionedEnabled.length > 0) {
-      try {
-        await persistentCache.preconnectServers(mentionedEnabled);
-      } catch (error) {
-        console.warn('[InjectionManager] 预连接失败:', error);
-      }
-      enabled = Array.from(new Set([...mentionedEnabled]));
+    enabled = mentionedEnabled;
+  }
+  enabled = Array.from(new Set([
+    ...enabled,
+    ...requestedServers.filter((server) => configuredEnabled.includes(server)),
+  ]));
+  if (enabled.length > 0) {
+    try {
+      await persistentCache.preconnectServers(enabled);
+    } catch (error) {
+      console.warn('[InjectionManager] 预连接失败:', error);
     }
   }
   enabledServers.push(...enabled);
@@ -169,10 +178,10 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
           content: `【当前会话工作目录】\n- @WorkDir -> ${wd}\n- 需要在该目录及其子目录中读写文件时，可使用 filesystem，并使用 @WorkDir/... 的别名路径或绝对路径。`,
         });
       }
-      let kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
-      if (!kb?.id) {
-        kb = await getPersistedKnowledgeBaseReference(convId);
-      }
+      // The current mount is the authority. Historic messages and prior
+      // selections are deliberately not consulted here: unmounting a library
+      // must remove both the tools and the prompt hint immediately.
+      const kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
       const attachments = useConversationAttachmentStore.getState().getSessionDocuments(convId);
       if (kb?.id || attachments.length) {
         messages.push({
@@ -374,10 +383,7 @@ async function buildNativeToolDefinitions(params: {
     const convId = params.conversationId || '';
     if (convId) {
       const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-      let kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
-      if (!kb?.id) {
-        kb = await getPersistedKnowledgeBaseReference(convId);
-      }
+      const kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
       const attachments = useConversationAttachmentStore.getState().getSessionDocuments(convId);
       if ((kb?.id || attachments.length > 0) && !detectedGroups.includes('knowledge')) {
         detectedGroups.push('knowledge');

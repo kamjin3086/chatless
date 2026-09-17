@@ -129,7 +129,7 @@ export async function shouldAutoAuthorize(serverName: string): Promise<boolean> 
 
     // 内部工具默认自动授权（无需用户审批）
     const name = (serverName || '').toLowerCase().trim();
-    const autoApprovedServers = ['ctx', 'skill', 'skills', 'skills_fs', 'tools', 'system'];
+    const autoApprovedServers = ['ctx', 'tools'];
     if (autoApprovedServers.includes(name)) {
       return true;
     }

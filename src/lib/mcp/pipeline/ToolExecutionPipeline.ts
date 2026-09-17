@@ -114,9 +114,13 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
     return tl === 'write_user_file' && !autoAuth;
   }
 
-  // skills_fs / skills：默认不需要人工确认（仅限技能包目录/内部工具）
-  if (srv === 'skills_fs' || srv === 'skills' || srv === 'skill') {
-    return false;
+  // Skill installation and modification change the local execution
+  // environment.  Only inspection remains approval-free.
+  if (srv === 'skills_fs') {
+    return !/^(read_skill_resource|list_skill_resources|list_files)$/.test(tl);
+  }
+  if (srv === 'skills' || srv === 'skill') {
+    return !/^(list|guide|read_file|list_files|check_deps|use)$/.test(tl);
   }
 
   // tools: auto-approve
@@ -124,9 +128,9 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
     return false;
   }
 
-  // system: auto-approve
+  // System reads are safe; prompt and skill administration is not.
   if (srv === 'system') {
-    return false;
+    return !/^(list_prompts|get_prompt|list_skills)$/.test(tl);
   }
 
   // filesystem：授权由 allowlist gate 统一管理，这里不参与（返回 false 以避免“全局 autoAuth”影响文件系统安全边界）
@@ -144,7 +148,7 @@ function isPlanOnlyAllowed(server: string, tool: string): boolean {
   if (isFilesystemServer(srv)) return /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(tl);
   if (srv === 'knowledge') return /^(list|search|read)$/.test(tl);
   if (srv === 'web_search' || srv === 'web') return /^(search|fetch)$/.test(tl);
-  if (srv === 'tools') return tl === 'discover' || tl === 'search';
+  if (srv === 'tools') return tl === 'search';
   if (srv === 'skill') return /^(list|guide|use|read_file|list_files|check_deps)$/.test(tl);
   if (srv === 'system') return /^(list_prompts|get_prompt)$/.test(tl);
   return false;
@@ -654,7 +658,7 @@ export class ToolExecutionPipeline {
       (isFilesystemServer(srvForRetry) && /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(toolForRetry)) ||
       (srvForRetry === 'knowledge' && /^(list|search|read)$/.test(toolForRetry)) ||
       (srvForRetry === 'web_search' && /^(search|fetch)$/.test(toolForRetry)) ||
-      (srvForRetry === 'tools' && toolForRetry === 'discover');
+      (srvForRetry === 'tools' && toolForRetry === 'search');
     // A timeout after a write, shell command, or unknown MCP operation does not
     // tell us whether the side effect happened. Never replay those calls.
     const maxRetries = isReadOnlyRetry && typeof cfg.maxToolRetries === 'number'
