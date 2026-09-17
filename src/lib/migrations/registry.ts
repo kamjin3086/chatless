@@ -12,6 +12,7 @@ import { migration_010 } from './scripts/010_add_vector_embeddings';
 import { migration_011 } from './scripts/011_add_agent_run_events';
 import { migration_012 } from './scripts/012_evidence_rag_v2';
 import { migration_013 } from './scripts/013_agent_run_checkpoints';
+import { migration_014 } from './scripts/014_document_chunks';
 // 合并到 v2 后，这里不再注册 v3/v4
 /**
  * 迁移注册器
@@ -44,6 +45,7 @@ export class MigrationRegistry {
     this.register(migration_011);
     this.register(migration_012);
     this.register(migration_013);
+    this.register(migration_014);
     // v3+v4 已合并到 v2，无需注册
   }
 
