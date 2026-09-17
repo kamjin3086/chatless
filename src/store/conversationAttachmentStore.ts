@@ -1,5 +1,5 @@
 /**
- * 会话级“附加内容”状态（非持久化）
+ * 会话级“附加内容”状态。
  *
  * 用于提升 Agent 体验：例如“附加工作目录”，让当前会话期间 filesystem 可在该目录及子目录工作。
  * 注意：这是临时授权，仅在应用运行期存在。
@@ -99,7 +99,9 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
       const existing = state.sessionDocumentsByConversation[cid] || [];
       const next = existing.filter((item) => item.id !== document.id);
       next.push({ ...document, addedAt: Date.now() });
-      return { sessionDocumentsByConversation: { ...state.sessionDocumentsByConversation, [cid]: next.slice(-8) } };
+      // Attachments are user-provided conversation records. Do not silently
+      // discard older files merely because a numeric in-memory cap was hit.
+      return { sessionDocumentsByConversation: { ...state.sessionDocumentsByConversation, [cid]: next } };
     });
   },
 
@@ -186,12 +188,12 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
   },
 }), {
   name: 'conversation-knowledge-mounts',
-  // A mounted knowledge base is a user-controlled access decision and must
-  // survive restart.  Attachment source text stays out of localStorage until
-  // it is moved to the document store; it is never silently re-granted from
-  // old chat history.
+  // Mounts and explicitly attached source text are both user-controlled
+  // conversation records. They survive restart; neither is reconstructed
+  // from historic chat messages.
   partialize: (state) => ({
     knowledgeBaseByConversation: state.knowledgeBaseByConversation,
+    sessionDocumentsByConversation: state.sessionDocumentsByConversation,
   }),
 }));
 
