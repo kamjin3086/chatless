@@ -1,4 +1,4 @@
-import { ChatGateway } from './ChatGateway';
+import { chat } from '@/lib/llm';
 import type { Message } from '@/lib/llm/types';
 import { extractTitleFromOutput, normalizeTitle } from './TitleGenerator';
 
@@ -72,9 +72,8 @@ Follow these rules strictly:
       { role: 'system', content: system },
       { role: 'user', content: seed },
     ];
-    const gateway = new ChatGateway({ provider, model, options: { temperature: 0.2 } });
     console.debug('[TitleService] 开始调用模型生成标题, provider:', provider, 'model:', model);
-    const { content } = await gateway.chat(messages);
+    const { content } = await chat(provider, model, messages, { temperature: 0.2, __priority: 'low' });
     console.debug('[TitleService] 模型原始输出:', content, '| 类型:', typeof content, '| 长度:', content?.length);
     const parsed = extractTitleFromOutput(content, max);
     const normalized = normalizeTitle(content, max);

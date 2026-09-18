@@ -17,11 +17,14 @@ use std::sync::Mutex;
 use lazy_static::lazy_static;
 
 lazy_static! {
-  // Store only the OS process id.  Waiting for a child must never hold a lock
-  // that cancellation needs in order to terminate it.
-  static ref RUNNING_SHELLS: Mutex<HashMap<String, u32>> =
+  // Waiting for a child never holds this lock. Windows keeps a Job handle;
+  // Unix uses the pid as a process-group id.
+  static ref RUNNING_SHELLS: Mutex<HashMap<String, ManagedProcess>> =
     Mutex::new(HashMap::new());
 }
+
+#[derive(Clone, Copy)]
+struct ManagedProcess { pid: u32, #[cfg(windows)] job: isize }
 
 /// Shell 执行结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,25 +74,35 @@ fn default_max_output() -> usize {
   1024 * 1024 // 1MB
 }
 
-async fn kill_process_tree(pid: u32) -> std::io::Result<()> {
-  if pid == 0 {
+async fn kill_process_tree(process: ManagedProcess) -> std::io::Result<()> {
+  if process.pid == 0 {
     return Ok(());
   }
   #[cfg(windows)]
   {
-    let status = Command::new("taskkill")
-      .args(["/PID", &pid.to_string(), "/T", "/F"])
-      .status()
-      .await?;
-    if status.success() { Ok(()) } else { Err(std::io::Error::new(std::io::ErrorKind::Other, "taskkill failed")) }
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::System::JobObjects::TerminateJobObject;
+    let job = HANDLE(process.job as *mut core::ffi::c_void);
+    unsafe {
+      TerminateJobObject(job, 1).map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error.to_string()))?;
+      CloseHandle(job).map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error.to_string()))?;
+    }
+    Ok(())
   }
   #[cfg(not(windows))]
   {
     let status = Command::new("kill")
-      .args(["-TERM", &pid.to_string()])
+      .args(["-TERM", &format!("-{}", process.pid)])
       .status()
       .await?;
-    if status.success() { Ok(()) } else { Err(std::io::Error::new(std::io::ErrorKind::Other, "kill failed")) }
+    if !status.success() { return Err(std::io::Error::new(std::io::ErrorKind::Other, "process-group TERM failed")); }
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let alive = Command::new("kill").args(["-0", &format!("-{}", process.pid)]).status().await?.success();
+    if alive {
+      let killed = Command::new("kill").args(["-KILL", &format!("-{}", process.pid)]).status().await?;
+      if !killed.success() { return Err(std::io::Error::new(std::io::ErrorKind::Other, "process-group KILL failed")); }
+    }
+    Ok(())
   }
 }
 
@@ -108,8 +121,8 @@ pub async fn cancel_safe_shell(execution_id: String) -> Result<bool, String> {
     map.remove(&id)
   };
 
-  if let Some(pid) = handle {
-    let _ = kill_process_tree(pid).await;
+  if let Some(process) = handle {
+    kill_process_tree(process).await.map_err(|error| format!("取消进程树失败: {error}"))?;
     return Ok(true);
   }
 
@@ -225,6 +238,10 @@ pub async fn run_safe_shell(
   {
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
   }
+  #[cfg(not(windows))]
+  {
+    cmd.process_group(0);
+  }
 
   log::info!(
     "[Sandbox] Executing command: {} in {:?}",
@@ -250,12 +267,28 @@ pub async fn run_safe_shell(
   // 启动进程
   let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
   let pid = child.id().unwrap_or_default();
+  #[cfg(windows)]
+  let job_handle: isize = {
+    use windows::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE};
+    let job = unsafe { CreateJobObjectW(None, None) }.map_err(|error| format!("创建 Job Object 失败: {error}"))?;
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+      SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info as *const _ as *const core::ffi::c_void,
+        std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32)
+        .map_err(|error| format!("配置 Job Object 失败: {error}"))?;
+      let raw_process = child.raw_handle().ok_or_else(|| "无法获取子进程句柄".to_string())?;
+      let process = windows::Win32::Foundation::HANDLE(raw_process);
+      AssignProcessToJobObject(job, process).map_err(|error| format!("绑定 Job Object 失败: {error}"))?;
+    }
+    job.0 as isize
+  };
 
   // 注册到全局 map（用于 cancel）
   let exec_id = options.execution_id.clone().unwrap_or_default();
   if !exec_id.trim().is_empty() {
     if let Ok(mut map) = RUNNING_SHELLS.lock() {
-      map.insert(exec_id.clone(), pid);
+      map.insert(exec_id.clone(), ManagedProcess { pid, #[cfg(windows)] job: job_handle });
     }
   }
 
@@ -277,6 +310,7 @@ pub async fn run_safe_shell(
   .await;
 
   let duration_ms = start_time.elapsed().as_millis() as u64;
+  let did_timeout = wait_result.is_err();
 
   let result = match wait_result {
     Ok(Ok(status)) => {
@@ -317,7 +351,10 @@ pub async fn run_safe_shell(
     Err(_) => {
       // 超时，尝试终止进程
       log::warn!("[Sandbox] Command timed out after {}ms", options.timeout_ms);
-      let _ = kill_process_tree(pid).await;
+      let process = ManagedProcess { pid, #[cfg(windows)] job: job_handle };
+      if let Err(error) = kill_process_tree(process).await {
+        return Err(format!("命令超时且终止进程树失败: {error}"));
+      }
       let _ = child.wait().await;
 
       Ok(ShellResult {
@@ -336,6 +373,11 @@ pub async fn run_safe_shell(
     if let Ok(mut map) = RUNNING_SHELLS.lock() {
       map.remove(&exec_id);
     }
+  }
+  #[cfg(windows)]
+  if !did_timeout {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    let _ = unsafe { CloseHandle(HANDLE(job_handle as *mut core::ffi::c_void)) };
   }
 
   result

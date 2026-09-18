@@ -39,8 +39,8 @@ export function RAGQueryInterface() {
 
   const openAgent = () => {
     const query = selectedKbId
-      ? `?knowledgeBase=${encodeURIComponent(selectedKbId)}&mode=agent`
-      : '?mode=agent';
+      ? `?knowledgeBase=${encodeURIComponent(selectedKbId)}`
+      : '';
     router.push(`/chat${query}`);
   };
 

@@ -8,9 +8,6 @@ import {
 } from './types';
 import { DocumentExtractionService } from '../document/DocumentExtractor';
 import { ChunkingService } from '../chunking/ChunkingService';
-import { EmbeddingService } from '../embedding/EmbeddingService';
-import type { EmbeddingServiceOptions } from '../embedding/types';
-import { RetrievalService } from '../retrieval/RetrievalService';
 import { generateId } from '../utils/id';
 
 /**
@@ -20,101 +17,10 @@ import { generateId } from '../utils/id';
 export class DocumentIndexer {
   private documentExtractor: DocumentExtractionService;
   private chunkingService: ChunkingService;
-  private embeddingService: EmbeddingService | null = null;
-  private retrievalService: RetrievalService;
-  private isInitialized = false;
 
   constructor() {
     this.documentExtractor = new DocumentExtractionService();
     this.chunkingService = new ChunkingService();
-    this.retrievalService = new RetrievalService();
-  }
-
-  /**
-   * 初始化嵌入服务
-   * 使用用户配置的嵌入策略和设置
-   */
-  private async initializeEmbeddingService(): Promise<void> {
-    if (this.embeddingService && this.isInitialized) {
-      return;
-    }
-
-    try {
-      // 加载用户配置的知识库设置
-      const { loadKnowledgeBaseConfig } = await import('../knowledgeBaseConfig');
-      const knowledgeBaseConfig = await loadKnowledgeBaseConfig();
-      const embeddingConfig = knowledgeBaseConfig.embedding;
-
-      console.log(`[DocumentIndexer] 使用配置的嵌入策略: ${embeddingConfig.strategy}`);
-
-      let serviceConfig: EmbeddingServiceOptions;
-
-      if (embeddingConfig.strategy === 'ollama') {
-        // 获取 Ollama URL
-        const { OllamaConfigService } = await import('../config/OllamaConfigService');
-        const apiUrl = embeddingConfig.apiUrl || await OllamaConfigService.getOllamaUrl();
-
-        serviceConfig = {
-          config: {
-            strategy: 'ollama',
-            apiUrl,
-            modelName: embeddingConfig.modelName || 'nomic-embed-text',
-            timeout: embeddingConfig.timeout || 30000,
-            maxBatchSize: embeddingConfig.maxBatchSize || 10
-          },
-          enableCache: true,
-          cacheSize: 1000
-        };
-
-        console.log(`[DocumentIndexer] 使用 Ollama URL: ${apiUrl}, 模型: ${embeddingConfig.modelName || 'nomic-embed-text'}`);
-      } else {
-        // local-onnx 策略
-        serviceConfig = {
-          config: {
-            strategy: 'local-onnx',
-            modelPath: embeddingConfig.modelPath,
-            modelName: embeddingConfig.modelName,
-            tokenizerPath: embeddingConfig.tokenizerPath,
-            timeout: embeddingConfig.timeout || 30000,
-            maxBatchSize: embeddingConfig.maxBatchSize || 32
-          },
-          enableCache: true,
-          cacheSize: 1000
-        };
-
-        console.log(`[DocumentIndexer] 使用本地 ONNX 模型: ${embeddingConfig.modelPath}`);
-      }
-
-      this.embeddingService = new EmbeddingService(serviceConfig);
-      await this.embeddingService.initialize();
-      this.isInitialized = true;
-
-      console.log(`[DocumentIndexer] 嵌入服务初始化完成 (策略: ${embeddingConfig.strategy})`);
-    } catch (error) {
-      console.error('[DocumentIndexer] 嵌入服务初始化失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 重新初始化嵌入服务
-   * 当用户更改嵌入配置时调用
-   */
-  async reinitializeEmbeddingService(): Promise<void> {
-    // 清理现有服务
-    if (this.embeddingService) {
-      try {
-        await this.embeddingService.cleanup();
-      } catch (error) {
-        console.warn('[DocumentIndexer] 清理嵌入服务时出错:', error);
-      }
-    }
-
-    this.embeddingService = null;
-    this.isInitialized = false;
-
-    // 重新初始化
-    await this.initializeEmbeddingService();
   }
 
   /**
@@ -134,8 +40,18 @@ export class DocumentIndexer {
       progress: 0,
       startTime: new Date()
     };
+    let expectedDocumentVersion: number | undefined;
 
     try {
+      const dbService = (await import('../database/services/DatabaseService')).DatabaseService.getInstance();
+      const db = dbService.getDbManager();
+      const docs = await db.select<{ index_version: number }>('SELECT index_version FROM documents WHERE id = ?', [documentId]);
+      if (!docs.length) throw new IndexingError('文档记录不存在', task.id, documentId);
+      expectedDocumentVersion = Number(docs[0].index_version || 0);
+      const now = Date.now();
+      await db.execute(`INSERT INTO document_index_tasks
+        (id, document_id, document_version, task_type, status, created_at, updated_at)
+        VALUES (?, ?, ?, 'lexical', 'running', ?, ?)`, [task.id, documentId, expectedDocumentVersion, now, now]);
       // 1. 文档内容提取。Embedding is deliberately not initialized here:
       // lexical search is the durable baseline and must become available even
       // when a local model is unavailable or slow to load.
@@ -174,11 +90,10 @@ export class DocumentIndexer {
           },
         };
       }
-      const scope = options.knowledgeBaseId ? `${documentId}_${options.knowledgeBaseId}` : documentId;
       parsed.blocks = parsed.blocks.map((b, i) => ({
         ...b,
         documentId,
-        id: `blk_${scope}_${i}`,
+        id: `blk_${documentId}_${i}`,
         blockIndex: i,
       }));
 
@@ -214,10 +129,9 @@ export class DocumentIndexer {
         throw new IndexingError('结构化分块结果为空', task.id, documentId);
       }
 
-      // 给同一文档在不同知识库中的索引使用稳定且不冲突的 ID。
+      // Chunks belong to the document. Knowledge bases only grant access.
       retrievalChunks.forEach((chunk, i) => {
-        chunk.id = `chk_${scope}_${i}`;
-        chunk.knowledgeBaseId = options.knowledgeBaseId;
+        chunk.id = `pending_${documentId}_${i}`;
         chunk.metadata = {
           ...chunk.metadata,
           documentHash: parsed!.metadata.fileHash,
@@ -225,102 +139,36 @@ export class DocumentIndexer {
           chunkSchemaVersion: CHUNK_SCHEMA_VERSION,
         };
       });
-      let embeddingFingerprint: string | null = null;
-
       // 3. 先发布原文和 FTS。embedding 是增强能力，失败不能让文档消失。
       task.status = IndexingStatus.STORING;
       task.progress = 50;
       options.progressCallback?.(task);
 
-      if (options.knowledgeBaseId) {
+      {
         const { EvidenceStore } = await import('../rag/evidenceStore');
-        // Keep the currently published lexical index until the replacement
-        // transaction succeeds. Vector cleanup happens only after publish.
-        const oldIds = await EvidenceStore.getDocumentIndexIds(documentId, options.knowledgeBaseId);
         await EvidenceStore.replaceDocumentIndex({
           documentId,
           knowledgeBaseId: options.knowledgeBaseId,
-          blocks: parsed.blocks,
           chunks: retrievalChunks,
+          taskId: task.id,
+          expectedDocumentVersion,
         });
-        if (oldIds.length) {
-          await this.retrievalService.removeVectors(oldIds).catch(() => {});
-        }
       }
 
-      // 4. Publish first, then initialize and generate optional embeddings.
-      // A failure here is a semantic-index failure only; the searchable
-      // lexical batch published above remains active.
-      task.status = IndexingStatus.EMBEDDING;
-      task.progress = 70;
-      options.progressCallback?.(task);
-      let validChunks: typeof retrievalChunks = [];
-      if (!this.embeddingService || !this.isInitialized) {
-        try {
-          await this.initializeEmbeddingService();
-        } catch (error) {
-          console.warn('[DocumentIndexer] embedding unavailable; keeping lexical index:', error);
-          this.embeddingService = null;
-          this.isInitialized = false;
-        }
-      }
-      embeddingFingerprint = this.embeddingService?.getEmbeddingFingerprint() || null;
-      if (this.embeddingService?.isUsableForRag()) {
-        try {
-          const embeddings = await this.embeddingService.generateEmbeddings(
-            retrievalChunks.map((c) => c.searchText)
-          );
-          retrievalChunks.forEach((chunk, i) => { chunk.embedding = embeddings[i]; });
-          validChunks = retrievalChunks.filter((c) => Array.isArray(c.embedding) && c.embedding.length > 0);
-        } catch (error) {
-          console.warn('[DocumentIndexer] embedding failed; keeping lexical index:', error);
-        }
-      }
-
-      if (validChunks.length > 0) {
-        try {
-          await this.retrievalService.addVectors(
-            validChunks.map((chunk) => ({
-            id: chunk.id,
-            embedding: chunk.embedding!,
-            content: chunk.sourceText,
-            metadata: {
-              ...chunk.metadata,
-              documentId,
-              knowledgeBaseId: options.knowledgeBaseId,
-              embeddingFingerprint,
-              sourceStartBlock: chunk.sourceStartBlock,
-              sourceEndBlock: chunk.sourceEndBlock,
-              searchText: chunk.searchText,
-            },
-            }))
-          );
-        } catch (error) {
-          // The lexical batch is already published and is the required
-          // baseline. A vector write failure must downgrade semantic search,
-          // rather than turn an otherwise readable document into a failed
-          // import or leave the mapping stuck in `failed`.
-          console.warn('[DocumentIndexer] vector persistence failed; keeping lexical index:', error);
-          validChunks = [];
-        }
-      }
-
-      const semanticIndexed = validChunks.length > 0;
       try {
         const dbService = (await import('../database/services/DatabaseService')).DatabaseService.getInstance();
         await dbService.getDbManager().execute(
-          `UPDATE documents SET is_indexed = 1, file_hash = ?, parser_version = ?, chunk_schema_version = ?, embedding_model = ?, embedding_dimension = ?, embedding_fingerprint = ?, updated_at = ? WHERE id = ?`,
+          `UPDATE documents SET is_indexed = 1, file_hash = ?, parser_version = ?, chunk_schema_version = ?, updated_at = ? WHERE id = ?`,
           [
             parsed.metadata.fileHash,
             PARSER_VERSION,
             CHUNK_SCHEMA_VERSION,
-            semanticIndexed ? this.embeddingService?.getStrategyName() : null,
-            semanticIndexed ? this.embeddingService?.getDimension() : null,
-            semanticIndexed ? embeddingFingerprint : null,
             Date.now(),
             documentId,
           ]
         );
+        const { semanticIndexQueue } = await import('./SemanticIndexQueue');
+        await semanticIndexQueue.enqueue(documentId);
       } catch (e) {
         console.warn('[DocumentIndexer] 更新 documents 版本字段失败:', e);
       }
@@ -365,6 +213,13 @@ export class DocumentIndexer {
       options.progressCallback?.(task);
 
       console.error(`文档索引失败: ${filePath}`, error);
+      try {
+        const dbService = (await import('../database/services/DatabaseService')).DatabaseService.getInstance();
+        await dbService.getDbManager().execute(
+          "UPDATE document_index_tasks SET status = 'failed', error = ?, updated_at = ? WHERE id = ? AND status = 'running'",
+          [task.error, Date.now(), task.id],
+        );
+      } catch { /* the task may not have been created */ }
 
       return {
         taskId: task.id,
@@ -449,10 +304,7 @@ export class DocumentIndexer {
 
   async removeDocumentIndex(documentId: string, knowledgeBaseId?: string): Promise<void> {
     const { EvidenceStore } = await import('../rag/evidenceStore');
-    const ids = await EvidenceStore.deleteDocumentIndex(documentId, knowledgeBaseId);
-    if (ids.length) {
-      await this.retrievalService.removeVectors(ids).catch(() => {});
-    }
+    await EvidenceStore.deleteDocumentIndex(documentId);
   }
 
   /**
@@ -524,28 +376,6 @@ let globalDocumentIndexer: DocumentIndexer | null = null;
 export function getDocumentIndexer(): DocumentIndexer {
   if (!globalDocumentIndexer) {
     globalDocumentIndexer = new DocumentIndexer();
-
-    // 监听知识库配置变更
-    const setupConfigListener = async () => {
-      try {
-        const { getKnowledgeBaseConfigManager } = await import('../knowledgeBaseConfig');
-        const configManager = getKnowledgeBaseConfigManager();
-
-        configManager.addListener(async (config) => {
-          console.log('[DocumentIndexer] 检测到知识库配置变更，重新初始化嵌入服务...');
-          try {
-            await globalDocumentIndexer?.reinitializeEmbeddingService();
-            console.log('[DocumentIndexer] 嵌入服务重新初始化完成');
-          } catch (error) {
-            console.error('[DocumentIndexer] 重新初始化嵌入服务失败:', error);
-          }
-        });
-      } catch (error) {
-        console.warn('[DocumentIndexer] 设置配置监听器失败:', error);
-      }
-    };
-
-    setupConfigListener();
   }
 
   return globalDocumentIndexer;

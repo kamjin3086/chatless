@@ -3,7 +3,7 @@ use ndarray::Array2;
 use ort::{session::Session, value::Tensor};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
-use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
+use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
 pub struct OnnxState {
   pub session: Mutex<Option<Session>>,
@@ -29,19 +29,25 @@ pub fn tokenize_batch(
   let mut tokenizer =
     Tokenizer::from_file(&tokenizer_path).map_err(|e| format!("Failed to load tokenizer: {e}"))?;
 
-  // Configure padding & truncation
+  // Validate with the real tokenizer. Silently truncating changes the text
+  // represented by a vector while the lexical/citation path keeps the full
+  // chunk, which makes retrieval evidence unreliable.
+  tokenizer.with_padding(None);
+  tokenizer.with_truncation(None).map_err(|e| e.to_string())?;
+  let lengths = tokenizer.encode_batch(texts.clone(), true)
+    .map_err(|e| format!("Tokenization failed: {e}"))?
+    .into_iter().map(|encoding| encoding.len()).collect::<Vec<_>>();
+  if let Some((index, length)) = lengths.iter().enumerate().find(|(_, length)| **length > max_length) {
+    return Err(format!("Embedding input {index} has {length} tokens, exceeding model limit {max_length}; rebuild with smaller chunks"));
+  }
+
+  // Configure padding only after every input passed the length check.
   tokenizer
     .with_padding(Some(PaddingParams {
       strategy: PaddingStrategy::BatchLongest,
       pad_to_multiple_of: Some(8),
       ..Default::default()
-    }))
-    .with_truncation(Some(TruncationParams {
-      max_length,
-      strategy: tokenizers::TruncationStrategy::LongestFirst,
-      ..Default::default()
-    }))
-    .map_err(|e| e.to_string())?;
+    }));
 
   // Encode batch
   let encodings = tokenizer

@@ -13,7 +13,7 @@ export function getEvidenceRegistry(runId: string): Map<string, Evidence> {
 
 export function registerEvidence(runId: string, items: Evidence[]): Evidence[] {
   const reg = getEvidenceRegistry(runId);
-  const start = reg.size;
+  const start = Math.max(0, ...Array.from(reg.keys()).map((id) => Number(id.slice(1)) || 0));
   return items.map((item, i) => {
     // Evidence IDs are scoped to an Agent run. Never reuse an ID from a
     // previous search round, otherwise a later search silently changes the
@@ -23,6 +23,14 @@ export function registerEvidence(runId: string, items: Evidence[]): Evidence[] {
     reg.set(id, next);
     return next;
   });
+}
+
+/** Restore immutable citation snapshots when a stopped run is continued. */
+export function restoreEvidence(runId: string, items: Evidence[]): void {
+  const reg = getEvidenceRegistry(runId);
+  for (const item of items) {
+    if (item.id && !reg.has(item.id)) reg.set(item.id, { ...item });
+  }
 }
 
 export function listEvidence(runId: string): Evidence[] {

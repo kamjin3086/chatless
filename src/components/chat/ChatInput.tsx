@@ -65,13 +65,14 @@ interface ChatInputProps {
       };
       contextData: string;
       sourceContent?: string;
+      sourceBytes?: Uint8Array;
     },
     knowledgeBase?: {
       id: string;
       name: string;
     },
     options?: { images?: string[]; planOnly?: boolean }
-  ) => void;
+  ) => void | Promise<void>;
   onImageUpload?: (file: File) => void;
   onFileUpload?: (file: File) => void;
   isLoading?: boolean;
@@ -127,6 +128,7 @@ export function ChatInput({
     fullContent: string;
     summary: string;
     fileSize: number;
+    bytes: Uint8Array;
   } | null>(null);
 
   // 知识库选择相关状态
@@ -591,13 +593,9 @@ export function ChatInput({
       } catch { /* noop */ }
     }
 
-    // 规则（明确区分）：
-    // - chat -> agent 只能通过：手动切换，或在 @/# 面板中“选择”了 MCP/Skill（见面板 onSelect）
-    // - 仅输入文本中包含 @xxx / #xxx 不触发自动切换
-
     if (attachedImages.length > 0) {
       const imagesData = attachedImages.map(img => img.base64Data);
-      onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData, planOnly });
+      await onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData, planOnly });
     } else if (editingMessage) {
       // 编辑模式下，保留原引用信息
       const docRef = editingMessage.documentReference
@@ -606,7 +604,7 @@ export function ChatInput({
             contextData: editingMessage.contextData || ''
           }
         : undefined;
-      onSendMessage(
+      await onSendMessage(
         userMessage,
         docRef,
         editingMessage.knowledgeBaseReference,
@@ -625,7 +623,7 @@ export function ChatInput({
         }
       } catch { /* noop */ }
 
-      onSendMessage(contentToSend, {
+      await onSendMessage(contentToSend, {
         documentReference: {
           fileName: attachedDocument.name,
           fileType: attachedDocument.name.split('.').pop() || 'unknown',
@@ -633,17 +631,22 @@ export function ChatInput({
           summary: attachedDocument.summary
         },
         contextData: attachedDocument.content,
-        sourceContent: attachedDocument.fullContent
+        sourceContent: attachedDocument.fullContent,
+        sourceBytes: attachedDocument.bytes,
       }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
     } else {
       // 普通消息，如果有选中的知识库则传递
-      onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
+      await onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
     }
 
-    // 补充已经写入运行队列后即可清空文字草稿；图片被拒绝排队时保留附件，避免误丢。
-    if (effectiveLoading && attachedImages.length === 0) {
+    // onSendMessage only resolves after the supplement and its attachments are
+    // durable, so every accepted input can now be cleared consistently.
+    if (effectiveLoading) {
       setInputValue('');
       setAttachedDocument(null);
+      setAttachedImages([]);
+      const convId = conversationId || useChatStore.getState().currentConversationId;
+      if (convId) clearInputDraft(convId);
     }
 
     // 不立即把高度重置为 auto，保持用户手动高度（或让 onStart 信号处理）
@@ -744,7 +747,8 @@ export function ChatInput({
           content: DocumentParser.cleanDocumentContent(preview),
           fullContent: DocumentParser.cleanDocumentContent(result.content),
           summary,
-          fileSize: file.size
+          fileSize: file.size,
+          bytes: new Uint8Array(await file.arrayBuffer()),
         });
       } else {
         // 解析失败，显示错误信息

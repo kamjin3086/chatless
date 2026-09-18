@@ -100,8 +100,6 @@ export interface Conversation {
   updated_at: number;
   messages: Message[];
   model_id: string;
-  /** 会话级工具模式：chat=纯聊天（默认不注入 tools）；agent=允许注入 tools 并进行工具调用 */
-  tool_mode?: 'chat' | 'agent';
   /** 新增：精确保存 provider 名称 */
   model_provider?: string;
   /** 新增：如 provider/modelId 这样的全名 */
@@ -122,4 +120,4 @@ export interface Conversation {
     variableValues?: Record<string, string>;
     mode?: 'permanent' | 'temporary' | 'oneOff';
   } | null;
-} 
+}

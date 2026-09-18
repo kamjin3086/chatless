@@ -12,6 +12,7 @@ import { ToolInvocation } from './ToolInvocation';
 import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
 import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult } from './toolResultDiagnostics';
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
+import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
 function normalizeSlashPath(p: unknown): string {
   if (typeof p === 'string') return p.trim().replace(/\\/g, '/');
@@ -147,6 +148,7 @@ function isPlanOnlyAllowed(server: string, tool: string): boolean {
   const tl = String(tool || '').toLowerCase();
   if (isFilesystemServer(srv)) return /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(tl);
   if (srv === 'knowledge') return /^(list|search|read)$/.test(tl);
+  if (srv === 'tool_result') return tl === 'read';
   if (srv === 'web_search' || srv === 'web') return /^(search|fetch)$/.test(tl);
   if (srv === 'tools') return tl === 'search';
   if (srv === 'skill') return /^(list|guide|use|read_file|list_files|check_deps)$/.test(tl);
@@ -168,6 +170,49 @@ function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
 
 function isDirectoryScopedFilesystemTool(tool: string): boolean {
   return isDirectorySemanticFsTool(tool);
+}
+
+async function waitForCallApproval(params: {
+  id: string; runId: string; conversationId: string; callId?: string; server: string; tool: string;
+  args: Record<string, unknown>; scope?: Record<string, unknown>;
+}): Promise<boolean> {
+  const db = DatabaseService.getInstance().getDbManager();
+  const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  if (tauri) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('agent_request_approval', { db: db.getConnectionUrl(), approvalId: params.id,
+      runId: params.runId, conversationId: params.conversationId, callId: params.callId,
+      server: params.server, tool: params.tool, normalizedArgs: JSON.stringify(params.args),
+      scope: JSON.stringify(params.scope || {}), createdAt: Date.now() });
+  } else {
+    await db.executeTransaction(async (tx) => {
+      await tx.execute(`INSERT OR REPLACE INTO agent_approvals
+        (id, run_id, conversation_id, call_id, server, tool, normalized_args, scope, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`, [params.id, params.runId, params.conversationId,
+        params.callId || null, params.server, params.tool, JSON.stringify(params.args), JSON.stringify(params.scope || {}), Date.now()]);
+      await tx.execute("UPDATE agent_runs SET status = 'waiting_approval', ended_at = NULL WHERE id = ?", [params.runId]);
+    });
+  }
+  return new Promise<boolean>((resolve) => {
+    const decide = (approved: boolean) => {
+      void (async () => {
+        if (tauri) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          return invoke<boolean>('agent_decide_approval', { db: db.getConnectionUrl(), approvalId: params.id,
+            status: approved ? 'approved' : 'rejected', decidedAt: Date.now() });
+        }
+        return db.executeTransaction(async (tx) => {
+          await tx.execute("UPDATE agent_approvals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
+            [approved ? 'approved' : 'rejected', Date.now(), params.id]);
+          await tx.execute("UPDATE agent_runs SET status = 'running' WHERE id = ? AND status = 'waiting_approval'", [params.runId]);
+          return true;
+        });
+      })().then((changed) => resolve(Boolean(changed) && approved)).catch(() => resolve(false));
+    };
+    useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
+      server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
+      onApprove: () => decide(true), onReject: () => decide(false) });
+  });
 }
 
 /**
@@ -251,6 +296,7 @@ export class ToolExecutionPipeline {
 
     // 授权 + filesystem allowlist gate（统一文件系统安全边界）
     let execInvocation: ToolInvocation = invocation;
+    let restoreFilesystemAllowlist: (() => Promise<void>) | undefined;
     const srvLower = normalizeServerName(server);
 
     // 预处理：shell_executor 的 workingDir 和 command 支持 @WorkDir / @Alias / 相对路径
@@ -436,19 +482,9 @@ export class ToolExecutionPipeline {
 
           if (needAuth) {
             markPendingAuth({ assistantMessageId, server, tool, cardId });
-            const authorized = await new Promise<boolean>((resolve) => {
-              const authId = `${assistantMessageId}:${cardId}`;
-              useAuthorizationStore.getState().addPendingAuthorization({
-                id: authId,
-                messageId: assistantMessageId,
-                server,
-                tool,
-                args: args || {},
-                createdAt: Date.now(),
-                onApprove: () => resolve(true),
-                onReject: () => resolve(false),
-              });
-            });
+            const authorized = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
+              runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
+              args: args || {}, scope: { operation: op, path: primaryAbsolutePath } });
 
             if (this.coordinator.isMessageCancelled(assistantMessageId)) {
               this.coordinator.markToolCallComplete(callKey, 'failed');
@@ -497,30 +533,13 @@ export class ToolExecutionPipeline {
               return denied;
             }
 
-            // 用户确认后：把目录加入 allowlist（或补齐权限），并同步到 Rust 后端
+            // “允许本次” is an execution-scoped grant. It must not mutate
+            // the persistent allowlist or turn one approval into future trust.
             try {
               const st = useFilesystemAllowlistStore.getState();
               const hasDirArg = typeof (args as any)?.dir === 'string';
               const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
-
-              // 规则：
-              // - dir+pattern 或 ls/mkdir 这类“目录语义”工具：授权目录本身（避免更具体条目覆盖父目录权限造成 forbidden）
-              // - 其余（文件语义）：授权其所在目录（目录白名单模型）
-              if (hasDirArg || dirScopedByTool) {
-                await st.upsertDirectory({ directoryPath: primaryAbsolutePath, op: op as any, source: 'manual' } as any);
-              } else {
-                await st.upsertDirectoryForPath({ absolutePath: primaryAbsolutePath, op: op as any, source: 'manual' });
-              }
-
-              // 删除动作需要“读取目录/枚举条目”才能执行（尤其 dir+pattern / 删除目录），否则后端会先 Read 再 Delete。
-              // UX：用户既然确认了 delete，这里为同一目录补齐 read（不扩大到其它目录）。
-              if (op === 'delete') {
-                if (hasDirArg || dirScopedByTool) {
-                  await st.upsertDirectory({ directoryPath: primaryAbsolutePath, op: 'read' as any, source: 'manual' } as any);
-                } else {
-                  await st.upsertDirectoryForPath({ absolutePath: primaryAbsolutePath, op: 'read' as any, source: 'manual' });
-                }
-              }
+              const grantPath = hasDirArg || dirScopedByTool ? primaryAbsolutePath : dirnamePath(primaryAbsolutePath);
               const allowDeleteInWorkDir =
                 op === 'delete' && !!workingDir && isPathWithinDirectory({ absolutePath: primaryAbsolutePath, directoryPath: workingDir });
 
@@ -538,7 +557,16 @@ export class ToolExecutionPipeline {
                     } as any,
                   ]
                 : [];
-              await syncFilesystemAllowlistToBackend([...st.directories, ...extra] as any);
+              const oneShot = {
+                id: `approval:${assistantMessageId}:${cardId}`, path: grantPath,
+                permissions: { read: op === 'read' || op === 'delete', write: op === 'write',
+                  create: op === 'create', delete: op === 'delete' },
+                source: 'manual', createdAt: Date.now(), updatedAt: Date.now(),
+              } as any;
+              await syncFilesystemAllowlistToBackend([...st.directories, ...extra, oneShot] as any);
+              restoreFilesystemAllowlist = async () => {
+                await syncFilesystemAllowlistToBackend([...useFilesystemAllowlistStore.getState().directories, ...extra] as any);
+              };
             } catch {
               // ignore: best-effort
             }
@@ -579,19 +607,9 @@ export class ToolExecutionPipeline {
       const effectiveArgs = (execInvocation.args || args || {}) as any;
       if (needsAuthorization(server, tool, autoAuth, effectiveArgs || {})) {
         markPendingAuth({ assistantMessageId, server, tool, cardId });
-        const authorized = await new Promise<boolean>((resolve) => {
-          const authId = `${assistantMessageId}:${cardId}`;
-          useAuthorizationStore.getState().addPendingAuthorization({
-            id: authId,
-            messageId: assistantMessageId,
-            server,
-            tool,
-            args: effectiveArgs || {},
-            createdAt: Date.now(),
-            onApprove: () => resolve(true),
-            onReject: () => resolve(false),
-          });
-        });
+        const authorized = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
+          runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
+          args: effectiveArgs || {} });
         if (this.coordinator.isMessageCancelled(assistantMessageId)) {
           this.coordinator.markToolCallComplete(callKey, 'failed');
           return { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId };
@@ -629,28 +647,12 @@ export class ToolExecutionPipeline {
           return denied;
         }
 
-        // UX：shell_executor 同意后，若提供了 workingDir，则“记住该工作目录”（降低后续重复确认）
-        try {
-          const srv = String(server || '').toLowerCase();
-          if (srv === 'shell_executor') {
-            const wd = typeof (effectiveArgs as any)?.workingDir === 'string' ? String((effectiveArgs as any).workingDir) : '';
-            const cmd = typeof (effectiveArgs as any)?.command === 'string' ? String((effectiveArgs as any).command) : '';
-            if (wd.trim() && cmd.trim()) {
-              // 仅对低风险命令进行“记忆”，高风险仍会被 isForcedApproval 拦下
-              if (!isForcedApproval(server, tool, effectiveArgs || {}) && isShellCommandTrusted({ command: cmd, workingDir: wd })) {
-                // already trusted: no-op
-              } else {
-                // 只记目录，不记具体命令；后续仍受 SAFE_EXECUTABLES 限制
-                await useShellAuthStore.getState().addTrustedWorkingDir(wd);
-              }
-            }
-          }
-        } catch {
-          // ignore
-        }
+        // A one-time shell approval is intentionally not persisted as a
+        // trusted directory. Long-lived trust is changed only in settings.
       }
     }
 
+    try {
     const cfg = await getAgentExperienceConfig();
     const srvForRetry = normalizeServerName(server).toLowerCase();
     const toolForRetry = String(tool || '').toLowerCase();
@@ -830,6 +832,9 @@ export class ToolExecutionPipeline {
     markError({ assistantMessageId, server, tool, cardId }, summary.message);
     this.coordinator.markToolCallComplete(callKey, 'failed');
     return summary;
+    } finally {
+      await restoreFilesystemAllowlist?.().catch(() => {});
+    }
   }
 }
 

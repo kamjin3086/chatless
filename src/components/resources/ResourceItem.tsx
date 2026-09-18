@@ -60,6 +60,8 @@ export function ResourceItem({
   onDelete,
   isIndexed,
   chunkCount,
+  lexicalStatus,
+  semanticStatus,
   knowledgeBases = [],
   hideIndexedStatus = false, // 新增参数，默认为false
   source,
@@ -104,6 +106,22 @@ export function ResourceItem({
             {isChatFile && (
               <span className="rounded px-1 py-0.5 text-[10px] border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300">
                 聊天
+              </span>
+            )}
+            {lexicalStatus && (
+              <span className={`rounded px-1 py-0.5 text-[10px] border ${lexicalStatus === 'ready'
+                ? 'border-emerald-200/70 bg-emerald-50/70 text-emerald-700 dark:text-emerald-400'
+                : lexicalStatus === 'failed' ? 'border-red-200/70 bg-red-50/70 text-red-700 dark:text-red-400'
+                : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
+                关键词{lexicalStatus === 'ready' ? '可用' : lexicalStatus === 'failed' ? '失败' : '处理中'}
+              </span>
+            )}
+            {semanticStatus && (
+              <span className={`rounded px-1 py-0.5 text-[10px] border ${semanticStatus === 'ready'
+                ? 'border-blue-200/70 bg-blue-50/70 text-blue-700 dark:text-blue-400'
+                : semanticStatus === 'failed' ? 'border-amber-200/70 bg-amber-50/70 text-amber-700 dark:text-amber-400'
+                : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
+                语义{semanticStatus === 'ready' ? '可用' : semanticStatus === 'failed' ? '不可用' : '等待'}
               </span>
             )}
             {!hideIndexedStatus && knowledgeBases && knowledgeBases.length > 0 && (
@@ -240,4 +258,4 @@ export function ResourceItem({
       </Dialog>
     </TooltipProvider>
   );
-} 
+}

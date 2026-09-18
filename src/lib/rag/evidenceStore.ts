@@ -1,252 +1,137 @@
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
-import type { RetrievalChunk, SourceBlock } from './evidenceTypes';
-import { sha256Hex } from '@/lib/utils/sha256';
+import type { RetrievalChunk } from './evidenceTypes';
 import { tokenizeForFts } from '@/lib/retrieval/tokenizeForFts';
+import { generateId } from '@/lib/utils/id';
 
+/** Persistence boundary for the single document-owned chunk representation. */
 export const EvidenceStore = {
-  async getDocumentIndexIds(documentId: string, knowledgeBaseId?: string): Promise<string[]> {
+  async getDocumentIndexIds(documentId: string): Promise<string[]> {
     const db = DatabaseService.getInstance().getDbManager();
-    const rows = knowledgeBaseId
-      ? await db.select<{ id: string }>(
-          `SELECT id FROM retrieval_chunks WHERE document_id = ? AND knowledge_base_id = ?`,
-          [documentId, knowledgeBaseId],
-        )
-      : await db.select<{ id: string }>(
-          `SELECT id FROM retrieval_chunks WHERE document_id = ?`,
-          [documentId],
-        );
-    return (rows || []).map((row) => row.id);
+    const rows = await db.select<{ id: string }>(
+      `SELECT c.id FROM document_chunks c JOIN documents d ON d.active_index_batch_id = c.batch_id
+        WHERE c.document_id = ? ORDER BY c.chunk_index`, [documentId],
+    );
+    return rows.map((row) => row.id);
   },
 
   async replaceDocumentIndex(params: {
     documentId: string;
-    knowledgeBaseId: string;
-    blocks: SourceBlock[];
+    knowledgeBaseId?: string;
     chunks: RetrievalChunk[];
-  }): Promise<void> {
+    expectedFileHash?: string;
+    taskId: string;
+    expectedDocumentVersion: number;
+  }): Promise<string> {
+    if (!params.chunks.length) throw new Error('文档分块为空，拒绝发布索引');
     const db = DatabaseService.getInstance().getDbManager();
-    const ftsTexts = await Promise.all(params.chunks.map((c) => tokenizeForFts(c.searchText)));
-    const contentHashes = await Promise.all(params.chunks.map((c) => sha256Hex(c.sourceText)));
+    const batchId = `batch_${generateId()}`;
     const createdAt = Date.now();
-    // The SQL plugin uses a connection pool. A WebView-side transaction cannot
-    // guarantee that BEGIN, the writes, and COMMIT reach one connection, so
-    // desktop publication is a single Rust SQLx transaction.
+    const ftsTexts = await Promise.all(params.chunks.map((chunk) => tokenizeForFts(chunk.searchText)));
+    const chunks = params.chunks.map((chunk, index) => ({
+      id: `chunk_${batchId}_${index}`,
+      chunkIndex: index,
+      sourceText: chunk.sourceText,
+      searchText: chunk.searchText,
+      locator: {
+        page: chunk.metadata.pageStart,
+        pageEnd: chunk.metadata.pageEnd,
+        sectionPath: chunk.metadata.sectionPath,
+        lineStart: chunk.metadata.lineStart,
+        lineEnd: chunk.metadata.lineEnd,
+        paragraphIndex: chunk.sourceStartBlock,
+      },
+      metadata: { ...chunk.metadata, sourceStartBlock: chunk.sourceStartBlock, sourceEndBlock: chunk.sourceEndBlock },
+      ftsText: ftsTexts[index] || chunk.searchText,
+    }));
+
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('publish_document_index', {
-        db: db.getConnectionUrl(),
-        documentId: params.documentId,
-        knowledgeBaseId: params.knowledgeBaseId,
-        createdAt,
-        blocks: params.blocks.map((block) => ({
-          id: block.id,
-          blockIndex: block.blockIndex,
-          type: block.type,
-          text: block.text,
-          page: block.page,
-          sectionPath: block.sectionPath,
-          lineStart: block.lineStart,
-          lineEnd: block.lineEnd,
-          charStart: block.charStart,
-          charEnd: block.charEnd,
-          metadata: block.metadata || {},
-        })),
-        chunks: params.chunks.map((chunk, index) => ({
-          id: chunk.id,
-          sourceStartBlock: chunk.sourceStartBlock,
-          sourceEndBlock: chunk.sourceEndBlock,
-          sourceText: chunk.sourceText,
-          searchText: chunk.searchText,
-          metadata: chunk.metadata || {},
-          contentHash: contentHashes[index],
-          chunkIndex: chunk.metadata.chunkIndex ?? index,
-          ftsText: ftsTexts[index] || chunk.searchText,
-        })),
+      await invoke('publish_document_batch', {
+        db: db.getConnectionUrl(), documentId: params.documentId, batchId,
+        expectedFileHash: params.expectedFileHash, taskId: params.taskId,
+        expectedDocumentVersion: params.expectedDocumentVersion, chunks, createdAt,
       });
-      return;
+      return batchId;
     }
+
+    // Browser tests use one in-memory connection. Production publication is
+    // always the Rust command above because the SQL plugin owns a pool.
     await db.executeTransaction(async (tx) => {
-      const mapping = await tx.select(
-        `SELECT id FROM doc_knowledge_mappings
-          WHERE document_id = ? AND knowledge_base_id = ?
-          LIMIT 1`,
-        [params.documentId, params.knowledgeBaseId],
+      const access = await tx.select(
+        `SELECT 1 FROM doc_knowledge_mappings WHERE document_id = ?
+         UNION ALL SELECT 1 FROM conversation_document_mappings WHERE document_id = ? LIMIT 1`,
+        [params.documentId, params.documentId],
       );
-      if (!mapping.length) {
-        throw new Error('知识库文档关系已移除，取消发布索引');
+      if (!access.length) throw new Error('文档已取消挂载，取消发布索引');
+      const validTask = await tx.select(`SELECT 1 FROM document_index_tasks t JOIN documents d ON d.id = t.document_id
+        WHERE t.id = ? AND t.document_id = ? AND t.task_type = 'lexical' AND t.status = 'running' AND d.index_version = ?`,
+      [params.taskId, params.documentId, params.expectedDocumentVersion]);
+      if (!validTask.length) throw new Error('索引任务已取消或文档版本已变化');
+      await tx.execute(`INSERT INTO document_index_batches (id, document_id, state, created_at)
+        VALUES (?, ?, 'staging', ?)`, [batchId, params.documentId, createdAt]);
+      for (const chunk of chunks) {
+        await tx.execute(`INSERT INTO document_chunks
+          (id, document_id, batch_id, chunk_index, source_text, search_text, locator, metadata)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [chunk.id, params.documentId, batchId, chunk.chunkIndex,
+          chunk.sourceText, chunk.searchText, JSON.stringify(chunk.locator), JSON.stringify(chunk.metadata)]);
+        await tx.execute('INSERT INTO document_chunks_fts (chunk_id, search_text) VALUES (?, ?)', [chunk.id, chunk.ftsText]);
       }
-      await tx.execute(
-        `DELETE FROM retrieval_chunks_fts WHERE chunk_id IN (SELECT id FROM retrieval_chunks WHERE document_id = ? AND knowledge_base_id = ?)`,
-        [params.documentId, params.knowledgeBaseId]
-      );
-      await tx.execute(
-        `DELETE FROM retrieval_chunks WHERE document_id = ? AND knowledge_base_id = ?`,
-        [params.documentId, params.knowledgeBaseId]
-      );
-      await tx.execute(
-        `DELETE FROM source_blocks WHERE document_id = ? AND knowledge_base_id = ?`,
-        [params.documentId, params.knowledgeBaseId]
-      );
-      await tx.execute(
-        `DELETE FROM knowledge_chunks WHERE document_id = ? AND knowledge_base_id = ?`,
-        [params.documentId, params.knowledgeBaseId]
-      );
-
-      for (const block of params.blocks) {
-        await tx.execute(
-          `INSERT INTO source_blocks (
-            id, document_id, knowledge_base_id, block_index, block_type, text, page, section_path,
-            line_start, line_end, char_start, char_end, metadata, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            block.id,
-            params.documentId,
-            params.knowledgeBaseId,
-            block.blockIndex,
-            block.type,
-            block.text,
-            block.page ?? null,
-            block.sectionPath ? JSON.stringify(block.sectionPath) : null,
-            block.lineStart ?? null,
-            block.lineEnd ?? null,
-            block.charStart ?? null,
-            block.charEnd ?? null,
-            JSON.stringify(block.metadata || {}),
-            createdAt,
-          ]
-        );
-      }
-
-      for (let index = 0; index < params.chunks.length; index += 1) {
-        const chunk = params.chunks[index];
-        await tx.execute(
-          `INSERT INTO retrieval_chunks (
-            id, document_id, knowledge_base_id, source_start_block, source_end_block,
-            source_text, search_text, metadata, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            chunk.id,
-            params.documentId,
-            params.knowledgeBaseId,
-            chunk.sourceStartBlock,
-            chunk.sourceEndBlock,
-            chunk.sourceText,
-            chunk.searchText,
-            JSON.stringify(chunk.metadata || {}),
-            createdAt,
-          ]
-        );
-        await tx.execute(
-          `INSERT INTO knowledge_chunks (
-            id, knowledge_base_id, document_id, content, chunk_index, content_hash, metadata, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            chunk.id,
-            params.knowledgeBaseId,
-            params.documentId,
-            chunk.sourceText,
-            chunk.metadata.chunkIndex ?? 0,
-            contentHashes[index],
-            JSON.stringify(chunk.metadata || {}),
-            createdAt,
-          ]
-        );
-        const ftsText = ftsTexts[index] || chunk.searchText;
-        await tx.execute(
-          `INSERT INTO retrieval_chunks_fts (chunk_id, search_text) VALUES (?, ?)`,
-          [chunk.id, ftsText]
-        );
-      }
+      await tx.execute("UPDATE document_index_batches SET state = 'retired' WHERE document_id = ? AND state = 'active'", [params.documentId]);
+      await tx.execute("UPDATE document_index_batches SET state = 'active', activated_at = ? WHERE id = ?", [createdAt, batchId]);
+      await tx.execute(`UPDATE documents SET active_index_batch_id = ?, index_version = index_version + 1,
+        lexical_status = 'ready', semantic_status = 'pending', is_indexed = 1, updated_at = ? WHERE id = ?`,
+      [batchId, createdAt, params.documentId]);
+      await tx.execute("UPDATE doc_knowledge_mappings SET status = 'indexed', indexed_at = ? WHERE document_id = ?", [createdAt, params.documentId]);
+      await tx.execute("UPDATE document_index_tasks SET status = 'completed', updated_at = ?, error = NULL WHERE id = ?", [createdAt, params.taskId]);
+      await tx.execute(`DELETE FROM document_chunks_fts WHERE chunk_id IN (
+        SELECT c.id FROM document_chunks c JOIN document_index_batches b ON b.id = c.batch_id
+        WHERE b.document_id = ? AND b.state = 'retired')`, [params.documentId]);
+      await tx.execute("DELETE FROM document_index_batches WHERE document_id = ? AND state = 'retired'", [params.documentId]);
     });
+    return batchId;
   },
 
-  async deleteDocumentIndex(documentId: string, knowledgeBaseId?: string): Promise<string[]> {
+  async deleteDocumentIndex(documentId: string): Promise<string[]> {
     const db = DatabaseService.getInstance().getDbManager();
-    const chunkIds = await this.getDocumentIndexIds(documentId, knowledgeBaseId);
+    const ids = await this.getDocumentIndexIds(documentId);
     await db.executeTransaction(async (tx) => {
-      if (chunkIds.length) {
-        const ph = chunkIds.map(() => '?').join(',');
-        await tx.execute(`DELETE FROM retrieval_chunks_fts WHERE chunk_id IN (${ph})`, chunkIds);
-      }
-      if (knowledgeBaseId) {
-        await tx.execute(`DELETE FROM retrieval_chunks WHERE document_id = ? AND knowledge_base_id = ?`, [documentId, knowledgeBaseId]);
-        await tx.execute(`DELETE FROM source_blocks WHERE document_id = ? AND knowledge_base_id = ?`, [documentId, knowledgeBaseId]);
-        await tx.execute(`DELETE FROM knowledge_chunks WHERE document_id = ? AND knowledge_base_id = ?`, [documentId, knowledgeBaseId]);
-      } else {
-        await tx.execute(`DELETE FROM retrieval_chunks WHERE document_id = ?`, [documentId]);
-        await tx.execute(`DELETE FROM source_blocks WHERE document_id = ?`, [documentId]);
-        await tx.execute(`DELETE FROM knowledge_chunks WHERE document_id = ?`, [documentId]);
-      }
+      await tx.execute(`DELETE FROM document_chunks_fts WHERE chunk_id IN (
+        SELECT id FROM document_chunks WHERE document_id = ?)`, [documentId]);
+      await tx.execute('DELETE FROM document_index_batches WHERE document_id = ?', [documentId]);
+      await tx.execute(`UPDATE documents SET active_index_batch_id = NULL, lexical_status = 'pending',
+        semantic_status = 'pending', is_indexed = 0 WHERE id = ?`, [documentId]);
+      await tx.execute("UPDATE doc_knowledge_mappings SET status = 'pending' WHERE document_id = ?", [documentId]);
     });
-    return chunkIds;
-  },
-
-  async getSourceBlocks(documentIds: string[], knowledgeBaseIds?: string[]): Promise<SourceBlock[]> {
-    if (documentIds.length === 0) return [];
-    const db = DatabaseService.getInstance().getDbManager();
-    const ph = documentIds.map(() => '?').join(',');
-    let sql = `SELECT * FROM source_blocks WHERE document_id IN (${ph})`;
-    const params: unknown[] = [...documentIds];
-    const kbIds = knowledgeBaseIds?.filter(Boolean) || [];
-    if (kbIds.length) {
-      sql += ` AND knowledge_base_id IN (${kbIds.map(() => '?').join(',')})`;
-      params.push(...kbIds);
-    }
-    sql += ' ORDER BY document_id, block_index';
-    const rows = await db.select<any>(sql, params);
-    return (rows || []).map(mapBlock);
+    return ids;
   },
 
   async getRetrievalChunks(ids: string[]): Promise<RetrievalChunk[]> {
-    if (ids.length === 0) return [];
+    if (!ids.length) return [];
     const db = DatabaseService.getInstance().getDbManager();
-    const ph = ids.map(() => '?').join(',');
-    const rows = await db.select<any>(
-      `SELECT * FROM retrieval_chunks WHERE id IN (${ph})`,
-      ids
-    );
-    return (rows || []).map(mapChunk);
+    const rows = await db.select<any>(`SELECT c.*, d.title AS document_name, d.file_path AS document_path,
+      d.file_hash AS document_hash FROM document_chunks c JOIN documents d ON d.id = c.document_id
+      WHERE c.id IN (${ids.map(() => '?').join(',')}) AND d.active_index_batch_id = c.batch_id`, ids);
+    return rows.map(mapChunk);
   },
 };
 
-function mapBlock(row: any): SourceBlock {
-  let sectionPath: string[] | undefined;
-  try {
-    sectionPath = row.section_path ? JSON.parse(row.section_path) : undefined;
-  } catch {
-    sectionPath = undefined;
-  }
-  return {
-    id: row.id,
-    documentId: row.document_id,
-    knowledgeBaseId: row.knowledge_base_id ?? undefined,
-    blockIndex: row.block_index,
-    type: row.block_type,
-    text: row.text,
-    page: row.page ?? undefined,
-    sectionPath,
-    lineStart: row.line_start ?? undefined,
-    lineEnd: row.line_end ?? undefined,
-    charStart: row.char_start ?? undefined,
-    charEnd: row.char_end ?? undefined,
-  };
+function jsonObject(value: unknown): Record<string, any> {
+  if (!value) return {};
+  try { return typeof value === 'string' ? JSON.parse(value) : value as Record<string, any>; }
+  catch { return {}; }
 }
 
 function mapChunk(row: any): RetrievalChunk {
-  let metadata: RetrievalChunk['metadata'] = {};
-  try {
-    metadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata || {};
-  } catch {
-    metadata = {};
-  }
+  const metadata = jsonObject(row.metadata);
+  const locator = jsonObject(row.locator);
   return {
-    id: row.id,
-    documentId: row.document_id,
-    knowledgeBaseId: row.knowledge_base_id,
-    sourceStartBlock: row.source_start_block,
-    sourceEndBlock: row.source_end_block,
-    sourceText: row.source_text,
-    searchText: row.search_text,
-    metadata,
+    id: row.id, documentId: row.document_id,
+    sourceStartBlock: Number(metadata.sourceStartBlock ?? row.chunk_index),
+    sourceEndBlock: Number(metadata.sourceEndBlock ?? row.chunk_index),
+    sourceText: row.source_text, searchText: row.search_text,
+    metadata: { ...metadata, chunkIndex: row.chunk_index, batchId: row.batch_id,
+      pageStart: locator.page, pageEnd: locator.pageEnd, sectionPath: locator.sectionPath,
+      lineStart: locator.lineStart, lineEnd: locator.lineEnd, documentName: row.document_name,
+      documentPath: row.document_path, documentHash: row.document_hash },
   };
 }

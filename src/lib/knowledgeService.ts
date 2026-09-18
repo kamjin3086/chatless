@@ -529,11 +529,11 @@ export const KnowledgeService = {
       const dbService = getDatabaseService();
       const db = dbService.getDbManager();
       const rows = await db.select<{ status: string; chunk_count: number }>(
-        `SELECT m.status, COUNT(rc.id) AS chunk_count
+        `SELECT m.status, COUNT(dc.id) AS chunk_count
            FROM doc_knowledge_mappings m
-           LEFT JOIN retrieval_chunks rc
-             ON rc.document_id = m.document_id
-            AND rc.knowledge_base_id = m.knowledge_base_id
+           JOIN documents d ON d.id = m.document_id
+           LEFT JOIN document_chunks dc ON dc.document_id = m.document_id
+             AND dc.batch_id = d.active_index_batch_id
           WHERE m.knowledge_base_id = ?
           GROUP BY m.document_id, m.status`,
         [knowledgeBaseId]
@@ -548,7 +548,9 @@ export const KnowledgeService = {
         else if (row.status === 'failed') counts.failed += 1;
       }
       const chunkRows = await db.select<{ n: number }>(
-        `SELECT COUNT(*) as n FROM retrieval_chunks WHERE knowledge_base_id = ?`,
+        `SELECT COUNT(*) as n FROM document_chunks dc JOIN documents d ON d.active_index_batch_id = dc.batch_id
+          WHERE EXISTS (SELECT 1 FROM doc_knowledge_mappings m
+            WHERE m.document_id = dc.document_id AND m.knowledge_base_id = ?)`,
         [knowledgeBaseId]
       );
       const retrievalChunks = Number(chunkRows?.[0]?.n || 0);
@@ -577,20 +579,28 @@ export const KnowledgeService = {
   /**
    * 获取指定文档在知识库中的统计信息（目前仅包含分片数量）
    */
-  async getDocumentStats(knowledgeBaseId: string, documentId: string): Promise<{ chunkCount: number }> {
+  async getDocumentStats(knowledgeBaseId: string, documentId: string): Promise<{
+    chunkCount: number; lexicalStatus: string; semanticStatus: string;
+  }> {
     try {
       const dbService = getDatabaseService();
       const dbManager = dbService.getDbManager();
 
       const result = await dbManager.select(
-        `SELECT COUNT(*) as chunkCount FROM knowledge_chunks WHERE knowledge_base_id = ? AND document_id = ?`,
-        [knowledgeBaseId, documentId]
+        `SELECT d.lexical_status as lexicalStatus, d.semantic_status as semanticStatus,
+          COUNT(dc.id) as chunkCount FROM documents d
+          LEFT JOIN document_chunks dc ON dc.document_id = d.id AND d.active_index_batch_id = dc.batch_id
+          WHERE d.id = ? AND EXISTS (SELECT 1 FROM doc_knowledge_mappings m
+            WHERE m.document_id = d.id AND m.knowledge_base_id = ?) GROUP BY d.id`,
+        [documentId, knowledgeBaseId]
       );
 
-      return { chunkCount: (result?.[0]?.chunkCount as number) || 0 };
+      return { chunkCount: (result?.[0]?.chunkCount as number) || 0,
+        lexicalStatus: String(result?.[0]?.lexicalStatus || 'pending'),
+        semanticStatus: String(result?.[0]?.semanticStatus || 'pending') };
     } catch (error) {
       console.error(`获取文档统计失败 (KB: ${knowledgeBaseId}, Doc: ${documentId}):`, error);
-      return { chunkCount: 0 };
+      return { chunkCount: 0, lexicalStatus: 'failed', semanticStatus: 'failed' };
     }
   },
 
@@ -694,56 +704,6 @@ export const KnowledgeService = {
     } catch (error) {
       console.error(`获取知识库文档失败 (ID: ${knowledgeBaseId}):`, error);
       return [];
-    }
-  },
-
-  /**
-   * 创建知识片段
-   */
-  async createKnowledgeChunk(
-    knowledgeBaseId: string,
-    documentId: string,
-    content: string,
-    metadata: any = {}
-  ): Promise<string> {
-    try {
-      const dbService = getDatabaseService();
-      const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
-      
-      const chunkIndex = metadata.chunkIndex || 0;
-      const chunkId = await knowledgeBaseRepo.createKnowledgeChunk(
-        knowledgeBaseId,
-        documentId,
-        content,
-        metadata,
-        chunkIndex
-      );
-
-      // 更新映射状态为已索引
-      await knowledgeBaseRepo.updateDocumentMappingStatus(
-        documentId,
-        knowledgeBaseId,
-        'indexed'
-      );
-
-      return chunkId;
-    } catch (error) {
-      console.error(`创建知识片段失败: ${documentId} -> ${knowledgeBaseId}`, error);
-      
-      // 更新映射状态为失败
-      try {
-        const dbService = getDatabaseService();
-        const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
-        await knowledgeBaseRepo.updateDocumentMappingStatus(
-          documentId,
-          knowledgeBaseId,
-          'failed'
-        );
-      } catch (updateError) {
-        console.error(`更新映射状态失败:`, updateError);
-      }
-      
-      throw error;
     }
   },
 

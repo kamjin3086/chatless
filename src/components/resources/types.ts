@@ -17,6 +17,8 @@ export interface ResourceDocument {
    * 文档分片数量，可选。仅在文档已被切分并入库时提供。
    */
   chunkCount?: number;
+  lexicalStatus?: 'pending' | 'processing' | 'ready' | 'failed' | string;
+  semanticStatus?: 'pending' | 'processing' | 'ready' | 'failed' | string;
   /**
    * 关联的知识库信息
    */
@@ -69,4 +71,4 @@ export interface ResourceItemProps extends ResourceDocument {
   onDelete?: (id: string) => void;
   onAddNote?: (id: string) => void;
   onComment?: (id: string) => void;
-} 
+}

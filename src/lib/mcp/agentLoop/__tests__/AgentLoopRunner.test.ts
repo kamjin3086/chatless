@@ -58,7 +58,9 @@ function tool(callbacks: StreamCallbacks, id: string, preResult?: unknown) {
 function finish(callbacks: StreamCallbacks) { callbacks.onComplete?.(); }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // Reset queued one-shot implementations as well as call history. A test
+  // may fail at a durable boundary before consuming its prepared transport.
+  vi.resetAllMocks();
   mocks.append.mockResolvedValue(undefined);
   mocks.status.mockResolvedValue(undefined);
   mocks.store.updateMessage.mockResolvedValue(undefined);

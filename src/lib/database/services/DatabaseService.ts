@@ -92,6 +92,11 @@ export class DatabaseService {
       this.knowledgeBaseRepo = new KnowledgeBaseRepository(this.dbManager);
       this.documentRepository = new DocumentRepository(this.dbManager);
       this.promptRepository = new PromptRepository(this.dbManager);
+      await this.dbManager.execute("UPDATE agent_approvals SET status = 'expired', decided_at = ? WHERE status = 'pending'", [Date.now()]);
+
+      // Resume durable semantic jobs only after every repository and migration
+      // is ready. The queue itself stays lazy when no job exists.
+      void import('@/lib/indexing/SemanticIndexQueue').then(({ semanticIndexQueue }) => semanticIndexQueue.resume());
 
       // 验证Repository实例创建成功
       if (!this.conversationRepo || !this.messageRepo) {
@@ -224,14 +229,11 @@ export class DatabaseService {
 
   /**
    * 清空知识库相关数据（不删除知识库定义）
-   * - knowledge_chunks
-   * - doc_knowledge_mappings
-   * - documents（复用现有实现）
+   * Document chunks, FTS rows, semantic vectors and attachment relations are
+   * owned by documents and removed through foreign keys / repository cleanup.
    */
   public async clearKnowledgeData(): Promise<void> {
     const db = this.getDbManager();
-    // 先清空依赖于 documents 的表，避免残留外键/数据引用
-    await db.execute('DELETE FROM knowledge_chunks');
     await db.execute('DELETE FROM doc_knowledge_mappings');
     await this.clearAllDocuments();
   }
@@ -526,4 +528,4 @@ export class DatabaseService {
   public static reset(): void {
     DatabaseService.instance = null;
   }
-} 
+}

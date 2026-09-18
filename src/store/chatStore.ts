@@ -36,8 +36,6 @@ interface ChatState {
   >;
   lastUsedModelPerChat: Record<string, string>;
   sessionLastSelectedModel: string | null;
-  /** 会话工具模式的“默认值”（新建会话沿用当前选择） */
-  sessionToolMode?: 'chat' | 'agent';
   /** 已加载消息的会话标记，避免重复加载 */
   _messagesLoaded: Record<string, boolean>;
   /** 按会话缓存的输入草稿，用于失败后回填 */
@@ -86,9 +84,6 @@ interface ChatActions {
   clearInputDraft: (conversationId: string) => void;
   // 通知前端：流已开始（用于在 UI 清空输入框等）
   notifyStreamStart: (conversationId: string) => void;
-  /** 设置会话级工具模式（chat/agent）并持久化 */
-  setConversationToolMode: (conversationId: string, mode: 'chat' | 'agent') => Promise<void>;
-
   /** AgentLoop：设置某条 assistant 消息的运行态（仅内存） */
   setAgentRunState: (params: { assistantMessageId: string; running: boolean; conversationId?: string }) => void;
 }
@@ -135,7 +130,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
       agentRuns: {},
       lastUsedModelPerChat: {},
       sessionLastSelectedModel: null,
-      sessionToolMode: 'agent',
       _messagesLoaded: {},
       inputDrafts: {},
       streamStartCounter: 0,
@@ -183,7 +177,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
               created_at: convAny.created_at || convAny.created_at,
               updated_at: convAny.updated_at || convAny.updated_at,
               model_id: convAny.model_id || convAny.model_id || 'default',
-              tool_mode: (convAny.tool_mode as any) || 'agent',
               model_provider: convAny.model_provider || null,
               model_full_id: convAny.model_full_id || (convAny.model_provider ? `${convAny.model_provider}/${convAny.model_id}` : convAny.model_id),
               is_important: convAny.is_important === true || convAny.is_important === 1,
@@ -212,8 +205,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
           if (!get().currentConversationId && loadedConversations.length > 0) {
             console.log(`🔄 [LOAD-CONVERSATIONS] 设置当前会话: ${loadedConversations[0].id}`);
             set({ currentConversationId: loadedConversations[0].id });
-            // 默认工具模式沿用当前会话
-            set({ sessionToolMode: loadedConversations[0].tool_mode || 'agent' });
           }
 
           console.log(`[LOAD-CONVERSATIONS] 会话加载完成，总计: ${loadedConversations.length} 个`);
@@ -359,18 +350,13 @@ export const useChatStore = create<ChatState & ChatActions>()(
                 citationDocIds,
               );
               const currentHashes = new Map((rows || []).map((row) => [String(row.id), String(row.file_hash || '')]));
-              const attachmentStore = await import('@/store/conversationAttachmentStore');
-              const sessionDocuments = attachmentStore.useConversationAttachmentStore
-                .getState().getSessionDocuments(conversationId);
               for (const message of processed) {
                 if (!message.citations?.length) continue;
                 for (const citation of message.citations as any[]) {
                   const snapshotHash = String(citation?.documentHash || '').trim();
                   if (!snapshotHash) continue;
                   const currentHash = currentHashes.get(String(citation.documentId));
-                  const sessionDocument = sessionDocuments.find((doc) => doc.id === citation.documentId);
-                  const availableHash = currentHash || sessionDocument?.documentHash;
-                  citation.stale = !availableHash || availableHash !== snapshotHash;
+                  citation.stale = !currentHash || currentHash !== snapshotHash;
                 }
               }
             }
@@ -406,7 +392,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       createConversation: async (title, modelId, providerName) => {
         const now = Date.now();
-        const mode = (get().sessionToolMode || 'agent') as 'chat' | 'agent';
         const newConversation: Conversation = {
           id: uuidv4(),
           title,
@@ -414,7 +399,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
           updated_at: now,
           messages: [],
           model_id: modelId || 'default',
-          tool_mode: mode,
           model_provider: providerName,
           model_full_id: providerName ? `${providerName}/${modelId}` : modelId,
           is_important: false,
@@ -436,7 +420,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
             created_at: now,
             updated_at: now,
             model_id: modelId || 'default',
-            tool_mode: mode,
             model_provider: providerName || null,
             model_full_id: providerName ? `${providerName}/${modelId}` : modelId,
             is_important: 0,
@@ -467,12 +450,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       setCurrentConversation: (id) => {
         set({ currentConversationId: id });
-        // 切换会话时，默认工具模式沿用该会话的设置
-        try {
-          const conv = get().conversations.find(c => c.id === id);
-          if (conv?.tool_mode) set({ sessionToolMode: conv.tool_mode });
-        } catch { /* noop */ }
-
         // 切换会话时确保 @WorkDir 存在（attachment store 非持久化，需懒创建）
         void (async () => {
           try {
@@ -1195,21 +1172,11 @@ export const useChatStore = create<ChatState & ChatActions>()(
           }
           if ('is_important' in updates) dbUpdates.is_important = updates.is_important ? 1 : 0;
           if ('is_favorite' in updates) dbUpdates.is_favorite = updates.is_favorite ? 1 : 0;
-          if ('tool_mode' in updates) dbUpdates.tool_mode = (updates as any).tool_mode;
 
           await conversationRepo.update(id, dbUpdates);
           console.log(`[UPDATE-CONVERSATION] 成功更新对话: ${id}`);
         } catch (error) {
           console.error(`❌ [STORE] Failed to update conversation ${id}:`, error);
-        }
-      },
-
-      setConversationToolMode: async (conversationId, mode) => {
-        // 1) 更新“默认值”，保证新建会话沿用
-        set({ sessionToolMode: mode });
-        // 2) 持久化到当前会话（若存在）
-        if (conversationId) {
-          await get().updateConversation(conversationId, { tool_mode: mode } as any);
         }
       },
 

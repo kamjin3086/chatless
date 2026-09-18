@@ -1,113 +1,70 @@
 import { KNOWLEDGE_SERVER_NAME } from '@/lib/mcp/nativeTools/knowledge';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
 import { getRAGService } from '@/lib/rag/ragServiceInstance';
-import { KnowledgeRetrievalError, retrieveEvidence } from '@/lib/rag/retrieveEvidence';
+import { retrieveEvidence } from '@/lib/rag/retrieveEvidence';
 import { registerEvidence, readEvidence } from '@/lib/rag/EvidenceRegistry';
-import { EvidenceStore } from '@/lib/rag/evidenceStore';
-import { NEIGHBOR_BLOCK_WINDOW } from '@/lib/rag/constants';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
-import type { Evidence } from '@/lib/rag/evidenceTypes';
+import type { Evidence, SourceLocator } from '@/lib/rag/evidenceTypes';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 
-const knowledgeCallBudget = new Map<string, { count: number; updatedAt: number }>();
-const MAX_KNOWLEDGE_CALLS = 12;
+type Scope = { knowledgeBaseIds: string[]; attachmentDocumentIds: string[]; documentIds: string[] };
+type Cursor = { documentId: string; batchId: string; chunkIndex: number; offset: number };
 
-async function resolveMountedScope(conversationId: string, raw?: unknown): Promise<string[]> {
-  const mounted = useConversationAttachmentStore.getState().getKnowledgeBase(conversationId);
-  // A historical selection is not an access grant.  In particular, clearing
-  // a mount must take effect immediately and must never be undone by a past
-  // user message during a later tool call.
-  const mountedId = mounted?.id;
-  if (!mountedId) return [];
-  const requested = Array.isArray(raw) ? raw.map(String).filter(Boolean) : [];
-  return requested.length ? (requested.includes(mountedId) ? [mountedId] : []) : [mountedId];
-}
-
-function sessionSearch(documents: ReturnType<typeof useConversationAttachmentStore.getState>['getSessionDocuments'] extends (...args: any[]) => infer R ? R : never, query: string, limit: number): Evidence[] {
-  const terms = query.toLowerCase().split(/[\s\u3000]+/).filter(Boolean);
-  return documents
-    .map((doc) => {
-      const text = doc.content.toLowerCase();
-      const hits = terms.reduce((n, term) => n + (text.includes(term) ? 1 : 0), 0);
-      const firstHit = terms
-        .map((term) => text.indexOf(term))
-        .filter((index) => index >= 0)
-        .sort((a, b) => a - b)[0] ?? 0;
-      const excerptStart = Math.max(0, firstHit - 600);
-      return { doc, hits, excerptStart };
-    })
-    .filter((item) => item.hits > 0)
-    .sort((a, b) => b.hits - a.hits)
-    .slice(0, limit)
-    .map(({ doc, hits, excerptStart }) => ({
-      id: '',
-      documentId: doc.id,
-      documentName: doc.name,
-      documentPath: undefined,
-      sourceBlockIds: [],
-      documentHash: doc.documentHash,
-      locator: {
-        lineStart: doc.content.slice(0, excerptStart).split('\n').length,
-      },
-      quote: doc.content.slice(excerptStart, excerptStart + 1600),
-      score: hits,
-    }));
-}
-
-function nonNegativeInt(value: unknown, fallback = 0): number {
+function int(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : fallback;
 }
 
-function boundedLimit(value: unknown, fallback = 8000): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.min(32000, Math.max(1000, Math.floor(parsed))) : fallback;
+function charLimit(value: unknown): number {
+  return Math.min(32000, Math.max(1000, int(value, 8000)));
 }
 
-function boundedNeighbor(value: unknown, fallback = NEIGHBOR_BLOCK_WINDOW): number {
-  return Math.min(32, nonNegativeInt(value, fallback));
+function object(value: unknown): Record<string, any> {
+  try { return typeof value === 'string' ? JSON.parse(value || '{}') : (value || {}) as Record<string, any>; }
+  catch { return {}; }
 }
 
-function parseDocumentCursor(value: unknown, documentId: string): number {
-  const raw = String(value || '').trim();
-  if (!raw) return 0;
+async function resolveScope(conversationId: string, args: Record<string, any>): Promise<Scope> {
+  const mounted = useConversationAttachmentStore.getState().getKnowledgeBase(conversationId)?.id;
+  const requestedKb = Array.isArray(args.knowledgeBaseIds) ? args.knowledgeBaseIds.map(String) : [];
+  const knowledgeBaseIds = mounted && (!requestedKb.length || requestedKb.includes(mounted)) ? [mounted] : [];
+  const db = DatabaseService.getInstance().getDbManager();
+  const attachmentRows = await db.select<{ document_id: string }>(
+    'SELECT document_id FROM conversation_document_mappings WHERE conversation_id = ?', [conversationId],
+  );
+  let attachmentDocumentIds = attachmentRows.map((row) => row.document_id);
+  const requestedDocs = Array.isArray(args.documentIds) ? new Set(args.documentIds.map(String)) : null;
+  if (requestedDocs?.size) attachmentDocumentIds = attachmentDocumentIds.filter((id) => requestedDocs.has(id));
+  const kbDocumentRows = knowledgeBaseIds.length
+    ? await db.select<{ document_id: string }>(
+        `SELECT document_id FROM doc_knowledge_mappings WHERE knowledge_base_id IN (${knowledgeBaseIds.map(() => '?').join(',')})`,
+        knowledgeBaseIds,
+      ) : [];
+  let documentIds = [...new Set([...attachmentDocumentIds, ...kbDocumentRows.map((row) => row.document_id)])];
+  if (requestedDocs?.size) documentIds = documentIds.filter((id) => requestedDocs.has(id));
+  return { knowledgeBaseIds, attachmentDocumentIds, documentIds };
+}
+
+function parseCursor(value: unknown, documentId: string): Cursor | null {
+  if (!value) return null;
   try {
-    const parsed = JSON.parse(raw) as { documentId?: string; index?: unknown };
-    if (parsed.documentId && parsed.documentId !== documentId) return 0;
-    return nonNegativeInt(parsed.index);
-  } catch {
-    // Keep existing numeric cursors readable while new cursors carry a
-    // document identity and cannot accidentally be used for another file.
-    return nonNegativeInt(raw);
-  }
+    const parsed = JSON.parse(String(value)) as Cursor;
+    if (parsed.documentId !== documentId || !parsed.batchId) return null;
+    return { ...parsed, chunkIndex: int(parsed.chunkIndex), offset: int(parsed.offset) };
+  } catch { return null; }
 }
 
-function formatDocumentCursor(documentId: string, index: number): string {
-  return JSON.stringify({ documentId, index });
-}
-
-function registerDeliveredText(params: {
-  runId: string;
-  documentId: string;
-  documentName: string;
-  documentHash?: string;
-  knowledgeBaseId?: string;
-  sourceBlockIds?: string[];
-  locator?: Evidence['locator'];
-  quote: string;
-}): string {
-  return registerEvidence(params.runId, [{
-    id: '',
-    documentId: params.documentId,
-    documentName: params.documentName,
-    documentHash: params.documentHash,
-    knowledgeBaseId: params.knowledgeBaseId,
-    sourceBlockIds: params.sourceBlockIds || [],
-    locator: params.locator || {},
-    quote: params.quote,
-    score: 0,
-  }])[0].id;
+function cite(runId: string, params: {
+  documentId: string; documentName: string; documentHash?: string; chunkIds: string[];
+  locator: SourceLocator; quote: string; score?: number; retrievalChunkId?: string;
+}): Evidence {
+  return registerEvidence(runId, [{
+    id: '', documentId: params.documentId, documentName: params.documentName,
+    documentHash: params.documentHash, sourceBlockIds: params.chunkIds,
+    locator: params.locator, quote: params.quote, score: params.score || 0,
+    retrievalChunkId: params.retrievalChunkId,
+  }])[0];
 }
 
 export class KnowledgeAdapter implements ToolAdapter {
@@ -119,318 +76,117 @@ export class KnowledgeAdapter implements ToolAdapter {
 
   async execute(invocation: ToolInvocation): Promise<unknown> {
     const tool = String(invocation.tool || '').toLowerCase();
-    const args = invocation.args || {};
+    const args = (invocation.args || {}) as Record<string, any>;
     const runId = invocation.assistantMessageId;
-    const previous = knowledgeCallBudget.get(runId);
-    const budget = previous && Date.now() - previous.updatedAt < 60 * 60 * 1000
-      ? previous
-      : { count: 0, updatedAt: Date.now() };
-    for (const [key, value] of knowledgeCallBudget) {
-      if (Date.now() - value.updatedAt >= 60 * 60 * 1000) knowledgeCallBudget.delete(key);
-    }
-    budget.count += 1;
-    budget.updatedAt = Date.now();
-    knowledgeCallBudget.set(runId, budget);
-    if (budget.count > MAX_KNOWLEDGE_CALLS) {
-      return { ok: false, error: 'KNOWLEDGE_TOOL_BUDGET_EXCEEDED', message: '本次运行最多读取 12 次知识库，请根据已读取内容回答或在下一轮继续。' };
-    }
-    const kbIds = await resolveMountedScope(invocation.conversationId, (args as any)?.knowledgeBaseIds);
-    const sessionDocuments = useConversationAttachmentStore.getState().getSessionDocuments(invocation.conversationId);
+    const scope = await resolveScope(invocation.conversationId, args);
+    const db = DatabaseService.getInstance().getDbManager();
 
     if (tool === 'list') {
-      const rows: any[] = [];
-      if (kbIds.length) {
-        const db = DatabaseService.getInstance().getDbManager();
-        const placeholders = kbIds.map(() => '?').join(',');
-        const dbRows = await db.select<any>(
-          `SELECT d.id, d.title, d.file_type, d.file_size, d.is_indexed,
-                  d.embedding_fingerprint,
-                  COALESCE(m.status, 'pending') AS mapping_status,
-                  COUNT(rc.id) AS indexed_chunk_count,
-                  CASE WHEN d.embedding_fingerprint IS NOT NULL AND EXISTS (
-                    SELECT 1 FROM vector_embeddings ve
-                     WHERE ve.is_deleted = 0
-                       AND json_extract(ve.metadata, '$.documentId') = d.id
-                       AND json_extract(ve.metadata, '$.knowledgeBaseId') = m.knowledge_base_id
-                       AND json_extract(ve.metadata, '$.embeddingFingerprint') = d.embedding_fingerprint
-                  ) THEN 1 ELSE 0 END AS semantic_indexed,
-                  COALESCE(SUM(LENGTH(rc.source_text)), 0) AS indexed_chars
-             FROM documents d
-             JOIN doc_knowledge_mappings m ON m.document_id = d.id
-             LEFT JOIN retrieval_chunks rc ON rc.document_id = d.id AND rc.knowledge_base_id = m.knowledge_base_id
-            WHERE m.knowledge_base_id IN (${placeholders})
-            GROUP BY d.id, d.title, d.file_type, d.file_size, d.is_indexed, m.status
-            ORDER BY d.title`,
-          kbIds,
-        );
-        rows.push(...(dbRows || []).map((row) => ({
-          documentId: row.id,
-          name: row.title,
-          fileType: row.file_type,
-          fileSize: Number(row.file_size || 0),
-          indexed: Number(row.indexed_chunk_count || 0) > 0 && row.mapping_status === 'indexed',
-          keywordIndexed: Number(row.indexed_chunk_count || 0) > 0 && row.mapping_status === 'indexed',
-          semanticIndexed: Number(row.semantic_indexed || 0) > 0 && row.mapping_status === 'indexed',
-          processingStatus: row.mapping_status,
-          indexedChars: Number(row.indexed_chars || 0),
-          source: 'knowledge_base',
-        })));
-      }
-      rows.push(...sessionDocuments.map((doc) => ({
-        documentId: doc.id,
-        name: doc.name,
-        fileType: doc.fileType,
-        fileSize: doc.fileSize,
-        indexed: true,
-        keywordIndexed: true,
-        semanticIndexed: false,
-        processingStatus: 'indexed',
-        indexedChars: doc.content.length,
-        documentHash: doc.documentHash,
-        source: 'session_attachment',
-      })));
-      const start = nonNegativeInt((args as any).cursor);
-      const limit = Math.min(100, Math.max(1, nonNegativeInt((args as any).limit, 50)));
-      return { ok: true, documents: rows.slice(start, start + limit), nextCursor: start + limit < rows.length ? String(start + limit) : undefined, complete: start + limit >= rows.length };
+      if (!scope.documentIds.length) return { ok: true, documents: [], complete: true };
+      const rows = await db.select<any>(`SELECT d.id, d.title, d.file_type, d.file_size, d.lexical_status,
+        d.semantic_status, d.file_hash, COUNT(c.id) AS chunk_count, COALESCE(SUM(LENGTH(c.source_text)), 0) AS indexed_chars
+        FROM documents d LEFT JOIN document_chunks c ON c.batch_id = d.active_index_batch_id
+        WHERE d.id IN (${scope.documentIds.map(() => '?').join(',')}) GROUP BY d.id ORDER BY d.title`, scope.documentIds);
+      const start = int(args.cursor);
+      const limit = Math.min(100, Math.max(1, int(args.limit, 50)));
+      const documents = rows.slice(start, start + limit).map((row) => ({
+        documentId: row.id, name: row.title, fileType: row.file_type, fileSize: Number(row.file_size || 0),
+        indexed: row.lexical_status === 'ready' && Number(row.chunk_count) > 0,
+        keywordIndexed: row.lexical_status === 'ready', semanticIndexed: row.semantic_status === 'ready',
+        processingStatus: row.lexical_status, indexedChars: Number(row.indexed_chars || 0),
+        documentHash: row.file_hash,
+        source: scope.attachmentDocumentIds.includes(row.id) ? 'session_attachment' : 'knowledge_base',
+      }));
+      return { ok: true, documents, nextCursor: start + limit < rows.length ? String(start + limit) : undefined,
+        complete: start + limit >= rows.length };
     }
 
-    if (!kbIds.length && !sessionDocuments.length) {
-      return { ok: false, error: 'NO_KNOWLEDGE_BASE', message: '当前会话没有可访问的知识库或临时附件。' };
+    if (!scope.documentIds.length) {
+      return { ok: false, error: 'NO_KNOWLEDGE_BASE', message: '当前会话没有可访问的知识库或附件。' };
     }
 
     if (tool === 'search') {
-      const query = String((args as any).query || '').trim();
-      if (!query) return { ok: false, error: 'query is required' };
-
-      const limit = Math.min(100, Math.max(1, nonNegativeInt((args as any).limit, 8)));
-      let evidence: Evidence[] = [];
-      let retrievalMode: 'lexical' | 'hybrid' = 'lexical';
-      if (kbIds.length) {
-        try {
-          const rag = await getRAGService();
-          const result = await retrieveEvidence({
-            query,
-            knowledgeBaseIds: kbIds,
-            embeddingService: rag.getEmbeddingService(),
-            retrievalService: rag.getRetrievalServiceInstance(),
-            topK: limit,
-          });
-          evidence = result.evidence;
-          retrievalMode = result.mode;
-        } catch (error) {
-          // A pending KB may coexist with searchable session attachments. A
-          // real FTS/database failure must remain visible to the caller.
-          if (!sessionDocuments.length || !(error instanceof KnowledgeRetrievalError) || error.code !== 'KB_NOT_INDEXED') {
-            throw error;
-          }
-        }
-      }
-      evidence = [...evidence, ...sessionSearch(sessionDocuments, query, limit)].slice(0, limit);
-
-      // The citation registry represents text the model actually received.
-      // Search returns snippets, so do not register a longer hidden window.
-      const registered = registerEvidence(runId, evidence.map((item) => ({
-        ...item,
-        quote: item.quote.slice(0, 400),
-      })));
-      const hasKnowledgeEvidence = evidence.some((ev) => !ev.documentId.startsWith('attachment_'));
-      return {
-        ok: true,
-        mode: hasKnowledgeEvidence ? retrievalMode : 'lexical',
-        results: registered.map((ev) => ({
-          evidenceId: ev.id,
-          document: ev.documentName,
-          page: ev.locator.page,
-          section: ev.locator.sectionPath?.join(' > '),
-          score: ev.score,
-          snippet: ev.quote,
-        })),
-      };
+      const query = String(args.query || '').trim();
+      if (!query) return { ok: false, error: 'QUERY_REQUIRED', message: 'query is required' };
+      const rag = await getRAGService();
+      const result = await retrieveEvidence({ query, knowledgeBaseIds: scope.knowledgeBaseIds,
+        documentIds: scope.attachmentDocumentIds, embeddingService: rag.getEmbeddingService(),
+        retrievalService: rag.getRetrievalServiceInstance(), topK: Math.min(100, Math.max(1, int(args.limit, 8))),
+        requestId: runId });
+      // Only this bounded snippet is delivered to the model and therefore eligible for citation.
+      const delivered = registerEvidence(runId, result.evidence.map((item) => ({ ...item, quote: item.quote.slice(0, 400) })));
+      return { ok: true, mode: result.mode, results: delivered.map((ev) => ({ evidenceId: ev.id,
+        document: ev.documentName, page: ev.locator.page, section: ev.locator.sectionPath?.join(' > '),
+        score: ev.score, snippet: ev.quote })) };
     }
 
-    if (tool === 'read') {
-      const requestedEvidenceId = String((args as any).evidenceId || '').trim();
-      const before = boundedNeighbor((args as any).before);
-      const after = boundedNeighbor((args as any).after);
+    if (tool !== 'read') return { ok: false, error: `Unknown tool: ${tool}` };
+    const evidenceId = String(args.evidenceId || '').trim();
+    const prior = evidenceId ? readEvidence(runId, evidenceId) : undefined;
+    const documentId = String(args.documentId || prior?.documentId || '').trim();
+    if (!documentId || !scope.documentIds.includes(documentId)) {
+      return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: '文档不存在或当前会话未挂载该文档。' };
+    }
+    const docs = await db.select<any>('SELECT id, title, file_hash, active_index_batch_id FROM documents WHERE id = ? LIMIT 1', [documentId]);
+    const document = docs[0];
+    if (!document?.active_index_batch_id) return { ok: false, error: 'INDEX_NOT_READY', message: '文档尚未建立关键词索引。' };
 
-      if (requestedEvidenceId) {
-        const ev = readEvidence(runId, requestedEvidenceId);
-        if (!ev) {
-          return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: `未找到 ${requestedEvidenceId}，请先 knowledge_search` };
-        }
-        const sessionDoc = sessionDocuments.find((doc) => doc.id === ev.documentId);
-        if (sessionDoc) {
-          const start = nonNegativeInt((args as any).cursor);
-          const limit = boundedLimit((args as any).limit);
-          const text = sessionDoc.content.slice(start, start + limit);
-          const delivered = registerEvidence(runId, [{ ...ev, quote: text }])[0];
-          return { ok: true, evidenceId: delivered.id, document: ev.documentName, text, nextCursor: start + limit < sessionDoc.content.length ? String(start + limit) : undefined, complete: start + limit >= sessionDoc.content.length };
-        }
-        if (!kbIds.length) {
-          return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: '该引用已不在当前会话的可访问资料范围内，请重新搜索。' };
-        }
-        const blocks = await EvidenceStore.getSourceBlocks([ev.documentId], kbIds);
-        const scopedBlocks = ev.knowledgeBaseId
-          ? blocks.filter((block) => block.knowledgeBaseId === ev.knowledgeBaseId)
-          : blocks;
-        const ids = new Set(ev.sourceBlockIds);
-        const matched = scopedBlocks.filter((b) => ids.has(b.id));
-        if (!matched.length) {
-          return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: '该引用已不在当前会话的可访问资料范围内，请重新搜索。' };
-        }
-        const minIdx = Math.min(...matched.map((b) => b.blockIndex));
-        const maxIdx = Math.max(...matched.map((b) => b.blockIndex));
-        const window = scopedBlocks.filter(
-          (b) => b.blockIndex >= minIdx - before && b.blockIndex <= maxIdx + after
-        );
-        const fullText = (window.length ? window : scopedBlocks).map((b) => b.text).join('\n');
-        const maxChars = boundedLimit((args as any).limit);
-        const text = fullText.slice(0, maxChars);
-        const delivered = registerEvidence(runId, [{
-          ...ev,
-          sourceBlockIds: window.map((block) => block.id),
-          quote: text,
-        }])[0];
-        return {
-          ok: true,
-          evidenceId: delivered.id,
-          document: ev.documentName,
-          text,
-          truncated: fullText.length > maxChars,
-        };
-      }
-
-      const documentId = String((args as any).documentId || '').trim();
-      if (!documentId) {
-        return { ok: false, error: 'evidenceId or documentId required' };
-      }
-      const sessionDoc = sessionDocuments.find((doc) => doc.id === documentId);
-      if (sessionDoc) {
-        const start = nonNegativeInt((args as any).cursor);
-        const limit = boundedLimit((args as any).limit);
-        const text = sessionDoc.content.slice(start, start + limit);
-        const evidenceId = registerDeliveredText({
-          runId, documentId, documentName: sessionDoc.name, documentHash: sessionDoc.documentHash,
-          locator: { lineStart: sessionDoc.content.slice(0, start).split('\n').length }, quote: text,
-        });
-        return { ok: true, documentId, evidenceId, text, nextCursor: start + limit < sessionDoc.content.length ? String(start + limit) : undefined, complete: start + limit >= sessionDoc.content.length };
-      }
-      if (!kbIds.length) {
-        return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: '文档不存在或当前会话未挂载该文档。' };
-      }
-      const db = DatabaseService.getInstance().getDbManager();
-      const access = await db.select<{ id: string }>(
-        `SELECT d.id FROM documents d
-           JOIN doc_knowledge_mappings m ON m.document_id = d.id
-          WHERE d.id = ? AND m.knowledge_base_id IN (${kbIds.map(() => '?').join(',')})
-          LIMIT 1`,
-        [documentId, ...kbIds],
-      );
-      if (!access.length) {
-        return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: '文档不存在或当前会话未挂载该文档。' };
-      }
-      const chunkRows = await db.select<any>(
-        `SELECT id, knowledge_base_id, source_text, source_start_block, source_end_block, metadata FROM retrieval_chunks
-          WHERE document_id = ? AND knowledge_base_id IN (${kbIds.map(() => '?').join(',')})
-          ORDER BY source_start_block`,
-        [documentId, ...kbIds],
-      );
-      if (chunkRows.length) {
-        // Each row is already scoped to the mounted knowledge base.  Do not
-        // collapse repeated paragraphs: repeated source text is still a real
-        // position in a document and must remain readable in order.
-        const uniqueChunkRows = chunkRows;
-        const start = parseDocumentCursor((args as any).cursor, documentId);
-        const limit = boundedLimit((args as any).limit);
-        const page = (args as any).page != null ? Number((args as any).page) : undefined;
-        const pageRows = page == null ? uniqueChunkRows : uniqueChunkRows.filter((row) => {
-          try {
-            const metadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata || {};
-            return metadata.pageStart === page || metadata.pageEnd === page;
-          } catch {
-            return false;
-          }
-        });
-        let used = 0;
-        const selected: any[] = [];
-        for (let i = start; i < pageRows.length; i += 1) {
-          const text = String(pageRows[i].source_text || '');
-          if (selected.length && used + text.length > limit) break;
-          selected.push(pageRows[i]);
-          used += text.length;
-        }
-        const next = start + selected.length;
-        const text = selected.map((row) => row.source_text).join('\n\n');
-        const document = await db.select<{ title: string; file_hash: string }>(
-          'SELECT title, file_hash FROM documents WHERE id = ? LIMIT 1', [documentId],
-        );
-        const selectedKbIds = [...new Set(selected.map((row) => String(row.knowledge_base_id || '')).filter(Boolean))];
-        const sourceBlockIds = selected.length && selectedKbIds.length
-          ? (await db.select<{ id: string }>(
-              `SELECT id FROM source_blocks
-                WHERE document_id = ? AND knowledge_base_id IN (${selectedKbIds.map(() => '?').join(',')})
-                  AND block_index >= ? AND block_index <= ?
-                ORDER BY block_index`,
-              [
-                documentId,
-                ...selectedKbIds,
-                Math.min(...selected.map((row) => Number(row.source_start_block))),
-                Math.max(...selected.map((row) => Number(row.source_end_block))),
-              ],
-            )).map((row) => row.id)
-          : [];
-        const evidenceId = registerDeliveredText({
-          runId,
-          documentId,
-          documentName: document[0]?.title || documentId,
-          documentHash: document[0]?.file_hash,
-          knowledgeBaseId: selectedKbIds[0] || kbIds[0],
-          sourceBlockIds,
-          locator: { paragraphIndex: start },
-          quote: text,
-        });
-        return {
-          ok: true,
-          documentId,
-          evidenceId,
-          text,
-          page,
-          nextCursor: next < pageRows.length ? formatDocumentCursor(documentId, next) : undefined,
-          complete: next >= pageRows.length,
-        };
-      }
-      const blocks = await EvidenceStore.getSourceBlocks([documentId], kbIds);
-      const uniqueBlocks = Array.from(new Map(
-        blocks.map((block) => [`${block.blockIndex}:${block.text}`, block]),
-      ).values());
-      const page = (args as any).page != null ? Number((args as any).page) : undefined;
-      const filtered = page != null ? uniqueBlocks.filter((b) => b.page === page) : uniqueBlocks;
-      const maxChars = boundedLimit((args as any).limit);
-      const fullText = filtered.map((b) => b.text).join('\n');
-      const text = fullText.slice(0, maxChars);
-      const document = await db.select<{ title: string; file_hash: string }>(
-        'SELECT title, file_hash FROM documents WHERE id = ? LIMIT 1', [documentId],
-      );
-      const evidenceId = registerDeliveredText({
-        runId,
-        documentId,
-        documentName: document[0]?.title || documentId,
-        documentHash: document[0]?.file_hash,
-        knowledgeBaseId: kbIds[0],
-        sourceBlockIds: filtered.map((block) => block.id),
-        locator: { page, lineStart: filtered[0]?.lineStart, lineEnd: filtered.at(-1)?.lineEnd },
-        quote: text,
-      });
-      return {
-        ok: true,
-        documentId,
-        page,
-        evidenceId,
-        text,
-        truncated: fullText.length > maxChars,
-      };
+    if (prior?.retrievalChunkId) {
+      const hit = await db.select<any>('SELECT chunk_index FROM document_chunks WHERE id = ? AND batch_id = ?',
+        [prior.retrievalChunkId, document.active_index_batch_id]);
+      if (!hit.length) return { ok: false, error: 'CURSOR_INVALID', message: '文档已重建，请重新搜索。' };
+      const before = Math.min(32, int(args.before, 1));
+      const after = Math.min(32, int(args.after, 1));
+      const rows = await db.select<any>(`SELECT * FROM document_chunks WHERE document_id = ? AND batch_id = ?
+        AND chunk_index BETWEEN ? AND ? ORDER BY chunk_index`, [documentId, document.active_index_batch_id,
+        Number(hit[0].chunk_index) - before, Number(hit[0].chunk_index) + after]);
+      const full = rows.map((row) => String(row.source_text)).join('\n\n');
+      const text = full.slice(0, charLimit(args.limit));
+      const locator = object(rows[0]?.locator);
+      const delivered = cite(runId, { documentId, documentName: document.title, documentHash: document.file_hash,
+        chunkIds: rows.map((row) => row.id), locator, quote: text, retrievalChunkId: prior.retrievalChunkId });
+      return { ok: true, evidenceId: delivered.id, document: document.title, text, truncated: text.length < full.length };
     }
 
-    return { ok: false, error: `Unknown tool: ${tool}` };
+    const cursor = parseCursor(args.cursor, documentId);
+    if (cursor && cursor.batchId !== document.active_index_batch_id) {
+      return { ok: false, error: 'CURSOR_INVALID', message: '文档已重建，该阅读游标已失效。' };
+    }
+    const batchId = document.active_index_batch_id as string;
+    const startIndex = cursor?.chunkIndex || 0;
+    let offset = cursor?.offset || 0;
+    const page = args.page == null ? undefined : Number(args.page);
+    const rows = await db.select<any>(`SELECT * FROM document_chunks WHERE document_id = ? AND batch_id = ?
+      AND chunk_index >= ? ORDER BY chunk_index`, [documentId, batchId, startIndex]);
+    const filtered = page == null ? rows : rows.filter((row) => {
+      const locator = object(row.locator); return Number(locator.page) === page || Number(locator.pageEnd) === page;
+    });
+    const limit = charLimit(args.limit);
+    const parts: string[] = [];
+    const deliveredRows: any[] = [];
+    let next: Cursor | undefined;
+    let remaining = limit;
+    for (const row of filtered) {
+      const source = String(row.source_text || '');
+      const slice = source.slice(offset, offset + remaining);
+      if (slice) { parts.push(slice); deliveredRows.push(row); remaining -= slice.length; }
+      if (offset + slice.length < source.length) {
+        next = { documentId, batchId, chunkIndex: Number(row.chunk_index), offset: offset + slice.length }; break;
+      }
+      offset = 0;
+      if (remaining <= 0) { next = { documentId, batchId, chunkIndex: Number(row.chunk_index) + 1, offset: 0 }; break; }
+    }
+    const text = parts.join('\n\n');
+    const last = deliveredRows.at(-1);
+    if (!next && last && rows.some((row) => Number(row.chunk_index) > Number(last.chunk_index))) {
+      next = { documentId, batchId, chunkIndex: Number(last.chunk_index) + 1, offset: 0 };
+    }
+    const firstLocator = object(deliveredRows[0]?.locator);
+    const lastLocator = object(last?.locator);
+    const delivered = cite(runId, { documentId, documentName: document.title, documentHash: document.file_hash,
+      chunkIds: deliveredRows.map((row) => row.id), locator: { page: firstLocator.page, sectionPath: firstLocator.sectionPath,
+        lineStart: firstLocator.lineStart, lineEnd: lastLocator.lineEnd, paragraphIndex: startIndex }, quote: text });
+    return { ok: true, documentId, evidenceId: delivered.id, text, page,
+      nextCursor: next ? JSON.stringify(next) : undefined, complete: !next };
   }
 }

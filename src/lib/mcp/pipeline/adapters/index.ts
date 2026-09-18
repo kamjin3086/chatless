@@ -9,6 +9,7 @@ import { WebSearchAdapter } from './WebSearchAdapter';
 import { CodingPackAdapter } from './CodingPackAdapter';
 import { KnowledgeAdapter } from './KnowledgeAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
+import { ToolResultAdapter } from './ToolResultAdapter';
 
 /**
  * 默认 adapters
@@ -21,6 +22,7 @@ import type { ToolAdapter } from '../ToolAdapter';
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
     new ToolsRegistryAdapter(),
+    new ToolResultAdapter(),
     new WebSearchAdapter(),
     new SkillUnifiedAdapter(),
     new UserFsAdapter(),
@@ -43,6 +45,7 @@ export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
 export { CodingPackAdapter } from './CodingPackAdapter';
 export { KnowledgeAdapter } from './KnowledgeAdapter';
+export { ToolResultAdapter } from './ToolResultAdapter';
 
 // 保留旧导出以兼容可能的外部引用（标记为 deprecated）
 /** @deprecated 使用 SkillUnifiedAdapter 代替 */

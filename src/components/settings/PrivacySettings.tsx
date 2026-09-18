@@ -7,7 +7,6 @@ import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { Shield, Trash2, HardDrive, Settings2, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Book } from "lucide-react";
-import { SQLiteVectorStore } from "@/lib/retrieval/strategies/SQLiteVectorStore";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -67,20 +66,9 @@ export function PrivacySettings() {
     try {
       const dbService = DatabaseService.getInstance();
       await dbService.initialize();
-      // 新增: 一站式清理知识库相关数据（文档、映射、知识片段）
-      if (typeof (dbService as any).clearKnowledgeData === 'function') {
-        // 新增方法 (v>=0.9.0)
-        await (dbService as any).clearKnowledgeData();
-      } else {
-        // 向后兼容旧版本：仍按旧流程执行
-        await dbService.clearAllDocuments();
-      }
+      await dbService.clearKnowledgeData();
 
-      // 同时清理向量索引
-      const store = new SQLiteVectorStore();
-      await store.clear();
-
-      toast.success("已清空知识库文档与向量索引");
+      toast.success("已清空知识库文档与索引");
     } catch (e: any) {
       toast.error(`清理失败: ${e?.message || "未知错误"}`);
     } finally {
@@ -453,4 +441,4 @@ export function PrivacySettings() {
       </Collapsible>
     </SettingsCard>
   );
-} 
+}

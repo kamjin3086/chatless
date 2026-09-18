@@ -74,7 +74,7 @@ export class DatabaseStateRepair {
     // 检查核心业务表是否存在
     const coreTableNames = [
       'conversations', 'messages', 'documents', 
-      'knowledge_bases', 'knowledge_chunks', 'doc_knowledge_mappings'
+      'knowledge_bases', 'document_chunks', 'document_index_batches', 'doc_knowledge_mappings'
     ];
     
     const existingCoreTables = coreTableNames.filter(name => existingTables.includes(name));
@@ -176,7 +176,7 @@ export class DatabaseStateRepair {
    */
   private async detectTargetVersion(existingTables: string[]): Promise<number> {
     const coreTablesV1 = ['conversations', 'messages'];
-    const coreTablesV2 = ['documents', 'knowledge_bases', 'knowledge_chunks', 'doc_knowledge_mappings'];
+    const coreTablesV2 = ['documents', 'knowledge_bases', 'document_chunks', 'document_index_batches', 'doc_knowledge_mappings'];
 
     const hasV1Tables = coreTablesV1.every(table => existingTables.includes(table));
     const hasV2Tables = coreTablesV2.every(table => existingTables.includes(table));
@@ -280,4 +280,4 @@ export async function checkDatabaseNeedsRepair(db: Database): Promise<boolean> {
   const repair = new DatabaseStateRepair(db);
   const state = await repair.checkDatabaseState();
   return state.shouldRepair;
-} 
+}

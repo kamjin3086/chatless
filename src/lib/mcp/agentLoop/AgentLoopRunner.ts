@@ -7,15 +7,17 @@ import { ToolExecutionPipeline, ToolInvocation } from '@/lib/mcp/pipeline';
 import { createDefaultAdapters } from '@/lib/mcp/pipeline/adapters';
 import { useChatStore } from '@/store/chatStore';
 
-import type { AgentLoopCancelParams, AgentLoopRunParams } from './types';
+import type { AgentLoopCancelParams, AgentLoopRunParams, RunInput } from './types';
 import { AgentRunControlPlane } from './AgentRunControlPlane';
 import { AgentRunEventStore } from './AgentRunEventStore';
 import { buildAgentPromptEnvelope, dedupeEnvelopeSystemPrefix } from './buildAgentPromptEnvelope';
 import { resolveAgentToolCapability } from './resolveAgentToolCapability';
 import { applyCitations } from '@/lib/rag/CitationService';
-import { listEvidence } from '@/lib/rag/EvidenceRegistry';
+import { listEvidence, restoreEvidence } from '@/lib/rag/EvidenceRegistry';
 import { isPipelineSkipped } from '@/lib/mcp/shared/toolResultGuards';
 import { ConversationEventLog } from '@/lib/mcp/pipeline/context/ConversationEventLog';
+import { externalizeLargeToolResult } from '@/lib/mcp/toolResultAttachments';
+import { modelRequestScheduler } from '@/lib/llm/ModelRequestScheduler';
 
 const coordinator = ToolCallCoordinator.getInstance();
 const DEFAULT_PIPELINE = new ToolExecutionPipeline({ adapters: createDefaultAdapters() });
@@ -30,54 +32,22 @@ const activeLoops = new Map<string, {
   modelRequestIds: Set<string>;
   controlPlane?: AgentRunControlPlane;
 }>();
-type SteeringInput = { inputId: string; content: string };
+type SteeringInput = RunInput & { inputId: string };
 const steeringInputs = new Map<string, SteeringInput[]>();
-// 一个本地模型端点只允许一个请求进入 Provider；不同端点仍可并行。
-const endpointTails = new Map<string, Promise<void>>();
-
-/**
- * Serialize inference only. Tool execution and approvals deliberately happen
- * outside this queue so a slow shell command cannot block another chat request
- * to the same model endpoint.
- */
-async function scheduleModelRequest<T>(endpointKey: string, signal: AbortSignal, work: () => Promise<T>): Promise<T | undefined> {
-  const previous = endpointTails.get(endpointKey) || Promise.resolve();
-  let release!: () => void;
-  const mine = new Promise<void>((resolve) => { release = resolve; });
-  const tail = previous.catch(() => {}).then(() => mine);
-  endpointTails.set(endpointKey, tail);
-  const aborted = new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
-  let acquired = false;
-  try {
-    await Promise.race([previous.catch(() => {}), aborted]);
-    if (signal.aborted) {
-      // Preserve this cancelled waiter's position until the active request
-      // releases the endpoint. Otherwise the next waiter can overlap it.
-      void previous.catch(() => {}).finally(release);
-      return undefined;
-    }
-    acquired = true;
-    return await work();
-  } finally {
-    if (acquired) release();
-    void tail.finally(() => {
-      if (endpointTails.get(endpointKey) === tail) endpointTails.delete(endpointKey);
-    });
-  }
-}
-
 /** Queue a user steering message for the next safe model boundary. */
-export async function queueAgentSteering(assistantMessageId: string, input: string): Promise<boolean> {
+export async function queueAgentSteering(assistantMessageId: string, input: RunInput | string): Promise<boolean> {
   const id = String(assistantMessageId || '').trim();
-  const text = String(input || '').trim();
+  const normalized: RunInput = typeof input === 'string' ? { text: input } : input;
+  const text = String(normalized.text || '').trim();
   const active = activeLoops.get(id);
-  if (!id || !text || !active?.controlPlane) return false;
+  if (!id || (!text && !normalized.images?.length && !normalized.attachmentDocumentIds?.length) || !active?.controlPlane) return false;
   // Confirming a queued supplement only after this append succeeds gives it
   // the same durable boundary as the original user turn.
   const inputId = `steer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  await active.controlPlane.record({ type: 'queued_user_input', inputId, content: text });
+  const queued = { inputId, content: text, images: normalized.images, attachmentDocumentIds: normalized.attachmentDocumentIds };
+  await active.controlPlane.record({ type: 'queued_user_input', ...queued });
   const pending = steeringInputs.get(id) || [];
-  pending.push({ inputId, content: text });
+  pending.push({ inputId, text, images: normalized.images, attachmentDocumentIds: normalized.attachmentDocumentIds });
   steeringInputs.set(id, pending);
   return true;
 }
@@ -103,7 +73,7 @@ async function ensureAssistantLoading(assistantMessageId: string) {
 }
 
 export class AgentLoopRunner {
-  static steer(assistantMessageId: string, input: string): Promise<boolean> {
+  static steer(assistantMessageId: string, input: RunInput | string): Promise<boolean> {
     return queueAgentSteering(assistantMessageId, input);
   }
   static cancel(params: AgentLoopCancelParams) {
@@ -124,7 +94,10 @@ export class AgentLoopRunner {
       }
       try {
         void import('@tauri-apps/api/core').then(({ invoke }) => Promise.all(
-          [...active.shellExecutionIds].map((executionId) => invoke('cancel_safe_shell', { executionId }).catch(() => false)),
+          [
+            ...[...active.shellExecutionIds].map((executionId) => invoke('cancel_safe_shell', { executionId }).catch(() => false)),
+            invoke('cancel_dense_search', { requestId: id }).catch(() => false),
+          ],
         )).catch(() => {});
       } catch { /* ignore */ }
     }
@@ -136,7 +109,8 @@ export class AgentLoopRunner {
     const conversationId = String(params.conversationId || '').trim();
     const provider = String(params.provider || '').trim();
     const model = String(params.model || '').trim();
-    const originalUserContent = String(params.continuationPrompt || params.originalUserContent || '');
+    const initialInput: RunInput = params.input || { text: params.originalUserContent };
+    const originalUserContent = String(params.continuationPrompt || initialInput.text || params.originalUserContent || '');
     const baseHistory: LlmMessage[] = [...(params.historyForLlm || [])] as LlmMessage[];
     const baseOptions: Record<string, any> = { ...(params.options || {}), conversationId, messageId: assistantMessageId };
     const hooks = params.runtimeHooks;
@@ -159,7 +133,10 @@ export class AgentLoopRunner {
     // the actual inference bottleneck.  Do not keep this lease while tools run.
     const endpointKey = providerEndpoint.trim().replace(/\/$/, '') || provider;
 
-    const controlPlane = new AgentRunControlPlane(assistantMessageId, conversationId, assistantMessageId);
+    const controlPlane = new AgentRunControlPlane(assistantMessageId, conversationId, assistantMessageId, {
+      parentRunId: params.continuationRunId,
+      runKind: regenerate ? 'regeneration' : params.continuationRunId ? 'continuation' : 'normal',
+    });
     const active = activeLoops.get(assistantMessageId);
     if (active) active.controlPlane = controlPlane;
     let streamFailed = false;
@@ -175,8 +152,9 @@ export class AgentLoopRunner {
       // the first model request would contain the same input twice.
       const lastMessage = baseHistory.at(-1);
       const currentUserAlreadyInHistory = lastMessage?.role === 'user' && lastMessage.content === originalUserContent;
-      if (originalUserContent.trim() && !currentUserAlreadyInHistory) {
-        await controlPlane.record({ type: 'user_message', content: originalUserContent });
+      if (originalUserContent.trim() || initialInput.images?.length || initialInput.attachmentDocumentIds?.length) {
+        await controlPlane.record({ type: 'user_message', content: originalUserContent,
+          images: initialInput.images, attachmentDocumentIds: initialInput.attachmentDocumentIds });
       }
       if (planOnly) {
         await controlPlane.record({
@@ -194,7 +172,10 @@ export class AgentLoopRunner {
       const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
       const envelope = buildAgentPromptEnvelope(injection);
       const capability = resolveAgentToolCapability(provider, model);
-      let conversationHistory = dedupeEnvelopeSystemPrefix(baseHistory, envelope.prefixMessages);
+      // The current turn is always a durable run event. Remove its duplicate
+      // from the caller-built history before projecting the event log.
+      const historyBeforeCurrentInput = currentUserAlreadyInHistory ? baseHistory.slice(0, -1) : baseHistory;
+      let conversationHistory = dedupeEnvelopeSystemPrefix(historyBeforeCurrentInput, envelope.prefixMessages);
 
       // 复用工具清单（避免每轮都计算）
       const toolOptions: Record<string, any> = { ...baseOptions };
@@ -217,6 +198,22 @@ export class AgentLoopRunner {
       const renderMode = capability.renderMode;
       if (params.continuationRunId) {
         try {
+          const previousMessage = useChatStore.getState().conversations
+            .find((conversation) => conversation.id === conversationId)?.messages
+            .find((message) => message.id === params.continuationRunId);
+          if (previousMessage?.citations?.length) {
+            restoreEvidence(assistantMessageId, previousMessage.citations.map((citation) => ({
+              id: citation.evidenceId || citation.id,
+              documentId: citation.documentId,
+              documentName: citation.documentName,
+              documentPath: citation.documentPath,
+              documentHash: citation.documentHash,
+              sourceBlockIds: [],
+              locator: citation.locator,
+              quote: citation.quote,
+              score: 0,
+            })));
+          }
           const previousEvents = await AgentRunEventStore.loadEvents(params.continuationRunId);
           const previousLog = new ConversationEventLog();
           previousEvents.forEach((event) => previousLog.append(event));
@@ -235,7 +232,8 @@ export class AgentLoopRunner {
             .filter((inputId): inputId is string => Boolean(inputId)));
           for (const event of previousEvents) {
             if (event.type === 'queued_user_input' && !delivered.has(event.inputId)) {
-              await controlPlane.record({ type: 'user_message', inputId: event.inputId, content: event.content });
+              await controlPlane.record({ type: 'user_message', inputId: event.inputId, content: event.content,
+                images: event.images, attachmentDocumentIds: event.attachmentDocumentIds });
             }
           }
         } catch (error) {
@@ -279,7 +277,8 @@ export class AgentLoopRunner {
         // This preserves native tool-call ordering.
         const queued = steeringInputs.get(assistantMessageId)?.splice(0) || [];
         for (const input of queued) {
-          await controlPlane.record({ type: 'user_message', inputId: input.inputId, content: input.content });
+          await controlPlane.record({ type: 'user_message', inputId: input.inputId, content: input.text,
+            images: input.images, attachmentDocumentIds: input.attachmentDocumentIds });
         }
         if (round >= MAX_MODEL_STEPS) {
           terminalStatus = 'paused';
@@ -396,9 +395,9 @@ export class AgentLoopRunner {
             const requestId = `agent-${assistantMessageId}-${round}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
             activeLoops.get(assistantMessageId)?.modelRequestIds.add(requestId);
             try {
-              await scheduleModelRequest(endpointKey, ctrl.signal, async () => {
+              await modelRequestScheduler.schedule(endpointKey, { signal: ctrl.signal }, async () => {
                 if (ctrl.signal.aborted) return;
-                void streamChat(provider, model, messages, callbacks, { ...toolOptions, __requestId: requestId }).catch((error) => {
+                void streamChat(provider, model, messages, callbacks, { ...toolOptions, __requestId: requestId, __schedulerLease: true }).catch((error) => {
                   callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
                 });
                 await streamDone;
@@ -422,23 +421,20 @@ export class AgentLoopRunner {
         }
 
         const content = orchestrator.getContext().content;
-        if (content?.trim()) {
-          await controlPlane.record({ type: 'assistant_message', content });
+        const modelEvents: import('@/lib/mcp/pipeline/context/ConversationEventLog').ConversationEvent[] = [];
+        if (content?.trim()) modelEvents.push({ type: 'assistant_message', content });
+        for (const [key, req] of requests) {
+          modelEvents.push({ type: 'tool_call_requested', callId: req.callId || key,
+            cardId: req.cardId, server: req.server, tool: req.tool, args: req.args, providerData: req.providerData });
         }
+        await controlPlane.commitModelStep(modelEvents);
         if (requests.size === 0) {
           if (steeringInputs.get(assistantMessageId)?.length) continue;
           break;
         }
 
-        // Persist every request before executing any of them. A failed write
-        // must stop dispatch, not become a successful model-visible result.
-        for (const [key, req] of requests) {
-          await controlPlane.record({
-            type: 'tool_call_requested', callId: req.callId || key,
-            cardId: req.cardId, server: req.server, tool: req.tool,
-            args: req.args, providerData: req.providerData,
-          });
-        }
+        // The complete assistant response and all requests were committed as
+        // one durable boundary above. No side effect starts before it succeeds.
         // Unknown/MCP side effects are ordered. Read-only parallel execution can
         // be added once adapters expose reliable effect metadata.
         let steeringPreempted = false;
@@ -446,7 +442,9 @@ export class AgentLoopRunner {
           const callId = req.callId || key;
           let out: unknown = req.preResult;
           let executed = false;
-          if (steeringInputs.get(assistantMessageId)?.length) {
+          if (regenerate) {
+            out = { ok: false, error: { code: 'REGENERATE_TOOL_BLOCKED', message: '重新生成只允许组织已有记录，禁止执行工具。' } };
+          } else if (steeringInputs.get(assistantMessageId)?.length) {
             steeringPreempted = true;
             out = { ok: false, error: { code: 'NOT_DISPATCHED', message: '收到用户补充，调用未执行，等待模型重新决定。' } };
           } else if (terminalStatus) {
@@ -489,10 +487,11 @@ export class AgentLoopRunner {
           }
           if ((out as any)?.resultStatus === 'unknown') terminalStatus = 'paused';
           const toolFailed = !!(out as any)?.error || (out as any)?.ok === false;
+          const modelOutput = await externalizeLargeToolResult({ conversationId, runId: assistantMessageId, callId, output: out });
           await controlPlane.record({
             type: 'tool_call_output', callId, cardId: req.cardId,
             server: req.server, tool: req.tool, args: req.args,
-            output: out, isError: toolFailed,
+            output: modelOutput, isError: toolFailed,
           });
           if ((!executed || (out as any)?.error?.code === 'EXECUTION_UNKNOWN') && toolFailed) {
             useChatStore.getState().dispatchMessageAction(assistantMessageId, {

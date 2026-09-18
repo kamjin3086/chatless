@@ -13,7 +13,7 @@ export const APP_INFO = {
   privacy: "https://kamjin3086.github.io/chatless/privacy",
 };
 
-import { version as pkgVersion } from "../../package.json" assert { type: "json" };
+import packageJson from "../../package.json";
 
 /**
  * 返回版本与内部构建号
@@ -22,7 +22,7 @@ import { version as pkgVersion } from "../../package.json" assert { type: "json"
  */
 export function getVersionInfo() {
   const envVer = process.env.npm_package_version;
-  const version = (pkgVersion as string | undefined) || envVer || "dev";
+  const version = packageJson.version || envVer || "dev";
   const build = (process.env.GITHUB_SHA)?.slice(0, 7) || (process.env.NEXT_PUBLIC_GIT_SHA?.slice(0, 7) ?? "release");
   return { version, build };
-} 
+}

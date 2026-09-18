@@ -38,39 +38,6 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
   }
 
   /**
-   * 检查 vector_embeddings 表是否存在（兼容旧库/未索引知识库）
-   */
-  private async hasVectorEmbeddingsTable(): Promise<boolean> {
-    try {
-      const rows = await this.dbManager.select<{ name: string }>(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'vector_embeddings'`
-      );
-      return Array.isArray(rows) && rows.length > 0;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * 软删除与知识库关联的向量数据（表不存在时跳过）
-   */
-  private async softDeleteVectorsByKnowledgeBaseId(
-    transaction: { execute: DatabaseManager['execute'] },
-    knowledgeBaseId: string
-  ): Promise<number> {
-    if (!(await this.hasVectorEmbeddingsTable())) {
-      console.warn('[KnowledgeBaseRepository] vector_embeddings 表不存在，跳过向量软删除');
-      return 0;
-    }
-    const result = await transaction.execute(
-      `UPDATE vector_embeddings SET is_deleted = 1
-       WHERE json_extract(metadata, '$.knowledgeBaseId') = ?`,
-      [knowledgeBaseId]
-    );
-    return result.rowsAffected ?? 0;
-  }
-
-  /**
    * 创建知识库
    */
   async createKnowledgeBase(
@@ -143,28 +110,9 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     console.log(`[deleteKnowledgeBase] 开始删除知识库: ${id}`);
 
     return await this.executeTransaction(async (transaction) => {
-      // 1. 删除向量嵌入数据（软删除，表不存在时跳过）
-      const vectorsAffected = await this.softDeleteVectorsByKnowledgeBaseId(transaction, id);
-      console.log(`[deleteKnowledgeBase] 标记删除向量数据: ${vectorsAffected} 条`);
-
-      // 2. 删除知识片段
-      const chunksResult = await transaction.execute(
-        'DELETE FROM knowledge_chunks WHERE knowledge_base_id = ?',
-        [id]
-      );
-      console.log(`[deleteKnowledgeBase] 删除知识片段: ${chunksResult.rowsAffected} 条`);
-
-      // 清理新检索链路的原文块、FTS 行和检索分块，避免删除知识库后
-      // 残留结果仍能被全文检索命中。迁移在数据库服务初始化时完成。
-      await transaction.execute(
-        `DELETE FROM retrieval_chunks_fts
-          WHERE chunk_id IN (SELECT id FROM retrieval_chunks WHERE knowledge_base_id = ?)`,
-        [id],
-      );
-      await transaction.execute('DELETE FROM retrieval_chunks WHERE knowledge_base_id = ?', [id]);
-      await transaction.execute('DELETE FROM source_blocks WHERE knowledge_base_id = ?', [id]);
-
-      // 3. 删除文档映射
+      // Chunks belong to documents and may still be visible through another
+      // knowledge base or conversation attachment. Deleting a knowledge base
+      // therefore removes only the relationship.
       const mappingResult = await transaction.execute(
         'DELETE FROM doc_knowledge_mappings WHERE knowledge_base_id = ?',
         [id]
@@ -178,28 +126,23 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
       );
       console.log(`[deleteKnowledgeBase] 删除知识库记录: ${result.rowsAffected} 条`);
 
-      console.log(`[deleteKnowledgeBase] 删除完成: vectors=${vectorsAffected}, chunks=${chunksResult.rowsAffected}, mapping=${mappingResult.rowsAffected}, kb=${result.rowsAffected}`);
+      console.log(`[deleteKnowledgeBase] 删除完成: mapping=${mappingResult.rowsAffected}, kb=${result.rowsAffected}`);
 
       return result.rowsAffected > 0;
     });
   }
 
-  /**
-   * 清理孤立的向量数据
-   * 删除那些没有对应knowledge_chunks记录的向量数据
-   */
+  /** Remove embeddings whose document chunk no longer exists. */
   async cleanupOrphanedVectors(): Promise<number> {
     try {
       console.log('[cleanupOrphanedVectors] 开始清理孤立的向量数据...');
 
-      // 找出孤立的向量数据（没有对应的knowledge_chunks记录）
       const orphanedVectors = await this.dbManager.select(`
-        SELECT ve.id
-        FROM vector_embeddings ve
-        LEFT JOIN knowledge_chunks kc ON
-          json_extract(ve.metadata, '$.documentId') = kc.document_id AND
-          json_extract(ve.metadata, '$.knowledgeBaseId') = kc.knowledge_base_id
-        WHERE kc.id IS NULL AND ve.is_deleted = 0
+        SELECT e.chunk_id AS id
+          FROM document_chunk_embeddings e
+          LEFT JOIN document_chunks dc
+            ON dc.id = e.chunk_id AND dc.batch_id = e.batch_id
+         WHERE dc.id IS NULL
       `);
 
       if (orphanedVectors.length === 0) {
@@ -209,16 +152,15 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
 
       console.log(`[cleanupOrphanedVectors] 发现 ${orphanedVectors.length} 个孤立的向量数据`);
 
-      // 软删除孤立的向量数据
       const vectorIds = orphanedVectors.map(v => v.id);
       const placeholders = vectorIds.map(() => '?').join(',');
 
       const result = await this.dbManager.execute(
-        `UPDATE vector_embeddings SET is_deleted = 1 WHERE id IN (${placeholders})`,
+        `DELETE FROM document_chunk_embeddings WHERE chunk_id IN (${placeholders})`,
         vectorIds
       );
 
-      console.log(`[cleanupOrphanedVectors] 清理完成，标记删除 ${result.rowsAffected} 个孤立向量`);
+      console.log(`[cleanupOrphanedVectors] 清理完成，删除 ${result.rowsAffected} 个孤立向量`);
       return result.rowsAffected;
     } catch (error) {
       console.error('[cleanupOrphanedVectors] 清理失败:', error);
@@ -236,25 +178,25 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     orphanedVectors: number;
   }> {
     try {
-      // 总向量数
-      const totalResult = await this.dbManager.select('SELECT COUNT(*) as count FROM vector_embeddings');
+      const totalResult = await this.dbManager.select('SELECT COUNT(*) as count FROM document_chunk_embeddings');
       const totalVectors = totalResult[0]?.count || 0;
 
-      // 活跃向量数
-      const activeResult = await this.dbManager.select('SELECT COUNT(*) as count FROM vector_embeddings WHERE is_deleted = 0');
+      const activeResult = await this.dbManager.select(`
+        SELECT COUNT(*) as count
+          FROM document_chunk_embeddings e
+          JOIN document_chunks dc ON dc.id = e.chunk_id AND dc.batch_id = e.batch_id
+          JOIN documents d ON d.id = dc.document_id AND d.active_index_batch_id = dc.batch_id
+      `);
       const activeVectors = activeResult[0]?.count || 0;
 
       // 已删除向量数
       const deletedVectors = totalVectors - activeVectors;
 
-      // 孤立向量数（活跃但没有对应knowledge_chunks的向量）
       const orphanedResult = await this.dbManager.select(`
         SELECT COUNT(*) as count
-        FROM vector_embeddings ve
-        LEFT JOIN knowledge_chunks kc ON
-          json_extract(ve.metadata, '$.documentId') = kc.document_id AND
-          json_extract(ve.metadata, '$.knowledgeBaseId') = kc.knowledge_base_id
-        WHERE kc.id IS NULL AND ve.is_deleted = 0
+          FROM document_chunk_embeddings e
+          LEFT JOIN document_chunks dc ON dc.id = e.chunk_id AND dc.batch_id = e.batch_id
+         WHERE dc.id IS NULL
       `);
       const orphanedVectors = orphanedResult[0]?.count || 0;
 
@@ -285,7 +227,13 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     const stats = await this.dbManager.select(`
       SELECT
         (SELECT COUNT(*) FROM doc_knowledge_mappings WHERE knowledge_base_id = ?) as documentCount,
-        (SELECT COUNT(*) FROM knowledge_chunks WHERE knowledge_base_id = ?) as chunkCount
+        (SELECT COUNT(*)
+           FROM document_chunks dc
+           JOIN documents d ON d.id = dc.document_id AND d.active_index_batch_id = dc.batch_id
+          WHERE EXISTS (
+            SELECT 1 FROM doc_knowledge_mappings m
+             WHERE m.document_id = dc.document_id AND m.knowledge_base_id = ?
+          )) as chunkCount
     `, [knowledgeBaseId, knowledgeBaseId]);
 
     return stats[0] || { documentCount: 0, chunkCount: 0 };
@@ -406,43 +354,7 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     return await this.executeTransaction(async (transaction) => {
       console.log(`[removeDocumentFromKnowledgeBase] 开始删除文档: ${documentId} from ${knowledgeBaseId}`);
 
-      let vectorsAffected = 0;
-      if (await this.hasVectorEmbeddingsTable()) {
-        const vectorsResult = await transaction.execute(
-          `UPDATE vector_embeddings SET is_deleted = 1
-           WHERE json_extract(metadata, '$.documentId') = ?
-           AND json_extract(metadata, '$.knowledgeBaseId') = ?`,
-          [documentId, knowledgeBaseId]
-        );
-        vectorsAffected = vectorsResult.rowsAffected ?? 0;
-      }
-      console.log(`[removeDocumentFromKnowledgeBase] 标记删除向量数据: ${vectorsAffected} 条`);
-
-      // 2. 删除知识片段
-      const chunksResult = await transaction.execute(
-        'DELETE FROM knowledge_chunks WHERE document_id = ? AND knowledge_base_id = ?',
-        [documentId, knowledgeBaseId]
-      );
-      console.log(`[removeDocumentFromKnowledgeBase] 删除知识片段: ${chunksResult.rowsAffected} 条`);
-
-      await transaction.execute(
-        `DELETE FROM retrieval_chunks_fts
-          WHERE chunk_id IN (
-            SELECT id FROM retrieval_chunks
-             WHERE document_id = ? AND knowledge_base_id = ?
-          )`,
-        [documentId, knowledgeBaseId],
-      );
-      await transaction.execute(
-        'DELETE FROM retrieval_chunks WHERE document_id = ? AND knowledge_base_id = ?',
-        [documentId, knowledgeBaseId],
-      );
-      await transaction.execute(
-        'DELETE FROM source_blocks WHERE document_id = ? AND knowledge_base_id = ?',
-        [documentId, knowledgeBaseId],
-      );
-
-      // 3. 删除映射关系
+      // Removing one mount must not delete the document-owned index.
       const mappingResult = await transaction.execute(
         'DELETE FROM doc_knowledge_mappings WHERE document_id = ? AND knowledge_base_id = ?',
         [documentId, knowledgeBaseId]
@@ -455,9 +367,9 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
         [Date.now(), knowledgeBaseId]
       );
 
-      console.log(`[removeDocumentFromKnowledgeBase] 删除完成: vectors=${vectorsAffected}, chunks=${chunksResult.rowsAffected}, mapping=${mappingResult.rowsAffected}`);
+      console.log(`[removeDocumentFromKnowledgeBase] 删除完成: mapping=${mappingResult.rowsAffected}`);
 
-      return (mappingResult.rowsAffected ?? 0) > 0 || (chunksResult.rowsAffected ?? 0) > 0;
+      return (mappingResult.rowsAffected ?? 0) > 0;
     });
   }
 
@@ -517,74 +429,6 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
     return mappings.length > 0;
   }
 
-  // === 知识片段相关方法 ===
-
-  /**
-   * 创建知识片段
-   */
-  async createKnowledgeChunk(
-    knowledgeBaseId: string,
-    documentId: string,
-    content: string,
-    metadata: any = {},
-    chunkIndex: number = 0
-  ): Promise<string> {
-    const id = this.generateId();
-    const contentHash = await this.generateContentHash(content);
-
-    await this.dbManager.execute(`
-      INSERT INTO knowledge_chunks (
-        id, knowledge_base_id, document_id, content, chunk_index, content_hash, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      id,
-      knowledgeBaseId,
-      documentId,
-      content,
-      chunkIndex,
-      contentHash,
-      JSON.stringify(metadata),
-      Date.now()
-    ]);
-
-    return id;
-  }
-
-  /**
-   * 获取知识库的所有知识片段
-   */
-  async getKnowledgeChunks(knowledgeBaseId: string): Promise<any[]> {
-    return await this.dbManager.select(`
-      SELECT * FROM knowledge_chunks
-      WHERE knowledge_base_id = ?
-      ORDER BY document_id, chunk_index
-    `, [knowledgeBaseId]);
-  }
-
-  /**
-   * 删除知识片段
-   */
-  async deleteKnowledgeChunks(
-    knowledgeBaseId?: string,
-    documentId?: string
-  ): Promise<number> {
-    let sql = 'DELETE FROM knowledge_chunks WHERE 1=1';
-    const params: any[] = [];
-
-    if (knowledgeBaseId) {
-      sql += ' AND knowledge_base_id = ?';
-      params.push(knowledgeBaseId);
-    }
-
-    if (documentId) {
-      sql += ' AND document_id = ?';
-      params.push(documentId);
-    }
-
-    const result = await this.dbManager.execute(sql, params);
-    return result.rowsAffected;
-  }
-
   /**
    * 将数据库记录映射为KnowledgeBase对象
    */
@@ -611,20 +455,6 @@ export class KnowledgeBaseRepository extends BaseRepository<KnowledgeBase> {
       indexedAt: record.indexed_at,
       status: record.status as 'pending' | 'indexing' | 'indexed' | 'failed'
     };
-  }
-
-  /**
-   * 生成内容哈希
-   */
-  private async generateContentHash(content: string): Promise<string> {
-    // 简单的哈希实现，实际项目中可能需要更强的哈希算法
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(36);
   }
 
   /**

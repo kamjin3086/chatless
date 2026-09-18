@@ -4,8 +4,8 @@ import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
 export type ContextChangeKind = 'permissions' | 'environment' | 'tools' | 'other';
 
 export type ConversationEvent =
-  | { type: 'user_message'; content: string; inputId?: string }
-  | { type: 'queued_user_input'; inputId: string; content: string }
+  | { type: 'user_message'; content: string; inputId?: string; images?: string[]; attachmentDocumentIds?: string[] }
+  | { type: 'queued_user_input'; inputId: string; content: string; images?: string[]; attachmentDocumentIds?: string[] }
   | { type: 'assistant_message'; content: string }
   | {
       type: 'tool_call_requested';
@@ -94,7 +94,7 @@ export class ConversationEventLog {
       for (const e of this.events) {
         if (e.type === 'queued_user_input') continue;
         if (e.type === 'user_message') {
-          out.push({ role: 'user', content: e.content });
+          out.push({ role: 'user', content: renderUserInput(e), images: e.images });
           continue;
         }
         if (e.type === 'assistant_message') {
@@ -195,7 +195,7 @@ export class ConversationEventLog {
     for (const e of this.events) {
       if (e.type === 'queued_user_input') continue;
       if (e.type === 'user_message') {
-        out.push({ role: 'user', content: e.content });
+        out.push({ role: 'user', content: renderUserInput(e), images: e.images });
         continue;
       }
       if (e.type === 'assistant_message') {
@@ -239,6 +239,11 @@ export class ConversationEventLog {
     }
     return out;
   }
+}
+
+function renderUserInput(event: Extract<ConversationEvent, { type: 'user_message' }>): string {
+  if (!event.attachmentDocumentIds?.length) return event.content;
+  return `${event.content}\n\n[已挂载会话资料: ${event.attachmentDocumentIds.join(', ')}]`.trim();
 }
 
 function safeJson(value: unknown): string {

@@ -1,5 +1,11 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
 
+export type RunInput = {
+  text: string;
+  images?: string[];
+  attachmentDocumentIds?: string[];
+};
+
 export type AgentLoopRuntimeHooks = {
   onAgentStart?: (info: { assistantMessageId: string; conversationId: string }) => void | Promise<void>;
   onAgentEnd?: (info: { assistantMessageId: string; conversationId: string }) => void | Promise<void>;
@@ -20,6 +26,8 @@ export type AgentLoopRunParams = {
   /** 不包含本次 assistant 消息的历史（通常截止到本次 user 输入） */
   historyForLlm: LlmMessage[];
   originalUserContent: string;
+  /** Durable representation of the user turn. Falls back to originalUserContent for older callers. */
+  input?: RunInput;
   /** Optional prior run whose completed events should be supplied as context for a new run. */
   continuationRunId?: string;
   continuationPrompt?: string;

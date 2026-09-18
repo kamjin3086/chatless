@@ -3,6 +3,7 @@ import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import { generateId } from '@/lib/utils/id';
 
 export type AgentRunStatus = 'running' | 'waiting_input' | 'waiting_approval' | 'paused' | 'completed' | 'cancelled' | 'failed' | 'interrupted';
+export type ContextCheckpoint = { summary: string; coveredMessages: number; historyFingerprint: string };
 
 export class AgentRunEventStore {
   private static async db() {
@@ -28,6 +29,8 @@ export class AgentRunEventStore {
     runId: string;
     conversationId: string;
     assistantMessageId: string;
+    parentRunId?: string;
+    runKind?: 'normal' | 'continuation' | 'regeneration';
   }): Promise<void> {
     const now = Date.now();
     const native = await this.native<void>('agent_create_run', {
@@ -35,13 +38,15 @@ export class AgentRunEventStore {
       conversationId: params.conversationId,
       assistantMessageId: params.assistantMessageId,
       startedAt: now,
+      parentRunId: params.parentRunId,
+      runKind: params.runKind || 'normal',
     });
     if (native !== undefined || this.isTauriRuntime()) return;
     const db = await this.db();
     await db.execute(
-      `INSERT OR IGNORE INTO agent_runs (id, conversation_id, assistant_message_id, status, started_at)
-       VALUES (?, ?, ?, 'running', ?)`,
-      [params.runId, params.conversationId, params.assistantMessageId, now],
+      `INSERT OR IGNORE INTO agent_runs (id, conversation_id, assistant_message_id, status, started_at, parent_run_id, run_kind)
+       VALUES (?, ?, ?, 'running', ?, ?, ?)`,
+      [params.runId, params.conversationId, params.assistantMessageId, now, params.parentRunId || null, params.runKind || 'normal'],
     );
   }
 
@@ -117,6 +122,53 @@ export class AgentRunEventStore {
       }
     }
     return out;
+  }
+
+  static async commitModelStep(params: { runId: string; conversationId: string; events: ConversationEvent[] }): Promise<number> {
+    if (!params.events.length) return 0;
+    const createdAt = Date.now();
+    const rows = params.events.map((event, index) => ({ eventId: generateId(), eventType: event.type,
+      payload: JSON.stringify(event), createdAt: createdAt + index }));
+    const native = await this.native<number>('agent_commit_model_step', {
+      runId: params.runId, conversationId: params.conversationId, events: rows,
+    });
+    if (native !== undefined || this.isTauriRuntime()) return native as number;
+    const db = await this.db();
+    let finalSeq = 0;
+    await db.executeTransaction(async (tx) => {
+      const current = await tx.select('SELECT COALESCE(MAX(seq), 0) AS seq FROM agent_run_events WHERE run_id = ?', [params.runId]) as Array<{ seq: number }>;
+      finalSeq = current[0]?.seq || 0;
+      for (let index = 0; index < rows.length; index += 1) {
+        finalSeq += 1;
+        await tx.execute(`INSERT INTO agent_run_events
+          (id, run_id, conversation_id, seq, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [rows[index].eventId, params.runId, params.conversationId, finalSeq, rows[index].eventType, rows[index].payload, rows[index].createdAt]);
+      }
+    });
+    return finalSeq;
+  }
+
+  static async loadLatestCheckpoint(runId: string): Promise<ContextCheckpoint | undefined> {
+    const db = await this.db();
+    const rows = await db.select<{ payload: string }>(
+      'SELECT payload FROM agent_run_checkpoints WHERE run_id = ? AND kind = ? ORDER BY seq DESC LIMIT 1',
+      [runId, 'context_summary'],
+    );
+    if (!rows.length) return undefined;
+    try { return JSON.parse(rows[0].payload) as ContextCheckpoint; }
+    catch { throw new Error(`agent run ${runId} contains corrupt context checkpoint`); }
+  }
+
+  static async saveCheckpoint(runId: string, checkpoint: ContextCheckpoint): Promise<void> {
+    const native = await this.native<void>('agent_save_checkpoint', {
+      checkpointId: generateId(), runId, kind: 'context_summary',
+      payload: JSON.stringify(checkpoint), createdAt: Date.now(),
+    });
+    if (native !== undefined || this.isTauriRuntime()) return;
+    const db = await this.db();
+    const rows = await db.select<{ seq: number }>('SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM agent_run_checkpoints WHERE run_id = ?', [runId]);
+    await db.execute('INSERT INTO agent_run_checkpoints (id, run_id, seq, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [generateId(), runId, rows[0]?.seq || 1, 'context_summary', JSON.stringify(checkpoint), Date.now()]);
   }
 
   static async markStaleRunsCancelled(conversationId: string): Promise<void> {

@@ -182,8 +182,11 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
       // selections are deliberately not consulted here: unmounting a library
       // must remove both the tools and the prompt hint immediately.
       const kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
-      const attachments = useConversationAttachmentStore.getState().getSessionDocuments(convId);
-      if (kb?.id || attachments.length) {
+      const { DatabaseService } = await import('@/lib/database/services/DatabaseService');
+      const attachmentRows = await DatabaseService.getInstance().getDbManager().select<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM conversation_document_mappings WHERE conversation_id = ?', [convId],
+      );
+      if (kb?.id || Number(attachmentRows[0]?.n || 0) > 0) {
         messages.push({
           role: 'system',
           content:
@@ -384,8 +387,11 @@ async function buildNativeToolDefinitions(params: {
     if (convId) {
       const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
       const kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
-      const attachments = useConversationAttachmentStore.getState().getSessionDocuments(convId);
-      if ((kb?.id || attachments.length > 0) && !detectedGroups.includes('knowledge')) {
+      const { DatabaseService } = await import('@/lib/database/services/DatabaseService');
+      const attachmentRows = await DatabaseService.getInstance().getDbManager().select<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM conversation_document_mappings WHERE conversation_id = ?', [convId],
+      );
+      if ((kb?.id || Number(attachmentRows[0]?.n || 0) > 0) && !detectedGroups.includes('knowledge')) {
         detectedGroups.push('knowledge');
       }
     }

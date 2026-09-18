@@ -157,10 +157,12 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
       // 为每个文档查询分片数量
       const docsWithChunk = await Promise.all(
         documentsWithMappings.map(async (item) => {
-          const { chunkCount } = await KnowledgeService.getDocumentStats(knowledgeBase.id, item.document.id);
+          const { chunkCount, lexicalStatus, semanticStatus } = await KnowledgeService.getDocumentStats(knowledgeBase.id, item.document.id);
           return {
             ...item.document,
             chunkCount,
+            lexicalStatus,
+            semanticStatus,
           };
         })
       );
@@ -376,7 +378,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
   const handleUse = () => {
     if (!knowledgeBase) return;
     // 跳转到聊天页并携带 knowledgeBase 查询参数
-    router.push(`/chat?knowledgeBase=${knowledgeBase.id}&mode=agent`);
+    router.push(`/chat?knowledgeBase=${knowledgeBase.id}`);
     toast.success('已切换到聊天，可开始使用该知识库');
   };
 
@@ -549,6 +551,8 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
                     updatedAt={doc.updatedAt || ""}
                     isIndexed={doc.isIndexed ?? false}
                     chunkCount={typeof doc.chunkCount === 'number' ? doc.chunkCount : undefined}
+                    lexicalStatus={(doc as any).lexicalStatus}
+                    semanticStatus={(doc as any).semanticStatus}
                     onView={() => handleViewDocument(doc.id)}
                     onDelete={() => handleRemoveDocument(doc.id)}
                     hideIndexedStatus={true}

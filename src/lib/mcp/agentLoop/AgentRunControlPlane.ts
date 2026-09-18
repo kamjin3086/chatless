@@ -14,11 +14,13 @@ export class AgentRunControlPlane {
   private seq = 0;
   private cancelled = false;
   private writes: Promise<void> = Promise.resolve();
+  private checkpoint: Awaited<ReturnType<typeof AgentRunEventStore.loadLatestCheckpoint>> = undefined;
 
   constructor(
     readonly runId: string,
     readonly conversationId: string,
     readonly assistantMessageId: string,
+    readonly source?: { parentRunId?: string; runKind?: 'normal' | 'continuation' | 'regeneration' },
   ) {}
 
   async start(): Promise<void> {
@@ -26,12 +28,20 @@ export class AgentRunControlPlane {
       runId: this.runId,
       conversationId: this.conversationId,
       assistantMessageId: this.assistantMessageId,
+      parentRunId: this.source?.parentRunId,
+      runKind: this.source?.runKind,
     });
     const existing = await AgentRunEventStore.loadEvents(this.runId);
     for (const event of existing) {
       this.eventLog.append(event);
       this.seq += 1;
     }
+    const loadCheckpoint = (AgentRunEventStore as typeof AgentRunEventStore & {
+      loadLatestCheckpoint?: typeof AgentRunEventStore.loadLatestCheckpoint;
+    }).loadLatestCheckpoint;
+    this.checkpoint = typeof loadCheckpoint === 'function'
+      ? await loadCheckpoint.call(AgentRunEventStore, this.runId)
+      : undefined;
   }
 
   record(event: ConversationEvent): Promise<void> {
@@ -47,6 +57,23 @@ export class AgentRunControlPlane {
       // only for that backwards-compatible in-memory path.
       this.seq = typeof assigned === 'number' ? assigned : expectedSeq;
       this.eventLog.append(event);
+    });
+    return this.writes;
+  }
+
+  commitModelStep(events: ConversationEvent[]): Promise<void> {
+    if (!events.length) return Promise.resolve();
+    const commit = (AgentRunEventStore as typeof AgentRunEventStore & {
+      commitModelStep?: typeof AgentRunEventStore.commitModelStep;
+    }).commitModelStep;
+    if (typeof commit !== 'function') {
+      return events.reduce((promise, event) => promise.then(() => this.record(event)), Promise.resolve());
+    }
+    this.writes = this.writes.then(async () => {
+      const finalSeq = await commit.call(AgentRunEventStore, { runId: this.runId,
+        conversationId: this.conversationId, events });
+      this.seq = finalSeq;
+      events.forEach((event) => this.eventLog.append(event));
     });
     return this.writes;
   }
@@ -96,6 +123,16 @@ export class AgentRunControlPlane {
       reserveOutputTokens: params.reserveOutputTokens,
       prefixMessages: params.prefixMessages, tools: params.tools,
       allowSummarize: true,
+      checkpoint: this.checkpoint,
+      onCheckpoint: async (checkpoint) => {
+        const saveCheckpoint = (AgentRunEventStore as typeof AgentRunEventStore & {
+          saveCheckpoint?: typeof AgentRunEventStore.saveCheckpoint;
+        }).saveCheckpoint;
+        if (typeof saveCheckpoint === 'function') {
+          await saveCheckpoint.call(AgentRunEventStore, this.runId, checkpoint);
+        }
+        this.checkpoint = checkpoint;
+      },
     });
     return [...params.prefixMessages, ...compactedVariable];
   }

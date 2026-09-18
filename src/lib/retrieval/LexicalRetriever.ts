@@ -16,6 +16,7 @@ function buildMatchQuery(tokenized: string): string {
 export class LexicalRetriever {
   async search(queryText: string, options: {
     knowledgeBaseIds?: string[];
+    documentIds?: string[];
     topK?: number;
   } = {}): Promise<VectorSearchResult[]> {
     const topK = options.topK ?? 30;
@@ -27,19 +28,23 @@ export class LexicalRetriever {
     const kbIds = options.knowledgeBaseIds?.filter(Boolean) || [];
 
     let sql = `
-      SELECT rc.id, rc.source_text as content, rc.metadata, rc.knowledge_base_id, rc.document_id,
-             bm25(retrieval_chunks_fts) as rank
-      FROM retrieval_chunks_fts
-      JOIN retrieval_chunks rc ON rc.id = retrieval_chunks_fts.chunk_id
-      WHERE retrieval_chunks_fts MATCH ?
+      SELECT dc.id, dc.source_text as content, dc.metadata, dc.locator, dc.document_id,
+             bm25(document_chunks_fts) as rank
+      FROM document_chunks_fts
+      JOIN document_chunks dc ON dc.id = document_chunks_fts.chunk_id
+      JOIN documents d ON d.id = dc.document_id AND d.active_index_batch_id = dc.batch_id
+      WHERE document_chunks_fts MATCH ?
     `;
     const params: unknown[] = [matchQuery];
-    if (kbIds.length === 1) {
-      sql += ` AND rc.knowledge_base_id = ?`;
-      params.push(kbIds[0]);
-    } else if (kbIds.length > 1) {
-      sql += ` AND rc.knowledge_base_id IN (${kbIds.map(() => '?').join(',')})`;
+    if (kbIds.length) {
+      sql += ` AND EXISTS (SELECT 1 FROM doc_knowledge_mappings m
+        WHERE m.document_id = dc.document_id AND m.knowledge_base_id IN (${kbIds.map(() => '?').join(',')}))`;
       params.push(...kbIds);
+    }
+    const documentIds = options.documentIds?.filter(Boolean) || [];
+    if (documentIds.length) {
+      sql += ` AND dc.document_id IN (${documentIds.map(() => '?').join(',')})`;
+      params.push(...documentIds);
     }
     sql += ` ORDER BY rank LIMIT ?`;
     params.push(topK);
@@ -59,8 +64,8 @@ export class LexicalRetriever {
           score: 1 / (index + 1),
           metadata: {
             ...metadata,
-            knowledgeBaseId: row.knowledge_base_id,
             documentId: row.document_id,
+            locator: typeof row.locator === 'string' ? JSON.parse(row.locator || '{}') : row.locator,
           },
         };
       });

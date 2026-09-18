@@ -39,4 +39,14 @@ describe('ConversationEventLog recovery boundaries', () => {
     expect(messages.filter((message) => message.role === 'tool').map((message) => message.tool_call_id)).toEqual(['a', 'b']);
     expect(messages.at(-1)?.content).toContain('EXECUTION_UNKNOWN');
   });
+
+  it('projects durable images and attachment references as one user input', () => {
+    const log = new ConversationEventLog();
+    log.append({ type: 'user_message', content: 'compare these', images: ['data:image/png;base64,abc'],
+      attachmentDocumentIds: ['doc-1'] });
+    const messages = log.renderForModel('tool_role');
+    expect(messages).toEqual([expect.objectContaining({
+      role: 'user', images: ['data:image/png;base64,abc'], content: expect.stringContaining('doc-1'),
+    })]);
+  });
 });

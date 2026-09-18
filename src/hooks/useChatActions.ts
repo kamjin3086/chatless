@@ -315,6 +315,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       }; 
       contextData: string 
       sourceContent?: string
+      sourceBytes?: Uint8Array
     },
     knowledgeBase?: { id: string; name: string },
     options?: { conversation?: Conversation, conversationId?: string, images?: string[], planOnly?: boolean }
@@ -334,11 +335,21 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       const steeringContent = documentData?.contextData
         ? `${content.trim()}\n\n[补充资料]\n${documentData.contextData.slice(0, 12000)}`.trim()
         : content;
-      if (activeAssistant?.id && options?.images?.length) {
-        toast.info('当前步骤完成后再发送图片', { description: '图片会保留在输入框中。' });
-        return;
+      let attachmentDocumentIds: string[] | undefined;
+      if (activeAssistant?.id && documentData?.sourceBytes?.length) {
+        const { attachDocumentToConversation } = await import('@/lib/documents/conversationDocumentService');
+        const attached = await attachDocumentToConversation({
+          conversationId: steeringConversationId,
+          name: documentData.documentReference.fileName,
+          bytes: documentData.sourceBytes,
+        });
+        attachmentDocumentIds = [attached.documentId];
       }
-      if (activeAssistant?.id && await AgentLoopRunner.steer(activeAssistant.id, steeringContent)) {
+      if (activeAssistant?.id && await AgentLoopRunner.steer(activeAssistant.id, {
+        text: steeringContent,
+        images: options?.images,
+        attachmentDocumentIds,
+      })) {
         toast.info('补充已排队', { description: '当前步骤完成后交给模型处理。' });
         return;
       }
@@ -435,21 +446,15 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       knowledge_base_reference: knowledgeBase,
       images: options?.images
     };
-    if (documentData?.sourceContent?.trim()) {
-      try {
-        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-        const { sha256Hex } = await import('@/lib/utils/sha256');
-        useConversationAttachmentStore.getState().setSessionDocument(finalConversationId, {
-          id: `attachment_${finalConversationId}_${documentData.documentReference.fileName}`,
-          name: documentData.documentReference.fileName,
-          fileType: documentData.documentReference.fileType,
-          fileSize: documentData.documentReference.fileSize,
-          content: documentData.sourceContent,
-          documentHash: await sha256Hex(documentData.sourceContent),
-        });
-      } catch {
-        /* session attachment is best-effort; message context remains available */
-      }
+    let attachmentDocumentIds: string[] | undefined;
+    if (documentData?.sourceBytes?.length) {
+      const { attachDocumentToConversation } = await import('@/lib/documents/conversationDocumentService');
+      const attached = await attachDocumentToConversation({
+        conversationId: finalConversationId,
+        name: documentData.documentReference.fileName,
+        bytes: documentData.sourceBytes,
+      });
+      attachmentDocumentIds = [attached.documentId];
     }
     await addMessage(newMessage);
 
@@ -576,6 +581,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
             model: modelToUse,
             historyForLlm: historyForLlm as any,
             originalUserContent: content,
+            input: { text: content, images: options?.images, attachmentDocumentIds },
             options: composed,
             planOnly: options?.planOnly,
             runtimeHooks: {

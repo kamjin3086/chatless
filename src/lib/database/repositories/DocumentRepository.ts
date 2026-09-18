@@ -130,24 +130,20 @@ export class DocumentRepository extends BaseRepository<Document> {
    * 删除文档
    */
   async deleteDocument(id: string): Promise<boolean> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return invoke<boolean>('delete_document_atomically', {
+        db: this.dbManager.getConnectionUrl(), documentId: id, updatedAt: Date.now(),
+      });
+    }
     return this.dbManager.executeTransaction(async (transaction) => {
-      // vector_embeddings is not linked by a foreign key because its
-      // document/knowledge-base identity lives in JSON metadata. Retire those
-      // vectors explicitly before deleting the document row.
       await transaction.execute(
-        `UPDATE vector_embeddings
-            SET is_deleted = 1
-          WHERE json_extract(metadata, '$.documentId') = ?`,
+        `DELETE FROM document_chunks_fts
+          WHERE chunk_id IN (SELECT id FROM document_chunks WHERE document_id = ?)`,
         [id],
       );
-      await transaction.execute(
-        `DELETE FROM retrieval_chunks_fts
-          WHERE chunk_id IN (SELECT id FROM retrieval_chunks WHERE document_id = ?)`,
-        [id],
-      );
-      await transaction.execute('DELETE FROM retrieval_chunks WHERE document_id = ?', [id]);
-      await transaction.execute('DELETE FROM source_blocks WHERE document_id = ?', [id]);
-      await transaction.execute('DELETE FROM knowledge_chunks WHERE document_id = ?', [id]);
+      await transaction.execute("UPDATE document_index_tasks SET status = 'cancelled', updated_at = ? WHERE document_id = ? AND status IN ('pending', 'running')", [Date.now(), id]);
+      await transaction.execute('DELETE FROM document_index_batches WHERE document_id = ?', [id]);
 
       const result = await transaction.execute('DELETE FROM documents WHERE id = ?', [id]);
       return (result.rowsAffected ?? 0) > 0;
@@ -159,11 +155,8 @@ export class DocumentRepository extends BaseRepository<Document> {
    */
   async clearAllDocuments(): Promise<void> {
     await this.dbManager.executeTransaction(async (transaction) => {
-      await transaction.execute('UPDATE vector_embeddings SET is_deleted = 1');
-      await transaction.execute('DELETE FROM retrieval_chunks_fts');
-      await transaction.execute('DELETE FROM retrieval_chunks');
-      await transaction.execute('DELETE FROM source_blocks');
-      await transaction.execute('DELETE FROM knowledge_chunks');
+      await transaction.execute('DELETE FROM document_chunks_fts');
+      await transaction.execute('DELETE FROM document_index_batches');
       await transaction.execute('DELETE FROM documents');
     });
   }

@@ -1,38 +1,9 @@
-import type { Evidence, RetrievalChunk, SourceBlock, SourceLocator } from './evidenceTypes';
-import { FINAL_EVIDENCE_K, MAX_EVIDENCE_CONTEXT_TOKENS, NEIGHBOR_BLOCK_WINDOW } from './constants';
+import type { Evidence, RetrievalChunk, SourceLocator } from './evidenceTypes';
+import { FINAL_EVIDENCE_K, MAX_EVIDENCE_CONTEXT_TOKENS } from './constants';
 import { estimateTokens } from './tokenEstimate';
-
-function sectionKey(block?: SourceBlock): string {
-  return block?.sectionPath?.join(' > ') || '';
-}
-
-function blocksKey(documentId: string, knowledgeBaseId?: string): string {
-  return `${knowledgeBaseId || ''}\u0000${documentId}`;
-}
-
-function evidenceWindowBlocks(
-  blocks: SourceBlock[],
-  chunk: RetrievalChunk,
-  neighbor: number
-): SourceBlock[] {
-  const start = Math.max(0, chunk.sourceStartBlock - neighbor);
-  const end = chunk.sourceEndBlock + neighbor;
-  const core = blocks.filter(
-    (b) => b.blockIndex >= chunk.sourceStartBlock && b.blockIndex <= chunk.sourceEndBlock
-  );
-  const coreSection = sectionKey(core[0]);
-  return blocks.filter((b) => {
-    if (b.blockIndex < start || b.blockIndex > end) return false;
-    const inCore = b.blockIndex >= chunk.sourceStartBlock && b.blockIndex <= chunk.sourceEndBlock;
-    if (inCore) return true;
-    if (coreSection && sectionKey(b) !== coreSection) return false;
-    return true;
-  });
-}
 
 export function buildEvidenceFromChunks(params: {
   chunks: RetrievalChunk[];
-  blocksByDoc: Map<string, SourceBlock[]>;
   documentNames?: Map<string, string>;
   knowledgeBaseNames?: Map<string, string>;
   limit?: number;
@@ -42,15 +13,7 @@ export function buildEvidenceFromChunks(params: {
   let tokens = 0;
 
   for (const chunk of params.chunks.slice(0, limit * 2)) {
-    const blocks =
-      params.blocksByDoc.get(blocksKey(chunk.documentId, chunk.knowledgeBaseId)) ||
-      params.blocksByDoc.get(chunk.documentId) ||
-      [];
-    const window = evidenceWindowBlocks(blocks, chunk, NEIGHBOR_BLOCK_WINDOW);
-    const quote = (window.length ? window : [{ text: chunk.sourceText } as SourceBlock])
-      .map((b) => b.text)
-      .join('\n')
-      .trim();
+    const quote = chunk.sourceText.trim();
     if (!quote) continue;
 
     const used = estimateTokens(quote);
@@ -59,8 +22,8 @@ export function buildEvidenceFromChunks(params: {
     const locator: SourceLocator = {
       page: chunk.metadata.pageStart,
       sectionPath: chunk.metadata.sectionPath,
-      lineStart: window[0]?.lineStart,
-      lineEnd: window[window.length - 1]?.lineEnd,
+      lineStart: Number(chunk.metadata.lineStart) || undefined,
+      lineEnd: Number(chunk.metadata.lineEnd) || undefined,
     };
 
     evidence.push({
@@ -75,7 +38,7 @@ export function buildEvidenceFromChunks(params: {
       knowledgeBaseName: chunk.knowledgeBaseId
         ? params.knowledgeBaseNames?.get(chunk.knowledgeBaseId)
         : undefined,
-      sourceBlockIds: window.map((b) => b.id),
+      sourceBlockIds: [chunk.id],
       locator,
       quote,
       score: Number(chunk.metadata.score || 0),

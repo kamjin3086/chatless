@@ -1,5 +1,6 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
 import { chat } from '@/lib/llm';
+import { sha256Hex } from '@/lib/utils/sha256';
 
 /** An estimate, not a tokenizer. Includes protocol data and image payloads. */
 export function estimateTokens(messages: LlmMessage[]): number {
@@ -17,6 +18,8 @@ export type CompactOptions = {
   allowSummarize?: boolean;
   prefixMessages?: LlmMessage[];
   tools?: unknown;
+  checkpoint?: { summary: string; coveredMessages: number; historyFingerprint: string };
+  onCheckpoint?: (checkpoint: { summary: string; coveredMessages: number; historyFingerprint: string }) => Promise<void>;
 };
 
 const summaryInstruction: LlmMessage = {
@@ -44,6 +47,11 @@ export class ContextWindowManager {
       throw new Error('当前完整轮次超出上下文预算；原始历史已保留，请缩小输入或调整模型窗口');
     }
     const tail = messages.slice(split);
+    const historyFingerprint = await sha256Hex(JSON.stringify(messages.slice(0, split)));
+    if (opts.checkpoint?.coveredMessages === split && opts.checkpoint.historyFingerprint === historyFingerprint) {
+      const reused: LlmMessage[] = [{ role: 'system', content: `【对话历史摘要】\n${opts.checkpoint.summary}` }, ...tail];
+      if (estimateTokens(reused) <= budget) return reused;
+    }
     const prompt = [summaryInstruction, ...messages.slice(0, split), { role: 'user' as const, content: '请输出摘要。' }];
     if (estimateTokens(prompt) > capacity) {
       throw new Error('待压缩历史超出摘要请求预算；原始历史已保留');
@@ -52,6 +60,7 @@ export class ContextWindowManager {
     const response = await chat(opts.provider, opts.model, prompt, { temperature: 0.2, maxTokens: reserve });
     const summary = String(response?.content || '').trim();
     if (!summary) throw new Error('历史压缩返回空摘要；原始历史已保留');
+    await opts.onCheckpoint?.({ summary, coveredMessages: split, historyFingerprint });
     const result: LlmMessage[] = [{ role: 'system', content: `【对话历史摘要】\n${summary}` }, ...tail];
     if (estimateTokens(result) > budget) throw new Error('压缩后仍超出上下文预算；原始历史已保留');
     return result;

@@ -17,6 +17,7 @@ import { SYSTEM_SERVER_NAME, SYSTEM_PROMPT_TOOLS } from './systemPrompts';
 import { SKILL_SERVER_NAME, SKILL_UNIFIED_TOOLS } from './skillUnifiedTools';
 import { CODING_PACK_SERVER_NAME, CODING_PACK_TOOLS } from './codingPack';
 import { KNOWLEDGE_SERVER_NAME, KNOWLEDGE_TOOLS } from './knowledge';
+import { TOOL_RESULT_SERVER_NAME, TOOL_RESULT_TOOLS } from './toolResult';
 
 // ============ 工具组定义 ============
 
@@ -60,6 +61,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       ...CORE_FS_TOOLS.map(t => ({ server: FILESYSTEM_SERVER_NAME, tool: t })),
       ...CORE_SHELL_TOOLS.map(t => ({ server: SHELL_EXECUTOR_SERVER_NAME, tool: t })),
       ...CORE_WEB_TOOLS.map(t => ({ server: WEB_SEARCH_SERVER_NAME, tool: t })),
+      ...TOOL_RESULT_TOOLS.map(t => ({ server: TOOL_RESULT_SERVER_NAME, tool: t })),
     ],
   },
   {

@@ -47,16 +47,8 @@ export default function ChatPage() {
   
   const searchParams = useSearchParams();
   const selectedKnowledgeBaseId = searchParams.get('knowledgeBase');
-  const requestedToolMode = searchParams.get('mode');
   const deepLinkConversationId = searchParams.get('conversation') || searchParams.get('conversationId');
   const setCurrentConversation = useChatStore((s)=>s.setCurrentConversation);
-  const setConversationToolMode = useChatStore((s) => s.setConversationToolMode);
-
-  useEffect(() => {
-    if (requestedToolMode === 'agent' && currentConversationId) {
-      void setConversationToolMode(currentConversationId, 'agent');
-    }
-  }, [currentConversationId, requestedToolMode, setConversationToolMode]);
   
   const { 
     llmInitialized, 

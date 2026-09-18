@@ -3,7 +3,7 @@ import { mergeSourceBlocksToChunks, buildSearchText } from '@/lib/chunking/strat
 import { buildEvidenceFromChunks, formatEvidenceContext } from '@/lib/rag/EvidenceBuilder';
 import { applyCitations } from '@/lib/rag/CitationService';
 import { reciprocalRankFusion } from '@/lib/retrieval/RRFFusion';
-import { registerEvidence, readEvidence, clearEvidenceRegistry } from '@/lib/rag/EvidenceRegistry';
+import { registerEvidence, readEvidence, clearEvidenceRegistry, restoreEvidence } from '@/lib/rag/EvidenceRegistry';
 import type { ParsedDocument, SourceBlock } from '@/lib/rag/evidenceTypes';
 
 const FIXTURE_DOC: ParsedDocument = {
@@ -137,6 +137,18 @@ describe('Evidence RAG v2 pipeline (integration)', () => {
     expect(readEvidence(runId, 'E1')?.quote).toContain('本地隐私');
     clearEvidenceRegistry(runId);
     expect(readEvidence(runId, 'E1')).toBeUndefined();
+  });
+
+  it('keeps restored citation ids stable and allocates new ids after them', () => {
+    const runId = 'continued-run';
+    clearEvidenceRegistry(runId);
+    restoreEvidence(runId, [{ id: 'E4', documentId: 'doc-fixture', documentName: 'manual',
+      sourceBlockIds: [], locator: { page: 1 }, quote: 'old quote', score: 0 }]);
+    const [next] = registerEvidence(runId, [{ id: '', documentId: 'doc-fixture', documentName: 'manual',
+      sourceBlockIds: [], locator: { page: 2 }, quote: 'new quote', score: 1 }]);
+    expect(readEvidence(runId, 'E4')?.quote).toBe('old quote');
+    expect(next.id).toBe('E5');
+    clearEvidenceRegistry(runId);
   });
 
   it('no-evidence abstention: empty chunk list yields no citations', () => {

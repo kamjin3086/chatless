@@ -2,7 +2,7 @@ import { EmbeddingService } from '../embedding/EmbeddingService';
 import { RetrievalService } from '../retrieval/RetrievalService';
 import { EvidenceStore } from './evidenceStore';
 import { buildEvidenceFromChunks } from './EvidenceBuilder';
-import type { Evidence, RetrievalChunk, SourceBlock } from './evidenceTypes';
+import type { Evidence, RetrievalChunk } from './evidenceTypes';
 import { BM25_CANDIDATE_K, FINAL_EVIDENCE_K } from './constants';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import { LexicalRetriever } from '../retrieval/LexicalRetriever';
@@ -17,14 +17,26 @@ export class KnowledgeRetrievalError extends Error {
   }
 }
 
-export async function kbHasRetrievalIndex(knowledgeBaseIds: string[]): Promise<boolean> {
+export async function kbHasRetrievalIndex(knowledgeBaseIds: string[], documentIds: string[] = []): Promise<boolean> {
   const ids = knowledgeBaseIds.filter(Boolean);
-  if (!ids.length) return false;
+  const docs = documentIds.filter(Boolean);
+  if (!ids.length && !docs.length) return false;
   const db = DatabaseService.getInstance().getDbManager();
-  const ph = ids.map(() => '?').join(',');
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (ids.length) {
+    clauses.push(`EXISTS (SELECT 1 FROM doc_knowledge_mappings m WHERE m.document_id = c.document_id
+      AND m.knowledge_base_id IN (${ids.map(() => '?').join(',')}))`);
+    params.push(...ids);
+  }
+  if (docs.length) {
+    clauses.push(`c.document_id IN (${docs.map(() => '?').join(',')})`);
+    params.push(...docs);
+  }
   const rows = await db.select<{ n: number }>(
-    `SELECT COUNT(*) as n FROM retrieval_chunks WHERE knowledge_base_id IN (${ph}) LIMIT 1`,
-    ids
+    `SELECT COUNT(*) as n FROM document_chunks c
+       JOIN documents d ON d.active_index_batch_id = c.batch_id
+      WHERE (${clauses.join(' OR ')}) LIMIT 1`, params,
   );
   return Number(rows?.[0]?.n || 0) > 0;
 }
@@ -32,18 +44,21 @@ export async function kbHasRetrievalIndex(knowledgeBaseIds: string[]): Promise<b
 export async function retrieveEvidence(params: {
   query: string;
   knowledgeBaseIds: string[];
+  documentIds?: string[];
   embeddingService: EmbeddingService;
   retrievalService: RetrievalService;
   topK?: number;
   /** Kept for API compatibility; RRF deliberately does not threshold raw scores. */
   similarityThreshold?: number;
+  requestId?: string;
 }): Promise<{ evidence: Evidence[]; retrievalChunks: RetrievalChunk[]; mode: 'lexical' | 'hybrid' }> {
   const kbIds = params.knowledgeBaseIds.filter(Boolean);
-  if (!kbIds.length) {
+  const documentIds = params.documentIds?.filter(Boolean) || [];
+  if (!kbIds.length && !documentIds.length) {
     return { evidence: [], retrievalChunks: [], mode: 'lexical' };
   }
 
-  const hasIndex = await kbHasRetrievalIndex(kbIds);
+  const hasIndex = await kbHasRetrievalIndex(kbIds, documentIds);
   if (!hasIndex) {
     throw new KnowledgeRetrievalError(
       '知识库尚未完成索引重建，请先在知识库页面执行「重建索引」后再检索。',
@@ -60,20 +75,24 @@ export async function retrieveEvidence(params: {
       const queryEmbedding = await params.embeddingService.generateEmbedding(params.query);
       searchResults = await params.retrievalService.searchByQuery(params.query, queryEmbedding, {
         knowledgeBaseIds: kbIds,
+        documentIds,
         topK: params.topK ?? FINAL_EVIDENCE_K,
         embeddingFingerprint: params.embeddingService.getEmbeddingFingerprint() || undefined,
+        requestId: params.requestId,
       });
       mode = 'hybrid';
     } catch (error) {
       console.warn('[KnowledgeRetrieval] dense retrieval unavailable; falling back to lexical:', error);
       searchResults = await new LexicalRetriever().search(params.query, {
         knowledgeBaseIds: kbIds,
+        documentIds,
         topK: BM25_CANDIDATE_K,
       });
     }
   } else {
     searchResults = await new LexicalRetriever().search(params.query, {
       knowledgeBaseIds: kbIds,
+      documentIds,
       topK: BM25_CANDIDATE_K,
     });
   }
@@ -89,16 +108,6 @@ export async function retrieveEvidence(params: {
     if (!chunk) continue;
     chunk.metadata = { ...chunk.metadata, score: scoreMap.get(id) ?? 0 };
     orderedChunks.push(chunk);
-  }
-
-  const docIds = [...new Set(orderedChunks.map((c) => c.documentId))];
-  const blocks = await EvidenceStore.getSourceBlocks(docIds, kbIds);
-  const blocksByDoc = new Map<string, SourceBlock[]>();
-  for (const block of blocks) {
-    const key = `${block.knowledgeBaseId || ''}\u0000${block.documentId}`;
-    const list = blocksByDoc.get(key) || [];
-    list.push(block);
-    blocksByDoc.set(key, list);
   }
 
   const documentNames = new Map<string, string>();
@@ -131,7 +140,6 @@ export async function retrieveEvidence(params: {
 
   const evidence = buildEvidenceFromChunks({
     chunks: orderedChunks,
-    blocksByDoc,
     documentNames,
     knowledgeBaseNames,
     limit: params.topK ?? FINAL_EVIDENCE_K,

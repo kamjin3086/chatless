@@ -11,16 +11,6 @@ import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 
 type ConversationId = string;
 
-export interface SessionDocument {
-  id: string;
-  name: string;
-  fileType: string;
-  fileSize: number;
-  content: string;
-  documentHash?: string;
-  addedAt: number;
-}
-
 interface ConversationAttachmentState {
   /**
    * 会话级默认工作区（系统自动创建并注入为 @WorkDir）
@@ -38,14 +28,10 @@ interface ConversationAttachmentState {
 
   /** 会话挂载的知识库（Agent knowledge_* 工具注入条件） */
   knowledgeBaseByConversation: Record<ConversationId, { id: string; name: string } | undefined>;
-  sessionDocumentsByConversation: Record<ConversationId, SessionDocument[]>;
 
   setKnowledgeBase: (conversationId: string, kb: { id: string; name: string }) => void;
   clearKnowledgeBase: (conversationId: string) => void;
   getKnowledgeBase: (conversationId: string) => { id: string; name: string } | undefined;
-  setSessionDocument: (conversationId: string, document: Omit<SessionDocument, 'addedAt'>) => void;
-  clearSessionDocuments: (conversationId: string) => void;
-  getSessionDocuments: (conversationId: string) => SessionDocument[];
 
   /** 设置系统默认 @WorkDir（自动） */
   setWorkingDir: (conversationId: string, absolutePath: string) => void;
@@ -66,7 +52,6 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
   workingDirByConversation: {},
   mountedDirByConversation: {},
   knowledgeBaseByConversation: {},
-  sessionDocumentsByConversation: {},
 
   setKnowledgeBase: (conversationId, kb) => {
     const cid = String(conversationId || '').trim();
@@ -92,33 +77,6 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     return get().knowledgeBaseByConversation[cid];
   },
 
-  setSessionDocument: (conversationId, document) => {
-    const cid = String(conversationId || '').trim();
-    if (!cid || !document?.id || !document.content?.trim()) return;
-    set((state) => {
-      const existing = state.sessionDocumentsByConversation[cid] || [];
-      const next = existing.filter((item) => item.id !== document.id);
-      next.push({ ...document, addedAt: Date.now() });
-      // Attachments are user-provided conversation records. Do not silently
-      // discard older files merely because a numeric in-memory cap was hit.
-      return { sessionDocumentsByConversation: { ...state.sessionDocumentsByConversation, [cid]: next } };
-    });
-  },
-
-  clearSessionDocuments: (conversationId) => {
-    const cid = String(conversationId || '').trim();
-    if (!cid) return;
-    set((state) => {
-      const next = { ...state.sessionDocumentsByConversation };
-      delete next[cid];
-      return { sessionDocumentsByConversation: next };
-    });
-  },
-
-  getSessionDocuments: (conversationId) => {
-    const cid = String(conversationId || '').trim();
-    return cid ? get().sessionDocumentsByConversation[cid] || [] : [];
-  },
 
   setWorkingDir: (conversationId, absolutePath) => {
     const cid = String(conversationId || '').trim();
@@ -188,12 +146,10 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
   },
 }), {
   name: 'conversation-knowledge-mounts',
-  // Mounts and explicitly attached source text are both user-controlled
-  // conversation records. They survive restart; neither is reconstructed
-  // from historic chat messages.
+  // Knowledge mounts remain UI preferences. Document attachments are durable
+  // SQLite relationships and are deliberately excluded from localStorage.
   partialize: (state) => ({
     knowledgeBaseByConversation: state.knowledgeBaseByConversation,
-    sessionDocumentsByConversation: state.sessionDocumentsByConversation,
   }),
 }));
 

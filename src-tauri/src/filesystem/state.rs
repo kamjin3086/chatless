@@ -195,7 +195,7 @@ impl FilesystemAllowlistState {
     let snap = self.inner.read().await;
     // 关键：选择“最具体且允许该 op 的目录”
     // 这样不会出现“更具体目录条目（仅 delete=true）意外覆盖父目录 read 权限，导致 ls 永远 forbidden”的问题。
-    if let Some(m) = best_match_for_op(&snap.directories, &abs, op) {
+    if best_match_for_op(&snap.directories, &abs, op).is_some() {
       return Ok(abs);
     }
 
