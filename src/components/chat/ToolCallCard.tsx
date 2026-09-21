@@ -36,7 +36,9 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   // time range of the grant instead of a bare yes/no.
   const pendingAuth = useAuthorizationStore((state) =>
     authKey ? state.pendingAuthorizations.get(authKey) : undefined);
-  const filesystemScope = pendingAuth?.filesystem;
+  const approvalScope = pendingAuth?.scope;
+  const filesystemScope = approvalScope?.kind === 'filesystem' ? approvalScope : undefined;
+  const shellScope = approvalScope?.kind === 'shell' ? approvalScope : undefined;
   const directoryScope = filesystemScope && filesystemScope.op !== 'delete'
     ? filesystemScope
     : undefined;
@@ -65,7 +67,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
       return;
     }
     if (decision === 'always') {
-      toast.success('该文件夹已加入白名单，读写不再询问');
+      toast.success(shellScope ? '以后所有命令都不再询问' : '该文件夹已加入白名单，读写不再询问');
       return;
     }
     // Turning prompts off must be as easy to undo as it was to enable.
@@ -75,17 +77,17 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         ? {
             label: '恢复询问',
             onClick: () => {
-              void import('@/lib/filesystemAllowlist/accessPolicy')
-                .then(({ setConversationFilesystemAccess }) => {
-                  setConversationFilesystemAccess(conversationId, 'ask');
-                  toast.info('已恢复文件操作询问');
+              void import('@/lib/mcp/accessPolicy')
+                .then(({ setConversationAccess }) => {
+                  setConversationAccess(shellScope ? 'shell' : 'fs', conversationId, 'ask');
+                  toast.info(shellScope ? '已恢复命令询问' : '已恢复文件操作询问');
                 })
                 .catch(() => {});
             },
           }
         : undefined,
     });
-  }, [authKey, messageId, cardId, approveAuthorization, pendingAuth?.conversationId]);
+  }, [authKey, messageId, cardId, approveAuthorization, pendingAuth?.conversationId, shellScope]);
   
   const handleReject = React.useCallback(() => {
     if (!authKey || !messageId || !cardId) return;
@@ -193,7 +195,31 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         {/* 审批按钮 */}
         {isPendingAuth && (
           <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {filesystemScope ? (
+            {shellScope ? (
+              <>
+                <button
+                  onClick={handleApprove}
+                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  title={`只运行这一次：${shellScope.command || ''}`}
+                >
+                  仅本次
+                </button>
+                <button
+                  onClick={() => handleApproveWith('unrestricted')}
+                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                  title="本会话内所有命令都不再询问，可在设置里改回"
+                >
+                  本会话不再询问
+                </button>
+                <button
+                  onClick={() => handleApproveWith('always')}
+                  className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  title="以后所有命令都不再询问，可在设置里改回"
+                >
+                  始终不再询问
+                </button>
+              </>
+            ) : filesystemScope ? (
               <>
                 <button
                   onClick={handleApprove}
@@ -232,7 +258,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
               onClick={handleReject}
               className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
             >
-              {filesystemScope ? '拒绝' : '取消'}
+              {approvalScope ? '拒绝' : '取消'}
             </button>
           </div>
         )}

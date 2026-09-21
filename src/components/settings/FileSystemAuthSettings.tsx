@@ -9,17 +9,15 @@ import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { useFilesystemAllowlistStore } from "@/store/filesystemAllowlistStore";
 import { useChatStore } from "@/store/chatStore";
-import {
-  clearConversationFilesystemAccess,
-  getConversationFilesystemAccess,
-} from "@/lib/filesystemAllowlist/accessPolicy";
 import { ensureAllowlistedDirectory, normalizeAlias as normalizeAliasCore } from "@/lib/filesystemAllowlist";
 import { syncFilesystemAllowlistToBackend } from "@/lib/filesystemAllowlist/backendSync";
 import {
-  getGlobalFilesystemAccess,
-  setGlobalFilesystemAccess,
-  type FilesystemAccessLevel,
-} from "@/lib/filesystemAllowlist/accessPolicy";
+  clearConversationAccess,
+  getConversationAccess,
+  getGlobalAccess,
+  setGlobalAccess,
+  type AccessLevel,
+} from "@/lib/mcp/accessPolicy";
 import { cn } from "@/lib/utils";
 
 function normalizeAlias(input: string): string {
@@ -47,29 +45,29 @@ function getSourceLabel(source: string): string {
 export function FileSystemAuthSettings() {
   const { directories, load, removeDirectory, updateDirectory } = useFilesystemAllowlistStore();
   const [loading, setLoading] = useState(false);
-  const [accessLevel, setAccessLevel] = useState<FilesystemAccessLevel>('ask');
+  const [accessLevel, setAccessLevel] = useState<AccessLevel>('ask');
   const conversationId = useChatStore((s) => s.currentConversationId);
-  const [conversationOverride, setConversationOverride] = useState<FilesystemAccessLevel | undefined>();
+  const [conversationOverride, setConversationOverride] = useState<AccessLevel | undefined>();
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    void getGlobalFilesystemAccess().then(setAccessLevel);
+    void getGlobalAccess('fs').then(setAccessLevel);
   }, []);
 
   useEffect(() => {
-    setConversationOverride(getConversationFilesystemAccess(conversationId || ''));
+    setConversationOverride(getConversationAccess('fs', conversationId || ''));
   }, [conversationId]);
 
-  const onChangeAccessLevel = useCallback(async (level: FilesystemAccessLevel) => {
+  const onChangeAccessLevel = useCallback(async (level: AccessLevel) => {
     setAccessLevel(level);
     try {
-      await setGlobalFilesystemAccess(level);
+      await setGlobalAccess('fs', level);
     } catch (error) {
       console.error('[FileSystemAuthSettings] 保存访问策略失败:', error);
-      setAccessLevel(await getGlobalFilesystemAccess());
+      setAccessLevel(await getGlobalAccess('fs'));
     }
   }, []);
 
@@ -157,7 +155,7 @@ export function FileSystemAuthSettings() {
             size="sm"
             className="h-6 px-2 text-[11px]"
             onClick={() => {
-              clearConversationFilesystemAccess(conversationId || '');
+              clearConversationAccess('fs', conversationId || '');
               setConversationOverride(undefined);
             }}
           >

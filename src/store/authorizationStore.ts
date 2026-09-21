@@ -12,13 +12,17 @@ import { create } from 'zustand';
  */
 export type ApprovalDecision = 'once' | 'always' | 'unrestricted';
 
-export interface PendingFilesystemScope {
-  /** Operation the user is approving: read / write / create / delete. */
-  op: string;
-  /** Resolved absolute path of the target. */
-  path: string;
-  /** Directory the grant would cover. */
-  directory: string;
+export interface PendingApprovalScope {
+  /** Which capability the user is approving. */
+  kind: 'filesystem' | 'shell';
+  /** filesystem: operation being approved (read / write / create / delete). */
+  op?: string;
+  /** filesystem: resolved absolute path of the target. */
+  path?: string;
+  /** filesystem: directory the grant would cover. */
+  directory?: string;
+  /** shell: the command line that will run. */
+  command?: string;
 }
 
 export interface PendingAuthorization {
@@ -29,8 +33,8 @@ export interface PendingAuthorization {
   server: string;
   tool: string;
   args?: Record<string, unknown>;
-  /** Present for filesystem calls so the card can offer directory-level grants. */
-  filesystem?: PendingFilesystemScope;
+  /** Present for filesystem/shell calls so the card can offer longer grants. */
+  scope?: PendingApprovalScope;
   createdAt: number;
   // 授权决策回调
   onApprove: (decision: ApprovalDecision) => void;

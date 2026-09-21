@@ -2,12 +2,12 @@
 
 import { WorkspaceSettings } from "./WorkspaceSettings";
 import { FileSystemAuthSettings } from "./FileSystemAuthSettings";
-import { ShellAuthSettings } from "./ShellAuthSettings";
+import { ShellAccessSettings } from "./ShellAccessSettings";
 
 export function SecuritySettings() {
   return (
     <>
-      <ShellAuthSettings />
+      <ShellAccessSettings />
       <WorkspaceSettings />
       <FileSystemAuthSettings />
     </>

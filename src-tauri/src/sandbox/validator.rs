@@ -3,7 +3,6 @@
 //! 检测并阻止危险命令的执行
 
 use regex::Regex;
-use std::path::Path;
 
 /// 校验结果
 #[derive(Debug, Clone, serde::Serialize)]
@@ -206,12 +205,8 @@ lazy_static::lazy_static! {
 
 /// 命令校验器
 pub struct CommandValidator {
-  /// 允许的命令白名单
-  allowed_commands: Option<Vec<String>>,
-  /// 允许的工作目录
-  allowed_working_dirs: Option<Vec<String>>,
-  /// 是否启用严格模式
-  strict_mode: bool,
+  /// 目前只保留“明显破坏性命令”的底线拦截；是否允许执行由用户授权决定。
+  _private: (),
 }
 
 impl Default for CommandValidator {
@@ -223,29 +218,7 @@ impl Default for CommandValidator {
 impl CommandValidator {
   /// 创建新的校验器
   pub fn new() -> Self {
-    Self {
-      allowed_commands: None,
-      allowed_working_dirs: None,
-      strict_mode: false,
-    }
-  }
-
-  /// 设置允许的命令白名单
-  pub fn with_allowed_commands(mut self, commands: Vec<String>) -> Self {
-    self.allowed_commands = Some(commands);
-    self
-  }
-
-  /// 设置允许的工作目录
-  pub fn with_allowed_working_dirs(mut self, dirs: Vec<String>) -> Self {
-    self.allowed_working_dirs = Some(dirs);
-    self
-  }
-
-  /// 启用严格模式
-  pub fn with_strict_mode(mut self, strict: bool) -> Self {
-    self.strict_mode = strict;
-    self
+    Self { _private: () }
   }
 
   /// 校验命令安全性
@@ -257,25 +230,10 @@ impl CommandValidator {
 
     let normalized = command.trim();
 
-    // 检查白名单
-    if let Some(ref allowed) = self.allowed_commands {
-      let base_cmd = self.extract_base_command(normalized);
-      if !allowed.iter().any(|c| c.eq_ignore_ascii_case(&base_cmd)) {
-        return ValidationResult::fail(format!("命令 '{}' 不在允许列表中", base_cmd));
-      }
-    }
-
     // 检查危险模式
     for pattern in DANGEROUS_PATTERNS.iter() {
       if pattern.pattern.is_match(normalized) {
         return ValidationResult::fail_with_pattern(pattern.description, pattern.pattern.as_str());
-      }
-    }
-
-    // 严格模式额外检查
-    if self.strict_mode {
-      if let Some(result) = self.strict_mode_check(normalized) {
-        return result;
       }
     }
 
@@ -317,47 +275,7 @@ impl CommandValidator {
       }
     }
 
-    // 检查允许的工作目录
-    if let Some(ref allowed) = self.allowed_working_dirs {
-      let path_obj = Path::new(normalized);
-      let is_allowed = allowed.iter().any(|dir| {
-        let dir_path = Path::new(dir);
-        path_obj.starts_with(dir_path)
-      });
-
-      if !is_allowed {
-        return ValidationResult::fail(format!("路径不在允许的目录范围内: {}", normalized));
-      }
-    }
-
     ValidationResult::ok()
-  }
-
-  /// 提取基础命令
-  fn extract_base_command(&self, command: &str) -> String {
-    command.split_whitespace().next().unwrap_or("").to_string()
-  }
-
-  /// 严格模式检查
-  fn strict_mode_check(&self, command: &str) -> Option<ValidationResult> {
-    // 检查命令替换
-    if command.contains("$(") || command.contains('`') {
-      return Some(ValidationResult::fail_with_pattern(
-        "严格模式下不允许命令替换",
-        "$() or ``",
-      ));
-    }
-
-    // 检查 rm 命令使用通配符
-    let rm_wildcard = Regex::new(r"(?i)\brm\s+.*\*").unwrap();
-    if rm_wildcard.is_match(command) {
-      return Some(ValidationResult::fail_with_pattern(
-        "严格模式下 rm 命令不允许使用通配符",
-        "rm *",
-      ));
-    }
-
-    None
   }
 }
 
@@ -379,6 +297,18 @@ mod tests {
     assert!(validator.validate_command("ls -la").valid);
     assert!(validator.validate_command("echo hello").valid);
     assert!(validator.validate_command("python script.py").valid);
+  }
+
+  #[test]
+  fn test_shell_wrappers_are_not_blocked() {
+    // Regression: the removed allowlist rejected the shells themselves, so
+    // `shell: cmd` / `shell: powershell` could never run a command.
+    let validator = CommandValidator::new();
+    assert!(validator.validate_command("cmd.exe /c echo %USERPROFILE%").valid);
+    assert!(validator.validate_command("powershell.exe -Command \"Write-Output $env:USERPROFILE\"").valid);
+    assert!(validator.validate_command("git status").valid);
+    // Destructive patterns stay blocked.
+    assert!(!validator.validate_command("cmd.exe /c rmdir /s /q C:\\Users").valid);
   }
 
   #[test]

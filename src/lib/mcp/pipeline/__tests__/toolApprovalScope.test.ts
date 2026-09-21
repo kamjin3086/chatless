@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
-import { clearConversationFilesystemAccess } from '@/lib/filesystemAllowlist/accessPolicy';
+import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
 
 const mocks = vi.hoisted(() => ({
   setAllowlist: vi.fn(async () => ({ ok: true })),
@@ -45,11 +45,6 @@ vi.mock('@/store/filesystemAllowlistStore', () => ({
   }) },
 }));
 
-vi.mock('@/store/shellAuthStore', () => ({
-  isShellCommandTrusted: () => false,
-  useShellAuthStore: { getState: () => ({ load: async () => {} }) },
-}));
-
 vi.mock('@/store/conversationAttachmentStore', () => ({
   useConversationAttachmentStore: { getState: () => ({ getWorkingDir: () => undefined }) },
 }));
@@ -80,7 +75,8 @@ beforeEach(() => {
   mocks.approvals.length = 0;
   mocks.addedDirectories.length = 0;
   mocks.decision = 'once';
-  clearConversationFilesystemAccess('conv-1');
+  clearConversationAccess('fs', 'conv-1');
+  clearConversationAccess('shell', 'conv-1');
 });
 
 describe('one-time filesystem approval', () => {
@@ -198,5 +194,32 @@ describe('directory-level filesystem approval', () => {
       expect.objectContaining({ path: 'C:/outside/keep',
         permissions: { read: true, write: true, create: true, delete: false } }),
     ]);
+  });
+
+  it('stops asking for shell commands after the user turns prompts off', async () => {
+    const exec = {
+      server: 'shell',
+      canHandle: () => true,
+      execute: vi.fn(async () => ({ ok: true })),
+    };
+    const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
+    mocks.decision = 'unrestricted';
+    const run = (id: string, command: string) => pipeline.run(new ToolInvocation({
+      assistantMessageId: id,
+      conversationId: 'conv-1',
+      server: 'shell',
+      tool: 'run',
+      args: { shell: 'cmd', command },
+      callId: id,
+    }));
+
+    await run('run-shell-a', 'echo %USERPROFILE%');
+    expect(mocks.approvals).toHaveLength(1);
+    // The card knows it is approving a command, not a path.
+    expect(mocks.approvals[0]).toMatchObject({ scope: { kind: 'shell', command: 'echo %USERPROFILE%' } });
+
+    await run('run-shell-b', 'git status');
+    expect(mocks.approvals).toHaveLength(1);
+    expect(exec.execute).toHaveBeenCalledTimes(2);
   });
 });

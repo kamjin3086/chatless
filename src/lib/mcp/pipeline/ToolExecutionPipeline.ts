@@ -1,10 +1,9 @@
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { useAuthorizationStore, type ApprovalDecision } from '@/store/authorizationStore';
 import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permissions';
-import { resolveFilesystemAccess, setConversationFilesystemAccess } from '@/lib/filesystemAllowlist/accessPolicy';
+import { resolveAccess, setConversationAccess } from '@/lib/mcp/accessPolicy';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
-import { isShellCommandTrusted, useShellAuthStore } from '@/store/shellAuthStore';
 import { isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
 import {
@@ -77,43 +76,14 @@ export type ToolExecutionPipelineDeps = {
   adapters: ToolAdapter[];
 };
 
-function isForcedApproval(server: string, tool: string, args?: Record<string, unknown>): boolean {
-  const srv = normalizeServerName(server);
-  const tl = String(tool || '').toLowerCase();
-
-  // filesystem：仅 delete 强制人工确认（你选择的策略）
-  if (isFilesystemServer(srv)) {
-    return tl === 'delete_file' || tl === 'delete';
-  }
-
-  // shell_executor：涉及安装运行时/改环境变量/下载脚本等高风险动作，强制确认
-  if (isShellServer(srv)) {
-    const cmd = typeof (args as any)?.command === 'string' ? String((args as any).command).toLowerCase() : '';
-    if (!cmd) return false;
-    if (cmd.includes('winget ') || cmd.includes('choco ')) return true;
-    if (cmd.includes('setx ') || cmd.includes('set environmentvariable') || cmd.includes('set-itemproperty')) return true;
-    // 下载脚本执行（curl|bash / iwr|iex 等）
-    if (cmd.includes('| bash') || cmd.includes('| sh') || cmd.includes('|iex') || cmd.includes('| iex')) return true;
-  }
-
-  return false;
-}
-
 function needsAuthorization(server: string, tool: string, autoAuth: boolean, args?: Record<string, unknown>): boolean {
   const srv = normalizeServerName(server);
   const tl = String(tool || '').toLowerCase();
 
-  if (isForcedApproval(server, tool, args)) return true;
-
-  // shell_executor：若用户已“信任该工作目录”，且命令属于低风险清单，则可免重复审批
+  // shell：由调用方按“访问策略”决定 autoAuth（含会话级免问），
+  // 不再维护“低风险命令白名单”和按工作目录的记忆。
   if (isShellServer(srv)) {
-    try {
-      if (isShellCommandTrusted({ command: (args as any)?.command, workingDir: (args as any)?.workingDir })) {
-        return false;
-      }
-    } catch {
-      // ignore
-    }
+    return !autoAuth;
   }
 
   // user_fs：保持现有行为——仅写入需要确认（读/list 属于“在已授权目录内的低风险操作”）
@@ -181,7 +151,7 @@ function isDirectoryScopedFilesystemTool(tool: string): boolean {
 async function waitForCallApproval(params: {
   id: string; runId: string; conversationId: string; callId?: string; server: string; tool: string;
   args: Record<string, unknown>; scope?: Record<string, unknown>;
-  filesystem?: { op: string; path: string; directory: string };
+  approvalScope?: import('@/store/authorizationStore').PendingApprovalScope;
 }): Promise<{ approved: boolean; decision: ApprovalDecision }> {
   const db = DatabaseService.getInstance().getDbManager();
   const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -222,7 +192,7 @@ async function waitForCallApproval(params: {
     useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
       conversationId: params.conversationId,
       server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
-      filesystem: params.filesystem,
+      scope: params.approvalScope,
       onApprove: (decision) => decide(true, decision), onReject: () => decide(false) });
   });
 }
@@ -295,15 +265,6 @@ export class ToolExecutionPipeline {
       markError({ assistantMessageId, server, tool, cardId }, blocked.error.message);
       this.coordinator.markToolCallComplete(callKey, 'failed');
       return blocked;
-    }
-
-    // 预加载：shell 授权记忆（用于 needsAuthorization 的同步判断）
-    try {
-      if (isShellServer(normalizeServerName(server))) {
-        await useShellAuthStore.getState().load();
-      }
-    } catch {
-      // ignore
     }
 
     // 授权 + filesystem allowlist gate（统一文件系统安全边界）
@@ -501,7 +462,7 @@ export class ToolExecutionPipeline {
           // The user's chosen trust level decides whether this call may ask.
           // "unrestricted" skips the prompt; the backend still validates every
           // path it receives.
-          const accessLevel = await resolveFilesystemAccess(invocation.conversationId);
+          const accessLevel = await resolveAccess('fs', invocation.conversationId);
           const unrestricted = accessLevel === 'unrestricted';
           const needAuth = !unrestricted && primaryAbsolutePath && (forceApproval || !hasDir || !hasPerm);
           const needsCallGrant = !hasPerm || forceApproval;
@@ -518,8 +479,8 @@ export class ToolExecutionPipeline {
               runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
               args: args || {},
               scope: { operation: op, path: primaryAbsolutePath, directory: approvableDirectory || undefined },
-              filesystem: approvableDirectory
-                ? { op, path: primaryAbsolutePath, directory: approvableDirectory }
+              approvalScope: approvableDirectory
+                ? { kind: 'filesystem', op, path: primaryAbsolutePath, directory: approvableDirectory }
                 : undefined });
             const authorized = approval.approved;
             approved = authorized;
@@ -588,7 +549,7 @@ export class ToolExecutionPipeline {
               }
             }
             if (decision === 'unrestricted') {
-              setConversationFilesystemAccess(invocation.conversationId, 'unrestricted');
+              setConversationAccess('fs', invocation.conversationId, 'unrestricted');
             }
           }
 
@@ -648,13 +609,22 @@ export class ToolExecutionPipeline {
         }
       }
     } else {
-      const autoAuth = await shouldAutoAuthorize(server);
+      const isShell = isShellServer(server);
+      // Shell trust comes from the access policy: the persisted switch or the
+      // choice this conversation's user already made on an approval card.
+      const autoAuth = isShell
+        ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
+        : await shouldAutoAuthorize(server);
       const effectiveArgs = (execInvocation.args || args || {}) as any;
       if (needsAuthorization(server, tool, autoAuth, effectiveArgs || {})) {
         markPendingAuth({ assistantMessageId, server, tool, cardId });
-        const authorized = (await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
+        const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
           runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
-          args: effectiveArgs || {} })).approved;
+          args: effectiveArgs || {},
+          approvalScope: isShell
+            ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
+            : undefined });
+        const authorized = approval.approved;
         if (this.coordinator.isMessageCancelled(assistantMessageId)) {
           this.coordinator.markToolCallComplete(callKey, 'failed');
           return { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId };
@@ -692,8 +662,19 @@ export class ToolExecutionPipeline {
           return denied;
         }
 
-        // A one-time shell approval is intentionally not persisted as a
-        // trusted directory. Long-lived trust is changed only in settings.
+        // A shell approval can end the questions for this session or for good;
+        // the next command re-checks the policy, so nothing is bypassed.
+        if (isShell && approval.decision === 'unrestricted') {
+          setConversationAccess('shell', invocation.conversationId, 'unrestricted');
+        }
+        if (isShell && approval.decision === 'always') {
+          try {
+            const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
+            await setGlobalAccess('shell', 'unrestricted');
+          } catch (error) {
+            console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
+          }
+        }
       }
     }
 
