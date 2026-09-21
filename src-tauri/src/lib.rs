@@ -58,6 +58,10 @@ pub mod sse;
 #[path = "lib/agent_runtime.rs"]
 pub mod agent_runtime;
 
+#[cfg(test)]
+#[path = "lib/retrieval_bench.rs"]
+mod retrieval_bench;
+
 #[path = "lib/http_client.rs"]
 pub mod http_client;
 

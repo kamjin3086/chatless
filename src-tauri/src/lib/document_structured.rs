@@ -384,3 +384,78 @@ pub async fn parse_document_structured(file_path: String) -> Result<ParsedDocume
 pub fn tokenize_for_fts_command(text: String) -> String {
   tokenize_for_fts(&text)
 }
+
+#[cfg(test)]
+mod eval_fixture {
+  use super::tokenize_for_fts;
+  use std::collections::BTreeMap;
+
+  #[test]
+  fn segments_chinese_with_words_not_characters() {
+    let segmented = tokenize_for_fts("过载保护与熔断器更换");
+    let tokens: Vec<&str> = segmented.split(' ').collect();
+    assert!(
+      tokens.len() >= 4 && tokens.contains(&"过载"),
+      "jieba must produce word tokens, got {tokens:?}"
+    );
+    // Identifiers are split at the hyphen, in the index and in the query alike.
+    // The numeric fragment still discriminates between error codes.
+    let identifier_text = tokenize_for_fts("E-1042 encoder shield");
+    let identifier: Vec<&str> = identifier_text.split_whitespace().collect();
+    assert_eq!(identifier, vec!["E", "-", "1042", "encoder", "shield"]);
+  }
+
+  /// The retrieval evaluation runs the production SQL from TypeScript, so the
+  /// corpus and the queries must carry production tokens. This fixture keeps
+  /// one tokenizer and one searchText composition in the picture instead of
+  /// re-implementing jieba in Node.
+  ///
+  /// Run: cd src-tauri && cargo test --lib generate_retrieval_token_fixture -- --ignored --nocapture
+  #[test]
+  #[ignore]
+  fn generate_retrieval_token_fixture() {
+    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+      .parent()
+      .expect("workspace root");
+    let acceptance = workspace.join("docs").join("acceptance");
+    let cases_path = acceptance.join("retrieval-cases.json");
+    let raw = std::fs::read_to_string(&cases_path)
+      .unwrap_or_else(|error| panic!("read {}: {error}", cases_path.display()));
+    let cases: serde_json::Value = serde_json::from_str(&raw).expect("parse retrieval-cases.json");
+
+    let mut chunks: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+    for document in cases["documents"].as_array().expect("documents") {
+      let title = document["title"].as_str().expect("title");
+      for chunk in document["chunks"].as_array().expect("chunks") {
+        let text = chunk["text"].as_str().expect("chunk text");
+        let heading = chunk["heading"].as_str().unwrap_or("");
+        let mut parts = vec![format!("文档：{title}")];
+        if !heading.is_empty() {
+          parts.push(format!("章节：{heading}"));
+        }
+        parts.push(text.to_string());
+        let search_text = parts.join("\n");
+        chunks.insert(
+          chunk["id"].as_str().expect("chunk id").to_string(),
+          serde_json::json!({ "searchText": search_text, "ftsText": tokenize_for_fts(&search_text) }),
+        );
+      }
+    }
+    let mut queries: BTreeMap<String, String> = BTreeMap::new();
+    for case in cases["cases"].as_array().expect("cases") {
+      let query = case["query"].as_str().expect("query");
+      queries.insert(query.to_string(), tokenize_for_fts(query));
+    }
+
+    let out = acceptance.join("retrieval-tokens.json");
+    let fixture = serde_json::json!({ "chunks": chunks, "queries": queries });
+    std::fs::write(&out, serde_json::to_string_pretty(&fixture).expect("serialize tokens"))
+      .unwrap_or_else(|error| panic!("write {}: {error}", out.display()));
+    println!(
+      "wrote {} chunks and {} queries to {}",
+      chunks.len(),
+      queries.len(),
+      out.display()
+    );
+  }
+}

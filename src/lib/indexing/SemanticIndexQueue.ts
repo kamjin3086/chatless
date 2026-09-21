@@ -4,6 +4,13 @@ import { generateId } from '@/lib/utils/id';
 
 type PendingTask = { id: string; document_id: string; document_version: number };
 
+/**
+ * Distinct from a real failure: the document is fine, only the embedding model
+ * is missing. Keeping it out of `failed` means configuring a model later can
+ * pick the work up instead of leaving the document permanently unavailable.
+ */
+class EmbeddingModelUnavailableError extends Error {}
+
 class SemanticIndexQueue {
   private running = false;
 
@@ -22,7 +29,14 @@ class SemanticIndexQueue {
 
   async resume(): Promise<void> {
     const db = DatabaseService.getInstance().getDbManager();
-    await db.execute("UPDATE document_index_tasks SET status = 'pending', updated_at = ? WHERE task_type = 'semantic' AND status = 'running'", [Date.now()]);
+    await db.execute("UPDATE document_index_tasks SET status = 'pending', updated_at = ? WHERE task_type = 'semantic' AND status IN ('running', 'waiting_model')", [Date.now()]);
+    void this.drain();
+  }
+
+  /** Called when the embedding configuration changes: retry everything that was waiting for a model. */
+  async wakeWaiting(): Promise<void> {
+    const db = DatabaseService.getInstance().getDbManager();
+    await db.execute("UPDATE document_index_tasks SET status = 'pending', error = NULL, updated_at = ? WHERE task_type = 'semantic' AND status = 'waiting_model'", [Date.now()]);
     void this.drain();
   }
 
@@ -57,6 +71,16 @@ class SemanticIndexQueue {
         if (!tasks.length) break;
         await this.process(tasks[0]).catch(async (error) => {
           const message = error instanceof Error ? error.message : String(error);
+          if (error instanceof EmbeddingModelUnavailableError) {
+            // Waiting for a model is not a failure: keep the lexical index
+            // usable and leave the task discoverable.
+            await db.execute(
+              "UPDATE document_index_tasks SET status = 'waiting_model', error = ?, updated_at = ? WHERE id = ? AND status = 'running'",
+              [message, Date.now(), tasks[0].id],
+            );
+            await db.execute("UPDATE documents SET semantic_status = 'pending' WHERE id = ? AND index_version = ?", [tasks[0].document_id, tasks[0].document_version]);
+            return;
+          }
           const failed = await db.execute(
             "UPDATE document_index_tasks SET status = 'failed', error = ?, updated_at = ? WHERE id = ? AND status = 'running'",
             [message, Date.now(), tasks[0].id],
@@ -87,7 +111,7 @@ class SemanticIndexQueue {
       [task.document_id, batchId]);
     const rag = await getRAGService();
     const embedding = rag.getEmbeddingService();
-    if (!embedding.isUsableForRag()) throw new Error('未配置可用的 embedding 模型');
+    if (!embedding.isUsableForRag()) throw new EmbeddingModelUnavailableError('未配置可用的 embedding 模型');
     const fingerprint = embedding.getEmbeddingFingerprint();
     if (!fingerprint) throw new Error('embedding 模型指纹不可用');
     const batchSize = 16;

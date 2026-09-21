@@ -188,16 +188,20 @@ export class AgentRunEventStore {
     }
   }
 
-  /** 应用启动时：保留运行记录并标记为 interrupted（尚不支持精确断点恢复）。 */
+  /**
+   * 应用启动时：保留运行记录并标记为 interrupted（尚不支持精确断点恢复）。
+   * 等待审批的运行同样被中断：审批在 DatabaseService 初始化时已置为 expired，
+   * 把它们留在 waiting_approval 会让界面显示一个永远不会继续的任务。
+   */
   static async markAllStaleRunsCancelled(): Promise<string[]> {
     const db = await this.db();
     const rows = await db.select<{ id: string; conversation_id: string; assistant_message_id: string }>(
-      `SELECT id, conversation_id, assistant_message_id FROM agent_runs WHERE status = 'running'`,
+      `SELECT id, conversation_id, assistant_message_id FROM agent_runs WHERE status IN ('running', 'waiting_approval')`,
     );
     if (rows.length === 0) return [];
     const now = Date.now();
     await db.execute(
-      `UPDATE agent_runs SET status = 'interrupted', ended_at = ? WHERE status = 'running'`,
+      `UPDATE agent_runs SET status = 'interrupted', ended_at = ? WHERE status IN ('running', 'waiting_approval')`,
       [now],
     );
     for (const row of rows) {

@@ -13,6 +13,11 @@
 # testing
 /coverage
 
+# acceptance harness build artifacts (regenerate with docs/acceptance scripts)
+/docs/acceptance/*.sqlite
+/docs/acceptance/*.sqlite-wal
+/docs/acceptance/*.sqlite-shm
+
 # next.js
 /.next/
 /out/
@@ -70,4 +75,3 @@ temp-*.md
 .private/
 .private/**/*
 .private/**
-

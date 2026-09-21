@@ -1,0 +1,173 @@
+{
+  "chunks": {
+    "att-1": {
+      "ftsText": "文档 ： 2026 - 08   设备 评审 会议纪要 . txt \n 会议 决定 把   HX - 450   的 保养 周期 从   90   天 调整 为   60   天 ， 原因 是 上 季度 出现 过 两次 轴承 温 升 异常 。",
+      "searchText": "文档：2026-08 设备评审会议纪要.txt\n会议决定把 HX-450 的保养周期从 90 天调整为 60 天，原因是上季度出现过两次轴承温升异常。"
+    },
+    "att-2": {
+      "ftsText": "文档 ： 2026 - 08   设备 评审 会议纪要 . txt \n 会议 同时 确认   E - 1042   高发 与 编码器 线缆 走向 有关 ， 需要 在 九月 完成 线缆 整改 ， 负责人 为 张 工 。",
+      "searchText": "文档：2026-08 设备评审会议纪要.txt\n会议同时确认 E-1042 高发与编码器线缆走向有关，需要在九月完成线缆整改，负责人为张工。"
+    },
+    "att-3": {
+      "ftsText": "文档 ： 2026 - 08   设备 评审 会议纪要 . txt \n 会议记录 人 ： 李 敏 。 下次 评审 时间 定 在   2026   年   10   月   12   日 ， 地点 为 二号 车间 会议室 。",
+      "searchText": "文档：2026-08 设备评审会议纪要.txt\n会议记录人：李敏。下次评审时间定在 2026 年 10 月 12 日，地点为二号车间会议室。"
+    },
+    "cn-docx-1": {
+      "ftsText": "文档 ： 设备 采购 与 折旧 管理 办法 . docx \n 章节 ： 第三章   折旧 \n 生产 设备 按 十年 直线 法 计提 折旧 ， 残值 率 百分之五 。 折旧 年限 变更 必须 经 财务 负责人 和 设备部 共同 审批 。",
+      "searchText": "文档：设备采购与折旧管理办法.docx\n章节：第三章 折旧\n生产设备按十年直线法计提折旧，残值率百分之五。折旧年限变更必须经财务负责人和设备部共同审批。"
+    },
+    "cn-docx-2": {
+      "ftsText": "文档 ： 设备 采购 与 折旧 管理 办法 . docx \n 章节 ： 第四章   采购 \n 单 台 设备 预算 超过   30   万元 需要 总经理 审批 ， 超过   100   万元 还 需要 董事会 决议 。 预算 金额 以 含 税 价 为 口径 。",
+      "searchText": "文档：设备采购与折旧管理办法.docx\n章节：第四章 采购\n单台设备预算超过 30 万元需要总经理审批，超过 100 万元还需要董事会决议。预算金额以含税价为口径。"
+    },
+    "cn-docx-3": {
+      "ftsText": "文档 ： 设备 采购 与 折旧 管理 办法 . docx \n 章节 ： 第五章   报废 \n 设备 报废 申请 需要 附 第三方 检测 报告 。 缺少 检测 报告 的 报废 申请 一律 退回 ， 不得 先行 处置 设备 。",
+      "searchText": "文档：设备采购与折旧管理办法.docx\n章节：第五章 报废\n设备报废申请需要附第三方检测报告。缺少检测报告的报废申请一律退回，不得先行处置设备。"
+    },
+    "cn-md-1": {
+      "ftsText": "文档 ： 夜间 巡检 SOP . md \n 章节 ： 1   巡检 准备 \n 夜间 巡检 每 两 小时 执行 一次 ， 共 四次 。 巡检 人员 必须 携带 红外 测温仪 和 照度计 ， 进入 车间 前 核对 当班人员 名单 。",
+      "searchText": "文档：夜间巡检SOP.md\n章节：1 巡检准备\n夜间巡检每两小时执行一次，共四次。巡检人员必须携带红外测温仪和照度计，进入车间前核对当班人员名单。"
+    },
+    "cn-md-2": {
+      "ftsText": "文档 ： 夜间 巡检 SOP . md \n 章节 ： 2   主轴 检查 \n 主轴 轴承 温度 超过   70   摄氏度 立即 上报 班长 ， 并 记录 到 巡检 表格 的 异常 栏 。 不得 自行 停机 等待 冷却 。",
+      "searchText": "文档：夜间巡检SOP.md\n章节：2 主轴检查\n主轴轴承温度超过 70 摄氏度立即上报班长，并记录到巡检表格的异常栏。不得自行停机等待冷却。"
+    },
+    "cn-md-3": {
+      "ftsText": "文档 ： 夜间 巡检 SOP . md \n 章节 ： 3   熔断 处理 \n 控制柜 熔断器 熔断 后 ， 只 允许 更换 同 规格 熔断器 。 禁止 使用 铜丝 替代 ， 也 禁止 短 接 熔断器 座 。",
+      "searchText": "文档：夜间巡检SOP.md\n章节：3 熔断处理\n控制柜熔断器熔断后，只允许更换同规格熔断器。禁止使用铜丝替代，也禁止短接熔断器座。"
+    },
+    "cn-md-4": {
+      "ftsText": "文档 ： 夜间 巡检 SOP . md \n 章节 ： 4   交接班 \n 交接班 记录 必须 写明 当班 产量 、 异常 次数 和 未 完成 的 维修工 单 编号 。 接班人 员 未 签字 前 ， 交班 人员 不得 离岗 。",
+      "searchText": "文档：夜间巡检SOP.md\n章节：4 交接班\n交接班记录必须写明当班产量、异常次数和未完成的维修工单编号。接班人员未签字前，交班人员不得离岗。"
+    },
+    "cn-pdf-1": {
+      "ftsText": "文档 ： CNC - 7   主轴 设备 手册 . pdf \n HX - 450   主轴 驱动器 额定功率   15   千瓦 ， 连续 工作温度 上限   55   摄氏度 。 超过 该 温度 时 驱动器 会 自动 降 额 运行 。",
+      "searchText": "文档：CNC-7 主轴设备手册.pdf\nHX-450 主轴驱动器额定功率 15 千瓦，连续工作温度上限 55 摄氏度。超过该温度时驱动器会自动降额运行。"
+    },
+    "cn-pdf-2": {
+      "ftsText": "文档 ： CNC - 7   主轴 设备 手册 . pdf \n 当 负载 超过 额定值 时 ， 过载 保护 会 在   2   秒 内 切断 输出 。 复位 按钮 位于 驱动器 正面 左下角 ， 需要 断电 复位 。",
+      "searchText": "文档：CNC-7 主轴设备手册.pdf\n当负载超过额定值时，过载保护会在 2 秒内切断输出。复位按钮位于驱动器正面左下角，需要断电复位。"
+    },
+    "cn-pdf-3": {
+      "ftsText": "文档 ： CNC - 7   主轴 设备 手册 . pdf \n 冷却液 回路 压力 应 保持 在   0 . 35   兆 帕 到   0 . 45   兆 帕 之间 。 压力 低于   0 . 30   兆 帕 会 触发 低压 报警 并 停止 主轴 。",
+      "searchText": "文档：CNC-7 主轴设备手册.pdf\n冷却液回路压力应保持在 0.35 兆帕到 0.45 兆帕之间。压力低于 0.30 兆帕会触发低压报警并停止主轴。"
+    },
+    "cn-pdf-4": {
+      "ftsText": "文档 ： CNC - 7   主轴 设备 手册 . pdf \n 更换 轴承 时 必须 使用   T - 220   专用工具 。 错误 使用 普通 拉马 会 导致 轴颈 拉伤 ， 属于 人为 损坏 ， 不 在 保修 范围 内 。",
+      "searchText": "文档：CNC-7 主轴设备手册.pdf\n更换轴承时必须使用 T-220 专用工具。错误使用普通拉马会导致轴颈拉伤，属于人为损坏，不在保修范围内。"
+    },
+    "cn-pdf-5": {
+      "ftsText": "文档 ： CNC - 7   主轴 设备 手册 . pdf \n 年度 保养 需要 紧固 全部 地 脚 螺栓 ， 扭矩 值 为   120   牛 米 。 保养 记录 必须 保存 五年 以上 。 手册 建议 的 常规 保养 周期 为   90   天 。",
+      "searchText": "文档：CNC-7 主轴设备手册.pdf\n年度保养需要紧固全部地脚螺栓，扭矩值为 120 牛米。保养记录必须保存五年以上。手册建议的常规保养周期为 90 天。"
+    },
+    "en-docx-1": {
+      "ftsText": "文档 ： Maintenance   Contract   Terms . docx \n 章节 ： Response   times \n Critical   faults   have   a   four   hour   response   target   and   a   next   business   day   repair   target .   Non - critical   faults   follow   a   three   business   day   schedule .",
+      "searchText": "文档：Maintenance Contract Terms.docx\n章节：Response times\nCritical faults have a four hour response target and a next business day repair target. Non-critical faults follow a three business day schedule."
+    },
+    "en-docx-2": {
+      "ftsText": "文档 ： Maintenance   Contract   Terms . docx \n 章节 ： Penalties \n Missing   the   response   target   three   times   in   one   quarter   reduces   the   service   fee   by   8   percent   for   that   quarter .",
+      "searchText": "文档：Maintenance Contract Terms.docx\n章节：Penalties\nMissing the response target three times in one quarter reduces the service fee by 8 percent for that quarter."
+    },
+    "en-docx-3": {
+      "ftsText": "文档 ： Maintenance   Contract   Terms . docx \n 章节 ： Coverage \n Consumables   such   as   coolant   filters   and   wiper   blades   are   excluded   from   the   contract   and   are   billed   separately .",
+      "searchText": "文档：Maintenance Contract Terms.docx\n章节：Coverage\nConsumables such as coolant filters and wiper blades are excluded from the contract and are billed separately."
+    },
+    "en-md-1": {
+      "ftsText": "文档 ： oncall - runbook . md \n 章节 ： Escalation \n Escalate   any   spindle   alarm   to   the   mechanical   on - call   engineer   within   15   minutes .   Do   not   reboot   the   controller   before   the   alarm   log   is   downloaded .",
+      "searchText": "文档：oncall-runbook.md\n章节：Escalation\nEscalate any spindle alarm to the mechanical on-call engineer within 15 minutes. Do not reboot the controller before the alarm log is downloaded."
+    },
+    "en-md-2": {
+      "ftsText": "文档 ： oncall - runbook . md \n 章节 ： Logs \n Alarm   logs   are   exported   with   the   command   hxlog   export   - - since   30d   - - format   csv .   The   export   takes   about   four   minutes   on   a   busy   controller .",
+      "searchText": "文档：oncall-runbook.md\n章节：Logs\nAlarm logs are exported with the command hxlog export --since 30d --format csv. The export takes about four minutes on a busy controller."
+    },
+    "en-md-3": {
+      "ftsText": "文档 ： oncall - runbook . md \n 章节 ： Spares \n The   spare   encoder   kit   part   number   is   ENC - 22 - KIT .   Only   two   kits   are   kept   on   site ;   replenishment   is   triggered   by   the   weekly   stock   check .",
+      "searchText": "文档：oncall-runbook.md\n章节：Spares\nThe spare encoder kit part number is ENC-22-KIT. Only two kits are kept on site; replenishment is triggered by the weekly stock check."
+    },
+    "en-md-4": {
+      "ftsText": "文档 ： oncall - runbook . md \n 章节 ： Safety \n Lock   out   the   main   breaker   before   opening   the   control   cabinet .   Verifying   zero   voltage   is   mandatory   even   after   the   lockout   tag   is   applied .",
+      "searchText": "文档：oncall-runbook.md\n章节：Safety\nLock out the main breaker before opening the control cabinet. Verifying zero voltage is mandatory even after the lockout tag is applied."
+    },
+    "en-pdf-1": {
+      "ftsText": "文档 ： Controller   Error   Codes . pdf \n E - 1042   means   the   spindle   encoder   signal   is   lost .   Check   the   encoder   cable   shield   grounding   before   replacing   the   encoder .",
+      "searchText": "文档：Controller Error Codes.pdf\nE-1042 means the spindle encoder signal is lost. Check the encoder cable shield grounding before replacing the encoder."
+    },
+    "en-pdf-2": {
+      "ftsText": "文档 ： Controller   Error   Codes . pdf \n E - 2207   indicates   coolant   pressure   below   0 . 30   MPa .   The   controller   stops   the   spindle   and   keeps   the   alarm   until   the   pressure   recovers .",
+      "searchText": "文档：Controller Error Codes.pdf\nE-2207 indicates coolant pressure below 0.30 MPa. The controller stops the spindle and keeps the alarm until the pressure recovers."
+    },
+    "en-pdf-3": {
+      "ftsText": "文档 ： Controller   Error   Codes . pdf \n A   HX - 450   drive   reports   F - 77   when   the   DC   bus   voltage   exceeds   780   V .   Reduce   the   deceleration   ramp   before   adding   a   brake   resistor .",
+      "searchText": "文档：Controller Error Codes.pdf\nA HX-450 drive reports F-77 when the DC bus voltage exceeds 780 V. Reduce the deceleration ramp before adding a brake resistor."
+    },
+    "en-pdf-4": {
+      "ftsText": "文档 ： Controller   Error   Codes . pdf \n Resetting   the   controller   clears   only   the   active   alarm   buffer .   The   historical   alarm   log   is   kept   for   30   days   and   cannot   be   cleared   manually .",
+      "searchText": "文档：Controller Error Codes.pdf\nResetting the controller clears only the active alarm buffer. The historical alarm log is kept for 30 days and cannot be cleared manually."
+    }
+  },
+  "queries": {
+    "0.30 MPa controller stops spindle": "0 . 30   MPa   controller   stops   spindle",
+    "0.30 MPa 低压": "0 . 30   MPa   低压",
+    "100 万元 董事会决议": "100   万元   董事会 决议",
+    "780 V brake resistor": "780   V   brake   resistor",
+    "8 percent service fee": "8   percent   service   fee",
+    "E-1042 cable routing": "E - 1042   cable   routing",
+    "E-1042 encoder": "E - 1042   encoder",
+    "E-1042 编码器 屏蔽接地": "E - 1042   编码器   屏蔽 接地",
+    "E-2207 coolant pressure": "E - 2207   coolant   pressure",
+    "ENC-22-KIT spare encoder": "ENC - 22 - KIT   spare   encoder",
+    "ENC-22-KIT 备件": "ENC - 22 - KIT   备件",
+    "F-77 DC bus voltage": "F - 77   DC   bus   voltage",
+    "HX-450 主轴 温度异常": "HX - 450   主轴   温度 异常",
+    "HX-450 保养周期": "HX - 450   保养 周期",
+    "HX-450 保养周期 maintenance interval": "HX - 450   保养 周期   maintenance   interval",
+    "T-220 轴承工具": "T - 220   轴承 工具",
+    "alarm buffer historical log": "alarm   buffer   historical   log",
+    "alarm log 30 days": "alarm   log   30   days",
+    "consumables coolant filters excluded": "consumables   coolant   filters   excluded",
+    "deceleration ramp DC bus": "deceleration   ramp   DC   bus",
+    "escalate spindle alarm 15 minutes": "escalate   spindle   alarm   15   minutes",
+    "four hour response target": "four   hour   response   target",
+    "hx-450 驱动器 F-77": "hx - 450   驱动器   F - 77",
+    "hxlog export csv": "hxlog   export   csv",
+    "laser cutter nozzle diameter": "laser   cutter   nozzle   diameter",
+    "lock out main breaker": "lock   out   main   breaker",
+    "next review October 12": "next   review   October   12",
+    "reboot controller before alarm log downloaded": "reboot   controller   before   alarm   log   downloaded",
+    "replenishment weekly stock check": "replenishment   weekly   stock   check",
+    "shield grounding encoder cable": "shield   grounding   encoder   cable",
+    "vacation carryover entitlement": "vacation   carryover   entitlement",
+    "下次评审 二号车间会议室": "下次 评审   二号 车间 会议室",
+    "主轴 降额运行": "主轴   降 额 运行",
+    "主轴轴承 上报班长": "主轴 轴承   上报 班长",
+    "交接班 未签字 离岗": "交接班   未 签字   离岗",
+    "低压报警 主轴停止": "低压 报警   主轴 停止",
+    "保养周期 90 天 调整为 60 天": "保养 周期   90   天   调整 为   60   天",
+    "冷却液 低压报警": "冷却液   低压 报警",
+    "员工餐厅 菜单 补贴": "员工 餐厅   菜单   补贴",
+    "回路压力 0.45 兆帕": "回路 压力   0 . 45   兆 帕",
+    "地脚螺栓 扭矩 牛米": "地 脚 螺栓   扭矩   牛 米",
+    "型号 HX-450 额定功率": "型号   HX - 450   额定功率",
+    "巡检 每两小时 四次": "巡检   每 两 小时   四次",
+    "巡检 照度计": "巡检   照度计",
+    "巡检 红外测温仪": "巡检   红外 测温仪",
+    "年度保养 地脚螺栓 五年": "年度 保养   地 脚 螺栓   五年",
+    "张工 线缆": "张 工   线缆",
+    "折旧 残值率": "折旧   残值 率",
+    "报废申请 第三方检测报告": "报废 申请   第三方 检测 报告",
+    "更换轴承 T-220 专用工具": "更换 轴承   T - 220   专用工具",
+    "未完成的维修工单编号": "未 完成 的 维修工 单 编号",
+    "残值率 depreciation": "残值 率   depreciation",
+    "液压泵站 伺服阀 校准": "液压泵 站   伺服 阀   校准",
+    "熔断器 fuse": "熔断器   fuse",
+    "熔断器 铜丝": "熔断器   铜丝",
+    "编码器 E-1042 原因": "编码器   E - 1042   原因",
+    "编码器线缆整改 负责人": "编码器 线缆 整改   负责人",
+    "轴承 人工损坏 保修": "轴承   人工 损坏   保修",
+    "轴承温度 70 摄氏度": "轴承 温度   70   摄氏度",
+    "过载保护 overload": "过载 保护   overload",
+    "过载保护 复位": "过载 保护   复位",
+    "连续工作温度 55 摄氏度": "连续 工作温度   55   摄氏度",
+    "预算 30 万元 总经理审批": "预算   30   万元   总经理 审批"
+  }
+}

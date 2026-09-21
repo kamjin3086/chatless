@@ -1,0 +1,825 @@
+{
+  "version": 1,
+  "generatedBy": "docs/acceptance/generate-retrieval-cases.py",
+  "documents": [
+    {
+      "id": "doc-cn-pdf",
+      "title": "CNC-7 主轴设备手册.pdf",
+      "type": "pdf",
+      "scope": "library",
+      "chunks": [
+        {
+          "id": "cn-pdf-1",
+          "page": 3,
+          "text": "HX-450 主轴驱动器额定功率 15 千瓦，连续工作温度上限 55 摄氏度。超过该温度时驱动器会自动降额运行。"
+        },
+        {
+          "id": "cn-pdf-2",
+          "page": 4,
+          "text": "当负载超过额定值时，过载保护会在 2 秒内切断输出。复位按钮位于驱动器正面左下角，需要断电复位。"
+        },
+        {
+          "id": "cn-pdf-3",
+          "page": 5,
+          "text": "冷却液回路压力应保持在 0.35 兆帕到 0.45 兆帕之间。压力低于 0.30 兆帕会触发低压报警并停止主轴。"
+        },
+        {
+          "id": "cn-pdf-4",
+          "page": 7,
+          "text": "更换轴承时必须使用 T-220 专用工具。错误使用普通拉马会导致轴颈拉伤，属于人为损坏，不在保修范围内。"
+        },
+        {
+          "id": "cn-pdf-5",
+          "page": 9,
+          "text": "年度保养需要紧固全部地脚螺栓，扭矩值为 120 牛米。保养记录必须保存五年以上。手册建议的常规保养周期为 90 天。"
+        }
+      ]
+    },
+    {
+      "id": "doc-cn-md",
+      "title": "夜间巡检SOP.md",
+      "type": "markdown",
+      "scope": "library",
+      "chunks": [
+        {
+          "id": "cn-md-1",
+          "heading": "1 巡检准备",
+          "text": "夜间巡检每两小时执行一次，共四次。巡检人员必须携带红外测温仪和照度计，进入车间前核对当班人员名单。"
+        },
+        {
+          "id": "cn-md-2",
+          "heading": "2 主轴检查",
+          "text": "主轴轴承温度超过 70 摄氏度立即上报班长，并记录到巡检表格的异常栏。不得自行停机等待冷却。"
+        },
+        {
+          "id": "cn-md-3",
+          "heading": "3 熔断处理",
+          "text": "控制柜熔断器熔断后，只允许更换同规格熔断器。禁止使用铜丝替代，也禁止短接熔断器座。"
+        },
+        {
+          "id": "cn-md-4",
+          "heading": "4 交接班",
+          "text": "交接班记录必须写明当班产量、异常次数和未完成的维修工单编号。接班人员未签字前，交班人员不得离岗。"
+        }
+      ]
+    },
+    {
+      "id": "doc-cn-docx",
+      "title": "设备采购与折旧管理办法.docx",
+      "type": "docx",
+      "scope": "library",
+      "chunks": [
+        {
+          "id": "cn-docx-1",
+          "heading": "第三章 折旧",
+          "text": "生产设备按十年直线法计提折旧，残值率百分之五。折旧年限变更必须经财务负责人和设备部共同审批。"
+        },
+        {
+          "id": "cn-docx-2",
+          "heading": "第四章 采购",
+          "text": "单台设备预算超过 30 万元需要总经理审批，超过 100 万元还需要董事会决议。预算金额以含税价为口径。"
+        },
+        {
+          "id": "cn-docx-3",
+          "heading": "第五章 报废",
+          "text": "设备报废申请需要附第三方检测报告。缺少检测报告的报废申请一律退回，不得先行处置设备。"
+        }
+      ]
+    },
+    {
+      "id": "doc-en-pdf",
+      "title": "Controller Error Codes.pdf",
+      "type": "pdf",
+      "scope": "library",
+      "chunks": [
+        {
+          "id": "en-pdf-1",
+          "page": 12,
+          "text": "E-1042 means the spindle encoder signal is lost. Check the encoder cable shield grounding before replacing the encoder."
+        },
+        {
+          "id": "en-pdf-2",
+          "page": 13,
+          "text": "E-2207 indicates coolant pressure below 0.30 MPa. The controller stops the spindle and keeps the alarm until the pressure recovers."
+        },
+        {
+          "id": "en-pdf-3",
+          "page": 18,
+          "text": "A HX-450 drive reports F-77 when the DC bus voltage exceeds 780 V. Reduce the deceleration ramp before adding a brake resistor."
+        },
+        {
+          "id": "en-pdf-4",
+          "page": 21,
+          "text": "Resetting the controller clears only the active alarm buffer. The historical alarm log is kept for 30 days and cannot be cleared manually."
+        }
+      ]
+    },
+    {
+      "id": "doc-en-md",
+      "title": "oncall-runbook.md",
+      "type": "markdown",
+      "scope": "library",
+      "chunks": [
+        {
+          "id": "en-md-1",
+          "heading": "Escalation",
+          "text": "Escalate any spindle alarm to the mechanical on-call engineer within 15 minutes. Do not reboot the controller before the alarm log is downloaded."
+        },
+        {
+          "id": "en-md-2",
+          "heading": "Logs",
+          "text": "Alarm logs are exported with the command hxlog export --since 30d --format csv. The export takes about four minutes on a busy controller."
+        },
+        {
+          "id": "en-md-3",
+          "heading": "Spares",
+          "text": "The spare encoder kit part number is ENC-22-KIT. Only two kits are kept on site; replenishment is triggered by the weekly stock check."
+        },
+        {
+          "id": "en-md-4",
+          "heading": "Safety",
+          "text": "Lock out the main breaker before opening the control cabinet. Verifying zero voltage is mandatory even after the lockout tag is applied."
+        }
+      ]
+    },
+    {
+      "id": "doc-en-docx",
+      "title": "Maintenance Contract Terms.docx",
+      "type": "docx",
+      "scope": "library",
+      "chunks": [
+        {
+          "id": "en-docx-1",
+          "heading": "Response times",
+          "text": "Critical faults have a four hour response target and a next business day repair target. Non-critical faults follow a three business day schedule."
+        },
+        {
+          "id": "en-docx-2",
+          "heading": "Penalties",
+          "text": "Missing the response target three times in one quarter reduces the service fee by 8 percent for that quarter."
+        },
+        {
+          "id": "en-docx-3",
+          "heading": "Coverage",
+          "text": "Consumables such as coolant filters and wiper blades are excluded from the contract and are billed separately."
+        }
+      ]
+    },
+    {
+      "id": "doc-attach-meeting",
+      "title": "2026-08 设备评审会议纪要.txt",
+      "type": "txt",
+      "scope": "attachment",
+      "chunks": [
+        {
+          "id": "att-1",
+          "text": "会议决定把 HX-450 的保养周期从 90 天调整为 60 天，原因是上季度出现过两次轴承温升异常。"
+        },
+        {
+          "id": "att-2",
+          "text": "会议同时确认 E-1042 高发与编码器线缆走向有关，需要在九月完成线缆整改，负责人为张工。"
+        },
+        {
+          "id": "att-3",
+          "text": "会议记录人：李敏。下次评审时间定在 2026 年 10 月 12 日，地点为二号车间会议室。"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "zh-short-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "过载保护 复位",
+      "expected": [
+        "cn-pdf-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-short-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "熔断器 铜丝",
+      "expected": [
+        "cn-md-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-short-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "折旧 残值率",
+      "expected": [
+        "cn-docx-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-short-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "冷却液 低压报警",
+      "expected": [
+        "cn-pdf-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-short-05",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "巡检 红外测温仪",
+      "expected": [
+        "cn-md-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-short-06",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "型号 HX-450 额定功率",
+      "expected": [
+        "cn-pdf-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-short-07",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "轴承 人工损坏 保修",
+      "expected": [
+        "cn-pdf-4"
+      ],
+      "mode": "lexical",
+      "note": "型号 T-220 与保修口径"
+    },
+    {
+      "id": "zh-num-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "地脚螺栓 扭矩 牛米",
+      "expected": [
+        "cn-pdf-5"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-num-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "轴承温度 70 摄氏度",
+      "expected": [
+        "cn-md-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-num-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "预算 30 万元 总经理审批",
+      "expected": [
+        "cn-docx-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-num-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "回路压力 0.45 兆帕",
+      "expected": [
+        "cn-pdf-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-num-05",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "连续工作温度 55 摄氏度",
+      "expected": [
+        "cn-pdf-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-sop-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "交接班 未签字 离岗",
+      "expected": [
+        "cn-md-4"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-sop-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "报废申请 第三方检测报告",
+      "expected": [
+        "cn-docx-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-sop-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "巡检 每两小时 四次",
+      "expected": [
+        "cn-md-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-sop-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "主轴轴承 上报班长",
+      "expected": [
+        "cn-md-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-sop-05",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "更换轴承 T-220 专用工具",
+      "expected": [
+        "cn-pdf-4"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-sop-06",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "年度保养 地脚螺栓 五年",
+      "expected": [
+        "cn-pdf-5"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-scope-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "保养周期 90 天 调整为 60 天",
+      "expected": [
+        "att-1"
+      ],
+      "mode": "lexical",
+      "note": "会话附件"
+    },
+    {
+      "id": "zh-scope-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "编码器线缆整改 负责人",
+      "expected": [
+        "att-2"
+      ],
+      "mode": "lexical",
+      "note": "会话附件"
+    },
+    {
+      "id": "zh-scope-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "下次评审 二号车间会议室",
+      "expected": [
+        "att-3"
+      ],
+      "mode": "lexical",
+      "note": "会话附件"
+    },
+    {
+      "id": "zh-conflict-01",
+      "lang": "zh",
+      "kind": "conflict",
+      "query": "HX-450 保养周期",
+      "expected": [
+        "att-1",
+        "cn-pdf-5"
+      ],
+      "mode": "lexical",
+      "note": "会议调整了保养周期，需同时召回手册保养章节与会议决定"
+    },
+    {
+      "id": "zh-cross-01",
+      "lang": "zh",
+      "kind": "cross-doc",
+      "query": "编码器 E-1042 原因",
+      "expected": [
+        "en-pdf-1",
+        "att-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-cross-02",
+      "lang": "zh",
+      "kind": "cross-doc",
+      "query": "HX-450 主轴 温度异常",
+      "expected": [
+        "cn-pdf-1",
+        "att-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-code-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "E-1042 encoder",
+      "expected": [
+        "en-pdf-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-code-02",
+      "lang": "en",
+      "kind": "fact",
+      "query": "E-2207 coolant pressure",
+      "expected": [
+        "en-pdf-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-code-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "F-77 DC bus voltage",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-code-04",
+      "lang": "en",
+      "kind": "fact",
+      "query": "alarm log 30 days",
+      "expected": [
+        "en-pdf-4"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-cmd-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "hxlog export csv",
+      "expected": [
+        "en-md-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-part-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "ENC-22-KIT spare encoder",
+      "expected": [
+        "en-md-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-num-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "780 V brake resistor",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-num-02",
+      "lang": "en",
+      "kind": "fact",
+      "query": "0.30 MPa controller stops spindle",
+      "expected": [
+        "en-pdf-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-num-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "four hour response target",
+      "expected": [
+        "en-docx-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-num-04",
+      "lang": "en",
+      "kind": "fact",
+      "query": "8 percent service fee",
+      "expected": [
+        "en-docx-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-sop-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "lock out main breaker",
+      "expected": [
+        "en-md-4"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-sop-02",
+      "lang": "en",
+      "kind": "fact",
+      "query": "escalate spindle alarm 15 minutes",
+      "expected": [
+        "en-md-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-sop-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "consumables coolant filters excluded",
+      "expected": [
+        "en-docx-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-sop-04",
+      "lang": "en",
+      "kind": "fact",
+      "query": "alarm buffer historical log",
+      "expected": [
+        "en-pdf-4"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-sop-05",
+      "lang": "en",
+      "kind": "fact",
+      "query": "reboot controller before alarm log downloaded",
+      "expected": [
+        "en-md-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-sop-06",
+      "lang": "en",
+      "kind": "fact",
+      "query": "replenishment weekly stock check",
+      "expected": [
+        "en-md-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-scope-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "next review October 12",
+      "expected": [
+        "att-3"
+      ],
+      "mode": "lexical",
+      "note": "中文附件里的英文日期"
+    },
+    {
+      "id": "en-cross-01",
+      "lang": "en",
+      "kind": "cross-doc",
+      "query": "E-1042 cable routing",
+      "expected": [
+        "en-pdf-1",
+        "att-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-cross-02",
+      "lang": "en",
+      "kind": "cross-doc",
+      "query": "HX-450 保养周期 maintenance interval",
+      "expected": [
+        "att-1",
+        "cn-pdf-5"
+      ],
+      "mode": "lexical",
+      "note": "双语查询：手册周期与会议调整分处中英文资料"
+    },
+    {
+      "id": "none-01",
+      "lang": "zh",
+      "kind": "no-answer",
+      "query": "液压泵站 伺服阀 校准",
+      "expected": [],
+      "mode": "lexical"
+    },
+    {
+      "id": "none-02",
+      "lang": "zh",
+      "kind": "no-answer",
+      "query": "员工餐厅 菜单 补贴",
+      "expected": [],
+      "mode": "lexical"
+    },
+    {
+      "id": "none-03",
+      "lang": "en",
+      "kind": "no-answer",
+      "query": "laser cutter nozzle diameter",
+      "expected": [],
+      "mode": "lexical"
+    },
+    {
+      "id": "none-04",
+      "lang": "en",
+      "kind": "no-answer",
+      "query": "vacation carryover entitlement",
+      "expected": [],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "hx-450 驱动器 F-77",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "E-1042 编码器 屏蔽接地",
+      "expected": [
+        "en-pdf-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "T-220 轴承工具",
+      "expected": [
+        "cn-pdf-4"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "0.30 MPa 低压",
+      "expected": [
+        "en-pdf-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-05",
+      "lang": "en",
+      "kind": "fact",
+      "query": "残值率 depreciation",
+      "expected": [
+        "cn-docx-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-06",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "ENC-22-KIT 备件",
+      "expected": [
+        "en-md-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-07",
+      "lang": "en",
+      "kind": "fact",
+      "query": "过载保护 overload",
+      "expected": [
+        "cn-pdf-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-08",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "熔断器 fuse",
+      "expected": [
+        "cn-md-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-09",
+      "lang": "en",
+      "kind": "fact",
+      "query": "巡检 照度计",
+      "expected": [
+        "cn-md-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-10",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "张工 线缆",
+      "expected": [
+        "att-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-fact-07",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "主轴 降额运行",
+      "expected": [
+        "cn-pdf-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-fact-08",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "未完成的维修工单编号",
+      "expected": [
+        "cn-md-4"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "zh-fact-09",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "100 万元 董事会决议",
+      "expected": [
+        "cn-docx-2"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-fact-07",
+      "lang": "en",
+      "kind": "fact",
+      "query": "shield grounding encoder cable",
+      "expected": [
+        "en-pdf-1"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "en-fact-08",
+      "lang": "en",
+      "kind": "fact",
+      "query": "deceleration ramp DC bus",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "mode": "lexical"
+    },
+    {
+      "id": "mix-11",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "低压报警 主轴停止",
+      "expected": [
+        "cn-pdf-3"
+      ],
+      "mode": "lexical"
+    }
+  ]
+}

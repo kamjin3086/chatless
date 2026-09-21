@@ -99,7 +99,9 @@ INSERT INTO document_chunks_fts VALUES ('c1','needle'),('c2','needle');
 ''')
 print(json.dumps([dict(row) for row in db.execute(request['sql'], request['params'])]))
 `;
-  mocks.select.mockImplementationOnce(async (sql: string, params: unknown[]) => JSON.parse(
+  // The retriever may issue a candidate query and then a scoped fallback, so
+  // every statement runs against the real SQLite engine.
+  mocks.select.mockImplementation(async (sql: string, params: unknown[]) => JSON.parse(
     execFileSync('python', ['-c', python], { input: JSON.stringify({ sql, params }), encoding: 'utf8' }),
   ));
   const results = await new LexicalRetriever().search('needle', {
