@@ -1,6 +1,7 @@
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { useAuthorizationStore, type ApprovalDecision } from '@/store/authorizationStore';
-import { getSessionDirectories, grantSessionDirectory, SESSION_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/sessionGrants';
+import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permissions';
+import { resolveFilesystemAccess, setConversationFilesystemAccess } from '@/lib/filesystemAllowlist/accessPolicy';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { isShellCommandTrusted, useShellAuthStore } from '@/store/shellAuthStore';
@@ -219,6 +220,7 @@ async function waitForCallApproval(params: {
       })).catch(() => resolve({ approved: false, decision: 'once' }));
     };
     useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
+      conversationId: params.conversationId,
       server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
       filesystem: params.filesystem,
       onApprove: (decision) => decide(true, decision), onReject: () => decide(false) });
@@ -311,8 +313,6 @@ export class ToolExecutionPipeline {
     // call only. They must never be written into the persisted allowlist.
     const callGrants: CallScopedGrant[] = [];
     let sessionWorkDir: string | undefined;
-    // Session-approved directories that cover this call's target.
-    const sessionDirectoriesForCall: Array<{ path: string; permissions: Record<string, boolean> }> = [];
     const srvLower = normalizeServerName(server);
 
     // 预处理：shell_executor 的 workingDir 和 command 支持 @WorkDir / @Alias / 相对路径
@@ -418,11 +418,6 @@ export class ToolExecutionPipeline {
           await allowlist.load();
           // 会话级别名：@WorkDir（来自附件菜单）
           const dirsForResolve = [...allowlist.directories];
-          // Directories the user approved for this conversation only.  They are
-          // never persisted, so they behave like the working directory: resolved
-          // here, granted per call below.
-          const sessionDirectories = getSessionDirectories(invocation.conversationId);
-          dirsForResolve.push(...sessionDirectories);
           let workingDir: string | undefined;
           try {
             const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
@@ -500,28 +495,25 @@ export class ToolExecutionPipeline {
           // 获取主路径的绝对路径（用于权限检查和授权）
           const primaryAbsolutePath = resolved?.absolutePath || '';
 
-          // A directory approved for this conversation covers the call without
-          // another prompt; the grant still travels per call.
-          if (primaryAbsolutePath) {
-            for (const directory of sessionDirectories) {
-              if (isPathWithinDirectory({ absolutePath: primaryAbsolutePath, directoryPath: directory.path })) {
-                sessionDirectoriesForCall.push({ path: directory.path, permissions: directory.permissions });
-              }
-            }
-          }
-          
           const forceApproval = op === 'delete';
           const hasDir = !!resolved?.directory;
           const hasPerm = hasDir ? !!resolved?.directory?.permissions?.[op] : false;
-          const needAuth = primaryAbsolutePath && (forceApproval || !hasDir || !hasPerm);
+          // The user's chosen trust level decides whether this call may ask.
+          // "unrestricted" skips the prompt; the backend still validates every
+          // path it receives.
+          const accessLevel = await resolveFilesystemAccess(invocation.conversationId);
+          const unrestricted = accessLevel === 'unrestricted';
+          const needAuth = !unrestricted && primaryAbsolutePath && (forceApproval || !hasDir || !hasPerm);
+          const needsCallGrant = !hasPerm || forceApproval;
+          let approved = false;
+          let decision: ApprovalDecision = 'once';
 
           if (needAuth) {
             markPendingAuth({ assistantMessageId, server, tool, cardId });
-            // A delete stays a one-off decision: the card does not offer
-            // directory-level trust for it.
-            const approvableDirectory = forceApproval
-              ? ''
-              : (resolved?.directory?.path || dirnamePath(primaryAbsolutePath));
+            // "以后都允许" is only meaningful for a folder we can grant, so a
+            // delete reports its parent but never offers that choice.
+            const approvableDirectory = resolved?.directory?.path
+              || dirnamePath(primaryAbsolutePath);
             const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
               runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
               args: args || {},
@@ -530,6 +522,8 @@ export class ToolExecutionPipeline {
                 ? { op, path: primaryAbsolutePath, directory: approvableDirectory }
                 : undefined });
             const authorized = approval.approved;
+            approved = authorized;
+            decision = approval.decision;
 
             if (this.coordinator.isMessageCancelled(assistantMessageId)) {
               this.coordinator.markToolCallComplete(callKey, 'failed');
@@ -579,27 +573,28 @@ export class ToolExecutionPipeline {
             }
 
             // Turn the user's choice into trust that lasts as long as they asked
-            // for.  "This session" stays in memory; "always" joins the persistent
-            // allowlist (without delete, which keeps prompting).
-            if (approvableDirectory) {
-              if (approval.decision === 'session') {
-                grantSessionDirectory(invocation.conversationId, approvableDirectory);
-              } else if (approval.decision === 'always') {
-                try {
-                  const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
-                  await ensureAllowlistedDirectory({
-                    path: approvableDirectory,
-                    source: 'manual',
-                    permissions: SESSION_DIRECTORY_PERMISSIONS,
-                  });
-                } catch (error) {
-                  console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
-                }
+            // for: "always" joins the persistent allowlist (never with delete),
+            // "unrestricted" stops the questions for the rest of the session.
+            if (approvableDirectory && decision === 'always' && !forceApproval) {
+              try {
+                const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
+                await ensureAllowlistedDirectory({
+                  path: approvableDirectory,
+                  source: 'manual',
+                  permissions: EVERYDAY_DIRECTORY_PERMISSIONS,
+                });
+              } catch (error) {
+                console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
               }
             }
+            if (decision === 'unrestricted') {
+              setConversationFilesystemAccess(invocation.conversationId, 'unrestricted');
+            }
+          }
 
-            // “允许本次” is an execution-scoped grant. It must not mutate
-            // the persistent allowlist or turn one approval into future trust.
+          // Anything the persistent allowlist does not cover needs a grant for
+          // this call, whether the user approved one call or turned prompts off.
+          if (needsCallGrant && (approved || unrestricted)) {
             try {
               const hasDirArg = typeof (args as any)?.dir === 'string';
               const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
@@ -710,11 +705,6 @@ export class ToolExecutionPipeline {
         path: sessionWorkDir,
         permissions: { read: true, write: true, create: true, delete: false },
       });
-    }
-    // Session-approved directories are not in the backend allowlist, so each
-    // call that touches one carries its own grant, just like the working dir.
-    for (const directory of sessionDirectoriesForCall) {
-      callGrants.push({ path: directory.path, permissions: { ...directory.permissions } });
     }
     if (callGrants.length) {
       try {

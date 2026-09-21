@@ -8,8 +8,18 @@ import { Button } from "@/components/ui/button";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { useFilesystemAllowlistStore } from "@/store/filesystemAllowlistStore";
+import { useChatStore } from "@/store/chatStore";
+import {
+  clearConversationFilesystemAccess,
+  getConversationFilesystemAccess,
+} from "@/lib/filesystemAllowlist/accessPolicy";
 import { ensureAllowlistedDirectory, normalizeAlias as normalizeAliasCore } from "@/lib/filesystemAllowlist";
 import { syncFilesystemAllowlistToBackend } from "@/lib/filesystemAllowlist/backendSync";
+import {
+  getGlobalFilesystemAccess,
+  setGlobalFilesystemAccess,
+  type FilesystemAccessLevel,
+} from "@/lib/filesystemAllowlist/accessPolicy";
 import { cn } from "@/lib/utils";
 
 function normalizeAlias(input: string): string {
@@ -37,10 +47,31 @@ function getSourceLabel(source: string): string {
 export function FileSystemAuthSettings() {
   const { directories, load, removeDirectory, updateDirectory } = useFilesystemAllowlistStore();
   const [loading, setLoading] = useState(false);
+  const [accessLevel, setAccessLevel] = useState<FilesystemAccessLevel>('ask');
+  const conversationId = useChatStore((s) => s.currentConversationId);
+  const [conversationOverride, setConversationOverride] = useState<FilesystemAccessLevel | undefined>();
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void getGlobalFilesystemAccess().then(setAccessLevel);
+  }, []);
+
+  useEffect(() => {
+    setConversationOverride(getConversationFilesystemAccess(conversationId || ''));
+  }, [conversationId]);
+
+  const onChangeAccessLevel = useCallback(async (level: FilesystemAccessLevel) => {
+    setAccessLevel(level);
+    try {
+      await setGlobalFilesystemAccess(level);
+    } catch (error) {
+      console.error('[FileSystemAuthSettings] 保存访问策略失败:', error);
+      setAccessLevel(await getGlobalFilesystemAccess());
+    }
+  }, []);
 
   const syncToBackend = useCallback(async () => {
     const dirs = useFilesystemAllowlistStore.getState().directories;
@@ -83,6 +114,57 @@ export function FileSystemAuthSettings() {
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
         管理允许AI访问的目录。建议为每个目录设置易识别的别名。
       </p>
+
+      {/* 访问策略：决定越权操作是否还要询问 */}
+      <div className="mt-3 rounded-lg border border-slate-200/60 dark:border-slate-700/40 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-200">白名单之外的操作</div>
+            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              {accessLevel === 'unrestricted'
+                ? '不再询问，文件读写和删除直接执行（适合长时间自动任务）'
+                : '弹卡片询问，可选仅本次 / 以后都允许 / 本会话不再询问'}
+            </div>
+          </div>
+          <div className="shrink-0 flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {(['ask', 'unrestricted'] as const).map((level) => (
+              <button
+                key={level}
+                type="button"
+                onClick={() => void onChangeAccessLevel(level)}
+                className={cn(
+                  'px-2.5 py-1 text-[11px] transition-colors',
+                  accessLevel === level
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
+                )}
+              >
+                {level === 'ask' ? '每次询问' : '不再询问'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 会话级覆盖：卡片上选过“本会话不再询问”时显示，可一键恢复 */}
+      {conversationOverride === 'unrestricted' && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-amber-300/60 dark:border-amber-700/50 bg-amber-50/60 dark:bg-amber-950/20 px-2.5 py-2">
+          <span className="text-[11px] text-amber-700 dark:text-amber-300">
+            当前会话已关闭文件操作询问
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => {
+              clearConversationFilesystemAccess(conversationId || '');
+              setConversationOverride(undefined);
+            }}
+          >
+            恢复询问
+          </Button>
+        </div>
+      )}
 
       {/* 顶部工具栏 */}
       <div className="mt-3 flex items-center justify-between gap-2">

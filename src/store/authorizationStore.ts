@@ -6,11 +6,11 @@ import { create } from 'zustand';
 
 /**
  * How long an approval should last.
- * - `once`: this call only (the default, and the only option for deletes)
- * - `session`: every call in this conversation while the app stays open
+ * - `once`: this call only (the default)
  * - `always`: adds the directory to the persistent allowlist
+ * - `unrestricted`: no more filesystem prompts in this conversation
  */
-export type ApprovalDecision = 'once' | 'session' | 'always';
+export type ApprovalDecision = 'once' | 'always' | 'unrestricted';
 
 export interface PendingFilesystemScope {
   /** Operation the user is approving: read / write / create / delete. */
@@ -24,6 +24,8 @@ export interface PendingFilesystemScope {
 export interface PendingAuthorization {
   id: string; // 唯一ID
   messageId: string;
+  /** Conversation the call belongs to (used by the card's undo action). */
+  conversationId?: string;
   server: string;
   tool: string;
   args?: Record<string, unknown>;

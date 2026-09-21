@@ -36,8 +36,9 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   // time range of the grant instead of a bare yes/no.
   const pendingAuth = useAuthorizationStore((state) =>
     authKey ? state.pendingAuthorizations.get(authKey) : undefined);
-  const directoryScope = pendingAuth?.filesystem && pendingAuth.filesystem.op !== 'delete'
-    ? pendingAuth.filesystem
+  const filesystemScope = pendingAuth?.filesystem;
+  const directoryScope = filesystemScope && filesystemScope.op !== 'delete'
+    ? filesystemScope
     : undefined;
 
   const rememberHint =
@@ -56,15 +57,35 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
     }
   }, [authKey, messageId, cardId, approveAuthorization]);
 
-  const handleApproveWith = React.useCallback((decision: 'session' | 'always') => {
+  const handleApproveWith = React.useCallback((decision: 'always' | 'unrestricted') => {
     if (!authKey || !messageId || !cardId) return;
     const ok = approveAuthorization(authKey, decision);
     if (!ok) {
       toast.info('审批已失效', { description: '请点击“继续”重新检查权限。' });
       return;
     }
-    toast.success(decision === 'session' ? '本次会话内该文件夹可直接读写' : '已加入白名单，之后不再询问');
-  }, [authKey, messageId, cardId, approveAuthorization]);
+    if (decision === 'always') {
+      toast.success('该文件夹已加入白名单，读写不再询问');
+      return;
+    }
+    // Turning prompts off must be as easy to undo as it was to enable.
+    const conversationId = pendingAuth?.conversationId;
+    toast.success('本会话内文件操作不再询问', {
+      action: conversationId
+        ? {
+            label: '恢复询问',
+            onClick: () => {
+              void import('@/lib/filesystemAllowlist/accessPolicy')
+                .then(({ setConversationFilesystemAccess }) => {
+                  setConversationFilesystemAccess(conversationId, 'ask');
+                  toast.info('已恢复文件操作询问');
+                })
+                .catch(() => {});
+            },
+          }
+        : undefined,
+    });
+  }, [authKey, messageId, cardId, approveAuthorization, pendingAuth?.conversationId]);
   
   const handleReject = React.useCallback(() => {
     if (!authKey || !messageId || !cardId) return;
@@ -172,28 +193,30 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         {/* 审批按钮 */}
         {isPendingAuth && (
           <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {directoryScope ? (
+            {filesystemScope ? (
               <>
                 <button
                   onClick={handleApprove}
                   className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                  title={`只允许这一次：${directoryScope.path}`}
+                  title={`只允许这一次：${filesystemScope.path}`}
                 >
                   仅本次
                 </button>
+                {directoryScope && (
+                  <button
+                    onClick={() => handleApproveWith('always')}
+                    className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition-colors"
+                    title={`把该文件夹加入白名单，长期允许读写（删除仍需确认）：${directoryScope.directory}`}
+                  >
+                    以后都允许
+                  </button>
+                )}
                 <button
-                  onClick={() => handleApproveWith('session')}
-                  className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition-colors"
-                  title={`本次会话内允许读写该文件夹：${directoryScope.directory}`}
+                  onClick={() => handleApproveWith('unrestricted')}
+                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                  title="本会话内所有文件操作（含删除）都不再询问，可在设置里改回"
                 >
-                  本会话允许读写
-                </button>
-                <button
-                  onClick={() => handleApproveWith('always')}
-                  className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
-                  title={`加入白名单，长期允许读写该文件夹：${directoryScope.directory}`}
-                >
-                  始终允许读写
+                  本会话不再询问
                 </button>
               </>
             ) : (
@@ -209,7 +232,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
               onClick={handleReject}
               className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
             >
-              {directoryScope ? '拒绝' : '取消'}
+              {filesystemScope ? '拒绝' : '取消'}
             </button>
           </div>
         )}

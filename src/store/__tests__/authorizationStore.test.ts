@@ -20,9 +20,9 @@ describe('authorization store decisions', () => {
     const onApprove = vi.fn();
     useAuthorizationStore.getState().addPendingAuthorization(pending(onApprove, vi.fn()) as never);
 
-    expect(useAuthorizationStore.getState().approveAuthorization('run:card', 'session')).toBe(true);
+    expect(useAuthorizationStore.getState().approveAuthorization('run:card', 'unrestricted')).toBe(true);
 
-    expect(onApprove).toHaveBeenCalledWith('session');
+    expect(onApprove).toHaveBeenCalledWith('unrestricted');
     expect(useAuthorizationStore.getState().hasPendingAuthorization('run:card')).toBe(false);
   });
 
