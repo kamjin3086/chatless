@@ -27,7 +27,6 @@ vi.mock('@/lib/rag/EvidenceRegistry', () => ({
 vi.mock('@/lib/mcp/promptInjector', () => ({ buildMcpSystemInjections: async () => ({ useNativeTools: true }) }));
 vi.mock('../buildAgentPromptEnvelope', () => ({
   buildAgentPromptEnvelope: () => ({ prefixMessages: [], tools: [{ name: 'fs__write' }] }),
-  dedupeEnvelopeSystemPrefix: (messages: Message[]) => messages,
 }));
 vi.mock('../resolveAgentToolCapability', () => ({ resolveAgentToolCapability: () => ({ useNativeTools: true, renderMode: 'tool_role' }) }));
 vi.mock('../AgentRunEventStore', () => ({ AgentRunEventStore: {

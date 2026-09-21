@@ -2,6 +2,8 @@
  * MCP 注入系统类型定义
  */
 
+import type { PromptBlock } from '../prompt/composition';
+
 /**
  * 注入阶段
  */
@@ -73,6 +75,10 @@ export interface InjectionContext {
   modelName?: string;
   /** 工具调用深度 */
   toolCallDepth?: number;
+  /** Interface language, so the contract stays stable for the conversation. */
+  locale?: string;
+  /** Plan-only mode is a per-turn instruction block, not a run event. */
+  planOnly?: boolean;
 }
 
 /**
@@ -92,8 +98,8 @@ export interface NativeToolDefinition {
  * 注入结果
  */
 export interface InjectionResult {
-  /** 注入的 system 消息 */
-  systemMessages: Array<{ role: 'system'; content: string }>;
+  /** Prompt blocks; the agent envelope merges them into one system message. */
+  systemMessages: PromptBlock[];
   /** 启用的服务器列表 */
   enabledServers: string[];
   /** 是否注入了工具信息 */

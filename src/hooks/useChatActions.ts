@@ -239,38 +239,12 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   ): Promise<LlmMessage[]> => {
     const hb = new HistoryBuilder();
     
-    // 0. 注入当前时间（永远置顶），帮助模型理解“今天/最新/现在”等时间语义，并提升实时信息查询准确性
-    try {
-      const wsMod: any = await import('@/store/webSearchStore').catch(() => null);
-      const webSearchEnabled = !!wsMod?.useWebSearchStore?.getState?.().isWebSearchEnabled;
-      const { buildTimeContextMessage, isTimeRelatedQuery } = await import('@/lib/prompts/TimeContext');
-      const includeInSearch = webSearchEnabled || isTimeRelatedQuery(userContent);
-      const timeMsg = buildTimeContextMessage(includeInSearch);
-      if (timeMsg && timeMsg.trim()) hb.addSystem(timeMsg);
-
-    } catch { /* ignore */ }
-
-    // Web search is a native tool in the unified Agent runtime.  Do not run a
-    // hidden pre-search here: the model must decide whether current information
-    // is needed and the result must remain part of the structured run history.
-    
-    // 1. 添加系统提示词
-    try {
-      const conv = useChatStore.getState().conversations.find((c: any) => c.id === conversationId);
-      const applied = conv?.system_prompt_applied;
-      if (applied?.promptId) {
-        const prompt = usePromptStore.getState().prompts.find((p: any) => p.id === applied.promptId);
-        if (prompt) {
-          const rendered = renderPromptContent(prompt.content, applied.variableValues);
-          if (rendered && rendered.trim()) hb.addSystem(rendered);
-        }
-      }
-
-
-      // 2. 添加MCP系统注入（agent 模式由 AgentLoopRunner Envelope 单次注入）
-      // MCP and Skills are assembled by AgentLoopRunner once per run.  Keeping
-      // them out of this history builder prevents duplicate, stale injections.
-    } catch { /* 忽略系统提示构建失败 */ }
+    // No system text is added here.  The prompt composer owns the single system
+    // message (time, user prompt, environment, capabilities), so the history
+    // stays free of duplicated or per-turn system blocks.
+    //
+    // Web search is a native tool in the unified Agent runtime: no hidden
+    // pre-search happens here either, so the model stays in charge.
     
     // 3. 处理历史消息
     if (messages && messages.length > 0) {

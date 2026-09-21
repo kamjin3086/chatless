@@ -2,6 +2,7 @@ import { BaseProvider, CheckResult, StreamCallbacks, LlmMessage } from './BasePr
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
+import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { createStreamEvent } from '../types/stream-events';
 import { 
   type ToolDefinition, 
@@ -176,6 +177,12 @@ export class AnthropicProvider extends BaseProvider {
               for (const part of parts) {
                 if (part.startsWith('{')) {
                   const json = JSON.parse(part);
+                  // Anthropic reports cache usage on message_start / message_delta.
+                  if (json?.message?.usage) {
+                    recordPromptCacheUsage(parsePromptCacheUsage(json.message.usage, 'anthropic', json.message.model));
+                  } else if (json?.usage) {
+                    recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'anthropic', json?.message?.model));
+                  }
                   
                   // 处理内容块开始（可能是工具调用）
                   if (json.type === 'content_block_start') {

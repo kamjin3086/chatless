@@ -31,8 +31,9 @@ import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
-import { AGENT_MINIMAL_SYSTEM_PROMPT } from './promptTemplates';
-import { getToolDoc, buildFirstFollowUpPromptFromDoc, buildForcedAnswerPromptFromDoc } from './toolDocLoader';
+import { buildAgentContractBlock, resolvePromptLocale } from '@/lib/mcp/prompt/agentContract';
+import type { PromptBlock } from '@/lib/mcp/prompt/composition';
+import { getToolDoc } from './toolDocLoader';
 
 /**
  * 构建初始调用阶段的提示词
@@ -52,7 +53,7 @@ export async function buildInitialPrompt(
   context: InjectionContext,
   signals: InjectionSignals
 ): Promise<InjectionResult> {
-  const messages: Array<{ role: 'system'; content: string }> = [];
+  const blocks: PromptBlock[] = [];
   const enabledServers: string[] = [];
   
   // 检测是否应该使用原生工具调用
@@ -73,8 +74,8 @@ export async function buildInitialPrompt(
 
   // Models without native tool support remain ordinary chat models.
   
-  // 1. 时间上下文（高优先级）
-  await injectTimeContext(messages, context.userContent, signals.isTimeRelated);
+  // 1. 时间上下文：唯一允许每轮变化的块，排在最后
+  await injectTimeContext(blocks, context.userContent, signals.isTimeRelated);
 
   // 1.1 运行平台上下文（用于生成稳定可执行的命令）
   try {
@@ -86,8 +87,10 @@ export async function buildInitialPrompt(
       .map(([op, cmd]) => `  ${op}: ${cmd}`)
       .join('\n');
     
-    messages.push({
-      role: 'system',
+    blocks.push({
+      id: 'runtime-environment',
+      layer: 'conversation',
+      order: 10,
       content: `【运行环境 - ${g.platformLabel}（强制遵守）】
 
 Shell: ${g.preferredShell}
@@ -101,6 +104,28 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     });
   } catch {
     // ignore
+  }
+
+  // 1.2 用户为该会话选择的系统提示词：属于会话层，仍然是同一个 system 消息里的块
+  try {
+    const convId = context.conversationId || '';
+    if (convId) {
+      const { useChatStore } = await import('@/store/chatStore');
+      const applied = useChatStore.getState().conversations.find((c) => c.id === convId)?.system_prompt_applied;
+      if (applied?.promptId) {
+        const { usePromptStore } = await import('@/store/promptStore');
+        const prompt = usePromptStore.getState().prompts.find((p) => p.id === applied.promptId);
+        if (prompt) {
+          const { renderPromptContent } = await import('@/lib/prompt/render');
+          const rendered = renderPromptContent(prompt.content, applied.variableValues);
+          if (rendered && rendered.trim()) {
+            blocks.push({ id: 'user-system-prompt', layer: 'conversation', order: 5, content: rendered.trim() });
+          }
+        }
+      }
+    }
+  } catch {
+    // 提示词缺失不应阻断对话
   }
   
   // 2. External MCP tools are only injected after an explicit mention or a
@@ -139,9 +164,6 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   }
   enabledServers.push(...enabled);
   
-  // 4. 构建工具信息（仅在不支持原生工具调用时注入）
-  const toolInfoParts: string[] = [];
-  
   // Skills 通过 tools__search / tools__load 按需发现，不根据用户措辞预加载。
   const shouldExposeSkills = false;
   const shouldExposeWebSearch =
@@ -158,10 +180,7 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
 
   // Keep the default contract small. Native schemas carry the detailed
   // operation surface; prompt text must not become a second tool protocol.
-  messages.push({
-    role: 'system',
-    content: AGENT_MINIMAL_SYSTEM_PROMPT
-  });
+  blocks.push(buildAgentContractBlock(resolvePromptLocale(context.locale)));
 
   // Models without native tool support remain chat-only. Do not inject a
   // textual fallback protocol that can be mistaken for an executable call.
@@ -173,8 +192,10 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
       const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
       const wd = useConversationAttachmentStore.getState().getWorkingDir(convId);
       if (wd) {
-        messages.push({
-          role: 'system',
+        blocks.push({
+          id: 'session-workspace',
+          layer: 'conversation',
+          order: 20,
           content: `【当前会话工作目录】\n- @WorkDir -> ${wd}\n- 需要在该目录及其子目录中读写文件时，可使用 filesystem，并使用 @WorkDir/... 的别名路径或绝对路径。`,
         });
       }
@@ -187,8 +208,10 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
         'SELECT COUNT(*) AS n FROM conversation_document_mappings WHERE conversation_id = ?', [convId],
       );
       if (kb?.id || Number(attachmentRows[0]?.n || 0) > 0) {
-        messages.push({
-          role: 'system',
+        blocks.push({
+          id: 'knowledge-rules',
+          layer: 'conversation',
+          order: 30,
           content:
             '【文档检索规则】\n' +
             '当前会话有可访问的知识库或临时附件。需要查资料时先使用 knowledge__list/knowledge__search，再用 knowledge__read 读取完整原文。\n' +
@@ -215,24 +238,34 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   if (allEnabled.length > 0) {
     const serversLine = MCPPrompts.buildEnabledServersLine(allEnabled);
     if (serversLine) {
-      messages.push({ role: 'system', content: serversLine });
+      blocks.push({ id: 'capabilities', layer: 'conversation', order: 60, content: serversLine });
     }
   }
   
   // 7. 网络搜索策略（如果启用）
   if (shouldExposeWebSearch) {
-    messages.push({ role: 'system', content: MCPPrompts.webSearchPolicy });
+    blocks.push({ id: 'web-search-policy', layer: 'conversation', order: 70, content: MCPPrompts.webSearchPolicy });
   }
   
   // 8. Skills 索引注入（始终）
   if (shouldExposeSkills) {
-    await injectSkillsIndex(messages);
+    await injectSkillsIndex(blocks);
+  }
+
+  // Plan-only is a per-turn instruction: the user can toggle it between turns.
+  if (context.planOnly) {
+    blocks.push({
+      id: 'plan-only-mode',
+      layer: 'turn',
+      order: 20,
+      content: '【仅规划模式】只允许有界读取、检索与只读工具；写入、Shell 与未知副作用一律不执行，先给出计划等待用户确认。',
+    });
   }
   
   return {
-    systemMessages: messages,
+    systemMessages: blocks,
     enabledServers: allEnabled,
-    hasToolInfo: toolInfoParts.length > 0 || (Array.isArray(nativeTools) && nativeTools.length > 0),
+    hasToolInfo: Array.isArray(nativeTools) && nativeTools.length > 0,
     useNativeTools,
     nativeTools,
     toolCallStrategy: toolStrategy,
@@ -240,63 +273,18 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
 }
 
 /**
- * 构建追问阶段的提示词
- */
-export async function buildFollowUpPrompt(
-  context: InjectionContext,
-  signals: InjectionSignals
-): Promise<InjectionResult> {
-  const messages: Array<{ role: 'system'; content: string }> = [];
-  
-  // 1. 时间上下文（简洁版）
-  if (signals.isTimeRelated) {
-    try {
-      const { buildSimpleTimeContext } = await import('@/lib/prompts/TimeContext');
-      messages.push({ role: 'system', content: buildSimpleTimeContext() });
-    } catch {
-      // 忽略错误
-    }
-  }
-  
-  // 2. 根据深度和错误状态构建追问提示
-  const depth = context.toolCallDepth ?? 1;
-  const originalQuestion = context.originalQuestion || context.userContent;
-  
-  if (depth >= 2) {
-    // 第二次追问：强制回答（到达预算/深度上限）
-    const forcedPrompt = await buildForcedAnswerPrompt(originalQuestion);
-    messages.push({
-      role: 'system',
-      content: forcedPrompt
-    });
-  } else {
-    // 第一次追问
-    const followUpPrompt = await buildFirstFollowUpPrompt(originalQuestion, context.hasToolError);
-    messages.push({
-      role: 'system',
-      content: followUpPrompt
-    });
-  }
-  
-  return {
-    systemMessages: messages,
-    enabledServers: [],
-    hasToolInfo: false
-  };
-}
-
-/**
  * 注入时间上下文
  */
 async function injectTimeContext(
-  messages: Array<{ role: 'system'; content: string }>,
+  blocks: PromptBlock[],
   content: string,
   isTimeRelated: boolean
 ): Promise<void> {
   try {
     const { buildTimeContextMessage } = await import('@/lib/prompts/TimeContext');
     const timeContextMsg = buildTimeContextMessage(isTimeRelated);
-    messages.push({ role: 'system', content: timeContextMsg });
+    // The clock changes every minute, so it must never precede cacheable text.
+    blocks.push({ id: 'current-time', layer: 'turn', order: 10, content: timeContextMsg });
   } catch (e) {
     console.warn('[PromptBuilder] 时间上下文注入失败:', e);
   }
@@ -455,37 +443,6 @@ async function buildNativeToolDefinitions(params: {
 
 // Native-only：WebSearch 以原生 tool schema 暴露（见 buildNativeToolDefinitions），无需文本描述注入。
 
-/**
- * 构建第一次追问提示词
- * 
- * 从 /tool-docs/followup_first.txt 加载提示词模板
- */
-async function buildFirstFollowUpPrompt(originalQuestion: string, hasError?: boolean): Promise<string> {
-  try {
-    return await buildFirstFollowUpPromptFromDoc(originalQuestion, hasError);
-  } catch {
-    // 降级：使用内联提示词
-    if (hasError) {
-      return `工具调用遇到错误。请分析错误信息，调整参数后重试或换用其他方法。\n\n用户问题：${originalQuestion}`;
-    }
-    return `工具调用已完成。请基于结果回答用户问题。如信息不足，可继续调用工具补充。\n\n用户问题：${originalQuestion}`;
-  }
-}
-
-/**
- * 构建强制回答提示词（第二次追问）
- * 
- * 从 /tool-docs/followup_forced.txt 加载提示词模板
- */
-async function buildForcedAnswerPrompt(originalQuestion: string): Promise<string> {
-  try {
-    return await buildForcedAnswerPromptFromDoc(originalQuestion);
-  } catch {
-    // 降级：使用内联提示词
-    return `【最终回答】你已完成所有工具调用，现在必须给出最终答案。\n\n用户问题：${originalQuestion}`;
-  }
-}
-
 // ================================
 // Skills 渐进式披露相关函数
 // ================================
@@ -499,7 +456,7 @@ async function buildForcedAnswerPrompt(originalQuestion: string): Promise<string
  * - 可节省约 70-75% 的 Token 消耗
  */
 async function injectSkillsIndex(
-  messages: Array<{ role: 'system'; content: string }>
+  blocks: PromptBlock[]
 ): Promise<void> {
   try {
     const manager = getSkillManager();
@@ -512,7 +469,7 @@ async function injectSkillsIndex(
 
     
     if (skillsPrompt) {
-      messages.push({ role: 'system', content: skillsPrompt });
+      blocks.push({ id: 'skills-index', layer: 'conversation', order: 80, content: skillsPrompt });
     }
   } catch (error) {
     console.warn('[PromptBuilder] Skills 索引注入失败:', error);

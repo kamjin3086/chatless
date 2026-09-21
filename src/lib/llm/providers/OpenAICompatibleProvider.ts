@@ -7,6 +7,7 @@ import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '../types/stream-events';
 import { toOpenAIMessage } from './messageMapping';
 import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
+import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -260,6 +261,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
         // 1) 先提取内容（包含最终 message.content），避免因 finish_reason 过早 return 丢失末帧内容
         const delta = json?.choices?.[0]?.delta ?? {};
+        if (json?.usage) {
+          recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'openai-compatible', json?.model));
+        }
 
         
         // 处理工具调用增量
@@ -458,6 +462,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
       try {
         const json = JSON.parse(payload);
         const delta = json?.choices?.[0]?.delta ?? {};
+        if (json?.usage) {
+          recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'openai-compatible', json?.model));
+        }
         const finishReason = json?.choices?.[0]?.finish_reason;
         if (finishReason === 'length' || finishReason === 'content_filter') {
           cb.onError?.(new Error(`Response incomplete: ${finishReason}`));

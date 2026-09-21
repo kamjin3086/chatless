@@ -20,9 +20,13 @@ vi.mock('@/lib/mcp/pipeline/context/ContextWindowManager', () => ({
 }));
 
 describe('buildAgentPromptEnvelope', () => {
-  it('maps injection system messages to environment prefix and sorts tools', () => {
+  it('merges blocks into one system message, stable first, and sorts tools', () => {
     const envelope = buildAgentPromptEnvelope({
-      systemMessages: [{ role: 'system', content: '【权限】allow fs' }],
+      systemMessages: [
+        { id: 'current-time', layer: 'turn', order: 10, content: '当前时间：12:00' },
+        { id: 'agent-contract', layer: 'stable', order: 10, content: '【契约】be truthful' },
+        { id: 'session-workspace', layer: 'conversation', order: 20, content: '工作目录：D:/work' },
+      ],
       useNativeTools: true,
       nativeTools: [
         { name: 'shell__run', description: 'run', parameters: { type: 'object', properties: {} } },
@@ -32,8 +36,37 @@ describe('buildAgentPromptEnvelope', () => {
     });
 
     expect(envelope.prefixMessages).toHaveLength(1);
-    expect(String(envelope.prefixMessages[0].content)).toContain('【权限】');
+    const content = String(envelope.prefixMessages[0].content);
+    // Stable, then conversation, then the per-turn block.
+    expect(content.indexOf('【契约】')).toBeLessThan(content.indexOf('工作目录'));
+    expect(content.indexOf('工作目录')).toBeLessThan(content.indexOf('当前时间'));
+    expect(envelope.blocks.map((b) => b.id)).toEqual(['agent-contract', 'session-workspace', 'current-time']);
     expect(envelope.tools.map((t) => t.name)).toEqual(['fs__read', 'shell__run']);
+  });
+
+  it('keeps the cacheable prefix identical when only the turn block changes', () => {
+    const base = {
+      useNativeTools: true,
+      nativeTools: [],
+      enabledServers: [],
+    } as const;
+    const first = buildAgentPromptEnvelope({
+      ...base,
+      systemMessages: [
+        { id: 'agent-contract', layer: 'stable', order: 10, content: 'contract' },
+        { id: 'current-time', layer: 'turn', order: 10, content: '当前时间：12:00' },
+      ],
+    });
+    const second = buildAgentPromptEnvelope({
+      ...base,
+      systemMessages: [
+        { id: 'agent-contract', layer: 'stable', order: 10, content: 'contract' },
+        { id: 'current-time', layer: 'turn', order: 10, content: '当前时间：12:01' },
+      ],
+    });
+
+    expect(second.stableFingerprint).toBe(first.stableFingerprint);
+    expect(second.fullFingerprint).not.toBe(first.fullFingerprint);
   });
 });
 

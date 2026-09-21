@@ -12,7 +12,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { AGENT_MINIMAL_SYSTEM_PROMPT } from '@/lib/mcp/injection/promptTemplates';
+import { buildAgentContractBlock, resolvePromptLocale } from '@/lib/mcp/prompt/agentContract';
+import { composeSystemPrompt } from '@/lib/mcp/prompt/composition';
 import { TOOLS_REGISTRY_TOOLS, getToolsForGroup } from '@/lib/mcp/nativeTools/toolRegistry';
 import { PromptEnvelopeBuilder } from '@/lib/mcp/pipeline/context/PromptEnvelopeBuilder';
 import { estimateTokens } from '@/lib/mcp/pipeline/context/ContextWindowManager';
@@ -45,8 +46,10 @@ function productionEnvelope(): { system: string; tools: ToolDef[]; tokenBudget: 
     description: tool.description,
     parameters: (tool.input_schema as { schema?: unknown }).schema,
   }));
+  // Measure the production contract, not a copy of it.
+  const contractMessage = composeSystemPrompt([buildAgentContractBlock(resolvePromptLocale('zh'))]).systemMessage;
   const envelope = new PromptEnvelopeBuilder().build({
-    environmentContext: AGENT_MINIMAL_SYSTEM_PROMPT,
+    systemMessage: contractMessage,
     tools: defs as never,
   });
   const system = envelope.prefixMessages.map((message) => String(message.content)).join('\n\n');

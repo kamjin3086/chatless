@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { classifyToolResult } from '@/lib/mcp/shared/toolResultGuards';
-import { dedupeEnvelopeSystemPrefix } from '@/lib/mcp/agentLoop/buildAgentPromptEnvelope';
 
 describe('classifyToolResult', () => {
   it('treats Cloudflare interstitial as tool_error', () => {
@@ -23,15 +22,3 @@ describe('classifyToolResult', () => {
   });
 });
 
-describe('dedupeEnvelopeSystemPrefix', () => {
-  it('removes system lines contained in envelope prefix blob', () => {
-    const prefix = [{ role: 'system', content: 'env-a\n\nenv-b' }] as any[];
-    const history = [
-      { role: 'system', content: 'env-a' },
-      { role: 'system', content: 'user-custom-prompt' },
-      { role: 'user', content: 'hi' },
-    ] as any[];
-    const out = dedupeEnvelopeSystemPrefix(history, prefix);
-    expect(out.map((m) => m.content)).toEqual(['user-custom-prompt', 'hi']);
-  });
-});

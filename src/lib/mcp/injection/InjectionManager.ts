@@ -21,7 +21,8 @@ import type {
   ConversationInjectionState 
 } from './types';
 import { detectIntentSignals, makeInjectionDecision } from './intentDetector';
-import { buildInitialPrompt, buildFollowUpPrompt } from './promptBuilder';
+import { buildInitialPrompt } from './promptBuilder';
+import type { PromptBlock } from '@/lib/mcp/prompt/composition';
 
 /**
  * 会话注入状态缓存
@@ -57,10 +58,6 @@ export class InjectionManager {
       case 'initial':
         return this.injectInitial(context, signals);
       
-      case 'followup':
-      case 'retry':
-        return this.injectFollowUp(context, signals);
-      
       default:
         return { systemMessages: [], enabledServers: [], hasToolInfo: false };
     }
@@ -78,18 +75,23 @@ export class InjectionManager {
 
     // 普通对话默认不注入工具（避免所有请求都携带 tools，导致“不支持 tools 的模型”连正常聊天都无法进行）
     if (!context.forceInject && !decision.shouldInject) {
-      const messages: Array<{ role: 'system'; content: string }> = [];
-
-      // 即使不注入 MCP/Skills，也注入时间上下文（必要时）
+      // Even when no tooling is injected the contract still has to reach the
+      // model, so the chat-only path renders the stable contract plus time.
+      const { buildAgentContractBlock, resolvePromptLocale } = await import('@/lib/mcp/prompt/agentContract');
+      const blocks: PromptBlock[] = [buildAgentContractBlock(resolvePromptLocale(context.locale))];
       try {
         const { buildTimeContextMessage, isTimeRelatedQuery } = await import('@/lib/prompts/TimeContext');
         const isTimeRelated = isTimeRelatedQuery(context.userContent);
-        messages.push({ role: 'system', content: buildTimeContextMessage(isTimeRelated) });
+        blocks.push({
+          id: 'current-time',
+          layer: 'turn',
+          order: 10,
+          content: buildTimeContextMessage(isTimeRelated),
+        });
       } catch {
         // ignore
       }
-
-      return { systemMessages: messages, enabledServers: [], hasToolInfo: false };
+      return { systemMessages: blocks, enabledServers: [], hasToolInfo: false };
     }
 
     // 构建初始提示词（按需注入工具与 skills 目录）
@@ -105,35 +107,6 @@ export class InjectionManager {
     }
     
     return result;
-  }
-  
-  /**
-   * 追问阶段注入
-   */
-  private static async injectFollowUp(
-    context: InjectionContext,
-    signals: ReturnType<typeof detectIntentSignals>
-  ): Promise<InjectionResult> {
-    // 获取会话状态
-    const state = context.conversationId 
-      ? this.getConversationState(context.conversationId)
-      : null;
-    
-    // 更新深度
-    const depth = (state?.toolCallDepth ?? 0) + 1;
-    if (context.conversationId) {
-      this.updateConversationState(context.conversationId, {
-        toolCallDepth: depth
-      });
-    }
-    
-    // 构建追问提示词
-    const updatedContext: InjectionContext = {
-      ...context,
-      toolCallDepth: depth
-    };
-    
-    return buildFollowUpPrompt(updatedContext, signals);
   }
   
   /**
@@ -216,25 +189,6 @@ export async function injectMcpPrompts(
     conversationId,
     phase: 'initial',
     providerName
-  });
-}
-
-/**
- * 便捷函数：执行追问阶段注入
- */
-export async function injectFollowUpPrompts(
-  originalQuestion: string,
-  hasToolError?: boolean,
-  conversationId?: string,
-  depth?: number
-): Promise<InjectionResult> {
-  return InjectionManager.inject({
-    userContent: '',
-    originalQuestion,
-    conversationId,
-    phase: 'followup',
-    hasToolError,
-    toolCallDepth: depth
   });
 }
 

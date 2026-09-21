@@ -55,21 +55,19 @@ function sortToolsDeterministically(tools: ToolDefinition[]): ToolDefinition[] {
  */
 export class PromptEnvelopeBuilder {
   build(params: {
-    permissionsInstructions?: string;
-    environmentContext?: string;
-    projectInstructions?: string;
+    /**
+     * The single system message produced by the prompt composer.  Callers must
+     * not pass several system texts: one message keeps the cached prefix
+     * contiguous and the ordering predictable.
+     */
+    systemMessage?: LlmMessage;
     tools?: ToolDefinition[];
   }): PromptEnvelope {
     const prefixMessages: LlmMessage[] = [];
 
-    if (params.permissionsInstructions) {
-      prefixMessages.push({ role: 'system', content: String(params.permissionsInstructions) });
-    }
-    if (params.projectInstructions) {
-      prefixMessages.push({ role: 'system', content: String(params.projectInstructions) });
-    }
-    if (params.environmentContext) {
-      prefixMessages.push({ role: 'system', content: String(params.environmentContext) });
+    const content = String(params.systemMessage?.content || '').trim();
+    if (content) {
+      prefixMessages.push({ role: 'system', content });
     }
 
     const tools = sortToolsDeterministically(params.tools || []);

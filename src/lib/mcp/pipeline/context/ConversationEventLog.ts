@@ -103,7 +103,11 @@ export class ConversationEventLog {
           continue;
         }
         if (e.type === 'context_change') {
-          out.push({ role: 'system', content: e.content });
+          // Run notes (cancelled / interrupted / stream failed) belong to the
+          // conversation record, not to the prompt prefix.  Rendering them as a
+          // tagged user note keeps exactly one system message per request and
+          // matches the 【工具调用结果】 convention used above.
+          out.push({ role: 'user', content: `【运行提示】${e.content}` });
           continue;
         }
         if (e.type === 'tool_call_requested') {
@@ -201,9 +205,9 @@ export class ConversationEventLog {
         continue;
       }
       if (e.type === 'context_change') {
-        // context_change 用 developer 语义更合理，但项目当前 Message.role 仅 user/assistant/system。
-        // 这里用 system 做最小实现，后续再引入 developer role。
-        out.push({ role: 'system', content: e.content });
+        // Keep the request free of extra system messages: run notes are tagged
+        // user notes, the same convention used for tool results below.
+        out.push({ role: 'user', content: `【运行提示】${e.content}` });
         continue;
       }
       if (e.type === 'tool_call_output') {

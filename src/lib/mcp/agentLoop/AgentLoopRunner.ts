@@ -10,7 +10,8 @@ import { useChatStore } from '@/store/chatStore';
 import type { AgentLoopCancelParams, AgentLoopRunParams, RunInput } from './types';
 import { AgentRunControlPlane } from './AgentRunControlPlane';
 import { AgentRunEventStore } from './AgentRunEventStore';
-import { buildAgentPromptEnvelope, dedupeEnvelopeSystemPrefix } from './buildAgentPromptEnvelope';
+import { buildAgentPromptEnvelope } from './buildAgentPromptEnvelope';
+import { logPromptComposition } from '@/lib/mcp/prompt/compositionLog';
 import { resolveAgentToolCapability } from './resolveAgentToolCapability';
 import { applyCitations } from '@/lib/rag/CitationService';
 import { listEvidence, restoreEvidence } from '@/lib/rag/EvidenceRegistry';
@@ -169,26 +170,29 @@ export class AgentLoopRunner {
         await controlPlane.record({ type: 'user_message', content: originalUserContent,
           images: initialInput.images, attachmentDocumentIds: initialInput.attachmentDocumentIds });
       }
-      if (planOnly) {
-        await controlPlane.record({
-          type: 'context_change',
-          kind: 'permissions',
-          content: 'plan_only_mode: only bounded reads/searches may execute; writes, shell, and unknown side effects are blocked',
-        });
-      }
       try {
         await hooks?.onAgentStart?.({ assistantMessageId, conversationId });
       } catch {
         // ignore
       }
       const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
-      const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
+      // Interface language and plan-only are prompt inputs, not run events: the
+      // contract stays stable for the conversation while the mode is a turn block.
+      const promptOptions = {
+        forceInject: true,
+        locale: (await import('@/store/localeStore')).useLocaleStore.getState().locale,
+        planOnly,
+      };
+      const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, promptOptions);
       const envelope = buildAgentPromptEnvelope(injection);
+      logPromptComposition(conversationId, envelope);
       const capability = resolveAgentToolCapability(provider, model);
       // The current turn is always a durable run event. Remove its duplicate
       // from the caller-built history before projecting the event log.
       const historyBeforeCurrentInput = currentUserAlreadyInHistory ? baseHistory.slice(0, -1) : baseHistory;
-      let conversationHistory = dedupeEnvelopeSystemPrefix(historyBeforeCurrentInput, envelope.prefixMessages);
+      // The composer is the only source of system text, so nothing has to be
+      // de-duplicated from the caller-built history any more.
+      let conversationHistory = historyBeforeCurrentInput;
 
       // 复用工具清单（避免每轮都计算）
       const toolOptions: Record<string, any> = { ...baseOptions };
@@ -302,7 +306,7 @@ export class AgentLoopRunner {
       }
       const refreshNativeToolOptions = async () => {
         if (regenerate || !capability.useNativeTools) return;
-        const refreshed = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, { forceInject: true });
+        const refreshed = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, promptOptions);
         if (!refreshed.useNativeTools || !Array.isArray(refreshed.nativeTools)) return;
         toolOptions.tools = refreshed.nativeTools.map((t) => ({
           name: t.name,

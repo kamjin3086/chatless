@@ -6,6 +6,7 @@ import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
 import { createStreamEvent } from '../types/stream-events';
 import { toOpenAIMessage } from './messageMapping';
+import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { toOpenAITools, toOpenAIToolChoice, type ToolDefinition } from '../types/tool-schema';
 
 /**
@@ -126,6 +127,9 @@ export class DeepSeekProvider extends BaseProvider {
 
             try {
               const json = JSON.parse(rawData);
+              if (json?.usage) {
+                recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'deepseek', json?.model));
+              }
               const delta = json?.choices?.[0]?.delta || {};
               const token = delta?.content;
               const reasoningToken = delta?.reasoning_content;

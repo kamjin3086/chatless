@@ -1,6 +1,6 @@
-import type { Message as LlmMessage } from '@/lib/llm/types';
 import type { ToolDefinition } from '@/lib/llm/types/tool-schema';
 import { PromptEnvelopeBuilder } from '@/lib/mcp/pipeline/context/PromptEnvelopeBuilder';
+import { composeSystemPrompt, type PromptBlock } from '@/lib/mcp/prompt/composition';
 import type { InjectionResult } from '@/lib/mcp/promptInjector';
 
 /**
@@ -18,46 +18,29 @@ import type { InjectionResult } from '@/lib/mcp/promptInjector';
 const envelopeBuilder = new PromptEnvelopeBuilder();
 
 export function buildAgentPromptEnvelope(injection: InjectionResult) {
-  const systemTexts = (injection.systemMessages || [])
-    .map((m) => String(m.content || '').trim())
-    .filter(Boolean);
+  const blocks: PromptBlock[] = (injection.systemMessages || [])
+    .filter((block) => String(block?.content || '').trim())
+    .map((block, index) => ({
+      id: block.id || `block-${index}`,
+      layer: block.layer || 'conversation',
+      order: typeof block.order === 'number' ? block.order : index,
+      content: String(block.content || '').trim(),
+    }));
 
-  return envelopeBuilder.build({
-    environmentContext: systemTexts.join('\n\n'),
+  const composed = composeSystemPrompt(blocks);
+  const envelope = envelopeBuilder.build({
+    systemMessage: composed.systemMessage,
     tools: (injection.nativeTools || []).map((t) => ({
       name: t.name,
       description: t.description,
       parameters: t.parameters as ToolDefinition['parameters'],
     })),
   });
-}
 
-/**
- * Remove system messages whose content is already represented in the envelope prefix
- * (e.g. time duplicated by MCP inject). Keeps user custom prompts.
- */
-export function dedupeEnvelopeSystemPrefix(
-  messages: LlmMessage[],
-  envelopePrefix: LlmMessage[],
-): LlmMessage[] {
-  const envBlob = envelopePrefix
-    .map((m) => String(m.content || '').trim())
-    .filter(Boolean)
-    .join('\n\n');
-  if (!envBlob) return messages;
-  return messages.filter((m) => {
-    if (m.role !== 'system') return true;
-    const c = String(m.content || '').trim();
-    if (!c) return false;
-    return !envBlob.includes(c);
-  });
-}
-
-/** @deprecated use dedupeEnvelopeSystemPrefix */
-export function stripLeadingSystemForEnvelope(messages: LlmMessage[]): LlmMessage[] {
-  let idx = 0;
-  while (idx < messages.length && messages[idx]?.role === 'system') {
-    idx += 1;
-  }
-  return messages.slice(idx);
+  return {
+    ...envelope,
+    blocks: composed.blocks,
+    stableFingerprint: composed.stableFingerprint,
+    fullFingerprint: composed.fullFingerprint,
+  };
 }

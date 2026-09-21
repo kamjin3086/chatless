@@ -15,13 +15,18 @@
  */
 
 import { InjectionManager } from './injection';
-import type { InjectionResult as FullInjectionResult, NativeToolDefinition } from './injection/types';
+import type {
+  InjectionResult as FullInjectionResult,
+  NativeToolDefinition,
+} from './injection/types';
+import type { PromptBlock } from './prompt/composition';
 
 /**
  * 注入结果类型（扩展版，支持原生工具调用）
  */
 export interface InjectionResult {
-  systemMessages: Array<{ role: 'system'; content: string }>;
+  /** Prompt blocks; the agent envelope merges them into one system message. */
+  systemMessages: PromptBlock[];
   /** 是否应该使用原生工具调用 API */
   useNativeTools?: boolean;
   /** 原生工具定义列表（当 useNativeTools=true 时使用） */
@@ -54,7 +59,7 @@ export async function buildMcpSystemInjections(
   currentConversationId?: string, 
   providerName?: string,
   modelName?: string,
-  options?: { forceInject?: boolean }
+  options?: { forceInject?: boolean; locale?: string; planOnly?: boolean }
 ): Promise<InjectionResult> {
   const result = await InjectionManager.inject({
     userContent: content,
@@ -63,6 +68,8 @@ export async function buildMcpSystemInjections(
     providerName,
     modelName,
     forceInject: options?.forceInject,
+    locale: options?.locale,
+    planOnly: options?.planOnly,
   });
   
   return {
