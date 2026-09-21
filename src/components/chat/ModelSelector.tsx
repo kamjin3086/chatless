@@ -13,6 +13,7 @@ import { ModelSelectContent } from './ModelSelectContent';
 import { ModelParametersDialog } from './ModelParametersDialog';
 import { PROVIDER_ICON_EXTS, getResolvedUrlForBase, isUrlKnownMissing, getModelBrandLogoSrc, prewarmModelBrandLogos } from '@/lib/utils/logoService';
 import { generateAvatarDataUrl } from '@/lib/avatar';
+import { selectSelectableProviders } from '@/lib/provider/modelPickerVisibility';
 
 interface ModelSelectorProps {
   currentModelId: string | null;
@@ -154,19 +155,11 @@ export function ModelSelector({
     return byScan;
   }, [sortedMetadata, currentModelId, currentProviderName]);
 
-  // 统一：仅显示可见且“已配置密钥或无需密钥”的提供商，提升选择效率
+  // 统一：仅显示可见且可用的提供商，提升选择效率。
+  // 规则见 modelPickerVisibility：用户手动添加的提供商不再因为“是否需要密钥”
+  // 这一静态猜测而被隐藏（本地免密端点正是这种情况）。
   const visibleProviders = useMemo(() => {
-    return sortedMetadata.filter((p: any) => {
-      if (p?.isVisible === false) return false;
-      // requiresApiKey=false → 一律显示（如本地 Ollama）
-      if (p?.requiresApiKey === false) return true;
-      // 需要密钥时：只显示已配置默认密钥或模型级密钥的
-      const hasProviderKey = !!(p?.default_api_key && String(p.default_api_key).trim());
-      if (hasProviderKey) return true;
-      // 模型级密钥（任一模型有 api_key 即视为可用）
-      const hasModelKey = Array.isArray(p?.models) && p.models.some((m: any) => !!(m?.api_key && String(m.api_key).trim()));
-      return hasModelKey;
-    });
+    return selectSelectableProviders(sortedMetadata);
   }, [sortedMetadata]);
 
   const filteredModels = useMemo(() => {
@@ -239,13 +232,14 @@ export function ModelSelector({
         // 忽略预热错误
         console.debug('logo prewarm skipped', e);
       }
-      // 免密 Provider（Ollama / LM Studio 等）打开面板时静默刷新模型列表
+      // 免密 Provider（Ollama / LM Studio 等）与用户手动添加的 Provider
+      // 在打开面板时静默刷新模型列表
       void (async () => {
         try {
           const { providerModelService } = await import('@/lib/provider/services/ProviderModelService');
-          await providerModelService.refreshNoKeyProviders();
+          await providerModelService.refreshAutoProviders();
         } catch (e) {
-          console.debug('auto refresh no-key models skipped', e);
+          console.debug('auto refresh provider models skipped', e);
         }
       })();
     } else {

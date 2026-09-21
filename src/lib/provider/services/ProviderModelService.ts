@@ -9,7 +9,7 @@ import { specializedStorage } from "@/lib/storage";
 import { MODEL_FETCH_RULES, type ModelFetchRule } from "@/config/modelFetchRules";
 import { tauriFetch } from "@/lib/request";
 import {
-  refreshNoKeyProviderModels,
+  refreshAutoProviderModels,
   shouldSkipModelFetch,
   type FetchModelsOptions,
 } from "@/lib/provider/modelFetchPolicy";
@@ -114,10 +114,10 @@ export class ProviderModelService {
     return p;
   }
 
-  /** 静默刷新所有免密 Provider 的模型列表（带默认节流；force 时立即拉取）。 */
-  async refreshNoKeyProviders(options?: { force?: boolean }): Promise<void> {
+  /** 静默刷新免密 Provider 与用户手动添加的 Provider 的模型列表（带默认节流；force 时立即拉取）。 */
+  async refreshAutoProviders(options?: { force?: boolean }): Promise<void> {
     const list = await providerRepository.getAll();
-    await refreshNoKeyProviderModels(
+    await refreshAutoProviderModels(
       list,
       (providerName, fetchOptions) => this.fetchIfNeeded(providerName, fetchOptions),
       options

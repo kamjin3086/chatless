@@ -17,6 +17,22 @@ export function isNoKeyProvider(provider: {
   return false;
 }
 
+/**
+ * Providers whose model list should be refreshed silently when the picker
+ * opens:免密 providers, plus providers the user added by hand.  For a custom
+ * endpoint `requiresKey` is only a static guess (usually `strategy !== 'ollama'`),
+ * so excluding user-added providers left their model list stale until a manual
+ * refresh in settings.
+ */
+export function isAutoRefreshProvider(provider: {
+  requiresKey?: boolean;
+  requiresApiKey?: boolean;
+  isUserAdded?: boolean;
+}): boolean {
+  if (provider.isUserAdded === true) return true;
+  return isNoKeyProvider(provider);
+}
+
 export function shouldSkipModelFetch(
   lastFetchAt: number | undefined,
   now: number,
@@ -28,15 +44,15 @@ export function shouldSkipModelFetch(
   return now - lastFetchAt < minIntervalMs;
 }
 
-export async function refreshNoKeyProviderModels(
-  providers: Array<{ name: string; requiresKey?: boolean; requiresApiKey?: boolean }>,
+export async function refreshAutoProviderModels(
+  providers: Array<{ name: string; requiresKey?: boolean; requiresApiKey?: boolean; isUserAdded?: boolean }>,
   fetchIfNeeded: (name: string, options?: FetchModelsOptions) => Promise<void>,
   options?: { force?: boolean }
 ): Promise<void> {
   const minIntervalMs = options?.force ? 0 : NO_KEY_MODEL_REFRESH_MIN_INTERVAL_MS;
   await Promise.allSettled(
     providers
-      .filter(isNoKeyProvider)
+      .filter(isAutoRefreshProvider)
       .map((provider) =>
         fetchIfNeeded(provider.name, {
           force: options?.force,

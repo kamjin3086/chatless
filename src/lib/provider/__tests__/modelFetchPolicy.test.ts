@@ -3,7 +3,8 @@ import { AVAILABLE_PROVIDERS_CATALOG } from '@/lib/provider/catalog';
 import {
   NO_KEY_MODEL_REFRESH_MIN_INTERVAL_MS,
   isNoKeyProvider,
-  refreshNoKeyProviderModels,
+  isAutoRefreshProvider,
+  refreshAutoProviderModels,
   shouldSkipModelFetch,
 } from '@/lib/provider/modelFetchPolicy';
 
@@ -47,19 +48,32 @@ describe('shouldSkipModelFetch', () => {
   });
 });
 
-describe('refreshNoKeyProviderModels', () => {
-  it('fetches only no-key providers with the default interval', async () => {
+describe('isAutoRefreshProvider', () => {
+  it('includes no-key providers and providers the user added by hand', () => {
+    expect(isAutoRefreshProvider({ requiresKey: false })).toBe(true);
+    expect(isAutoRefreshProvider({ requiresKey: true, isUserAdded: true })).toBe(true);
+    expect(isAutoRefreshProvider({ requiresKey: true })).toBe(false);
+  });
+});
+
+describe('refreshAutoProviderModels', () => {
+  it('fetches no-key and user-added providers with the default interval', async () => {
     const fetchIfNeeded = vi.fn().mockResolvedValue(undefined);
-    await refreshNoKeyProviderModels(
+    await refreshAutoProviderModels(
       [
         { name: 'Ollama', requiresKey: false },
         { name: 'DeepSeek', requiresKey: true },
         { name: 'LM Studio', requiresApiKey: false },
+        { name: 'homelab', requiresKey: true, isUserAdded: true },
       ],
       fetchIfNeeded
     );
-    expect(fetchIfNeeded).toHaveBeenCalledTimes(2);
+    expect(fetchIfNeeded).toHaveBeenCalledTimes(3);
     expect(fetchIfNeeded).toHaveBeenCalledWith('Ollama', {
+      force: undefined,
+      minIntervalMs: NO_KEY_MODEL_REFRESH_MIN_INTERVAL_MS,
+    });
+    expect(fetchIfNeeded).toHaveBeenCalledWith('homelab', {
       force: undefined,
       minIntervalMs: NO_KEY_MODEL_REFRESH_MIN_INTERVAL_MS,
     });
@@ -71,7 +85,7 @@ describe('refreshNoKeyProviderModels', () => {
 
   it('passes force through and disables interval', async () => {
     const fetchIfNeeded = vi.fn().mockResolvedValue(undefined);
-    await refreshNoKeyProviderModels(
+    await refreshAutoProviderModels(
       [{ name: 'Ollama', requiresKey: false }],
       fetchIfNeeded,
       { force: true }
