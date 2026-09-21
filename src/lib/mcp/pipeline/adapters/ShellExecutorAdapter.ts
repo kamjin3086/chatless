@@ -84,6 +84,68 @@ export class ShellExecutorAdapter implements ToolAdapter {
 
   async execute(invocation: ToolInvocation): Promise<unknown> {
     const args = invocation.args || {};
+    const toolName = String(invocation.tool || '').toLowerCase();
+    const sandboxForManaged = getProcessSandbox();
+
+    // Background processes: start / logs / stop / list.
+    if (toolName === 'start') {
+      const command = typeof (args as any).command === 'string' ? String((args as any).command).trim() : '';
+      if (!command) throw new Error('command is required');
+      const parts = splitCommandLine(command);
+      if (parts.length === 0) throw new Error('command is required');
+      // Same id namespace the pipeline registers for cancellation, so stopping
+      // a run also stops the processes it started.
+      const executionId = `shell:${invocation.assistantMessageId}:${invocation.ensureCardId()}`;
+      try {
+        const started = await sandboxForManaged.startManagedProcess({
+          executionId,
+          command: parts[0],
+          args: parts.slice(1),
+          workingDir: typeof (args as any).workingDir === 'string' ? String((args as any).workingDir) : undefined,
+        });
+        return {
+          ok: true,
+          executionId: started.executionId,
+          pid: started.pid,
+          command,
+          name: typeof (args as any).name === 'string' ? String((args as any).name) : undefined,
+          message: '进程已在后台启动。用 shell__logs 读取输出，用 shell__stop 停止。',
+        };
+      } catch (error) {
+        return { ok: false, error: { code: 'START_FAILED', message: error instanceof Error ? error.message : String(error) } };
+      }
+    }
+
+    if (toolName === 'logs') {
+      const executionId = String((args as any).executionId || '').trim();
+      if (!executionId) return { ok: false, error: { code: 'INVALID_ARGUMENTS', message: 'executionId is required' } };
+      const limit = typeof (args as any).limit === 'number' ? Number((args as any).limit) : undefined;
+      try {
+        return { ok: true, ...(await sandboxForManaged.readManagedProcess(executionId, limit)) };
+      } catch (error) {
+        return { ok: false, error: { code: 'LOGS_FAILED', message: error instanceof Error ? error.message : String(error) } };
+      }
+    }
+
+    if (toolName === 'stop') {
+      const executionId = String((args as any).executionId || '').trim();
+      if (!executionId) return { ok: false, error: { code: 'INVALID_ARGUMENTS', message: 'executionId is required' } };
+      try {
+        const stopped = await sandboxForManaged.stopManagedProcess(executionId);
+        return { ok: true, ...stopped };
+      } catch (error) {
+        return { ok: false, error: { code: 'STOP_FAILED', message: error instanceof Error ? error.message : String(error) } };
+      }
+    }
+
+    if (toolName === 'list') {
+      try {
+        return { ok: true, processes: await sandboxForManaged.listManagedProcesses() };
+      } catch (error) {
+        return { ok: false, error: { code: 'LIST_FAILED', message: error instanceof Error ? error.message : String(error) } };
+      }
+    }
+
     const command = typeof (args as any).command === 'string' ? String((args as any).command) : '';
     if (!command.trim()) throw new Error('command is required');
     const shellModeRaw =

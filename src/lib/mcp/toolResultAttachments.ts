@@ -5,6 +5,18 @@ import { generateId } from '@/lib/utils/id';
 import { sha256Hex } from '@/lib/utils/sha256';
 
 const INLINE_LIMIT = 16_000;
+/// Preview budget split between the start and the end of a large result: the
+/// error that matters usually prints last.
+const PREVIEW_HEAD = 4_000;
+const PREVIEW_TAIL = 4_000;
+
+export function buildResultPreview(serialized: string): string {
+  if (serialized.length <= PREVIEW_HEAD + PREVIEW_TAIL) return serialized;
+  const head = serialized.slice(0, PREVIEW_HEAD);
+  const tail = serialized.slice(-PREVIEW_TAIL);
+  const omitted = serialized.length - head.length - tail.length;
+  return `${head}\n[…已省略 ${omitted} 字符，完整内容见附件…]\n${tail}`;
+}
 
 export async function externalizeLargeToolResult(params: {
   conversationId: string; runId: string; callId: string; output: unknown;
@@ -24,7 +36,7 @@ export async function externalizeLargeToolResult(params: {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [id, params.conversationId, params.runId, params.callId,
     filePath, new TextEncoder().encode(serialized).length, await sha256Hex(serialized), Date.now()]);
   return { ok: true, truncated: true, attachmentId: id, totalChars: serialized.length,
-    preview: serialized.slice(0, 8000), message: '完整工具结果已保存。需要更多内容时使用 tool_result__read。' };
+    preview: buildResultPreview(serialized), message: '完整工具结果已保存。需要更多内容时使用 tool_result__read。' };
 }
 
 export async function readToolResultAttachment(params: {

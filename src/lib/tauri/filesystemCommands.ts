@@ -65,6 +65,45 @@ export interface WriteFileParams {
   content: string;
 }
 
+export interface EditFileParams {
+  path: string;
+  find: string;
+  replace: string;
+  all?: boolean;
+}
+
+export interface EditFileResult {
+  ok: boolean;
+  path: string;
+  replacements: number;
+  line?: number | null;
+  reason?: string | null;
+  candidates: string[];
+}
+
+export interface SearchFilesParams {
+  root: string;
+  query: string;
+  glob?: string;
+  limit?: number;
+  regex?: boolean;
+}
+
+export interface SearchMatch {
+  path: string;
+  line: number;
+  text: string;
+}
+
+export interface SearchFilesResult {
+  ok: boolean;
+  root: string;
+  matches: SearchMatch[];
+  truncated: boolean;
+  filesScanned: number;
+  limit: number;
+}
+
 export interface ListDirectoryParams {
   path: string;
   limit?: number;
@@ -179,6 +218,20 @@ export async function readFile(params: ReadFileParams): Promise<ReadFileResult> 
  */
 export async function writeFile(params: WriteFileParams): Promise<OkResult> {
   return invokeFs<WriteFileParams, OkResult>('filesystem_write_file', params);
+}
+
+/**
+ * 精确编辑：把 find 替换为 replace（默认要求唯一匹配）
+ */
+export async function editFile(params: EditFileParams): Promise<EditFileResult> {
+  return invokeFs<EditFileParams, EditFileResult>('filesystem_edit_file', params);
+}
+
+/**
+ * 在目录中搜索内容/文件名
+ */
+export async function searchFiles(params: SearchFilesParams): Promise<SearchFilesResult> {
+  return invokeFs<SearchFilesParams, SearchFilesResult>('filesystem_search_files', params);
 }
 
 /**

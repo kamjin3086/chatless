@@ -274,6 +274,10 @@ pub fn run() {
       // —— Sandbox Commands ——
       sandbox::commands::run_safe_shell,
       sandbox::commands::cancel_safe_shell,
+      sandbox::commands::start_shell_process,
+      sandbox::commands::read_shell_process,
+      sandbox::commands::stop_shell_process,
+      sandbox::commands::list_shell_processes,
       sandbox::commands::validate_command,
       sandbox::commands::check_runtime_environment,
       // —— Filesystem (backend commands, allowlist enforced) ——
@@ -282,6 +286,8 @@ pub fn run() {
       filesystem::commands::filesystem_revoke_call_scope,
       filesystem::commands::filesystem_read_file,
       filesystem::commands::filesystem_write_file,
+      filesystem::commands::filesystem_edit_file,
+      filesystem::commands::filesystem_search_files,
       filesystem::commands::filesystem_list_directory,
       filesystem::commands::filesystem_create_directory,
       filesystem::commands::filesystem_delete_file,

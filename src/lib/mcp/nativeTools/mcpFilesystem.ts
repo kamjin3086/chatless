@@ -115,9 +115,46 @@ export const MCP_FILESYSTEM_RENAME_FILE_TOOL: McpTool = {
   },
 };
 
+export const MCP_FILESYSTEM_EDIT_FILE_TOOL: McpTool = {
+  name: 'edit',
+  description: '精确编辑：把文件里的一段原文替换为新内容（默认要求唯一匹配，改一行不用重写整个文件）',
+  input_schema: {
+    schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '文件路径。支持 @WorkDir/相对路径、@别名、绝对路径' },
+        find: { type: 'string', description: '要被替换的原文（必须与文件内容逐字一致；默认必须唯一，否则返回候选行）' },
+        replace: { type: 'string', description: '替换后的内容（可以为空字符串表示删除这段原文）' },
+        all: { type: 'boolean', description: '允许替换全部匹配（默认 false，仅允许唯一匹配）' },
+      },
+      required: ['path', 'find', 'replace'],
+    },
+  },
+};
+
+export const MCP_FILESYSTEM_SEARCH_FILES_TOOL: McpTool = {
+  name: 'search',
+  description: '在目录中搜索内容或文件名（跳过 .git/node_modules 等目录与二进制文件，结果有上限）',
+  input_schema: {
+    schema: {
+      type: 'object',
+      properties: {
+        root: { type: 'string', description: '搜索根目录。支持 @WorkDir、@别名、绝对路径' },
+        query: { type: 'string', description: '要查找的文本（默认按字面匹配；regex=true 时按正则）' },
+        glob: { type: 'string', description: '文件名通配符过滤（可选，支持 * 和 ?，如 *.ts）' },
+        limit: { type: 'number', description: '最多返回匹配条数（可选，默认 50，上限 500）' },
+        regex: { type: 'boolean', description: '把 query 当作正则表达式（可选，默认 false）' },
+      },
+      required: ['root', 'query'],
+    },
+  },
+};
+
 export const MCP_FILESYSTEM_TOOLS: McpTool[] = [
   MCP_FILESYSTEM_READ_FILE_TOOL,
   MCP_FILESYSTEM_WRITE_FILE_TOOL,
+  MCP_FILESYSTEM_EDIT_FILE_TOOL,
+  MCP_FILESYSTEM_SEARCH_FILES_TOOL,
   MCP_FILESYSTEM_LIST_DIR_TOOL,
   MCP_FILESYSTEM_CREATE_DIR_TOOL,
   MCP_FILESYSTEM_DELETE_FILE_TOOL,

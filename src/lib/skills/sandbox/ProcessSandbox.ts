@@ -26,7 +26,34 @@ interface TauriShellResult {
   stdout: string;
   stderr: string;
   duration_ms: number;
+  /** 超时被终止；stdout/stderr 是终止前抓到的输出 */
+  timed_out?: boolean;
   error?: string;
+}
+
+/** One of the background processes started through `shell__start`. */
+export interface ManagedProcessOutput {
+  executionId: string;
+  running: boolean;
+  exitCode?: number | null;
+  stdout: string;
+  stderr: string;
+  stdoutBytes: number;
+  stderrBytes: number;
+  stdoutDropped: number;
+  stderrDropped: number;
+}
+
+export interface ManagedProcessSummary {
+  executionId: string;
+  pid: number;
+  command: string;
+  workingDir: string;
+  running: boolean;
+  exitCode?: number | null;
+  startedAt: number;
+  stdoutBytes: number;
+  stderrBytes: number;
 }
 
 /**
@@ -213,8 +240,9 @@ export class ProcessSandbox extends BaseSandboxExecutor {
         stderr: tauriResult.stderr,
         duration: tauriResult.duration_ms,
         error: tauriResult.error,
-        status: tauriResult.success ? 'completed' : 
-                tauriResult.error?.includes('超时') ? 'timeout' : 'failed',
+        status: tauriResult.success ? 'completed'
+          : (tauriResult.timed_out || tauriResult.error?.includes('超时')) ? 'timeout'
+            : 'failed',
       };
 
       // 触发事件
@@ -244,6 +272,79 @@ export class ProcessSandbox extends BaseSandboxExecutor {
     } finally {
       this.activeExecutions.delete(execContext.executionId);
     }
+  }
+
+  /**
+   * Start a long-running process (dev server, watch, long build).
+   *
+   * Returns as soon as the child is spawned; output is read through
+   * `readManagedProcess` and the process is stopped with `stopManagedProcess`.
+   * This is what makes "run the site locally and check it" possible at all:
+   * a blocking call would be killed by its own timeout.
+   */
+  async startManagedProcess(params: {
+    executionId: string;
+    command: string;
+    args?: string[];
+    workingDir?: string;
+    env?: Record<string, string>;
+  }): Promise<{ executionId: string; pid: number }> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<{ execution_id: string; pid: number }>('start_shell_process', {
+      options: {
+        execution_id: params.executionId,
+        command: params.command,
+        args: params.args || [],
+        working_dir: params.workingDir,
+        timeout_ms: this.securityConfig.maxTimeout || 30000,
+        env: params.env || {},
+        max_output_size: this.securityConfig.maxOutputSize || 1024 * 1024,
+      },
+    });
+    return { executionId: raw.execution_id, pid: raw.pid };
+  }
+
+  async readManagedProcess(executionId: string, limit?: number): Promise<ManagedProcessOutput> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<Record<string, unknown>>('read_shell_process', {
+      execution_id: executionId,
+      limit: limit ?? null,
+    });
+    return {
+      executionId: String(raw.execution_id ?? executionId),
+      running: Boolean(raw.running),
+      exitCode: (raw.exit_code as number | null | undefined) ?? null,
+      stdout: String(raw.stdout ?? ''),
+      stderr: String(raw.stderr ?? ''),
+      stdoutBytes: Number(raw.stdout_bytes ?? 0),
+      stderrBytes: Number(raw.stderr_bytes ?? 0),
+      stdoutDropped: Number(raw.stdout_dropped ?? 0),
+      stderrDropped: Number(raw.stderr_dropped ?? 0),
+    };
+  }
+
+  async stopManagedProcess(executionId: string): Promise<{ stopped: boolean; exitCode?: number | null }> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<{ stopped: boolean; exit_code?: number | null }>('stop_shell_process', {
+      execution_id: executionId,
+    });
+    return { stopped: Boolean(raw?.stopped), exitCode: raw?.exit_code ?? null };
+  }
+
+  async listManagedProcesses(): Promise<ManagedProcessSummary[]> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const rows = await invoke<Array<Record<string, unknown>>>('list_shell_processes', {});
+    return (rows || []).map((raw) => ({
+      executionId: String(raw.execution_id ?? ''),
+      pid: Number(raw.pid ?? 0),
+      command: String(raw.command ?? ''),
+      workingDir: String(raw.working_dir ?? ''),
+      running: Boolean(raw.running),
+      exitCode: (raw.exit_code as number | null | undefined) ?? null,
+      startedAt: Number(raw.started_at ?? 0),
+      stdoutBytes: Number(raw.stdout_bytes ?? 0),
+      stderrBytes: Number(raw.stderr_bytes ?? 0),
+    }));
   }
 
   /**

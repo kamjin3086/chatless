@@ -8,39 +8,13 @@ import { ToggleSwitch } from "./ToggleSwitch";
 import { startupMonitor } from "@/lib/utils/startupPerformanceMonitor";
 import { downloadService } from "@/lib/utils/downloadService";
 import { detectTauriEnvironment } from "@/lib/utils/environment";
-import { isCodingPackEnabled, setCodingPackEnabled } from "@/lib/codingPack/config";
 import { toast } from "@/components/ui/sonner";
-import { LogsIcon, Download, FlaskConical } from "lucide-react";
+import { LogsIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function AdvancedSettings() {
   const [logLevel, setLogLevelState] = useState<'none'|'error'|'warn'|'info'|'debug'>('info');
   const [loading, setLoading] = useState(false);
-  const [codingPackEnabled, setCodingPackEnabledState] = useState(false);
-  const [labsLoading, setLabsLoading] = useState(true);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const enabled = await isCodingPackEnabled();
-        setCodingPackEnabledState(enabled);
-      } finally {
-        setLabsLoading(false);
-      }
-    })();
-  }, []);
-
-  const handleCodingPackToggle = async (checked: boolean) => {
-    setCodingPackEnabledState(checked);
-    try {
-      await setCodingPackEnabled(checked);
-      toast.success(checked ? 'Coding Pack 已开启' : 'Coding Pack 已关闭');
-    } catch (e) {
-      setCodingPackEnabledState(!checked);
-      toast.error('保存 Labs 设置失败');
-      console.warn(e);
-    }
-  };
 
   const handleLevelChange = async (val: string) => {
     const lvl = val as 'none'|'error'|'warn'|'info'|'debug';
@@ -136,24 +110,6 @@ export function AdvancedSettings() {
 
       {/* 网络设置 */}
       <NetworkSettings />
-
-      {/* Labs 实验功能 */}
-      <SettingsCard>
-        <SettingsSectionHeader icon={FlaskConical} title="Labs（实验功能）" />
-        <div className="space-y-3">
-          {!labsLoading && (
-            <ToggleSwitch
-              label="Coding Pack"
-              description="默认关闭。开启后可使用项目挂载、glob/grep、patch 预览与受控 git/诊断；需会话挂载目录，写入走审批。"
-              checked={codingPackEnabled}
-              onChange={(checked) => void handleCodingPackToggle(checked)}
-            />
-          )}
-          {labsLoading && (
-            <p className="text-xs text-slate-500">加载 Labs 设置...</p>
-          )}
-        </div>
-      </SettingsCard>
 
       {/* 日志系统 */}
       <SettingsCard>

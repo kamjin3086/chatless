@@ -222,4 +222,33 @@ describe('directory-level filesystem approval', () => {
     expect(mocks.approvals).toHaveLength(1);
     expect(exec.execute).toHaveBeenCalledTimes(2);
   });
+
+  it('asks before starting a background process but never for logs, list or stop', async () => {
+    const exec = {
+      server: 'shell',
+      canHandle: () => true,
+      execute: vi.fn(async () => ({ ok: true })),
+    };
+    const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
+    const run = (id: string, tool: string, args: Record<string, unknown>) => pipeline.run(new ToolInvocation({
+      assistantMessageId: id,
+      conversationId: 'conv-1',
+      server: 'shell',
+      tool,
+      args,
+      callId: id,
+    }));
+
+    // Starting a server is a side effect: it goes through the approval card.
+    await run('run-start', 'start', { command: 'pnpm dev' });
+    expect(mocks.approvals).toHaveLength(1);
+    expect(mocks.approvals[0]).toMatchObject({ scope: { kind: 'shell', command: 'pnpm dev' } });
+
+    // Reading, listing and stopping a process the agent started do not.
+    await run('run-logs', 'logs', { executionId: 'shell:run-start:card' });
+    await run('run-list', 'list', {});
+    await run('run-stop', 'stop', { executionId: 'shell:run-start:card' });
+    expect(mocks.approvals).toHaveLength(1);
+    expect(exec.execute).toHaveBeenCalledTimes(4);
+  });
 });

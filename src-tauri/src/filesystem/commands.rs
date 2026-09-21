@@ -3,6 +3,97 @@ use crate::filesystem::types::*;
 use std::path::Path;
 use tauri::{AppHandle, State};
 
+/// Directories never worth scanning for a code search.
+const SEARCH_SKIP_DIRS: &[&str] = &[
+  ".git", "node_modules", "target", "dist", ".next", ".turbo", "venv", ".venv", "__pycache__",
+];
+/// Files larger than this are skipped: they are data, not source.
+const SEARCH_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
+const SEARCH_DEFAULT_LIMIT: u32 = 50;
+const SEARCH_MAX_LIMIT: u32 = 500;
+/// How many context lines an ambiguous edit returns.
+const EDIT_CANDIDATE_LINES: usize = 5;
+
+fn line_number_of(text: &str, byte_index: usize) -> u32 {
+  (text[..byte_index].bytes().filter(|b| *b == b'\n').count() as u32) + 1
+}
+
+fn line_text(text: &str, line: u32) -> String {
+  text.lines().nth((line.saturating_sub(1)) as usize).unwrap_or("").trim().to_string()
+}
+
+/// Minimal glob matcher: `*`, `?` and literal characters over one path segment.
+fn glob_matches(pattern: &str, name: &str) -> bool {
+  let pattern: Vec<char> = pattern.chars().collect();
+  let name: Vec<char> = name.chars().collect();
+  let (mut p, mut n) = (0_usize, 0_usize);
+  let mut star: Option<(usize, usize)> = None;
+  while n < name.len() {
+    if p < pattern.len() && (pattern[p] == '?' || pattern[p] == name[n]) {
+      p += 1;
+      n += 1;
+    } else if p < pattern.len() && pattern[p] == '*' {
+      star = Some((p, n));
+      p += 1;
+    } else if let Some((star_p, star_n)) = star {
+      p = star_p + 1;
+      n = star_n + 1;
+      star = Some((star_p, star_n + 1));
+    } else {
+      return false;
+    }
+  }
+  while p < pattern.len() && pattern[p] == '*' {
+    p += 1;
+  }
+  p == pattern.len()
+}
+
+fn looks_binary(bytes: &[u8]) -> bool {
+  bytes.iter().take(8192).any(|byte| *byte == 0)
+}
+
+/// Result of a match-based edit, before it is mapped onto the command response.
+enum EditOutcome {
+  Applied { content: String, replacements: u32, line: u32 },
+  NoMatch { candidates: Vec<String> },
+  NotUnique { candidates: Vec<String> },
+}
+
+/// Pure edit semantics so the match rules can be tested without a Tauri state.
+fn apply_edit(text: &str, find: &str, replace: &str, all: bool) -> EditOutcome {
+  let occurrences = text.matches(find).count();
+  if occurrences == 0 {
+    return EditOutcome::NoMatch {
+      candidates: text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .take(EDIT_CANDIDATE_LINES)
+        .map(|line| line.trim().to_string())
+        .collect(),
+    };
+  }
+  if occurrences > 1 && !all {
+    let mut candidates = Vec::new();
+    let mut search_from = 0_usize;
+    while candidates.len() < EDIT_CANDIDATE_LINES {
+      let Some(offset) = text[search_from..].find(find) else { break };
+      let index = search_from + offset;
+      let line = line_number_of(text, index);
+      candidates.push(format!("第 {line} 行: {}", line_text(text, line)));
+      search_from = index + find.len();
+    }
+    return EditOutcome::NotUnique { candidates };
+  }
+  let first_index = text.find(find).unwrap_or(0);
+  let content = if all { text.replace(find, replace) } else { text.replacen(find, replace, 1) };
+  EditOutcome::Applied {
+    content,
+    replacements: if all { occurrences as u32 } else { 1 },
+    line: line_number_of(text, first_index),
+  }
+}
+
 #[tauri::command]
 pub async fn filesystem_set_allowlist(
   app: AppHandle,
@@ -130,6 +221,154 @@ pub async fn filesystem_read_file(
     content: slice,
     truncated,
   })
+}
+
+#[tauri::command]
+pub async fn filesystem_edit_file(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  payload: EditFilePayload,
+) -> Result<EditFileResult, String> {
+  if payload.find.is_empty() {
+    return Err("find 不能为空".to_string());
+  }
+  let abs = state.assert_allowed(&app, &payload.path, FsOp::Write).await?;
+  let text = tokio::fs::read_to_string(&abs)
+    .await
+    .map_err(|e| format!("读取文件失败: {}", e))?;
+
+  match apply_edit(&text, &payload.find, &payload.replace, payload.all.unwrap_or(false)) {
+    EditOutcome::Applied { content, replacements, line } => {
+      tokio::fs::write(&abs, content)
+        .await
+        .map_err(|e| format!("写入文件失败: {}", e))?;
+      Ok(EditFileResult {
+        ok: true,
+        path: abs,
+        replacements,
+        line: Some(line),
+        reason: None,
+        candidates: Vec::new(),
+      })
+    }
+    EditOutcome::NoMatch { candidates } => Ok(EditFileResult {
+      ok: false,
+      path: abs,
+      replacements: 0,
+      line: None,
+      reason: Some("EDIT_NO_MATCH".to_string()),
+      candidates,
+    }),
+    EditOutcome::NotUnique { candidates } => Ok(EditFileResult {
+      ok: false,
+      path: abs,
+      replacements: 0,
+      line: None,
+      reason: Some("EDIT_MATCH_NOT_UNIQUE".to_string()),
+      candidates,
+    }),
+  }
+}
+
+#[tauri::command]
+pub async fn filesystem_search_files(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  payload: SearchFilesPayload,
+) -> Result<SearchFilesResult, String> {
+  let root = state.assert_allowed(&app, &payload.root, FsOp::Read).await?;
+  let limit = payload
+    .limit
+    .unwrap_or(SEARCH_DEFAULT_LIMIT)
+    .clamp(1, SEARCH_MAX_LIMIT);
+  search_in_tree(&root, &payload.query, payload.glob.as_deref(), limit, payload.regex.unwrap_or(false)).await
+}
+
+/// Walk a directory and collect line matches.  Pure with respect to Tauri state,
+/// so the walking, skipping and limit rules are unit tested directly.
+async fn search_in_tree(
+  root: &str,
+  query: &str,
+  glob: Option<&str>,
+  limit: u32,
+  use_regex: bool,
+) -> Result<SearchFilesResult, String> {
+  let matcher = if use_regex {
+    Some(regex::Regex::new(query).map_err(|e| format!("正则表达式无效: {}", e))?)
+  } else {
+    None
+  };
+
+  let mut matches: Vec<SearchMatch> = Vec::new();
+  let mut files_scanned: u32 = 0;
+  let mut truncated = false;
+  let mut stack = vec![std::path::PathBuf::from(&root)];
+
+  while let Some(dir) = stack.pop() {
+    let mut entries = match tokio::fs::read_dir(&dir).await {
+      Ok(entries) => entries,
+      Err(_) => continue,
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+      let path = entry.path();
+      let name = entry.file_name().to_string_lossy().to_string();
+      let is_dir = entry.file_type().await.map(|kind| kind.is_dir()).unwrap_or(false);
+      if is_dir {
+        if SEARCH_SKIP_DIRS.iter().any(|skip| skip.eq_ignore_ascii_case(&name)) {
+          continue;
+        }
+        stack.push(path);
+        continue;
+      }
+      if let Some(glob) = glob.filter(|glob| !glob.trim().is_empty()) {
+        if !glob_matches(glob, &name) {
+          continue;
+        }
+      }
+      let metadata = match entry.metadata().await {
+        Ok(metadata) => metadata,
+        Err(_) => continue,
+      };
+      if metadata.len() > SEARCH_MAX_FILE_BYTES {
+        continue;
+      }
+      let bytes = match tokio::fs::read(&path).await {
+        Ok(bytes) => bytes,
+        Err(_) => continue,
+      };
+      if looks_binary(&bytes) {
+        continue;
+      }
+      files_scanned += 1;
+      let text = String::from_utf8_lossy(&bytes);
+      for (index, line) in text.lines().enumerate() {
+        let hit = match matcher {
+          Some(ref regex) => regex.is_match(line),
+          None => line.contains(query),
+        };
+        if !hit {
+          continue;
+        }
+        matches.push(SearchMatch {
+          path: path.to_string_lossy().to_string(),
+          line: (index + 1) as u32,
+          text: line.trim().chars().take(400).collect(),
+        });
+        if matches.len() >= limit as usize {
+          truncated = true;
+          break;
+        }
+      }
+      if truncated {
+        break;
+      }
+    }
+    if truncated {
+      break;
+    }
+  }
+
+  Ok(SearchFilesResult { ok: true, root: root.to_string(), matches, truncated, files_scanned, limit })
 }
 
 #[tauri::command]
@@ -453,5 +692,101 @@ pub async fn filesystem_rename_file(
     .await
     .map_err(|e| format!("rename failed: {}", e))?;
   Ok(serde_json::json!({ "ok": true, "oldPath": old_abs, "newPath": new_abs }))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn applied(outcome: EditOutcome) -> (String, u32, u32) {
+    match outcome {
+      EditOutcome::Applied { content, replacements, line } => (content, replacements, line),
+      other => panic!("expected an applied edit, got {}", match other {
+        EditOutcome::NoMatch { .. } => "no match",
+        EditOutcome::NotUnique { .. } => "not unique",
+        EditOutcome::Applied { .. } => unreachable!(),
+      }),
+    }
+  }
+
+  #[test]
+  fn edit_replaces_a_unique_match_and_reports_the_line() {
+    let text = "line one\nconst port = 3000;\nline three\n";
+    let (content, replacements, line) = applied(apply_edit(text, "const port = 3000;", "const port = 4000;", false));
+
+    assert_eq!(content, "line one\nconst port = 4000;\nline three\n");
+    assert_eq!(replacements, 1);
+    assert_eq!(line, 2);
+  }
+
+  #[test]
+  fn edit_refuses_an_ambiguous_match_and_lists_candidates() {
+    let text = "useEffect();\nconst x = 1;\nuseEffect();\n";
+    match apply_edit(text, "useEffect();", "effect();", false) {
+      EditOutcome::NotUnique { candidates } => {
+        assert_eq!(candidates.len(), 2);
+        assert!(candidates[0].contains("第 1 行"));
+        assert!(candidates[1].contains("第 3 行"));
+      }
+      _ => panic!("an ambiguous edit must not be applied"),
+    }
+  }
+
+  #[test]
+  fn edit_with_all_replaces_every_occurrence() {
+    let text = "a\na\na\n";
+    let (content, replacements, _) = applied(apply_edit(text, "a", "b", true));
+
+    assert_eq!(content, "b\nb\nb\n");
+    assert_eq!(replacements, 3);
+  }
+
+  #[test]
+  fn edit_reports_a_miss_with_nearby_lines() {
+    let text = "first line\nsecond line\n";
+    match apply_edit(text, "missing text", "x", false) {
+      EditOutcome::NoMatch { candidates } => {
+        assert!(candidates.iter().any(|line| line.contains("first line")));
+      }
+      _ => panic!("a missing match must not be applied"),
+    }
+  }
+
+  #[test]
+  fn glob_matches_names_not_paths() {
+    assert!(glob_matches("*.ts", "app.ts"));
+    assert!(glob_matches("Button?tsx", "Button.tsx"));
+    assert!(!glob_matches("*.ts", "app.tsx"));
+    assert!(glob_matches("*", "anything"));
+  }
+
+  #[tokio::test]
+  async fn search_skips_heavy_dirs_and_binaries_and_respects_the_limit() {
+    let root = std::env::temp_dir().join(format!("chatless-search-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("node_modules")).unwrap();
+    std::fs::write(root.join("app.ts"), "const needle = 1;\nconst other = 2;\n").unwrap();
+    std::fs::write(root.join("readme.md"), "needle in docs\nneedle again\n").unwrap();
+    std::fs::write(root.join("node_modules").join("dep.ts"), "needle in a dependency\n").unwrap();
+    std::fs::write(root.join("blob.bin"), [0_u8, b'n', b'e', b'e', b'd', b'l', b'e']).unwrap();
+
+    let result = search_in_tree(&root.to_string_lossy(), "needle", Some("*.ts"), 10, false)
+      .await
+      .expect("search");
+    assert_eq!(result.matches.len(), 1, "glob + skip rules should leave one hit: {:?}", result.matches);
+    assert!(result.matches[0].path.ends_with("app.ts"));
+
+    let limited = search_in_tree(&root.to_string_lossy(), "needle", None, 1, false)
+      .await
+      .expect("search");
+    assert_eq!(limited.matches.len(), 1);
+    assert!(limited.truncated);
+    assert!(
+      !limited.matches.iter().any(|m| m.path.contains("node_modules")),
+      "node_modules must be skipped",
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+  }
 }
 

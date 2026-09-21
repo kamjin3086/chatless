@@ -3,6 +3,8 @@ import type { ToolInvocation } from '../ToolInvocation';
 import {
   readFile,
   writeFile,
+  editFile,
+  searchFiles,
   listDirectory,
   createDirectory,
   deleteFile,
@@ -65,6 +67,51 @@ export class FilesystemAdapter implements ToolAdapter {
           ? String((args as Record<string, unknown>).content)
           : '';
         return await writeFile({ path, content });
+      }
+
+      if (tool === 'edit' || tool === 'edit_file') {
+        if (!path) return { ok: false, error: 'path is required' };
+        const find = typeof (args as Record<string, unknown>).find === 'string'
+          ? String((args as Record<string, unknown>).find)
+          : '';
+        const replace = typeof (args as Record<string, unknown>).replace === 'string'
+          ? String((args as Record<string, unknown>).replace)
+          : '';
+        if (!find) return { ok: false, error: 'find is required' };
+        const all = (args as Record<string, unknown>).all === true;
+        const result = await editFile({ path, find, replace, all });
+        if (!result.ok) {
+          return {
+            ok: false,
+            error: {
+              code: result.reason || 'EDIT_FAILED',
+              message: result.reason === 'EDIT_MATCH_NOT_UNIQUE'
+                ? '原文匹配到多处，请给出更长的唯一片段，或用 all=true 全部替换'
+                : '原文未找到，请核对缩进与空白后重试',
+              candidates: result.candidates,
+            },
+          };
+        }
+        return result;
+      }
+
+      if (tool === 'search' || tool === 'search_files') {
+        const root = typeof (args as Record<string, unknown>).root === 'string'
+          ? String((args as Record<string, unknown>).root)
+          : path;
+        if (!root) return { ok: false, error: 'root is required' };
+        const query = typeof (args as Record<string, unknown>).query === 'string'
+          ? String((args as Record<string, unknown>).query)
+          : '';
+        if (!query) return { ok: false, error: 'query is required' };
+        const glob = typeof (args as Record<string, unknown>).glob === 'string'
+          ? String((args as Record<string, unknown>).glob)
+          : undefined;
+        const limit = typeof (args as Record<string, unknown>).limit === 'number'
+          ? Number((args as Record<string, unknown>).limit)
+          : undefined;
+        const regex = (args as Record<string, unknown>).regex === true;
+        return await searchFiles({ root, query, glob, limit, regex });
       }
 
       if (tool === 'list_directory' || tool === 'list' || tool === 'dir' || tool === 'ls') {

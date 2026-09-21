@@ -83,6 +83,9 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
   // shell：由调用方按“访问策略”决定 autoAuth（含会话级免问），
   // 不再维护“低风险命令白名单”和按工作目录的记忆。
   if (isShellServer(srv)) {
+    // Reading the output of a process the agent started, listing them, or
+    // stopping one it started are not new side effects: never prompt for them.
+    if (/^(logs|list|stop)$/.test(tl)) return false;
     return !autoAuth;
   }
 
@@ -140,6 +143,9 @@ function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
   // rename/move 视为写入类操作
   if (tl === 'rename_file' || tl === 'rename' || tl === 'move_file' || tl === 'move' || tl === 'mv') return 'write';
   if (tl === 'write_file' || tl === 'write') return 'write';
+  // Precise editing writes to the file just like a full write.
+  if (tl === 'edit' || tl === 'edit_file') return 'write';
+  if (tl === 'search' || tl === 'search_files') return 'read';
   if (tl === 'mkdir' || tl === 'create_directory' || tl === 'create') return 'create';
   return 'read';
 }
@@ -362,12 +368,14 @@ export class ToolExecutionPipeline {
       const rawDir = typeof (args as any)?.dir === 'string' ? String((args as any).dir) : '';
       const rawOldPath = typeof (args as any)?.oldPath === 'string' ? String((args as any).oldPath) : '';
       const rawNewPath = typeof (args as any)?.newPath === 'string' ? String((args as any).newPath) : '';
+      // fs__search takes a root directory instead of a path/dir.
+      const rawRoot = typeof (args as any)?.root === 'string' ? String((args as any).root) : '';
       const rawPaths = Array.isArray((args as any)?.paths)
         ? ((args as any).paths as unknown[]).map((p) => String(p ?? '').trim()).filter(Boolean)
         : [];
       
       // 主路径用于权限检查
-      const inputPath = rawPath || rawDir || rawOldPath || '';
+      const inputPath = rawPath || rawDir || rawRoot || rawOldPath || '';
       const op = getFilesystemOp(tool);
       
       // 判断是否有任何需要解析的路径
@@ -427,6 +435,7 @@ export class ToolExecutionPipeline {
           if (resolved) {
             if (rawPath) execArgs.path = resolved.absolutePath;
             if (rawDir) execArgs.dir = resolved.absolutePath;
+            if (rawRoot) execArgs.root = resolved.absolutePath;
           }
           
           // 解析 rename/move 的 oldPath 和 newPath

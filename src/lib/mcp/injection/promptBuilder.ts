@@ -127,6 +127,27 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   } catch {
     // 提示词缺失不应阻断对话
   }
+
+  // git / gh guidance: the tools exist on PATH, but the shell has no stdin, so
+  // a command that asks for input fails.  Say that once, in the conversation
+  // layer, instead of letting the agent discover it by hanging.
+  try {
+    blocks.push({
+      id: 'git-guidance',
+      layer: 'conversation',
+      order: 90,
+      content: [
+        '【版本控制与 GitHub】',
+        '- `git` 与 `gh` 可直接通过 shell__run 使用；工作目录内的仓库不需要额外授权。',
+        '- 命令必须非交互：stdin 已关闭。不要执行会等待输入的命令（例如不带 -m 的 git commit、交互式 rebase、需要密码的推送）。',
+        '- 提交用 `git commit -m "…"`；推送用 `git push`，若远端要求凭据会直接失败，此时把失败信息转述给用户。',
+        '- PR/issue 等 GitHub 操作用已登录的 `gh`；若 `gh auth status` 显示未登录，请让用户执行 `gh auth login`，不要反复重试同一命令。',
+        '- 需要长时间运行的东西（dev server、watch）用 shell__start，不要用阻塞命令等待。',
+      ].join('\n'),
+    });
+  } catch {
+    // ignore
+  }
   
   // 2. External MCP tools are only injected after an explicit mention or a
   //    tools__search result. The search itself covers every enabled server,

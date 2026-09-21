@@ -69,6 +69,57 @@ pub struct WriteFilePayload {
   pub content: String,
 }
 
+/// 精确编辑 payload：把 `find` 替换为 `replace`，默认要求唯一匹配
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditFilePayload {
+  pub path: String,
+  pub find: String,
+  pub replace: String,
+  pub all: Option<bool>,
+}
+
+/// 精确编辑结果。匹配不唯一/未命中不是 IO 错误，因此作为结构化结果返回。
+#[derive(Debug, Clone, Serialize)]
+pub struct EditFileResult {
+  pub ok: bool,
+  pub path: String,
+  pub replacements: u32,
+  /// 1-based line number of the first replacement, when one happened.
+  pub line: Option<u32>,
+  /// EDIT_NO_MATCH / EDIT_MATCH_NOT_UNIQUE, when nothing was written.
+  pub reason: Option<String>,
+  /// Nearby lines so the model can correct the request in one step.
+  pub candidates: Vec<String>,
+}
+
+/// 内容/文件名搜索 payload
+#[derive(Debug, Clone, Deserialize)]
+pub struct SearchFilesPayload {
+  pub root: String,
+  pub query: String,
+  pub glob: Option<String>,
+  pub limit: Option<u32>,
+  pub regex: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SearchMatch {
+  pub path: String,
+  /// 1-based line number.
+  pub line: u32,
+  pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SearchFilesResult {
+  pub ok: bool,
+  pub root: String,
+  pub matches: Vec<SearchMatch>,
+  pub truncated: bool,
+  pub files_scanned: u32,
+  pub limit: u32,
+}
+
 /// 列出目录 payload
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListDirectoryPayload {

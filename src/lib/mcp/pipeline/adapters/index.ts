@@ -6,7 +6,6 @@ import { SystemToolAdapter } from './SystemToolAdapter';
 import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 import { UserFsAdapter } from './UserFsAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
-import { CodingPackAdapter } from './CodingPackAdapter';
 import { KnowledgeAdapter } from './KnowledgeAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 import { ToolResultAdapter } from './ToolResultAdapter';
@@ -28,7 +27,6 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new UserFsAdapter(),
     new FilesystemAdapter(),
     new ShellExecutorAdapter(),
-    new CodingPackAdapter(),
     new KnowledgeAdapter(),
     new SystemToolAdapter(),
     new McpAdapter(),
@@ -43,7 +41,6 @@ export { SystemToolAdapter } from './SystemToolAdapter';
 export { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
-export { CodingPackAdapter } from './CodingPackAdapter';
 export { KnowledgeAdapter } from './KnowledgeAdapter';
 export { ToolResultAdapter } from './ToolResultAdapter';
 

@@ -15,7 +15,6 @@ import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecuto
 import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
 import { SYSTEM_SERVER_NAME, SYSTEM_PROMPT_TOOLS } from './systemPrompts';
 import { SKILL_SERVER_NAME, SKILL_UNIFIED_TOOLS } from './skillUnifiedTools';
-import { CODING_PACK_SERVER_NAME, CODING_PACK_TOOLS } from './codingPack';
 import { KNOWLEDGE_SERVER_NAME, KNOWLEDGE_TOOLS } from './knowledge';
 import { TOOL_RESULT_SERVER_NAME, TOOL_RESULT_TOOLS } from './toolResult';
 
@@ -25,7 +24,6 @@ export type ToolGroupId =
   | 'core'      // 核心：始终加载（fs + shell + web）
   | 'skill'     // 技能系统
   | 'prompt'    // 提示词管理
-  | 'coding'    // Coding Pack（默认关闭）
   | 'knowledge'; // 知识库（会话挂载 KB + Agent 模式）
 
 export interface ToolGroup {
@@ -75,12 +73,6 @@ export const TOOL_GROUPS: ToolGroup[] = [
     name: '提示词管理',
     description: '管理提示词（列出、创建、编辑、删除、优化）',
     tools: SYSTEM_PROMPT_TOOLS.map(t => ({ server: SYSTEM_SERVER_NAME, tool: t })),
-  },
-  {
-    id: 'coding',
-    name: 'Coding Pack',
-    description: 'glob/grep、patch 预览、git 只读与诊断（默认关闭）',
-    tools: CODING_PACK_TOOLS.map(t => ({ server: CODING_PACK_SERVER_NAME, tool: t })),
   },
   {
     id: 'knowledge',
