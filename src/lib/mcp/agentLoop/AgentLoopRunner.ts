@@ -15,7 +15,7 @@ import { resolveAgentToolCapability } from './resolveAgentToolCapability';
 import { applyCitations } from '@/lib/rag/CitationService';
 import { listEvidence, restoreEvidence } from '@/lib/rag/EvidenceRegistry';
 import { isPipelineSkipped } from '@/lib/mcp/shared/toolResultGuards';
-import { ConversationEventLog } from '@/lib/mcp/pipeline/context/ConversationEventLog';
+import { ConversationEventLog, type ConversationEvent } from '@/lib/mcp/pipeline/context/ConversationEventLog';
 import { externalizeLargeToolResult } from '@/lib/mcp/toolResultAttachments';
 import { modelRequestScheduler } from '@/lib/llm/ModelRequestScheduler';
 
@@ -134,7 +134,7 @@ export class AgentLoopRunner {
     const endpointKey = providerEndpoint.trim().replace(/\/$/, '') || provider;
 
     const controlPlane = new AgentRunControlPlane(assistantMessageId, conversationId, assistantMessageId, {
-      parentRunId: params.continuationRunId,
+      parentRunId: params.continuationRunId || params.regenerationParentRunId,
       runKind: regenerate ? 'regeneration' : params.continuationRunId ? 'continuation' : 'normal',
     });
     const active = activeLoops.get(assistantMessageId);
@@ -196,6 +196,53 @@ export class AgentLoopRunner {
         toolOptions.__useNativeTools = false;
       }
       const renderMode = capability.renderMode;
+      if (regenerate && params.regenerationParentRunId) {
+        // A regeneration keeps the facts the previous run gathered — its tool
+        // results and citation mapping — but not its answer, so the model
+        // revises instead of continuing. Tools stay blocked for this run.
+        try {
+          const previousMessage = useChatStore.getState().conversations
+            .find((conversation) => conversation.id === conversationId)?.messages
+            .find((message) => message.id === params.regenerationParentRunId);
+          if (previousMessage?.citations?.length) {
+            restoreEvidence(assistantMessageId, previousMessage.citations.map((citation) => ({
+              id: citation.evidenceId || citation.id,
+              documentId: citation.documentId,
+              documentName: citation.documentName,
+              documentPath: citation.documentPath,
+              documentHash: citation.documentHash,
+              sourceBlockIds: [],
+              locator: citation.locator,
+              quote: citation.quote,
+              score: 0,
+            })));
+          }
+          const recorded = await AgentRunEventStore.loadEvents(params.regenerationParentRunId);
+          const digest = recorded
+            .filter((event): event is Extract<ConversationEvent, { type: 'tool_call_output' }> =>
+              event.type === 'tool_call_output')
+            .map((event) => {
+              const output = typeof event.output === 'string' ? event.output : JSON.stringify(event.output);
+              const clipped = output.length > 400 ? `${output.slice(0, 400)}…` : output;
+              return `- ${event.server}.${event.tool} → ${clipped}`;
+            });
+          if (digest.length) {
+            const note: LlmMessage = {
+              role: 'system',
+              content: [
+                '【上一次运行已完成的工具结果】',
+                ...digest,
+                '这些是既成事实；不要重复这些操作，也不要沿用上一次的回答，请重新组织回答。',
+              ].join('\n'),
+            };
+            const lastIndex = conversationHistory.length - 1;
+            if (conversationHistory[lastIndex]?.role === 'user') conversationHistory.splice(lastIndex, 0, note);
+            else conversationHistory.push(note);
+          }
+        } catch {
+          // Regeneration still produces an answer without the prior facts.
+        }
+      }
       if (params.continuationRunId) {
         try {
           const previousMessage = useChatStore.getState().conversations

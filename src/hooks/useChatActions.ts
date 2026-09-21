@@ -966,6 +966,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         // Regenerating revises the answer from the existing record.  It must
         // never silently repeat a prior write, shell command, or MCP action.
         regenerate: !continueStoppedRun,
+        regenerationParentRunId: !continueStoppedRun ? target.id : undefined,
         options: composed,
         runtimeHooks: {
           onAgentStart: () => {

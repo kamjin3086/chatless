@@ -177,6 +177,23 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
     }
   }, [knowledgeBase]);
 
+  /**
+   * Semantic indexing is optional: keyword search works without a model. These
+   * actions cover the two states a user can act on — retry after a failure or
+   * after configuring a model, and cancel work that is still queued.
+   */
+  const handleRetrySemantic = useCallback(async (documentId: string) => {
+    const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
+    await semanticIndexQueue.retryForDocument(documentId);
+    await loadDocuments();
+  }, [loadDocuments]);
+
+  const handleCancelSemantic = useCallback(async (documentId: string) => {
+    const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
+    await semanticIndexQueue.cancelForDocument(documentId);
+    await loadDocuments();
+  }, [loadDocuments]);
+
   // 组件加载时获取知识库和文档
   useEffect(() => {
     loadKnowledgeBase();
@@ -555,6 +572,8 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
                     semanticStatus={(doc as any).semanticStatus}
                     onView={() => handleViewDocument(doc.id)}
                     onDelete={() => handleRemoveDocument(doc.id)}
+                    onRetrySemantic={handleRetrySemantic}
+                    onCancelSemantic={handleCancelSemantic}
                     hideIndexedStatus={true}
                   />
                 ))}

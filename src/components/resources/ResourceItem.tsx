@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator 
 } from '@/components/ui/dropdown-menu';
-import { FileText, FileJson, FileCode, Database, Trash2, Clock, HardDrive, Layers, Info, Eye, MoreVertical } from 'lucide-react';
+import { Ban, FileText, FileJson, FileCode, Database, RotateCcw, Trash2, Clock, HardDrive, Layers, Info, Eye, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { ResourceDocument } from './types';
 import { useState } from 'react';
@@ -47,6 +47,9 @@ interface ExtendedResourceItemProps extends ResourceDocument {
   onAddNote?: (id: string) => void;
   onComment?: (id: string) => void;
   hideIndexedStatus?: boolean; // 新增：是否隐藏"已入库"状态
+  /** 语义索引失败/等待时提供的操作入口 */
+  onRetrySemantic?: (id: string) => void;
+  onCancelSemantic?: (id: string) => void;
 }
 
 export function ResourceItem({
@@ -66,6 +69,8 @@ export function ResourceItem({
   hideIndexedStatus = false, // 新增参数，默认为false
   source,
   conversationId,
+  onRetrySemantic,
+  onCancelSemantic,
 }: ExtendedResourceItemProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   
@@ -123,6 +128,36 @@ export function ResourceItem({
                 : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
                 语义{semanticStatus === 'ready' ? '可用' : semanticStatus === 'failed' ? '不可用' : '等待'}
               </span>
+            )}
+            {semanticStatus && semanticStatus !== 'ready' && onRetrySemantic && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="重试语义索引"
+                    className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    onClick={(event) => { event.stopPropagation(); onRetrySemantic(id); }}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>重试语义索引</TooltipContent>
+              </Tooltip>
+            )}
+            {onCancelSemantic && (semanticStatus === 'processing' || semanticStatus === 'pending') && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="取消语义索引"
+                    className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    onClick={(event) => { event.stopPropagation(); onCancelSemantic(id); }}
+                  >
+                    <Ban className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>取消语义索引</TooltipContent>
+              </Tooltip>
             )}
             {!hideIndexedStatus && knowledgeBases && knowledgeBases.length > 0 && (
               <div className="flex gap-0.5 flex-wrap">

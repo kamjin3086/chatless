@@ -33,6 +33,12 @@ export type AgentLoopRunParams = {
   continuationPrompt?: string;
   /** A regeneration reuses recorded context but may only produce an answer. */
   regenerate?: boolean;
+  /**
+   * The run being regenerated. Its recorded tool results become factual
+   * background, while its answer is not replayed: a regeneration must revise
+   * the answer rather than continue it.
+   */
+  regenerationParentRunId?: string;
   /** 透传给 provider 的 options（温度/最大tokens/会话参数等） */
   options?: Record<string, unknown>;
   /** Planning mode permits bounded reads/searches but blocks side effects. */

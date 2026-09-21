@@ -60,6 +60,30 @@ class SemanticIndexQueue {
     return Boolean(result.rowsAffected);
   }
 
+  /** Cancel whatever semantic work a document currently has queued or running. */
+  async cancelForDocument(documentId: string): Promise<boolean> {
+    const db = DatabaseService.getInstance().getDbManager();
+    const result = await db.execute(
+      "UPDATE document_index_tasks SET status = 'cancelled', updated_at = ? WHERE document_id = ? AND task_type = 'semantic' AND status IN ('pending','running','waiting_model')",
+      [Date.now(), documentId],
+    );
+    if (result.rowsAffected) {
+      await db.execute("UPDATE documents SET semantic_status = 'pending' WHERE id = ?", [documentId]);
+    }
+    return Boolean(result.rowsAffected);
+  }
+
+  /** Requeue a document whose semantic index failed, was cancelled, or waited for a model. */
+  async retryForDocument(documentId: string): Promise<boolean> {
+    const db = DatabaseService.getInstance().getDbManager();
+    const result = await db.execute(
+      "UPDATE document_index_tasks SET status = 'pending', error = NULL, updated_at = ? WHERE document_id = ? AND task_type = 'semantic' AND status IN ('failed','cancelled','waiting_model')",
+      [Date.now(), documentId],
+    );
+    if (result.rowsAffected) void this.drain();
+    return Boolean(result.rowsAffected);
+  }
+
   private async drain(): Promise<void> {
     if (this.running || typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
     this.running = true;

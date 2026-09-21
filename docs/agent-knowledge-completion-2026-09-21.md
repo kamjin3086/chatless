@@ -21,7 +21,8 @@
 | Dense 扫描把已有取消标志覆盖为 false | 扫描前先检查取消，标志只在缺失时插入，所有退出路径都清理注册项 | `agent_runtime.rs` |
 | 撤销挂载后知识工具仍因粘性状态出现 | `knowledge` 组不再粘性，每轮按当前挂载实时计算 | `promptBuilder.ts` |
 | 断电/重启后 `waiting_approval` 运行永久悬挂 | 启动恢复同时把 `running` 与 `waiting_approval` 标记为 `interrupted` | `AgentRunEventStore.ts` |
-| 无模型时语义任务被标记失败，配置模型后无入口 | 新增 `waiting_model` 状态与 `wakeWaiting()`，恢复时一并唤醒 | `SemanticIndexQueue.ts` |
+| 无模型时语义任务被标记失败，配置模型后无入口 | 新增 `waiting_model` 状态、`wakeWaiting()` 与按文档的重试/取消，知识库文档行提供操作入口 | `SemanticIndexQueue.ts`、`KnowledgeDetail.tsx`、`ResourceItem.tsx` |
+| 重新生成没有血缘，也没有旧工具结果背景 | 记录 `parentRunId` 与 `run_kind = regeneration`；把上一次运行的工具结果作为事实背景注入到用户回合之前，回答本身不重放，工具保持禁用 | `AgentLoopRunner.ts`、[AgentLoopRunner.test.ts](../src/lib/mcp/agentLoop/__tests__/AgentLoopRunner.test.ts) |
 | 检索性能：50k 分块上词法 P95 约 1 秒 | 范围谓词移出排序查询，先让 FTS5 用 top-N 取候选再过滤；窗口内 in-scope 行数不足 `topK` 时回退到精确定义查询 | 下方性能表格 |
 
 ## 2. 本轮实际测量
@@ -31,8 +32,8 @@
 | 检查 | 命令 | 实际结果 |
 |---|---|---|
 | 类型与静态检查 | `pnpm typecheck` / `pnpm lint:ci` | 通过 |
-| 前端回归 | `pnpm test` | 50 文件、211 测试通过 |
-| Rust 单元与真实进程测试 | `cargo test --lib` | 20 通过、2 ignored（评测生成器与 50k 基准确认不会在常规测试中运行） |
+| 前端回归 | `pnpm test` | 50 文件、212 测试通过 |
+| Rust 单元与真实进程测试 | `cargo test --lib` | 20 通过、2 ignored（评测生成器与 50k 基准不会在常规测试中运行） |
 | 计划边界探针 | `pnpm exec vitest run --config docs/acceptance/vitest.config.ts` | 6/6 通过（复验时为 6/6 失败） |
 | 检索质量 | 同上（含 63 题） | **Recall@8 = 100%**，63 题全部命中标注原文，4 道无答案题返回空 |
 | 50k 分块词法性能 | `cargo test --lib lexical_query_latency_on_50k_chunks -- --ignored --nocapture` | **P50 11.0 ms / P95 87.2 ms / max 88.8 ms**（57 次查询，50,000 分块，库 29.5 MiB，构建 13.6s）；同一基准确认旧查询形状 P95 972 ms |
@@ -52,14 +53,12 @@
 
 以下项本轮没有做到，不作为“已完成”声明：
 
-1. **Qwen 24×3 任务集与完成率 ≥90%**：任务集与运行器尚未建立；本轮只完成了用户确认的“先建立可复现标准题集”这一步（检索题集）。需要可用的 homelab/Qwen 端点后建立 24 个固定任务并各运行 3 次。
+1. **Qwen 24×3 任务集与完成率 ≥90%**：本轮只完成了用户确认的“先建立可复现标准题集”这一步（检索题集）。已实际探测配置中的端点 `http://101.37.152.90:6434/`，`/v1/models` 与根路径都返回 **HTTP 502**，因此现在无法建立 24 个固定任务的实测记录。恢复端点后需建立任务集并各运行 3 次。
 2. **真实桌面端流程**：Tauri WebDriver 与 WebView2 驱动未安装，未验证发送、补充、停止、拒绝审批、重启继续、重新生成、大输出等流程。人工清单不能替代自动化证据。
 3. **Dense＋融合 P95 ≤2s 与五万分块向量扫描**：本轮只测量词法路径；向量路径无 embedding 模型与对应规模数据可用。
-4. **语义索引 UI 调用方**：队列已有 `waiting_model` 与 `wakeWaiting()`，但界面仍只有状态标记，没有“重试/取消语义索引”按钮。
-5. **重新生成血缘**：重新生成仍只截断到用户消息，没有携带旧工具结果与引用，也未记录 `parentRunId`/`run_kind` 血缘。
-6. **跨平台**：本轮验收范围为 Windows；其他平台仅保持既有契约测试状态。
-7. **真实使用样本**：检索题集为自建标准集，尚不包含真实业务样本。
+4. **跨平台**：本轮验收范围为 Windows；其他平台仅保持既有契约测试状态。
+5. **真实使用样本**：检索题集为自建标准集，尚不包含真实业务样本。
 
 ## 4. 完成定义
 
-只有上述第 1–5 项关闭、第 6–7 项按已确认范围记录后，才满足此前批准计划的完成标准。本轮交付的是可复现的质量与性能基线、以及复验中可闭环缺陷的修复，不是“体验已达标”的结论。
+只有上述第 1–3 项关闭、第 4–5 项按已确认范围记录后，才满足此前批准计划的完成标准。本轮交付的是可复现的质量与性能基线、以及复验中可闭环缺陷的修复，不是“体验已达标”的结论。

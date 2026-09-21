@@ -4,6 +4,7 @@ import { AgentLoopRunner } from '../AgentLoopRunner';
 
 const mocks = vi.hoisted(() => ({
   stream: vi.fn(), execute: vi.fn(), append: vi.fn(), status: vi.fn(),
+  loadEvents: vi.fn(),
   store: { conversations: [], setAgentRunState: vi.fn(), updateMessage: vi.fn(), dispatchMessageAction: vi.fn() },
 }));
 vi.mock('@/lib/llm', () => ({ streamChat: mocks.stream, cancelStream: vi.fn(), chat: vi.fn() }));
@@ -20,7 +21,9 @@ vi.mock('@/lib/mcp/ToolCallCoordinator', () => ({ ToolCallCoordinator: { getInst
 vi.mock('@/store/chatStore', () => ({ useChatStore: { getState: () => mocks.store } }));
 vi.mock('@/store/toolLoadRequestStore', () => ({ useToolLoadRequestStore: { getState: () => ({ reset: vi.fn() }) } }));
 vi.mock('@/lib/rag/CitationService', () => ({ applyCitations: vi.fn() }));
-vi.mock('@/lib/rag/EvidenceRegistry', () => ({ listEvidence: () => [], clearEvidenceRegistry: vi.fn() }));
+vi.mock('@/lib/rag/EvidenceRegistry', () => ({
+  listEvidence: () => [], clearEvidenceRegistry: vi.fn(), restoreEvidence: vi.fn(),
+}));
 vi.mock('@/lib/mcp/promptInjector', () => ({ buildMcpSystemInjections: async () => ({ useNativeTools: true }) }));
 vi.mock('../buildAgentPromptEnvelope', () => ({
   buildAgentPromptEnvelope: () => ({ prefixMessages: [], tools: [{ name: 'fs__write' }] }),
@@ -28,7 +31,7 @@ vi.mock('../buildAgentPromptEnvelope', () => ({
 }));
 vi.mock('../resolveAgentToolCapability', () => ({ resolveAgentToolCapability: () => ({ useNativeTools: true, renderMode: 'tool_role' }) }));
 vi.mock('../AgentRunEventStore', () => ({ AgentRunEventStore: {
-  ensureRun: vi.fn(), loadEvents: async () => [], appendEvent: mocks.append, setRunStatus: mocks.status,
+  ensureRun: vi.fn(), loadEvents: mocks.loadEvents, appendEvent: mocks.append, setRunStatus: mocks.status,
 } }));
 vi.mock('@/lib/chat/stream/StreamOrchestrator', () => ({ StreamOrchestrator: class {
   content = '';
@@ -63,6 +66,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.append.mockResolvedValue(undefined);
   mocks.status.mockResolvedValue(undefined);
+  mocks.loadEvents.mockResolvedValue([]);
   mocks.store.updateMessage.mockResolvedValue(undefined);
   mocks.execute.mockResolvedValue({ ok: true });
   mocks.stream.mockImplementation(async (_p, _m, _history, cb) => finish(cb));
@@ -181,6 +185,26 @@ describe('AgentLoopRunner execution boundaries', () => {
   it('does not expose tools while regenerating a prior answer', async () => {
     await AgentLoopRunner.run({ ...params, assistantMessageId: 'regenerate', regenerate: true });
     expect(mocks.stream.mock.calls[0][4]).toMatchObject({ toolChoice: 'none', __useNativeTools: false });
+  });
+
+  it('records regeneration lineage and carries prior tool results as facts', async () => {
+    const { AgentRunEventStore } = await import('../AgentRunEventStore');
+    mocks.loadEvents.mockImplementation(async (runId: string) => (runId === 'prior'
+      ? [{ type: 'tool_call_output', callId: 'a', server: 'fs', tool: 'read_file',
+          args: {}, output: { ok: true, text: 'file body' } }]
+      : []));
+
+    await AgentLoopRunner.run({ ...params, assistantMessageId: 'regen', regenerate: true,
+      regenerationParentRunId: 'prior' });
+
+    expect(vi.mocked(AgentRunEventStore.ensureRun)).toHaveBeenCalledWith(
+      expect.objectContaining({ parentRunId: 'prior', runKind: 'regeneration' }));
+    const history = mocks.stream.mock.calls[0][2] as Message[];
+    const note = history.find((message) => message.role === 'system' && String(message.content).includes('file body'));
+    expect(note).toBeDefined();
+    // The facts are inserted before the user turn, so the model revises the
+    // answer instead of continuing the previous one.
+    expect(history.indexOf(note!)).toBeLessThan(history.findIndex((message) => message.role === 'user'));
   });
 
   it('retains steering received during a final text response', async () => {
