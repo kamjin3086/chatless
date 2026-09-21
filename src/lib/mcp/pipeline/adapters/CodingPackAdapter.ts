@@ -32,7 +32,9 @@ async function resolveCodingRoot(conversationId: string, raw: string): Promise<s
   }
   if (!trimmed) return workingDir || '';
   try {
-    await syncFilesystemAllowlistToBackend(dirsForResolve as any);
+    // Persistent settings only; the session working directory must not become a
+    // lasting backend authorization just because a coding tool ran.
+    await syncFilesystemAllowlistToBackend(allowlist.directories as any);
   } catch {
     // best-effort
   }

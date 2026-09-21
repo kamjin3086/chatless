@@ -23,8 +23,24 @@ lazy_static! {
     Mutex::new(HashMap::new());
 }
 
-#[derive(Clone, Copy)]
-struct ManagedProcess { pid: u32, #[cfg(windows)] job: isize }
+/// Owns the Windows Job Object handle exactly once. Cloning the `Arc` shares
+/// ownership; the handle closes when the last reference drops, so cancellation
+/// and normal completion can never double-close the same handle value.
+#[cfg(windows)]
+struct JobHandle(isize);
+
+#[cfg(windows)]
+impl Drop for JobHandle {
+  fn drop(&mut self) {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    unsafe {
+      let _ = CloseHandle(HANDLE(self.0 as *mut core::ffi::c_void));
+    }
+  }
+}
+
+#[derive(Clone)]
+struct ManagedProcess { pid: u32, #[cfg(windows)] job: std::sync::Arc<JobHandle> }
 
 /// Shell 执行结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,12 +96,26 @@ async fn kill_process_tree(process: ManagedProcess) -> std::io::Result<()> {
   }
   #[cfg(windows)]
   {
-    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
     use windows::Win32::System::JobObjects::TerminateJobObject;
-    let job = HANDLE(process.job as *mut core::ffi::c_void);
+    use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
+    let job = HANDLE(process.job.0 as *mut core::ffi::c_void);
     unsafe {
       TerminateJobObject(job, 1).map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error.to_string()))?;
-      CloseHandle(job).map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error.to_string()))?;
+    }
+    // Confirm the tree is actually gone before reporting success. A process
+    // that already exited makes OpenProcess fail, which counts as confirmed.
+    unsafe {
+      if let Ok(handle) = OpenProcess(PROCESS_SYNCHRONIZE, false, process.pid) {
+        let waited = WaitForSingleObject(handle, 2000);
+        let _ = CloseHandle(handle);
+        if waited != WAIT_OBJECT_0 {
+          return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "取消后进程仍在运行（2 秒内未退出）",
+          ));
+        }
+      }
     }
     Ok(())
   }
@@ -264,12 +294,11 @@ pub async fn run_safe_shell(
     );
   }
 
-  // 启动进程
-  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
-  let pid = child.id().unwrap_or_default();
+  // The Job Object must exist before the process does, so a failed bind can
+  // never leave an unmanaged child running outside the job.
   #[cfg(windows)]
-  let job_handle: isize = {
-    use windows::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE};
+  let job = {
+    use windows::Win32::System::JobObjects::{CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE};
     let job = unsafe { CreateJobObjectW(None, None) }.map_err(|error| format!("创建 Job Object 失败: {error}"))?;
     let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
@@ -277,18 +306,40 @@ pub async fn run_safe_shell(
       SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info as *const _ as *const core::ffi::c_void,
         std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32)
         .map_err(|error| format!("配置 Job Object 失败: {error}"))?;
-      let raw_process = child.raw_handle().ok_or_else(|| "无法获取子进程句柄".to_string())?;
-      let process = windows::Win32::Foundation::HANDLE(raw_process);
-      AssignProcessToJobObject(job, process).map_err(|error| format!("绑定 Job Object 失败: {error}"))?;
     }
-    job.0 as isize
+    std::sync::Arc::new(JobHandle(job.0 as isize))
   };
+
+  // 启动进程
+  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let pid = child.id().unwrap_or_default();
+
+  #[cfg(windows)]
+  {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::AssignProcessToJobObject;
+    let raw_process = match child.raw_handle() {
+      Some(raw) => raw,
+      None => {
+        let _ = child.kill().await;
+        return Err("无法获取子进程句柄".to_string());
+      }
+    };
+    if let Err(error) =
+      unsafe { AssignProcessToJobObject(HANDLE(job.0 as *mut core::ffi::c_void), HANDLE(raw_process)) }
+    {
+      // Never report a started command that escaped the job: kill it first.
+      let _ = child.kill().await;
+      let _ = child.wait().await;
+      return Err(format!("绑定 Job Object 失败: {error}"));
+    }
+  }
 
   // 注册到全局 map（用于 cancel）
   let exec_id = options.execution_id.clone().unwrap_or_default();
   if !exec_id.trim().is_empty() {
     if let Ok(mut map) = RUNNING_SHELLS.lock() {
-      map.insert(exec_id.clone(), ManagedProcess { pid, #[cfg(windows)] job: job_handle });
+      map.insert(exec_id.clone(), ManagedProcess { pid, #[cfg(windows)] job: job.clone() });
     }
   }
 
@@ -310,7 +361,6 @@ pub async fn run_safe_shell(
   .await;
 
   let duration_ms = start_time.elapsed().as_millis() as u64;
-  let did_timeout = wait_result.is_err();
 
   let result = match wait_result {
     Ok(Ok(status)) => {
@@ -351,20 +401,31 @@ pub async fn run_safe_shell(
     Err(_) => {
       // 超时，尝试终止进程
       log::warn!("[Sandbox] Command timed out after {}ms", options.timeout_ms);
-      let process = ManagedProcess { pid, #[cfg(windows)] job: job_handle };
-      if let Err(error) = kill_process_tree(process).await {
-        return Err(format!("命令超时且终止进程树失败: {error}"));
+      let process = ManagedProcess { pid, #[cfg(windows)] job: job.clone() };
+      // Report a failed tree kill as a result rather than an early return, so
+      // the registry entry is always cleared and a reused pid can never be
+      // cancelled by a later request.
+      match kill_process_tree(process).await {
+        Ok(()) => {
+          let _ = child.wait().await;
+          Ok(ShellResult {
+            success: false,
+            exit_code: -1,
+            stdout: String::new(),
+            stderr: String::new(),
+            duration_ms: options.timeout_ms,
+            error: Some(format!("命令执行超时 ({}ms)", options.timeout_ms)),
+          })
+        }
+        Err(error) => Ok(ShellResult {
+          success: false,
+          exit_code: -1,
+          stdout: String::new(),
+          stderr: String::new(),
+          duration_ms: options.timeout_ms,
+          error: Some(format!("命令超时且终止进程树失败: {error}")),
+        }),
       }
-      let _ = child.wait().await;
-
-      Ok(ShellResult {
-        success: false,
-        exit_code: -1,
-        stdout: String::new(),
-        stderr: String::new(),
-        duration_ms: options.timeout_ms,
-        error: Some(format!("命令执行超时 ({}ms)", options.timeout_ms)),
-      })
     }
   };
 
@@ -373,11 +434,6 @@ pub async fn run_safe_shell(
     if let Ok(mut map) = RUNNING_SHELLS.lock() {
       map.remove(&exec_id);
     }
-  }
-  #[cfg(windows)]
-  if !did_timeout {
-    use windows::Win32::Foundation::{CloseHandle, HANDLE};
-    let _ = unsafe { CloseHandle(HANDLE(job_handle as *mut core::ffi::c_void)) };
   }
 
   result
@@ -536,5 +592,53 @@ mod output_tests {
   async fn preserves_line_endings_and_utf8() {
     let data = "第一行\r\nsecond\n".as_bytes();
     assert_eq!(drain_output(Some(data), 100).await, "第一行\r\nsecond\n");
+  }
+}
+
+/// Real process test: a managed child must actually be terminated, and within
+/// the cancellation budget, rather than only reported as cancelled.
+#[cfg(all(test, windows))]
+mod tree_tests {
+  use super::*;
+
+  #[tokio::test]
+  async fn terminates_a_real_process_tree_within_two_seconds() {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+      AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+      SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    let mut child = std::process::Command::new("cmd")
+      .args(["/C", "ping -n 60 127.0.0.1 > nul"])
+      .spawn()
+      .expect("spawn a long running child");
+    let job = unsafe { CreateJobObjectW(None, None) }.expect("create job object");
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+      SetInformationJobObject(
+        job,
+        JobObjectExtendedLimitInformation,
+        &info as *const _ as *const core::ffi::c_void,
+        std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+      )
+      .expect("configure job object");
+      AssignProcessToJobObject(job, HANDLE(child.as_raw_handle())).expect("bind child to job object");
+    }
+
+    let pid = child.id();
+    let process = ManagedProcess {
+      pid,
+      job: std::sync::Arc::new(JobHandle(job.0 as isize)),
+    };
+    let started = std::time::Instant::now();
+    kill_process_tree(process).await.expect("terminate the process tree");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "cancellation took {elapsed:?}");
+
+    let status = child.wait().expect("reap the child");
+    assert!(!status.success(), "a terminated process must not report success");
   }
 }

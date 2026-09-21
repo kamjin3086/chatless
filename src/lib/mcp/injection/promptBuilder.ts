@@ -406,7 +406,8 @@ async function buildNativeToolDefinitions(params: {
   const session = store.sessions[String(conversationId || '__default__')] || { loadedGroups: ['core' as ToolGroupId], requestedGroups: [] };
   // 关键：已加载的组需要在后续轮次持续注入（否则会出现“上一轮能用、下一轮工具不见了”）
   // 说明：store.loadedGroups 会随着 tools__load 或意图检测逐步累积；这里把它作为“粘性工具组”基础集合。
-  const stickyLoaded = (session.loadedGroups || []).filter((g) => g && g !== 'core');
+  // knowledge 例外：它每轮按当前挂载实时计算，粘性注入会让撤销挂载后的工具继续出现。
+  const stickyLoaded = (session.loadedGroups || []).filter((g) => g && g !== 'core' && g !== 'knowledge');
   const pendingRequests = store.getPendingRequests(conversationId);
   
   // 合并所有需要加载的组
@@ -420,7 +421,7 @@ async function buildNativeToolDefinitions(params: {
   }
 
   // 更新已加载状态
-  store.markLoaded(loadedGroups, conversationId);
+  store.markLoaded(loadedGroups.filter((g) => g !== 'knowledge'), conversationId);
 
   // ========== 4. MCP 服务器工具（外部服务） ==========
   

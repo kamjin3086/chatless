@@ -116,3 +116,26 @@ pub struct SetAllowlistPayload {
   pub directories: Vec<super::state::AllowlistDirectory>,
   pub version: Option<u32>,
 }
+
+/// 一次调用授权 payload：绑定 run/call，只作用于本次执行，不写入磁盘
+#[derive(Debug, Clone, Deserialize)]
+pub struct GrantCallScopePayload {
+  pub run_id: String,
+  pub call_id: Option<String>,
+  pub path: String,
+  #[serde(default)]
+  pub read: bool,
+  #[serde(default)]
+  pub write: bool,
+  #[serde(default)]
+  pub create: bool,
+  #[serde(default)]
+  pub delete: bool,
+}
+
+/// 撤销一次调用授权
+#[derive(Debug, Clone, Deserialize)]
+pub struct RevokeCallScopePayload {
+  pub run_id: String,
+  pub call_id: Option<String>,
+}

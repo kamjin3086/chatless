@@ -1,4 +1,4 @@
-use crate::filesystem::state::{AllowlistSnapshot, FilesystemAllowlistState, FsOp};
+use crate::filesystem::state::{AllowlistSnapshot, FilesystemAllowlistState, FsOp, FsPermissions, CALL_SCOPE_TTL_MS};
 use crate::filesystem::types::*;
 use std::path::Path;
 use tauri::{AppHandle, State};
@@ -14,6 +14,42 @@ pub async fn filesystem_set_allowlist(
     directories: payload.directories,
   };
   state.set_allowlist(&app, snapshot).await?;
+  Ok(serde_json::json!({ "ok": true }))
+}
+
+/// Registers the single-call grant produced by “允许本次”. The grant stays in
+/// memory, is keyed by run and call, and never edits the persisted allowlist.
+#[tauri::command]
+pub async fn filesystem_grant_call_scope(
+  state: State<'_, FilesystemAllowlistState>,
+  payload: GrantCallScopePayload,
+) -> Result<serde_json::Value, String> {
+  let permissions = FsPermissions {
+    read: payload.read,
+    write: payload.write,
+    create: payload.create,
+    delete: payload.delete,
+  };
+  let path = state
+    .grant_call_scope(
+      &payload.run_id,
+      payload.call_id.as_deref(),
+      &payload.path,
+      permissions,
+      CALL_SCOPE_TTL_MS,
+    )
+    .await?;
+  Ok(serde_json::json!({ "ok": true, "path": path }))
+}
+
+#[tauri::command]
+pub async fn filesystem_revoke_call_scope(
+  state: State<'_, FilesystemAllowlistState>,
+  payload: RevokeCallScopePayload,
+) -> Result<serde_json::Value, String> {
+  state
+    .revoke_call_scope(&payload.run_id, payload.call_id.as_deref())
+    .await?;
   Ok(serde_json::json!({ "ok": true }))
 }
 

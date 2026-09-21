@@ -92,19 +92,36 @@ pub async fn dense_search_document_chunks(
   document_ids: Vec<String>, fingerprint: String, top_k: usize,
 ) -> Result<Vec<DenseSearchHit>, String> {
   if query_embedding.is_empty() || document_ids.is_empty() || top_k == 0 { return Ok(vec![]); }
-  DENSE_CANCELLATIONS.insert(request_id.clone(), false);
+  // A cancel that arrives before the scan starts must win. Overwriting the flag
+  // with `false` here used to lose that cancellation entirely.
+  if DENSE_CANCELLATIONS.get(&request_id).is_some_and(|flag| *flag) {
+    DENSE_CANCELLATIONS.remove(&request_id);
+    return Err("DENSE_SEARCH_CANCELLED".into());
+  }
+  DENSE_CANCELLATIONS.entry(request_id.clone()).or_insert(false);
+  // The wrapper owns the registry entry, so every exit path (including `?`
+  // failures) still clears it.
+  let result = dense_scan(instances, db, &request_id, &query_embedding, &document_ids, &fingerprint, top_k).await;
+  DENSE_CANCELLATIONS.remove(&request_id);
+  result
+}
+
+async fn dense_scan(
+  instances: State<'_, DbInstances>, db: String, request_id: &str, query_embedding: &[f32],
+  document_ids: &[String], fingerprint: &str, top_k: usize,
+) -> Result<Vec<DenseSearchHit>, String> {
   let pool = sqlite_pool(instances, db).await?;
   let mut builder = sqlx::QueryBuilder::new("SELECT e.chunk_id, e.dimension, e.embedding FROM document_chunk_embeddings e JOIN document_chunks c ON c.id = e.chunk_id JOIN documents d ON d.active_index_batch_id = c.batch_id WHERE e.fingerprint = ");
-  builder.push_bind(&fingerprint).push(" AND c.document_id IN (");
+  builder.push_bind(fingerprint).push(" AND c.document_id IN (");
   let mut separated = builder.separated(",");
-  for id in &document_ids { separated.push_bind(id); }
+  for id in document_ids { separated.push_bind(id); }
   separated.push_unseparated(")");
   let mut rows = builder.build().fetch(&pool);
   let query_norm = query_embedding.iter().map(|v| v * v).sum::<f32>().sqrt();
   let mut best: Vec<DenseSearchHit> = Vec::with_capacity(top_k);
   while let Some(row) = rows.try_next().await.map_err(|e| e.to_string())? {
-    if DENSE_CANCELLATIONS.get(&request_id).is_some_and(|flag| *flag) {
-      DENSE_CANCELLATIONS.remove(&request_id); return Err("DENSE_SEARCH_CANCELLED".into());
+    if DENSE_CANCELLATIONS.get(request_id).is_some_and(|flag| *flag) {
+      return Err("DENSE_SEARCH_CANCELLED".into());
     }
     let dimension = row.get::<i64, _>("dimension") as usize;
     let bytes = row.get::<Vec<u8>, _>("embedding");
@@ -120,7 +137,6 @@ pub async fn dense_search_document_chunks(
     best.sort_by(|a, b| b.score.total_cmp(&a.score));
     if best.len() > top_k { best.pop(); }
   }
-  DENSE_CANCELLATIONS.remove(&request_id);
   Ok(best)
 }
 

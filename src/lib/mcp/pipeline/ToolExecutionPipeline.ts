@@ -5,7 +5,11 @@ import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceCo
 import { isShellCommandTrusted, useShellAuthStore } from '@/store/shellAuthStore';
 import { isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
-import { syncFilesystemAllowlistToBackend } from '@/lib/filesystemAllowlist/backendSync';
+import {
+  grantCallScopedPaths,
+  syncFilesystemAllowlistToBackend,
+  type CallScopedGrant,
+} from '@/lib/filesystemAllowlist/backendSync';
 import { markError, markPendingAuth, markSuccess } from './ToolCardUpdater';
 import type { ToolAdapter } from './ToolAdapter';
 import { ToolInvocation } from './ToolInvocation';
@@ -296,7 +300,11 @@ export class ToolExecutionPipeline {
 
     // 授权 + filesystem allowlist gate（统一文件系统安全边界）
     let execInvocation: ToolInvocation = invocation;
-    let restoreFilesystemAllowlist: (() => Promise<void>) | undefined;
+    let revokeCallGrants: (() => Promise<void>) | undefined;
+    // Session working directories and single approvals are granted for this
+    // call only. They must never be written into the persisted allowlist.
+    const callGrants: CallScopedGrant[] = [];
+    let sessionWorkDir: string | undefined;
     const srvLower = normalizeServerName(server);
 
     // 预处理：shell_executor 的 workingDir 和 command 支持 @WorkDir / @Alias / 相对路径
@@ -311,6 +319,7 @@ export class ToolExecutionPipeline {
           const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
           if (wd) {
             shellWorkDir = String(wd).replace(/\\/g, '/');
+            sessionWorkDir = shellWorkDir;
             dirsForResolve.unshift({
               id: `session:${invocation.conversationId}:workdir`,
               path: shellWorkDir,
@@ -407,6 +416,7 @@ export class ToolExecutionPipeline {
             const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
             if (wd) {
               workingDir = String(wd).replace(/\\/g, '/');
+              sessionWorkDir = workingDir;
               dirsForResolve.unshift({
                 id: `session:${invocation.conversationId}:workdir`,
                 path: workingDir,
@@ -421,9 +431,11 @@ export class ToolExecutionPipeline {
             // ignore
           }
 
-          // 确保后端 allowlist 与前端一致（避免后端最终校验拦截）
+          // Keep the backend in step with the user's persistent settings only.
+          // The session working directory travels as a call-scoped grant below,
+          // so it never becomes a lasting backend authorization.
           try {
-            await syncFilesystemAllowlistToBackend(dirsForResolve as any);
+            await syncFilesystemAllowlistToBackend(allowlist.directories as any);
           } catch {
             // ignore: best-effort sync
           }
@@ -536,37 +548,22 @@ export class ToolExecutionPipeline {
             // “允许本次” is an execution-scoped grant. It must not mutate
             // the persistent allowlist or turn one approval into future trust.
             try {
-              const st = useFilesystemAllowlistStore.getState();
               const hasDirArg = typeof (args as any)?.dir === 'string';
               const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
-              const grantPath = hasDirArg || dirScopedByTool ? primaryAbsolutePath : dirnamePath(primaryAbsolutePath);
-              const allowDeleteInWorkDir =
-                op === 'delete' && !!workingDir && isPathWithinDirectory({ absolutePath: primaryAbsolutePath, directoryPath: workingDir });
-
-              const extra = workingDir
-                ? [
-                    {
-                      id: `session:${invocation.conversationId}:workdir`,
-                      path: workingDir,
-                      alias: 'WorkDir',
-                      // 默认 WorkDir 不允许 delete；但若用户对 WorkDir 范围内的删除操作明确确认，则本次同步升级 delete 权限
-                      permissions: { read: true, write: true, create: true, delete: allowDeleteInWorkDir },
-                      source: 'workdir',
-                      createdAt: Date.now(),
-                      updatedAt: Date.now(),
-                    } as any,
-                  ]
-                : [];
-              const oneShot = {
-                id: `approval:${assistantMessageId}:${cardId}`, path: grantPath,
-                permissions: { read: op === 'read' || op === 'delete', write: op === 'write',
-                  create: op === 'create', delete: op === 'delete' },
-                source: 'manual', createdAt: Date.now(), updatedAt: Date.now(),
-              } as any;
-              await syncFilesystemAllowlistToBackend([...st.directories, ...extra, oneShot] as any);
-              restoreFilesystemAllowlist = async () => {
-                await syncFilesystemAllowlistToBackend([...useFilesystemAllowlistStore.getState().directories, ...extra] as any);
-              };
+              // A delete is bound to the exact target. Writes and creates need
+              // the containing directory because the file may not exist yet.
+              const grantPath = hasDirArg || dirScopedByTool || op === 'delete'
+                ? primaryAbsolutePath
+                : dirnamePath(primaryAbsolutePath);
+              callGrants.push({
+                path: grantPath,
+                permissions: {
+                  read: op === 'read' || op === 'delete',
+                  write: op === 'write',
+                  create: op === 'create',
+                  delete: op === 'delete',
+                },
+              });
             } catch {
               // ignore: best-effort
             }
@@ -649,6 +646,23 @@ export class ToolExecutionPipeline {
 
         // A one-time shell approval is intentionally not persisted as a
         // trusted directory. Long-lived trust is changed only in settings.
+      }
+    }
+
+    // Register the grants for this call right before it can touch disk. They
+    // are revoked in the finally block below, so an approval never outlives the
+    // call it was given for.
+    if (sessionWorkDir) {
+      callGrants.push({
+        path: sessionWorkDir,
+        permissions: { read: true, write: true, create: true, delete: false },
+      });
+    }
+    if (callGrants.length) {
+      try {
+        revokeCallGrants = await grantCallScopedPaths(callGrants, { runId: assistantMessageId, callId });
+      } catch {
+        // ignore: best-effort; the backend still re-checks the persistent allowlist
       }
     }
 
@@ -833,7 +847,7 @@ export class ToolExecutionPipeline {
     this.coordinator.markToolCallComplete(callKey, 'failed');
     return summary;
     } finally {
-      await restoreFilesystemAllowlist?.().catch(() => {});
+      await revokeCallGrants?.().catch(() => {});
     }
   }
 }

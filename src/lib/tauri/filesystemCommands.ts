@@ -111,6 +111,25 @@ export interface SetAllowlistParams {
   version?: number;
 }
 
+/**
+ * 一次调用授权（run/call 级）。只存在于 Rust 内存中，不写入磁盘，
+ * 也不会成为其他会话或其他调用的授权。
+ */
+export interface GrantCallScopeParams {
+  runId: string;
+  callId?: string;
+  path: string;
+  read?: boolean;
+  write?: boolean;
+  create?: boolean;
+  delete?: boolean;
+}
+
+export interface RevokeCallScopeParams {
+  runId: string;
+  callId?: string;
+}
+
 // ============================================
 // 内部工具函数
 // ============================================
@@ -211,6 +230,16 @@ export async function setAllowlist(params: SetAllowlistParams): Promise<OkResult
   return invokeFs<SetAllowlistParams, OkResult>('filesystem_set_allowlist', params);
 }
 
+/** 登记一次调用授权（仅内存，绑定 run/call） */
+export async function grantCallScope(params: GrantCallScopeParams): Promise<{ ok: boolean; path: string }> {
+  return invokeFs<GrantCallScopeParams, { ok: boolean; path: string }>('filesystem_grant_call_scope', params);
+}
+
+/** 撤销某个 run/call 的一次性授权 */
+export async function revokeCallScope(params: RevokeCallScopeParams): Promise<OkResult> {
+  return invokeFs<RevokeCallScopeParams, OkResult>('filesystem_revoke_call_scope', params);
+}
+
 // ============================================
 // 命名空间导出（方便使用）
 // ============================================
@@ -225,6 +254,8 @@ export const filesystemCommands = {
   deleteByPattern,
   renameFile,
   setAllowlist,
+  grantCallScope,
+  revokeCallScope,
 } as const;
 
 export default filesystemCommands;

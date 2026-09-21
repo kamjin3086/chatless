@@ -270,6 +270,8 @@ pub fn run() {
       sandbox::commands::check_runtime_environment,
       // —— Filesystem (backend commands, allowlist enforced) ——
       filesystem::commands::filesystem_set_allowlist,
+      filesystem::commands::filesystem_grant_call_scope,
+      filesystem::commands::filesystem_revoke_call_scope,
       filesystem::commands::filesystem_read_file,
       filesystem::commands::filesystem_write_file,
       filesystem::commands::filesystem_list_directory,
