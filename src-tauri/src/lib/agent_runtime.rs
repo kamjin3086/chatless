@@ -44,7 +44,7 @@ pub struct ChunkEmbeddingInput { chunk_id: String, embedding: Vec<f32> }
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DenseSearchHit { chunk_id: String, score: f32 }
+pub struct DenseSearchHit { pub(crate) chunk_id: String, pub(crate) score: f32 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,22 +101,25 @@ pub async fn dense_search_document_chunks(
   DENSE_CANCELLATIONS.entry(request_id.clone()).or_insert(false);
   // The wrapper owns the registry entry, so every exit path (including `?`
   // failures) still clears it.
-  let result = dense_scan(instances, db, &request_id, &query_embedding, &document_ids, &fingerprint, top_k).await;
+  let pool = sqlite_pool(instances, db).await?;
+  let result = dense_scan(&pool, &request_id, &query_embedding, &document_ids, &fingerprint, top_k).await;
   DENSE_CANCELLATIONS.remove(&request_id);
   result
 }
 
-async fn dense_scan(
-  instances: State<'_, DbInstances>, db: String, request_id: &str, query_embedding: &[f32],
+/// Exact dense scan over the authorised documents of the active batch, keeping
+/// only the top K in memory.  Takes the pool directly so the acceptance
+/// benchmark measures this production statement shape.
+pub(crate) async fn dense_scan(
+  pool: &SqlitePool, request_id: &str, query_embedding: &[f32],
   document_ids: &[String], fingerprint: &str, top_k: usize,
 ) -> Result<Vec<DenseSearchHit>, String> {
-  let pool = sqlite_pool(instances, db).await?;
   let mut builder = sqlx::QueryBuilder::new("SELECT e.chunk_id, e.dimension, e.embedding FROM document_chunk_embeddings e JOIN document_chunks c ON c.id = e.chunk_id JOIN documents d ON d.active_index_batch_id = c.batch_id WHERE e.fingerprint = ");
   builder.push_bind(fingerprint).push(" AND c.document_id IN (");
   let mut separated = builder.separated(",");
   for id in document_ids { separated.push_bind(id); }
   separated.push_unseparated(")");
-  let mut rows = builder.build().fetch(&pool);
+  let mut rows = builder.build().fetch(pool);
   let query_norm = query_embedding.iter().map(|v| v * v).sum::<f32>().sqrt();
   let mut best: Vec<DenseSearchHit> = Vec::with_capacity(top_k);
   while let Some(row) = rows.try_next().await.map_err(|e| e.to_string())? {

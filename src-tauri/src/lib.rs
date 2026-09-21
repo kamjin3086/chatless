@@ -62,6 +62,10 @@ pub mod agent_runtime;
 #[path = "lib/retrieval_bench.rs"]
 mod retrieval_bench;
 
+#[cfg(test)]
+#[path = "lib/dense_bench.rs"]
+mod dense_bench;
+
 #[path = "lib/http_client.rs"]
 pub mod http_client;
 

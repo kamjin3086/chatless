@@ -1,0 +1,1 @@
+{"buildSeconds":4.3916045,"cancelObserved":true,"databaseMib":106.79296875,"dimension":384,"generatedAtMs":1789974058933,"peakWorkingSetMib":11.9296875,"queryCount":50,"scanMaxMs":430.40270000000004,"scanMeanMs":267.81316200000003,"scanP50Ms":254.7495,"scanP95Ms":320.5241,"top1Correct":50,"topK":30,"vectorCount":50000,"vectorsAreDeterministic":true}

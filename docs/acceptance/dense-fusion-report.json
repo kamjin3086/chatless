@@ -1,0 +1,37 @@
+{
+  "generatedAt": "2026-09-21T07:01:10.295Z",
+  "target": {
+    "combinedP95Ms": 2000,
+    "excludesQueryEmbedding": true
+  },
+  "candidateWindow": {
+    "dense": 30,
+    "lexical": 30,
+    "rrfRankConstant": 60
+  },
+  "dense": {
+    "buildSeconds": 4.3916045,
+    "cancelObserved": true,
+    "databaseMib": 106.79296875,
+    "dimension": 384,
+    "generatedAtMs": 1789974058933,
+    "peakWorkingSetMib": 11.9296875,
+    "queryCount": 50,
+    "scanMaxMs": 430.40270000000004,
+    "scanMeanMs": 267.81316200000003,
+    "scanP50Ms": 254.7495,
+    "scanP95Ms": 320.5241,
+    "top1Correct": 50,
+    "topK": 30,
+    "vectorCount": 50000,
+    "vectorsAreDeterministic": true
+  },
+  "fusion": {
+    "samples": 200,
+    "fusionP50Ms": 0.009799999999984266,
+    "fusionP95Ms": 0.028500000000008185,
+    "fusionMaxMs": 2.1339999999999577
+  },
+  "combinedP95Ms": 320.5526,
+  "note": "The dense corpus uses deterministic vectors, so it measures scan cost and ordering, not semantic quality. Query embedding inference is excluded."
+}
