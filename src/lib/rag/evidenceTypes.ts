@@ -1,3 +1,22 @@
+/**
+ * The exact slice of a document chunk that was handed to the model.
+ * Offsets are character offsets into `document_chunks.source_text`, with an
+ * exclusive end. Citation reopen and neighbour reads rely on this being the
+ * delivered range rather than the whole candidate chunk.
+ */
+export interface DeliveredChunkRange {
+  chunkId: string;
+  chunkIndex: number;
+  startOffset: number;
+  endOffset: number;
+}
+
+export interface DeliveredRange {
+  documentId: string;
+  batchId: string;
+  chunks: DeliveredChunkRange[];
+}
+
 export type SourceBlockType =
   | 'heading'
   | 'paragraph'
@@ -77,6 +96,8 @@ export interface Evidence {
   quote: string;
   score: number;
   retrievalChunkId?: string;
+  /** Set whenever this evidence was produced by a bounded read/search delivery. */
+  range?: DeliveredRange;
 }
 
 export interface Citation {

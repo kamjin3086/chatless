@@ -26,6 +26,7 @@ export class LexicalRetriever {
 
     const db = DatabaseService.getInstance().getDbManager();
     const kbIds = options.knowledgeBaseIds?.filter(Boolean) || [];
+    const documentIds = options.documentIds?.filter(Boolean) || [];
 
     let sql = `
       SELECT dc.id, dc.source_text as content, dc.metadata, dc.locator, dc.document_id,
@@ -36,16 +37,21 @@ export class LexicalRetriever {
       WHERE document_chunks_fts MATCH ?
     `;
     const params: unknown[] = [matchQuery];
+    // Knowledge-base membership and an explicit document list are two additive
+    // ways of naming the same scope (library documents and session attachments).
+    // Intersecting them silently dropped every attachment hit; a plain AND here
+    // would also disagree with the dense path, which unions the same two sets.
+    const scopeClauses: string[] = [];
     if (kbIds.length) {
-      sql += ` AND EXISTS (SELECT 1 FROM doc_knowledge_mappings m
-        WHERE m.document_id = dc.document_id AND m.knowledge_base_id IN (${kbIds.map(() => '?').join(',')}))`;
+      scopeClauses.push(`EXISTS (SELECT 1 FROM doc_knowledge_mappings m
+        WHERE m.document_id = dc.document_id AND m.knowledge_base_id IN (${kbIds.map(() => '?').join(',')}))`);
       params.push(...kbIds);
     }
-    const documentIds = options.documentIds?.filter(Boolean) || [];
     if (documentIds.length) {
-      sql += ` AND dc.document_id IN (${documentIds.map(() => '?').join(',')})`;
+      scopeClauses.push(`dc.document_id IN (${documentIds.map(() => '?').join(',')})`);
       params.push(...documentIds);
     }
+    if (scopeClauses.length) sql += ` AND (${scopeClauses.join(' OR ')})`;
     sql += ` ORDER BY rank LIMIT ?`;
     params.push(topK);
 

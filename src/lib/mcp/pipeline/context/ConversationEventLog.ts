@@ -86,7 +86,8 @@ export class ConversationEventLog {
     if (mode === 'tool_role') {
       // 最小协议化实现：tool_call_requested -> assistant.tool_calls；tool_call_output -> role=tool（tool_call_id）
       const pending: ToolCallRequest[] = [];
-      const requested = new Map<string, ToolCallRequest>();
+      const requested = new Map<string, { request: ToolCallRequest; key: string }>();
+      const started = new Set<string>();
       const completed = new Set<string>();
       let pendingProviderData: Record<string, unknown> | undefined;
       let didEmitAssistantForPending = false;
@@ -107,6 +108,7 @@ export class ConversationEventLog {
         }
         if (e.type === 'tool_call_requested') {
           const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : `call_${pending.length}`;
+          const key = callKeyOf(e);
           pending.push({
             id,
             type: 'function',
@@ -116,7 +118,7 @@ export class ConversationEventLog {
             },
             providerData: e.providerData,
           });
-          requested.set(id, pending[pending.length - 1]);
+          requested.set(id, { request: pending[pending.length - 1], key });
           if (e.providerData && typeof e.providerData === 'object') {
             pendingProviderData = e.providerData;
           }
@@ -124,11 +126,12 @@ export class ConversationEventLog {
           continue;
         }
         if (e.type === 'tool_call_started') {
+          started.add(callKeyOf(e));
           continue;
         }
         if (e.type === 'tool_call_output') {
           const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : undefined;
-          if (id) completed.add(id);
+          completed.add(callKeyOf(e));
 
           if (pending.length > 0 && !didEmitAssistantForPending) {
             const previous = out.at(-1);
@@ -168,18 +171,12 @@ export class ConversationEventLog {
       if (pending.length > 0) {
         out.push({ role: 'assistant', content: '', tool_calls: [...pending], providerData: pendingProviderData });
       }
-      for (const request of requested.values()) {
-        if (!completed.has(request.id)) {
+      for (const { request, key } of requested.values()) {
+        if (!completed.has(key)) {
+          const startedInThisRun = started.has(key);
           out.push({
             role: 'tool',
-            content: safeJson({
-              ok: false,
-              resultStatus: 'unknown',
-              error: {
-                code: 'EXECUTION_UNKNOWN',
-                message: 'The previous run ended before this tool result was durably recorded. Verify its effect before retrying.',
-              },
-            }),
+            content: safeJson(pendingResultPayload(startedInThisRun)),
             tool_call_id: request.id,
             name: request.function.name,
           });
@@ -192,6 +189,7 @@ export class ConversationEventLog {
     // 默认 text_wrapper（与旧逻辑兼容）
     const pendingTextRequests: Array<Extract<ConversationEvent, { type: 'tool_call_requested' }>> = [];
     const completedTextCalls = new Set<string>();
+    const startedTextCalls = new Set<string>();
     for (const e of this.events) {
       if (e.type === 'queued_user_input') continue;
       if (e.type === 'user_message') {
@@ -209,7 +207,7 @@ export class ConversationEventLog {
         continue;
       }
       if (e.type === 'tool_call_output') {
-        if (e.callId) completedTextCalls.add(e.callId);
+        completedTextCalls.add(callKeyOf(e));
         const content = [
           '【工具调用结果】',
           `工具: ${e.server}.${e.tool}`,
@@ -223,22 +221,63 @@ export class ConversationEventLog {
         pendingTextRequests.push(e);
         continue;
       }
-      if (e.type === 'tool_call_started') continue;
+      if (e.type === 'tool_call_started') {
+        startedTextCalls.add(callKeyOf(e));
+        continue;
+      }
     }
     for (const request of pendingTextRequests) {
-      if (request.callId && completedTextCalls.has(request.callId)) continue;
+      const key = callKeyOf(request);
+      if (completedTextCalls.has(key)) continue;
       out.push({
         role: 'user',
         content: [
           '【工具调用结果】',
           `工具: ${request.server}.${request.tool}`,
           `参数: ${safeJson(request.args || {})}`,
-          '结果: {"ok":false,"resultStatus":"unknown","error":{"code":"EXECUTION_UNKNOWN","message":"上次运行结束前未保存结果；请先核对影响，不能自动重试。"}}',
+          `结果: ${safeJson(pendingResultPayload(startedTextCalls.has(key)))}`,
         ].join('\n'),
       });
     }
     return out;
   }
+}
+
+/**
+ * Correlates request/start/result events for one tool call. `callId` is the
+ * authoritative key; the signature fallback keeps tool rounds from providers
+ * that omit it from collapsing into "unknown".
+ */
+function callKeyOf(event: { callId?: string; server?: string; tool?: string; args?: unknown }): string {
+  const id = event.callId && String(event.callId).trim();
+  if (id) return `id:${id}`;
+  return `sig:${event.server || ''}.${event.tool || ''}:${safeJson(event.args || {})}`;
+}
+
+/**
+ * A request with a persisted execution start but no result is an unknown side
+ * effect. Without a start event the call simply never ran, so replaying it is
+ * safe and must not be reported as an unknown effect.
+ */
+function pendingResultPayload(started: boolean): Record<string, unknown> {
+  if (started) {
+    return {
+      ok: false,
+      resultStatus: 'unknown',
+      error: {
+        code: 'EXECUTION_UNKNOWN',
+        message: 'The previous run ended after this call started but before its result was recorded. Verify the effect before retrying.',
+      },
+    };
+  }
+  return {
+    ok: false,
+    resultStatus: 'not_executed',
+    error: {
+      code: 'EXECUTION_NOT_STARTED',
+      message: 'This call was requested but never started before the run ended. It can be issued again.',
+    },
+  };
 }
 
 function renderUserInput(event: Extract<ConversationEvent, { type: 'user_message' }>): string {

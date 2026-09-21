@@ -19,6 +19,8 @@ export type CompactOptions = {
   prefixMessages?: LlmMessage[];
   tools?: unknown;
   checkpoint?: { summary: string; coveredMessages: number; historyFingerprint: string };
+  /** Cancels the compaction request together with its owning run. */
+  signal?: AbortSignal;
   onCheckpoint?: (checkpoint: { summary: string; coveredMessages: number; historyFingerprint: string }) => Promise<void>;
 };
 
@@ -52,13 +54,44 @@ export class ContextWindowManager {
       const reused: LlmMessage[] = [{ role: 'system', content: `【对话历史摘要】\n${opts.checkpoint.summary}` }, ...tail];
       if (estimateTokens(reused) <= budget) return reused;
     }
-    const prompt = [summaryInstruction, ...messages.slice(0, split), { role: 'user' as const, content: '请输出摘要。' }];
-    if (estimateTokens(prompt) > capacity) {
-      throw new Error('待压缩历史超出摘要请求预算；原始历史已保留');
+    // Compact in bounded segments instead of one oversized request: a long
+    // completed history must not fail just because the prefix is big. Segments
+    // are formed with the same budget arithmetic as the real request, so the
+    // whole prefix still fits in a single summary when it genuinely fits.
+    const summaryTokens = Math.max(512, Math.min(reserve, Math.floor(capacity * 0.25)));
+    const prefix = messages.slice(0, split);
+
+    let summary = '';
+    const summarize = async (part: LlmMessage[]): Promise<void> => {
+      const prompt: LlmMessage[] = [summaryInstruction];
+      if (summary) prompt.push({ role: 'system', content: `【已有摘要】\n${summary}` });
+      prompt.push(...part, { role: 'user' as const, content: '请输出摘要。' });
+      if (estimateTokens(prompt) > capacity) {
+        throw new Error('待压缩历史超出摘要请求预算；原始历史已保留');
+      }
+      // No statistics-only fallback: a failed summary must not erase constraints.
+      const response = await chat(opts.provider, opts.model, prompt, {
+        temperature: 0.2, maxTokens: summaryTokens, __signal: opts.signal, __priority: 'low',
+      });
+      const next = String(response?.content || '').trim();
+      if (!next) throw new Error('历史压缩返回空摘要；原始历史已保留');
+      summary = next;
+    };
+
+    let segment: LlmMessage[] = [];
+    for (const message of prefix) {
+      if (segment.length) {
+        const probe: LlmMessage[] = [summaryInstruction];
+        if (summary) probe.push({ role: 'system', content: `【已有摘要】\n${summary}` });
+        probe.push(...segment, message, { role: 'user' as const, content: '请输出摘要。' });
+        if (estimateTokens(probe) > capacity) {
+          await summarize(segment);
+          segment = [];
+        }
+      }
+      segment.push(message);
     }
-    // No statistics-only fallback: a failed summary must not erase constraints.
-    const response = await chat(opts.provider, opts.model, prompt, { temperature: 0.2, maxTokens: reserve });
-    const summary = String(response?.content || '').trim();
+    await summarize(segment);
     if (!summary) throw new Error('历史压缩返回空摘要；原始历史已保留');
     await opts.onCheckpoint?.({ summary, coveredMessages: split, historyFingerprint });
     const result: LlmMessage[] = [{ role: 'system', content: `【对话历史摘要】\n${summary}` }, ...tail];
