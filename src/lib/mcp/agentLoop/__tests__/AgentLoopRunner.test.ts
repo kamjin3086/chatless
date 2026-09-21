@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamCallbacks, Message } from '@/lib/llm/types';
-import { AgentLoopRunner } from '../AgentLoopRunner';
+import { AgentLoopRunner, EMPTY_MODEL_OUTPUT_NOTICE } from '../AgentLoopRunner';
 
 const mocks = vi.hoisted(() => ({
   stream: vi.fn(), execute: vi.fn(), append: vi.fn(), status: vi.fn(),
@@ -243,5 +243,37 @@ describe('AgentLoopRunner execution boundaries', () => {
     await vi.waitFor(() => expect(callbacks).toHaveLength(2));
     finish(callbacks[1]);
     await third;
+  });
+
+  it('marks a run that produced no text and no tool calls as an explicit empty answer', async () => {
+    // Default transport completes without content and without tool calls, which
+    // is what a thinking-budget exhaustion looks like from the loop's side.
+    mocks.store.updateMessage.mockResolvedValue(undefined);
+
+    await AgentLoopRunner.run(params);
+
+    expect(mocks.status).toHaveBeenLastCalledWith('run', 'failed');
+    const recorded = mocks.append.mock.calls.map(([p]) => p.event);
+    const reason = recorded.find((event) => event.type === 'context_change'
+      && String(event.content).startsWith('agent_run_empty_output'));
+    expect(reason).toBeDefined();
+    expect(mocks.store.updateMessage).toHaveBeenCalledWith('run', {
+      status: 'error',
+      content: EMPTY_MODEL_OUTPUT_NOTICE,
+    });
+  });
+
+  it('keeps a completed run that produced visible text free of the empty-answer notice', async () => {
+    mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => {
+      cb.onEvent({ type: 'content_token', content: '答案' });
+      finish(cb);
+    });
+
+    await AgentLoopRunner.run(params);
+
+    expect(mocks.status).toHaveBeenLastCalledWith('run', 'completed');
+    expect(mocks.store.updateMessage).toHaveBeenCalledWith('run', { status: 'sent' });
+    const recorded = mocks.append.mock.calls.map(([p]) => p.event);
+    expect(recorded.some((event) => String(event?.content || '').startsWith('agent_run_empty_output'))).toBe(false);
   });
 });

@@ -2,6 +2,8 @@
 //   cargo test --lib generate_retrieval_token_fixture -- --ignored --nocapture   (in src-tauri)
 //   python docs/acceptance/build-eval-db.py
 //   pnpm exec vitest run --config docs/acceptance/vitest.config.ts
+// The committed report is only rewritten when CHATLESS_WRITE_ACCEPTANCE_REPORTS=1,
+// so a routine run cannot leave a timestamp-only diff behind.
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -85,7 +87,7 @@ describe('retrieval evaluation', () => {
       })),
     };
 
-    fs.writeFileSync(reportPath, `${JSON.stringify({
+    const report = {
       generatedAt: new Date().toISOString(),
       sampleSize: cases.cases.length,
       chunkCount: cases.documents.reduce(
@@ -94,7 +96,10 @@ describe('retrieval evaluation', () => {
       scope: { knowledgeBaseIds: ['kb-eval'], attachmentDocumentIds },
       summary,
       cases: results,
-    }, null, 2)}\n`);
+    };
+    if (process.env.CHATLESS_WRITE_ACCEPTANCE_REPORTS === '1') {
+      fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+    }
 
     // eslint-disable-next-line no-console
     console.log(`Recall@8=${(summary.recallAt8 * 100).toFixed(1)}% ` +

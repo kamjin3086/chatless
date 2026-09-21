@@ -24,6 +24,14 @@ const DEFAULT_PIPELINE = new ToolExecutionPipeline({ adapters: createDefaultAdap
 
 const MAX_MODEL_STEPS = 50;
 
+/**
+ * Shown when a completed model step carries neither text nor tool calls.  The
+ * message is kept (a run may already have produced tool side effects) and the
+ * existing retry entry regenerates the answer from the durable record.
+ */
+export const EMPTY_MODEL_OUTPUT_NOTICE =
+  '[模型未产生输出] 本次请求没有返回正文或工具调用（可能推理预算耗尽）。可点击“重试”重新生成。';
+
 const activeLoops = new Map<string, {
   controller: AbortController;
   provider: string;
@@ -142,6 +150,11 @@ export class AgentLoopRunner {
     let streamFailed = false;
     let runError: unknown;
     let terminalStatus: 'paused' | undefined;
+    // A run that ends without any visible answer is not a success: the user
+    // gets an empty bubble and no clue what happened.  Track whether this run
+    // ever produced visible text so the terminal state can say so.
+    let producedVisibleContent = false;
+    let emptyModelOutput = false;
 
     await setAgentRunState({ assistantMessageId, conversationId, running: true });
 
@@ -468,6 +481,7 @@ export class AgentLoopRunner {
         }
 
         const content = orchestrator.getContext().content;
+        if (content?.trim()) producedVisibleContent = true;
         const modelEvents: import('@/lib/mcp/pipeline/context/ConversationEventLog').ConversationEvent[] = [];
         if (content?.trim()) modelEvents.push({ type: 'assistant_message', content });
         for (const [key, req] of requests) {
@@ -477,6 +491,14 @@ export class AgentLoopRunner {
         await controlPlane.commitModelStep(modelEvents);
         if (requests.size === 0) {
           if (steeringInputs.get(assistantMessageId)?.length) continue;
+          if (!producedVisibleContent) {
+            emptyModelOutput = true;
+            await controlPlane.record({
+              type: 'context_change',
+              kind: 'other',
+              content: `agent_run_empty_output: step=${round}`,
+            }).catch(() => {});
+          }
           break;
         }
 
@@ -571,6 +593,8 @@ export class AgentLoopRunner {
           ? terminalStatus
         : streamFailed
           ? 'failed'
+        : emptyModelOutput
+          ? 'failed'
           : 'completed';
       if (finalStatus === 'cancelled') {
         await controlPlane.recordCancelled().catch(() => {});
@@ -609,8 +633,18 @@ export class AgentLoopRunner {
         /* noop */
       }
       await setAgentRunState({ assistantMessageId, conversationId, running: false });
+      const messageStatus = finalStatus === 'completed' && !persistenceError
+        ? 'sent'
+        : finalStatus === 'cancelled' || finalStatus === 'paused'
+          ? 'aborted'
+          : 'error';
+      // Keep the message and say why it is empty.  The user needs a visible
+      // terminal state and the existing retry entry instead of a blank bubble;
+      // the run may already have produced tool side effects, so the bubble is
+      // never rolled back here.
       await useChatStore.getState().updateMessage(assistantMessageId, {
-        status: finalStatus === 'completed' && !persistenceError ? 'sent' : finalStatus === 'cancelled' || finalStatus === 'paused' ? 'aborted' : 'error',
+        status: messageStatus,
+        ...(emptyModelOutput && messageStatus === 'error' ? { content: EMPTY_MODEL_OUTPUT_NOTICE } : {}),
       }).catch(() => {});
       runError ??= persistenceError;
 
