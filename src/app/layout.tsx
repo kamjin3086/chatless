@@ -17,6 +17,12 @@ import { preloadInitialLogos } from '@/lib/utils/logoPreloader';
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
 import { isTauriEnvironment } from '@/lib/utils/environment';
 
+// The custom title bar is a platform capability, not a user setting, so the
+// class has to exist before the first paint (waiting for an effect makes the
+// title bar jump).  Applying it while the client bundle is evaluated means
+// <html> carries a class the server could not render; the root element below
+// therefore opts out of hydration checking for its own attributes, which is
+// what the class and the storage-driven locale need.
 if (typeof window !== 'undefined' && isTauriEnvironment()) {
   document.documentElement.classList.add('custom-titlebar');
 }
@@ -226,8 +232,11 @@ export default function RootLayout({
     }
   }, [initialized, simpleMode, lowAnimationMode, sidebarWidth, sidebarIconSize]);
 
+  // suppressHydrationWarning: the client adds the title-bar class before
+  // hydration and the locale store applies the saved language on load, so the
+  // root element's attributes are intentionally client-first.
   return (
-    <html lang={getHtmlLang(locale)} className="h-full">
+    <html lang={getHtmlLang(locale)} className="h-full" suppressHydrationWarning>
       <body className={`${inter.variable} h-full bg-background text-foreground antialiased`}>
         <WindowTitleBar />
         <TauriApp>
