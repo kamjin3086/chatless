@@ -4,15 +4,34 @@
 
 import { create } from 'zustand';
 
+/**
+ * How long an approval should last.
+ * - `once`: this call only (the default, and the only option for deletes)
+ * - `session`: every call in this conversation while the app stays open
+ * - `always`: adds the directory to the persistent allowlist
+ */
+export type ApprovalDecision = 'once' | 'session' | 'always';
+
+export interface PendingFilesystemScope {
+  /** Operation the user is approving: read / write / create / delete. */
+  op: string;
+  /** Resolved absolute path of the target. */
+  path: string;
+  /** Directory the grant would cover. */
+  directory: string;
+}
+
 export interface PendingAuthorization {
   id: string; // 唯一ID
   messageId: string;
   server: string;
   tool: string;
   args?: Record<string, unknown>;
+  /** Present for filesystem calls so the card can offer directory-level grants. */
+  filesystem?: PendingFilesystemScope;
   createdAt: number;
   // 授权决策回调
-  onApprove: () => void;
+  onApprove: (decision: ApprovalDecision) => void;
   onReject: () => void;
 }
 
@@ -21,8 +40,8 @@ interface AuthorizationState {
   // 添加待授权请求
   addPendingAuthorization: (auth: PendingAuthorization) => void;
   
-  // 批准授权
-  approveAuthorization: (id: string) => boolean;
+  // 批准授权（可指定授权时长）
+  approveAuthorization: (id: string, decision?: ApprovalDecision) => boolean;
   
   // 拒绝授权
   rejectAuthorization: (id: string) => boolean;
@@ -50,10 +69,10 @@ export const useAuthorizationStore = create<AuthorizationState>((set, get) => ({
     });
   },
   
-  approveAuthorization: (id) => {
+  approveAuthorization: (id, decision = 'once') => {
     const auth = get().getPendingAuthorization(id);
     if (auth) {
-      auth.onApprove();
+      auth.onApprove(decision);
       get().removeAuthorization(id);
       return true;
     }

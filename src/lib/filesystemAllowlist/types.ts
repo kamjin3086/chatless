@@ -1,6 +1,6 @@
 export type FileOp = 'read' | 'write' | 'create' | 'delete';
 
-export type AllowlistSource = 'manual' | 'skills' | 'workdir' | 'attachment' | 'unknown';
+export type AllowlistSource = 'manual' | 'skills' | 'workdir' | 'attachment' | 'session' | 'unknown';
 
 export type AllowlistPermissions = Record<FileOp, boolean>;
 

@@ -1,5 +1,6 @@
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
-import { useAuthorizationStore } from '@/store/authorizationStore';
+import { useAuthorizationStore, type ApprovalDecision } from '@/store/authorizationStore';
+import { getSessionDirectories, grantSessionDirectory, SESSION_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/sessionGrants';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { isShellCommandTrusted, useShellAuthStore } from '@/store/shellAuthStore';
@@ -179,7 +180,8 @@ function isDirectoryScopedFilesystemTool(tool: string): boolean {
 async function waitForCallApproval(params: {
   id: string; runId: string; conversationId: string; callId?: string; server: string; tool: string;
   args: Record<string, unknown>; scope?: Record<string, unknown>;
-}): Promise<boolean> {
+  filesystem?: { op: string; path: string; directory: string };
+}): Promise<{ approved: boolean; decision: ApprovalDecision }> {
   const db = DatabaseService.getInstance().getDbManager();
   const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   if (tauri) {
@@ -197,8 +199,8 @@ async function waitForCallApproval(params: {
       await tx.execute("UPDATE agent_runs SET status = 'waiting_approval', ended_at = NULL WHERE id = ?", [params.runId]);
     });
   }
-  return new Promise<boolean>((resolve) => {
-    const decide = (approved: boolean) => {
+  return new Promise<{ approved: boolean; decision: ApprovalDecision }>((resolve) => {
+    const decide = (approved: boolean, decision: ApprovalDecision = 'once') => {
       void (async () => {
         if (tauri) {
           const { invoke } = await import('@tauri-apps/api/core');
@@ -211,11 +213,15 @@ async function waitForCallApproval(params: {
           await tx.execute("UPDATE agent_runs SET status = 'running' WHERE id = ? AND status = 'waiting_approval'", [params.runId]);
           return true;
         });
-      })().then((changed) => resolve(Boolean(changed) && approved)).catch(() => resolve(false));
+      })().then((changed) => resolve({
+        approved: Boolean(changed) && approved,
+        decision: approved ? decision : 'once',
+      })).catch(() => resolve({ approved: false, decision: 'once' }));
     };
     useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
       server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
-      onApprove: () => decide(true), onReject: () => decide(false) });
+      filesystem: params.filesystem,
+      onApprove: (decision) => decide(true, decision), onReject: () => decide(false) });
   });
 }
 
@@ -305,6 +311,8 @@ export class ToolExecutionPipeline {
     // call only. They must never be written into the persisted allowlist.
     const callGrants: CallScopedGrant[] = [];
     let sessionWorkDir: string | undefined;
+    // Session-approved directories that cover this call's target.
+    const sessionDirectoriesForCall: Array<{ path: string; permissions: Record<string, boolean> }> = [];
     const srvLower = normalizeServerName(server);
 
     // 预处理：shell_executor 的 workingDir 和 command 支持 @WorkDir / @Alias / 相对路径
@@ -410,6 +418,11 @@ export class ToolExecutionPipeline {
           await allowlist.load();
           // 会话级别名：@WorkDir（来自附件菜单）
           const dirsForResolve = [...allowlist.directories];
+          // Directories the user approved for this conversation only.  They are
+          // never persisted, so they behave like the working directory: resolved
+          // here, granted per call below.
+          const sessionDirectories = getSessionDirectories(invocation.conversationId);
+          dirsForResolve.push(...sessionDirectories);
           let workingDir: string | undefined;
           try {
             const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
@@ -486,6 +499,16 @@ export class ToolExecutionPipeline {
 
           // 获取主路径的绝对路径（用于权限检查和授权）
           const primaryAbsolutePath = resolved?.absolutePath || '';
+
+          // A directory approved for this conversation covers the call without
+          // another prompt; the grant still travels per call.
+          if (primaryAbsolutePath) {
+            for (const directory of sessionDirectories) {
+              if (isPathWithinDirectory({ absolutePath: primaryAbsolutePath, directoryPath: directory.path })) {
+                sessionDirectoriesForCall.push({ path: directory.path, permissions: directory.permissions });
+              }
+            }
+          }
           
           const forceApproval = op === 'delete';
           const hasDir = !!resolved?.directory;
@@ -494,9 +517,19 @@ export class ToolExecutionPipeline {
 
           if (needAuth) {
             markPendingAuth({ assistantMessageId, server, tool, cardId });
-            const authorized = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
+            // A delete stays a one-off decision: the card does not offer
+            // directory-level trust for it.
+            const approvableDirectory = forceApproval
+              ? ''
+              : (resolved?.directory?.path || dirnamePath(primaryAbsolutePath));
+            const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
               runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
-              args: args || {}, scope: { operation: op, path: primaryAbsolutePath } });
+              args: args || {},
+              scope: { operation: op, path: primaryAbsolutePath, directory: approvableDirectory || undefined },
+              filesystem: approvableDirectory
+                ? { op, path: primaryAbsolutePath, directory: approvableDirectory }
+                : undefined });
+            const authorized = approval.approved;
 
             if (this.coordinator.isMessageCancelled(assistantMessageId)) {
               this.coordinator.markToolCallComplete(callKey, 'failed');
@@ -543,6 +576,26 @@ export class ToolExecutionPipeline {
                 // ignore
               }
               return denied;
+            }
+
+            // Turn the user's choice into trust that lasts as long as they asked
+            // for.  "This session" stays in memory; "always" joins the persistent
+            // allowlist (without delete, which keeps prompting).
+            if (approvableDirectory) {
+              if (approval.decision === 'session') {
+                grantSessionDirectory(invocation.conversationId, approvableDirectory);
+              } else if (approval.decision === 'always') {
+                try {
+                  const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
+                  await ensureAllowlistedDirectory({
+                    path: approvableDirectory,
+                    source: 'manual',
+                    permissions: SESSION_DIRECTORY_PERMISSIONS,
+                  });
+                } catch (error) {
+                  console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
+                }
+              }
             }
 
             // “允许本次” is an execution-scoped grant. It must not mutate
@@ -604,9 +657,9 @@ export class ToolExecutionPipeline {
       const effectiveArgs = (execInvocation.args || args || {}) as any;
       if (needsAuthorization(server, tool, autoAuth, effectiveArgs || {})) {
         markPendingAuth({ assistantMessageId, server, tool, cardId });
-        const authorized = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
+        const authorized = (await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
           runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
-          args: effectiveArgs || {} });
+          args: effectiveArgs || {} })).approved;
         if (this.coordinator.isMessageCancelled(assistantMessageId)) {
           this.coordinator.markToolCallComplete(callKey, 'failed');
           return { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId };
@@ -657,6 +710,11 @@ export class ToolExecutionPipeline {
         path: sessionWorkDir,
         permissions: { read: true, write: true, create: true, delete: false },
       });
+    }
+    // Session-approved directories are not in the backend allowlist, so each
+    // call that touches one carries its own grant, just like the working dir.
+    for (const directory of sessionDirectoriesForCall) {
+      callGrants.push({ path: directory.path, permissions: { ...directory.permissions } });
     }
     if (callGrants.length) {
       try {

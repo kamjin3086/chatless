@@ -32,13 +32,21 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   
   const authKey = cardId && messageId ? `${messageId}:${cardId}` : undefined;
   const isPendingAuth = status === 'pending_auth' || (!!authKey && hasPendingAuthorization(authKey));
+  // Filesystem approvals can cover a whole folder, so the card offers the
+  // time range of the grant instead of a bare yes/no.
+  const pendingAuth = useAuthorizationStore((state) =>
+    authKey ? state.pendingAuthorizations.get(authKey) : undefined);
+  const directoryScope = pendingAuth?.filesystem && pendingAuth.filesystem.op !== 'delete'
+    ? pendingAuth.filesystem
+    : undefined;
 
   const rememberHint =
-    isPendingAuth && String(server || '').toLowerCase() === 'filesystem' && presentation.kind === 'path'
+    isPendingAuth
+      && String(server || '').toLowerCase() === 'shell_executor'
+      && typeof (args as any)?.workingDir === 'string'
+      && String((args as any).workingDir).trim()
       ? '确认后会记住该目录'
-      : isPendingAuth && String(server || '').toLowerCase() === 'shell_executor' && typeof (args as any)?.workingDir === 'string' && String((args as any).workingDir).trim()
-        ? '确认后会记住该目录'
-        : undefined;
+      : undefined;
   
   const handleApprove = React.useCallback(() => {
     if (!authKey || !messageId || !cardId) return;
@@ -46,6 +54,16 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
     if (!ok) {
       toast.info('审批已失效', { description: '请点击“继续”重新检查权限。' });
     }
+  }, [authKey, messageId, cardId, approveAuthorization]);
+
+  const handleApproveWith = React.useCallback((decision: 'session' | 'always') => {
+    if (!authKey || !messageId || !cardId) return;
+    const ok = approveAuthorization(authKey, decision);
+    if (!ok) {
+      toast.info('审批已失效', { description: '请点击“继续”重新检查权限。' });
+      return;
+    }
+    toast.success(decision === 'session' ? '本次会话内该文件夹可直接读写' : '已加入白名单，之后不再询问');
   }, [authKey, messageId, cardId, approveAuthorization]);
   
   const handleReject = React.useCallback(() => {
@@ -154,18 +172,44 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         {/* 审批按钮 */}
         {isPendingAuth && (
           <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={handleApprove}
-              className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-              title={rememberHint || '确认'}
-            >
-              确认
-            </button>
+            {directoryScope ? (
+              <>
+                <button
+                  onClick={handleApprove}
+                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  title={`只允许这一次：${directoryScope.path}`}
+                >
+                  仅本次
+                </button>
+                <button
+                  onClick={() => handleApproveWith('session')}
+                  className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition-colors"
+                  title={`本次会话内允许读写该文件夹：${directoryScope.directory}`}
+                >
+                  本会话允许读写
+                </button>
+                <button
+                  onClick={() => handleApproveWith('always')}
+                  className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  title={`加入白名单，长期允许读写该文件夹：${directoryScope.directory}`}
+                >
+                  始终允许读写
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleApprove}
+                className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                title={rememberHint || '确认'}
+              >
+                确认
+              </button>
+            )}
             <button
               onClick={handleReject}
               className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
             >
-              取消
+              {directoryScope ? '拒绝' : '取消'}
             </button>
           </div>
         )}
