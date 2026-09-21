@@ -184,7 +184,11 @@ export function ChatMessageList({
           );
         }}
         components={{
-          Footer: () => (messagesEndRef ? <div ref={messagesEndRef} /> : null),
+          // The footer doubles as the scroll anchor, so the bottom spacer stays
+          // part of the scroll content and keeps the last message off the composer.
+          Footer: () => (
+            <div ref={messagesEndRef} className="h-6" aria-hidden="true" />
+          ),
         }}
         style={{ height: '100%' }}
         ref={(instance) => {
