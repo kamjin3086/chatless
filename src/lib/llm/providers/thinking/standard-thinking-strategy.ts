@@ -79,10 +79,21 @@ export class StandardThinkingStrategy extends BaseStreamingStrategy {
    * @returns 提取的thinking内容（如果找到完整标签）
    */
   protected extractThinkingContent(token: ThinkingToken): string {
-    if (!token.content) return '';
-    
+    // Providers may deliver reasoning on its own channel (OpenAI-compatible
+    // `reasoning_content`, Responses reasoning deltas).  That text is already
+    // thinking, so only `content` has to be scanned for <think> tags.
+    const structured = typeof token.reasoning_content === 'string' ? token.reasoning_content : '';
+    if (!token.content) return structured;
+
+    return structured + this.extractTaggedThinking(token.content);
+  }
+
+  /**
+   * Extract thinking from a <think> tag stream.  Tags may span tokens.
+   */
+  private extractTaggedThinking(content: string): string {
     // 累积到buffer
-    this.tagBuffer += token.content;
+    this.tagBuffer += content;
     
     // 检测<think>开始标签（可能跨token）
     if (!this.detectedThinkStart && this.tagBuffer.includes('<think>')) {
@@ -185,4 +196,3 @@ export class StandardThinkingStrategy extends BaseStreamingStrategy {
     this.detectedThinkStart = false;
   }
 }
-

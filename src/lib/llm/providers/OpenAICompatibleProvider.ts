@@ -285,17 +285,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
         
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
         if (reasoningPiece) reasoningContent += reasoningPiece;
-        const contentPiece: string | undefined =
-          (typeof delta.content === 'string' ? delta.content : undefined) ||
-          (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
-        
-        let fullContent = '';
-        if (reasoningPiece) fullContent = `<think>${reasoningPiece}</think>`;
-        if (contentPiece) fullContent += contentPiece;
-        if (fullContent) {
-          const result = this.thinkingStrategy.processToken({ content: fullContent, done: false });
+
+        const token = this.toThinkingToken(delta, json);
+        if (token) {
+          const result = this.thinkingStrategy.processToken(token);
           parsedOkCount++;
-          contentEmittedChars += fullContent.length;
+          contentEmittedChars += (token.content || '').length + (token.reasoning_content || '').length;
 
           
           this.dispatchEvents(result.events || [], cb);
@@ -374,6 +369,23 @@ export class OpenAICompatibleProvider extends BaseProvider {
       console.error('[OpenAICompatibleProvider] stream error:', error);
       cb.onError?.(error);
     }
+  }
+
+  /**
+   * Map one OpenAI-shaped delta onto the thinking strategy's input.
+   *
+   * A `reasoning_content` delta is reasoning on its own channel; it must stay
+   * on that channel.  Wrapping each delta in `<think>...</think>` produced one
+   * closed think block per token, so the same text came out once as thinking
+   * and once as body, and the tags leaked into the visible answer.
+   */
+  private toThinkingToken(delta: any, json: any) {
+    const reasoningPiece = typeof delta?.reasoning_content === 'string' ? delta.reasoning_content : undefined;
+    const contentPiece: string | undefined =
+      (typeof delta?.content === 'string' ? delta.content : undefined) ||
+      (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
+    if (!reasoningPiece && !contentPiece) return null;
+    return { reasoning_content: reasoningPiece, content: contentPiece };
   }
 
   /**
@@ -476,20 +488,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
         
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
         if (reasoningPiece) reasoningContent += reasoningPiece;
-        const contentPiece: string | undefined =
-          (typeof delta.content === 'string' ? delta.content : undefined) ||
-          (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
-        
-        let fullContent = '';
-        if (reasoningPiece) {
-          fullContent = `<think>${reasoningPiece}</think>`;
-        }
-        if (contentPiece) {
-          fullContent += contentPiece;
-        }
-        
-        if (fullContent) {
-          const result = this.thinkingStrategy.processToken({ content: fullContent, done: false });
+
+        const token = this.toThinkingToken(delta, json);
+        if (token) {
+          const result = this.thinkingStrategy.processToken(token);
           this.dispatchEvents(result.events || [], cb);
         }
         // 检查 finish_reason：完成前同样冲刷工具调用
@@ -623,24 +625,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
               
               const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
               if (reasoningPiece) reasoningContent += reasoningPiece;
-              const contentPiece: string | undefined =
-                (typeof delta.content === 'string' ? delta.content : undefined) ||
-                (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
-              
-              // 构造完整的token内容（reasoning + content）
-              let fullContent = '';
-              if (reasoningPiece) {
-                fullContent = `<think>${reasoningPiece}</think>`;
-              }
-              if (contentPiece) {
-                fullContent += contentPiece;
-              }
-              
-              if (fullContent) {
-                const result = this.thinkingStrategy.processToken({
-                  content: fullContent,
-                  done: false
-                });
+
+              const token = this.toThinkingToken(delta, json);
+              if (token) {
+                const result = this.thinkingStrategy.processToken(token);
                 this.dispatchEvents(result.events || [], cb);
               }
               

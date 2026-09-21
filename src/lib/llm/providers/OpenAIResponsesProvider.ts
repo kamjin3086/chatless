@@ -165,11 +165,11 @@ export class OpenAIResponsesProvider extends BaseProvider {
         
         switch (route) {
           case 'response.reasoning.delta': {
-            // OpenAI Responses API的reasoning应该被包装为<think>
+            // Reasoning is its own channel; the strategy handles it directly.
             const piece = pickPiece(data);
             if (piece) {
               const result = this.thinkingStrategy.processToken({
-                content: `<think>${piece}`,
+                reasoning_content: piece,
                 done: false
               });
               
@@ -341,7 +341,7 @@ export class OpenAIResponsesProvider extends BaseProvider {
                 const piece = pickPiece(data);
                 if (piece) {
                   const result = this.thinkingStrategy.processToken({
-                    content: `<think>${piece}`,
+                    reasoning_content: piece,
                     done: false
                   });
                   
