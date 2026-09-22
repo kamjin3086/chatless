@@ -278,6 +278,7 @@ pub fn run() {
       sandbox::commands::read_shell_process,
       sandbox::commands::stop_shell_process,
       sandbox::commands::list_shell_processes,
+      sandbox::commands::stop_conversation_processes,
       sandbox::commands::validate_command,
       sandbox::commands::check_runtime_environment,
       // —— Filesystem (backend commands, allowlist enforced) ——

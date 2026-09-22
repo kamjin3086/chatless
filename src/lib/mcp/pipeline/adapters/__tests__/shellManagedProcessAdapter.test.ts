@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShellExecutorAdapter } from '../ShellExecutorAdapter';
 import { ToolInvocation } from '../../ToolInvocation';
+import { planCommand } from '@/lib/shell/commandPlan';
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(async () => ({ executionId: 'shell:run-1:card-1', pid: 4242 })),
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/skills/sandbox', () => ({
   getProcessSandbox: () => ({
     isAvailable: async () => true,
+    checkEnvironment: async (runtime: string) => ({ runtime, available: true }),
     startManagedProcess: mocks.start,
     readManagedProcess: mocks.read,
     stopManagedProcess: mocks.stop,
@@ -36,13 +38,26 @@ describe('shell background process tools', () => {
       invocation('start', { command: 'pnpm dev --port 4321', workingDir: 'D:/site', name: 'dev-server' }),
     );
 
+    // The whole command line goes to one interpreter, exactly as `run` does.
+    const planned = planCommand({ command: 'pnpm dev --port 4321' });
+    expect(planned.ok).toBe(true);
     expect(mocks.start).toHaveBeenCalledWith(expect.objectContaining({
       executionId: expect.stringContaining('shell:run-1'),
-      command: 'pnpm',
-      args: ['dev', '--port', '4321'],
+      conversationId: 'conv-1',
+      runId: 'run-1',
+      command: planned.ok ? planned.plan.file : '',
+      args: planned.ok ? planned.plan.args : [],
       workingDir: 'D:/site',
     }));
     expect(result).toMatchObject({ ok: true, pid: 4242, name: 'dev-server' });
+  });
+
+  it('rejects an unknown shell instead of guessing an interpreter', async () => {
+    const result: any = await new ShellExecutorAdapter().execute(
+      invocation('start', { command: 'pnpm dev', shell: 'node' }),
+    );
+    expect(result).toMatchObject({ ok: false, error: { code: 'SHELL_INVALID' } });
+    expect(mocks.start).not.toHaveBeenCalled();
   });
 
   it('reads logs, stops and lists without touching a command', async () => {
@@ -50,14 +65,17 @@ describe('shell background process tools', () => {
 
     const logs: any = await adapter.execute(invocation('logs', { executionId: 'shell:run-1:card-1' }));
     expect(logs).toMatchObject({ ok: true, running: true, stdout: 'ready in 812ms' });
+    // A process belongs to a conversation: the session id travels with the call.
+    expect(mocks.read).toHaveBeenCalledWith('shell:run-1:card-1', undefined, 'conv-1');
 
     const stopped: any = await adapter.execute(invocation('stop', { executionId: 'shell:run-1:card-1' }));
     expect(stopped).toMatchObject({ ok: true, stopped: true });
-    expect(mocks.stop).toHaveBeenCalledWith('shell:run-1:card-1');
+    expect(mocks.stop).toHaveBeenCalledWith('shell:run-1:card-1', 'conv-1');
 
     const list: any = await adapter.execute(invocation('list', {}));
     expect(list.processes).toHaveLength(1);
     expect(list.processes[0]).toMatchObject({ command: 'pnpm dev', running: true });
+    expect(mocks.list).toHaveBeenCalledWith('conv-1');
   });
 
   it('maps failures into structured tool errors', async () => {

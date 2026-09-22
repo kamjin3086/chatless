@@ -127,3 +127,30 @@ export function buildFatalErrorHints(id: ToolId, message: string): string[] {
   return out.length ? out : ['请检查参数与权限；必要时缩小范围后重试。'];
 }
 
+/**
+ * A tool that returned a structured failure already told us what happened.
+ * Keep every field it produced (stdout, stderr, exit code, candidates) and only
+ * add the outcome marker, so a known failure is never downgraded into "the side
+ * effect may or may not have happened".
+ */
+export function markKnownFailure(id: ToolId, result: unknown, failure: string): Record<string, unknown> {
+  const base = result && typeof result === 'object' ? (result as Record<string, unknown>) : { value: result };
+  const existing = base.errorDetails;
+  const hasStructuredError =
+    !!existing && typeof existing === 'object' ||
+    (!!base.error && typeof base.error === 'object');
+  return {
+    ...base,
+    resultStatus: 'failed',
+    errorDetails: hasStructuredError
+      ? existing ?? base.error
+      : {
+          code: 'TOOL_FAILED',
+          message: failure,
+          hints: buildFatalErrorHints(id, failure),
+          server: id.server,
+          tool: id.tool,
+        },
+  };
+}
+

@@ -49,6 +49,9 @@ export interface ManagedProcessSummary {
   pid: number;
   command: string;
   workingDir: string;
+  name?: string;
+  conversationId: string;
+  runId?: string;
   running: boolean;
   exitCode?: number | null;
   startedAt: number;
@@ -240,6 +243,7 @@ export class ProcessSandbox extends BaseSandboxExecutor {
         stderr: tauriResult.stderr,
         duration: tauriResult.duration_ms,
         error: tauriResult.error,
+        timedOut: tauriResult.timed_out === true,
         status: tauriResult.success ? 'completed'
           : (tauriResult.timed_out || tauriResult.error?.includes('超时')) ? 'timeout'
             : 'failed',
@@ -281,9 +285,15 @@ export class ProcessSandbox extends BaseSandboxExecutor {
    * `readManagedProcess` and the process is stopped with `stopManagedProcess`.
    * This is what makes "run the site locally and check it" possible at all:
    * a blocking call would be killed by its own timeout.
+   *
+   * The process belongs to a conversation: it stays alive after the reply that
+   * started it, and only that conversation can read or stop it.
    */
   async startManagedProcess(params: {
     executionId: string;
+    conversationId: string;
+    runId?: string;
+    name?: string;
     command: string;
     args?: string[];
     workingDir?: string;
@@ -291,6 +301,9 @@ export class ProcessSandbox extends BaseSandboxExecutor {
   }): Promise<{ executionId: string; pid: number }> {
     const { invoke } = await import('@tauri-apps/api/core');
     const raw = await invoke<{ execution_id: string; pid: number }>('start_shell_process', {
+      conversationId: params.conversationId,
+      runId: params.runId,
+      name: params.name,
       options: {
         execution_id: params.executionId,
         command: params.command,
@@ -304,10 +317,11 @@ export class ProcessSandbox extends BaseSandboxExecutor {
     return { executionId: raw.execution_id, pid: raw.pid };
   }
 
-  async readManagedProcess(executionId: string, limit?: number): Promise<ManagedProcessOutput> {
+  async readManagedProcess(executionId: string, limit?: number, conversationId?: string): Promise<ManagedProcessOutput> {
     const { invoke } = await import('@tauri-apps/api/core');
     const raw = await invoke<Record<string, unknown>>('read_shell_process', {
-      execution_id: executionId,
+      executionId,
+      conversationId,
       limit: limit ?? null,
     });
     return {
@@ -323,28 +337,42 @@ export class ProcessSandbox extends BaseSandboxExecutor {
     };
   }
 
-  async stopManagedProcess(executionId: string): Promise<{ stopped: boolean; exitCode?: number | null }> {
+  async stopManagedProcess(executionId: string, conversationId?: string): Promise<{ stopped: boolean; exitCode?: number | null }> {
     const { invoke } = await import('@tauri-apps/api/core');
     const raw = await invoke<{ stopped: boolean; exit_code?: number | null }>('stop_shell_process', {
-      execution_id: executionId,
+      executionId,
+      conversationId,
     });
     return { stopped: Boolean(raw?.stopped), exitCode: raw?.exit_code ?? null };
   }
 
-  async listManagedProcesses(): Promise<ManagedProcessSummary[]> {
+  async listManagedProcesses(conversationId?: string): Promise<ManagedProcessSummary[]> {
     const { invoke } = await import('@tauri-apps/api/core');
-    const rows = await invoke<Array<Record<string, unknown>>>('list_shell_processes', {});
+    const rows = await invoke<Array<Record<string, unknown>>>('list_shell_processes', { conversationId });
     return (rows || []).map((raw) => ({
       executionId: String(raw.execution_id ?? ''),
       pid: Number(raw.pid ?? 0),
       command: String(raw.command ?? ''),
       workingDir: String(raw.working_dir ?? ''),
+      name: raw.name ? String(raw.name) : undefined,
+      conversationId: String(raw.conversation_id ?? ''),
+      runId: raw.run_id ? String(raw.run_id) : undefined,
       running: Boolean(raw.running),
       exitCode: (raw.exit_code as number | null | undefined) ?? null,
       startedAt: Number(raw.started_at ?? 0),
       stdoutBytes: Number(raw.stdout_bytes ?? 0),
       stderrBytes: Number(raw.stderr_bytes ?? 0),
     }));
+  }
+
+  /**
+   * Terminates every process a conversation started. Used when the session is
+   * deleted, so a dev server cannot outlive the chat that launched it.
+   */
+  async stopConversationProcesses(conversationId: string): Promise<number> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const stopped = await invoke<number>('stop_conversation_processes', { conversationId });
+    return Number(stopped ?? 0);
   }
 
   /**
@@ -356,7 +384,7 @@ export class ProcessSandbox extends BaseSandboxExecutor {
       // 通知 Tauri 后端取消（如果支持）
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('cancel_safe_shell', { execution_id: executionId });
+        await invoke('cancel_safe_shell', { executionId });
       } catch {
         // ignore
       }

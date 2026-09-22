@@ -54,6 +54,8 @@ export interface ExecuteResult {
   duration: number;
   /** 错误信息（如果失败） */
   error?: string;
+  /** 是否因为超时被终止（此时 stdout/stderr 是终止前的输出） */
+  timedOut?: boolean;
   /** 执行状态 */
   status: ExecutionStatus;
 }

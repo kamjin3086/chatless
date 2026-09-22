@@ -317,6 +317,15 @@ export class HistoryService {
    */
   async deleteConversation(conversationId: string): Promise<boolean> {
     try {
+      // Anything the conversation started (a dev server, a watcher) must not
+      // outlive it, or the port stays occupied and the process is unreachable.
+      try {
+        const { getProcessSandbox } = await import('@/lib/skills/sandbox');
+        await getProcessSandbox().stopConversationProcesses(conversationId);
+      } catch (error) {
+        console.warn('[historyService] 停止会话后台进程失败:', error);
+      }
+
       const dbService = this.getDatabaseService();
       const conversationRepo = dbService.getConversationRepository();
 

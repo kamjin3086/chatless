@@ -1,5 +1,6 @@
 use crate::filesystem::state::{AllowlistSnapshot, FilesystemAllowlistState, FsOp, FsPermissions, CALL_SCOPE_TTL_MS};
 use crate::filesystem::types::*;
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use tauri::{AppHandle, State};
 
@@ -13,6 +14,57 @@ const SEARCH_DEFAULT_LIMIT: u32 = 50;
 const SEARCH_MAX_LIMIT: u32 = 500;
 /// How many context lines an ambiguous edit returns.
 const EDIT_CANDIDATE_LINES: usize = 5;
+/// How many refused paths are reported back with their reason.
+const SEARCH_SKIP_SAMPLES: usize = 10;
+
+fn sha256_hex(bytes: &[u8]) -> String {
+  let mut hasher = Sha256::new();
+  hasher.update(bytes);
+  hex::encode(hasher.finalize())
+}
+
+/// One write at a time per real path: two edits to the same file must not
+/// interleave read-modify-write and silently drop one of them.
+fn write_lock_for(path: &str) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+  use std::collections::HashMap;
+  use std::sync::{Arc, Mutex, OnceLock};
+  static LOCKS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+  let locks = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+  let mut guard = match locks.lock() {
+    Ok(guard) => guard,
+    Err(poisoned) => poisoned.into_inner(),
+  };
+  guard
+    .entry(comparable_for_lock(path))
+    .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+    .clone()
+}
+
+fn comparable_for_lock(path: &str) -> String {
+  let normalized = path.replace('\\', "/").to_lowercase();
+  normalized.strip_prefix("//?/").unwrap_or(&normalized).to_string()
+}
+
+/// Replace a file's contents through a sibling temp file, so a failed write
+/// leaves the original intact instead of truncating it.
+async fn write_file_atomically(path: &Path, content: &str) -> Result<(), String> {
+  let directory = path.parent().ok_or_else(|| "目标路径没有父目录".to_string())?;
+  let file_name = path
+    .file_name()
+    .map(|name| name.to_string_lossy().to_string())
+    .unwrap_or_else(|| "file".to_string());
+  let temp = directory.join(format!(".{file_name}.chatless-{}.tmp", std::process::id()));
+  tokio::fs::write(&temp, content)
+    .await
+    .map_err(|e| format!("写入临时文件失败: {}", e))?;
+  match tokio::fs::rename(&temp, path).await {
+    Ok(()) => Ok(()),
+    Err(error) => {
+      let _ = tokio::fs::remove_file(&temp).await;
+      Err(format!("替换文件失败: {}", error))
+    }
+  }
+}
 
 fn line_number_of(text: &str, byte_index: usize) -> u32 {
   (text[..byte_index].bytes().filter(|b| *b == b'\n').count() as u32) + 1
@@ -65,12 +117,7 @@ fn apply_edit(text: &str, find: &str, replace: &str, all: bool) -> EditOutcome {
   let occurrences = text.matches(find).count();
   if occurrences == 0 {
     return EditOutcome::NoMatch {
-      candidates: text
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .take(EDIT_CANDIDATE_LINES)
-        .map(|line| line.trim().to_string())
-        .collect(),
+      candidates: closest_lines(text, find),
     };
   }
   if occurrences > 1 && !all {
@@ -92,6 +139,80 @@ fn apply_edit(text: &str, find: &str, replace: &str, all: bool) -> EditOutcome {
     replacements: if all { occurrences as u32 } else { 1 },
     line: line_number_of(text, first_index),
   }
+}
+
+/// Lines that actually resemble the text the caller asked for, so a miss comes
+/// back with something to correct against instead of the top of the file.
+fn closest_lines(text: &str, find: &str) -> Vec<String> {
+  let needle_lines: Vec<&str> = find
+    .lines()
+    .map(|line| line.trim())
+    .filter(|line| !line.is_empty())
+    .collect();
+  let probe = needle_lines.first().copied().unwrap_or(find.trim());
+  let probe_terms = similarity_terms(probe);
+
+  let mut scored: Vec<(usize, usize, String)> = Vec::new();
+  for (index, line) in text.lines().enumerate() {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+      continue;
+    }
+    let score = if probe.is_empty() {
+      0
+    } else if trimmed.contains(probe) || probe.contains(trimmed) {
+      // A near miss on the same statement is the most useful hint of all.
+      1000 + trimmed.len().min(probe.len())
+    } else {
+      let line_terms = similarity_terms(trimmed);
+      probe_terms.intersection(&line_terms).count() * 10
+    };
+    if score == 0 {
+      continue;
+    }
+    scored.push((score, index + 1, line.to_string()));
+  }
+
+  if scored.is_empty() {
+    return text
+      .lines()
+      .enumerate()
+      .filter(|(_, line)| !line.trim().is_empty())
+      .take(EDIT_CANDIDATE_LINES)
+      .map(|(index, line)| format!("第 {} 行: {}", index + 1, line.trim()))
+      .collect();
+  }
+
+  scored.sort_by(|left, right| right.0.cmp(&left.0).then(left.1.cmp(&right.1)));
+  scored
+    .into_iter()
+    .take(EDIT_CANDIDATE_LINES)
+    .map(|(_, line, content)| {
+      let trimmed = content.trim();
+      let clipped: String = trimmed.chars().take(200).collect();
+      format!("第 {line} 行: {clipped}")
+    })
+    .collect()
+}
+
+/// Cheap token set used to rank candidate lines: identifiers and short CJK runs.
+fn similarity_terms(text: &str) -> std::collections::HashSet<String> {
+  let mut terms = std::collections::HashSet::new();
+  let mut current = String::new();
+  for char in text.chars() {
+    if char.is_alphanumeric() || char == '_' {
+      current.push(char);
+    } else {
+      if current.len() > 1 {
+        terms.insert(current.to_lowercase());
+      }
+      current.clear();
+    }
+  }
+  if current.len() > 1 {
+    terms.insert(current.to_lowercase());
+  }
+  terms
 }
 
 #[tauri::command]
@@ -156,6 +277,8 @@ pub async fn filesystem_read_file(
   let content = tokio::fs::read_to_string(&abs)
     .await
     .map_err(|e| format!("read failed: {}", e))?;
+  // The hash covers the whole file, so an edit can prove it saw this revision.
+  let hash = sha256_hex(content.as_bytes());
 
   // Compute total lines (1-based counting)
   let lines: Vec<&str> = content.split('\n').collect();
@@ -194,6 +317,7 @@ pub async fn filesystem_read_file(
       end_line: 0,
       content: "".to_string(),
       truncated: false,
+      hash,
     });
   }
 
@@ -220,6 +344,7 @@ pub async fn filesystem_read_file(
     end_line: end,
     content: slice,
     truncated,
+    hash,
   })
 }
 
@@ -233,41 +358,60 @@ pub async fn filesystem_edit_file(
     return Err("find 不能为空".to_string());
   }
   let abs = state.assert_allowed(&app, &payload.path, FsOp::Write).await?;
-  let text = tokio::fs::read_to_string(&abs)
+  // Read-modify-write under a per-path lock: two edits to the same file cannot
+  // interleave and lose one of the changes.
+  let lock = write_lock_for(&abs);
+  let _guard = lock.lock().await;
+
+  let bytes = tokio::fs::read(&abs)
     .await
     .map_err(|e| format!("读取文件失败: {}", e))?;
-
-  match apply_edit(&text, &payload.find, &payload.replace, payload.all.unwrap_or(false)) {
-    EditOutcome::Applied { content, replacements, line } => {
-      tokio::fs::write(&abs, content)
-        .await
-        .map_err(|e| format!("写入文件失败: {}", e))?;
-      Ok(EditFileResult {
-        ok: true,
+  if let Some(expected) = payload.expected_hash.as_deref().filter(|value| !value.trim().is_empty()) {
+    let actual = sha256_hex(&bytes);
+    if !actual.eq_ignore_ascii_case(expected.trim()) {
+      return Ok(EditFileResult {
+        ok: false,
         path: abs,
+        replacements: 0,
+        line: None,
+        reason: Some("FILE_CHANGED".to_string()),
+        candidates: vec![format!("文件已变化：读取时 {expected}，当前 {actual}。请重新读取后再编辑。")],
+      });
+    }
+  }
+  let text = String::from_utf8_lossy(&bytes).into_owned();
+
+  let outcome = apply_edit(&text, &payload.find, &payload.replace, payload.all.unwrap_or(false));
+  let result = match outcome {
+    EditOutcome::Applied { content, replacements, line } => {
+      write_file_atomically(Path::new(&abs), &content).await?;
+      EditFileResult {
+        ok: true,
+        path: abs.clone(),
         replacements,
         line: Some(line),
         reason: None,
         candidates: Vec::new(),
-      })
+      }
     }
-    EditOutcome::NoMatch { candidates } => Ok(EditFileResult {
+    EditOutcome::NoMatch { candidates } => EditFileResult {
       ok: false,
-      path: abs,
+      path: abs.clone(),
       replacements: 0,
       line: None,
       reason: Some("EDIT_NO_MATCH".to_string()),
       candidates,
-    }),
-    EditOutcome::NotUnique { candidates } => Ok(EditFileResult {
+    },
+    EditOutcome::NotUnique { candidates } => EditFileResult {
       ok: false,
-      path: abs,
+      path: abs.clone(),
       replacements: 0,
       line: None,
       reason: Some("EDIT_MATCH_NOT_UNIQUE".to_string()),
       candidates,
-    }),
-  }
+    },
+  };
+  Ok(result)
 }
 
 #[tauri::command]
@@ -281,17 +425,51 @@ pub async fn filesystem_search_files(
     .limit
     .unwrap_or(SEARCH_DEFAULT_LIMIT)
     .clamp(1, SEARCH_MAX_LIMIT);
-  search_in_tree(&root, &payload.query, payload.glob.as_deref(), limit, payload.regex.unwrap_or(false)).await
+  let mode = match payload.mode.as_deref().unwrap_or("both").trim().to_lowercase().as_str() {
+    "content" => SearchMode::Content,
+    "filename" => SearchMode::Filename,
+    "both" => SearchMode::Both,
+    other => return Err(format!("mode 只能是 content / filename / both，收到: {other}")),
+  };
+  search_in_tree(&root, &payload.query, payload.glob.as_deref(), limit, payload.regex.unwrap_or(false), mode).await
 }
 
-/// Walk a directory and collect line matches.  Pure with respect to Tauri state,
-/// so the walking, skipping and limit rules are unit tested directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchMode {
+  Content,
+  Filename,
+  Both,
+}
+
+impl SearchMode {
+  fn wants_content(self) -> bool {
+    matches!(self, SearchMode::Content | SearchMode::Both)
+  }
+  fn wants_filename(self) -> bool {
+    matches!(self, SearchMode::Filename | SearchMode::Both)
+  }
+  fn as_str(self) -> &'static str {
+    match self {
+      SearchMode::Content => "content",
+      SearchMode::Filename => "filename",
+      SearchMode::Both => "both",
+    }
+  }
+}
+
+/// Walk a directory and collect matches. Pure with respect to Tauri state, so
+/// the walking, skipping and limit rules are unit tested directly.
+///
+/// The root was already checked against the allowlist. Links are never
+/// followed, so every path this walk reads is lexically inside that root and
+/// cannot point at an unauthorized file.
 async fn search_in_tree(
   root: &str,
   query: &str,
   glob: Option<&str>,
   limit: u32,
   use_regex: bool,
+  mode: SearchMode,
 ) -> Result<SearchFilesResult, String> {
   let matcher = if use_regex {
     Some(regex::Regex::new(query).map_err(|e| format!("正则表达式无效: {}", e))?)
@@ -301,19 +479,55 @@ async fn search_in_tree(
 
   let mut matches: Vec<SearchMatch> = Vec::new();
   let mut files_scanned: u32 = 0;
+  let mut skipped_count: u32 = 0;
+  let mut skipped: Vec<SearchSkip> = Vec::new();
+  let mut partial = false;
   let mut truncated = false;
+
+  let root_path = Path::new(root);
+  let root_meta = tokio::fs::metadata(root_path)
+    .await
+    .map_err(|e| format!("无法读取搜索根目录 {root}: {e}"))?;
+  if !root_meta.is_dir() {
+    return Err(format!("搜索根目录不是目录: {root}"));
+  }
+
+  let note_skip = |path: String, reason: &str, skipped: &mut Vec<SearchSkip>, count: &mut u32| {
+    *count += 1;
+    if skipped.len() < SEARCH_SKIP_SAMPLES {
+      skipped.push(SearchSkip { path, reason: reason.to_string() });
+    }
+  };
+
   let mut stack = vec![std::path::PathBuf::from(&root)];
 
   while let Some(dir) = stack.pop() {
     let mut entries = match tokio::fs::read_dir(&dir).await {
       Ok(entries) => entries,
-      Err(_) => continue,
+      Err(error) => {
+        partial = true;
+        note_skip(dir.to_string_lossy().to_string(), &format!("目录不可读: {error}"), &mut skipped, &mut skipped_count);
+        continue;
+      }
     };
     while let Ok(Some(entry)) = entries.next_entry().await {
       let path = entry.path();
       let name = entry.file_name().to_string_lossy().to_string();
-      let is_dir = entry.file_type().await.map(|kind| kind.is_dir()).unwrap_or(false);
-      if is_dir {
+      // `file_type()` does not follow links, so a symlink or junction is
+      // detected here and never traversed or read.
+      let file_type = match entry.file_type().await {
+        Ok(kind) => kind,
+        Err(error) => {
+          partial = true;
+          note_skip(path.to_string_lossy().to_string(), &format!("无法判断文件类型: {error}"), &mut skipped, &mut skipped_count);
+          continue;
+        }
+      };
+      if file_type.is_symlink() {
+        note_skip(path.to_string_lossy().to_string(), "符号链接/联接点已跳过", &mut skipped, &mut skipped_count);
+        continue;
+      }
+      if file_type.is_dir() {
         if SEARCH_SKIP_DIRS.iter().any(|skip| skip.eq_ignore_ascii_case(&name)) {
           continue;
         }
@@ -325,16 +539,39 @@ async fn search_in_tree(
           continue;
         }
       }
+      if mode.wants_filename() && name.to_lowercase().contains(&query.to_lowercase()) {
+        matches.push(SearchMatch {
+          path: path.to_string_lossy().to_string(),
+          line: None,
+          text: name.clone(),
+          kind: "filename".to_string(),
+        });
+        if matches.len() >= limit as usize {
+          truncated = true;
+          break;
+        }
+      }
+      if !mode.wants_content() {
+        continue;
+      }
       let metadata = match entry.metadata().await {
         Ok(metadata) => metadata,
-        Err(_) => continue,
+        Err(error) => {
+          partial = true;
+          note_skip(path.to_string_lossy().to_string(), &format!("无法读取元数据: {error}"), &mut skipped, &mut skipped_count);
+          continue;
+        }
       };
       if metadata.len() > SEARCH_MAX_FILE_BYTES {
         continue;
       }
       let bytes = match tokio::fs::read(&path).await {
         Ok(bytes) => bytes,
-        Err(_) => continue,
+        Err(error) => {
+          partial = true;
+          note_skip(path.to_string_lossy().to_string(), &format!("无法读取: {error}"), &mut skipped, &mut skipped_count);
+          continue;
+        }
       };
       if looks_binary(&bytes) {
         continue;
@@ -351,8 +588,9 @@ async fn search_in_tree(
         }
         matches.push(SearchMatch {
           path: path.to_string_lossy().to_string(),
-          line: (index + 1) as u32,
+          line: Some((index + 1) as u32),
           text: line.trim().chars().take(400).collect(),
+          kind: "content".to_string(),
         });
         if matches.len() >= limit as usize {
           truncated = true;
@@ -368,7 +606,18 @@ async fn search_in_tree(
     }
   }
 
-  Ok(SearchFilesResult { ok: true, root: root.to_string(), matches, truncated, files_scanned, limit })
+  Ok(SearchFilesResult {
+    ok: true,
+    root: root.to_string(),
+    mode: mode.as_str().to_string(),
+    matches,
+    truncated,
+    partial,
+    files_scanned,
+    skipped_count,
+    skipped,
+    limit,
+  })
 }
 
 #[tauri::command]
@@ -393,9 +642,9 @@ pub async fn filesystem_write_file(
     }
   }
 
-  tokio::fs::write(&abs, content)
-    .await
-    .map_err(|e| format!("write failed: {}", e))?;
+  let lock = write_lock_for(&abs);
+  let _guard = lock.lock().await;
+  write_file_atomically(Path::new(&abs), &content).await?;
 
   Ok(OkResult {
     ok: true,
@@ -753,6 +1002,27 @@ mod tests {
   }
 
   #[test]
+  fn edit_candidates_prefer_the_lines_that_resemble_the_request() {
+    let text = [
+      "import { useState } from 'react';",
+      "const port = 3000;",
+      "const other = 1;",
+      "export default App;",
+    ]
+    .join("\n");
+    // The caller asked for a slightly different spelling of the same statement.
+    match apply_edit(&text, "const port = 4000;", "const port = 5000;", false) {
+      EditOutcome::NoMatch { candidates } => {
+        assert!(
+          candidates[0].contains("const port = 3000;"),
+          "the closest line should lead the candidates: {candidates:?}",
+        );
+      }
+      _ => panic!("a missing match must not be applied"),
+    }
+  }
+
+  #[test]
   fn glob_matches_names_not_paths() {
     assert!(glob_matches("*.ts", "app.ts"));
     assert!(glob_matches("Button?tsx", "Button.tsx"));
@@ -770,13 +1040,17 @@ mod tests {
     std::fs::write(root.join("node_modules").join("dep.ts"), "needle in a dependency\n").unwrap();
     std::fs::write(root.join("blob.bin"), [0_u8, b'n', b'e', b'e', b'd', b'l', b'e']).unwrap();
 
-    let result = search_in_tree(&root.to_string_lossy(), "needle", Some("*.ts"), 10, false)
+    let result = search_in_tree(&root.to_string_lossy(), "needle", Some("*.ts"), 10, false, SearchMode::Content)
       .await
       .expect("search");
     assert_eq!(result.matches.len(), 1, "glob + skip rules should leave one hit: {:?}", result.matches);
     assert!(result.matches[0].path.ends_with("app.ts"));
+    assert_eq!(result.matches[0].kind, "content");
+    assert_eq!(result.matches[0].line, Some(1));
+    assert_eq!(result.mode, "content");
+    assert!(!result.partial);
 
-    let limited = search_in_tree(&root.to_string_lossy(), "needle", None, 1, false)
+    let limited = search_in_tree(&root.to_string_lossy(), "needle", None, 1, false, SearchMode::Content)
       .await
       .expect("search");
     assert_eq!(limited.matches.len(), 1);
@@ -787,6 +1061,87 @@ mod tests {
     );
 
     let _ = std::fs::remove_dir_all(&root);
+  }
+
+  #[tokio::test]
+  async fn search_finds_files_by_name_without_inventing_a_line() {
+    let root = std::env::temp_dir().join(format!("chatless-search-name-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("checkout-flow.tsx"), "export const Checkout = () => null;\n").unwrap();
+    std::fs::write(root.join("unrelated.ts"), "nothing to see\n").unwrap();
+
+    let result = search_in_tree(&root.to_string_lossy(), "checkout", None, 50, false, SearchMode::Both)
+      .await
+      .expect("search");
+    let name_hit = result
+      .matches
+      .iter()
+      .find(|hit| hit.kind == "filename")
+      .expect("the file name itself should match");
+    assert!(name_hit.path.ends_with("checkout-flow.tsx"));
+    assert_eq!(name_hit.line, None, "a filename match has no line number");
+
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  #[tokio::test]
+  async fn search_refuses_a_root_that_is_not_a_directory() {
+    let file = std::env::temp_dir().join(format!("chatless-search-file-{}.txt", std::process::id()));
+    std::fs::write(&file, "content").unwrap();
+    let result = search_in_tree(&file.to_string_lossy(), "content", None, 10, false, SearchMode::Both).await;
+    assert!(result.is_err(), "a file root must be reported, not treated as empty");
+    let _ = std::fs::remove_file(&file);
+  }
+
+  #[tokio::test]
+  async fn search_never_follows_links_out_of_the_root() {
+    let base = std::env::temp_dir().join(format!("chatless-search-link-{}", std::process::id()));
+    let root = base.join("root");
+    let outside = base.join("outside");
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(root.join("inside.txt"), "secret-in-root\n").unwrap();
+    std::fs::write(outside.join("secret.txt"), "secret-outside-root\n").unwrap();
+
+    // A link (or Windows junction) pointing at the unauthorized directory.
+    let link = root.join("escape");
+    let linked = link_directory(&outside, &link).await;
+
+    let result = search_in_tree(&root.to_string_lossy(), "secret", None, 50, false, SearchMode::Content)
+      .await
+      .expect("search");
+    assert!(
+      result.matches.iter().all(|hit| hit.path.contains("inside.txt")),
+      "no hit may come from outside the root: {:?}",
+      result.matches,
+    );
+    if linked {
+      assert!(result.skipped_count >= 1, "the link should be reported as skipped");
+    }
+
+    let _ = std::fs::remove_dir_all(&base);
+  }
+
+  /// Creates a directory link where the platform allows it. Returns false when
+  /// the test environment cannot create one (no privilege, no symlink support).
+  async fn link_directory(target: &Path, link: &Path) -> bool {
+    #[cfg(windows)]
+    {
+      let status = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+      return matches!(status, Ok(status) if status.success());
+    }
+    #[cfg(not(windows))]
+    {
+      std::os::unix::fs::symlink(target, link).is_ok()
+    }
   }
 }
 

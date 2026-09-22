@@ -554,8 +554,6 @@ export class AgentLoopRunner {
               // happened. Never retry it automatically or continue dispatching.
               out = { ok: false, error: { code: 'EXECUTION_UNKNOWN', message: String(error) } };
               terminalStatus = 'paused';
-            } finally {
-              activeLoops.get(assistantMessageId)?.shellExecutionIds.delete(`shell:${assistantMessageId}:${req.cardId}`);
             }
           }
           if ((out as any)?.resultStatus === 'unknown') terminalStatus = 'paused';
@@ -589,6 +587,7 @@ export class AgentLoopRunner {
       streamFailed = true;
       runError = error;
     } finally {
+      const ownedShells = activeLoops.get(assistantMessageId)?.shellExecutionIds;
       activeLoops.delete(assistantMessageId);
       steeringInputs.delete(assistantMessageId);
       const finalStatus = controlPlane.isCancelled() || isCancelled(assistantMessageId, ctrl.signal)
@@ -600,6 +599,17 @@ export class AgentLoopRunner {
         : emptyModelOutput
           ? 'failed'
           : 'completed';
+      // Background processes started by this run survive a normal reply so the
+      // site keeps serving; a stopped run takes its own children with it.
+      if (finalStatus === 'cancelled' && ownedShells?.size) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await Promise.all([...ownedShells].map((executionId) =>
+            invoke('cancel_safe_shell', { executionId }).catch(() => false)));
+        } catch {
+          // The Rust side still cleans up on app exit.
+        }
+      }
       if (finalStatus === 'cancelled') {
         await controlPlane.recordCancelled().catch(() => {});
       }

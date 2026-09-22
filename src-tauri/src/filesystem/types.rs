@@ -76,6 +76,9 @@ pub struct EditFilePayload {
   pub find: String,
   pub replace: String,
   pub all: Option<bool>,
+  /// sha256 of the file the caller read. When present, an edit refuses to touch
+  /// a file that changed since, instead of overwriting someone else's work.
+  pub expected_hash: Option<String>,
 }
 
 /// 精确编辑结果。匹配不唯一/未命中不是 IO 错误，因此作为结构化结果返回。
@@ -100,23 +103,40 @@ pub struct SearchFilesPayload {
   pub glob: Option<String>,
   pub limit: Option<u32>,
   pub regex: Option<bool>,
+  /// content | filename | both (default both).
+  pub mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchMatch {
   pub path: String,
-  /// 1-based line number.
-  pub line: u32,
+  /// 1-based line number; absent for a filename match.
+  pub line: Option<u32>,
   pub text: String,
+  /// content | filename
+  pub kind: String,
+}
+
+/// A path the walk refused to read, with the reason.
+#[derive(Debug, Clone, Serialize)]
+pub struct SearchSkip {
+  pub path: String,
+  pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchFilesResult {
   pub ok: bool,
   pub root: String,
+  pub mode: String,
   pub matches: Vec<SearchMatch>,
   pub truncated: bool,
+  /// True when part of the tree could not be read, so "no matches" is not
+  /// the same as "nothing there".
+  pub partial: bool,
   pub files_scanned: u32,
+  pub skipped_count: u32,
+  pub skipped: Vec<SearchSkip>,
   pub limit: u32,
 }
 
@@ -159,6 +179,8 @@ pub struct ReadFileResult {
   pub end_line: u32,
   pub content: String,
   pub truncated: bool,
+  /// sha256 of the whole file, so an edit can prove it saw this revision.
+  pub hash: String,
 }
 
 /// 设置 allowlist payload

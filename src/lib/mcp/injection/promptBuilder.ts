@@ -132,18 +132,32 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   // a command that asks for input fails.  Say that once, in the conversation
   // layer, instead of letting the agent discover it by hanging.
   try {
+    const gitGuidance = resolvePromptLocale(context.locale) === 'en'
+      ? [
+          '【Version control and GitHub】',
+          '- `git` and `gh` run through shell__run. Running a command still follows the shell trust setting,',
+          '  so a first command outside the trusted scope may need the user to approve it.',
+          '- Commands must be non-interactive: stdin is closed. Do not run commands that wait for input',
+          '  (a bare `git commit`, interactive rebase, a push that prompts for a password).',
+          '- Commit with `git commit -m "..."`. If a push needs credentials it fails immediately; report that to the user.',
+          '- Use a logged-in `gh` for pull requests and issues. If `gh auth status` says you are not logged in,',
+          '  ask the user to run `gh auth login` instead of retrying the same command.',
+          '- Start anything long-running (dev server, watcher) with shell__start instead of blocking on it.',
+        ].join('\n')
+      : [
+          '【版本控制与 GitHub】',
+          '- `git` 与 `gh` 通过 shell__run 使用；命令是否直接执行取决于用户的 Shell 信任设置，',
+          '  首次执行落在信任范围外的命令可能需要用户批准。',
+          '- 命令必须非交互：stdin 已关闭。不要执行会等待输入的命令（不带 -m 的 git commit、交互式 rebase、需要密码的推送）。',
+          '- 提交用 `git commit -m "…"`；推送若远端要求凭据会直接失败，此时把失败信息转述给用户。',
+          '- PR/issue 等 GitHub 操作用已登录的 `gh`；若 `gh auth status` 显示未登录，请让用户执行 `gh auth login`，不要反复重试同一命令。',
+          '- 需要长时间运行的东西（dev server、watch）用 shell__start，不要用阻塞命令等待。',
+        ].join('\n');
     blocks.push({
       id: 'git-guidance',
       layer: 'conversation',
       order: 90,
-      content: [
-        '【版本控制与 GitHub】',
-        '- `git` 与 `gh` 可直接通过 shell__run 使用；工作目录内的仓库不需要额外授权。',
-        '- 命令必须非交互：stdin 已关闭。不要执行会等待输入的命令（例如不带 -m 的 git commit、交互式 rebase、需要密码的推送）。',
-        '- 提交用 `git commit -m "…"`；推送用 `git push`，若远端要求凭据会直接失败，此时把失败信息转述给用户。',
-        '- PR/issue 等 GitHub 操作用已登录的 `gh`；若 `gh auth status` 显示未登录，请让用户执行 `gh auth login`，不要反复重试同一命令。',
-        '- 需要长时间运行的东西（dev server、watch）用 shell__start，不要用阻塞命令等待。',
-      ].join('\n'),
+      content: gitGuidance,
     });
   } catch {
     // ignore

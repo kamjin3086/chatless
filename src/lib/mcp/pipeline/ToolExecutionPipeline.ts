@@ -15,7 +15,7 @@ import { markError, markPendingAuth, markSuccess } from './ToolCardUpdater';
 import type { ToolAdapter } from './ToolAdapter';
 import { ToolInvocation } from './ToolInvocation';
 import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
-import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult } from './toolResultDiagnostics';
+import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult, markKnownFailure } from './toolResultDiagnostics';
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
@@ -316,6 +316,11 @@ export class ToolExecutionPipeline {
         if (workingDirInput) {
           const shellResolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any, workingDir: shellWorkDir });
           execArgs.workingDir = shellResolved.absolutePath;
+        } else if (shellWorkDir) {
+          // The tool description promises @WorkDir as the default. Resolving it
+          // here, before the approval gate, means the card and the backend see
+          // the same directory instead of the backend falling back silently.
+          execArgs.workingDir = shellWorkDir;
         }
 
         // 解析 command 参数中的 @WorkDir / @Alias 别名
@@ -784,10 +789,33 @@ export class ToolExecutionPipeline {
         }
 
         const failure = detectFatalFailure(toolId, result);
-        if (failure) throw new Error(failure);
         if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
           this.coordinator.markToolCallComplete(callKey, 'failed');
           return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
+        }
+        if (failure) {
+          // A structured failure said exactly what went wrong. Passing it on
+          // unchanged keeps stdout/stderr, exit codes and edit candidates
+          // visible; re-throwing here used to erase them and reclassify a known
+          // failure as an unknown side effect.
+          const failed = markKnownFailure(toolId, result, failure);
+          markError({ assistantMessageId, server, tool, cardId }, failure);
+          try {
+            await appendWorkspaceToolStep({
+              conversationId: invocation.conversationId,
+              assistantMessageId,
+              cardId,
+              callId,
+              server,
+              tool,
+              args: (execInvocation.args || args || {}) as any,
+              result: failed,
+            });
+          } catch {
+            // ignore
+          }
+          this.coordinator.markToolCallComplete(callKey, 'failed');
+          return failed;
         }
         markSuccess({ assistantMessageId, server, tool, cardId }, result);
         try {

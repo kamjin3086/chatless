@@ -32,6 +32,8 @@ export {
 // 执行器导出
 export { 
   ProcessSandbox, 
+  type ManagedProcessOutput,
+  type ManagedProcessSummary,
   createProcessSandbox,
   getProcessSandbox,
   resetProcessSandbox,

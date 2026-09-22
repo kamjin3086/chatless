@@ -47,6 +47,8 @@ export interface ReadFileResult {
   endLine: number;
   content: string;
   truncated: boolean;
+  /** sha256 of the whole file; an edit can pass it back to detect staleness. */
+  hash: string;
 }
 
 // ============================================
@@ -70,6 +72,8 @@ export interface EditFileParams {
   find: string;
   replace: string;
   all?: boolean;
+  /** sha256 returned by the last read; a stale value refuses the edit. */
+  expectedHash?: string;
 }
 
 export interface EditFileResult {
@@ -87,20 +91,34 @@ export interface SearchFilesParams {
   glob?: string;
   limit?: number;
   regex?: boolean;
+  /** content | filename | both (default both). */
+  mode?: 'content' | 'filename' | 'both';
 }
 
 export interface SearchMatch {
   path: string;
-  line: number;
+  /** 1-based line number; absent for a filename match. */
+  line?: number | null;
   text: string;
+  kind: 'content' | 'filename';
+}
+
+export interface SearchSkip {
+  path: string;
+  reason: string;
 }
 
 export interface SearchFilesResult {
   ok: boolean;
   root: string;
+  mode: 'content' | 'filename' | 'both';
   matches: SearchMatch[];
   truncated: boolean;
+  /** Part of the tree could not be read, so "no matches" is not conclusive. */
+  partial: boolean;
   filesScanned: number;
+  skippedCount: number;
+  skipped: SearchSkip[];
   limit: number;
 }
 

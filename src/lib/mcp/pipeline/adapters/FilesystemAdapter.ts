@@ -74,20 +74,36 @@ export class FilesystemAdapter implements ToolAdapter {
         const find = typeof (args as Record<string, unknown>).find === 'string'
           ? String((args as Record<string, unknown>).find)
           : '';
-        const replace = typeof (args as Record<string, unknown>).replace === 'string'
-          ? String((args as Record<string, unknown>).replace)
-          : '';
         if (!find) return { ok: false, error: 'find is required' };
+        // An omitted `replace` used to be coerced to "" and silently deleted the
+        // matched text. Deleting content must be an explicit empty string.
+        if (typeof (args as Record<string, unknown>).replace !== 'string') {
+          return {
+            ok: false,
+            error: {
+              code: 'INVALID_ARGUMENTS',
+              message: 'replace is required (pass "" to delete the matched text)',
+              hints: ['必须同时给出 find 与 replace；删除内容时显式传 replace=""'],
+            },
+          };
+        }
+        const replace = String((args as Record<string, unknown>).replace);
         const all = (args as Record<string, unknown>).all === true;
-        const result = await editFile({ path, find, replace, all });
+        const expectedHash = typeof (args as Record<string, unknown>).expectedHash === 'string'
+          ? String((args as Record<string, unknown>).expectedHash)
+          : undefined;
+        const result = await editFile({ path, find, replace, all, expectedHash });
         if (!result.ok) {
+          const stale = result.reason === 'FILE_CHANGED';
           return {
             ok: false,
             error: {
               code: result.reason || 'EDIT_FAILED',
-              message: result.reason === 'EDIT_MATCH_NOT_UNIQUE'
-                ? '原文匹配到多处，请给出更长的唯一片段，或用 all=true 全部替换'
-                : '原文未找到，请核对缩进与空白后重试',
+              message: stale
+                ? '文件在读取后已被修改，编辑未执行。请重新读取该文件再编辑。'
+                : result.reason === 'EDIT_MATCH_NOT_UNIQUE'
+                  ? '原文匹配到多处，请给出更长的唯一片段，或用 all=true 全部替换'
+                  : '原文未找到，请按候选行核对缩进与空白后重试',
               candidates: result.candidates,
             },
           };
@@ -111,7 +127,18 @@ export class FilesystemAdapter implements ToolAdapter {
           ? Number((args as Record<string, unknown>).limit)
           : undefined;
         const regex = (args as Record<string, unknown>).regex === true;
-        return await searchFiles({ root, query, glob, limit, regex });
+        const modeRaw = String((args as Record<string, unknown>).mode ?? 'both').toLowerCase();
+        if (!['content', 'filename', 'both'].includes(modeRaw)) {
+          return {
+            ok: false,
+            error: {
+              code: 'INVALID_ARGUMENTS',
+              message: `mode 只能是 content / filename / both，收到: ${modeRaw}`,
+            },
+          };
+        }
+        const mode = modeRaw as 'content' | 'filename' | 'both';
+        return await searchFiles({ root, query, glob, limit, regex, mode });
       }
 
       if (tool === 'list_directory' || tool === 'list' || tool === 'dir' || tool === 'ls') {

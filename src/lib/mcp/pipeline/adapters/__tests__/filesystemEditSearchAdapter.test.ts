@@ -28,8 +28,36 @@ describe('fs__edit adapter', () => {
       invocation('edit', { path: 'D:/site/a.ts', find: 'old', replace: 'new' }),
     );
 
-    expect(mocks.editFile).toHaveBeenCalledWith({ path: 'D:/site/a.ts', find: 'old', replace: 'new', all: false });
+    expect(mocks.editFile).toHaveBeenCalledWith({
+      path: 'D:/site/a.ts', find: 'old', replace: 'new', all: false, expectedHash: undefined,
+    });
     expect(result).toMatchObject({ ok: true, replacements: 1 });
+  });
+
+  it('refuses an edit that omits replace instead of deleting the match', async () => {
+    const result: any = await new FilesystemAdapter().execute(
+      invocation('edit', { path: 'D:/site/a.ts', find: 'keep this' }),
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENTS' } });
+    expect(mocks.editFile).not.toHaveBeenCalled();
+  });
+
+  it('passes the read hash so a stale edit is refused', async () => {
+    mocks.editFile.mockResolvedValue({
+      ok: false, path: 'D:/site/a.ts', replacements: 0, reason: 'FILE_CHANGED',
+      candidates: ['文件已变化：请重新读取后再编辑。'],
+    });
+
+    const result: any = await new FilesystemAdapter().execute(
+      invocation('edit', { path: 'D:/site/a.ts', find: 'a', replace: 'b', expectedHash: 'abc' }),
+    );
+
+    expect(mocks.editFile).toHaveBeenCalledWith({
+      path: 'D:/site/a.ts', find: 'a', replace: 'b', all: false, expectedHash: 'abc',
+    });
+    expect(result.error.code).toBe('FILE_CHANGED');
+    expect(String(result.error.message)).toContain('已被修改');
   });
 
   it('turns an ambiguous match into an actionable tool error', async () => {
@@ -74,7 +102,7 @@ describe('fs__search adapter', () => {
     );
 
     expect(mocks.searchFiles).toHaveBeenCalledWith({
-      root: 'D:/site', query: 'port\\s+\\d+', glob: '*.ts', limit: 20, regex: true,
+      root: 'D:/site', query: 'port\\s+\\d+', glob: '*.ts', limit: 20, regex: true, mode: 'both',
     });
     expect(result.matches).toHaveLength(1);
   });
@@ -83,5 +111,25 @@ describe('fs__search adapter', () => {
     const result: any = await new FilesystemAdapter().execute(invocation('search', { root: 'D:/site' }));
     expect(result.ok).toBe(false);
     expect(mocks.searchFiles).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown search mode', async () => {
+    const result: any = await new FilesystemAdapter().execute(
+      invocation('search', { root: 'D:/site', query: 'x', mode: 'names' }),
+    );
+    expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENTS' } });
+    expect(mocks.searchFiles).not.toHaveBeenCalled();
+  });
+
+  it('passes the filename mode through', async () => {
+    mocks.searchFiles.mockResolvedValue({
+      ok: true, root: 'D:/site', mode: 'filename', matches: [], truncated: false,
+      partial: false, filesScanned: 0, skippedCount: 0, skipped: [], limit: 50,
+    });
+
+    await new FilesystemAdapter().execute(invocation('search', { root: 'D:/site', query: 'checkout', mode: 'filename' }));
+    expect(mocks.searchFiles).toHaveBeenCalledWith({
+      root: 'D:/site', query: 'checkout', glob: undefined, limit: undefined, regex: false, mode: 'filename',
+    });
   });
 });
