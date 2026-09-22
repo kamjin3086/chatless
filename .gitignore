@@ -17,6 +17,8 @@
 /docs/acceptance/*.sqlite
 /docs/acceptance/*.sqlite-wal
 /docs/acceptance/*.sqlite-shm
+# the desktop e2e build keeps its own target dir so it never locks the dev build
+/src-tauri/target-e2e/
 
 # next.js
 /.next/

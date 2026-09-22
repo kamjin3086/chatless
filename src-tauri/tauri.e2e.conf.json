@@ -5,7 +5,13 @@
     "windows": [
       {
         "label": "main",
-        "title": "Chatless E2E"
+        "title": "Chatless E2E",
+        "width": 900,
+        "height": 700,
+        "decorations": false,
+        "shadow": true,
+        "backgroundColor": "#0f172a",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port=0"
       }
     ]
   },
