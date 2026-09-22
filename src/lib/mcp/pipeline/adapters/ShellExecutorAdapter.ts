@@ -57,7 +57,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
     await this.syncAllowedWorkingDirs(invocation, sandbox);
 
     const result = await sandbox.execute(
-      { command: plan.file, args: plan.args, workingDir, timeoutMs },
+      { command: plan.file, args: plan.args, workingDir, timeoutMs, verbatimLastArg: plan.verbatimLastArg },
       { executionId, startTime: Date.now(), conversationId: invocation.conversationId },
     );
 
@@ -125,6 +125,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
         name: typeof args.name === 'string' ? String(args.name) : undefined,
         command: plan.file,
         args: plan.args,
+        verbatimLastArg: plan.verbatimLastArg,
         workingDir: typeof args.workingDir === 'string' ? String(args.workingDir) : undefined,
       });
       return {

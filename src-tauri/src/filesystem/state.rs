@@ -239,12 +239,18 @@ async fn best_match_for_op<'a>(
   best
 }
 
-async fn storage_path(app: &AppHandle) -> Result<PathBuf, String> {
-  let base = app
-    .path()
+/// Where the persisted allowlist lives. Taking the directory instead of an
+/// `AppHandle` keeps the authorization rules usable outside a running app.
+fn storage_path(data_dir: &Path) -> PathBuf {
+  data_dir.join("filesystem-allowlist.json")
+}
+
+/// The app data directory every filesystem command resolves window-scoped paths
+/// against.
+pub fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+  app.path()
     .app_data_dir()
-    .map_err(|e| format!("resolve app_data_dir failed: {}", e))?;
-  Ok(base.join("filesystem-allowlist.json"))
+    .map_err(|e| format!("resolve app_data_dir failed: {}", e))
 }
 
 async fn ensure_parent_dir(p: &Path) -> Result<(), String> {
@@ -257,12 +263,12 @@ async fn ensure_parent_dir(p: &Path) -> Result<(), String> {
 }
 
 impl FilesystemAllowlistState {
-  pub async fn ensure_loaded(&self, app: &AppHandle) -> Result<(), String> {
+  pub async fn ensure_loaded(&self, data_dir: &Path) -> Result<(), String> {
     if self.loaded.load(Ordering::SeqCst) {
       return Ok(());
     }
     // best-effort load; if file missing, treat as empty allowlist
-    let p = storage_path(app).await?;
+    let p = storage_path(data_dir);
     let snapshot = match tokio::fs::read_to_string(&p).await {
       Ok(s) => serde_json::from_str::<AllowlistSnapshot>(&s).unwrap_or_default(),
       Err(_) => AllowlistSnapshot::default(),
@@ -275,7 +281,7 @@ impl FilesystemAllowlistState {
     Ok(())
   }
 
-  pub async fn set_allowlist(&self, app: &AppHandle, mut snapshot: AllowlistSnapshot) -> Result<(), String> {
+  pub async fn set_allowlist(&self, data_dir: &Path, mut snapshot: AllowlistSnapshot) -> Result<(), String> {
     // normalize paths
     for d in snapshot.directories.iter_mut() {
       d.path = normalize_abs_path(&d.path)?;
@@ -287,7 +293,7 @@ impl FilesystemAllowlistState {
       *w = snapshot.clone();
     }
 
-    let p = storage_path(app).await?;
+    let p = storage_path(data_dir);
     ensure_parent_dir(&p).await?;
     tokio::fs::write(&p, serde_json::to_string_pretty(&snapshot).unwrap_or_else(|_| "{}".to_string()))
       .await
@@ -329,8 +335,8 @@ impl FilesystemAllowlistState {
     Ok(())
   }
 
-  pub async fn assert_allowed(&self, app: &AppHandle, input_path: &str, op: FsOp) -> Result<String, String> {
-    self.ensure_loaded(app).await?;
+  pub async fn assert_allowed(&self, data_dir: &Path, input_path: &str, op: FsOp) -> Result<String, String> {
+    self.ensure_loaded(data_dir).await?;
     let abs = normalize_abs_path(input_path)?;
     let real = resolve_real_path(&abs).await;
 

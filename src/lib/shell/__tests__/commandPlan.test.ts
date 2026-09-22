@@ -19,6 +19,9 @@ describe('planCommand', () => {
     ]);
     expect(result.plan.shell).toBe('cmd');
     expect(result.plan.autoSelected).toBe(true);
+    // cmd must receive the line as one unescaped argument, or it hands the
+    // program literal backslashes in place of quotes.
+    expect(result.plan.verbatimLastArg).toBe(true);
   });
 
   it('runs the whole line through the explicitly requested interpreter', () => {
@@ -28,6 +31,9 @@ describe('planCommand', () => {
       expect(powershell.plan.file).toBe('powershell.exe');
       expect(powershell.plan.args).toEqual(['-NoProfile', '-NonInteractive', '-Command', 'Write-Output ready']);
       expect(powershell.plan.autoSelected).toBe(false);
+      // PowerShell parses its own command line and handles escaped quotes, so it
+      // must keep the default escaping.
+      expect(powershell.plan.verbatimLastArg).toBeUndefined();
     }
 
     const bash = planCommand({ command: 'echo ready', shell: 'bash', platform: 'linux' });

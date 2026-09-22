@@ -214,6 +214,30 @@ pub struct ExecuteOptions {
   /// 最大输出大小（字节），默认 1MB
   #[serde(default = "default_max_output")]
   pub max_output_size: usize,
+  /// Windows only: append the final argument verbatim, wrapped in quotes.
+  /// `cmd.exe /c "<line>"` is the documented form for a line that contains
+  /// quotes; escaping them as `\"` makes cmd hand literal backslashes to the
+  /// program, so `node -e "process.exit(3)"` quietly exits 0.
+  #[serde(default)]
+  pub raw_last_arg: bool,
+}
+
+/// Places the program arguments on the command, honouring `raw_last_arg`.
+fn apply_program_args(cmd: &mut Command, options: &ExecuteOptions) {
+  #[cfg(windows)]
+  {
+    use std::os::windows::process::CommandExt;
+    if options.raw_last_arg {
+      if let Some((last, rest)) = options.args.split_last() {
+        cmd.args(rest);
+        // tokio's Command is a thin wrapper; the raw escape hatch lives on the
+        // std one it owns.
+        cmd.as_std_mut().raw_arg(format!("\"{last}\""));
+        return;
+      }
+    }
+  }
+  cmd.args(&options.args);
 }
 
 fn default_timeout() -> u64 {
@@ -446,8 +470,9 @@ pub async fn start_shell_process(
 }
 
 /// Spawn a managed process.  Kept separate from the command so the lifecycle can
-/// be exercised with a real child process in tests.
-async fn start_managed_process(
+/// be exercised with a real child process in tests and through the acceptance
+/// bridge.
+pub async fn start_managed_process(
   options: ExecuteOptions,
   app_data_dir: PathBuf,
   owner: ManagedProcessOwner,
@@ -508,7 +533,7 @@ async fn start_managed_process(
   }
 
   let mut cmd = Command::new(&options.command);
-  cmd.args(&options.args);
+  apply_program_args(&mut cmd, &options);
   cmd.current_dir(&working_dir);
   cmd.stdout(Stdio::piped());
   cmd.stderr(Stdio::piped());
@@ -778,8 +803,9 @@ pub async fn run_safe_shell(
 }
 
 /// The blocking-command body, kept free of `AppHandle` so the timeout,
-/// cancellation and output rules can be exercised with a real child process.
-async fn run_blocking_shell(options: ExecuteOptions, app_data_dir: PathBuf) -> Result<ShellResult, String> {
+/// cancellation and output rules can be exercised with a real child process and
+/// through the acceptance bridge.
+pub async fn run_blocking_shell(options: ExecuteOptions, app_data_dir: PathBuf) -> Result<ShellResult, String> {
   let start_time = std::time::Instant::now();
 
   // Whether a command may run is the user's decision (see the approval card);
@@ -827,7 +853,7 @@ async fn run_blocking_shell(options: ExecuteOptions, app_data_dir: PathBuf) -> R
 
   // 构建命令
   let mut cmd = Command::new(&options.command);
-  cmd.args(&options.args);
+  apply_program_args(&mut cmd, &options);
   cmd.current_dir(&working_dir);
   cmd.stdout(Stdio::piped());
   cmd.stderr(Stdio::piped());
@@ -1247,6 +1273,7 @@ mod blocking_timeout_tests {
       timeout_ms,
       env: HashMap::new(),
       max_output_size: 1024 * 1024,
+      raw_last_arg: false,
     }
   }
 
@@ -1270,6 +1297,29 @@ mod blocking_timeout_tests {
       "output printed before the timeout must survive: {:?}",
       result.stdout
     );
+  }
+
+  /// `cmd /c` mangles a command line whose quotes were escaped as `\"`: the
+  /// program receives literal backslashes instead. The plan therefore asks for
+  /// the whole line as one verbatim, quoted argument.
+  #[tokio::test]
+  #[cfg(windows)]
+  async fn a_quoted_command_line_reaches_the_program_unchanged() {
+    let mut opts = options("cmd.exe", vec![
+      "/d".into(),
+      "/s".into(),
+      "/c".into(),
+      // The plan sends the line as the caller wrote it; the backend adds the
+      // outer quotes that `cmd /c` needs.
+      "echo \"quoted value\"".into(),
+    ], 5_000);
+    opts.raw_last_arg = true;
+    let result = run_blocking_shell(opts, std::env::temp_dir()).await.expect("run");
+
+    assert!(result.success, "cmd should have run the line: {:?}", result.stderr);
+    let stdout = result.stdout.trim().to_string();
+    assert_eq!(stdout, "\"quoted value\"", "cmd must see the line as written");
+    assert!(!stdout.contains("\\\""), "the quotes must not stay backslash-escaped");
   }
 
   #[tokio::test]
@@ -1355,6 +1405,7 @@ mod managed_process_tests {
       timeout_ms: 5_000,
       env,
       max_output_size: 1024 * 1024,
+      raw_last_arg: false,
     }
   }
 
@@ -1559,6 +1610,7 @@ mod local_server_tests {
         timeout_ms: 5_000,
         env: HashMap::new(),
         max_output_size: 1024 * 1024,
+        raw_last_arg: false,
       },
       root.clone(),
       ManagedProcessOwner {

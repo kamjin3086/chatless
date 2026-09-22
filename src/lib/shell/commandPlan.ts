@@ -22,6 +22,13 @@ export interface CommandPlan {
   shell: ShellKind;
   /** True when the caller did not pick one and the platform default was used. */
   autoSelected: boolean;
+  /**
+   * Windows only, and only for `cmd`: the last argument must reach the process
+   * unescaped, wrapped in quotes. `cmd /c "line"` is the documented way to run a
+   * line that itself contains quotes; without it cmd sees `\"` and, for example,
+   * `node -e "process.exit(3)"` exits 0 instead of 3.
+   */
+  verbatimLastArg?: boolean;
 }
 
 export type CommandPlanResult =
@@ -88,7 +95,10 @@ export function planCommand(params: { command: unknown; shell?: unknown; platfor
   }
 
   if (shell === 'cmd') {
-    return { ok: true, plan: { file: 'cmd.exe', args: ['/d', '/s', '/c', command], shell, autoSelected } };
+    return {
+      ok: true,
+      plan: { file: 'cmd.exe', args: ['/d', '/s', '/c', command], shell, autoSelected, verbatimLastArg: true },
+    };
   }
   if (shell === 'powershell') {
     // `pwsh` exists on the PATH only on some machines; powershell.exe ships with

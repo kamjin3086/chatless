@@ -233,6 +233,7 @@ export class ProcessSandbox extends BaseSandboxExecutor {
           timeout_ms: options.timeoutMs || this.securityConfig.maxTimeout || 30000,
           env: options.env || {},
           max_output_size: this.securityConfig.maxOutputSize || 1024 * 1024,
+          raw_last_arg: options.verbatimLastArg === true,
         },
       });
 
@@ -298,6 +299,8 @@ export class ProcessSandbox extends BaseSandboxExecutor {
     args?: string[];
     workingDir?: string;
     env?: Record<string, string>;
+    /** See CommandPlan.verbatimLastArg: `cmd /c "line"` needs an unescaped arg. */
+    verbatimLastArg?: boolean;
   }): Promise<{ executionId: string; pid: number }> {
     const { invoke } = await import('@tauri-apps/api/core');
     const raw = await invoke<{ execution_id: string; pid: number }>('start_shell_process', {
@@ -312,6 +315,7 @@ export class ProcessSandbox extends BaseSandboxExecutor {
         timeout_ms: this.securityConfig.maxTimeout || 30000,
         env: params.env || {},
         max_output_size: this.securityConfig.maxOutputSize || 1024 * 1024,
+        raw_last_arg: params.verbatimLastArg === true,
       },
     });
     return { executionId: raw.execution_id, pid: raw.pid };

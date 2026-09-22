@@ -36,6 +36,11 @@ export interface ExecuteOptions {
   env?: Record<string, string>;
   /** 是否捕获输出 */
   captureOutput?: boolean;
+  /**
+   * 最后一个参数不转义、由后端按原样加引号传入（Windows 上 `cmd /c "整行"` 需要）。
+   * 见 `src/lib/shell/commandPlan.ts`。
+   */
+  verbatimLastArg?: boolean;
 }
 
 /**

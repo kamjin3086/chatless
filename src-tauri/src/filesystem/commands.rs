@@ -1,4 +1,6 @@
-use crate::filesystem::state::{AllowlistSnapshot, FilesystemAllowlistState, FsOp, FsPermissions, CALL_SCOPE_TTL_MS};
+use crate::filesystem::state::{
+  app_data_dir, AllowlistSnapshot, FilesystemAllowlistState, FsOp, FsPermissions, CALL_SCOPE_TTL_MS,
+};
 use crate::filesystem::types::*;
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -221,11 +223,21 @@ pub async fn filesystem_set_allowlist(
   state: State<'_, FilesystemAllowlistState>,
   payload: SetAllowlistPayload,
 ) -> Result<serde_json::Value, String> {
+  set_allowlist_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+/// Applies a new allowlist. Split out from the command so the authorization
+/// rules can run against a plain data directory (tests, the acceptance bridge).
+pub async fn set_allowlist_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: SetAllowlistPayload,
+) -> Result<serde_json::Value, String> {
   let snapshot = AllowlistSnapshot {
     version: payload.version.unwrap_or(1),
     directories: payload.directories,
   };
-  state.set_allowlist(&app, snapshot).await?;
+  state.set_allowlist(data_dir, snapshot).await?;
   Ok(serde_json::json!({ "ok": true }))
 }
 
@@ -271,8 +283,16 @@ pub async fn filesystem_read_file(
   state: State<'_, FilesystemAllowlistState>,
   payload: ReadFilePayload,
 ) -> Result<ReadFileResult, String> {
+  read_file_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn read_file_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: ReadFilePayload,
+) -> Result<ReadFileResult, String> {
   let abs = state
-    .assert_allowed(&app, &payload.path, FsOp::Read)
+    .assert_allowed(data_dir, &payload.path, FsOp::Read)
     .await?;
   let content = tokio::fs::read_to_string(&abs)
     .await
@@ -354,10 +374,18 @@ pub async fn filesystem_edit_file(
   state: State<'_, FilesystemAllowlistState>,
   payload: EditFilePayload,
 ) -> Result<EditFileResult, String> {
+  edit_file_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn edit_file_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: EditFilePayload,
+) -> Result<EditFileResult, String> {
   if payload.find.is_empty() {
     return Err("find 不能为空".to_string());
   }
-  let abs = state.assert_allowed(&app, &payload.path, FsOp::Write).await?;
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Write).await?;
   // Read-modify-write under a per-path lock: two edits to the same file cannot
   // interleave and lose one of the changes.
   let lock = write_lock_for(&abs);
@@ -420,7 +448,15 @@ pub async fn filesystem_search_files(
   state: State<'_, FilesystemAllowlistState>,
   payload: SearchFilesPayload,
 ) -> Result<SearchFilesResult, String> {
-  let root = state.assert_allowed(&app, &payload.root, FsOp::Read).await?;
+  search_files_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn search_files_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: SearchFilesPayload,
+) -> Result<SearchFilesResult, String> {
+  let root = state.assert_allowed(data_dir, &payload.root, FsOp::Read).await?;
   let limit = payload
     .limit
     .unwrap_or(SEARCH_DEFAULT_LIMIT)
@@ -626,16 +662,24 @@ pub async fn filesystem_write_file(
   state: State<'_, FilesystemAllowlistState>,
   payload: WriteFilePayload,
 ) -> Result<OkResult, String> {
+  write_file_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn write_file_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: WriteFilePayload,
+) -> Result<OkResult, String> {
   let path = payload.path;
   let content = payload.content;
   // write permission on target file
-  let abs = state.assert_allowed(&app, &path, FsOp::Write).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Write).await?;
   let p = Path::new(&abs);
   if let Some(parent) = p.parent() {
     // if parent doesn't exist, require create permission (and create it)
     if tokio::fs::metadata(parent).await.is_err() {
       let parent_str = parent.to_string_lossy().to_string();
-      let parent_abs = state.assert_allowed(&app, &parent_str, FsOp::Create).await?;
+      let parent_abs = state.assert_allowed(data_dir, &parent_str, FsOp::Create).await?;
       tokio::fs::create_dir_all(&parent_abs)
         .await
         .map_err(|e| format!("mkdir parent failed: {}", e))?;
@@ -659,11 +703,19 @@ pub async fn filesystem_list_directory(
   state: State<'_, FilesystemAllowlistState>,
   payload: ListDirectoryPayload,
 ) -> Result<ListDirectoryResult, String> {
+  list_directory_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn list_directory_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: ListDirectoryPayload,
+) -> Result<ListDirectoryResult, String> {
   let path = payload.path;
   let limit = payload.limit;
   let pattern = payload.pattern;
   let kind = payload.kind;
-  let abs = state.assert_allowed(&app, &path, FsOp::Read).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Read).await?;
   let mut rd = tokio::fs::read_dir(&abs)
     .await
     .map_err(|e| format!("read_dir failed: {}", e))?;
@@ -768,8 +820,8 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
   pi == p.len()
 }
 
-async fn delete_path_impl(app: &AppHandle, state: &FilesystemAllowlistState, path: &str) -> Result<String, String> {
-  let abs = state.assert_allowed(app, path, FsOp::Delete).await?;
+async fn delete_path_impl(data_dir: &Path, state: &FilesystemAllowlistState, path: &str) -> Result<String, String> {
+  let abs = state.assert_allowed(data_dir, path, FsOp::Delete).await?;
   let meta = tokio::fs::metadata(&abs).await.map_err(|e| format!("delete failed: {}", e))?;
   if meta.is_dir() {
     tokio::fs::remove_dir_all(&abs).await.map_err(|e| format!("delete failed: {}", e))?;
@@ -785,11 +837,12 @@ pub async fn filesystem_delete_many(
   state: State<'_, FilesystemAllowlistState>,
   payload: DeleteManyPayload,
 ) -> Result<serde_json::Value, String> {
+  let data_dir = app_data_dir(&app)?;
   let mut deleted: Vec<String> = Vec::new();
   let mut failed: Vec<serde_json::Value> = Vec::new();
   for p in payload.paths.iter() {
     let input = String::from(p);
-    match delete_path_impl(&app, &state, &input).await {
+    match delete_path_impl(&data_dir, &state, &input).await {
       Ok(abs) => deleted.push(abs.replace('\\', "/")),
       Err(e) => failed.push(serde_json::json!({ "path": input.replace('\\', "/"), "error": e })),
     }
@@ -809,7 +862,8 @@ pub async fn filesystem_delete_by_pattern(
   state: State<'_, FilesystemAllowlistState>,
   payload: DeleteByPatternPayload,
 ) -> Result<serde_json::Value, String> {
-  let dir_abs = state.assert_allowed(&app, &payload.dir, FsOp::Read).await?;
+  let data_dir = app_data_dir(&app)?;
+  let dir_abs = state.assert_allowed(&data_dir, &payload.dir, FsOp::Read).await?;
   // 默认限制，防止误删/误匹配太多
   const DEFAULT_LIMIT: u32 = 200;
   const HARD_MAX_LIMIT: u32 = 2000;
@@ -852,7 +906,7 @@ pub async fn filesystem_delete_by_pattern(
   let mut deleted: Vec<String> = Vec::new();
   let mut failed: Vec<serde_json::Value> = Vec::new();
   for p in targets.iter() {
-    match delete_path_impl(&app, &state, p).await {
+    match delete_path_impl(&data_dir, &state, p).await {
       Ok(abs) => deleted.push(abs.replace('\\', "/")),
       Err(e) => failed.push(serde_json::json!({ "path": p, "error": e })),
     }
@@ -880,9 +934,17 @@ pub async fn filesystem_create_directory(
   state: State<'_, FilesystemAllowlistState>,
   payload: CreateDirectoryPayload,
 ) -> Result<serde_json::Value, String> {
+  create_directory_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn create_directory_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: CreateDirectoryPayload,
+) -> Result<serde_json::Value, String> {
   let path = payload.path;
   let recursive = payload.recursive;
-  let abs = state.assert_allowed(&app, &path, FsOp::Create).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Create).await?;
   let rec = recursive.unwrap_or(true);
   if rec {
     tokio::fs::create_dir_all(&abs)
@@ -902,8 +964,16 @@ pub async fn filesystem_delete_file(
   state: State<'_, FilesystemAllowlistState>,
   payload: DeleteFilePayload,
 ) -> Result<OkResult, String> {
+  delete_file_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn delete_file_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: DeleteFilePayload,
+) -> Result<OkResult, String> {
   let path = payload.path;
-  let abs = state.assert_allowed(&app, &path, FsOp::Delete).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Delete).await?;
   let meta = tokio::fs::metadata(&abs)
     .await
     .map_err(|e| format!("delete failed: {}", e))?;
@@ -932,11 +1002,19 @@ pub async fn filesystem_rename_file(
   state: State<'_, FilesystemAllowlistState>,
   payload: RenameFilePayload,
 ) -> Result<serde_json::Value, String> {
+  rename_file_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn rename_file_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: RenameFilePayload,
+) -> Result<serde_json::Value, String> {
   let old_path = payload.old_path;
   let new_path = payload.new_path;
   // rename/move is a write-like operation
-  let old_abs = state.assert_allowed(&app, &old_path, FsOp::Write).await?;
-  let new_abs = state.assert_allowed(&app, &new_path, FsOp::Write).await?;
+  let old_abs = state.assert_allowed(data_dir, &old_path, FsOp::Write).await?;
+  let new_abs = state.assert_allowed(data_dir, &new_path, FsOp::Write).await?;
   tokio::fs::rename(&old_abs, &new_abs)
     .await
     .map_err(|e| format!("rename failed: {}", e))?;
