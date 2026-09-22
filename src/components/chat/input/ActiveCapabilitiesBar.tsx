@@ -39,6 +39,8 @@ interface ActiveCapabilitiesBarProps {
 
   // WorkDir
   workingDir?: string;
+  /** True when @WorkDir is a directory the user attached (removable). */
+  workingDirAttached?: boolean;
   onRemoveWorkingDir?: () => void;
 
   // Document attachment (input file)
@@ -61,6 +63,7 @@ export function ActiveCapabilitiesBar({
   hasSessionParameters,
   onClickSessionParameters,
   workingDir,
+  workingDirAttached = false,
   onRemoveWorkingDir,
   attachedDocument,
   onRemoveDocument,
@@ -150,13 +153,16 @@ export function ActiveCapabilitiesBar({
             {/* 只显示文件夹名，悬浮显示完整路径 */}
             <span className="max-w-[160px] truncate">{basename(workingDir)}</span>
             <ExternalLink className="w-3 h-3 opacity-40 group-hover:opacity-100" />
-            <X
-              className="w-3 h-3 opacity-40 group-hover:opacity-100 hover:text-emerald-700 dark:hover:text-emerald-300"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemoveWorkingDir?.();
-              }}
-            />
+            {/* 会话自带的产物目录不能移除，只能打开；附加的用户目录才可以摘下。 */}
+            {workingDirAttached && (
+              <X
+                className="w-3 h-3 opacity-40 group-hover:opacity-100 hover:text-emerald-700 dark:hover:text-emerald-300"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveWorkingDir?.();
+                }}
+              />
+            )}
           </button>
         )}
 

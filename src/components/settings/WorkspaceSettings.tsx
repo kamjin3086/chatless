@@ -29,6 +29,7 @@ export function WorkspaceSettings() {
   const conversations = useChatStore((s) => s.conversations);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const clearWorkingDir = useConversationAttachmentStore((s) => s.clearWorkingDir);
+  const clearMountedDir = useConversationAttachmentStore((s) => s.clearMountedDir);
 
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -44,13 +45,17 @@ export function WorkspaceSettings() {
     if (!currentConversationId) return;
     void (async () => {
       try {
-        const ws = await ensureConversationWorkspace(currentConversationId);
+        const ws = await ensureConversationWorkspace({
+          conversationId: currentConversationId,
+          title: conversations.find(c => c.id === currentConversationId)?.title,
+          knownRoot: useConversationAttachmentStore.getState().getSessionDir(currentConversationId),
+        });
         useConversationAttachmentStore.getState().setWorkingDir(currentConversationId, ws.root);
       } catch {
         // ignore
       }
     })();
-  }, [currentConversationId]);
+  }, [currentConversationId, conversations]);
 
   // 导出选中的会话
   const onExport = useCallback(async () => {
@@ -72,14 +77,18 @@ export function WorkspaceSettings() {
       
       let totalFiles = 0;
       for (const id of ids) {
-        const ws = await ensureConversationWorkspace(id);
         const conv = conversations.find(c => c.id === id);
+        const ws = await ensureConversationWorkspace({
+          conversationId: id,
+          title: conv?.title,
+          knownRoot: useConversationAttachmentStore.getState().getSessionDir(id),
+        });
         // 使用会话标题作为导出文件夹名
         const safeName = (conv?.title || id).replace(/[<>:"/\\|?*]/g, '_').slice(0, 50);
         const dest = `${baseExportDir}/${safeName}`;
         
         await mkdir(dest, { recursive: true });
-        const r = await copyDirectoryRecursive(ws.outDir, dest);
+        const r = await copyDirectoryRecursive(ws.root, dest);
         totalFiles += r.filesCopied;
       }
       
@@ -104,7 +113,12 @@ export function WorkspaceSettings() {
     setLoading(true);
     try {
       for (const id of ids) {
-        await removeConversationWorkspace(id);
+        const ws = await ensureConversationWorkspace({
+          conversationId: id,
+          title: conversations.find(c => c.id === id)?.title,
+          knownRoot: useConversationAttachmentStore.getState().getSessionDir(id),
+        });
+        await removeConversationWorkspace(ws.root);
         clearWorkingDir(id);
       }
       toast.success(`已清理 ${ids.length} 个会话的工作区`);
@@ -115,7 +129,7 @@ export function WorkspaceSettings() {
     } finally {
       setLoading(false);
     }
-  }, [selectedIds, currentConversationId, clearWorkingDir]);
+  }, [selectedIds, currentConversationId, clearWorkingDir, conversations]);
 
   // 清理全部工作区
   const onClearAll = useCallback(async () => {
@@ -124,11 +138,15 @@ export function WorkspaceSettings() {
     setLoading(true);
     try {
       await clearAllWorkspaces();
-      // 清空会话级 workingDir
+      // 清空会话级工作目录记录（含挂载目录，避免继续指向已删除的路径）
       try {
         const st = useConversationAttachmentStore.getState();
-        const map = (st as any).workingDirByConversation || {};
-        for (const cid of Object.keys(map)) st.clearWorkingDir(cid);
+        const sessionDirs = (st as any).sessionDirByConversation || {};
+        const mounted = (st as any).mountedDirByConversation || {};
+        for (const cid of new Set([...Object.keys(sessionDirs), ...Object.keys(mounted)])) {
+          st.clearWorkingDir(cid as string);
+          st.clearMountedDir(cid as string);
+        }
       } catch {
         // ignore
       }

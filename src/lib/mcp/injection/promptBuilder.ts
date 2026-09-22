@@ -225,13 +225,21 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
     const convId = context.conversationId || '';
     if (convId) {
       const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-      const wd = useConversationAttachmentStore.getState().getWorkingDir(convId);
+      const attachment = useConversationAttachmentStore.getState();
+      const wd = attachment.getWorkingDir(convId);
       if (wd) {
+        const attached = attachment.getMountedDir(convId);
         blocks.push({
           id: 'session-workspace',
           layer: 'conversation',
           order: 20,
-          content: `【当前会话工作目录】\n- @WorkDir -> ${wd}\n- 需要在该目录及其子目录中读写文件时，可使用 filesystem，并使用 @WorkDir/... 的别名路径或绝对路径。`,
+          content:
+            '【当前会话工作目录】\n' +
+            `- @WorkDir -> ${wd}\n` +
+            (attached
+              ? '- 这是用户为本会话附加的目录：默认就在这里读写，写文件前先看清楚现有内容。\n'
+              : '- 这是本会话自己的产物目录：相对路径与新建文件默认落在它里面。\n') +
+            '- 用相对路径或 @WorkDir/... 均可；访问该目录之外的路径需要用户授权。',
         });
       }
       // The current mount is the authority. Historic messages and prior

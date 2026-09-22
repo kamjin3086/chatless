@@ -13,16 +13,14 @@ type ConversationId = string;
 
 interface ConversationAttachmentState {
   /**
-   * 会话级默认工作区（系统自动创建并注入为 @WorkDir）
-   * - 用于脚本/中间文件/产物的默认落点
-   * - 不一定需要在输入框下方展示（避免噪音）
+   * 会话自带的产物目录（文档/Chatless/<标题>-<短ID>；旧会话沿用原应用数据目录）。
+   * 没有挂载目录时它就是 @WorkDir。
    */
-  workingDirByConversation: Record<ConversationId, string | undefined>;
+  sessionDirByConversation: Record<ConversationId, string | undefined>;
 
   /**
-   * 用户手动挂载目录（通过 + 号选择）
-   * - 仅用于授权/便捷访问/展示
-   * - 输入框下方彩色标签条只展示这类“用户主动挂载”
+   * 用户手动挂载目录（通过 + 号选择）。
+   * 一旦挂载，它就是该会话的 @WorkDir：相对路径与默认落点都指向这里。
    */
   mountedDirByConversation: Record<ConversationId, string | undefined>;
 
@@ -33,10 +31,13 @@ interface ConversationAttachmentState {
   clearKnowledgeBase: (conversationId: string) => void;
   getKnowledgeBase: (conversationId: string) => { id: string; name: string } | undefined;
 
-  /** 设置系统默认 @WorkDir（自动） */
+  /** 记录会话自带的产物目录（系统自动解析，不作为用户授权） */
   setWorkingDir: (conversationId: string, absolutePath: string) => void;
   clearWorkingDir: (conversationId: string) => void;
+  /** 实际生效的 @WorkDir：挂载目录优先，否则会话产物目录 */
   getWorkingDir: (conversationId: string) => string | undefined;
+  /** 仅会话自带产物目录（不返回挂载目录）——应用元数据只写这里 */
+  getSessionDir: (conversationId: string) => string | undefined;
 
   /** 设置用户手动挂载目录（显示在输入框下方） */
   setMountedDir: (conversationId: string, absolutePath: string) => void;
@@ -49,7 +50,7 @@ function normalizePath(p: string): string {
 }
 
 export const useConversationAttachmentStore = create<ConversationAttachmentState>()(persist((set, get) => ({
-  workingDirByConversation: {},
+  sessionDirByConversation: {},
   mountedDirByConversation: {},
   knowledgeBaseByConversation: {},
 
@@ -83,33 +84,35 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     const p = normalizePath(absolutePath);
     if (!cid || !p) return;
     set((state) => ({
-      workingDirByConversation: { ...state.workingDirByConversation, [cid]: p },
+      sessionDirByConversation: { ...state.sessionDirByConversation, [cid]: p },
     }));
-
-    // 自动加入 filesystem 白名单（你选择了 workdir 自动授权）
-    // 注意：该目录的 alias 仍由会话注入的 @WorkDir 表达，持久化条目不强制占用 alias 名称，避免冲突。
-    void ensureAllowlistedDirectory({
-      path: p,
-      source: 'workdir',
-      permissions: { read: true, write: true, create: true, delete: false },
-      reconnect: true,
-    });
+    // 会话产物目录不写入持久白名单：运行期由流水线合成的 @WorkDir 条目 +
+    // 每次调用的 call-scoped grant 授权。否则每个新会话都会往用户的安全设置里
+    // 塞一条 UUID 路径，白名单很快就没法人工审计了。
   },
 
   clearWorkingDir: (conversationId) => {
     const cid = String(conversationId || '').trim();
     if (!cid) return;
     set((state) => {
-      const next = { ...state.workingDirByConversation };
+      const next = { ...state.sessionDirByConversation };
       delete next[cid];
-      return { workingDirByConversation: next };
+      return { sessionDirByConversation: next };
     });
   },
 
   getWorkingDir: (conversationId) => {
     const cid = String(conversationId || '').trim();
     if (!cid) return undefined;
-    return get().workingDirByConversation[cid];
+    const mounted = get().mountedDirByConversation[cid];
+    if (mounted) return mounted;
+    return get().sessionDirByConversation[cid];
+  },
+
+  getSessionDir: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return undefined;
+    return get().sessionDirByConversation[cid];
   },
 
   setMountedDir: (conversationId, absolutePath) => {

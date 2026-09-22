@@ -142,7 +142,20 @@ export async function appendWorkspaceToolStep(params: {
   if (!cid) return;
 
   await enqueue(cid, async () => {
-    const ws = await ensureConversationWorkspace(cid);
+    // The manifest belongs to the session's own folder. It must never be written
+    // into a directory the user mounted (that would drop app metadata into their
+    // project), so this uses the session directory rather than @WorkDir.
+    const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+    const { useChatStore } = await import('@/store/chatStore');
+    const attachment = useConversationAttachmentStore.getState();
+    const ws = await ensureConversationWorkspace({
+      conversationId: cid,
+      title: useChatStore.getState().conversations.find((c) => c.id === cid)?.title,
+      knownRoot: attachment.getSessionDir(cid),
+    });
+    if (attachment.getSessionDir(cid) !== ws.root) {
+      attachment.setWorkingDir(cid, ws.root);
+    }
     const { readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
 
     let manifest: WorkspaceManifest | null = null;
@@ -204,16 +217,18 @@ export async function appendWorkspaceToolStep(params: {
       }
     }
 
-    // Heuristic outputs: any filesystem write/create/rename touching outDir
-    const outDir = normKey(ws.outDir);
+    // Outputs: any filesystem write/create/rename that landed inside the
+    // session's own folder. A mounted project directory is the user's, so it is
+    // not listed as "generated output".
+    const sessionDir = normKey(ws.root);
     for (const fc of step.fileChanges || []) {
       if (fc.op !== 'write' && fc.op !== 'create' && fc.op !== 'rename' && fc.op !== 'delete') continue;
       const pKey = normKey(fc.path);
-      if (!pKey || !outDir) continue;
-      if (!pKey.startsWith(outDir)) continue;
+      if (!pKey || !sessionDir) continue;
+      if (!pKey.startsWith(sessionDir)) continue;
       const exists = (manifest.outputs || []).some((o) => normKey(o.path) === pKey);
       if (!exists) {
-        (manifest.outputs ||= []).push({ path: normalize(fc.path), description: 'Generated in @WorkDir/out' });
+        (manifest.outputs ||= []).push({ path: normalize(fc.path), description: 'Generated in the session workspace' });
       }
     }
 

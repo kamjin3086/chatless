@@ -435,11 +435,14 @@ export const useChatStore = create<ChatState & ChatActions>()(
           throw error;
         }
 
-        // 自动创建会话工作区并注入 @WorkDir（默认 AppData/workspaces/<conversationId>）
+        // 解析会话工作目录并注入 @WorkDir（文档/Chatless/<标题>-<短ID>）
         try {
           const { ensureConversationWorkspace } = await import('@/lib/agentWorkspace/workspaceService');
           const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-          const ws = await ensureConversationWorkspace(newConversation.id);
+          const ws = await ensureConversationWorkspace({
+            conversationId: newConversation.id,
+            title: newConversation.title,
+          });
           useConversationAttachmentStore.getState().setWorkingDir(newConversation.id, ws.root);
         } catch (e) {
           console.warn('[CREATE-CONVERSATION] init workspace failed:', e);
@@ -450,16 +453,17 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       setCurrentConversation: (id) => {
         set({ currentConversationId: id });
-        // 切换会话时确保 @WorkDir 存在（attachment store 非持久化，需懒创建）
+        // 切换会话时解析 @WorkDir（attachment store 非持久化，需要时重建）
         void (async () => {
           try {
             const cid = String(id || '').trim();
             if (!cid) return;
             const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-            const existing = useConversationAttachmentStore.getState().getWorkingDir(cid);
+            const existing = useConversationAttachmentStore.getState().getSessionDir(cid);
             if (existing) return;
             const { ensureConversationWorkspace } = await import('@/lib/agentWorkspace/workspaceService');
-            const ws = await ensureConversationWorkspace(cid);
+            const title = get().conversations.find((c) => c.id === cid)?.title;
+            const ws = await ensureConversationWorkspace({ conversationId: cid, title });
             useConversationAttachmentStore.getState().setWorkingDir(cid, ws.root);
           } catch {
             // ignore
@@ -1072,6 +1076,23 @@ export const useChatStore = create<ChatState & ChatActions>()(
             conversation.updated_at = Date.now();
           }
         });
+        // The sessions folder is named after the title. Rename it only while the
+        // folder is still empty, so a path already handed to the model never moves.
+        void (async () => {
+          try {
+            const cid = String(conversationId || '').trim();
+            if (!cid) return;
+            const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+            const attachment = useConversationAttachmentStore.getState();
+            const current = attachment.getSessionDir(cid);
+            if (!current) return;
+            const { renameConversationWorkspaceIfPristine } = await import('@/lib/agentWorkspace/workspaceService');
+            const renamed = await renameConversationWorkspaceIfPristine({ conversationId: cid, currentRoot: current, title });
+            if (renamed && renamed !== current) attachment.setWorkingDir(cid, renamed);
+          } catch {
+            // A failed rename only costs a nicer folder name.
+          }
+        })();
       },
 
       finalizeStreamedMessage: async (messageId: string, finalStatus: string, finalContent: string, model?: string) => {

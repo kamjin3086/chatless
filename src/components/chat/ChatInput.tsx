@@ -218,9 +218,10 @@ export function ChatInput({
     return Boolean(lastAssistant?.id && s.agentRuns?.[lastAssistant.id]?.running);
   });
   const effectiveLoading = isLoading || storeAgentRunning;
-  const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
-  // 仅展示用户主动挂载的目录（通过 + 号选择），不展示系统自动 @WorkDir
+  const { getMountedDir, getWorkingDir, clearMountedDir } = useConversationAttachmentStore();
+  // 显示真正生效的 @WorkDir：挂载了用户目录就是它，否则是会话自己的产物目录。
   const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;
+  const effectiveWorkDir = currentConvId ? getWorkingDir(String(currentConvId)) : undefined;
   const clearInputDraft = useChatStore((s)=>s.clearInputDraft);
   const setInputDraft = useChatStore((s)=>s.setInputDraft);
   const prevConvRef = useRef<string | null>(null);
@@ -1252,14 +1253,15 @@ export function ChatInput({
           const kb = allKnowledgeBases.find(k => k.id === id);
           if (kb) setSelectedKnowledgeBase(kb);
         }}
-        workingDir={mountedDir}
-        onRemoveWorkingDir={() => {
+        workingDir={effectiveWorkDir}
+        workingDirAttached={Boolean(mountedDir)}
+        onRemoveWorkingDir={mountedDir ? () => {
           try {
             if (currentConvId) clearMountedDir(String(currentConvId));
           } catch {
             // ignore
           }
-        }}
+        } : undefined}
         attachedDocument={attachedDocument ? { name: attachedDocument.name, fileSize: attachedDocument.fileSize } : undefined}
         onRemoveDocument={() => removeAttachedDocument()}
         enabledMcpServers={[]}
