@@ -24,6 +24,7 @@ import { PromptEnvelopeBuilder } from '@/lib/mcp/pipeline/context/PromptEnvelope
 import { estimateTokens } from '@/lib/mcp/pipeline/context/ContextWindowManager';
 import { resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { TauriBridge } from './tauriBridge';
+import { DEFAULT_MAX_OUTPUT_TOKENS } from '@/lib/llm/outputBudget';
 import type { FilesystemAdapter as FilesystemAdapterType } from '@/lib/mcp/pipeline/adapters/FilesystemAdapter';
 import type { ShellExecutorAdapter as ShellExecutorAdapterType } from '@/lib/mcp/pipeline/adapters/ShellExecutorAdapter';
 
@@ -400,7 +401,7 @@ async function callModel(messages: unknown[], tools: ToolDef[]) {
     body: JSON.stringify({
       // Thinking models spend part of this budget on reasoning before the
       // answer, so keep headroom above the visible answer length.
-      model, messages, temperature: 0.2, max_tokens: 2400,
+      model, messages, temperature: 0.2, max_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
       tools: tools.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })),
     }),
   });

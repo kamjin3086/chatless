@@ -8,6 +8,7 @@ import { createStreamEvent } from '../types/stream-events';
 import { toOpenAIMessage } from './messageMapping';
 import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
 import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
+import { readContextWindow } from '@/lib/llm/modelWindow';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -42,7 +43,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     return h;
   }
 
-  async fetchModels(): Promise<Array<{ name: string; label?: string; aliases?: string[] }> | null> {
+  async fetchModels(): Promise<Array<{ name: string; label?: string; aliases?: string[]; contextWindow?: number }> | null> {
     // 通用兜底：按 OpenAI 兼容协议拉取 /models
     try {
       const apiKey = await this.getApiKey();
@@ -56,7 +57,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
         return items.map((it: any) => {
           const id = it?.id || it?.name;
           const label = it?.label || it?.id || it?.name;
-          return { name: String(id), label: String(label), aliases: [String(id)] };
+          return {
+            name: String(id),
+            label: String(label),
+            aliases: [String(id)],
+            contextWindow: readContextWindow(it),
+          };
         });
       }
     } catch (e) {

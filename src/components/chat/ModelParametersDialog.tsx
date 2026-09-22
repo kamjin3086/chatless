@@ -63,8 +63,9 @@ function ParamSliderRow({
   inputMin,
   inputMax,
 }: {
-  enabled: boolean;
-  onEnabledChange: (v: boolean) => void;
+  /** Omit `onEnabledChange` for a parameter that has no on/off state. */
+  enabled?: boolean;
+  onEnabledChange?: (v: boolean) => void;
   label: string;
   help: string;
   min: number;
@@ -75,9 +76,12 @@ function ParamSliderRow({
   inputMin: number;
   inputMax: number;
 }) {
+  const on = enabled !== false;
   return (
     <div className="flex items-center gap-2.5 min-w-0">
-      <Checkbox checked={enabled} onCheckedChange={(checked) => onEnabledChange(Boolean(checked))} />
+      {onEnabledChange
+        ? <Checkbox checked={on} onCheckedChange={(checked) => onEnabledChange(Boolean(checked))} />
+        : <span className="w-4 shrink-0" aria-hidden />}
       <div className="flex items-center gap-1.5 w-44 shrink-0 min-w-0">
         <Label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">
           {label}
@@ -91,9 +95,9 @@ function ParamSliderRow({
         max={max}
         step={step}
         value={value}
-        disabled={!enabled}
+        disabled={!on}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={sliderTrackStyle(enabled, value, min, max)}
+        style={sliderTrackStyle(on, value, min, max)}
       />
       <Input
         type="number"
@@ -102,7 +106,7 @@ function ParamSliderRow({
         max={inputMax}
         step={step}
         value={value}
-        disabled={!enabled}
+        disabled={!on}
         onChange={(e) => onChange(parseFloat(e.target.value || "0"))}
       />
     </div>
@@ -484,7 +488,7 @@ export function ModelParametersDialog({
             enabled={parameters.enableMaxTokens !== false}
             onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableMaxTokens: v }))}
             label="Max Tokens"
-            help="限制单次回复能生成的最大 Token 数。控制输出长度的硬性限制。"
+            help="限制单次回复能生成的最大 Token 数。默认 8192，并按下方上下文窗口自动调整；关闭后不向模型下发该参数。"
             min={MODEL_PARAMETER_LIMITS.maxTokens.min}
             max={MODEL_PARAMETER_LIMITS.maxTokens.max}
             step={MODEL_PARAMETER_LIMITS.maxTokens.step}
@@ -492,6 +496,17 @@ export function ModelParametersDialog({
             onChange={(v) => setParameters((prev) => ({ ...prev, maxTokens: Math.round(v) }))}
             inputMin={MODEL_PARAMETER_LIMITS.maxTokens.inputMin}
             inputMax={MODEL_PARAMETER_LIMITS.maxTokens.inputMax}
+          />
+          <ParamSliderRow
+            label="Context Window"
+            help="模型上下文窗口（tokens）。由服务商上报时自动填写；未知时不下发 Max Tokens，由服务端决定输出长度。"
+            min={MODEL_PARAMETER_LIMITS.contextWindow.min}
+            max={MODEL_PARAMETER_LIMITS.contextWindow.max}
+            step={MODEL_PARAMETER_LIMITS.contextWindow.step}
+            value={parameters.contextWindow || 0}
+            onChange={(v) => setParameters((prev) => ({ ...prev, contextWindow: Math.round(v) || undefined }))}
+            inputMin={MODEL_PARAMETER_LIMITS.contextWindow.inputMin}
+            inputMax={MODEL_PARAMETER_LIMITS.contextWindow.inputMax}
           />
           <ParamSliderRow
             enabled={parameters.enableTopP !== false}

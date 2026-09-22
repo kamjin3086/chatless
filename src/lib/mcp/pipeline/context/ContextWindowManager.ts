@@ -1,6 +1,7 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
 import { chat } from '@/lib/llm';
 import { sha256Hex } from '@/lib/utils/sha256';
+import { resolveOutputBudget } from '@/lib/llm/outputBudget';
 
 /** An estimate, not a tokenizer. Includes protocol data and image payloads. */
 export function estimateTokens(messages: LlmMessage[]): number {
@@ -32,7 +33,11 @@ const summaryInstruction: LlmMessage = {
 export class ContextWindowManager {
   async compact(messages: LlmMessage[], opts: CompactOptions): Promise<LlmMessage[]> {
     const window = opts.contextWindowTokens ?? 8192;
-    const reserve = opts.reserveOutputTokens ?? Math.min(4096, Math.floor(window * 0.2));
+    // The same function the request body uses, so the reservation always matches
+    // what the model was actually allowed to produce.
+    const reserve = opts.reserveOutputTokens
+      ?? resolveOutputBudget({ contextWindow: opts.contextWindowTokens })
+      ?? Math.min(4096, Math.floor(window * 0.2));
     const safety = opts.safetyMarginRatio ?? 0.08;
     const capacity = Math.floor(window * (1 - safety)) - reserve;
     const fixed = estimateTokens(opts.prefixMessages || []) + Math.ceil(JSON.stringify(opts.tools || []).length / 2.5);

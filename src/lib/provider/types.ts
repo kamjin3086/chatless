@@ -50,6 +50,11 @@ export interface ModelEntity {
   /** 面向用户展示的名称；如果缺失则回退 name */
   label?: string;
   aliases: string[];
+  /**
+   * Context window reported by the provider (llama-swap meta、context_length…).
+   * Absent means unknown, and an unknown window keeps max_tokens unsent.
+   */
+  contextWindow?: number;
   /** 可选：模型级别 API Key */
   apiKey?: string | null;
-} 
+}

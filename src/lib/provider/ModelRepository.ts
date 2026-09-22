@@ -12,6 +12,9 @@ function isSameModelList(a: ModelEntity[] | undefined, b: ModelEntity[]): boolea
   for (let i = 0; i < a.length; i++) {
     if (a[i].name !== b[i].name) return false;
     if ((a[i] as any).label !== (b[i] as any).label) return false;
+    // A newly reported context window must reach the in-memory list, otherwise
+    // the output budget would keep treating the model as unknown.
+    if ((a[i] as any).contextWindow !== (b[i] as any).contextWindow) return false;
   }
   return true;
 }

@@ -2,6 +2,7 @@ import { specializedStorage } from './storage';
 import { DEFAULT_MODEL_PARAMETERS } from '@/types/model-params';
 import type { ModelParameters } from '@/types/model-params';
 import { adaptFieldsForProvider } from './llm/provider-field-support';
+import { resolveOutputBudget } from './llm/outputBudget';
 
 export class ModelParametersService {
   /**
@@ -45,6 +46,31 @@ export class ModelParametersService {
     } catch (error) {
       console.error('删除模型参数失败:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Records a context window discovered from the provider's model list.
+   *
+   * Only fills a gap: a value the user typed is never overwritten, and a model
+   * that already knows its window is left alone. This is what makes the output
+   * budget work on the next launch without the user opening a dialog.
+   */
+  static async setContextWindowIfUnset(
+    providerName: string,
+    modelId: string,
+    contextWindow: number,
+  ): Promise<boolean> {
+    const window = Math.floor(Number(contextWindow));
+    if (!Number.isFinite(window) || window <= 0) return false;
+    try {
+      const saved = await ModelParametersService.getModelParameters(providerName, modelId);
+      if (typeof saved.contextWindow === 'number' && saved.contextWindow > 0) return false;
+      await ModelParametersService.setModelParameters(providerName, modelId, { ...saved, contextWindow: window });
+      return true;
+    } catch (error) {
+      console.warn('[ModelParameters] 记录上下文窗口失败:', error);
+      return false;
     }
   }
 
@@ -114,6 +140,34 @@ export class ModelParametersService {
   }
 
   /**
+   * Applies the resolved output budget to a chat-options object.
+   *
+   * A user value wins (clamped to the window). Otherwise the default applies
+   * only when the window is known; an unknown window sends nothing and keeps
+   * today's behaviour of letting the server decide. The window also travels in
+   * `contextWindowTokens` so the context manager reserves the same amount.
+   */
+  static applyOutputBudget(
+    options: Record<string, any>,
+    params: { contextWindow?: number },
+  ): Record<string, any> {
+    const next = { ...options };
+    const window = Number(params?.contextWindow);
+    const known = Number.isFinite(window) && window > 0 ? Math.floor(window) : undefined;
+
+    const budget = resolveOutputBudget({
+      contextWindow: known,
+      userMaxTokens: typeof options.maxTokens === 'number' ? options.maxTokens : undefined,
+    });
+    if (typeof budget === 'number') next.maxTokens = budget;
+    else delete next.maxTokens;
+
+    if (known) next.contextWindowTokens = known;
+    else delete next.contextWindowTokens;
+    return next;
+  }
+
+  /**
    * 反向解析：将通用 ChatOptions 拆解回 ModelParameters 结构（基础参数 + 高级参数）
    * - 会尽量从顶层或 generationConfig 中提取基础参数
    * - 其余参数保留在 advancedOptions 中，且会移除与基础参数重复的字段
@@ -130,6 +184,11 @@ export class ModelParametersService {
       (typeof src.maxTokens === 'number' ? src.maxTokens :
         (typeof src.maxOutputTokens === 'number' ? src.maxOutputTokens :
           (typeof gen.maxOutputTokens === 'number' ? gen.maxOutputTokens : DEFAULT_MODEL_PARAMETERS.maxTokens)));
+
+    // The context window is a capability we track, never a request field.
+    const contextWindow: number | undefined =
+      (typeof src.contextWindow === 'number' ? src.contextWindow :
+        (typeof gen.contextWindow === 'number' ? gen.contextWindow : undefined));
 
     const topP: number =
       (typeof src.topP === 'number' ? src.topP :
@@ -159,6 +218,7 @@ export class ModelParametersService {
     delete advanced.temperature;
     delete advanced.maxTokens;
     delete advanced.maxOutputTokens;
+    delete advanced.contextWindow;
     delete advanced.topP;
     delete advanced.topK;
     delete advanced.minP;
@@ -169,6 +229,7 @@ export class ModelParametersService {
     if (advanced.generationConfig && typeof advanced.generationConfig === 'object') {
       if (advanced.generationConfig.temperature !== undefined) delete advanced.generationConfig.temperature;
       if (advanced.generationConfig.maxOutputTokens !== undefined) delete advanced.generationConfig.maxOutputTokens;
+      if (advanced.generationConfig.contextWindow !== undefined) delete advanced.generationConfig.contextWindow;
       if (advanced.generationConfig.topP !== undefined) delete advanced.generationConfig.topP;
       if (advanced.generationConfig.stopSequences !== undefined) delete advanced.generationConfig.stopSequences;
       // 如果 generationConfig 变空对象，保留（兼容后续可能新增字段），不特殊处理
@@ -177,6 +238,7 @@ export class ModelParametersService {
     return {
       temperature,
       maxTokens,
+      contextWindow,
       topP,
       topK,
       minP,

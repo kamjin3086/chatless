@@ -544,6 +544,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
         // 4) 合并，确保会话级覆盖模型级
         baseOptions = { ...filteredModelOpts, ...sessionOpts };
+        // 输出预算：用户值优先，其次按已知上下文窗口自适应；窗口未知则不下发
+        baseOptions = ModelParametersService.applyOutputBudget(baseOptions, modelParams);
 
         const composed = await composeChatOptions(effectiveProvider, modelToUse, baseOptions, currentConversationId || null, content);
 
@@ -923,7 +925,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       const composed = await composeChatOptions(
         effectiveProvider,
         modelToUse,
-        { ...filteredModelOpts, ...sessionOpts },
+        ModelParametersService.applyOutputBudget({ ...filteredModelOpts, ...sessionOpts }, modelParams),
         conv.id,
         userMsg.content,
       );

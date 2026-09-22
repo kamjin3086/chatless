@@ -239,13 +239,20 @@ export class ProviderModelService {
     const staticList = getStaticModels(name) || [];
     const existing = (await modelRepository.get(name)) || [];
 
-    const byName = new Map<string, { provider: string; name: string; label?: string; aliases: string[] }>();
+    const byName = new Map<string, { provider: string; name: string; label?: string; aliases: string[]; contextWindow?: number }>();
 
     if (Array.isArray(online)) {
       // 在线结果为权威来源：仅以在线结果构建列表
       for (const m of online) {
         const key = m.name;
-        byName.set(key, { provider: name, name: key, label: m.label, aliases: m.aliases || [key] });
+        const contextWindow = Number((m as { contextWindow?: number }).contextWindow);
+        byName.set(key, {
+          provider: name,
+          name: key,
+          label: m.label,
+          aliases: m.aliases || [key],
+          ...(Number.isFinite(contextWindow) && contextWindow > 0 ? { contextWindow: Math.floor(contextWindow) } : null),
+        });
       }
     } else {
       // 在线失败：使用现有缓存与静态模型的并集，避免界面空白
@@ -281,6 +288,18 @@ export class ProviderModelService {
       // 排序异常则保持合并后的原始顺序，避免影响功能
     }
     await modelRepository.save(name, merged, ttl);
+    // Remember a reported window so the output budget still knows it after a
+    // restart; a window the user typed is never overwritten.
+    try {
+      const { ModelParametersService } = await import('@/lib/model-parameters');
+      for (const model of merged as Array<{ name: string; contextWindow?: number }>) {
+        if (model.contextWindow) {
+          await ModelParametersService.setContextWindowIfUnset(name, model.name, model.contextWindow);
+        }
+      }
+    } catch (error) {
+      console.warn('[ProviderModelService] 记录模型上下文窗口失败:', error);
+    }
     await defaultCacheManager.set(EVENTS.providerModels(name), true);
   }
 }
