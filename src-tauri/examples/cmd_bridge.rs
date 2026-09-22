@@ -106,6 +106,14 @@ impl Bridge {
         let payload: DeleteFilePayload = serde_json::from_value(parse("payload")?).map_err(|e| e.to_string())?;
         Ok(serde_json::to_value(delete_file_inner(&self.data_dir, &self.allowlist, payload).await?).unwrap())
       }
+      "filesystem_file_history" => {
+        let payload: FileHistoryPayload = serde_json::from_value(parse("payload")?).map_err(|e| e.to_string())?;
+        Ok(serde_json::to_value(file_history_inner(&self.data_dir, &self.allowlist, payload).await?).unwrap())
+      }
+      "filesystem_restore_file_version" => {
+        let payload: RestoreVersionPayload = serde_json::from_value(parse("payload")?).map_err(|e| e.to_string())?;
+        Ok(serde_json::to_value(restore_version_inner(&self.data_dir, &self.allowlist, payload).await?).unwrap())
+      }
       "run_safe_shell" => {
         let options: ExecuteOptions = serde_json::from_value(parse("options")?).map_err(|e| e.to_string())?;
         Ok(serde_json::to_value(run_blocking_shell(options, self.data_dir.clone()).await?).unwrap())

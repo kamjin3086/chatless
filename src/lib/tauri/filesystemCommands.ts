@@ -36,6 +36,10 @@ export interface OkResult {
   ok: boolean;
   message: string;
   path: string;
+  /** 本次覆盖前保存的版本 ID（有历史时才返回）。 */
+  historyId?: string;
+  /** 该文件当前保留的历史版本数。 */
+  historyCount?: number;
 }
 
 /** 读取文件结果 */
@@ -83,6 +87,23 @@ export interface EditFileResult {
   line?: number | null;
   reason?: string | null;
   candidates: string[];
+  historyId?: string;
+  historyCount?: number;
+}
+
+export interface FileHistoryVersion {
+  id: string;
+  createdAt: number;
+  bytes: number;
+  /** 产生这次覆盖的操作：write / edit / restore */
+  tool: string;
+  sha256: string;
+}
+
+export interface FileHistoryResult {
+  ok: boolean;
+  path: string;
+  versions: FileHistoryVersion[];
 }
 
 export interface SearchFilesParams {
@@ -236,6 +257,24 @@ export async function readFile(params: ReadFileParams): Promise<ReadFileResult> 
  */
 export async function writeFile(params: WriteFileParams): Promise<OkResult> {
   return invokeFs<WriteFileParams, OkResult>('filesystem_write_file', params);
+}
+
+/**
+ * 某个文件保留的历史版本（最近 20 版，最新在前）。
+ * 覆盖/编辑前的内容会自动保存到应用数据目录，不污染用户目录。
+ */
+export async function fileHistory(path: string): Promise<FileHistoryResult> {
+  return invokeFs<{ path: string }, FileHistoryResult>('filesystem_file_history', { path });
+}
+
+/**
+ * 恢复到某个历史版本。恢复前会把当前内容也记入历史，所以恢复本身可以撤销。
+ */
+export async function restoreFileVersion(path: string, versionId: string): Promise<OkResult> {
+  return invokeFs<{ path: string; versionId: string }, OkResult>('filesystem_restore_file_version', {
+    path,
+    versionId,
+  });
 }
 
 /**

@@ -51,6 +51,12 @@ pub struct OkResult {
   pub ok: bool,
   pub message: String,
   pub path: String,
+  /// 本次覆盖前的版本 ID（若已备份）。
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub history_id: Option<String>,
+  /// 该文件当前保留的历史版本数。
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub history_count: Option<u32>,
 }
 
 /// 读取文件 payload
@@ -93,6 +99,42 @@ pub struct EditFileResult {
   pub reason: Option<String>,
   /// Nearby lines so the model can correct the request in one step.
   pub candidates: Vec<String>,
+  /// 本次编辑前的版本 ID（若已备份）。
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub history_id: Option<String>,
+  /// 该文件当前保留的历史版本数。
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub history_count: Option<u32>,
+}
+
+/// 恢复某个历史版本 payload
+#[derive(Debug, Clone, Deserialize)]
+pub struct RestoreVersionPayload {
+  pub path: String,
+  pub version_id: String,
+}
+
+/// 文件历史查询 payload
+#[derive(Debug, Clone, Deserialize)]
+pub struct FileHistoryPayload {
+  pub path: String,
+}
+
+/// 一个历史版本的展示信息
+#[derive(Debug, Clone, Serialize)]
+pub struct FileHistoryEntry {
+  pub id: String,
+  pub created_at: i64,
+  pub bytes: u64,
+  pub tool: String,
+  pub sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FileHistoryResult {
+  pub ok: bool,
+  pub path: String,
+  pub versions: Vec<FileHistoryEntry>,
 }
 
 /// 内容/文件名搜索 payload

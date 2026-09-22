@@ -294,7 +294,9 @@ pub fn run() {
       filesystem::commands::filesystem_delete_file,
       filesystem::commands::filesystem_delete_many,
       filesystem::commands::filesystem_delete_by_pattern,
-      filesystem::commands::filesystem_rename_file
+      filesystem::commands::filesystem_rename_file,
+      filesystem::commands::filesystem_file_history,
+      filesystem::commands::filesystem_restore_file_version
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

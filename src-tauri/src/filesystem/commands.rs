@@ -25,6 +25,22 @@ fn sha256_hex(bytes: &[u8]) -> String {
   hex::encode(hasher.finalize())
 }
 
+/// Backs up a file's current content before it is overwritten.
+///
+/// Returns the recorded version plus the number of versions the file now has.
+/// History is best-effort: if it cannot be written, the file operation still
+/// proceeds (the user would rather have their edit than a failed call).
+async fn record_previous_version(
+  data_dir: &Path,
+  abs_path: &str,
+  tool: &str,
+) -> Option<(crate::filesystem::history::FileVersion, u32)> {
+  let existing = tokio::fs::read(abs_path).await.ok()?;
+  let version = crate::filesystem::history::record_version(data_dir, abs_path, &existing, tool, None).await?;
+  let count = crate::filesystem::history::list_versions(data_dir, abs_path).await.len() as u32;
+  Some((version, count))
+}
+
 /// One write at a time per real path: two edits to the same file must not
 /// interleave read-modify-write and silently drop one of them.
 fn write_lock_for(path: &str) -> std::sync::Arc<tokio::sync::Mutex<()>> {
@@ -404,6 +420,8 @@ pub async fn edit_file_inner(
         line: None,
         reason: Some("FILE_CHANGED".to_string()),
         candidates: vec![format!("文件已变化：读取时 {expected}，当前 {actual}。请重新读取后再编辑。")],
+        history_id: None,
+        history_count: None,
       });
     }
   }
@@ -412,6 +430,8 @@ pub async fn edit_file_inner(
   let outcome = apply_edit(&text, &payload.find, &payload.replace, payload.all.unwrap_or(false));
   let result = match outcome {
     EditOutcome::Applied { content, replacements, line } => {
+      // The pre-edit content is what "撤销这次编辑" needs.
+      let history = record_previous_version(data_dir, &abs, "edit").await;
       write_file_atomically(Path::new(&abs), &content).await?;
       EditFileResult {
         ok: true,
@@ -420,6 +440,8 @@ pub async fn edit_file_inner(
         line: Some(line),
         reason: None,
         candidates: Vec::new(),
+        history_id: history.as_ref().map(|(version, _)| version.id.clone()),
+        history_count: history.as_ref().map(|(_, count)| *count),
       }
     }
     EditOutcome::NoMatch { candidates } => EditFileResult {
@@ -429,6 +451,8 @@ pub async fn edit_file_inner(
       line: None,
       reason: Some("EDIT_NO_MATCH".to_string()),
       candidates,
+      history_id: None,
+      history_count: None,
     },
     EditOutcome::NotUnique { candidates } => EditFileResult {
       ok: false,
@@ -437,6 +461,8 @@ pub async fn edit_file_inner(
       line: None,
       reason: Some("EDIT_MATCH_NOT_UNIQUE".to_string()),
       candidates,
+      history_id: None,
+      history_count: None,
     },
   };
   Ok(result)
@@ -688,12 +714,17 @@ pub async fn write_file_inner(
 
   let lock = write_lock_for(&abs);
   let _guard = lock.lock().await;
+  // Keep the previous content before it is replaced: an overwrite is otherwise
+  // unrecoverable.
+  let history = record_previous_version(data_dir, &abs, "write").await;
   write_file_atomically(Path::new(&abs), &content).await?;
 
   Ok(OkResult {
     ok: true,
     message: "File written successfully".to_string(),
     path: abs,
+    history_id: history.as_ref().map(|(version, _)| version.id.clone()),
+    history_count: history.as_ref().map(|(_, count)| *count),
   })
 }
 
@@ -993,6 +1024,8 @@ pub async fn delete_file_inner(
     ok: true,
     message: "Path deleted successfully".to_string(),
     path: abs,
+    history_id: None,
+    history_count: None,
   })
 }
 
@@ -1021,9 +1054,133 @@ pub async fn rename_file_inner(
   Ok(serde_json::json!({ "ok": true, "oldPath": old_abs, "newPath": new_abs }))
 }
 
+/// 某个文件保留的历史版本（最新在前）。读取历史只需要该路径的读权限。
+#[tauri::command]
+pub async fn filesystem_file_history(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  payload: FileHistoryPayload,
+) -> Result<FileHistoryResult, String> {
+  file_history_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn file_history_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: FileHistoryPayload,
+) -> Result<FileHistoryResult, String> {
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Read).await?;
+  let versions = crate::filesystem::history::list_versions(data_dir, &abs)
+    .await
+    .into_iter()
+    .map(|version| FileHistoryEntry {
+      id: version.id,
+      created_at: version.created_at,
+      bytes: version.bytes,
+      tool: version.tool,
+      sha256: version.sha256,
+    })
+    .collect();
+  Ok(FileHistoryResult { ok: true, path: abs, versions })
+}
+
+/// 恢复某个历史版本。恢复前会先把当前内容也备份一次，所以恢复本身可撤销。
+#[tauri::command]
+pub async fn filesystem_restore_file_version(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  payload: RestoreVersionPayload,
+) -> Result<OkResult, String> {
+  restore_version_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn restore_version_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: RestoreVersionPayload,
+) -> Result<OkResult, String> {
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Write).await?;
+  let lock = write_lock_for(&abs);
+  let _guard = lock.lock().await;
+
+  let content = crate::filesystem::history::read_version(data_dir, &abs, &payload.version_id).await?;
+  // Snapshot what is on disk now, so "restore" is just another step in history.
+  let history = record_previous_version(data_dir, &abs, "restore").await;
+  let text = String::from_utf8_lossy(&content).into_owned();
+  write_file_atomically(Path::new(&abs), &text).await?;
+
+  Ok(OkResult {
+    ok: true,
+    message: format!("已恢复到版本 {}", payload.version_id),
+    path: abs,
+    history_id: history.as_ref().map(|(version, _)| version.id.clone()),
+    history_count: history.as_ref().map(|(_, count)| *count),
+  })
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::filesystem::state::AllowlistDirectory;
+
+  /// End-to-end through the real commands: overwrite an existing file, see the
+  /// previous content in history, restore it, and confirm the restore itself was
+  /// recorded so it can be undone.
+  #[tokio::test]
+  async fn an_overwrite_can_be_restored_from_history() {
+    let data_dir = std::env::temp_dir().join(format!("chatless-history-data-{}", std::process::id()));
+    let work_dir = std::env::temp_dir().join(format!("chatless-history-work-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+    std::fs::create_dir_all(&data_dir).unwrap();
+    std::fs::create_dir_all(&work_dir).unwrap();
+
+    let state = FilesystemAllowlistState::default();
+    let path = work_dir.join("notes.txt").to_string_lossy().replace('\\', "/");
+    set_allowlist_inner(&data_dir, &state, SetAllowlistPayload {
+      version: Some(1),
+      directories: vec![AllowlistDirectory {
+        path: work_dir.to_string_lossy().replace('\\', "/"),
+        permissions: FsPermissions { read: true, write: true, create: true, delete: false },
+      }],
+    })
+    .await
+    .expect("allowlist the work directory");
+
+    // First write creates the file, so there is nothing to back up yet.
+    let created = write_file_inner(&data_dir, &state, WriteFilePayload {
+      path: path.clone(), content: "v1".to_string(),
+    }).await.expect("initial write");
+    assert!(created.history_id.is_none(), "a new file has no previous version");
+
+    let overwritten = write_file_inner(&data_dir, &state, WriteFilePayload {
+      path: path.clone(), content: "v2".to_string(),
+    }).await.expect("overwrite");
+    assert!(overwritten.history_id.is_some());
+    assert_eq!(overwritten.history_count, Some(1));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "v2");
+
+    let history = file_history_inner(&data_dir, &state, FileHistoryPayload { path: path.clone() })
+      .await
+      .expect("read history");
+    assert_eq!(history.versions.len(), 1);
+    let version_id = history.versions[0].id.clone();
+
+    restore_version_inner(&data_dir, &state, RestoreVersionPayload {
+      path: path.clone(), version_id,
+    }).await.expect("restore");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "v1");
+
+    // The restore snapshotted v2 first, so undoing the undo is possible.
+    let after = file_history_inner(&data_dir, &state, FileHistoryPayload { path })
+      .await
+      .expect("read history after restore");
+    assert_eq!(after.versions.len(), 2);
+    assert_eq!(after.versions[0].tool, "restore");
+
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+  }
 
   fn applied(outcome: EditOutcome) -> (String, u32, u32) {
     match outcome {

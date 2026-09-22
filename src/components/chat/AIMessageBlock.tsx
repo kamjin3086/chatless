@@ -22,6 +22,7 @@ import { toast } from '@/components/ui/sonner';
 import { FileOpener } from '@/lib/utils/fileOpener';
 import { resolveAliasPath } from '@/lib/filesystemAllowlist/displayPathAliases';
 import { extractThinkAndRegular, splitThinkFromMarkdown } from '@/lib/markdown/splitThinkTags';
+import { FileHistoryPopover } from '@/components/chat/FileHistoryPopover';
 
 interface AIMessageBlockProps {
   content: string;
@@ -648,22 +649,30 @@ export function AIMessageBlock({
           </div> */}
           <div className="mt-1 flex flex-wrap gap-1.5">
             {fileChanges.slice(0, 12).map((c) => (
-              <button
+              <div
                 key={`${c.op}:${c.path}`}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px]
+                className="inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-md text-[11px]
                   bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-900/20 dark:hover:bg-slate-900/30
                   border border-slate-200/60 dark:border-slate-700/60
                   text-slate-700 dark:text-slate-200"
-                title={c.path}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void openPathSafe(c.path);
-                }}
               >
-                <span className="font-mono text-slate-500 dark:text-slate-400">{c.op}</span>
-                <span className="max-w-[320px] truncate">{basename(c.path)}</span>
-              </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 min-w-0"
+                  title={c.path}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void openPathSafe(c.path);
+                  }}
+                >
+                  <span className="font-mono text-slate-500 dark:text-slate-400">{c.op}</span>
+                  <span className="max-w-[320px] truncate">{basename(c.path)}</span>
+                </button>
+                {/* Overwrites are otherwise unrecoverable; history lives in the
+                    app data directory so it never pollutes the user's folder. */}
+                <FileHistoryPopover path={c.path} />
+              </div>
             ))}
             {fileChanges.length > 12 && (
               <span className="text-[11px] text-slate-400 dark:text-slate-500 select-none px-1 py-1">
