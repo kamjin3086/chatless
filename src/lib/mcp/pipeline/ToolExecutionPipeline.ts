@@ -4,7 +4,7 @@ import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permis
 import { resolveAccess, setConversationAccess } from '@/lib/mcp/accessPolicy';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
-import { isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
+import { findUnresolvedAlias, findUnresolvedAliasInValues, isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
 import {
   grantCallScopedPaths,
@@ -346,6 +346,18 @@ export class ToolExecutionPipeline {
           }
         }
 
+        // An alias that survived substitution is not a path and not a command:
+        // refuse it here so nothing creates a literal "@WorkDir" folder.
+        const unresolved = findUnresolvedAliasInValues([
+          execArgs.workingDir,
+          typeof execArgs.command === 'string' ? execArgs.command : '',
+        ]);
+        if (unresolved) {
+          return this.rejectUnresolvedAlias({ assistantMessageId, conversationId: invocation.conversationId,
+            server, tool, cardId, callKey, callId, args: (args || {}) as any, alias: unresolved,
+            sessionWorkDir: shellWorkDir });
+        }
+
         execInvocation = new ToolInvocation({
           assistantMessageId: invocation.assistantMessageId,
           conversationId: invocation.conversationId,
@@ -423,15 +435,26 @@ export class ToolExecutionPipeline {
           }
 
           // 路径解析辅助函数：支持相对路径、别名路径、绝对路径
+          let resolveError: string | undefined;
           const resolvePath = (p: string) => {
             if (!p.trim()) return '';
-            return resolveAllowlistPath({ inputPath: p, directories: dirsForResolve as any, workingDir }).absolutePath;
+            try {
+              return resolveAllowlistPath({ inputPath: p, directories: dirsForResolve as any, workingDir }).absolutePath;
+            } catch (error) {
+              resolveError ||= error instanceof Error ? error.message : String(error);
+              return p;
+            }
           };
 
           // 解析主路径用于权限检查
-          const resolved = inputPath
-            ? resolveAllowlistPath({ inputPath, directories: dirsForResolve as any, workingDir })
-            : null;
+          let resolved: ReturnType<typeof resolveAllowlistPath> | null = null;
+          if (inputPath) {
+            try {
+              resolved = resolveAllowlistPath({ inputPath, directories: dirsForResolve as any, workingDir });
+            } catch (error) {
+              resolveError ||= error instanceof Error ? error.message : String(error);
+            }
+          }
 
           // 构建执行参数，解析所有路径
           const execArgs: Record<string, unknown> = { ...(args || {}) };
@@ -450,6 +473,21 @@ export class ToolExecutionPipeline {
           // 解析 paths 数组（用于 delete_many 等）
           if (rawPaths.length > 0) {
             execArgs.paths = rawPaths.map(resolvePath).filter(Boolean);
+          }
+
+          // 别名没解析出来（未授权/拼错）或路径无法解析：直接给出结构化错误，
+          // 不把原始字符串交给后端——那正是字面量 "@WorkDir" 目录的由来。
+          const leftoverAlias = findUnresolvedAliasInValues([
+            execArgs.path, execArgs.dir, execArgs.root, execArgs.oldPath, execArgs.newPath,
+            ...(Array.isArray(execArgs.paths) ? execArgs.paths : []),
+          ]);
+          if (leftoverAlias || resolveError) {
+            return this.rejectUnresolvedAlias({
+              assistantMessageId, conversationId: invocation.conversationId, server, tool, cardId, callKey, callId,
+              args: (args || {}) as any,
+              alias: leftoverAlias || findUnresolvedAlias(inputPath) || '',
+              reason: resolveError,
+            });
           }
 
           execInvocation = new ToolInvocation({
@@ -915,6 +953,66 @@ export class ToolExecutionPipeline {
     } finally {
       await revokeCallGrants?.().catch(() => {});
     }
+  }
+
+  /**
+   * Refuses a call whose path or command still carries an unresolved `@Alias`.
+   *
+   * Passing it on is how a command like `cd @WorkDir` created a literal
+   * `@WorkDir` folder, so this returns a structured result the model can act on
+   * and never dispatches to an adapter.
+   */
+  private async rejectUnresolvedAlias(params: {
+    assistantMessageId: string;
+    conversationId: string;
+    server: string;
+    tool: string;
+    cardId: string;
+    callKey: string;
+    callId?: string;
+    args: Record<string, unknown>;
+    alias: string;
+    reason?: string;
+    sessionWorkDir?: string;
+  }): Promise<unknown> {
+    const label = params.alias || '未知别名';
+    const message = params.reason
+      ? `${params.reason}（路径里的别名为 ${label}）`
+      : `${label} 未被解析：该别名没有对应的已授权目录。`;
+    const hint = params.sessionWorkDir
+      ? `可以用相对路径，或直接用 @WorkDir（当前指向 ${params.sessionWorkDir}）。`
+      : '可以用绝对路径，或让用户先附加一个目录再使用 @WorkDir。';
+
+    const failure = {
+      ok: false,
+      error: {
+        code: 'UNRESOLVED_ALIAS',
+        message: `${message} ${hint}`,
+        alias: params.alias || undefined,
+        server: params.server,
+        tool: params.tool,
+      },
+      resultStatus: 'failed' as const,
+    };
+
+    markError({ assistantMessageId: params.assistantMessageId, server: params.server, tool: params.tool,
+      cardId: params.cardId }, failure.error.message);
+    this.coordinator.markToolCallComplete(params.callKey, 'failed');
+    try {
+      await appendWorkspaceToolStep({
+        conversationId: params.conversationId,
+        assistantMessageId: params.assistantMessageId,
+        cardId: params.cardId,
+        callId: params.callId,
+        server: params.server,
+        tool: params.tool,
+        args: params.args,
+        result: failure,
+      });
+    } catch {
+      // ignore
+    }
+    return failure;
   }
 }
 

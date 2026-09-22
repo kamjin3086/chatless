@@ -12,6 +12,7 @@ import {
   deleteByPattern,
   renameFile,
 } from '@/lib/tauri/filesystemCommands';
+import { findUnresolvedAliasInValues } from '@/lib/filesystemAllowlist/unresolvedAlias';
 
 /**
  * 内置 filesystem adapter（调用 Rust 后端 commands）
@@ -35,6 +36,26 @@ export class FilesystemAdapter implements ToolAdapter {
   async execute(invocation: ToolInvocation): Promise<unknown> {
     const tool = String(invocation.tool || '').toLowerCase();
     const args = invocation.args || {};
+    // Defence in depth: the pipeline resolves aliases and rejects leftovers, but
+    // no path that still contains one may ever reach the backend.
+    const unresolved = findUnresolvedAliasInValues([
+      (args as Record<string, unknown>).path,
+      (args as Record<string, unknown>).dir,
+      (args as Record<string, unknown>).root,
+      (args as Record<string, unknown>).oldPath,
+      (args as Record<string, unknown>).newPath,
+      ...(Array.isArray((args as Record<string, unknown>).paths) ? ((args as Record<string, unknown>).paths as unknown[]) : []),
+    ]);
+    if (unresolved) {
+      return {
+        ok: false,
+        error: {
+          code: 'UNRESOLVED_ALIAS',
+          message: `${unresolved} 没有对应的已授权目录，请改用相对路径、@WorkDir 或绝对路径。`,
+        },
+        resultStatus: 'failed',
+      };
+    }
 
     const path = typeof (args as Record<string, unknown>).path === 'string'
       ? String((args as Record<string, unknown>).path)
