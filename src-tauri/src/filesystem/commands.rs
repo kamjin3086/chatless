@@ -1118,6 +1118,35 @@ pub async fn restore_version_inner(
   })
 }
 
+/// 用系统默认程序打开文件/目录。
+///
+/// 走这里而不是前端的 opener 插件，是因为插件的作用域白名单只能表达固定目录
+/// （$APPDATA 等），而用户的产物目录、附加目录可能在任意位置。这里复用同一套
+/// allowlist 校验：能读到的路径才能打开。
+#[tauri::command]
+pub async fn filesystem_open_path(
+  app: AppHandle,
+  state: State<'_, FilesystemAllowlistState>,
+  payload: OpenPathPayload,
+) -> Result<serde_json::Value, String> {
+  open_path_inner(&app_data_dir(&app)?, &state, payload).await
+}
+
+pub async fn open_path_inner(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  payload: OpenPathPayload,
+) -> Result<serde_json::Value, String> {
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Read).await?;
+  let target = Path::new(&abs);
+  if !target.exists() {
+    return Err(format!("路径不存在: {abs}"));
+  }
+  tauri_plugin_opener::open_path(target, None::<&str>)
+    .map_err(|error| format!("打开失败: {error}"))?;
+  Ok(serde_json::json!({ "ok": true, "path": abs }))
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

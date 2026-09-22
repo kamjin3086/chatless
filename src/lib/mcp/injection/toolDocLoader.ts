@@ -52,9 +52,6 @@ export async function getToolDoc(params: {
     if (key.startsWith('web__')) {
       return await fetchText('/tool-docs/web.txt');
     }
-    if (key.startsWith('ctx__')) {
-      return await fetchText('/tool-docs/ctx.txt');
-    }
     if (key.startsWith('tools__')) {
       return await fetchText('/tool-docs/tools.txt');
     }

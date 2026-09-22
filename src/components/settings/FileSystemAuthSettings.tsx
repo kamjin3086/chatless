@@ -91,7 +91,6 @@ export function FileSystemAuthSettings() {
         alias: alias || undefined,
         source: "manual",
         permissions: { read: true, write: true, create: true, delete: false },
-        reconnect: true,
       });
     } finally {
       setLoading(false);

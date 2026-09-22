@@ -120,6 +120,12 @@ pub struct FileHistoryPayload {
   pub path: String,
 }
 
+/// 用系统默认程序打开文件/目录 payload
+#[derive(Debug, Clone, Deserialize)]
+pub struct OpenPathPayload {
+  pub path: String,
+}
+
 /// 一个历史版本的展示信息
 #[derive(Debug, Clone, Serialize)]
 pub struct FileHistoryEntry {

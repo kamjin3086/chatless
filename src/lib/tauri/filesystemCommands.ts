@@ -278,6 +278,14 @@ export async function restoreFileVersion(path: string, versionId: string): Promi
 }
 
 /**
+ * Opens a path with the system default application. Goes through Rust because
+ * the renderer's opener plugin cannot reach the user's own directories.
+ */
+export async function openPathChecked(path: string): Promise<OkResult> {
+  return invokeFs<{ path: string }, OkResult>('filesystem_open_path', { path });
+}
+
+/**
  * 精确编辑：把 find 替换为 replace（默认要求唯一匹配）
  */
 export async function editFile(params: EditFileParams): Promise<EditFileResult> {

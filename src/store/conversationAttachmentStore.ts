@@ -128,7 +128,6 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
       path: p,
       source: 'attachment',
       permissions: { read: true, write: true, create: true, delete: false },
-      reconnect: true,
     });
   },
 

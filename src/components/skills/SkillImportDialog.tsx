@@ -122,7 +122,6 @@ export function SkillImportDialog({
             path: parent,
             source: 'attachment',
             permissions: { read: true, write: false, create: false, delete: false },
-            reconnect: true,
           });
         } catch {
           // ignore

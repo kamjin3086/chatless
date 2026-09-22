@@ -6,7 +6,6 @@ export async function ensureAllowlistedDirectory(params: {
   source: AllowlistSource;
   permissions: AllowlistPermissions;
   alias?: string;
-  reconnect?: boolean;
 }): Promise<void> {
   const dirPath = normalizeDirectoryPath(params.path);
   if (!dirPath) return;

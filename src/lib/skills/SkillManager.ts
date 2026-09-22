@@ -717,7 +717,6 @@ export class SkillManager {
           alias: 'Skills',
           source: 'skills',
           permissions: { read: true, write: true, create: true, delete: false },
-          reconnect: true,
         });
       } catch (e) {
         console.warn('[SkillManager] Failed to add skills dir to allowlist:', e);
