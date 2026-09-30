@@ -74,6 +74,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev patchelf
+      - name: Provide frontend placeholder
+        # tauri::generate_context! embeds the frontendDist directory while
+        # compiling, so cargo check only needs that path to exist. The real
+        # frontend build runs in the frontend-checks job and on release.
+        run: |
+          mkdir -p dist
+          printf '<!doctype html><meta charset="utf-8"><title>chatless</title>' > dist/index.html
       - name: Run cargo check
         run: cd src-tauri && cargo check
 
