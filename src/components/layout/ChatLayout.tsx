@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } f
 import StorageUtil from '@/lib/storage';
 import { useUiPreferences } from '@/store/uiPreferences';
 import { cn } from "@/lib/utils";
-import {  X, Clock, Star, Flag, RotateCcw, ListPlus } from 'lucide-react';
+import {  X, Clock, Star, RotateCcw, ListPlus } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 // import { SidebarHeader } from './SidebarHeader';
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
@@ -161,7 +161,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
   const [isSearching, setIsSearching] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite' | 'important'>('recent');
+  const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite'>('recent');
   
   const createConversation = useChatStore((state) => state.createConversation);
   const conversations = useChatStore((state) => state.conversations);
@@ -190,7 +190,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   }, []);
 
   // 处理分类筛选
-  const handleFilterChange = (filter: 'recent' | 'favorite' | 'important') => {
+  const handleFilterChange = (filter: 'recent' | 'favorite') => {
     setActiveFilter(filter);
     // 如果在搜索模式，清除搜索
     if (isSearching) {
@@ -207,9 +207,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       switch (activeFilter) {
         case 'favorite':
           result = conversations.filter((conv: Conversation) => (conv as any)['is_favorite']);
-          break;
-        case 'important':
-          result = conversations.filter((conv: Conversation) => (conv as any)['is_important']);
           break;
         case 'recent':
         default:
@@ -266,7 +263,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         <aside
           style={{ width: isSidebarOpen ? sidebarWidth : 0 }}
           className={cn(
-            "bg-white dark:bg-gray-900 flex flex-col min-h-0 flex-shrink-0",
+            "chat-rail bg-white dark:bg-gray-900 flex flex-col min-h-0 flex-shrink-0 glass-surface",
             mounted ? "transition-all duration-300" : "transition-none",
             isSidebarOpen
               ? "border-r border-slate-200/50 dark:border-slate-800/50 translate-x-0"
@@ -275,47 +272,45 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         >
           {/* 侧边栏头部已隐藏 */}
 
-          {/* 搜索框 + 新建按钮 - 紧凑风格 */}
-          <div className="flex-shrink-0 px-2 py-1.5 border-b border-slate-200/40 dark:border-slate-700/40 bg-white/90 dark:bg-slate-900/90">
-            <div className="flex items-center gap-1.5">
-              <div className="flex-1 min-w-0">
-                <div className="relative bg-slate-100/60 dark:bg-slate-800/40 rounded px-2 py-1 focus-within:bg-slate-100 dark:focus-within:bg-slate-800/60 transition-colors">
-                  <SearchInput
-                    placeholder="搜索对话..."
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    className="w-full bg-transparent border-none focus:ring-0 text-xs h-5 placeholder:text-slate-400/70"
-                  />
-                  {isSearching && (
-                    <button
-                      onClick={handleClearSearch}
-                      className="absolute top-1/2 -translate-y-1/2 right-1 p-0.5 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded transition-colors"
-                      aria-label="清除"
-                    >
-                      <X className="w-3 h-3 text-slate-400" />
-                    </button>
-                  )}
-                </div>
+          {/* 搜索框 + 新建按钮 */}
+          <div className="flex-shrink-0 px-2.5 py-2">
+            <div className="flex items-center gap-1 min-w-0">
+              <div className="relative flex-1 min-w-0">
+                <SearchInput
+                  placeholder="搜索对话..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="h-8 w-full pr-6 text-xs"
+                />
+                {isSearching && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="absolute top-1/2 -translate-y-1/2 right-1 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    aria-label="清除"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
               </div>
               <IconButton
                 onClick={handleNewChat}
                 title="新建"
                 icon={ListPlus}
-                className="h-6 w-6 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                className="h-7 w-7 shrink-0 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               />
             </div>
           </div>
 
-          {/* 对话分类标签 - 紧凑文字风格 */}
+          {/* 对话分类 */}
           {!isSearching && (
-            <div className="flex-shrink-0 px-2 py-1 border-b border-slate-200/40 dark:border-slate-700/40 bg-white/90 dark:bg-slate-900/90">
+            <div className="flex-shrink-0 px-2 pb-1">
               <div className="flex items-center gap-0.5 text-[11px]">
                 <button 
                   className={cn(
-                    "px-2 py-1 rounded transition-colors flex items-center gap-1",
+                    "px-2 py-1 rounded-md transition-colors flex items-center gap-1",
                     activeFilter === 'recent' 
-                      ? "text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-900/20" 
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                      ? "text-sky-700 dark:text-sky-300" 
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   )} 
                   onClick={() => handleFilterChange('recent')}
                 >
@@ -324,34 +319,22 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                 </button>
                 <button 
                   className={cn(
-                    "px-2 py-1 rounded transition-colors flex items-center gap-1",
+                    "px-2 py-1 rounded-md transition-colors flex items-center gap-1",
                     activeFilter === 'favorite' 
-                      ? "text-yellow-600 dark:text-yellow-400 bg-yellow-50/60 dark:bg-yellow-900/20" 
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                      ? "text-sky-700 dark:text-sky-300" 
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   )} 
                   onClick={() => handleFilterChange('favorite')}
                 >
                   <Star className={cn("w-3 h-3", activeFilter === 'favorite' && "fill-current")} />
                   <span>收藏</span>
                 </button>
-                <button 
-                  className={cn(
-                    "px-2 py-1 rounded transition-colors flex items-center gap-1",
-                    activeFilter === 'important' 
-                      ? "text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-900/20" 
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-                  )} 
-                  onClick={() => handleFilterChange('important')}
-                >
-                  <Flag className="w-3 h-3" />
-                  <span>重要</span>
-                </button>
               </div>
             </div>
           )}
 
           {/* 会话列表 - 传递过滤后的会话 */}
-          <div className="flex-1 min-h-0 overflow-hidden bg-white dark:bg-gray-900">
+          <div className="flex-1 min-h-0 overflow-hidden glass-surface">
             <ConversationSidebar 
               filteredConversations={filteredConversations}
               isSearching={isSearching}
@@ -366,7 +349,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             onMouseDown={handleDragStart}
             className={cn(
               "relative w-1 cursor-col-resize group transition-colors duration-150",
-              isDragging ? "bg-blue-500/20" : "dark:bg-slate-900 bg-transparent hover:bg-blue-500/10"
+              isDragging ? "bg-slate-400/20" : "dark:bg-slate-900 bg-transparent hover:bg-slate-400/10"
             )}
           >
             {/* 重置按钮，仅在拖拽时显示 */}
@@ -374,7 +357,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
               <button
                 ref={resetBtnRef}
                 title="恢复默认宽度"
-                className="absolute -right-3 top-1/2 -translate-y-1/2 p-1 rounded-full bg-white dark:bg-slate-800 shadow-md hover:bg-blue-500 hover:text-white transition-colors pointer-events-none"
+                className="absolute -right-3 top-1/2 -translate-y-1/2 p-1 rounded-full bg-white dark:bg-slate-800 shadow-md hover:bg-slate-600 hover:text-white transition-colors pointer-events-none"
               >
                 <RotateCcw className="w-3 h-3" />
               </button>
@@ -383,7 +366,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         )}
 
         {/* 主内容区域 */}
-        <main className="flex-1 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-900">
+        <main className="flex-1 flex flex-col min-h-0 glass-surface">
           {/* 聊天内容区域 - 使用flex-1和min-h-0确保正确滚动 */}
           <div className="flex-1 min-h-0 overflow-auto">
             {children}

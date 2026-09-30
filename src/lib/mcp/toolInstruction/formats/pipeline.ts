@@ -19,6 +19,13 @@ import type {
   ParsedToolCall, 
   CleanOptions 
 } from './types';
+import {
+  OpenAIHandler,
+  XMLHandler,
+  GptOssHandler,
+  JsonHandler,
+  GptOssTagHandler,
+} from './handlers';
 
 /**
  * 处理管道类
@@ -231,29 +238,12 @@ export function resetDefaultPipeline(): void {
  * 否则 commentary to= 格式会在被解析之前就被清理掉。
  */
 function registerBuiltinHandlers(pipeline: ToolCallPipeline): void {
-  // 同步导入所有处理器
-  // 注：这里使用 require 进行同步导入，确保处理器在 getDefaultPipeline 返回前已注册
-  try {
-     
-    const { OpenAIHandler } = require('./handlers/openai');
-     
-    const { XMLHandler } = require('./handlers/xml');
-     
-    const { GptOssHandler } = require('./handlers/gptoss');
-     
-    const { JsonHandler } = require('./handlers/json');
-     
-    const { GptOssTagHandler } = require('./handlers/gptoss-tags');
-    
-    pipeline.registerAll([
-      new OpenAIHandler(),
-      new XMLHandler(),
-      new GptOssHandler(),    // 解析 commentary to= 格式
-      new JsonHandler(),
-      new GptOssTagHandler(), // 清理 GPT-OSS 标签（在解析之后）
-    ]);
-  } catch (e) {
-    console.warn('[ToolCallPipeline] 处理器加载失败:', e);
-  }
+  pipeline.registerAll([
+    new OpenAIHandler(),
+    new XMLHandler(),
+    new GptOssHandler(),
+    new JsonHandler(),
+    new GptOssTagHandler(),
+  ]);
 }
 

@@ -8,7 +8,7 @@
 // 面板容器样式
 export const panelContainerClass = [
   // 基础
-  "rounded-xl border overflow-hidden",
+  "glass-overlay rounded-xl border overflow-hidden",
   // 背景
   "bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm",
   // 边框和阴影

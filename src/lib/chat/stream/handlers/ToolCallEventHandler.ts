@@ -19,7 +19,6 @@ import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import type { EventHandler, StreamContext } from '../types';
 import { useChatStore } from '@/store/chatStore';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
-import { repairToolCall } from '@/lib/mcp/toolRepair/repairToolCall';
 
 
 const coordinator = ToolCallCoordinator.getInstance();
@@ -63,17 +62,34 @@ export class ToolCallEventHandler implements EventHandler {
       return;
     }
 
-    // ============================================================
-    // Tool Repair（工具名/参数 JSON 修复 + 常见字段别名修复）
-    // ============================================================
-    const repaired = repairToolCall({
-      server: parsedServer,
-      tool: parsedTool,
+    // Native tool calls are already structured by the provider adapter.  Do not
+    // guess tool names, repair malformed JSON, or synthesize missing fields here:
+    // a malformed call must be returned to the model as a structured error.
+    const server = parsedServer;
+    const tool = parsedTool;
+    let args: Record<string, unknown> = {};
+    let argumentError: string | undefined;
+    if (parsedArguments !== undefined && parsedArguments.trim() !== '') {
+      try {
+        const decoded = JSON.parse(parsedArguments);
+        if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
+          argumentError = 'Tool arguments must be a JSON object';
+        } else {
+          args = decoded as Record<string, unknown>;
+        }
+      } catch (error) {
+        argumentError = error instanceof Error ? error.message : 'Invalid JSON arguments';
+      }
+    }
+    const repaired = {
+      ok: !argumentError,
+      server,
+      tool,
+      args,
       rawArguments: parsedArguments,
-    });
-    const server = repaired.server;
-    const tool = repaired.tool;
-    const args = repaired.args;
+      issue: argumentError ? { message: argumentError } : undefined,
+      repairs: [] as string[],
+    };
     
     // ============================================================
     // 关键：全局工具调用去重（协调器）
@@ -177,12 +193,12 @@ export class ToolCallEventHandler implements EventHandler {
         });
       }
 
-      // 修复失败：不进入执行，直接把结构化错误回灌给模型，要求其自修
+      // 参数无效：不进入执行，直接把结构化错误回灌给模型，要求其修正原生调用
       if (!repaired.ok) {
-      const onToolCall = (context as any)?.metadata?.onToolCall;
+        const onToolCall = (context as any)?.metadata?.onToolCall;
         const schemaHint = JSON.stringify(
           {
-            code: 'TOOL_REPAIR_FAILED',
+            code: 'TOOL_ARGUMENTS_INVALID',
             issue: repaired.issue,
             repairs: repaired.repairs,
             rawArguments: repaired.rawArguments,
@@ -196,7 +212,7 @@ export class ToolCallEventHandler implements EventHandler {
             server,
             tool,
             ok: false,
-            errorMessage: repaired.issue?.message || 'tool repair failed',
+            errorMessage: repaired.issue?.message || 'invalid tool arguments',
             schemaHint,
             cardId,
           });
@@ -206,66 +222,48 @@ export class ToolCallEventHandler implements EventHandler {
         } catch {
           // ignore
         }
-      // AgentLoop：交由外部 loop 生成下一轮 tool_role 续写（避免递归开新流）
-      if (typeof onToolCall === 'function') {
-        try {
-          await onToolCall({
-            server,
-            tool,
-            args,
-            callId: normalizedCallId,
-            cardId,
-            lockKey: lockResult.key,
-            preResult: {
-              error: {
-                code: 'TOOL_REPAIR_FAILED',
-                issue: repaired.issue,
-                repairs: repaired.repairs,
-                rawArguments: repaired.rawArguments,
+        if (typeof onToolCall === 'function') {
+          try {
+            await onToolCall({
+              server,
+              tool,
+              args,
+              callId: normalizedCallId,
+              cardId,
+              lockKey: lockResult.key,
+              providerData: event.providerData,
+              preResult: {
+                error: {
+                  code: 'TOOL_ARGUMENTS_INVALID',
+                  issue: repaired.issue,
+                  repairs: repaired.repairs,
+                  rawArguments: repaired.rawArguments,
+                },
               },
-            },
-          });
-        } catch {
-          // ignore
+            });
+          } catch {
+            // ignore
+          }
         }
-        return;
-      }
-
-      // 兼容旧链路：仍走 ToolCallOrchestrator 递归续写
-      try {
-        const { continueWithToolResult } = await import('@/lib/mcp/ToolCallOrchestrator');
-        await continueWithToolResult({
-          assistantMessageId: context.messageId,
-          provider: context.metadata.provider,
-          model: context.metadata.model,
-          conversationId: context.conversationId,
-          historyForLlm: context.metadata.historyForLlm as any,
-          originalUserContent: context.metadata.originalUserContent,
-          server,
-          tool,
-          args,
-          cardId,
-          callId: normalizedCallId,
-          result: {
-            error: {
-              code: 'TOOL_REPAIR_FAILED',
-              issue: repaired.issue,
-              repairs: repaired.repairs,
-              rawArguments: repaired.rawArguments,
-            },
-          },
-        });
-      } catch (e) {
-        console.warn('[ToolCallHandler] continueWithToolResult after repair-fail failed:', e);
-      }
         return;
       }
 
       // 执行工具调用（独立的错误处理）
       try {
-      const onToolCall = (context as any)?.metadata?.onToolCall;
-      // AgentLoop：把执行/续写交给外部 while(true) loop
-      if (typeof onToolCall === 'function') {
+        const onToolCall = (context as any)?.metadata?.onToolCall;
+        if (typeof onToolCall !== 'function') {
+          store.dispatchMessageAction(context.messageId, {
+            type: 'TOOL_RESULT',
+            server,
+            tool,
+            ok: false,
+            errorMessage: 'Tool execution is unavailable outside the agent runtime',
+            cardId,
+          });
+          coordinator.markToolCallComplete(lockResult.key, 'failed');
+          return;
+        }
+        // 工具执行只由统一 Agent loop 负责，避免旧链路递归启动第二个请求。
         await onToolCall({
           server,
           tool,
@@ -273,26 +271,9 @@ export class ToolCallEventHandler implements EventHandler {
           callId: normalizedCallId,
           cardId,
           lockKey: lockResult.key,
+          providerData: event.providerData,
         });
         return;
-      }
-
-        
-        const { executeToolCall } = await import('@/lib/mcp/ToolCallOrchestrator');
-        await executeToolCall({
-          assistantMessageId: context.messageId,
-          conversationId: context.conversationId,
-          server,
-          tool,
-          args,
-          provider: context.metadata.provider,
-          model: context.metadata.model,
-          historyForLlm: context.metadata.historyForLlm as any,
-          originalUserContent: context.metadata.originalUserContent,
-          callId: normalizedCallId,
-          cardId,
-          lockKey: lockResult.key,
-        });
 
       } catch (executeError) {
         console.error('[ToolCallHandler] Tool execution failed:', executeError);

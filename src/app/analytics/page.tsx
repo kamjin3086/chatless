@@ -14,7 +14,7 @@ import { useHistoryStore } from '@/store/historyStore';
 
 // 统计组件
 import { AnalyticsToolbar } from "@/components/analytics/AnalyticsToolbar";
-import { MessageSquare, Bot, Tags, TrendingUp, Star, Flag } from "lucide-react";
+import { MessageSquare, Bot, Tags, TrendingUp, Star } from "lucide-react";
 import { historyService } from "@/lib/historyService";
 import { HistoryStats as HistoryStatsType } from "@/types/history";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
   }, [searchParams]);
 
   return (
-    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 overflow-hidden">
+    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 overflow-hidden glass-surface">
       {/* 顶部 Tab */}
       <PageTabs
         tabs={tabs}
@@ -68,7 +68,7 @@ function HistoryContent() {
   const { showStats } = useHistoryStore();
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 glass-surface">
       {/* 统计信息抽屉 */}
       <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
         showStats ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
@@ -140,10 +140,10 @@ function AnalyticsContent() {
       <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
         {/* 概览统计卡片 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-white/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-medium text-slate-500">总对话数</CardTitle>
-              <MessageSquare className="h-4 w-4 text-blue-500" />
+              <MessageSquare className="h-4 w-4 text-slate-500" />
             </CardHeader>
             <CardContent>
               <div className="text-xl font-semibold text-slate-800 dark:text-slate-100">{stats?.totalConversations || 0}</div>
@@ -153,7 +153,7 @@ function AnalyticsContent() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-medium text-slate-500">收藏对话</CardTitle>
               <Star className="h-4 w-4 text-amber-500" />
@@ -166,20 +166,7 @@ function AnalyticsContent() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium text-slate-500">重要对话</CardTitle>
-              <Flag className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-xl font-semibold text-slate-800 dark:text-slate-100">{stats?.importantCount || 0}</div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                占比 {stats && stats.totalConversations > 0 ? Math.round((stats.importantCount / stats.totalConversations) * 100) : 0}%
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-medium text-slate-500">平均消息数</CardTitle>
               <TrendingUp className="h-4 w-4 text-emerald-500" />
@@ -196,7 +183,7 @@ function AnalyticsContent() {
         {/* 详细统计图表 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* 模型使用统计 */}
-          <Card className="bg-white/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-slate-500 flex items-center gap-2">
                 <Bot className="h-4 w-4" />
@@ -215,7 +202,7 @@ function AnalyticsContent() {
                         <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{count}</span>
                         <div className="w-16 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
                           <div 
-                            className="bg-blue-500 h-1.5 rounded-full" 
+                            className="bg-slate-600 dark:bg-slate-400 h-1.5 rounded-full" 
                             style={{ width: `${stats ? (count / stats.totalConversations) * 100 : 0}%` }}
                           />
                         </div>
@@ -230,7 +217,7 @@ function AnalyticsContent() {
           </Card>
 
           {/* 标签使用统计 */}
-          <Card className="bg-white/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-slate-500 flex items-center gap-2">
                 <Tags className="h-4 w-4" />

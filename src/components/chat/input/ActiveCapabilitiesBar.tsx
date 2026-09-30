@@ -39,6 +39,8 @@ interface ActiveCapabilitiesBarProps {
 
   // WorkDir
   workingDir?: string;
+  /** True when @WorkDir is a directory the user attached (removable). */
+  workingDirAttached?: boolean;
   onRemoveWorkingDir?: () => void;
 
   // Document attachment (input file)
@@ -61,6 +63,7 @@ export function ActiveCapabilitiesBar({
   hasSessionParameters,
   onClickSessionParameters,
   workingDir,
+  workingDirAttached = false,
   onRemoveWorkingDir,
   attachedDocument,
   onRemoveDocument,
@@ -71,12 +74,14 @@ export function ActiveCapabilitiesBar({
   // 锚点元素
   const knowledgeBaseRef = useRef<HTMLButtonElement>(null);
 
-  // 简化：状态栏仅展示“已附加内容”（不展示“已启用”文案与过多技术项）
+  // 简化：状态栏仅展示“已附加内容”（不展示“已启用”文案与过多技术项）。
+  // 工作目录只在**用户自己选过**的时候出现：默认的会话产物目录是每个人的默认值，
+  // 每个新会话都宣告一次只是噪音，它的入口在 + 菜单里。
   const hasAny =
     selectedKnowledgeBase ||
     enabledMcpServers.length > 0 ||
     hasSessionParameters ||
-    !!workingDir ||
+    (workingDirAttached && !!workingDir) ||
     !!attachedDocument;
 
   if (!hasAny) {
@@ -130,8 +135,8 @@ export function ActiveCapabilitiesBar({
           </button>
         )}
 
-        {/* 工作目录标签 - 绿色系 */}
-        {workingDir && (
+        {/* 工作目录标签 - 绿色系：只表示“用户选定的目录”，点击打开、× 改回默认 */}
+        {workingDir && workingDirAttached && (
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -144,7 +149,7 @@ export function ActiveCapabilitiesBar({
               "hover:bg-emerald-100 dark:hover:bg-emerald-900/50",
               "border border-emerald-200/50 dark:border-emerald-800/50"
             )}
-            title={workingDir}
+            title={`${workingDir}\n本会话的工作目录（你选定的）：点右侧 × 改回会话默认`}
           >
             <Folder className="w-3 h-3" />
             {/* 只显示文件夹名，悬浮显示完整路径 */}

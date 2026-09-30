@@ -8,6 +8,12 @@ import { OpenAICompatibleProvider } from './providers/OpenAICompatibleProvider';
 import { createProviderInstance } from './strategy-factory';
 import { providerRepository } from '@/lib/provider/ProviderRepository';
 import { AVAILABLE_PROVIDERS_CATALOG } from '@/lib/provider/catalog';
+import { modelRequestScheduler } from './ModelRequestScheduler';
+
+function endpointFor(provider: string): string {
+  const instance = ProviderRegistry.get(provider) as any;
+  return String(instance?.baseUrl || provider).trim().replace(/\/$/, '') || provider;
+}
 
 // —— 定义 Provider 注册顺序 ——
 const PROVIDER_ORDER = [
@@ -197,7 +203,12 @@ export async function chat(
   await initializeLLM();
   const inst = getInterpreter();
   if (!inst) throw new Error('LLMInterpreter not initialized');
-  return inst.chat(provider, model, messages as any, options);
+  if (options.__schedulerLease) return inst.chat(provider, model, messages as any, options);
+  const result = await modelRequestScheduler.schedule(endpointFor(provider), {
+    signal: options.__signal, priority: options.__priority || 'normal',
+  }, () => inst.chat(provider, model, messages as any, { ...options, __schedulerLease: true }));
+  if (!result) throw new Error('模型请求在排队期间已取消');
+  return result;
 }
 
 export async function streamChat(
@@ -210,13 +221,25 @@ export async function streamChat(
   await initializeLLM();
   const inst = getInterpreter();
   if (!inst) throw new Error('LLMInterpreter not initialized');
-  return inst.streamChat(provider, model, messages as any, callbacks as any, options);
+  if (options.__schedulerLease) return inst.streamChat(provider, model, messages as any, callbacks as any, options);
+  return modelRequestScheduler.schedule(endpointFor(provider), {
+    signal: options.__signal, priority: options.__priority || 'normal',
+  }, async () => {
+    let resolveTerminal!: () => void;
+    const terminal = new Promise<void>((resolve) => { resolveTerminal = resolve; });
+    const wrapped = { ...callbacks,
+      onComplete: () => { try { callbacks.onComplete?.(); } finally { resolveTerminal(); } },
+      onError: (error: Error) => { try { callbacks.onError?.(error); } finally { resolveTerminal(); } },
+    };
+    await inst.streamChat(provider, model, messages as any, wrapped as any, { ...options, __schedulerLease: true });
+    await terminal;
+  });
 }
 
-export function cancelStream() {
+export function cancelStream(requestId?: string) {
   const inst = getInterpreter();
   if (inst) {
-    inst.cancelStream();
+    inst.cancelStream(requestId);
   }
 }
 

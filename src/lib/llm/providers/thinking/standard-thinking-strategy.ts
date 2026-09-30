@@ -79,10 +79,21 @@ export class StandardThinkingStrategy extends BaseStreamingStrategy {
    * @returns 提取的thinking内容（如果找到完整标签）
    */
   protected extractThinkingContent(token: ThinkingToken): string {
-    if (!token.content) return '';
-    
+    // Providers may deliver reasoning on its own channel (OpenAI-compatible
+    // `reasoning_content`, Responses reasoning deltas).  That text is already
+    // thinking, so only `content` has to be scanned for <think> tags.
+    const structured = typeof token.reasoning_content === 'string' ? token.reasoning_content : '';
+    if (!token.content) return structured;
+
+    return structured + this.extractTaggedThinking(token.content);
+  }
+
+  /**
+   * Extract thinking from a <think> tag stream.  Tags may span tokens.
+   */
+  private extractTaggedThinking(content: string): string {
     // 累积到buffer
-    this.tagBuffer += token.content;
+    this.tagBuffer += content;
     
     // 检测<think>开始标签（可能跨token）
     if (!this.detectedThinkStart && this.tagBuffer.includes('<think>')) {
@@ -131,11 +142,13 @@ export class StandardThinkingStrategy extends BaseStreamingStrategy {
 
     const wasInThinkingMode = this.detectedThinkStart;
 
-    // 1) 先处理 thinking（开放标签流式）
-    if (this.shouldProcessThinking(token)) {
-      events.push(...this.processThinkingStream(token));
+    // 1) 先处理 thinking（开放标签流式）— 仅解析一次
+    const thinkingContent = this.extractThinkingContent(token);
+    if (thinkingContent) {
+      events.push(...this.processThinkingStream(thinkingContent));
+    }
 
-      // 若刚刚因 </think> 退出 thinking，tagBuffer 里可能已存有 </think> 后的正文
+    if (thinkingContent || wasInThinkingMode || this.detectedThinkStart) {
       const exitedThinkingMode = wasInThinkingMode && !this.detectedThinkStart;
       if (exitedThinkingMode) {
         if (this.tagBuffer.length > 0) {
@@ -183,4 +196,3 @@ export class StandardThinkingStrategy extends BaseStreamingStrategy {
     this.detectedThinkStart = false;
   }
 }
-

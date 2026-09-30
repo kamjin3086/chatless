@@ -52,14 +52,22 @@ export class TauriDocumentExtractor implements DocumentExtractor {
       }
 
       // 调用Tauri命令解析文档
-      const content = await invoke<string>('parse_document_text', {
-        filePath: filePath
-      });
+      let parsed: import('@/lib/rag/evidenceTypes').ParsedDocument | undefined;
+      let content = '';
+      try {
+        parsed = await invoke<import('@/lib/rag/evidenceTypes').ParsedDocument>('parse_document_structured', {
+          filePath,
+        });
+        content = (parsed?.plainText || '').trim();
+      } catch {
+        content = (await invoke<string>('parse_document_text', { filePath })).trim();
+      }
 
       const fileName = this.getFileName(filePath);
 
       return {
         content: content.trim(),
+        parsed,
         metadata: {
           fileName,
           filePath,

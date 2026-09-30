@@ -96,10 +96,10 @@ export function ProviderTableRow({
 
   // 处理打开模型参数设置弹窗
   const handleOpenParameters = (modelId: string, modelLabel?: string) => {
-    setSelectedModelForParams({ 
-      providerName: provider.name, 
-      modelId, 
-      modelLabel 
+    setSelectedModelForParams({
+      providerName: provider.name,
+      modelId,
+      modelLabel
     });
     setParametersDialogOpen(true);
   };
@@ -111,10 +111,10 @@ export function ProviderTableRow({
     setLocalUrl(provider.api_base_url || '');
     setLocalDefaultApiKey(provider.default_api_key || '');
   }, [provider.name, provider.api_base_url, provider.default_api_key]);
-  
+
   // 模型搜索本地状态（用于 ProviderModelList 的筛选输入框）
   const [modelSearch, setModelSearch] = useState<string>('');
-  
+
   // 状态显示逻辑
   let statusText: string | undefined;
   let StatusIcon: any = undefined;
@@ -174,9 +174,9 @@ export function ProviderTableRow({
     <>
       <div className={cn(
         "px-5 py-3.5 mx-3 my-2 rounded-xl border transition-all duration-200",
-        isExpanded 
-          ? "bg-gradient-to-r from-blue-50/80 to-indigo-50/60 dark:from-blue-900/25 dark:to-indigo-900/20 border-blue-200/70 dark:border-blue-700/60 shadow-md ring-1 ring-blue-200/60 dark:ring-blue-800/60" 
-          : "bg-white/70 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-700/50 hover:bg-gradient-to-r hover:from-slate-50 hover:to-blue-50/30 dark:hover:from-slate-800/60 dark:hover:to-blue-900/15 hover:border-slate-300/70 dark:hover:border-slate-600/70 hover:shadow-md hover:ring-1 hover:ring-blue-200/70 dark:hover:ring-blue-800/60"
+        isExpanded
+          ? "bg-slate-200/45 dark:bg-white/8 border-slate-300/55 dark:border-white/14"
+          : "bg-white/40 dark:bg-white/5 border-slate-200/55 dark:border-white/10 hover:bg-slate-100/50 dark:hover:bg-white/8 hover:border-slate-300/60 dark:hover:border-white/14"
       )}>
         <div className="grid grid-cols-12 gap-4 items-center">
           {/* 拖拽手柄 */}
@@ -191,8 +191,8 @@ export function ProviderTableRow({
             </button>
             <div className={cn(
               "transition-all",
-              isExpanded 
-                ? "text-blue-600 dark:text-blue-400" 
+              isExpanded
+                ? "text-slate-700 dark:text-slate-200"
                 : "text-slate-400 dark:text-slate-500"
             )}>
               {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -200,7 +200,7 @@ export function ProviderTableRow({
           </div>
 
           {/* 可点击区域 - 提供商、状态 */}
-            <div 
+            <div
             className="col-span-9 flex items-center px-2 gap-4 cursor-pointer select-text"
             onClick={() => setIsExpanded(!isExpanded)}
           >
@@ -208,9 +208,9 @@ export function ProviderTableRow({
             <div className="flex items-center gap-3 flex-1">
               <div className={cn(
                 "w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 ring-2 transition-all",
-                isExpanded 
-                  ? "ring-blue-200/50 dark:ring-blue-700/50 shadow-sm" 
-                  : "ring-slate-200/50 dark:ring-slate-700/40"
+                isExpanded
+                  ? "ring-slate-300/70 dark:ring-white/20"
+                  : "ring-slate-200/50 dark:ring-white/10"
               )}>
                 <img
                   src={iconSrc}
@@ -228,14 +228,14 @@ export function ProviderTableRow({
               <div className="min-w-0 flex-1">
                 <div className={cn(
                   "font-semibold truncate transition-colors",
-                  isExpanded 
-                    ? "text-slate-900 dark:text-slate-50" 
+                  isExpanded
+                    ? "text-slate-900 dark:text-slate-50"
                     : "text-slate-800 dark:text-slate-100"
                 )}>{provider.displayName || provider.name}</div>
               <div className={cn(
                 "text-xs truncate transition-colors",
-                isExpanded 
-                  ? "text-slate-600 dark:text-slate-300" 
+                isExpanded
+                  ? "text-slate-600 dark:text-slate-300"
                   : "text-slate-500 dark:text-slate-400"
               )}>
                 {((localRepoModels ?? provider.models ?? []) as any[]).length} 个模型
@@ -304,7 +304,7 @@ export function ProviderTableRow({
                       onRefresh(provider);
                     }}
                     disabled={isConnectingLive || isInitialChecking}
-                    className="h-8 w-8 p-0 rounded-lg text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all shadow-sm border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                    className="h-8 w-8 p-0 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-white/10 transition-colors"
                   >
                     {isConnectingLive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
                   </Button>
@@ -341,7 +341,7 @@ export function ProviderTableRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                
+
                 <DropdownMenuItem onClick={() => setEditDialogOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md">
                   <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
                     <Pencil className="w-4 h-4 text-gray-700 dark:text-gray-300" />
@@ -359,7 +359,7 @@ export function ProviderTableRow({
                     <span className="text-sm font-medium">高级设置</span>
                     <span className="text-xs text-gray-500">网络请求方式等高级选项</span>
                   </div>
-                  {hasAdvanced && <span className="ml-auto w-2 h-2 rounded-full bg-blue-500" />}
+                  {hasAdvanced && <span className="ml-auto w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md">
                   <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
@@ -411,7 +411,6 @@ export function ProviderTableRow({
                 localUrl={localUrl}
                 setLocalUrl={setLocalUrl}
                 onUrlChange={onUrlChange}
-                onResetUrl={() => undefined}
                 showApiKeyFields={true}
                 localDefaultApiKey={localDefaultApiKey}
                 setLocalDefaultApiKey={setLocalDefaultApiKey}
@@ -419,10 +418,8 @@ export function ProviderTableRow({
                 onDefaultApiKeyChange={onDefaultApiKeyChange}
                 onDefaultApiKeyBlur={onDefaultApiKeyBlur}
                 endpointPreview={provider.api_base_url}
-                onPreferenceChange={onPreferenceChange}
-                showInlineMenu={false}
               />
-              
+
               <ProviderModelList
                 provider={provider}
                 modelsForDisplay={(localRepoModels ?? provider.models ?? []) as any}

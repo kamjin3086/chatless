@@ -3,6 +3,7 @@ import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { createStreamEvent } from '../types/stream-events';
+import { toOpenAIMessage } from './messageMapping';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -29,38 +30,12 @@ export class OpenAIProvider extends BaseProvider {
   }
 
   async checkConnection(): Promise<CheckResult> {
-    // 采用“无成本连通性检查”策略：构造一次标准 API 请求，携带显式错误密钥，
-    // 只要服务端返回可识别的鉴权错误（401/403/带有"auth"/"key"提示），即可判定 API 可达。
-    const base = this.baseUrl.replace(/\/$/, '');
-    const url = `${base}/chat/completions`;
-    const fakeKey = 'invalid_test_key_for_healthcheck';
-    const body = { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'ping' }], stream: false };
-    try {
-      const { tauriFetch } = await import('@/lib/request');
-      const { judgeApiReachable } = await import('./healthcheck');
-      const resp: any = await tauriFetch(url, {
-        method: 'POST',
-        rawResponse: true,
-        browserHeaders: true,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fakeKey}` },
-        body,
-        timeout: 5000,
-        fallbackToBrowserOnError: true,
-        debugTag: 'OpenAI-HealthCheck',
-        verboseDebug: true,
-        includeBodyInLogs: true
-      });
-      const status = (resp?.status ?? 0) as number;
-      const text = (await resp.text?.()) || '';
-      const judged = judgeApiReachable(status, text);
-      if (judged.ok) return { ok: true, message: judged.message, meta: { status } };
-      return { ok: false, reason: 'UNKNOWN', message: `HTTP ${status}`, meta: { status } };
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (/timeout|abort/i.test(msg)) return { ok: false, reason: 'TIMEOUT', message: '连接超时' };
-      if (/network|fetch|ENOTFOUND|ECONN/i.test(msg)) return { ok: false, reason: 'NETWORK', message: '网络错误' };
-      return { ok: false, reason: 'UNKNOWN', message: msg };
-    }
+    const apiKey = await this.getApiKey();
+    const { probeOpenAICompatibleBase } = await import('./healthcheck');
+    return probeOpenAICompatibleBase(this.baseUrl, {
+      apiKey,
+      debugTag: 'OpenAI-HealthCheck',
+    });
   }
 
   async chatStream(
@@ -103,18 +78,7 @@ export class OpenAIProvider extends BaseProvider {
     // 构建请求体
     const body: Record<string, unknown> = {
       model,
-      messages: messages.map(m => {
-        const anyMsg: any = m as any;
-        const msg: any = { role: m.role, content: m.content };
-        if (m.role === 'tool') {
-          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
-          if (anyMsg.name) msg.name = anyMsg.name;
-        }
-        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
-          msg.tool_calls = anyMsg.tool_calls;
-        }
-        return msg;
-      }),
+      messages: messages.map(toOpenAIMessage),
       stream: true,
       ...mapped,
     };
@@ -145,6 +109,7 @@ export class OpenAIProvider extends BaseProvider {
         name: string;
         arguments: string;
       }> = new Map();
+      let reasoningContent = '';
       
       await this.sseClient.startConnection(
         {
@@ -168,7 +133,7 @@ export class OpenAIProvider extends BaseProvider {
             if (!jsonStr) return;
             if (jsonStr === '[DONE]') {
               // 完成前，发送所有累积的工具调用
-              this.emitPendingToolCalls(toolCallState, cb);
+              this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               cb.onComplete?.();
               this.sseClient.stopConnection();
               return;
@@ -176,6 +141,9 @@ export class OpenAIProvider extends BaseProvider {
             try {
               const json = JSON.parse(jsonStr);
               const delta = json?.choices?.[0]?.delta;
+              if (typeof delta?.reasoning_content === 'string') {
+                reasoningContent += delta.reasoning_content;
+              }
               
               // 处理工具调用增量
               if (delta?.tool_calls) {
@@ -232,7 +200,8 @@ export class OpenAIProvider extends BaseProvider {
    */
   private emitPendingToolCalls(
     toolCallState: Map<number, { id: string; name: string; arguments: string }>,
-    cb: StreamCallbacks
+    cb: StreamCallbacks,
+    reasoningContent?: string
   ): void {
     if (toolCallState.size === 0) return;
     
@@ -255,7 +224,8 @@ export class OpenAIProvider extends BaseProvider {
             serverName,
             toolName,
             arguments: tc.arguments,
-          }
+          },
+          reasoningContent ? { reasoning_content: reasoningContent } : undefined
         );
         cb.onEvent(toolEvent);
       }

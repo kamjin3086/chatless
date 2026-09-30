@@ -1,16 +1,13 @@
-import { 
-  IndexingTask, 
-  IndexingStatus, 
-  IndexingOptions, 
-  IndexingResult, 
+import {
+  IndexingTask,
+  IndexingStatus,
+  IndexingOptions,
+  IndexingResult,
   ChunkData,
-  IndexingError 
+  IndexingError
 } from './types';
 import { DocumentExtractionService } from '../document/DocumentExtractor';
-import { ChunkingService, ChunkingStrategyType } from '../chunking/ChunkingService';
-import { EmbeddingService } from '../embedding/EmbeddingService';
-import type { EmbeddingServiceOptions } from '../embedding/types';
-import { RetrievalService } from '../retrieval/RetrievalService';
+import { ChunkingService } from '../chunking/ChunkingService';
 import { generateId } from '../utils/id';
 
 /**
@@ -20,99 +17,10 @@ import { generateId } from '../utils/id';
 export class DocumentIndexer {
   private documentExtractor: DocumentExtractionService;
   private chunkingService: ChunkingService;
-  private embeddingService: EmbeddingService | null = null;
-  private retrievalService: RetrievalService;
-  private isInitialized = false;
 
   constructor() {
     this.documentExtractor = new DocumentExtractionService();
     this.chunkingService = new ChunkingService();
-    this.retrievalService = new RetrievalService();
-  }
-
-  /**
-   * 初始化嵌入服务
-   * 使用用户配置的嵌入策略和设置
-   */
-  private async initializeEmbeddingService(): Promise<void> {
-    if (this.embeddingService && this.isInitialized) {
-      return;
-    }
-
-    try {
-      // 加载用户配置的知识库设置
-      const { loadKnowledgeBaseConfig } = await import('../knowledgeBaseConfig');
-      const knowledgeBaseConfig = await loadKnowledgeBaseConfig();
-      const embeddingConfig = knowledgeBaseConfig.embedding;
-      
-      console.log(`[DocumentIndexer] 使用配置的嵌入策略: ${embeddingConfig.strategy}`);
-
-      let serviceConfig: EmbeddingServiceOptions;
-
-      if (embeddingConfig.strategy === 'ollama') {
-        // 获取 Ollama URL
-        const { OllamaConfigService } = await import('../config/OllamaConfigService');
-        const apiUrl = embeddingConfig.apiUrl || await OllamaConfigService.getOllamaUrl();
-        
-        serviceConfig = {
-          config: {
-            strategy: 'ollama',
-            apiUrl,
-            modelName: embeddingConfig.modelName || 'nomic-embed-text',
-            timeout: embeddingConfig.timeout || 30000,
-            maxBatchSize: embeddingConfig.maxBatchSize || 10
-          },
-          enableCache: true,
-          cacheSize: 1000
-        };
-        
-        console.log(`[DocumentIndexer] 使用 Ollama URL: ${apiUrl}, 模型: ${embeddingConfig.modelName || 'nomic-embed-text'}`);
-      } else {
-        // local-onnx 策略
-        serviceConfig = {
-          config: {
-            strategy: 'local-onnx',
-            modelPath: embeddingConfig.modelPath,
-            timeout: embeddingConfig.timeout || 30000,
-            maxBatchSize: embeddingConfig.maxBatchSize || 32
-          },
-          enableCache: true,
-          cacheSize: 1000
-        };
-        
-        console.log(`[DocumentIndexer] 使用本地 ONNX 模型: ${embeddingConfig.modelPath}`);
-      }
-
-      this.embeddingService = new EmbeddingService(serviceConfig);
-      await this.embeddingService.initialize();
-      this.isInitialized = true;
-      
-      console.log(`[DocumentIndexer] 嵌入服务初始化完成 (策略: ${embeddingConfig.strategy})`);
-    } catch (error) {
-      console.error('[DocumentIndexer] 嵌入服务初始化失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 重新初始化嵌入服务
-   * 当用户更改嵌入配置时调用
-   */
-  async reinitializeEmbeddingService(): Promise<void> {
-    // 清理现有服务
-    if (this.embeddingService) {
-      try {
-        await this.embeddingService.cleanup();
-      } catch (error) {
-        console.warn('[DocumentIndexer] 清理嵌入服务时出错:', error);
-      }
-    }
-    
-    this.embeddingService = null;
-    this.isInitialized = false;
-    
-    // 重新初始化
-    await this.initializeEmbeddingService();
   }
 
   /**
@@ -132,25 +40,28 @@ export class DocumentIndexer {
       progress: 0,
       startTime: new Date()
     };
+    let expectedDocumentVersion: number | undefined;
 
     try {
-      // 0. 确保嵌入服务已初始化
-      if (!this.embeddingService || !this.isInitialized) {
-        await this.initializeEmbeddingService();
-      }
-
-      if (!this.embeddingService) {
-        throw new IndexingError('嵌入服务初始化失败', task.id, documentId);
-      }
-
-      // 1. 文档内容提取
+      const dbService = (await import('../database/services/DatabaseService')).DatabaseService.getInstance();
+      const db = dbService.getDbManager();
+      const docs = await db.select<{ index_version: number }>('SELECT index_version FROM documents WHERE id = ?', [documentId]);
+      if (!docs.length) throw new IndexingError('文档记录不存在', task.id, documentId);
+      expectedDocumentVersion = Number(docs[0].index_version || 0);
+      const now = Date.now();
+      await db.execute(`INSERT INTO document_index_tasks
+        (id, document_id, document_version, task_type, status, created_at, updated_at)
+        VALUES (?, ?, ?, 'lexical', 'running', ?, ?)`, [task.id, documentId, expectedDocumentVersion, now, now]);
+      // 1. 文档内容提取。Embedding is deliberately not initialized here:
+      // lexical search is the durable baseline and must become available even
+      // when a local model is unavailable or slow to load.
       task.status = IndexingStatus.EXTRACTING;
       task.progress = 10;
       options.progressCallback?.(task);
 
       console.log(`开始提取文档: ${filePath}`);
       const extractionResult = await this.documentExtractor.extractDocument(filePath);
-      
+
       if (!extractionResult.success) {
         throw new IndexingError(
           `文档提取失败: ${extractionResult.error}`,
@@ -159,120 +70,122 @@ export class DocumentIndexer {
         );
       }
 
-      const documentContent = extractionResult.text;
-      console.log(`文档提取完成，内容长度: ${documentContent.length} 字符`);
+      let parsed = extractionResult.parsed;
+      if (!parsed) {
+        parsed = {
+          title: extractionResult.metadata.title || documentId,
+          fileType: extractionResult.metadata.fileType,
+          blocks: [{
+            id: 'blk_0',
+            documentId,
+            blockIndex: 0,
+            type: 'paragraph',
+            text: extractionResult.text,
+          }],
+          plainText: extractionResult.text,
+          metadata: {
+            filePath,
+            fileHash: await (await import('../utils/sha256')).sha256Hex(extractionResult.text),
+            parserVersion: (await import('../rag/constants')).PARSER_VERSION,
+          },
+        };
+      }
+      parsed.blocks = parsed.blocks.map((b, i) => ({
+        ...b,
+        documentId,
+        id: `blk_${documentId}_${i}`,
+        blockIndex: i,
+      }));
 
-      // 2. 文本分块
+      const documentContent = parsed.plainText || extractionResult.text;
+      if (!documentContent.trim()) {
+        throw new IndexingError(
+          '文档未提取到可检索文本，可能是扫描件、加密文件或仅包含图片',
+          task.id,
+          documentId,
+        );
+      }
+      console.log(`文档提取完成，内容长度: ${documentContent.length} 字符, blocks=${parsed.blocks.length}`);
+
+      // 2. 结构优先分块
       task.status = IndexingStatus.CHUNKING;
       task.progress = 30;
       options.progressCallback?.(task);
 
-      console.log(`开始文本分块...`);
-      const chunkingResult = await this.chunkingService.chunkText(
-        documentContent,
-        (options.chunkingStrategy as ChunkingStrategyType) || 'recursive-character',
-        {
-          chunkSize: options.chunkSize || 1000,
-          overlap: options.chunkOverlap || 200
-        }
+      const { mergeSourceBlocksToChunks } = await import('../chunking/strategies/StructuredBlockMerger');
+      const { PARSER_VERSION, CHUNK_SCHEMA_VERSION } = await import('../rag/constants');
+      const chunkMaxTokens = 800;
+      const retrievalChunks = mergeSourceBlocksToChunks(
+        parsed,
+        documentId,
+        chunkMaxTokens
+          ? {
+              maxTokens: chunkMaxTokens,
+              targetTokens: Math.min(500, Math.max(32, chunkMaxTokens - 64)),
+            }
+          : undefined,
       );
-      const chunks = chunkingResult.chunks;
+      if (retrievalChunks.length === 0) {
+        throw new IndexingError('结构化分块结果为空', task.id, documentId);
+      }
 
-      console.log(`文本分块完成，生成 ${chunks.length} 个块`);
-
-      // 3. 生成嵌入
-      task.status = IndexingStatus.EMBEDDING;
+      // Chunks belong to the document. Knowledge bases only grant access.
+      retrievalChunks.forEach((chunk, i) => {
+        chunk.id = `pending_${documentId}_${i}`;
+        chunk.metadata = {
+          ...chunk.metadata,
+          documentHash: parsed!.metadata.fileHash,
+          parserVersion: PARSER_VERSION,
+          chunkSchemaVersion: CHUNK_SCHEMA_VERSION,
+        };
+      });
+      // 3. 先发布原文和 FTS。embedding 是增强能力，失败不能让文档消失。
+      task.status = IndexingStatus.STORING;
       task.progress = 50;
       options.progressCallback?.(task);
 
-      console.log(`开始生成嵌入向量...`);
-      const chunkTexts = chunks.map(chunk => chunk.content);
-      const embeddings = await this.embeddingService.generateEmbeddings(chunkTexts);
+      {
+        const { EvidenceStore } = await import('../rag/evidenceStore');
+        await EvidenceStore.replaceDocumentIndex({
+          documentId,
+          knowledgeBaseId: options.knowledgeBaseId,
+          chunks: retrievalChunks,
+          taskId: task.id,
+          expectedDocumentVersion,
+        });
+      }
 
-      console.log(`嵌入生成完成，生成 ${embeddings.length} 个向量`);
+      try {
+        const dbService = (await import('../database/services/DatabaseService')).DatabaseService.getInstance();
+        await dbService.getDbManager().execute(
+          `UPDATE documents SET is_indexed = 1, file_hash = ?, parser_version = ?, chunk_schema_version = ?, updated_at = ? WHERE id = ?`,
+          [
+            parsed.metadata.fileHash,
+            PARSER_VERSION,
+            CHUNK_SCHEMA_VERSION,
+            Date.now(),
+            documentId,
+          ]
+        );
+        const { semanticIndexQueue } = await import('./SemanticIndexQueue');
+        await semanticIndexQueue.enqueue(documentId);
+      } catch (e) {
+        console.warn('[DocumentIndexer] 更新 documents 版本字段失败:', e);
+      }
 
-      // 4. 准备存储数据
-      task.status = IndexingStatus.STORING;
-      task.progress = 80;
-      options.progressCallback?.(task);
-
-      const chunkData: ChunkData[] = chunks.map((chunk, index) => ({
-        id: generateId(),
-        content: chunk.content,
-        embedding: embeddings[index],
+      const chunkData: ChunkData[] = retrievalChunks.map((chunk, index) => ({
+        id: chunk.id,
+        content: chunk.sourceText,
+        embedding: chunk.embedding,
         metadata: {
           documentId,
           chunkIndex: index,
-          startPosition: chunk.startIndex || 0,
-          endPosition: chunk.endIndex || chunk.content.length,
-          chunkType: 'text',
+          startPosition: chunk.sourceStartBlock,
+          endPosition: chunk.sourceEndBlock,
+          chunkType: 'structured',
           parentDocument: filePath,
-          extractorType: extractionResult.metadata.fileType,
-          wordCount: chunk.metadata.wordCount || 0
-        }
+        },
       }));
-
-      // 5. 存储到向量数据库
-      console.log(`开始存储向量数据...`);
-      
-      // 验证 chunkData 和 embeddings 的有效性
-      if (!chunkData || chunkData.length === 0) {
-        throw new IndexingError('生成的文档块数据为空');
-      }
-      
-      // 过滤掉无效的 embedding
-      const validChunks = chunkData.filter((chunk, index) => {
-        if (!chunk.embedding || !Array.isArray(chunk.embedding) || chunk.embedding.length === 0) {
-          console.warn(`块 ${index} (ID: ${chunk.id}) 的嵌入向量无效，跳过此块`);
-          return false;
-        }
-        return true;
-      });
-      
-      if (validChunks.length === 0) {
-        throw new IndexingError('没有有效的嵌入向量数据');
-      }
-      
-      console.log(`有效的向量数据: ${validChunks.length}/${chunkData.length} 个块`);
-      
-      const vectorData = validChunks.map(chunk => ({
-        id: chunk.id,
-        embedding: chunk.embedding!,
-        content: chunk.content,
-        metadata: {
-          ...chunk.metadata,
-          // 如果提供了知识库ID，添加到元数据中
-          ...(options.knowledgeBaseId && { knowledgeBaseId: options.knowledgeBaseId })
-        }
-      }));
-
-      // 再次验证向量数据
-      if (!vectorData || vectorData.length === 0) {
-        throw new IndexingError('生成的向量数据为空');
-      }
-
-      await this.retrievalService.addVectors(vectorData);
-
-      // 6. 如果提供了知识库ID，创建知识片段记录
-      if (options.knowledgeBaseId) {
-        console.log(`创建知识片段记录...`);
-        const { KnowledgeService } = await import('../knowledgeService');
-        
-        for (let i = 0; i < chunkData.length; i++) {
-          const chunk = chunkData[i];
-          try {
-            await KnowledgeService.createKnowledgeChunk(
-              options.knowledgeBaseId,
-              documentId,
-              chunk.content,
-              chunk.metadata
-            );
-          } catch (chunkError) {
-            console.warn(`创建知识片段失败 (块 ${i}):`, chunkError);
-            // 继续处理其他块，不中断整个流程
-          }
-        }
-      }
 
       // 7. 完成
       task.status = IndexingStatus.COMPLETED;
@@ -300,6 +213,13 @@ export class DocumentIndexer {
       options.progressCallback?.(task);
 
       console.error(`文档索引失败: ${filePath}`, error);
+      try {
+        const dbService = (await import('../database/services/DatabaseService')).DatabaseService.getInstance();
+        await dbService.getDbManager().execute(
+          "UPDATE document_index_tasks SET status = 'failed', error = ?, updated_at = ? WHERE id = ? AND status = 'running'",
+          [task.error, Date.now(), task.id],
+        );
+      } catch { /* the task may not have been created */ }
 
       return {
         taskId: task.id,
@@ -321,17 +241,19 @@ export class DocumentIndexer {
     options: IndexingOptions = {}
   ): Promise<IndexingResult[]> {
     console.log(`开始批量索引 ${documents.length} 个文档`);
-    
+
     const results: IndexingResult[] = [];
-    const maxConcurrency = options.maxConcurrency || 3;
+    // Keep the default queue single-document to bound SQLite/WebView memory;
+    // callers can opt into parallelism explicitly for controlled imports.
+    const maxConcurrency = options.maxConcurrency || 1;
 
     // 分批处理以控制并发数
     for (let i = 0; i < documents.length; i += maxConcurrency) {
       const batch = documents.slice(i, i + maxConcurrency);
-      
+
       console.log(`处理批次 ${Math.floor(i / maxConcurrency) + 1}, 文档数: ${batch.length}`);
-      
-      const batchPromises = batch.map(doc => 
+
+      const batchPromises = batch.map(doc =>
         this.indexDocument(doc.documentId, doc.filePath, {
           ...options,
           progressCallback: (task) => {
@@ -342,7 +264,7 @@ export class DocumentIndexer {
       );
 
       const batchResults = await Promise.allSettled(batchPromises);
-      
+
       batchResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           results.push(result.value);
@@ -375,57 +297,14 @@ export class DocumentIndexer {
     filePath: string,
     options: IndexingOptions = {}
   ): Promise<IndexingResult> {
-    console.log(`开始重新索引文档: ${documentId}`);
-
-    try {
-      // 1. 删除现有的向量数据
-      // 这里需要根据实际的数据库结构来实现删除逻辑
-      // 暂时跳过删除步骤
-      console.log(`删除文档 ${documentId} 的现有索引数据`);
-
-      // 2. 重新索引
-      const result = await this.indexDocument(documentId, filePath, options);
-      
-      if (result.success) {
-        console.log(`文档重新索引成功: ${documentId}`);
-      } else {
-        console.error(`文档重新索引失败: ${documentId}`, result.error);
-      }
-
-      return result;
-
-    } catch (error) {
-      console.error(`重新索引文档失败: ${documentId}`, error);
-      throw new IndexingError(
-        `重新索引失败: ${error instanceof Error ? error.message : String(error)}`,
-        undefined,
-        documentId
-      );
-    }
+    // indexDocument replaces the active batch transactionally and keeps the
+    // old batch available if parsing or storage fails.
+    return this.indexDocument(documentId, filePath, options);
   }
 
-  /**
-   * 删除文档索引
-   */
-  async removeDocumentIndex(documentId: string): Promise<void> {
-    console.log(`删除文档索引: ${documentId}`);
-
-    try {
-      // 这里需要根据实际的数据库结构来实现
-      // 删除所有属于该文档的向量数据
-      console.log(`删除文档 ${documentId} 的所有向量数据`);
-
-      // 可以通过元数据查询来找到所有相关的向量ID
-      // 然后调用 retrievalService.removeVectors(vectorIds)
-
-    } catch (error) {
-      console.error(`删除文档索引失败: ${documentId}`, error);
-      throw new IndexingError(
-        `删除索引失败: ${error instanceof Error ? error.message : String(error)}`,
-        undefined,
-        documentId
-      );
-    }
+  async removeDocumentIndex(documentId: string, knowledgeBaseId?: string): Promise<void> {
+    const { EvidenceStore } = await import('../rag/evidenceStore');
+    await EvidenceStore.deleteDocumentIndex(documentId);
   }
 
   /**
@@ -438,7 +317,7 @@ export class DocumentIndexer {
   }> {
     try {
       const validation = await this.documentExtractor.validateFile(filePath);
-      
+
       if (!validation.isSupported) {
         return {
           isValid: false,
@@ -497,30 +376,8 @@ let globalDocumentIndexer: DocumentIndexer | null = null;
 export function getDocumentIndexer(): DocumentIndexer {
   if (!globalDocumentIndexer) {
     globalDocumentIndexer = new DocumentIndexer();
-    
-    // 监听知识库配置变更
-    const setupConfigListener = async () => {
-      try {
-        const { getKnowledgeBaseConfigManager } = await import('../knowledgeBaseConfig');
-        const configManager = getKnowledgeBaseConfigManager();
-        
-        configManager.addListener(async (config) => {
-          console.log('[DocumentIndexer] 检测到知识库配置变更，重新初始化嵌入服务...');
-          try {
-            await globalDocumentIndexer?.reinitializeEmbeddingService();
-            console.log('[DocumentIndexer] 嵌入服务重新初始化完成');
-          } catch (error) {
-            console.error('[DocumentIndexer] 重新初始化嵌入服务失败:', error);
-          }
-        });
-      } catch (error) {
-        console.warn('[DocumentIndexer] 设置配置监听器失败:', error);
-      }
-    };
-    
-    setupConfigListener();
   }
-  
+
   return globalDocumentIndexer;
 }
 
@@ -530,4 +387,4 @@ export function getDocumentIndexer(): DocumentIndexer {
   */
  export function resetDocumentIndexer(): void {
    globalDocumentIndexer = null;
- } 
+ }

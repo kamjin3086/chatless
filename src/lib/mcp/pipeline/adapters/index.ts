@@ -1,4 +1,3 @@
-import { AgentContextAdapter } from './AgentContextAdapter';
 import { FilesystemAdapter } from './FilesystemAdapter';
 import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
@@ -7,7 +6,9 @@ import { SystemToolAdapter } from './SystemToolAdapter';
 import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 import { UserFsAdapter } from './UserFsAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
+import { KnowledgeAdapter } from './KnowledgeAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
+import { ToolResultAdapter } from './ToolResultAdapter';
 
 /**
  * 默认 adapters
@@ -20,18 +21,18 @@ import type { ToolAdapter } from '../ToolAdapter';
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
     new ToolsRegistryAdapter(),
-    new AgentContextAdapter(),
+    new ToolResultAdapter(),
     new WebSearchAdapter(),
     new SkillUnifiedAdapter(),
     new UserFsAdapter(),
     new FilesystemAdapter(),
     new ShellExecutorAdapter(),
+    new KnowledgeAdapter(),
     new SystemToolAdapter(),
     new McpAdapter(),
   ];
 }
 
-export { AgentContextAdapter } from './AgentContextAdapter';
 export { FilesystemAdapter } from './FilesystemAdapter';
 export { McpAdapter } from './McpAdapter';
 export { ShellExecutorAdapter } from './ShellExecutorAdapter';
@@ -40,10 +41,11 @@ export { SystemToolAdapter } from './SystemToolAdapter';
 export { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
+export { KnowledgeAdapter } from './KnowledgeAdapter';
+export { ToolResultAdapter } from './ToolResultAdapter';
 
 // 保留旧导出以兼容可能的外部引用（标记为 deprecated）
 /** @deprecated 使用 SkillUnifiedAdapter 代替 */
 export { SkillUnifiedAdapter as SkillsToolAdapter } from './SkillUnifiedAdapter';
 /** @deprecated 使用 SkillUnifiedAdapter 代替 */
 export { SkillUnifiedAdapter as SkillsFsAdapter } from './SkillUnifiedAdapter';
-

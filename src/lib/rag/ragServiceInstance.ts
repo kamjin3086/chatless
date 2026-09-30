@@ -1,6 +1,7 @@
 import { RAGService, createDefaultRAGConfig } from "./RAGService";
 
 let _ragService: RAGService | null = null;
+let _ragInitPromise: Promise<RAGService> | null = null;
 
 /**
  * 获取全局 RAGService 实例（带懒加载与初始化）。
@@ -12,12 +13,18 @@ export async function getRAGService(): Promise<RAGService> {
     // 已初始化
     return _ragService;
   }
-
-  // 创建默认配置（后续可在运行时通过 updateConfig 调整）
-  const config = createDefaultRAGConfig();
-  const service = new RAGService(config);
-  await service.initialize();
-
-  _ragService = service;
-  return _ragService;
-} 
+  if (!_ragInitPromise) {
+    _ragInitPromise = (async () => {
+      // 创建默认配置（后续可在运行时通过 updateConfig 调整）
+      const config = createDefaultRAGConfig();
+      const service = new RAGService(config);
+      await service.initialize();
+      _ragService = service;
+      return service;
+    })().catch((error) => {
+      _ragInitPromise = null;
+      throw error;
+    });
+  }
+  return _ragInitPromise;
+}

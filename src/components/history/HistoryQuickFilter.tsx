@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Star, Flag, Clock, Calendar, CalendarDays, CalendarRange } from 'lucide-react';
+import { Star, Clock, Calendar, CalendarDays, CalendarRange } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useHistoryStore } from '@/store/historyStore';
 
-type FilterType = 'all' | 'today' | 'week' | 'month' | 'favorite' | 'important';
+type FilterType = 'all' | 'today' | 'week' | 'month' | 'favorite';
 
 interface HistoryQuickFilterProps {
   onFilterChange?: (filter: FilterType) => void;
@@ -23,22 +23,19 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
     // 根据筛选类型设置存储状态
     switch (filter) {
       case 'all':
-        setFilter({ dateRange: 'all', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'all', isFavorite: undefined });
         break;
       case 'today':
-        setFilter({ dateRange: 'today', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'today', isFavorite: undefined });
         break;
       case 'week':
-        setFilter({ dateRange: 'week', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'week', isFavorite: undefined });
         break;
       case 'month':
-        setFilter({ dateRange: 'month', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'month', isFavorite: undefined });
         break;
       case 'favorite':
-        setFilter({ dateRange: 'all', isFavorite: true, isImportant: undefined });
-        break;
-      case 'important':
-        setFilter({ dateRange: 'all', isImportant: true, isFavorite: undefined });
+        setFilter({ dateRange: 'all', isFavorite: true });
         break;
     }
   };
@@ -46,9 +43,9 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
   const getButtonClasses = (filter: FilterType) => {
     const baseClasses = "px-3 py-1.5 rounded-full text-xs transition-all duration-200 flex items-center gap-1.5 h-8 whitespace-nowrap border font-medium";
     if (activeFilter === filter) {
-      return cn(baseClasses, "bg-blue-500 text-white border-blue-500 shadow-sm");
+      return cn(baseClasses, "glass-chip-active bg-slate-200/50 text-slate-800 border-slate-300/50 dark:bg-white/10 dark:text-slate-200 dark:border-white/15");
     }
-    return cn(baseClasses, "text-gray-600 border-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-800");
+    return cn(baseClasses, "text-slate-600 border-slate-200/70 hover:bg-slate-100/60 dark:text-slate-300 dark:border-slate-600/50 dark:hover:bg-white/8");
   };
 
   return (
@@ -102,16 +99,8 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
             className={getButtonClasses('favorite')} 
             variant="ghost"
           >
-            <Star className={cn("h-3.5 w-3.5", activeFilter === 'favorite' ? "text-white" : "text-gray-600 dark:text-gray-300")}/>
+            <Star className={cn("h-3.5 w-3.5", activeFilter === 'favorite' ? "text-slate-700 dark:text-slate-200" : "text-slate-500 dark:text-slate-400")}/>
             收藏
-          </Button>
-          <Button 
-            onClick={() => handleFilterClick('important')} 
-            className={getButtonClasses('important')} 
-            variant="ghost"
-          >
-            <Flag className={cn("h-3.5 w-3.5", activeFilter === 'important' ? "text-white" : "text-gray-600 dark:text-gray-300")}/>
-            重要
           </Button>
         </div>
       </div>

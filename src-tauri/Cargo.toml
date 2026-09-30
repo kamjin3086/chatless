@@ -23,6 +23,7 @@ serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio-rustls"] }
 tauri-plugin-fs = "2"
 tauri-plugin-http = { version = "2.4.3", features = ["dangerous-settings", "cookies", "unsafe-headers"] }
 tauri-plugin-store = "2"
@@ -71,7 +72,11 @@ anyhow = "1.0"
 pdf-extract = "0.7.0"
 docx-rust = "0.1.10"
 pulldown-cmark = "0.9.3"
-crc32fast = "1.4.0"
+sha2 = "0.10"
+hex = "0.4"
+# 清理会话工作目录时移入系统回收站（可撤销），不做永久删除。
+trash = "5.2.9"
+jieba-rs = { version = "0.7", default-features = false, features = ["default-dict"] }
 tauri-plugin-log = "2"
 log = "0.4"
 csv = "1"
@@ -87,11 +92,7 @@ tauri-plugin-shell = "2"
 # 仅在Windows平台添加windows依赖
 [target.'cfg(target_os = "windows")'.dependencies]
 # 锁定windows版本以解决冲突
-windows = "=0.61.1"
-webview2-com-sys = "=0.37.0"
-
-# 使用patch仅在Windows平台修正冲突
-[target.'cfg(target_os = "windows")'.patch.crates-io]
+windows = { version = "=0.61.1", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_ProcessStatus"] }
 webview2-com-sys = "=0.37.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

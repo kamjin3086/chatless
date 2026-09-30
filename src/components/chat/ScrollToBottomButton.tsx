@@ -30,7 +30,7 @@ export function ScrollToBottomButton({ show, onClick, className }: ScrollToBotto
           }}
           onClick={onClick}
           className={cn(
-            "fixed bottom-24 right-8 z-50",
+            // 位置交给外层的导航条容器（锚定在聊天面板内），组件本身不再 fixed 到窗口。
             "flex items-center justify-center",
             "w-12 h-12 rounded-full",
             "bg-white dark:bg-gray-800",

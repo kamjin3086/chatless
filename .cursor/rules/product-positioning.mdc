@@ -1,0 +1,34 @@
+---
+description: Chatless 产品定位与身份边界。每个改动必须符合这一定位，禁止把项目做成专业编码 Agent 或云端平台。
+alwaysApply: true
+---
+
+# 产品定位
+
+Chatless 是面向重视本地隐私、模型自由与实用自动化用户的轻量桌面 AI 工作台。它连接云端和本地模型，通过可选能力处理知识、文档、文件及少量代码任务，但不替代 IDE 或专业编码 Agent。
+
+## 身份（必须强化）
+
+- 本地优先、数据在本机、不要求云账号
+- 多 Provider 与 OpenAI-compatible 兼容，包括 Ollama / LM Studio
+- 轻量、启动快、依赖少、功能可关闭
+- 实用：对话、文档、知识库、MCP、Skills、轻量 Agent
+- Chat / Agent 双模式；native / prompt tool-call 双轨降级
+
+## 用户
+
+主用户是重视隐私和模型选择的桌面用户，以及需要本地自动化的技术型用户。专职程序员可能使用 Chatless，但不会把它当主力 IDE Agent。专业开发者“看不上编码深度”不构成失败。
+
+## 表达方式
+
+正确：轻量、本地优先、兼容多种模型的通用 Agent，也能处理代码相关任务。
+
+错误：Chatless 要替代 Cursor、Claude Code 或 Codex。
+
+## 当前明确不做
+
+- 移动端、便携版
+- 自研代码编辑器、补全、LSP、IDE 深度集成
+- 默认依赖 Docker、Qdrant、常驻 sidecar
+- 强制云后端或云账号
+- 企业级多 Agent 编排 / swarm / A2A 作为核心能力

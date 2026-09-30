@@ -9,15 +9,16 @@ interface SwitchProps {
   disabled?: boolean;
   className?: string;
   size?: "sm" | "md" | "lg";
+  id?: string;
 }
 
 const sizeCfg = {
-  sm: { track: "w-10 h-5", knob: 16, shift: 20 },
-  md: { track: "w-12 h-6", knob: 20, shift: 24 },
-  lg: { track: "w-14 h-7", knob: 24, shift: 28 },
+  sm: { track: "h-5 w-9", thumb: "size-4", on: "translate-x-4" },
+  md: { track: "h-6 w-11", thumb: "size-5", on: "translate-x-5" },
+  lg: { track: "h-7 w-14", thumb: "size-6", on: "translate-x-7" },
 } as const;
 
-const SwitchImpl = React.forwardRef<HTMLInputElement, SwitchProps>(
+const SwitchImpl = React.forwardRef<HTMLButtonElement, SwitchProps>(
   (
     {
       checked = false,
@@ -25,48 +26,41 @@ const SwitchImpl = React.forwardRef<HTMLInputElement, SwitchProps>(
       disabled = false,
       className,
       size = "md",
-      ...props
+      id,
     },
     ref
   ) => {
     const cfg = sizeCfg[size];
 
     return (
-      <label className={cn("relative inline-flex items-center select-none", className)}>
-        <input
-          type="checkbox"
-          className="sr-only"
-          checked={checked}
-          disabled={disabled}
-          onChange={(e) => onCheckedChange?.(e.target.checked)}
-          onClick={(e) => e.stopPropagation()}
-          ref={ref}
-          {...(props as any)}
-        />
-        {/* track */}
+      <button
+        ref={ref}
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        data-slot="switch"
+        disabled={disabled}
+        onClick={() => onCheckedChange?.(!checked)}
+        className={cn(
+          "glass-switch-track inline-flex shrink-0 items-center rounded-full p-0.5 align-middle transition-colors duration-200 ease-out",
+          cfg.track,
+          disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+          checked
+            ? "glass-switch-on bg-sky-500 dark:bg-sky-400"
+            : "bg-slate-300 dark:bg-slate-600",
+          className
+        )}
+      >
         <span
           aria-hidden
           className={cn(
-            "block rounded-full transition-colors duration-200 ease-out",
-            cfg.track,
-            disabled
-              ? "bg-gray-200 dark:bg-gray-700 opacity-50"
-              : checked
-              ? "bg-blue-600 dark:bg-blue-500"
-              : "bg-gray-200 dark:bg-gray-700"
+            "glass-switch-knob pointer-events-none block shrink-0 rounded-full shadow-sm ring-0 transition-transform duration-200 ease-out will-change-transform",
+            cfg.thumb,
+            checked ? cfg.on : "translate-x-0"
           )}
         />
-        {/* knob */}
-        <span
-          aria-hidden
-          className="absolute top-0.5 left-0.5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out"
-          style={{
-            width: cfg.knob,
-            height: cfg.knob,
-            transform: `translateX(${checked ? cfg.shift : 0}px)`,
-          }}
-        />
-      </label>
+      </button>
     );
   }
 );

@@ -1,17 +1,23 @@
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
-import { useAuthorizationStore } from '@/store/authorizationStore';
+import { useAuthorizationStore, type ApprovalDecision } from '@/store/authorizationStore';
+import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permissions';
+import { resolveAccess, setConversationAccess } from '@/lib/mcp/accessPolicy';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
-import { isShellCommandTrusted, useShellAuthStore } from '@/store/shellAuthStore';
-import { isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
+import { findUnresolvedAlias, findUnresolvedAliasInValues, isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
-import { syncFilesystemAllowlistToBackend } from '@/lib/filesystemAllowlist/backendSync';
+import {
+  grantCallScopedPaths,
+  syncFilesystemAllowlistToBackend,
+  type CallScopedGrant,
+} from '@/lib/filesystemAllowlist/backendSync';
 import { markError, markPendingAuth, markSuccess } from './ToolCardUpdater';
 import type { ToolAdapter } from './ToolAdapter';
 import { ToolInvocation } from './ToolInvocation';
 import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
-import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult } from './toolResultDiagnostics';
+import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult, markKnownFailure } from './toolResultDiagnostics';
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
+import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
 function normalizeSlashPath(p: unknown): string {
   if (typeof p === 'string') return p.trim().replace(/\\/g, '/');
@@ -70,43 +76,17 @@ export type ToolExecutionPipelineDeps = {
   adapters: ToolAdapter[];
 };
 
-function isForcedApproval(server: string, tool: string, args?: Record<string, unknown>): boolean {
-  const srv = normalizeServerName(server);
-  const tl = String(tool || '').toLowerCase();
-
-  // filesystem：仅 delete 强制人工确认（你选择的策略）
-  if (isFilesystemServer(srv)) {
-    return tl === 'delete_file' || tl === 'delete';
-  }
-
-  // shell_executor：涉及安装运行时/改环境变量/下载脚本等高风险动作，强制确认
-  if (isShellServer(srv)) {
-    const cmd = typeof (args as any)?.command === 'string' ? String((args as any).command).toLowerCase() : '';
-    if (!cmd) return false;
-    if (cmd.includes('winget ') || cmd.includes('choco ')) return true;
-    if (cmd.includes('setx ') || cmd.includes('set environmentvariable') || cmd.includes('set-itemproperty')) return true;
-    // 下载脚本执行（curl|bash / iwr|iex 等）
-    if (cmd.includes('| bash') || cmd.includes('| sh') || cmd.includes('|iex') || cmd.includes('| iex')) return true;
-  }
-
-  return false;
-}
-
 function needsAuthorization(server: string, tool: string, autoAuth: boolean, args?: Record<string, unknown>): boolean {
   const srv = normalizeServerName(server);
   const tl = String(tool || '').toLowerCase();
 
-  if (isForcedApproval(server, tool, args)) return true;
-
-  // shell_executor：若用户已“信任该工作目录”，且命令属于低风险清单，则可免重复审批
+  // shell：由调用方按“访问策略”决定 autoAuth（含会话级免问），
+  // 不再维护“低风险命令白名单”和按工作目录的记忆。
   if (isShellServer(srv)) {
-    try {
-      if (isShellCommandTrusted({ command: (args as any)?.command, workingDir: (args as any)?.workingDir })) {
-        return false;
-      }
-    } catch {
-      // ignore
-    }
+    // Reading the output of a process the agent started, listing them, or
+    // stopping one it started are not new side effects: never prompt for them.
+    if (/^(logs|list|stop)$/.test(tl)) return false;
+    return !autoAuth;
   }
 
   // user_fs：保持现有行为——仅写入需要确认（读/list 属于“在已授权目录内的低风险操作”）
@@ -114,14 +94,13 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
     return tl === 'write_user_file' && !autoAuth;
   }
 
-  // skills_fs / skills：默认不需要人工确认（仅限技能包目录/内部工具）
-  if (srv === 'skills_fs' || srv === 'skills' || srv === 'skill') {
-    return false;
+  // Skill installation and modification change the local execution
+  // environment.  Only inspection remains approval-free.
+  if (srv === 'skills_fs') {
+    return !/^(read_skill_resource|list_skill_resources|list_files)$/.test(tl);
   }
-
-  // ctx (Agent Context): auto-approve
-  if (srv === 'ctx') {
-    return false;
+  if (srv === 'skills' || srv === 'skill') {
+    return !/^(list|guide|read_file|list_files|check_deps|use)$/.test(tl);
   }
 
   // tools: auto-approve
@@ -129,9 +108,9 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
     return false;
   }
 
-  // system: auto-approve
+  // System reads are safe; prompt and skill administration is not.
   if (srv === 'system') {
-    return false;
+    return !/^(list_prompts|get_prompt|list_skills)$/.test(tl);
   }
 
   // filesystem：授权由 allowlist gate 统一管理，这里不参与（返回 false 以避免“全局 autoAuth”影响文件系统安全边界）
@@ -143,6 +122,19 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
   return !autoAuth;
 }
 
+function isPlanOnlyAllowed(server: string, tool: string): boolean {
+  const srv = normalizeServerName(server).toLowerCase();
+  const tl = String(tool || '').toLowerCase();
+  if (isFilesystemServer(srv)) return /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(tl);
+  if (srv === 'knowledge') return /^(list|search|read)$/.test(tl);
+  if (srv === 'tool_result') return tl === 'read';
+  if (srv === 'web_search' || srv === 'web') return /^(search|fetch)$/.test(tl);
+  if (srv === 'tools') return tl === 'search';
+  if (srv === 'skill') return /^(list|guide|use|read_file|list_files|check_deps)$/.test(tl);
+  if (srv === 'system') return /^(list_prompts|get_prompt)$/.test(tl);
+  return false;
+}
+
 function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
   const tl = String(tool || '').toLowerCase();
   if (tl === 'delete_file' || tl === 'delete' || tl === 'rm') return 'delete';
@@ -151,6 +143,9 @@ function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
   // rename/move 视为写入类操作
   if (tl === 'rename_file' || tl === 'rename' || tl === 'move_file' || tl === 'move' || tl === 'mv') return 'write';
   if (tl === 'write_file' || tl === 'write') return 'write';
+  // Precise editing writes to the file just like a full write.
+  if (tl === 'edit' || tl === 'edit_file') return 'write';
+  if (tl === 'search' || tl === 'search_files') return 'read';
   if (tl === 'mkdir' || tl === 'create_directory' || tl === 'create') return 'create';
   return 'read';
 }
@@ -159,11 +154,59 @@ function isDirectoryScopedFilesystemTool(tool: string): boolean {
   return isDirectorySemanticFsTool(tool);
 }
 
+async function waitForCallApproval(params: {
+  id: string; runId: string; conversationId: string; callId?: string; server: string; tool: string;
+  args: Record<string, unknown>; scope?: Record<string, unknown>;
+  approvalScope?: import('@/store/authorizationStore').PendingApprovalScope;
+}): Promise<{ approved: boolean; decision: ApprovalDecision }> {
+  const db = DatabaseService.getInstance().getDbManager();
+  const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  if (tauri) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('agent_request_approval', { db: db.getConnectionUrl(), approvalId: params.id,
+      runId: params.runId, conversationId: params.conversationId, callId: params.callId,
+      server: params.server, tool: params.tool, normalizedArgs: JSON.stringify(params.args),
+      scope: JSON.stringify(params.scope || {}), createdAt: Date.now() });
+  } else {
+    await db.executeTransaction(async (tx) => {
+      await tx.execute(`INSERT OR REPLACE INTO agent_approvals
+        (id, run_id, conversation_id, call_id, server, tool, normalized_args, scope, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`, [params.id, params.runId, params.conversationId,
+        params.callId || null, params.server, params.tool, JSON.stringify(params.args), JSON.stringify(params.scope || {}), Date.now()]);
+      await tx.execute("UPDATE agent_runs SET status = 'waiting_approval', ended_at = NULL WHERE id = ?", [params.runId]);
+    });
+  }
+  return new Promise<{ approved: boolean; decision: ApprovalDecision }>((resolve) => {
+    const decide = (approved: boolean, decision: ApprovalDecision = 'once') => {
+      void (async () => {
+        if (tauri) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          return invoke<boolean>('agent_decide_approval', { db: db.getConnectionUrl(), approvalId: params.id,
+            status: approved ? 'approved' : 'rejected', decidedAt: Date.now() });
+        }
+        return db.executeTransaction(async (tx) => {
+          await tx.execute("UPDATE agent_approvals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
+            [approved ? 'approved' : 'rejected', Date.now(), params.id]);
+          await tx.execute("UPDATE agent_runs SET status = 'running' WHERE id = ? AND status = 'waiting_approval'", [params.runId]);
+          return true;
+        });
+      })().then((changed) => resolve({
+        approved: Boolean(changed) && approved,
+        decision: approved ? decision : 'once',
+      })).catch(() => resolve({ approved: false, decision: 'once' }));
+    };
+    useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
+      conversationId: params.conversationId,
+      server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
+      scope: params.approvalScope,
+      onApprove: (decision) => decide(true, decision), onReject: () => decide(false) });
+  });
+}
+
 /**
  * 统一工具执行管线：去重 -> 授权 -> 执行 -> 更新卡片 -> 返回结果
  *
- * 注意：follow-up / multi-tool gate 仍由现有 `continueWithToolResult` 承担，
- * 后续会在 `followup-gate` / `context-envelope` 阶段收敛。
+ * 多工具顺序和下一模型步由 AgentLoopRunner 统一承担；Pipeline 只负责一次调用。
  */
 export class ToolExecutionPipeline {
   private coordinator = ToolCallCoordinator.getInstance();
@@ -215,17 +258,28 @@ export class ToolExecutionPipeline {
       return { error: 'NO_ADAPTER', message: msg };
     }
 
-    // 预加载：shell 授权记忆（用于 needsAuthorization 的同步判断）
-    try {
-      if (isShellServer(normalizeServerName(server))) {
-        await useShellAuthStore.getState().load();
-      }
-    } catch {
-      // ignore
+    if (invocation.planOnly && !isPlanOnlyAllowed(server, tool)) {
+      const blocked = {
+        ok: false,
+        error: {
+          code: 'PLAN_ONLY_BLOCKED',
+          message: `计划模式禁止执行有副作用的工具: ${server}.${tool}`,
+          server,
+          tool,
+        },
+      };
+      markError({ assistantMessageId, server, tool, cardId }, blocked.error.message);
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      return blocked;
     }
 
     // 授权 + filesystem allowlist gate（统一文件系统安全边界）
     let execInvocation: ToolInvocation = invocation;
+    let revokeCallGrants: (() => Promise<void>) | undefined;
+    // Session working directories and single approvals are granted for this
+    // call only. They must never be written into the persisted allowlist.
+    const callGrants: CallScopedGrant[] = [];
+    let sessionWorkDir: string | undefined;
     const srvLower = normalizeServerName(server);
 
     // 预处理：shell_executor 的 workingDir 和 command 支持 @WorkDir / @Alias / 相对路径
@@ -240,6 +294,7 @@ export class ToolExecutionPipeline {
           const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
           if (wd) {
             shellWorkDir = String(wd).replace(/\\/g, '/');
+            sessionWorkDir = shellWorkDir;
             dirsForResolve.unshift({
               id: `session:${invocation.conversationId}:workdir`,
               path: shellWorkDir,
@@ -261,6 +316,11 @@ export class ToolExecutionPipeline {
         if (workingDirInput) {
           const shellResolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any, workingDir: shellWorkDir });
           execArgs.workingDir = shellResolved.absolutePath;
+        } else if (shellWorkDir) {
+          // The tool description promises @WorkDir as the default. Resolving it
+          // here, before the approval gate, means the card and the backend see
+          // the same directory instead of the backend falling back silently.
+          execArgs.workingDir = shellWorkDir;
         }
 
         // 解析 command 参数中的 @WorkDir / @Alias 别名
@@ -286,6 +346,18 @@ export class ToolExecutionPipeline {
           }
         }
 
+        // An alias that survived substitution is not a path and not a command:
+        // refuse it here so nothing creates a literal "@WorkDir" folder.
+        const unresolved = findUnresolvedAliasInValues([
+          execArgs.workingDir,
+          typeof execArgs.command === 'string' ? execArgs.command : '',
+        ]);
+        if (unresolved) {
+          return this.rejectUnresolvedAlias({ assistantMessageId, conversationId: invocation.conversationId,
+            server, tool, cardId, callKey, callId, args: (args || {}) as any, alias: unresolved,
+            sessionWorkDir: shellWorkDir });
+        }
+
         execInvocation = new ToolInvocation({
           assistantMessageId: invocation.assistantMessageId,
           conversationId: invocation.conversationId,
@@ -299,6 +371,8 @@ export class ToolExecutionPipeline {
           callId: invocation.callId,
           cardId,
           lockKey: invocation.lockKey,
+          providerData: invocation.providerData,
+          planOnly: invocation.planOnly,
         });
       } catch {
         // ignore: best-effort（解析失败则保持原参数，让后续校验/授权处理）
@@ -311,12 +385,14 @@ export class ToolExecutionPipeline {
       const rawDir = typeof (args as any)?.dir === 'string' ? String((args as any).dir) : '';
       const rawOldPath = typeof (args as any)?.oldPath === 'string' ? String((args as any).oldPath) : '';
       const rawNewPath = typeof (args as any)?.newPath === 'string' ? String((args as any).newPath) : '';
+      // fs__search takes a root directory instead of a path/dir.
+      const rawRoot = typeof (args as any)?.root === 'string' ? String((args as any).root) : '';
       const rawPaths = Array.isArray((args as any)?.paths)
         ? ((args as any).paths as unknown[]).map((p) => String(p ?? '').trim()).filter(Boolean)
         : [];
       
       // 主路径用于权限检查
-      const inputPath = rawPath || rawDir || rawOldPath || '';
+      const inputPath = rawPath || rawDir || rawRoot || rawOldPath || '';
       const op = getFilesystemOp(tool);
       
       // 判断是否有任何需要解析的路径
@@ -334,6 +410,7 @@ export class ToolExecutionPipeline {
             const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
             if (wd) {
               workingDir = String(wd).replace(/\\/g, '/');
+              sessionWorkDir = workingDir;
               dirsForResolve.unshift({
                 id: `session:${invocation.conversationId}:workdir`,
                 path: workingDir,
@@ -348,23 +425,36 @@ export class ToolExecutionPipeline {
             // ignore
           }
 
-          // 确保后端 allowlist 与前端一致（避免后端最终校验拦截）
+          // Keep the backend in step with the user's persistent settings only.
+          // The session working directory travels as a call-scoped grant below,
+          // so it never becomes a lasting backend authorization.
           try {
-            await syncFilesystemAllowlistToBackend(dirsForResolve as any);
+            await syncFilesystemAllowlistToBackend(allowlist.directories as any);
           } catch {
             // ignore: best-effort sync
           }
 
           // 路径解析辅助函数：支持相对路径、别名路径、绝对路径
+          let resolveError: string | undefined;
           const resolvePath = (p: string) => {
             if (!p.trim()) return '';
-            return resolveAllowlistPath({ inputPath: p, directories: dirsForResolve as any, workingDir }).absolutePath;
+            try {
+              return resolveAllowlistPath({ inputPath: p, directories: dirsForResolve as any, workingDir }).absolutePath;
+            } catch (error) {
+              resolveError ||= error instanceof Error ? error.message : String(error);
+              return p;
+            }
           };
 
           // 解析主路径用于权限检查
-          const resolved = inputPath
-            ? resolveAllowlistPath({ inputPath, directories: dirsForResolve as any, workingDir })
-            : null;
+          let resolved: ReturnType<typeof resolveAllowlistPath> | null = null;
+          if (inputPath) {
+            try {
+              resolved = resolveAllowlistPath({ inputPath, directories: dirsForResolve as any, workingDir });
+            } catch (error) {
+              resolveError ||= error instanceof Error ? error.message : String(error);
+            }
+          }
 
           // 构建执行参数，解析所有路径
           const execArgs: Record<string, unknown> = { ...(args || {}) };
@@ -373,6 +463,7 @@ export class ToolExecutionPipeline {
           if (resolved) {
             if (rawPath) execArgs.path = resolved.absolutePath;
             if (rawDir) execArgs.dir = resolved.absolutePath;
+            if (rawRoot) execArgs.root = resolved.absolutePath;
           }
           
           // 解析 rename/move 的 oldPath 和 newPath
@@ -382,6 +473,21 @@ export class ToolExecutionPipeline {
           // 解析 paths 数组（用于 delete_many 等）
           if (rawPaths.length > 0) {
             execArgs.paths = rawPaths.map(resolvePath).filter(Boolean);
+          }
+
+          // 别名没解析出来（未授权/拼错）或路径无法解析：直接给出结构化错误，
+          // 不把原始字符串交给后端——那正是字面量 "@WorkDir" 目录的由来。
+          const leftoverAlias = findUnresolvedAliasInValues([
+            execArgs.path, execArgs.dir, execArgs.root, execArgs.oldPath, execArgs.newPath,
+            ...(Array.isArray(execArgs.paths) ? execArgs.paths : []),
+          ]);
+          if (leftoverAlias || resolveError) {
+            return this.rejectUnresolvedAlias({
+              assistantMessageId, conversationId: invocation.conversationId, server, tool, cardId, callKey, callId,
+              args: (args || {}) as any,
+              alias: leftoverAlias || findUnresolvedAlias(inputPath) || '',
+              reason: resolveError,
+            });
           }
 
           execInvocation = new ToolInvocation({
@@ -401,27 +507,36 @@ export class ToolExecutionPipeline {
 
           // 获取主路径的绝对路径（用于权限检查和授权）
           const primaryAbsolutePath = resolved?.absolutePath || '';
-          
+
           const forceApproval = op === 'delete';
           const hasDir = !!resolved?.directory;
           const hasPerm = hasDir ? !!resolved?.directory?.permissions?.[op] : false;
-          const needAuth = primaryAbsolutePath && (forceApproval || !hasDir || !hasPerm);
+          // The user's chosen trust level decides whether this call may ask.
+          // "unrestricted" skips the prompt; the backend still validates every
+          // path it receives.
+          const accessLevel = await resolveAccess('fs', invocation.conversationId);
+          const unrestricted = accessLevel === 'unrestricted';
+          const needAuth = !unrestricted && primaryAbsolutePath && (forceApproval || !hasDir || !hasPerm);
+          const needsCallGrant = !hasPerm || forceApproval;
+          let approved = false;
+          let decision: ApprovalDecision = 'once';
 
           if (needAuth) {
             markPendingAuth({ assistantMessageId, server, tool, cardId });
-            const authorized = await new Promise<boolean>((resolve) => {
-              const authId = `${assistantMessageId}:${cardId}`;
-              useAuthorizationStore.getState().addPendingAuthorization({
-                id: authId,
-                messageId: assistantMessageId,
-                server,
-                tool,
-                args: args || {},
-                createdAt: Date.now(),
-                onApprove: () => resolve(true),
-                onReject: () => resolve(false),
-              });
-            });
+            // "以后都允许" is only meaningful for a folder we can grant, so a
+            // delete reports its parent but never offers that choice.
+            const approvableDirectory = resolved?.directory?.path
+              || dirnamePath(primaryAbsolutePath);
+            const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
+              runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
+              args: args || {},
+              scope: { operation: op, path: primaryAbsolutePath, directory: approvableDirectory || undefined },
+              approvalScope: approvableDirectory
+                ? { kind: 'filesystem', op, path: primaryAbsolutePath, directory: approvableDirectory }
+                : undefined });
+            const authorized = approval.approved;
+            approved = authorized;
+            decision = approval.decision;
 
             if (this.coordinator.isMessageCancelled(assistantMessageId)) {
               this.coordinator.markToolCallComplete(callKey, 'failed');
@@ -470,48 +585,46 @@ export class ToolExecutionPipeline {
               return denied;
             }
 
-            // 用户确认后：把目录加入 allowlist（或补齐权限），并同步到 Rust 后端
+            // Turn the user's choice into trust that lasts as long as they asked
+            // for: "always" joins the persistent allowlist (never with delete),
+            // "unrestricted" stops the questions for the rest of the session.
+            if (approvableDirectory && decision === 'always' && !forceApproval) {
+              try {
+                const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
+                await ensureAllowlistedDirectory({
+                  path: approvableDirectory,
+                  source: 'manual',
+                  permissions: EVERYDAY_DIRECTORY_PERMISSIONS,
+                });
+              } catch (error) {
+                console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
+              }
+            }
+            if (decision === 'unrestricted') {
+              setConversationAccess('fs', invocation.conversationId, 'unrestricted');
+            }
+          }
+
+          // Anything the persistent allowlist does not cover needs a grant for
+          // this call, whether the user approved one call or turned prompts off.
+          if (needsCallGrant && (approved || unrestricted)) {
             try {
-              const st = useFilesystemAllowlistStore.getState();
               const hasDirArg = typeof (args as any)?.dir === 'string';
               const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
-
-              // 规则：
-              // - dir+pattern 或 ls/mkdir 这类“目录语义”工具：授权目录本身（避免更具体条目覆盖父目录权限造成 forbidden）
-              // - 其余（文件语义）：授权其所在目录（目录白名单模型）
-              if (hasDirArg || dirScopedByTool) {
-                await st.upsertDirectory({ directoryPath: primaryAbsolutePath, op: op as any, source: 'manual' } as any);
-              } else {
-                await st.upsertDirectoryForPath({ absolutePath: primaryAbsolutePath, op: op as any, source: 'manual' });
-              }
-
-              // 删除动作需要“读取目录/枚举条目”才能执行（尤其 dir+pattern / 删除目录），否则后端会先 Read 再 Delete。
-              // UX：用户既然确认了 delete，这里为同一目录补齐 read（不扩大到其它目录）。
-              if (op === 'delete') {
-                if (hasDirArg || dirScopedByTool) {
-                  await st.upsertDirectory({ directoryPath: primaryAbsolutePath, op: 'read' as any, source: 'manual' } as any);
-                } else {
-                  await st.upsertDirectoryForPath({ absolutePath: primaryAbsolutePath, op: 'read' as any, source: 'manual' });
-                }
-              }
-              const allowDeleteInWorkDir =
-                op === 'delete' && !!workingDir && isPathWithinDirectory({ absolutePath: primaryAbsolutePath, directoryPath: workingDir });
-
-              const extra = workingDir
-                ? [
-                    {
-                      id: `session:${invocation.conversationId}:workdir`,
-                      path: workingDir,
-                      alias: 'WorkDir',
-                      // 默认 WorkDir 不允许 delete；但若用户对 WorkDir 范围内的删除操作明确确认，则本次同步升级 delete 权限
-                      permissions: { read: true, write: true, create: true, delete: allowDeleteInWorkDir },
-                      source: 'workdir',
-                      createdAt: Date.now(),
-                      updatedAt: Date.now(),
-                    } as any,
-                  ]
-                : [];
-              await syncFilesystemAllowlistToBackend([...st.directories, ...extra] as any);
+              // A delete is bound to the exact target. Writes and creates need
+              // the containing directory because the file may not exist yet.
+              const grantPath = hasDirArg || dirScopedByTool || op === 'delete'
+                ? primaryAbsolutePath
+                : dirnamePath(primaryAbsolutePath);
+              callGrants.push({
+                path: grantPath,
+                permissions: {
+                  read: op === 'read' || op === 'delete',
+                  write: op === 'write',
+                  create: op === 'create',
+                  delete: op === 'delete',
+                },
+              });
             } catch {
               // ignore: best-effort
             }
@@ -548,23 +661,22 @@ export class ToolExecutionPipeline {
         }
       }
     } else {
-      const autoAuth = await shouldAutoAuthorize(server);
+      const isShell = isShellServer(server);
+      // Shell trust comes from the access policy: the persisted switch or the
+      // choice this conversation's user already made on an approval card.
+      const autoAuth = isShell
+        ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
+        : await shouldAutoAuthorize(server);
       const effectiveArgs = (execInvocation.args || args || {}) as any;
       if (needsAuthorization(server, tool, autoAuth, effectiveArgs || {})) {
         markPendingAuth({ assistantMessageId, server, tool, cardId });
-        const authorized = await new Promise<boolean>((resolve) => {
-          const authId = `${assistantMessageId}:${cardId}`;
-          useAuthorizationStore.getState().addPendingAuthorization({
-            id: authId,
-            messageId: assistantMessageId,
-            server,
-            tool,
-            args: effectiveArgs || {},
-            createdAt: Date.now(),
-            onApprove: () => resolve(true),
-            onReject: () => resolve(false),
-          });
-        });
+        const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
+          runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
+          args: effectiveArgs || {},
+          approvalScope: isShell
+            ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
+            : undefined });
+        const authorized = approval.approved;
         if (this.coordinator.isMessageCancelled(assistantMessageId)) {
           this.coordinator.markToolCallComplete(callKey, 'failed');
           return { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId };
@@ -602,30 +714,70 @@ export class ToolExecutionPipeline {
           return denied;
         }
 
-        // UX：shell_executor 同意后，若提供了 workingDir，则“记住该工作目录”（降低后续重复确认）
-        try {
-          const srv = String(server || '').toLowerCase();
-          if (srv === 'shell_executor') {
-            const wd = typeof (effectiveArgs as any)?.workingDir === 'string' ? String((effectiveArgs as any).workingDir) : '';
-            const cmd = typeof (effectiveArgs as any)?.command === 'string' ? String((effectiveArgs as any).command) : '';
-            if (wd.trim() && cmd.trim()) {
-              // 仅对低风险命令进行“记忆”，高风险仍会被 isForcedApproval 拦下
-              if (!isForcedApproval(server, tool, effectiveArgs || {}) && isShellCommandTrusted({ command: cmd, workingDir: wd })) {
-                // already trusted: no-op
-              } else {
-                // 只记目录，不记具体命令；后续仍受 SAFE_EXECUTABLES 限制
-                await useShellAuthStore.getState().addTrustedWorkingDir(wd);
-              }
-            }
+        // A shell approval can end the questions for this session or for good;
+        // the next command re-checks the policy, so nothing is bypassed.
+        if (isShell && approval.decision === 'unrestricted') {
+          setConversationAccess('shell', invocation.conversationId, 'unrestricted');
+        }
+        if (isShell && approval.decision === 'always') {
+          try {
+            const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
+            await setGlobalAccess('shell', 'unrestricted');
+          } catch (error) {
+            console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
           }
-        } catch {
-          // ignore
         }
       }
     }
 
+    // Register the grants for this call right before it can touch disk. They
+    // are revoked in the finally block below, so an approval never outlives the
+    // call it was given for.
+    if (sessionWorkDir) {
+      // The session folder is created on first real use. The model is about to
+      // touch files or run a command with this directory as its cwd, so it has to
+      // exist now - a chat that never gets here leaves no folder behind.
+      //
+      // When the user mounted their own directory, @WorkDir is that directory and
+      // the session folder stays uncreated: no second folder next to their project.
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const attachments = useConversationAttachmentStore.getState();
+        if (attachments.isSessionDirInUse(invocation.conversationId)
+          && !attachments.isWorkspaceMaterialized(invocation.conversationId)) {
+          const { ensureConversationWorkspaceMaterialized } = await import('@/lib/agentWorkspace/workspaceService');
+          await ensureConversationWorkspaceMaterialized(invocation.conversationId);
+        }
+      } catch (error) {
+        console.warn('[ToolExecutionPipeline] 准备工作目录失败:', error);
+      }
+      callGrants.push({
+        path: sessionWorkDir,
+        permissions: { read: true, write: true, create: true, delete: false },
+      });
+    }
+    if (callGrants.length) {
+      try {
+        revokeCallGrants = await grantCallScopedPaths(callGrants, { runId: assistantMessageId, callId });
+      } catch {
+        // ignore: best-effort; the backend still re-checks the persistent allowlist
+      }
+    }
+
+    try {
     const cfg = await getAgentExperienceConfig();
-    const maxRetries = typeof cfg.maxToolRetries === 'number' ? Math.max(0, Math.min(5, cfg.maxToolRetries)) : 0;
+    const srvForRetry = normalizeServerName(server).toLowerCase();
+    const toolForRetry = String(tool || '').toLowerCase();
+    const isReadOnlyRetry =
+      (isFilesystemServer(srvForRetry) && /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(toolForRetry)) ||
+      (srvForRetry === 'knowledge' && /^(list|search|read)$/.test(toolForRetry)) ||
+      (srvForRetry === 'web_search' && /^(search|fetch)$/.test(toolForRetry)) ||
+      (srvForRetry === 'tools' && toolForRetry === 'search');
+    // A timeout after a write, shell command, or unknown MCP operation does not
+    // tell us whether the side effect happened. Never replay those calls.
+    const maxRetries = isReadOnlyRetry && typeof cfg.maxToolRetries === 'number'
+      ? Math.max(0, Math.min(5, cfg.maxToolRetries))
+      : 0;
 
     const toolId = { server, tool };
 
@@ -692,10 +844,33 @@ export class ToolExecutionPipeline {
         }
 
         const failure = detectFatalFailure(toolId, result);
-        if (failure) throw new Error(failure);
         if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
           this.coordinator.markToolCallComplete(callKey, 'failed');
           return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
+        }
+        if (failure) {
+          // A structured failure said exactly what went wrong. Passing it on
+          // unchanged keeps stdout/stderr, exit codes and edit candidates
+          // visible; re-throwing here used to erase them and reclassify a known
+          // failure as an unknown side effect.
+          const failed = markKnownFailure(toolId, result, failure);
+          markError({ assistantMessageId, server, tool, cardId }, failure);
+          try {
+            await appendWorkspaceToolStep({
+              conversationId: invocation.conversationId,
+              assistantMessageId,
+              cardId,
+              callId,
+              server,
+              tool,
+              args: (execInvocation.args || args || {}) as any,
+              result: failed,
+            });
+          } catch {
+            // ignore
+          }
+          this.coordinator.markToolCallComplete(callKey, 'failed');
+          return failed;
         }
         markSuccess({ assistantMessageId, server, tool, cardId }, result);
         try {
@@ -740,7 +915,7 @@ export class ToolExecutionPipeline {
           hints,
           // 新增：结构化错误（便于 UI/模型直接读懂）
           errorDetails: {
-            code: 'TOOL_EXEC_FAILED',
+            code: isReadOnlyRetry ? 'TOOL_EXEC_FAILED' : 'TOOL_RESULT_UNKNOWN',
             message: lastErr,
             hints,
             attempts: attempt + 1,
@@ -748,6 +923,7 @@ export class ToolExecutionPipeline {
             server,
             tool,
           },
+          resultStatus: isReadOnlyRetry ? 'failed' : 'unknown',
         };
         markError({ assistantMessageId, server, tool, cardId }, lastErr);
         try {
@@ -791,6 +967,69 @@ export class ToolExecutionPipeline {
     markError({ assistantMessageId, server, tool, cardId }, summary.message);
     this.coordinator.markToolCallComplete(callKey, 'failed');
     return summary;
+    } finally {
+      await revokeCallGrants?.().catch(() => {});
+    }
+  }
+
+  /**
+   * Refuses a call whose path or command still carries an unresolved `@Alias`.
+   *
+   * Passing it on is how a command like `cd @WorkDir` created a literal
+   * `@WorkDir` folder, so this returns a structured result the model can act on
+   * and never dispatches to an adapter.
+   */
+  private async rejectUnresolvedAlias(params: {
+    assistantMessageId: string;
+    conversationId: string;
+    server: string;
+    tool: string;
+    cardId: string;
+    callKey: string;
+    callId?: string;
+    args: Record<string, unknown>;
+    alias: string;
+    reason?: string;
+    sessionWorkDir?: string;
+  }): Promise<unknown> {
+    const label = params.alias || '未知别名';
+    const message = params.reason
+      ? `${params.reason}（路径里的别名为 ${label}）`
+      : `${label} 未被解析：该别名没有对应的已授权目录。`;
+    const hint = params.sessionWorkDir
+      ? `可以用相对路径，或直接用 @WorkDir（当前指向 ${params.sessionWorkDir}）。`
+      : '可以用绝对路径，或让用户先附加一个目录再使用 @WorkDir。';
+
+    const failure = {
+      ok: false,
+      error: {
+        code: 'UNRESOLVED_ALIAS',
+        message: `${message} ${hint}`,
+        alias: params.alias || undefined,
+        server: params.server,
+        tool: params.tool,
+      },
+      resultStatus: 'failed' as const,
+    };
+
+    markError({ assistantMessageId: params.assistantMessageId, server: params.server, tool: params.tool,
+      cardId: params.cardId }, failure.error.message);
+    this.coordinator.markToolCallComplete(params.callKey, 'failed');
+    try {
+      await appendWorkspaceToolStep({
+        conversationId: params.conversationId,
+        assistantMessageId: params.assistantMessageId,
+        cardId: params.cardId,
+        callId: params.callId,
+        server: params.server,
+        tool: params.tool,
+        args: params.args,
+        result: failure,
+      });
+    } catch {
+      // ignore
+    }
+    return failure;
   }
 }
 

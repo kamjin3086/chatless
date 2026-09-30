@@ -71,6 +71,13 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
   const [rebuildDialogOpen, setRebuildDialogOpen] = useState(false);
   const [rebuildProgress, setRebuildProgress] = useState<number | null>(null);
   const [rebuildMessage, setRebuildMessage] = useState('');
+  const [indexStatus, setIndexStatus] = useState<{
+    total: number;
+    indexed: number;
+    pending: number;
+    failed: number;
+    needsRebuild: boolean;
+  } | null>(null);
   // 添加文档对话框状态
   const [addDocsOpen, setAddDocsOpen] = useState(false);
 
@@ -150,21 +157,42 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
       // 为每个文档查询分片数量
       const docsWithChunk = await Promise.all(
         documentsWithMappings.map(async (item) => {
-          const { chunkCount } = await KnowledgeService.getDocumentStats(knowledgeBase.id, item.document.id);
+          const { chunkCount, lexicalStatus, semanticStatus } = await KnowledgeService.getDocumentStats(knowledgeBase.id, item.document.id);
           return {
             ...item.document,
             chunkCount,
+            lexicalStatus,
+            semanticStatus,
           };
         })
       );
 
       setDocuments(docsWithChunk);
+      const status = await KnowledgeService.getKnowledgeBaseIndexStatus(knowledgeBase.id);
+      setIndexStatus(status);
       console.log(`[KnowledgeDetail] 加载到 ${docsWithChunk.length} 个文档`);
     } catch (error) {
       console.error('加载文档失败:', error);
       setDocuments([]);
     }
   }, [knowledgeBase]);
+
+  /**
+   * Semantic indexing is optional: keyword search works without a model. These
+   * actions cover the two states a user can act on — retry after a failure or
+   * after configuring a model, and cancel work that is still queued.
+   */
+  const handleRetrySemantic = useCallback(async (documentId: string) => {
+    const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
+    await semanticIndexQueue.retryForDocument(documentId);
+    await loadDocuments();
+  }, [loadDocuments]);
+
+  const handleCancelSemantic = useCallback(async (documentId: string) => {
+    const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
+    await semanticIndexQueue.cancelForDocument(documentId);
+    await loadDocuments();
+  }, [loadDocuments]);
 
   // 组件加载时获取知识库和文档
   useEffect(() => {
@@ -406,9 +434,9 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg h-full flex flex-col">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg h-full flex flex-col glass-panel">
         {/* 头部 */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200/70 px-4 sm:px-5 dark:border-slate-700/60">
+        <div className="app-topbar flex h-12 shrink-0 items-center justify-between border-b border-slate-200/70 px-4 sm:px-5 dark:border-slate-700/60">
           <div className="flex items-center gap-2 sm:gap-3">
             <TooltipProvider delayDuration={100}>
               <Tooltip>
@@ -474,6 +502,22 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
           </TooltipProvider>
         </div>
 
+        {indexStatus?.needsRebuild && (
+          <div className="mx-4 mt-3 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm text-amber-900 dark:text-amber-100">
+              <p className="font-medium">需要重建索引</p>
+              <p className="text-xs opacity-80 mt-0.5">
+                待索引 {indexStatus.pending} 篇，失败 {indexStatus.failed} 篇，已建立关键词索引 {indexStatus.indexed}/{indexStatus.total} 篇。
+                未索引文档不会出现在检索结果中。
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setRebuildDialogOpen(true)}>
+              <RotateCcw className="h-4 w-4 mr-1" />
+              一键重建
+            </Button>
+          </div>
+        )}
+
         {/* 内容区域 */}
         <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
           {/* 知识库信息 */}
@@ -524,8 +568,12 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
                     updatedAt={doc.updatedAt || ""}
                     isIndexed={doc.isIndexed ?? false}
                     chunkCount={typeof doc.chunkCount === 'number' ? doc.chunkCount : undefined}
+                    lexicalStatus={(doc as any).lexicalStatus}
+                    semanticStatus={(doc as any).semanticStatus}
                     onView={() => handleViewDocument(doc.id)}
                     onDelete={() => handleRemoveDocument(doc.id)}
+                    onRetrySemantic={handleRetrySemantic}
+                    onCancelSemantic={handleCancelSemantic}
                     hideIndexedStatus={true}
                   />
                 ))}
@@ -650,4 +698,4 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
       />
     </>
   );
-} 
+}

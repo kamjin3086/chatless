@@ -13,6 +13,8 @@ export interface LlmMessage {
   tool_call_id?: string;
   tool_calls?: ToolCallRequest[];
   name?: string;
+  providerData?: Record<string, unknown>;
+  raw?: unknown;
 }
 
 export interface CheckResult {

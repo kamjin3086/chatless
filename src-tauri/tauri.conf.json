@@ -21,11 +21,13 @@
         "resizable": true,
         "fullscreen": false,
         "closable": true,
+        "decorations": false,
+        "shadow": true,
         "backgroundColor": "#0f172a"
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* http://127.0.0.1:* https: http: ws: wss:; font-src 'self' data:; media-src 'self' blob:; frame-src 'self'",
       "capabilities": [
         "main-capability"
       ]

@@ -62,6 +62,7 @@ export class MessageRepository extends BaseRepository<Message> {
         thinking_start_time, thinking_duration,
         knowledge_base_reference,
         segments,
+        citations,
         version_group_id, version_index
       FROM messages 
       WHERE conversation_id = ?
@@ -88,6 +89,7 @@ export class MessageRepository extends BaseRepository<Message> {
       knowledge_base_reference?: any;
       images?: string[];
       segments?: any;
+      citations?: any;
     }
   ): Promise<Message> {
     // 确保引用字段被正确序列化
@@ -103,6 +105,9 @@ export class MessageRepository extends BaseRepository<Message> {
     }
     if ('segments' in dbUpdates) {
       (dbUpdates as any).segments = dbUpdates.segments ? JSON.stringify(dbUpdates.segments) : null;
+    }
+    if ('citations' in dbUpdates) {
+      (dbUpdates as any).citations = dbUpdates.citations ? JSON.stringify(dbUpdates.citations) : null;
     }
 
     const updated = await this.update(messageId, dbUpdates as any);
@@ -351,7 +356,8 @@ export class MessageRepository extends BaseRepository<Message> {
       thinking_duration: record.thinking_duration,
       knowledge_base_reference: this.parseJsonField(record.knowledge_base_reference),
       images: this.parseImagesField(record.images),
-      segments: this.parseJsonField(record.segments)
+      segments: this.parseJsonField(record.segments),
+      citations: this.parseJsonField(record.citations),
     };
     
     // 添加版本字段（如果存在）

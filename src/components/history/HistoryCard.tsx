@@ -1,7 +1,7 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, FileUp, Trash2, Eye, MessageSquare, Flag, Bot, Clock, Hash, ArrowRightCircle } from 'lucide-react';
+import { Star, FileUp, Trash2, Eye, MessageSquare, Bot, Clock, Hash, ArrowRightCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 import { memo } from 'react';
@@ -16,7 +16,6 @@ interface HistoryCardProps {
   tags: string[];
   timestamp: number;
   fullTimestamp: string;
-  isImportant?: boolean;
   isFavorite?: boolean;
   messageCount: number;
   lastMessage: string;
@@ -24,7 +23,6 @@ interface HistoryCardProps {
   updatedAt: number;
   isSelected?: boolean;
   onSelectChange?: (id: string, selected: boolean) => void;
-  onToggleImportant?: (id: string) => void;
   onView?: (id: string) => void;
   onContinue?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -41,12 +39,10 @@ const HistoryCard = memo(function HistoryCard({
   tags,
   timestamp,
   fullTimestamp,
-  isImportant = false,
   isFavorite = false,
   messageCount,
   isSelected = false,
   onSelectChange,
-  onToggleImportant,
   onView,
   onContinue,
   onDelete,
@@ -71,10 +67,10 @@ const HistoryCard = memo(function HistoryCard({
 
   // 获取模型显示颜色
   const getModelColor = (modelName: string) => {
-    if (modelName.toLowerCase().includes('gpt-4')) return 'text-green-600 bg-green-50 dark:text-green-300 dark:bg-green-800/40';
-    if (modelName.toLowerCase().includes('gpt-3.5')) return 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-800/40';
-    if (modelName.toLowerCase().includes('claude')) return 'text-purple-600 bg-purple-50 dark:text-purple-300 dark:bg-purple-800/40';
-    return 'text-gray-600 bg-gray-50 dark:text-gray-300 dark:bg-slate-800/40';
+    if (modelName.toLowerCase().includes('gpt-4')) return 'text-emerald-700 bg-emerald-50/80 dark:text-emerald-300 dark:bg-emerald-900/25';
+    if (modelName.toLowerCase().includes('gpt-3.5')) return 'text-slate-700 bg-slate-100/80 dark:text-slate-300 dark:bg-slate-800/40';
+    if (modelName.toLowerCase().includes('claude')) return 'text-slate-700 bg-slate-100/80 dark:text-slate-300 dark:bg-slate-800/40';
+    return 'text-slate-600 bg-slate-100/70 dark:text-slate-300 dark:bg-slate-800/40';
   };
 
   // 截取摘要文本
@@ -83,10 +79,7 @@ const HistoryCard = memo(function HistoryCard({
   return (
     <SectionCard
       selected={isSelected}
-      className={cn(
-        "history-card-hover will-change-transform",
-        isImportant && "border-l-4 border-red-500"
-      )}
+      className={cn("history-card-hover will-change-transform")}
     >
       <div className="px-3 py-2.5">
         {/* 头部：选择框、标题、时间 */}
@@ -97,11 +90,8 @@ const HistoryCard = memo(function HistoryCard({
               onCheckedChange={(checked) => onSelectChange?.(id, !!checked)}
               className="h-4 w-4 transition-all duration-150"
             />
-            {/* 重要和收藏状态始终可见 */}
+            {/* 收藏状态始终可见 */}
             <div className="flex items-center gap-1">
-              {isImportant && (
-                <Flag className="h-3 w-3 text-red-500 history-status-icon" />
-              )}
               {isFavorite && (
                 <Star className="h-3 w-3 text-yellow-500 fill-current history-status-icon" />
               )}
@@ -111,7 +101,7 @@ const HistoryCard = memo(function HistoryCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2 mb-1">
               <h4 className={cn(
-                "font-medium text-sm text-gray-900 dark:text-gray-100 cursor-pointer transition-colors duration-150 truncate hover:text-blue-600 dark:hover:text-blue-400"
+                "font-medium text-sm text-gray-900 dark:text-gray-100 cursor-pointer transition-colors duration-150 truncate hover:text-slate-700 dark:hover:text-slate-200"
               )}
                 onClick={() => onView?.(id)}
                 title={title}>
@@ -181,16 +171,6 @@ const HistoryCard = memo(function HistoryCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-red-500 transition-all duration-150 cursor-pointer"
-                onClick={() => onToggleImportant?.(id)}
-                title={isImportant ? "取消重要" : "标记重要"}
-              >
-                <Flag className="h-3 w-3" />
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="icon"
                 className="h-6 w-6 text-gray-400 hover:text-gray-600 transition-all duration-150 cursor-pointer"
                 onClick={() => onExport?.(id)}
                 title="导出"
@@ -215,7 +195,7 @@ const HistoryCard = memo(function HistoryCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-gray-500 hover:text-blue-500 transition-all duration-150 cursor-pointer"
+              className="h-6 w-6 text-gray-500 hover:text-slate-700 dark:hover:text-slate-200 transition-all duration-150 cursor-pointer"
               onClick={() => onView?.(id)}
               title="查看"
             >
@@ -225,7 +205,7 @@ const HistoryCard = memo(function HistoryCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-blue-500 hover:text-blue-600 transition-all duration-150 cursor-pointer"
+              className="h-6 w-6 text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-all duration-150 cursor-pointer"
               onClick={() => onContinue?.(id)}
               title="继续"
             >

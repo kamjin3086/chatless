@@ -1,17 +1,22 @@
 /**
- * 工具注册表 Adapter
- * 
- * 处理 tools__discover 和 tools__load 调用
+ * Capability directory. It intentionally has one operation: search the whole
+ * enabled directory, then expose the selected capability on the next turn.
  */
-
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
-import { 
-  TOOLS_DISCOVER_SERVER_NAME, 
-  getGroupsSummary,
-  type ToolGroupId,
-} from '@/lib/mcp/nativeTools/toolRegistry';
+import { TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
+import { getEnabledConfiguredServers } from '@/lib/mcp/chatIntegration';
+import { persistentCache } from '@/lib/mcp/persistentCache';
+import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
+
+interface CatalogItem {
+  source: 'builtin' | 'mcp';
+  group?: ToolGroupId;
+  server: string;
+  name: string;
+  description: string;
+}
 
 export class ToolsRegistryAdapter implements ToolAdapter {
   readonly server = TOOLS_DISCOVER_SERVER_NAME;
@@ -21,92 +26,62 @@ export class ToolsRegistryAdapter implements ToolAdapter {
   }
 
   async execute(invocation: ToolInvocation): Promise<unknown> {
-    const tool = String(invocation.tool || '').toLowerCase();
-    const args = invocation.args || {};
-
-    switch (tool) {
-      case 'discover':
-        return this.handleDiscover();
-      case 'load':
-        return this.handleLoad(args);
-      default:
-        return { ok: false, error: `Unknown tools command: ${tool}` };
+    if (String(invocation.tool || '').toLowerCase() !== 'search') {
+      return { ok: false, error: 'Unknown tools command. Use tools__search.' };
     }
+    return this.handleSearch(invocation.args || {}, invocation.conversationId);
   }
 
-  private handleDiscover(): unknown {
-    // 获取当前已加载的组
-    const loadedGroups = useToolLoadRequestStore.getState().loadedGroups;
-    
-    // 获取所有可用组
-    const allGroups = getGroupsSummary();
-    
-    const loaded = allGroups.filter(g => loadedGroups.includes(g.id));
-    const available = allGroups.filter(g => !loadedGroups.includes(g.id));
-    
-    return {
-      ok: true,
-      loadedGroups: loaded.map(g => ({
-        id: g.id,
-        name: g.name,
-        description: g.description,
-      })),
-      availableGroups: available.map(g => ({
-        id: g.id,
-        name: g.name,
-        description: g.description,
-        howToLoad: `调用 tools__load({ group: "${g.id}" }) 可在下一轮加载此组工具`,
-      })),
-      hint: available.length > 0 
-        ? `有 ${available.length} 个工具组未加载。如需使用，调用 tools__load 加载。`
-        : '所有工具组已加载。',
-    };
-  }
+  private async handleSearch(args: Record<string, unknown>, conversationId?: string): Promise<unknown> {
+    const query = String(args.query || '').trim().toLowerCase();
+    const offset = Math.max(0, Number(args.cursor || 0));
+    const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
+    if (!query) return { ok: false, error: 'query is required' };
 
-  private handleLoad(args: Record<string, unknown>): unknown {
-    const rawGroup = args.group;
-    const groupId = typeof rawGroup === 'string' ? rawGroup : '';
-    
-    const validGroups: ToolGroupId[] = ['ctx', 'skill', 'prompt'];
-    if (!validGroups.includes(groupId as ToolGroupId)) {
-      // 对已废弃的组给出友好提示
-      if (groupId === 'fs_extra' || groupId === 'shell' || groupId === 'web') {
-        return {
-          ok: true,
-          alreadyLoaded: true,
-          message: `工具组 "${groupId}" 已包含在核心工具中，无需加载。直接使用即可。`,
-        };
+    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => group.tools.map(({ server, tool }) => ({
+      source: 'builtin' as const,
+      group: group.id,
+      server,
+      name: tool.name,
+      description: tool.description || '',
+    })));
+
+    // A failing remote server only omits its own entries. Local discovery must
+    // remain usable when a configured MCP endpoint is unavailable.
+    const enabledServers = (await getEnabledConfiguredServers())
+      .filter((server) => !RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase()));
+    const external = await Promise.all(enabledServers.map(async (server): Promise<CatalogItem[]> => {
+      try {
+        const tools = await persistentCache.getToolsWithCache(server);
+        return (Array.isArray(tools) ? tools : [])
+          .filter((tool) => tool?.name)
+          .map((tool) => ({
+            source: 'mcp' as const,
+            server,
+            name: String(tool.name),
+            description: String(tool.description || ''),
+          }));
+      } catch {
+        return [];
       }
-      return {
-        ok: false,
-        error: `无效的工具组: ${groupId}`,
-        validGroups,
-      };
-    }
+    }));
 
-    // 检查是否已加载
-    const loadedGroups = useToolLoadRequestStore.getState().loadedGroups;
-    if (loadedGroups.includes(groupId as ToolGroupId)) {
-      return {
-        ok: true,
-        alreadyLoaded: true,
-        message: `工具组 "${groupId}" 已经加载，无需重复加载。直接使用即可。`,
-      };
-    }
-
-    // 记录加载请求，下一轮对话时会注入
-    useToolLoadRequestStore.getState().requestLoad(groupId as ToolGroupId);
-
-    const groupNames: Record<string, string> = {
-      ctx: '上下文管理（save_research, save_plan 等）',
-      skill: '技能系统（查询、管理技能）',
-      prompt: '提示词管理（列出、创建、编辑、删除）',
-    };
+    const matches = [...builtin, ...external.flat()]
+      .filter((item) => `${item.server} ${item.name} ${item.description}`.toLowerCase().includes(query));
+    const page = matches.slice(offset, offset + limit);
+    const groupsToLoad = [...new Set(page.flatMap((item) => item.group ? [item.group] : []))];
+    const serversToLoad = [...new Set(page.filter((item) => item.source === 'mcp').map((item) => item.server))];
+    const state = useToolLoadRequestStore.getState();
+    for (const group of groupsToLoad) state.requestLoad(group, conversationId);
+    for (const server of serversToLoad) state.loadMcpServer(server, conversationId);
 
     return {
       ok: true,
-      message: `已请求加载工具组: ${groupNames[groupId] || groupId}`,
-      note: '工具将在下一轮对话中可用。请继续你的任务。',
+      query,
+      results: page,
+      nextCursor: offset + page.length < matches.length ? offset + page.length : null,
+      total: matches.length,
+      hint: page.length ? '匹配能力将在下一模型步生效。' : '没有匹配的工具。',
     };
   }
 }

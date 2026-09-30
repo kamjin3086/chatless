@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
@@ -21,15 +21,15 @@ lazy_static! {
     pub static ref SERVER_CHILD: std::sync::Mutex<Option<std::process::Child>> = std::sync::Mutex::new(None);
 }
 
-/// 全局状态，用于在 `start_sse` 和 `stop_sse` 之间共享关闭信号
+/// 每个请求独立的关闭信号，避免停止一个模型请求时误伤其他请求。
 pub struct AppState {
-  pub sse_shutdown_sender: Mutex<Option<broadcast::Sender<()>>>,
+  pub sse_shutdown_senders: Mutex<HashMap<String, broadcast::Sender<()>>>,
 }
 
 impl AppState {
   pub fn new() -> Self {
     Self {
-      sse_shutdown_sender: Mutex::new(None),
+      sse_shutdown_senders: Mutex::new(HashMap::new()),
     }
   }
 }
@@ -50,18 +50,19 @@ pub async fn start_sse(
   headers: Option<HashMap<String, String>>,
   body: Option<Value>,
   proxy_url: Option<String>,
+  request_id: Option<String>,
 ) -> Result<(), String> {
-  // 如果已有连接，先断开
-  if let Ok(mut guard) = state.sse_shutdown_sender.lock() {
-    if let Some(sender) = guard.take() {
-      let _ = sender.send(());
-    }
-  }
+  let request_id = request_id.filter(|id| !id.trim().is_empty()).unwrap_or_else(|| format!("sse-{}", std::process::id()));
+  let event_request_id = request_id.clone();
+  let event_name = move |kind: &str| format!("sse-{}-{}", kind, event_request_id);
 
   // 新建广播通道用于优雅关闭
   let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
-  if let Ok(mut guard) = state.sse_shutdown_sender.lock() {
-    *guard = Some(shutdown_tx);
+  if let Ok(mut guard) = state.sse_shutdown_senders.lock() {
+    // 同一 request_id 重启时只关闭该请求的旧连接。
+    if let Some(previous) = guard.insert(request_id.clone(), shutdown_tx) {
+      let _ = previous.send(());
+    }
   }
 
   // 选择HTTP客户端：优先使用携带代理的自定义客户端；否则回退到最小化客户端
@@ -75,12 +76,11 @@ pub async fn start_sse(
     match crate::http_client::HttpClientManager::build_custom_client(cfg) {
       Ok(client) => client,
       Err(e) => {
-        app
-          .emit(
-            "sse-error",
-            format!("Failed to build HTTP client with proxy: {}", e),
-          )
-          .ok();
+        app.emit(&event_name("error"), format!("Failed to build HTTP client with proxy: {}", e)).ok();
+        app.emit(&event_name("status"), "closed").ok();
+        if let Ok(mut guard) = state.sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
         return Err(format!("Failed to build HTTP client with proxy: {}", e));
       }
     }
@@ -88,9 +88,11 @@ pub async fn start_sse(
     match crate::http_client::get_minimal_client() {
       Ok(client) => (*client).clone(), // 从Arc<Client>转换为Client
       Err(e) => {
-        app
-          .emit("sse-error", format!("Failed to get HTTP client: {}", e))
-          .ok();
+        app.emit(&event_name("error"), format!("Failed to get HTTP client: {}", e)).ok();
+        app.emit(&event_name("status"), "closed").ok();
+        if let Ok(mut guard) = state.sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
         return Err(format!("Failed to get HTTP client: {}", e));
       }
     }
@@ -98,7 +100,7 @@ pub async fn start_sse(
 
   // 在后台任务中拉取 SSE 数据并通过 Tauri Event 转发给前端
   tauri::async_runtime::spawn(async move {
-    app.emit("sse-status", "Connecting...").ok();
+    app.emit(&event_name("status"), "Connecting...").ok();
 
     // ---------- 构造请求 ----------
     let http_method = method.unwrap_or_else(|| "GET".to_string()).to_uppercase();
@@ -129,11 +131,26 @@ pub async fn start_sse(
       }
     }
 
-    // 发送请求
-    let res = match req_builder.send().await {
+    // Cancellation must also interrupt DNS/TLS/response-header wait, not only
+    // the already-open response stream.
+    let response = tokio::select! {
+      _ = shutdown_rx.recv() => {
+        app.emit(&event_name("status"), "cancelled").ok();
+        if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
+        return;
+      },
+      result = req_builder.send() => result,
+    };
+    let res = match response {
       Ok(r) => r,
       Err(e) => {
-        app.emit("sse-error", e.to_string()).ok();
+        app.emit(&event_name("error"), e.to_string()).ok();
+        app.emit(&event_name("status"), "closed").ok();
+        if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
+          guard.remove(&request_id);
+        }
         return;
       }
     };
@@ -144,33 +161,42 @@ pub async fn start_sse(
       let status = res.status();
       let body_text = res.text().await.unwrap_or_default();
       let full_msg = format!("HTTP {}: {}", status, body_text);
-      app.emit("sse-error", full_msg).ok();
+      app.emit(&event_name("error"), full_msg).ok();
+      app.emit(&event_name("status"), "closed").ok();
+      if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
+        guard.remove(&request_id);
+      }
       return;
     }
     app
-      .emit("sse-status", "Connected. Listening for events...")
+      .emit(&event_name("status"), "Connected. Listening for events...")
       .ok();
 
     let mut stream = res.bytes_stream();
     // 跨 chunk 行缓冲，避免一行在两个 chunk 之间被拆分导致上层解析失败
-    let mut line_buffer = String::new();
+    let mut line_buffer = Vec::<u8>::new();
     loop {
       tokio::select! {
           _ = shutdown_rx.recv() => {
-              app.emit("sse-status", "Connection closed by user.").ok();
+              app.emit(&event_name("status"), "cancelled").ok();
               break;
           },
-          Some(item) = stream.next() => {
+          item = stream.next() => {
               match item {
+                  // `StreamExt::next()` resolves to None at transport EOF.  A
+                  // `Some(item) = ...` pattern disables that branch instead,
+                  // leaving the cancellation receiver pending forever.
+                  None => break,
+                  Some(item) => match item {
                   Ok(bytes) => {
-                      let chunk = String::from_utf8_lossy(&bytes);
-                      line_buffer.push_str(&chunk);
-                      while let Some(pos) = line_buffer.find('\n') {
-                          let mut line = line_buffer[..pos].to_string();
-                          // 移除已消费内容与换行符
-                          line_buffer.drain(..pos+1);
-                          if line.ends_with('\r') { line.pop(); }
-
+                      line_buffer.extend_from_slice(&bytes);
+                      while let Some(pos) = line_buffer.iter().position(|byte| *byte == b'\n') {
+                          let mut raw_line: Vec<u8> = line_buffer.drain(..=pos).collect();
+                          raw_line.pop(); // newline
+                          if raw_line.last() == Some(&b'\r') { raw_line.pop(); }
+                          // Decode only after receiving the full line. A UTF-8
+                          // character may legitimately span transport chunks.
+                          let line = String::from_utf8_lossy(&raw_line);
                           let payload = if let Some(data) = line.strip_prefix("data:") {
                               data.trim()
                           } else {
@@ -179,17 +205,17 @@ pub async fn start_sse(
                           };
 
                           if !payload.is_empty() {
-                              app.emit("sse-event", payload.to_string()).ok();
+                              app.emit(&event_name("event"), payload.to_string()).ok();
                           }
                       }
                   },
                   Err(e) => {
-                      app.emit("sse-error", e.to_string()).ok();
+                      app.emit(&event_name("error"), e.to_string()).ok();
                       break;
                   }
+                }
               }
           },
-          else => break,
       }
     }
 
@@ -197,7 +223,7 @@ pub async fn start_sse(
     // 这会导致前端永远收不到收尾信号，从而出现“服务端已完成但前端还在加载/追赶输出”的现象。
     // 在结束前补一次冲刷，确保最后一行也会被发出。
     {
-      let line = line_buffer.trim().to_string();
+      let line = String::from_utf8_lossy(&line_buffer).trim().to_string();
       if !line.is_empty() {
         let payload = if let Some(data) = line.strip_prefix("data:") {
           data.trim()
@@ -205,13 +231,16 @@ pub async fn start_sse(
           line.trim()
         };
         if !payload.is_empty() {
-          app.emit("sse-event", payload.to_string()).ok();
+          app.emit(&event_name("event"), payload.to_string()).ok();
         }
       }
     }
 
     // 连接自然结束
-    app.emit("sse-status", "Connection closed.").ok();
+    app.emit(&event_name("status"), "closed").ok();
+    if let Ok(mut guard) = app.state::<AppState>().sse_shutdown_senders.lock() {
+      guard.remove(&request_id);
+    }
   });
 
   Ok(())
@@ -219,10 +248,11 @@ pub async fn start_sse(
 
 /// 停止 SSE 连接的命令
 #[tauri::command]
-pub async fn stop_sse(state: State<'_, AppState>) -> Result<(), String> {
-  match state.sse_shutdown_sender.lock() {
+pub async fn stop_sse(state: State<'_, AppState>, request_id: Option<String>) -> Result<(), String> {
+  match state.sse_shutdown_senders.lock() {
     Ok(mut guard) => {
-      if let Some(sender) = guard.take() {
+      let key = request_id.filter(|id| !id.trim().is_empty()).unwrap_or_else(|| "sse-default".to_string());
+      if let Some(sender) = guard.remove(&key) {
         sender.send(()).map_err(|e| e.to_string())?;
         Ok(())
       } else {

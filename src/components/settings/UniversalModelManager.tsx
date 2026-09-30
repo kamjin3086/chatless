@@ -754,7 +754,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
       case 'installed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'downloading':
-        return <Clock className="w-4 h-4 text-blue-500 animate-spin" />;
+        return <Clock className="w-4 h-4 text-slate-500 animate-spin" />;
       case 'error':
         return <AlertCircle className="w-4 h-4 text-red-500" />;
       default:
@@ -949,8 +949,8 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
               key={model.id}
               className={`p-4 border rounded-lg transition-all ${
                 model.selected
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ? 'border-slate-400/70 bg-slate-100/60 dark:border-white/20 dark:bg-white/8'
+                  : 'border-slate-200/70 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/16'
               }`}
             >
               <div className="flex items-start justify-between">
@@ -979,7 +979,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                         </Badge>
                       )}
                       {model.selected && (
-                        <Badge variant="default" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        <Badge variant="secondary" className="text-xs">
                           使用中
                         </Badge>
                       )}
@@ -1056,7 +1056,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                     {/* 进度条 */}
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div 
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+                        className="bg-slate-600 dark:bg-slate-300 h-2 rounded-full transition-all duration-300 ease-out"
                         style={{ width: `${model.downloadProgress || 0}%` }}
                       />
                     </div>
@@ -1092,10 +1092,10 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
 
       {/* 提示信息 */}
       {selectedStrategy === 'ollama' ? (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+        <div className="bg-slate-100/55 dark:bg-white/6 border border-slate-200/60 dark:border-white/10 rounded-lg p-3">
           <div className="flex items-start space-x-2">
-            <Globe className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-blue-700 dark:text-blue-300">
+            <Globe className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-slate-600 dark:text-slate-300">
               <p className="font-medium mb-1">Ollama 使用说明</p>
               <ul className="space-y-1 text-xs">
                 <li>• 可连接本地或远端 Ollama API 服务</li>
@@ -1106,10 +1106,10 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
           </div>
         </div>
       ) : (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+        <div className="bg-slate-100/55 dark:bg-white/6 border border-slate-200/60 dark:border-white/10 rounded-lg p-3">
           <div className="flex items-start space-x-2">
-            <HardDrive className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-blue-700 dark:text-blue-300">
+            <HardDrive className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-slate-600 dark:text-slate-300">
               <p className="font-medium mb-1">本地离线推理</p>
               <ul className="space-y-1 text-xs">
                 <li>• 完全本地推理，生成高质量嵌入向量</li>

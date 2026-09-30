@@ -9,7 +9,6 @@
  * 
  * - **InjectionManager**: 核心管理器类
  * - **injectMcpPrompts**: 初始调用注入的便捷函数
- * - **injectFollowUpPrompts**: 追问阶段注入的便捷函数
  * - **detectAndDecide**: 检测并决策是否需要注入
  * 
  * ## 使用示例
@@ -50,7 +49,6 @@ export type {
 export { 
   InjectionManager,
   injectMcpPrompts,
-  injectFollowUpPrompts
 } from './InjectionManager';
 
 // 意图检测
@@ -61,8 +59,5 @@ export {
 } from './intentDetector';
 
 // 提示词构建器（高级用法）
-export {
-  buildInitialPrompt,
-  buildFollowUpPrompt
-} from './promptBuilder';
+export { buildInitialPrompt } from './promptBuilder';
 

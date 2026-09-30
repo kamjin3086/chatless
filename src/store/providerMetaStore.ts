@@ -83,12 +83,17 @@ export const useProviderMetaStore = create<ProviderMetaState>((set, get) => ({
   setConnecting: (name, on) => {
     const connecting = new Set(get().connectingSet);
     if (on) connecting.add(name); else connecting.delete(name);
-    // 同步到 list 覆盖显示
-    const list = get().list.map((p) =>
-      p.name === name
-        ? { ...p, displayStatus: on ? 'CONNECTING' : p.displayStatus, statusTooltip: on ? '正在检查状态…' : p.statusTooltip }
-        : p
-    );
+    const list = get().list.map((p) => {
+      if (p.name !== name) return p;
+      if (on) {
+        return { ...p, displayStatus: 'CONNECTING' as const, statusTooltip: '正在检查状态…' as const };
+      }
+      return {
+        ...p,
+        displayStatus: p.displayStatus === 'CONNECTING' ? undefined : p.displayStatus,
+        statusTooltip: p.statusTooltip === '正在检查状态…' ? null : p.statusTooltip,
+      };
+    });
     set({ connectingSet: connecting, list });
   },
 })); 

@@ -5,6 +5,7 @@
 :root {
   /* 用于逐字动画的默认延迟（可在元素上通过 --char-delay 覆盖） */
   --char-delay: 12ms;
+  --titlebar-height: 0px;
 }
 
 /* 逐字平滑淡入关键帧：通过为每个字符包裹 span 的方式成本太高，
@@ -188,34 +189,30 @@ body {
 */
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background-color: hsl(var(--muted)); /* Use HSL variable */
+  background: transparent;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-track {
-   background-color: hsl(var(--muted)); /* Tailwind handles dark mode for HSL vars */
-   /* Or specify a darker gray if needed explicitly */
-   /* background-color: #1f2937; */ 
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-   background-color: hsl(var(--muted-foreground)); /* Use HSL variable */
-   border-radius: 3px;
+  background-color: rgba(148, 163, 184, 0.38);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-   background-color: hsl(var(--muted-foreground)); /* Use HSL variable */
-   /* Or specify a different dark thumb color explicitly */
-   /* background-color: #6b7280; */
+  background-color: rgba(148, 163, 184, 0.32);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-   background-color: hsl(var(--secondary)); /* Use HSL variable */
+  background-color: rgba(100, 116, 139, 0.55);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-   background-color: hsl(var(--secondary)); /* Use HSL variable */
-   /* Or specify a different dark hover color explicitly */
-   /* background-color: #4f46e5; */
+  background-color: rgba(203, 213, 225, 0.45);
 }
 
 /* 动画和交互效果 */
@@ -312,13 +309,13 @@ body {
 
 /* 输入区域样式 */
 .input-area {
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
 }
 
 .input-area:focus-within {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
 /* 发送按钮阴影 */
@@ -700,6 +697,10 @@ body {
   background-color: rgba(249, 250, 251, 0.95);
 }
 
+html.glass-ui .history-sticky-header {
+  background-color: transparent !important;
+}
+
 .dark .history-sticky-header {
   background-color: rgba(30, 41, 59, 0.6); /* slate-800/60 */
 }
@@ -817,16 +818,15 @@ li+li { margin-top: 0.375rem; }
   contain: layout paint;
 }
 
-/* === 全局滚动条样式: 简约纤细 === */
+/* === 全局滚动条：纤细圆角，去掉 Windows 上下三角 === */
 * {
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(120, 120, 120, 0.4) transparent; /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
 }
 
-/* WebKit 浏览器 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -834,32 +834,56 @@ li+li { margin-top: 0.375rem; }
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(120, 120, 120, 0.4);
-  border-radius: 3px;
+  background-color: rgba(148, 163, 184, 0.38);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(120, 120, 120, 0.6);
+  background-color: rgba(100, 116, 139, 0.55);
 }
 
-/* 隐藏上下箭头按钮 */
-::-webkit-scrollbar-button {
-  display: none;
-  width: 0;
-  height: 0;
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-/* 暗色模式适配 */
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-button:single-button,
+::-webkit-scrollbar-button:decrement,
+::-webkit-scrollbar-button:increment,
+::-webkit-scrollbar-button:vertical:decrement,
+::-webkit-scrollbar-button:vertical:increment,
+::-webkit-scrollbar-button:horizontal:decrement,
+::-webkit-scrollbar-button:horizontal:increment,
+::-webkit-scrollbar-button:start:decrement,
+::-webkit-scrollbar-button:end:increment,
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:end:increment,
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:vertical:end:decrement,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:end:increment,
+::-webkit-scrollbar-button:horizontal:start:increment,
+::-webkit-scrollbar-button:horizontal:end:decrement {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  appearance: none !important;
+  background: transparent !important;
+  border: none !important;
+}
+
 .dark * {
-  scrollbar-color: rgba(90, 90, 90, 0.5) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.32) transparent;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background-color: rgba(90, 90, 90, 0.5);
+  background-color: rgba(148, 163, 184, 0.32);
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(90, 90, 90, 0.7);
+  background-color: rgba(203, 213, 225, 0.45);
 }
 
 /* ------------------------------ */
@@ -879,14 +903,74 @@ li+li { margin-top: 0.375rem; }
   box-shadow: none !important;
 }
 
-/* 仅在浅色主题替换白色背景为灰 50 */
-.simple-ui:not(.dark) .bg-white{
-  background-color: theme("colors.gray.50") !important;
+/* 常规（非玻璃）：侧栏与主画布同一底色，避免聊天页侧栏过白；设置页切到纸色与侧栏同白 */
+html:not(.glass-ui):not(.dark) {
+  --app-canvas: #f8f9fa;
+  --app-paper: #ffffff;
+  --background: var(--app-canvas);
 }
 
-/* 在暗色主题下替换白色背景为灰 900（与默认 dark:bg-gray-900 一致）*/
-.dark.simple-ui .bg-white{
-  background-color: theme("colors.gray.900") !important;
+html:not(.glass-ui).dark {
+  --app-canvas: #0f172a;
+  --app-paper: #1e293b;
+  --background: var(--app-canvas);
+}
+
+html:not(.glass-ui):not(.dark) body {
+  background-color: var(--app-canvas);
+}
+
+html:not(.glass-ui) .window-titlebar,
+html:not(.glass-ui) .glass-nav {
+  background-color: var(--app-canvas) !important;
+}
+
+html:not(.glass-ui) .glass-nav {
+  border-right: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+html:not(.glass-ui) .glass-shell-inner,
+html:not(.glass-ui) .glass-surface {
+  background-color: var(--app-canvas);
+  background-image: none;
+}
+
+html:not(.glass-ui).page-paper .window-titlebar,
+html:not(.glass-ui).page-paper .glass-nav,
+html:not(.glass-ui).page-paper .glass-shell-inner,
+html:not(.glass-ui).page-paper .glass-surface,
+html:not(.glass-ui) .settings-shell {
+  background-color: var(--app-paper) !important;
+}
+
+html:not(.glass-ui).page-paper .glass-nav {
+  border-right-color: color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+html:not(.glass-ui) .input-area {
+  width: auto !important;
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+html:not(.glass-ui):not(.dark) .composer-box {
+  background-color: var(--app-paper) !important;
+}
+
+html:not(.glass-ui).dark .composer-box {
+  background-color: color-mix(in srgb, var(--app-paper) 88%, #000) !important;
+}
+
+html:not(.glass-ui).simple-ui:not(.dark):not(.page-paper) .bg-white:not(.glass-switch-knob),
+html:not(.glass-ui).simple-ui:not(.dark):not(.page-paper) [class~="bg-white/95"],
+html:not(.glass-ui).simple-ui:not(.dark):not(.page-paper) [class~="bg-white/90"] {
+  background-color: var(--app-canvas) !important;
+}
+
+html:not(.glass-ui).dark.simple-ui:not(.page-paper) .bg-white:not(.glass-switch-knob),
+html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/95"],
+html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
+  background-color: var(--app-canvas) !important;
 }
 
 /* ------------------------------ */
@@ -927,13 +1011,13 @@ li+li { margin-top: 0.375rem; }
 
 /* Collapsible card styles for settings sections */
 .setting-collapse {
-  @apply border border-gray-200 dark:border-gray-700 rounded-md bg-white/70 dark:bg-gray-800/30 hover:ring-1 hover:ring-gray-300/40 dark:hover:ring-gray-600/40 transition-shadow overflow-hidden;
+  @apply border border-slate-200/70 dark:border-white/10 rounded-md bg-white/40 dark:bg-white/5 hover:ring-1 hover:ring-slate-300/40 dark:hover:ring-white/12 transition-shadow overflow-hidden;
 }
 .setting-collapse-trigger {
-  @apply flex items-center justify-between w-full px-3 py-2 cursor-pointer hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-colors select-none;
+  @apply flex items-center justify-between w-full px-3 py-2 cursor-pointer hover:bg-slate-50/60 dark:hover:bg-white/6 transition-colors select-none;
 }
 .setting-collapse-content {
-  @apply px-4 pb-4 pt-3 bg-white/60 dark:bg-gray-800/20 border-t border-gray-100 dark:border-gray-700/40 text-sm leading-relaxed;
+  @apply px-4 pb-4 pt-3 bg-white/30 dark:bg-white/4 border-t border-slate-100/80 dark:border-white/8 text-sm leading-relaxed;
 }
 
 /* 暗色下设置与MCP相关卡片的边框与背景优化，避免偏白的描边 */
@@ -995,4 +1079,692 @@ li+li { margin-top: 0.375rem; }
 /* Tailwind 动画类 */
 .animate-bounce-wave {
   animation: bounce-wave 1.4s ease-in-out infinite;
+}
+
+/* ------------------------------ */
+/* 玻璃主题：壁纸 + 毛玻璃面板（默认关闭，由 html.glass-ui 启用） */
+/* ------------------------------ */
+
+.glass-ui {
+  --glass-fill: rgba(255, 255, 255, 0.18);
+  --glass-fill-strong: rgba(255, 255, 255, 0.22);
+  --glass-border: rgba(148, 163, 184, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.45);
+  --glass-shadow: 0 10px 36px rgba(15, 23, 42, 0.08);
+  --glass-inset: inset 0 1px 0 var(--glass-highlight);
+  --glass-input-border: rgba(212, 175, 110, 0.38);
+  --glass-accent: rgba(14, 165, 233, 0.78);
+  --glass-accent-hover: rgba(2, 132, 199, 0.88);
+  --glass-accent-border: rgba(56, 189, 248, 0.5);
+  --glass-accent-text: rgb(3, 105, 161);
+  --glass-accent-soft: rgba(125, 211, 252, 0.32);
+  --glass-warm: rgba(212, 175, 110, 0.45);
+  --glass-agent: rgba(99, 102, 241, 0.22);
+  --glass-agent-border: rgba(99, 102, 241, 0.42);
+  --glass-agent-text: rgb(79, 70, 229);
+  --glass-ok: rgba(16, 185, 129, 0.24);
+  --glass-ok-border: rgba(16, 185, 129, 0.38);
+  --glass-ok-text: rgb(5, 150, 105);
+  --glass-warn: rgba(251, 191, 36, 0.28);
+  --glass-warn-text: rgb(180, 83, 9);
+  --glass-danger: rgba(244, 63, 94, 0.22);
+  --glass-knowledge: rgba(139, 92, 246, 0.22);
+  --glass-knowledge-border: rgba(139, 92, 246, 0.38);
+  --glass-knowledge-text: rgb(109, 40, 217);
+  --glass-search: rgba(56, 189, 248, 0.26);
+  --glass-search-border: rgba(14, 165, 233, 0.4);
+  --glass-search-text: rgb(2, 132, 199);
+  --glass-radius-overlay: 12px;
+  --glass-radius-control: 8px;
+  --glass-radius-chip: 6px;
+  --glass-text-primary: rgb(30, 41, 59);
+  --glass-text-secondary: rgb(71, 85, 105);
+  --glass-text-muted: rgb(100, 116, 139);
+  --glass-blur: 40px;
+  --glass-gap: 8px;
+  --background: transparent;
+}
+
+.glass-ui.dark {
+  /* 浅色霜面叠在深色壁纸上，才能透出色相；深蓝填充会把毛玻璃糊成整块海军蓝 */
+  --glass-fill: rgba(255, 255, 255, 0.06);
+  --glass-fill-strong: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.22);
+  --glass-highlight: rgba(255, 255, 255, 0.42);
+  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.46);
+  --glass-inset: inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+  --glass-input-border: rgba(212, 175, 110, 0.32);
+  --glass-accent: rgba(14, 165, 233, 0.65);
+  --glass-accent-hover: rgba(56, 189, 248, 0.78);
+  --glass-accent-border: rgba(56, 189, 248, 0.45);
+  --glass-accent-text: rgb(125, 211, 252);
+  --glass-accent-soft: rgba(56, 189, 248, 0.18);
+  --glass-warm: rgba(212, 175, 110, 0.35);
+  --glass-agent: rgba(99, 102, 241, 0.24);
+  --glass-agent-border: rgba(129, 140, 248, 0.42);
+  --glass-agent-text: rgb(165, 180, 252);
+  --glass-ok: rgba(16, 185, 129, 0.2);
+  --glass-ok-border: rgba(52, 211, 153, 0.38);
+  --glass-ok-text: rgb(110, 231, 183);
+  --glass-warn: rgba(251, 191, 36, 0.22);
+  --glass-warn-text: rgb(252, 211, 77);
+  --glass-danger: rgba(244, 63, 94, 0.2);
+  --glass-knowledge: rgba(139, 92, 246, 0.2);
+  --glass-knowledge-border: rgba(167, 139, 250, 0.38);
+  --glass-knowledge-text: rgb(196, 181, 253);
+  --glass-search: rgba(56, 189, 248, 0.18);
+  --glass-search-border: rgba(56, 189, 248, 0.35);
+  --glass-search-text: rgb(125, 211, 252);
+  --glass-text-primary: rgb(241, 245, 249);
+  --glass-text-secondary: rgb(203, 213, 225);
+  --glass-text-muted: rgb(148, 163, 184);
+}
+
+.glass-ui.reduced-motion {
+  --glass-blur: 10px;
+}
+
+.glass-ui body {
+  background-color: transparent !important;
+}
+
+html.glass-ui:not(.dark) {
+  background:
+    radial-gradient(880px 640px at 22% 18%, rgba(56, 189, 248, 0.22), transparent 58%),
+    radial-gradient(760px 560px at 82% 78%, rgba(45, 212, 191, 0.14), transparent 55%),
+    radial-gradient(520px 400px at 50% 42%, rgba(251, 191, 36, 0.08), transparent 62%),
+    linear-gradient(165deg, #f3f8fc 0%, #e7f0f7 52%, #edf4f9 100%);
+  background-attachment: fixed;
+}
+
+html.glass-ui.dark {
+  background:
+    radial-gradient(880px 640px at 24% 16%, rgba(99, 102, 241, 0.28), transparent 56%),
+    radial-gradient(760px 560px at 80% 80%, rgba(14, 165, 233, 0.18), transparent 54%),
+    radial-gradient(520px 400px at 48% 38%, rgba(251, 191, 36, 0.06), transparent 60%),
+    linear-gradient(165deg, #1a1f2e 0%, #141824 52%, #181d2a 100%);
+  background-attachment: fixed;
+}
+
+.glass-wallpaper {
+  background-color: #161a20;
+  overflow: hidden;
+}
+
+.glass-ui:not(.dark) .glass-wallpaper {
+  background-color: #e8f4fc;
+}
+
+.glass-wallpaper-fallback {
+  background:
+    radial-gradient(880px 640px at 24% 16%, rgba(99, 102, 241, 0.28), transparent 56%),
+    radial-gradient(760px 560px at 80% 80%, rgba(14, 165, 233, 0.18), transparent 54%),
+    linear-gradient(165deg, #1a1f2e 0%, #141824 52%, #181d2a 100%);
+}
+
+.glass-ui:not(.dark) .glass-wallpaper-fallback {
+  background:
+    radial-gradient(880px 640px at 22% 18%, rgba(56, 189, 248, 0.22), transparent 58%),
+    radial-gradient(760px 560px at 82% 78%, rgba(45, 212, 191, 0.14), transparent 55%),
+    radial-gradient(520px 400px at 50% 42%, rgba(251, 191, 36, 0.08), transparent 62%),
+    linear-gradient(165deg, #f3f8fc 0%, #e7f0f7 52%, #edf4f9 100%);
+}
+
+.glass-ui .glass-nav {
+  background: var(--glass-fill) !important;
+  top: calc(var(--titlebar-height, 0px) + var(--glass-gap));
+  left: var(--glass-gap);
+  height: calc(100vh - var(--titlebar-height, 0px) - (var(--glass-gap) * 2)) !important;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+}
+
+.glass-ui .glass-shell {
+  position: fixed !important;
+  z-index: 10;
+  top: calc(var(--titlebar-height, 0px) + var(--glass-gap));
+  right: var(--glass-gap);
+  bottom: var(--glass-gap);
+  left: calc(var(--sidebar-width, 4.5rem) + var(--glass-gap) * 2);
+  margin: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 16px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+}
+
+.glass-ui .glass-shell-inner {
+  height: 100%;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: transparent;
+}
+
+html.glass-ui.simple-ui .glass-shell {
+  box-shadow: var(--glass-inset), var(--glass-shadow) !important;
+}
+
+html.glass-ui.simple-ui .glass-shell-inner,
+html.glass-ui.simple-ui .glass-nav,
+html.glass-ui.simple-ui .settings-card {
+  box-shadow: var(--glass-inset), 0 8px 28px rgba(0, 0, 0, 0.12) !important;
+}
+
+html.glass-ui.simple-ui .glass-nav {
+  box-shadow: var(--glass-inset), var(--glass-shadow) !important;
+}
+
+.glass-ui .glass-shell .h-screen {
+  height: 100% !important;
+}
+
+.glass-ui .glass-shell-inner > .glass-surface {
+  border-width: 0 !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .glass-surface,
+html.glass-ui.simple-ui .glass-surface,
+html.glass-ui.simple-ui.dark .glass-surface {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.glass-ui .glass-nav .nav-item,
+.glass-ui .glass-nav .nav-item-active,
+.glass-ui .glass-nav .nav-item:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.glass-ui:not(.dark) .glass-nav .nav-item-active,
+.glass-ui.dark .glass-nav .nav-item-active {
+  color: var(--glass-accent-text) !important;
+}
+
+/* 输入栏工具：只着色图标，不铺色块 */
+.glass-ui .glass-chip-agent {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--glass-agent-text) !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .glass-chip-search {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--glass-search-text) !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .glass-chip-knowledge {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--glass-knowledge-text) !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .glass-chip-ok {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--glass-ok-text) !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .composer-tool,
+.glass-ui .composer-send {
+  background: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .composer-send {
+  color: var(--glass-accent-text) !important;
+}
+
+.glass-ui .inline-edit,
+.glass-ui input.inline-edit {
+  background: transparent !important;
+  background-image: none !important;
+  border-top-color: transparent !important;
+  border-left-color: transparent !important;
+  border-right-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.param-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.param-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+}
+
+.glass-ui .glass-btn-accent {
+  background: var(--glass-accent) !important;
+  background-image: none !important;
+  border: 1px solid var(--glass-accent-border) !important;
+  color: rgb(255, 255, 255) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 10px rgba(14, 165, 233, 0.22) !important;
+}
+
+.glass-ui .glass-btn-accent:hover:not(:disabled) {
+  background: var(--glass-accent-hover) !important;
+}
+
+.glass-ui.dark .glass-btn-accent {
+  color: rgb(240, 249, 255) !important;
+}
+
+.glass-ui .glass-empty-glow {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.42), rgba(14, 165, 233, 0.12), transparent 72%) !important;
+  opacity: 0.38 !important;
+}
+
+.glass-ui.dark .glass-empty-glow {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.28), rgba(99, 102, 241, 0.1), transparent 72%) !important;
+  opacity: 0.32 !important;
+}
+
+html.glass-ui.simple-ui .glass-shell .bg-white:not([role="dialog"]):not(.glass-float-dialog):not(.glass-switch-knob),
+html.glass-ui.dark.simple-ui .glass-shell .bg-white:not([role="dialog"]):not(.glass-float-dialog):not(.glass-switch-knob),
+html.glass-ui .bg-slate-50 {
+  background-color: transparent !important;
+}
+
+.glass-ui .settings-rail {
+  margin: 0;
+  height: 100% !important;
+  border-radius: 0;
+  border: none !important;
+  border-right: 1px solid var(--glass-border) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .settings-main {
+  margin: 0;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+.glass-ui .provider-rail {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-right-color: var(--glass-border) !important;
+}
+
+.glass-ui .provider-detail {
+  overflow: hidden !important;
+}
+
+.provider-rail .glass-field {
+  height: 1.75rem;
+  font-size: 12px;
+}
+
+.glass-ui .chat-rail {
+  border-right-color: var(--glass-border) !important;
+  background: var(--glass-fill-strong) !important;
+}
+
+.glass-ui .glass-chip-agent,
+.glass-ui .glass-chip-search,
+.glass-ui .glass-chip-knowledge,
+.glass-ui .glass-chip-ok {
+  border-radius: var(--glass-radius-chip) !important;
+}
+
+.glass-ui .input-area {
+  width: auto !important;
+  margin-left: 8px !important;
+  margin-right: 8px !important;
+  margin-bottom: 8px !important;
+  background-image: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.glass-ui .input-area .composer-box {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: var(--glass-border) !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  isolation: isolate;
+  background-clip: padding-box;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+.glass-ui .input-area .composer-box:focus-within {
+  border-color: var(--glass-accent-border) !important;
+  box-shadow: none !important;
+}
+
+.glass-ui.dark .input-area .composer-box {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.glass-ui .prompt-chip {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-inset);
+}
+
+.glass-ui.dark .prompt-chip {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.glass-ui .settings-card {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-inset);
+}
+
+.glass-ui.dark .settings-card,
+html.glass-ui.dark .settings-card {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: var(--glass-border) !important;
+}
+
+.glass-ui select,
+.glass-ui .settings-card input:not([type="checkbox"]):not([type="file"]):not([type="range"]) {
+  background-color: rgba(255, 255, 255, 0.32) !important;
+  border-color: var(--glass-border) !important;
+}
+
+.glass-ui.dark select,
+.glass-ui.dark .settings-card input:not([type="checkbox"]):not([type="file"]):not([type="range"]) {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-ui .glass-shell-inner,
+  .glass-ui .glass-nav {
+    background: rgba(15, 23, 42, 0.92) !important;
+  }
+  .glass-ui:not(.dark) .glass-shell-inner,
+  .glass-ui:not(.dark) .glass-nav {
+    background: rgba(255, 255, 255, 0.94) !important;
+  }
+}
+
+/* 构建链路会丢掉这些 backdrop-filter；真正生效的是 GlassThemeApplier 注入的样式 */
+.glass-ui .glass-nav,
+.glass-ui .glass-shell-inner {
+  backdrop-filter: blur(28px);
+}
+.glass-ui .prompt-chip,
+.glass-ui .settings-card {
+  backdrop-filter: blur(12px);
+}
+.glass-ui .glass-overlay,
+.glass-ui .glass-panel,
+.glass-ui .glass-field,
+.glass-ui .glass-inset,
+.glass-ui [role="dialog"],
+.glass-ui [data-sonner-toast] {
+  border-color: var(--glass-border);
+}
+.glass-ui.reduced-motion .glass-nav,
+.glass-ui.reduced-motion .glass-shell-inner,
+.glass-ui.reduced-motion .prompt-chip,
+.glass-ui.reduced-motion .settings-card {
+  backdrop-filter: blur(8px);
+}
+
+/* 玻璃主题滚动条：半透明圆条，无三角箭头 */
+html.glass-ui,
+html.glass-ui * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.42) transparent;
+}
+
+html.glass-ui.dark,
+html.glass-ui.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+html.glass-ui ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.glass-ui ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html.glass-ui ::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.36);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+html.glass-ui ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(56, 189, 248, 0.42);
+}
+
+html.glass-ui.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html.glass-ui.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(125, 211, 252, 0.38);
+}
+
+/* ------------------------------ */
+/* 夜间亮度：仅 .dark 生效，100% 为当前默认 */
+/* ------------------------------ */
+
+:root {
+  --night-brightness: 1;
+  --night-overlay: 0;
+  --night-mix: 0%;
+  --slider-rest: rgb(229 231 235);
+}
+
+html.dark {
+  background-color: color-mix(in srgb, #0f172a, #000 var(--night-mix, 0%));
+  --slider-rest: rgb(51 65 85);
+}
+
+html.dark:not(.glass-ui) body {
+  background-color: color-mix(in srgb, #0f172a, #000 var(--night-mix, 0%)) !important;
+}
+
+.night-dim-veil {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+  background: #000;
+  opacity: var(--night-overlay, 0);
+}
+
+html.custom-titlebar {
+  --titlebar-height: 32px;
+  --titlebar-slot: 7.75rem;
+}
+
+html.custom-titlebar:not(.glass-ui) .custom-titlebar-content {
+  padding-top: var(--titlebar-height);
+}
+
+html.custom-titlebar:not(.glass-ui) .glass-nav {
+  top: var(--titlebar-height);
+  height: calc(100vh - var(--titlebar-height)) !important;
+}
+
+.window-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  height: var(--titlebar-height);
+  user-select: none;
+  background: transparent;
+  border-bottom: 0;
+}
+
+.window-titlebar-slot {
+  flex: 0 0 var(--titlebar-slot);
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.window-titlebar-slot-start {
+  justify-content: flex-start;
+}
+
+.window-titlebar-slot-end {
+  justify-content: flex-end;
+}
+
+html.custom-titlebar-left .window-titlebar-slot-start {
+  padding-left: 12px;
+}
+
+html.custom-titlebar-left .window-titlebar-slot-end {
+  padding-right: 12px;
+}
+
+.window-titlebar-drag {
+  flex: 1;
+  height: 100%;
+  min-width: 1.5rem;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.window-titlebar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 100%;
+}
+
+.window-titlebar-logo {
+  display: block;
+  width: 22px;
+  height: 15px;
+  object-fit: contain;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.window-titlebar-name {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: rgb(71 85 105);
+}
+
+html.dark .window-titlebar-name {
+  color: rgb(203 213 225);
+}
+
+.window-controls-win {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.window-controls-mac {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.window-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: rgb(71 85 105);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+html.dark .window-btn {
+  color: rgb(148 163 184);
+}
+
+.window-btn-win {
+  width: 40px;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+}
+
+.window-btn-win:hover {
+  background: rgba(15, 23, 42, 0.08);
+  color: rgb(15 23 42);
+}
+
+html.dark .window-btn-win:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgb(226 232 240);
+}
+
+.window-btn-win.window-btn-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.window-btn-mac {
+  width: 12px;
+  height: 12px;
+  margin: auto 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.55);
+}
+
+.window-controls-mac:hover .window-btn-mac.window-btn-close,
+.window-btn-mac.window-btn-close:hover {
+  background: #ff5f57;
+}
+
+.window-controls-mac:hover .window-btn-mac.window-btn-min,
+.window-btn-mac.window-btn-min:hover {
+  background: #febc2e;
+}
+
+.window-controls-mac:hover .window-btn-mac.window-btn-max,
+.window-btn-mac.window-btn-max:hover {
+  background: #28c840;
+}
+
+.glass-switch-knob {
+  background-color: #fff !important;
+  background-image: none !important;
 }

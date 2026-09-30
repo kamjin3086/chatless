@@ -4,39 +4,54 @@
 
 import { create } from 'zustand';
 
+/**
+ * How long an approval should last.
+ * - `once`: this call only (the default)
+ * - `always`: adds the directory to the persistent allowlist
+ * - `unrestricted`: no more filesystem prompts in this conversation
+ */
+export type ApprovalDecision = 'once' | 'always' | 'unrestricted';
+
+export interface PendingApprovalScope {
+  /** Which capability the user is approving. */
+  kind: 'filesystem' | 'shell';
+  /** filesystem: operation being approved (read / write / create / delete). */
+  op?: string;
+  /** filesystem: resolved absolute path of the target. */
+  path?: string;
+  /** filesystem: directory the grant would cover. */
+  directory?: string;
+  /** shell: the command line that will run. */
+  command?: string;
+}
+
 export interface PendingAuthorization {
   id: string; // 唯一ID
   messageId: string;
+  /** Conversation the call belongs to (used by the card's undo action). */
+  conversationId?: string;
   server: string;
   tool: string;
   args?: Record<string, unknown>;
+  /** Present for filesystem/shell calls so the card can offer longer grants. */
+  scope?: PendingApprovalScope;
   createdAt: number;
   // 授权决策回调
-  onApprove: () => void;
+  onApprove: (decision: ApprovalDecision) => void;
   onReject: () => void;
 }
 
 interface AuthorizationState {
   pendingAuthorizations: Map<string, PendingAuthorization>;
-  /**
-   * “预先批准/拒绝”缓存：
-   * 用于处理 UI 中点击发生在 pending 授权尚未入 store 的竞态（以及恢复/残留卡片的场景）。
-   */
-  _preDecision: Map<string, { decision: 'approve' | 'reject'; at: number }>;
-  
   // 添加待授权请求
   addPendingAuthorization: (auth: PendingAuthorization) => void;
   
-  // 批准授权
-  approveAuthorization: (id: string) => boolean;
+  // 批准授权（可指定授权时长）
+  approveAuthorization: (id: string, decision?: ApprovalDecision) => boolean;
   
   // 拒绝授权
   rejectAuthorization: (id: string) => boolean;
 
-  // 预先批准/拒绝（用于竞态/恢复）
-  preApproveAuthorization: (id: string) => void;
-  preRejectAuthorization: (id: string) => void;
-  
   // 移除授权请求（用于清理）
   removeAuthorization: (id: string) => void;
   
@@ -52,35 +67,7 @@ interface AuthorizationState {
 
 export const useAuthorizationStore = create<AuthorizationState>((set, get) => ({
   pendingAuthorizations: new Map(),
-  _preDecision: new Map(),
-  
   addPendingAuthorization: (auth) => {
-    // 如果 UI 提前点了“批准/拒绝”，在这里直接消费该决定并继续执行
-    const pre = get()._preDecision.get(auth.id);
-    if (pre) {
-      // 仅保留短时间窗口，避免陈旧点击造成误触发
-      if (Date.now() - pre.at < 30_000) {
-        try {
-          if (pre.decision === 'approve') auth.onApprove();
-          else auth.onReject();
-        } catch {
-          // ignore
-        }
-        set((state) => {
-          const nextPre = new Map(state._preDecision);
-          nextPre.delete(auth.id);
-          return { _preDecision: nextPre };
-        });
-        return;
-      }
-      // 过期则清理
-      set((state) => {
-        const nextPre = new Map(state._preDecision);
-        nextPre.delete(auth.id);
-        return { _preDecision: nextPre };
-      });
-    }
-
     set((state) => {
       const newMap = new Map(state.pendingAuthorizations);
       newMap.set(auth.id, auth);
@@ -88,15 +75,13 @@ export const useAuthorizationStore = create<AuthorizationState>((set, get) => ({
     });
   },
   
-  approveAuthorization: (id) => {
+  approveAuthorization: (id, decision = 'once') => {
     const auth = get().getPendingAuthorization(id);
     if (auth) {
-      auth.onApprove();
+      auth.onApprove(decision);
       get().removeAuthorization(id);
       return true;
     }
-    // 没有 pending：记录“预批准”，避免竞态导致点击无效
-    get().preApproveAuthorization(id);
     return false;
   },
   
@@ -107,28 +92,7 @@ export const useAuthorizationStore = create<AuthorizationState>((set, get) => ({
       get().removeAuthorization(id);
       return true;
     }
-    get().preRejectAuthorization(id);
     return false;
-  },
-
-  preApproveAuthorization: (id) => {
-    const k = String(id || '').trim();
-    if (!k) return;
-    set((state) => {
-      const next = new Map(state._preDecision);
-      next.set(k, { decision: 'approve', at: Date.now() });
-      return { _preDecision: next };
-    });
-  },
-
-  preRejectAuthorization: (id) => {
-    const k = String(id || '').trim();
-    if (!k) return;
-    set((state) => {
-      const next = new Map(state._preDecision);
-      next.set(k, { decision: 'reject', at: Date.now() });
-      return { _preDecision: next };
-    });
   },
   
   removeAuthorization: (id) => {

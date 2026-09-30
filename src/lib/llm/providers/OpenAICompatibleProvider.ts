@@ -1,15 +1,60 @@
+import { normalizeToolCallServerAndTool } from '@/lib/mcp/normalizeToolCallName';
 import { BaseProvider, CheckResult, LlmMessage, StreamCallbacks } from './BaseProvider';
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '../types/stream-events';
-import { rewriteEventsWithToolCalls } from '../adapters/ToolChannelParser';
+import { toOpenAIMessage } from './messageMapping';
+import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
+import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
+import { readContextWindow } from '@/lib/llm/modelWindow';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
   toOpenAIToolChoice 
 } from '../types/tool-schema';
+
+/**
+ * One terminal signal per request.
+ *
+ * A single request can report more than one terminal event: a server error
+ * followed by the transport closing, or a completion marker followed by EOF.
+ * Only the first one reaches the caller.  Without that rule the later, vaguer
+ * transport message overwrites the provider's real explanation and the user is
+ * told to check their configuration for a request the server already rejected
+ * with a specific reason.
+ */
+function createStreamTerminal(cb: StreamCallbacks) {
+  let settled = false;
+  return {
+    get settled(): boolean {
+      return settled;
+    },
+    complete(): boolean {
+      if (settled) return false;
+      settled = true;
+      cb.onComplete?.();
+      return true;
+    },
+    fail(error: Error): boolean {
+      if (settled) return false;
+      settled = true;
+      cb.onError?.(error);
+      return true;
+    },
+  };
+}
+
+type ProviderHttpError = Error & { code?: string; status?: number };
+
+function createProviderHttpError(status: number, statusText: string, detail: string): ProviderHttpError {
+  const suffix = detail ? `: ${detail}` : '';
+  const error = new Error(`HTTP ${status} ${statusText}`.trim() + suffix) as ProviderHttpError;
+  error.code = 'PROVIDER_HTTP_ERROR';
+  error.status = status;
+  return error;
+}
 
 /**
  * OpenAI 兼容 Provider（宽松解析版）
@@ -30,7 +75,16 @@ export class OpenAICompatibleProvider extends BaseProvider {
     this.thinkingStrategy = ThinkingStrategyFactory.createStandardStrategy();
   }
 
-  async fetchModels(): Promise<Array<{ name: string; label?: string; aliases?: string[] }> | null> {
+  private buildHeaders(apiKey?: string | null, extra: Record<string, string> = {}): Record<string, string> {
+    const h: Record<string, string> = {
+      ...extra,
+      ...getGatewayExtraHeaders(this.name, this.baseUrl),
+    };
+    if (apiKey) h.Authorization = `Bearer ${apiKey}`;
+    return h;
+  }
+
+  async fetchModels(): Promise<Array<{ name: string; label?: string; aliases?: string[]; contextWindow?: number }> | null> {
     // 通用兜底：按 OpenAI 兼容协议拉取 /models
     try {
       const apiKey = await this.getApiKey();
@@ -38,13 +92,18 @@ export class OpenAICompatibleProvider extends BaseProvider {
       if (!base) throw new Error('no base url');
       const url = `${base}/models`;
       const { tauriFetch } = await import('@/lib/request');
-      const resp: any = await tauriFetch(url, { method: 'GET', headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, fallbackToBrowserOnError: true, verboseDebug: true, debugTag: 'ModelList' });
+      const resp: any = await tauriFetch(url, { method: 'GET', headers: this.buildHeaders(apiKey), fallbackToBrowserOnError: true, verboseDebug: true, debugTag: 'ModelList' });
       const items = Array.isArray(resp?.data) ? resp.data : (Array.isArray(resp) ? resp : []);
       if (Array.isArray(items) && items.length) {
         return items.map((it: any) => {
           const id = it?.id || it?.name;
           const label = it?.label || it?.id || it?.name;
-          return { name: String(id), label: String(label), aliases: [String(id)] };
+          return {
+            name: String(id),
+            label: String(label),
+            aliases: [String(id)],
+            contextWindow: readContextWindow(it),
+          };
         });
       }
     } catch (e) {
@@ -57,40 +116,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   async checkConnection(): Promise<CheckResult> {
-    // 与 OpenAI 类似，使用错误密钥做一次标准请求，判断是否可达
-    const base = this.baseUrl.replace(/\/$/, '');
-    const url = `${base}/chat/completions`;
-    const fakeKey = 'invalid_test_key_for_healthcheck';
-    const body = { model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: 'ping' }], stream: false };
-    try {
-      const { tauriFetch } = await import('@/lib/request');
-      const { judgeApiReachable } = await import('./healthcheck');
-      const resp: any = await tauriFetch(url, {
-        method: 'POST',
-        rawResponse: true,
-        browserHeaders: true,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fakeKey}` },
-        body,
-        timeout: 5000,
-        fallbackToBrowserOnError: true,
-        debugTag: 'OpenAICompat-HealthCheck',
-        verboseDebug: true,
-        includeBodyInLogs: true
-      });
-      const status = (resp?.status ?? 0) as number;
-      const text = (await resp.text?.()) || '';
-      const judged = judgeApiReachable(status, text);
-      if (!judged.ok) {
-        console.log('[OpenAICompatibleProvider] judged unreachable', { status, text: (text||'').slice(0,200) });
-      }
-      if (judged.ok) return { ok: true, message: judged.message, meta: { status } };
-      return { ok: false, reason: 'UNKNOWN', message: `HTTP ${status}`, meta: { status } };
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (/timeout|abort/i.test(msg)) return { ok: false, reason: 'TIMEOUT', message: '连接超时' };
-      if (/network|fetch|ENOTFOUND|ECONN/i.test(msg)) return { ok: false, reason: 'NETWORK', message: '网络错误' };
-      return { ok: false, reason: 'UNKNOWN', message: msg };
-    }
+    const apiKey = await this.getApiKey();
+    const { probeOpenAICompatibleBase } = await import('./healthcheck');
+    return probeOpenAICompatibleBase(this.baseUrl, {
+      apiKey,
+      debugTag: 'OpenAICompat-HealthCheck',
+    });
   }
 
   async chatStream(
@@ -148,18 +179,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           const hasContent = !!String(m.content || '').trim();
           return hasContent || hasToolCalls;
         })
-        .map((m) => {
-        const anyMsg: any = m as any;
-        const msg: any = { role: m.role, content: m.content };
-        if (m.role === 'tool') {
-          if (anyMsg.tool_call_id) msg.tool_call_id = anyMsg.tool_call_id;
-          if (anyMsg.name) msg.name = anyMsg.name;
-        }
-        if (m.role === 'assistant' && Array.isArray(anyMsg.tool_calls) && anyMsg.tool_calls.length > 0) {
-          msg.tool_calls = anyMsg.tool_calls;
-        }
-        return msg;
-      }),
+        .map(toOpenAIMessage),
       stream: true,
       ...mapped,
     };
@@ -189,17 +209,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
     }
 
 
-    // 防止重复触发完成回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、reader.done 等多条完成分支
-    let didComplete = false;
-    const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
-      if (didComplete) {
-
-        return;
-      }
-      didComplete = true;
-
-      cb.onComplete?.();
-    };
+    // 防止重复触发终态回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、
+    // reader.done 等多条完成分支，也可能在服务端报错后再收到一次传输关闭。
+    const terminal = createStreamTerminal(cb);
 
     try {
       this.aborted = false;
@@ -214,14 +226,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
           method: 'POST',
           rawResponse: true,
           browserHeaders: true,
-          headers: (() => {
-            const h: Record<string, string> = {
-              'Content-Type': 'application/json',
-              'Accept': 'application/x-ndjson, application/json, text/event-stream',
-            };
-            if (apiKey) h.Authorization = `Bearer ${apiKey}`;
-            return h;
-          })(),
+          headers: this.buildHeaders(apiKey, {
+            'Content-Type': 'application/json',
+            'Accept': 'application/x-ndjson, application/json, text/event-stream',
+          }),
           body,
           debugTag: 'OpenAICompatStream',
         });
@@ -234,14 +242,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
         try {
           resp = await fetch(url, {
             method: 'POST',
-            headers: (() => {
-              const h: Record<string, string> = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/x-ndjson, application/json, text/event-stream',
-              };
-              if (apiKey) h.Authorization = `Bearer ${apiKey}`;
-              return h;
-            })(),
+            headers: this.buildHeaders(apiKey, {
+              'Content-Type': 'application/json',
+              'Accept': 'application/x-ndjson, application/json, text/event-stream',
+            }),
             body: JSON.stringify(body),
           });
         } catch {
@@ -249,8 +253,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
       }
 
-      if (!resp || !resp.ok) {
+      // 只有“根本没有响应”才是传输失败。HTTP 错误响应本身带着服务端的解释，
+      // 再换一条传输重发同一请求会真的发出第二次请求，并把这份解释盖掉。
+      if (!resp) {
         await this.startSSEFallback(url, apiKey || null, body, cb);
+        return;
+      }
+      if (!resp.ok) {
+        const detail = await this.readErrorBody(resp);
+        terminal.fail(createProviderHttpError(resp.status, resp.statusText, detail));
         return;
       }
 
@@ -283,11 +294,21 @@ export class OpenAICompatibleProvider extends BaseProvider {
         name: string;
         arguments: string;
       }> = new Map();
+      let reasoningContent = '';
       
       const processDelta = (json: any) => {
-        if (!json) return;
+        if (!json || terminal.settled) return;
+        const finishReason = json?.choices?.[0]?.finish_reason;
+        if (finishReason === 'length' || finishReason === 'content_filter') {
+          toolCallState.clear();
+          terminal.fail(new Error(`Response incomplete: ${finishReason}`));
+          return;
+        }
         // 1) 先提取内容（包含最终 message.content），避免因 finish_reason 过早 return 丢失末帧内容
         const delta = json?.choices?.[0]?.delta ?? {};
+        if (json?.usage) {
+          recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'openai-compatible', json?.model));
+        }
 
         
         // 处理工具调用增量
@@ -312,17 +333,13 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
         
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
-        const contentPiece: string | undefined =
-          (typeof delta.content === 'string' ? delta.content : undefined) ||
-          (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
-        
-        let fullContent = '';
-        if (reasoningPiece) fullContent = `<think>${reasoningPiece}</think>`;
-        if (contentPiece) fullContent += contentPiece;
-        if (fullContent) {
-          const result = this.thinkingStrategy.processToken({ content: fullContent, done: false });
+        if (reasoningPiece) reasoningContent += reasoningPiece;
+
+        const token = this.toThinkingToken(delta, json);
+        if (token) {
+          const result = this.thinkingStrategy.processToken(token);
           parsedOkCount++;
-          contentEmittedChars += fullContent.length;
+          contentEmittedChars += (token.content || '').length + (token.reasoning_content || '').length;
 
           
           this.dispatchEvents(result.events || [], cb);
@@ -331,12 +348,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const isDone = json === '[DONE]' || json?.done === true || !!json?.choices?.[0]?.finish_reason;
         if (isDone) {
           // 完成前，发送所有累积的工具调用
-          this.emitPendingToolCalls(toolCallState, cb);
+          this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
 
           
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          completeOnce('finish_reason_or_done', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
+          terminal.complete();
           // —— 诊断输出：NDJSON 模式统计 —— 
           try {
             console.debug('[OpenAICompatibleProvider] NDJSON complete', {
@@ -366,7 +383,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
           }
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          completeOnce('reader_done', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
+          if (!terminal.settled && toolCallState.size > 0) throw new Error('Tool response ended before a completion marker');
+          terminal.complete();
           break;
         }
         buffer += decoder.decode(value, { stream: true });
@@ -374,8 +392,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
         while ((idx = buffer.indexOf('\n')) >= 0) {
           const line = buffer.slice(0, idx).trim();
           buffer = buffer.slice(idx + 1);
-          if (!line || line === '[DONE]') { 
-            if (line === '[DONE]') { 
+          if (!line || line === '[DONE]') {
+            if (line === '[DONE]' && !terminal.settled) {
+              this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               const result = this.thinkingStrategy.processToken({ done: true });
               if (!cb.onEvent) {
                 throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
@@ -383,7 +402,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
               if (result.events && result.events.length > 0) {
                 result.events.forEach(event => cb.onEvent!(event));
               }
-              completeOnce('line_DONE', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
+              terminal.complete();
             } 
             continue; 
           }
@@ -397,25 +416,60 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
     } catch (error: any) {
       console.error('[OpenAICompatibleProvider] stream error:', error);
-      cb.onError?.(error);
+      // A stream that already reported its answer must not be turned into an
+      // error by a late transport hiccup.
+      terminal.fail(error instanceof Error ? error : new Error(String(error)));
     }
   }
 
   /**
-   * 统一的事件分发入口：
-   * - 先通过 ToolChannelParser 剥离工具指令 → 生成 tool_call 事件
-   * - 再将纯净的事件流交给上层回调（Native-only：必须 onEvent）
+   * Map one OpenAI-shaped delta onto the thinking strategy's input.
+   *
+   * A `reasoning_content` delta is reasoning on its own channel; it must stay
+   * on that channel.  Wrapping each delta in `<think>...</think>` produced one
+   * closed think block per token, so the same text came out once as thinking
+   * and once as body, and the tags leaked into the visible answer.
+   */
+  private toThinkingToken(delta: any, json: any) {
+    const reasoningPiece = typeof delta?.reasoning_content === 'string' ? delta.reasoning_content : undefined;
+    const contentPiece: string | undefined =
+      (typeof delta?.content === 'string' ? delta.content : undefined) ||
+      (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
+    if (!reasoningPiece && !contentPiece) return null;
+    return { reasoning_content: reasoningPiece, content: contentPiece };
+  }
+
+  /**
+   * Dispatch structured provider events.  Text/JSON embedded in model output
+   * is deliberately never interpreted as an executable tool call.
    */
   private dispatchEvents(rawEvents: StreamEvent[] | undefined, cb: StreamCallbacks, _isDone: boolean = false) {
     if (!rawEvents || rawEvents.length === 0) return;
-    const events = rewriteEventsWithToolCalls(rawEvents);
-    if (!events.length) return;
+    const events = rawEvents;
 
     if (!cb.onEvent) {
       throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
     }
 
       for (const ev of events) cb.onEvent(ev);
+  }
+
+  /**
+   * Read the provider's own explanation for an HTTP failure.
+   *
+   * Providers put the actionable reason in the body ("message 5 has role
+   * 'system' after a non-system turn", "context length exceeded", ...).  That
+   * text is what the user needs; the status line alone is not diagnosable.
+   */
+  private async readErrorBody(resp: Response): Promise<string> {
+    const MAX = 2000;
+    try {
+      const text = await (typeof resp.clone === 'function' ? resp.clone() : resp).text();
+      const compact = String(text || '').replace(/\s+/g, ' ').trim();
+      return compact.length > MAX ? `${compact.slice(0, MAX)}…` : compact;
+    } catch {
+      return '';
+    }
   }
 
   /**
@@ -430,13 +484,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     // SSE 工具调用增量状态（LM Studio/OpenAI compat streaming：delta.tool_calls 分块发送，需要累积）
     const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
-    let didComplete = false;
-    const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
-      if (didComplete) return;
-      didComplete = true;
-
-      cb.onComplete?.();
-    };
+    let reasoningContent = '';
+    const terminal = createStreamTerminal(cb);
     
     const reader = resp.body?.getReader();
     if (!reader) {
@@ -448,6 +497,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     let buffer = '';
     
     const processLine = (line: string) => {
+      if (terminal.settled) return;
       const trimmedLine = line.trim();
       if (!trimmedLine) return;
       
@@ -461,17 +511,25 @@ export class OpenAICompatibleProvider extends BaseProvider {
       
       if (payload === '[DONE]') {
         // 完成前，发送所有累积的工具调用
-        this.emitPendingToolCalls(toolCallState, cb);
+        this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
         const result = this.thinkingStrategy.processToken({ done: true });
         this.dispatchEvents(result.events || [], cb, true);
-        completeOnce('DONE', { toolCallsCount: toolCallState.size });
+        terminal.complete();
         return;
       }
       
       try {
         const json = JSON.parse(payload);
         const delta = json?.choices?.[0]?.delta ?? {};
+        if (json?.usage) {
+          recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'openai-compatible', json?.model));
+        }
         const finishReason = json?.choices?.[0]?.finish_reason;
+        if (finishReason === 'length' || finishReason === 'content_filter') {
+          toolCallState.clear();
+          terminal.fail(new Error(`Response incomplete: ${finishReason}`));
+          return;
+        }
 
         
         // SSE：累积 tool_calls（LM Studio 文档 Streaming）
@@ -494,28 +552,19 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
         
         const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
-        const contentPiece: string | undefined =
-          (typeof delta.content === 'string' ? delta.content : undefined) ||
-          (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
-        
-        let fullContent = '';
-        if (reasoningPiece) {
-          fullContent = `<think>${reasoningPiece}</think>`;
-        }
-        if (contentPiece) {
-          fullContent += contentPiece;
-        }
-        
-        if (fullContent) {
-          const result = this.thinkingStrategy.processToken({ content: fullContent, done: false });
+        if (reasoningPiece) reasoningContent += reasoningPiece;
+
+        const token = this.toThinkingToken(delta, json);
+        if (token) {
+          const result = this.thinkingStrategy.processToken(token);
           this.dispatchEvents(result.events || [], cb);
         }
         // 检查 finish_reason：完成前同样冲刷工具调用
         if (finishReason && finishReason !== 'null') {
-          this.emitPendingToolCalls(toolCallState, cb);
+          this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
+          terminal.complete();
         }
       } catch {
         // JSON 解析失败，忽略
@@ -531,11 +580,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
           if (buffer.trim()) {
             processLine(buffer);
           }
-          // reader done：确保发射累积工具调用
-          this.emitPendingToolCalls(toolCallState, cb);
+          if (!terminal.settled && toolCallState.size > 0) {
+            throw new Error('Tool response ended before a completion marker');
+          }
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          completeOnce('reader_done', { toolCallsCount: toolCallState.size });
+          terminal.complete();
           break;
         }
         
@@ -549,9 +599,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
     } catch (error: any) {
       if (this.aborted) {
-        completeOnce('aborted', { toolCallsCount: toolCallState.size });
+        terminal.complete();
       } else {
-        cb.onError?.(error);
+        terminal.fail(error instanceof Error ? error : new Error(String(error)));
       }
     } finally {
       this.currentReader = null;
@@ -566,43 +616,38 @@ export class OpenAICompatibleProvider extends BaseProvider {
   ) {
     // 重置策略状态
     this.thinkingStrategy.reset();
-    
+
+    const terminal = createStreamTerminal(cb);
     try {
       // SSE fallback 工具调用增量状态（与 processSSEResponse 保持一致）
       const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
-      let didComplete = false;
-      const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
-        if (didComplete) return;
-        didComplete = true;
-
-        cb.onComplete?.();
-      };
+      let reasoningContent = '';
       
       await this.sseClient.startConnection(
         {
           url,
           method: 'POST',
-          headers: {
+          headers: this.buildHeaders(apiKey, {
             'Accept-Encoding': 'identity',
             'Content-Type': 'application/json',
-            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-          },
+          }),
           body,
           debugTag: 'OpenAICompatibleProvider',
         },
         {
           onStart: cb.onStart,
-          onError: cb.onError,
+          onError: (error: Error) => { terminal.fail(error); },
           onData: (rawData: string) => {
             // —— 诊断：统计 —— 
             // 注意：SSE 由后端拆“行”，这里统计的是每个 data 行
+            if (terminal.settled) return;
             const payload = rawData.startsWith('data:') ? rawData.substring(5).trim() : rawData.trim();
             if (!payload) return;
             if (payload === '[DONE]') {
-              this.emitPendingToolCalls(toolCallState, cb);
+              this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               const result = this.thinkingStrategy.processToken({ done: true });
               this.dispatchEvents(result.events || [], cb, true);
-              completeOnce('DONE', { toolCallsCount: toolCallState.size });
+              terminal.complete();
               this.sseClient.stopConnection();
               return;
             }
@@ -610,7 +655,13 @@ export class OpenAICompatibleProvider extends BaseProvider {
               const json = JSON.parse(payload);
               const delta = json?.choices?.[0]?.delta ?? {};
               const finishReason = json?.choices?.[0]?.finish_reason;
-              
+              if (finishReason === 'length' || finishReason === 'content_filter') {
+                toolCallState.clear();
+                terminal.fail(new Error(`Response incomplete: ${finishReason}`));
+                this.sseClient.stopConnection();
+                return;
+              }
+
               // SSE fallback：累积 tool_calls
               if (delta?.tool_calls) {
                 for (const tc of delta.tool_calls) {
@@ -631,32 +682,19 @@ export class OpenAICompatibleProvider extends BaseProvider {
               }
               
               const reasoningPiece = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : undefined;
-              const contentPiece: string | undefined =
-                (typeof delta.content === 'string' ? delta.content : undefined) ||
-                (typeof json?.choices?.[0]?.message?.content === 'string' ? json.choices[0].message.content : undefined);
-              
-              // 构造完整的token内容（reasoning + content）
-              let fullContent = '';
-              if (reasoningPiece) {
-                fullContent = `<think>${reasoningPiece}</think>`;
-              }
-              if (contentPiece) {
-                fullContent += contentPiece;
-              }
-              
-              if (fullContent) {
-                const result = this.thinkingStrategy.processToken({
-                  content: fullContent,
-                  done: false
-                });
+              if (reasoningPiece) reasoningContent += reasoningPiece;
+
+              const token = this.toThinkingToken(delta, json);
+              if (token) {
+                const result = this.thinkingStrategy.processToken(token);
                 this.dispatchEvents(result.events || [], cb);
               }
               
               if (finishReason && finishReason !== 'null') {
-                this.emitPendingToolCalls(toolCallState, cb);
+                this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
                 const result = this.thinkingStrategy.processToken({ done: true });
                 this.dispatchEvents(result.events || [], cb, true);
-                completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
+                terminal.complete();
                 this.sseClient.stopConnection();
               }
             } catch (err) {
@@ -665,12 +703,16 @@ export class OpenAICompatibleProvider extends BaseProvider {
           },
           onClose: () => {
             try { console.debug('[OpenAICompatibleProvider] SSE closed'); } catch { /* noop */ }
+            // Only meaningful when nothing else settled this request: a server
+            // error already delivered to the caller must not be replaced by
+            // this vaguer transport message.
+            terminal.fail(new Error('SSE transport ended before a completion marker'));
           }
         }
       );
     } catch (error) {
       console.error('[OpenAICompatibleProvider] SSE fallback failed:', error);
-      cb.onError?.(error as any);
+      terminal.fail(error instanceof Error ? error : new Error(String(error)));
     }
   }
 
@@ -679,7 +721,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
    */
   private emitPendingToolCalls(
     toolCallState: Map<number, { id: string; name: string; arguments: string }>,
-    cb: StreamCallbacks
+    cb: StreamCallbacks,
+    reasoningContent?: string
   ): void {
     if (toolCallState.size === 0) return;
     
@@ -688,7 +731,6 @@ export class OpenAICompatibleProvider extends BaseProvider {
       
       // 解析服务器和工具名称（格式: server__tool 或 server.tool 或直接工具名）
       // 关键：避免出现 server=default 导致 “服务器 default 配置未找到”
-      const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
       const n = normalizeToolCallServerAndTool({ serverName: 'default', toolName: tc.name });
       const serverName = n.serverName;
       const toolName = n.toolName;
@@ -701,7 +743,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
             serverName,
             toolName,
             arguments: tc.arguments,
-          }
+          },
+          reasoningContent ? { reasoning_content: reasoningContent } : undefined
         );
         cb.onEvent(toolEvent);
       }

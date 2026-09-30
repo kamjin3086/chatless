@@ -202,10 +202,10 @@ export function ExecutionConfirmDialog({
   const RiskIcon = riskConfig.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-scrim bg-black/50 backdrop-blur-sm">
       <div 
         className={cn(
-          "w-full max-w-md rounded-lg shadow-xl",
+          "w-full max-w-md rounded-lg shadow-xl glass-overlay",
           "bg-background border",
           riskConfig.borderColor,
           className

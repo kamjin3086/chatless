@@ -65,10 +65,10 @@ export function ModelSelectContent({
     <TooltipProvider delayDuration={150}>
       <SelectContent
         onFocusCapture={handleFocusCapture}
-        className="max-h-[600px] w-[520px] p-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-300/60 dark:border-slate-600/50 rounded-2xl shadow-2xl"
+        className="max-h-[600px] w-[520px] p-0 glass-overlay rounded-2xl"
       >
       {/* 搜索栏 */}
-      <div className="sticky top-0 z-10 p-3 bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-900/80 border-b border-slate-200/60 dark:border-slate-700/50 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 px-2.5 pt-2.5 pb-2 border-b border-slate-200/40 dark:border-slate-700/40">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
@@ -78,7 +78,7 @@ export function ModelSelectContent({
             autoCorrect="off"
             spellCheck={false}
             placeholder="搜索模型或提供商..."
-            className="w-full py-2.5 pl-10 pr-20 border border-slate-300/60 dark:border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400/60 bg-white dark:bg-slate-800/60 dark:text-slate-200 transition-all placeholder:text-slate-400/80 shadow-sm"
+            className="w-full py-2 pl-9 pr-16 border border-slate-300/50 dark:border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-400/25 focus:border-slate-400/50 bg-white/70 dark:bg-slate-800/50 dark:text-slate-200 transition-all placeholder:text-slate-400/80"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDownCapture={(e) => {
@@ -112,18 +112,18 @@ export function ModelSelectContent({
        </div>
 
       {/* 标签页 */}
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="p-3">
-        <TabsList className="w-full grid grid-cols-2 mb-3 bg-slate-100/80 dark:bg-slate-800/60 rounded-xl p-1 border border-slate-200/50 dark:border-slate-700/40">
-          <TabsTrigger value="all" className="text-sm font-medium rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700/80 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm transition-all">
+      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="px-2 py-2">
+        <TabsList className="w-full grid grid-cols-2 mb-2 bg-slate-100/50 dark:bg-slate-800/40 rounded-xl p-0.5 border border-slate-200/40 dark:border-slate-700/40">
+          <TabsTrigger value="all" className="text-sm font-medium rounded-lg data-[state=active]:bg-white/80 dark:data-[state=active]:bg-slate-700/70 data-[state=active]:text-slate-700 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-none transition-all">
             全部模型
           </TabsTrigger>
-          <TabsTrigger value="recent" className="text-sm font-medium rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700/80 data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400 data-[state=active]:shadow-sm transition-all" disabled={filteredModels.length === 0}>
+          <TabsTrigger value="recent" className="text-sm font-medium rounded-lg data-[state=active]:bg-white/80 dark:data-[state=active]:bg-slate-700/70 data-[state=active]:text-slate-700 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-none transition-all" disabled={filteredModels.length === 0}>
             <Clock className="w-3.5 h-3.5 mr-1.5" />
             最近使用
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-0 space-y-2 max-h-[440px] overflow-y-auto pr-1 custom-scrollbar">
+        <TabsContent value="all" className="mt-0 max-h-[440px] overflow-y-auto pr-0.5 custom-scrollbar">
           {filteredModels.length === 0 ? (
             <div className="p-6 text-center">
               <div className="text-sm text-slate-500 dark:text-slate-400">{searchQuery ? '无匹配结果' : '正在加载模型列表...'}</div>
@@ -141,7 +141,7 @@ export function ModelSelectContent({
             />
           )}
         </TabsContent>
-        <TabsContent value="recent" className="mt-0 space-y-2 max-h-[440px] overflow-y-auto pr-1 custom-scrollbar">
+        <TabsContent value="recent" className="mt-0 max-h-[440px] overflow-y-auto pr-0.5 custom-scrollbar">
           <RecentModelsList
             recentModelDetails={recentModelDetails}
             globalDefaultModel={globalDefaultModel}

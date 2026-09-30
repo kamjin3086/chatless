@@ -2,16 +2,14 @@
 
 import { WorkspaceSettings } from "./WorkspaceSettings";
 import { FileSystemAuthSettings } from "./FileSystemAuthSettings";
-import { NativeToolAuthSettings } from "./NativeToolAuthSettings";
-import { ShellAuthSettings } from "./ShellAuthSettings";
+import { ShellAccessSettings } from "./ShellAccessSettings";
 
 export function SecuritySettings() {
   return (
-    <div className="space-y-4">
-      <NativeToolAuthSettings />
-      <ShellAuthSettings />
+    <>
+      <ShellAccessSettings />
       <WorkspaceSettings />
       <FileSystemAuthSettings />
-    </div>
+    </>
   );
 }

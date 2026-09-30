@@ -2,6 +2,7 @@ import { BaseProvider, CheckResult, LlmMessage, StreamCallbacks } from './BasePr
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '@/lib/llm/adapters/StreamEventAdapter';
+import { classifyNetworkError, judgeApiReachable } from './healthcheck';
 
 export class OllamaProvider extends BaseProvider {
   private sseClient: SSEClient;
@@ -73,7 +74,7 @@ export class OllamaProvider extends BaseProvider {
           clearTimeout(timeoutId);
           console.error(`[OllamaProvider] 原生 fetch 也失败:`, nativeFetchError);
           if (nativeFetchError instanceof Error && nativeFetchError.name === 'AbortError') {
-            return { ok: false, reason: 'TIMEOUT', message: '连接超时（8秒内无响应）' };
+            return { ok: false, reason: 'TIMEOUT', message: '连接超时' };
           }
           throw nativeFetchError;
         }
@@ -86,26 +87,17 @@ export class OllamaProvider extends BaseProvider {
         return { ok: true };
       }
       
-      console.warn(`[OllamaProvider] 服务器响应错误，状态码: ${resp.status}`);
-      return { ok: false, reason: 'UNKNOWN', message: `HTTP ${resp.status} - 服务器响应错误` };
+      const contentType = resp.headers?.get?.('content-type') || '';
+      const judged = judgeApiReachable(resp.status, '', contentType);
+      console.warn(`[OllamaProvider] 连接检查未通过，状态码: ${resp.status}`);
+      return {
+        ok: false,
+        reason: judged.reason || 'UNKNOWN',
+        message: judged.message || '请确认服务已启动',
+      };
     } catch (error) {
       console.error('[OllamaProvider] checkConnection error:', error);
-      if (error instanceof Error) {
-        if (error.name === 'AbortError' || error.message.includes('timeout')) {
-          return { ok: false, reason: 'TIMEOUT', message: '连接超时（8秒内无响应）' };
-        }
-        if (error.message.includes('fetch') || error.message.includes('network')) {
-          return { ok: false, reason: 'NETWORK', message: '网络连接失败 - 请检查网络和服务器地址' };
-        }
-        if (error.message.includes('ENOTFOUND') || error.message.includes('getaddrinfo')) {
-          return { ok: false, reason: 'NETWORK', message: '无法解析服务器地址 - 请检查URL是否正确' };
-        }
-        if (error.message.includes('ECONNREFUSED')) {
-          return { ok: false, reason: 'NETWORK', message: '连接被拒绝 - 请检查服务器是否运行在端口6434' };
-        }
-        return { ok: false, reason: 'UNKNOWN', message: `连接错误: ${error.message}` };
-      }
-      return { ok: false, reason: 'UNKNOWN', message: '未知连接错误' };
+      return classifyNetworkError(error);
     }
   }
 

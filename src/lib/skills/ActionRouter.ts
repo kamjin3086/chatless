@@ -14,6 +14,10 @@ import type {
   SkillActionStatus,
 } from './types';
 import { getProcessSandbox } from './sandbox';
+import { ToolExecutionPipeline, ToolInvocation } from '@/lib/mcp/pipeline';
+import { createDefaultAdapters } from '@/lib/mcp/pipeline/adapters';
+
+const skillMcpPipeline = new ToolExecutionPipeline({ adapters: createDefaultAdapters() });
 
 /**
  * 动作执行器接口
@@ -376,11 +380,7 @@ class McpBridgeExecutor implements IActionExecutor {
         };
       }
 
-      // 动态导入 MCP 执行器
-      const { executeToolCall } = await import('@/lib/mcp/ToolCallOrchestrator');
-      
-      // 调用 MCP 工具
-      await executeToolCall({
+      const result = await skillMcpPipeline.run(new ToolInvocation({
         assistantMessageId: context.messageId,
         conversationId: context.conversationId,
         server: action.mcpServer,
@@ -390,7 +390,17 @@ class McpBridgeExecutor implements IActionExecutor {
         model: 'gpt-4',
         historyForLlm: [],
         originalUserContent: context.userContent,
-      });
+      }));
+
+      if ((result as any)?.error || (result as any)?.ok === false) {
+        return {
+          actionId: action.id,
+          success: false,
+          status: 'failed',
+          error: String((result as any)?.error?.message || (result as any)?.error || 'MCP 工具执行失败'),
+          duration: Date.now() - startTime,
+        };
+      }
 
       // 注意：MCP 执行是异步的，这里只表示调用已发起
       return {

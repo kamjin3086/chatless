@@ -12,6 +12,9 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import { PromptPill } from './PromptPill';
 import { useEffect } from 'react';
 import { getEnabledConfiguredServers, getConnectedServers, getEnabledServersForConversation, setEnabledServersForConversation } from '@/lib/mcp/chatIntegration';
+import { LocateFixed } from 'lucide-react';
+import { MessageNavigationMenu } from './MessageNavigationMenu';
+import type { Message } from '@/types/chat';
 
 interface ChatHeaderProps {
   title: string;
@@ -29,6 +32,9 @@ interface ChatHeaderProps {
   /** 会话参数：入口从输入框迁移到右上角三点菜单 */
   hasSessionParameters?: boolean;
   onOpenSessionParameters?: () => void;
+  /** 消息导航（长会话里跳转到指定消息）；为空时不显示入口 */
+  navigationMessages?: Message[];
+  onNavigateToMessage?: (messageId: string) => void;
 }
 
 export function ChatHeader({
@@ -46,6 +52,8 @@ export function ChatHeader({
   tokenCount: _tokenCount = 0,
   hasSessionParameters,
   onOpenSessionParameters,
+  navigationMessages,
+  onNavigateToMessage,
 }: ChatHeaderProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [_mcpAll, setMcpAll] = useState<string[]>([]);
@@ -87,13 +95,14 @@ export function ChatHeader({
 
   return (
     <>
-      <div className="h-9 px-2 border-b border-slate-200/30 dark:border-slate-700/20 flex items-center justify-between bg-white/90 dark:bg-slate-900/90">
-        {/* 左侧：侧边栏切换 + 新建 + 标题 */}
+      <div className="app-topbar h-8 px-3 border-b border-slate-200/20 dark:border-slate-700/15 flex items-center justify-between glass-surface">
+        {/* 左侧：侧栏开关 + 标题 */}
         <div className="flex items-center gap-1 flex-1 min-w-0">
           <button 
             onClick={toggleSidebar} 
             className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors" 
             title="侧边栏"
+            aria-label="切换侧边栏"
           >
             <PanelLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
@@ -102,7 +111,8 @@ export function ChatHeader({
             <button
               onClick={handleNewChat}
               className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-              title="新建"
+              title="新建对话"
+              aria-label="新建对话"
             >
               <PenLine className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             </button>
@@ -111,37 +121,59 @@ export function ChatHeader({
           <EditableTitle
             initialTitle={title}
             onTitleChange={onTitleChange}
-            className="text-xs text-slate-600 dark:text-slate-300 truncate ml-1"
+            className="text-xs text-slate-500 dark:text-slate-400 ml-0.5 min-w-0 max-w-[min(40vw,20rem)]"
             inputClassName="text-xs"
           />
           
           {tags?.map((tag, index) => (
             <span
               key={index}
-              className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 bg-slate-100/60 dark:bg-slate-800/40 rounded"
+              className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 bg-slate-100/60 dark:bg-slate-800/40 rounded hidden sm:inline"
             >
               {tag}
             </span>
           ))}
+          <div className="flex-1 h-8 min-w-2" data-tauri-drag-region />
         </div>
         
-        {/* 右侧：模型选择 + 提示词 + 更多 */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {/* 右侧：模型选择为主控件，按名称向左撑开 */}
+        <div className="flex items-center gap-0.5 shrink-0">
           <ModelSelector 
-            allMetadata={allMetadata}
-            currentModelId={currentModelId}
-            currentProviderName={currentProviderName}
-            onModelChange={handleModelChange}
-            disabled={isModelSelectorDisabled}
-          />
+              allMetadata={allMetadata}
+              currentModelId={currentModelId}
+              currentProviderName={currentProviderName}
+              onModelChange={handleModelChange}
+              disabled={isModelSelectorDisabled}
+            />
           
           <PromptPill />
+
+          {/* 消息导航：长会话里跳转到指定消息。放在头部而不是悬浮在消息上，避免遮挡内容 */}
+          {onNavigateToMessage && (navigationMessages?.length || 0) >= 2 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  title="消息导航"
+                  aria-label="消息导航"
+                >
+                  <LocateFixed className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <MessageNavigationMenu
+                messages={navigationMessages || []}
+                onNavigateToMessage={onNavigateToMessage}
+                onClose={() => {}}
+              />
+            </DropdownMenu>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button 
                 className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
                 title="更多"
+                aria-label="更多操作"
               >
                 <Ellipsis className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               </button>

@@ -42,7 +42,7 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
           className
         )}
         style={{
-          background: `linear-gradient(to right, rgb(59 130 246) 0%, rgb(59 130 246) ${Math.max(0, Math.min(100, pct * 100))}%, rgb(229 231 235) ${Math.max(0, Math.min(100, pct * 100))}%, rgb(229 231 235) 100%)`,
+          background: `linear-gradient(to right, rgb(59 130 246) 0%, rgb(59 130 246) ${Math.max(0, Math.min(100, pct * 100))}%, var(--slider-rest, rgb(229 231 235)) ${Math.max(0, Math.min(100, pct * 100))}%, var(--slider-rest, rgb(229 231 235)) 100%)`,
         }}
         value={cur}
         onInput={(e)=>onValueChange([parseFloat((e.target as HTMLInputElement).value)])}

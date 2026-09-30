@@ -216,7 +216,7 @@ export default function KnowledgePage() {
   }));
 
   return (
-    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 overflow-hidden">
+    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 overflow-hidden glass-surface">
       {/* 顶部 Tab */}
       <PageTabs
         tabs={tabs}
@@ -247,8 +247,8 @@ export default function KnowledgePage() {
                     className={cn(
                       "px-3 py-1.5 text-xs rounded-md transition-colors",
                       knowledgeSubTab === tab.id
-                        ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                        ? "bg-slate-200/50 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-white/10"
+                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400 border border-transparent"
                     )}
                   >
                     {tab.label}

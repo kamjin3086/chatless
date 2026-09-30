@@ -7,6 +7,7 @@ import { Loader2, FileText, Database, AlertCircle, MessageSquare } from 'lucide-
 import { UnifiedFileService, type UnifiedFile } from '@/lib/unifiedFileService';
 import { KnowledgeService, type KnowledgeBase } from '@/lib/knowledgeService';
 import { toast } from '@/components/ui/sonner';
+import { truncateDisplayName } from '@/lib/filesystem/safeFileName';
 
 interface AddDocumentsDialogProps {
   open: boolean;
@@ -179,8 +180,10 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
   const getFileLabel = (file: DisplayFile) => {
     if (file.type === 'chat') {
       return (
-        <div className="flex items-center gap-2 flex-1">
-          <span className="text-sm truncate text-gray-800 dark:text-gray-200">{file.name}</span>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-sm truncate text-gray-800 dark:text-gray-200 min-w-0 flex-1" title={file.name}>
+            {truncateDisplayName(file.name)}
+          </span>
           <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded dark:bg-blue-900/30 dark:text-blue-400">
             💬 聊天文件
           </span>
@@ -189,8 +192,10 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
     }
     
     return (
-      <div className="flex items-center gap-2 flex-1">
-        <span className="text-sm truncate text-gray-800 dark:text-gray-200">{file.name}</span>
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <span className="text-sm truncate text-gray-800 dark:text-gray-200 min-w-0 flex-1" title={file.name}>
+          {truncateDisplayName(file.name)}
+        </span>
         {file.isAlreadyInKB && (
           <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded dark:bg-green-900/30 dark:text-green-400">
             已入库
@@ -230,15 +235,15 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
               {files.map(file => (
                 <label 
                   key={file.id} 
-                  className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors min-w-0"
                 >
                   <Checkbox 
                     checked={selected.has(file.id)} 
                     onCheckedChange={() => toggle(file.id)}
-                    className="border-slate-300 dark:border-slate-600"
+                    className="border-slate-300 dark:border-slate-600 shrink-0"
                   />
-                  {getFileIcon(file)}
-                  {getFileLabel(file)}
+                  <span className="shrink-0">{getFileIcon(file)}</span>
+                  <span className="min-w-0 flex-1">{getFileLabel(file)}</span>
                 </label>
               ))}
               {files.length === 0 && (

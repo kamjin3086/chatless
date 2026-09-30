@@ -1,6 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use anyhow::Result;
-use crc32fast;
 use log::LevelFilter;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::path::BaseDirectory;
@@ -23,14 +22,28 @@ pub mod sandbox;
 #[path = "filesystem/mod.rs"]
 pub mod filesystem;
 
+#[path = "workspace/mod.rs"]
+pub mod workspace;
+
 #[tauri::command]
 fn exit(app: tauri::AppHandle, code: i32) {
   #[cfg(not(any(target_os = "android", target_os = "ios")))]
   {
-    use tauri_plugin_window_state::{AppHandleExt, StateFlags};
-    let _ = app.save_window_state(StateFlags::all());
+    use tauri_plugin_window_state::AppHandleExt;
+    let _ = app.save_window_state(persisted_window_state_flags());
   }
   std::process::exit(code);
+}
+
+/// Keep size/position, never restore the OS title bar (custom title bar owns chrome).
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn persisted_window_state_flags() -> tauri_plugin_window_state::StateFlags {
+  use tauri_plugin_window_state::StateFlags;
+  StateFlags::SIZE
+    | StateFlags::POSITION
+    | StateFlags::MAXIMIZED
+    | StateFlags::VISIBLE
+    | StateFlags::FULLSCREEN
 }
 
 #[path = "lib/onnx_logic.rs"]
@@ -39,8 +52,22 @@ pub mod onnx_logic;
 #[path = "lib/document_parser.rs"]
 pub mod document_parser;
 
+#[path = "lib/document_structured.rs"]
+pub mod document_structured;
+
 #[path = "lib/sse.rs"]
 pub mod sse;
+
+#[path = "lib/agent_runtime.rs"]
+pub mod agent_runtime;
+
+#[cfg(test)]
+#[path = "lib/retrieval_bench.rs"]
+mod retrieval_bench;
+
+#[cfg(test)]
+#[path = "lib/dense_bench.rs"]
+mod dense_bench;
 
 #[path = "lib/http_client.rs"]
 pub mod http_client;
@@ -76,25 +103,10 @@ fn can_run_mcp_services() -> bool {
   env_setup::can_run_mcp_services()
 }
 
-/// Tauri 命令：使用模拟数据生成嵌入向量（用于测试和回退）
+/// 应用退出时释放 ONNX 等资源
 #[tauri::command]
-fn generate_embedding_command(texts: Vec<String>) -> Result<Vec<Vec<f32>>, String> {
-  // 为每个输入文本生成一个384维的模拟嵌入向量
-  let embeddings = texts
-    .iter()
-    .map(|text| {
-      // 使用文本的哈希值或其他属性来生成确定性的、但看起来随机的向量
-      let hash = crc32fast::hash(text.as_bytes());
-      let mut vec = vec![0.0f32; 384];
-      let mut val = (hash as f32) / (u32::MAX as f32) - 0.5;
-      for i in 0..384 {
-        vec[i] = val;
-        val = (val * 1.1 + 0.1).sin();
-      }
-      vec
-    })
-    .collect();
-  Ok(embeddings)
+fn cleanup_on_exit(state: tauri::State<onnx_logic::OnnxState>) -> Result<(), String> {
+  onnx_logic::release_onnx_session(state)
 }
 
 pub fn run() {
@@ -105,15 +117,16 @@ pub fn run() {
     .setup(|app| {
       #[cfg(not(any(target_os = "android", target_os = "ios")))]
       {
-        let _ = app
-          .handle()
-          .plugin(tauri_plugin_window_state::Builder::default().build());
-        // 主动恢复一次，确保未被其他初始化逻辑覆盖
-        {
-          use tauri_plugin_window_state::{StateFlags, WindowExt};
-          if let Some(win) = app.get_webview_window("main") {
-            let _ = win.restore_state(StateFlags::all());
-          }
+        let flags = persisted_window_state_flags();
+        let _ = app.handle().plugin(
+          tauri_plugin_window_state::Builder::default()
+            .with_state_flags(flags)
+            .build(),
+        );
+        if let Some(win) = app.get_webview_window("main") {
+          use tauri_plugin_window_state::WindowExt;
+          let _ = win.restore_state(flags);
+          let _ = win.set_decorations(false);
         }
       }
       // 尝试在后台线程初始化 ONNX Runtime，避免阻塞启动
@@ -207,7 +220,7 @@ pub fn run() {
     .manage(filesystem::state::FilesystemAllowlistState::default())
     .invoke_handler(tauri::generate_handler![
       greet,
-      generate_embedding_command,
+      cleanup_on_exit,
       exit,
       set_log_level,
       // —— Environment Check Commands ——
@@ -228,6 +241,8 @@ pub fn run() {
       document_parser::parse_document_from_binary,
       document_parser::parse_document_content,
       document_parser::get_supported_file_types,
+      document_structured::parse_document_structured,
+      document_structured::tokenize_for_fts_command,
       // ONNX commands
       onnx_logic::init_onnx_session,
       onnx_logic::tokenize_batch,
@@ -238,6 +253,18 @@ pub fn run() {
       sse::stop_sse,
       sse::start_local_sse_server,
       sse::start_local_mcp_sse,
+      agent_runtime::agent_create_run,
+      agent_runtime::agent_append_event,
+      agent_runtime::agent_commit_model_step,
+      agent_runtime::agent_set_run_status,
+      agent_runtime::agent_save_checkpoint,
+      agent_runtime::agent_request_approval,
+      agent_runtime::agent_decide_approval,
+      agent_runtime::publish_document_batch,
+      agent_runtime::delete_document_atomically,
+      agent_runtime::store_document_embeddings,
+      agent_runtime::dense_search_document_chunks,
+      agent_runtime::cancel_dense_search,
       // —— HTTP Client Commands ——
       http_client::get_http_client_info,
       http_client::test_http_client,
@@ -250,18 +277,38 @@ pub fn run() {
       // —— Sandbox Commands ——
       sandbox::commands::run_safe_shell,
       sandbox::commands::cancel_safe_shell,
+      sandbox::commands::start_shell_process,
+      sandbox::commands::read_shell_process,
+      sandbox::commands::stop_shell_process,
+      sandbox::commands::list_shell_processes,
+      sandbox::commands::stop_conversation_processes,
       sandbox::commands::validate_command,
       sandbox::commands::check_runtime_environment,
       // —— Filesystem (backend commands, allowlist enforced) ——
       filesystem::commands::filesystem_set_allowlist,
+      filesystem::commands::filesystem_grant_call_scope,
+      filesystem::commands::filesystem_revoke_call_scope,
       filesystem::commands::filesystem_read_file,
       filesystem::commands::filesystem_write_file,
+      filesystem::commands::filesystem_edit_file,
+      filesystem::commands::filesystem_search_files,
       filesystem::commands::filesystem_list_directory,
       filesystem::commands::filesystem_create_directory,
       filesystem::commands::filesystem_delete_file,
       filesystem::commands::filesystem_delete_many,
       filesystem::commands::filesystem_delete_by_pattern,
-      filesystem::commands::filesystem_rename_file
+      filesystem::commands::filesystem_rename_file,
+      filesystem::commands::filesystem_file_history,
+      filesystem::commands::filesystem_restore_file_version,
+      filesystem::commands::filesystem_open_path,
+      // —— Session workspace (Documents/Chatless, Rust-owned identity) ——
+      workspace::commands::workspace_ensure,
+      workspace::commands::workspace_export,
+      workspace::commands::workspace_trash,
+      workspace::commands::workspace_trash_all,
+      workspace::commands::workspace_reveal,
+      workspace::commands::workspace_read_manifest,
+      workspace::commands::workspace_write_manifest
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

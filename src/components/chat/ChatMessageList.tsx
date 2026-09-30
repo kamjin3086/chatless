@@ -1,10 +1,12 @@
 import React from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { ChatMessage } from './ChatMessage';
+import { ContextCompactionNotice } from './ContextCompactionNotice';
 import { VersionedAssistantGroup } from './VersionedAssistantGroup';
 import { Message } from '@/types/chat';
-import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
 import FoldingLoader from '@/components/ui/FoldingLoader';
+import { ChatEmptyState } from './ChatEmptyState';
+import type { ChatSetupState } from './ChatEmptyState';
 
 interface ChatMessageListProps {
   chatId?: string;
@@ -25,6 +27,8 @@ interface ChatMessageListProps {
   initialTopMostItemIndex?: number;
   /** 是否应该自动滚动到底部（由父组件的滚动管理逻辑控制） */
   shouldFollowOutput?: boolean;
+  onPromptClick?: (prompt: string) => void;
+  setupState?: ChatSetupState;
 }
 
 export function ChatMessageList({
@@ -41,6 +45,8 @@ export function ChatMessageList({
   onRegisterScrollToMessage,
   initialTopMostItemIndex,
   shouldFollowOutput = false,
+  onPromptClick,
+  setupState = 'ready',
 }: ChatMessageListProps) {
 
   // 预处理：将版本化消息分组，生成渲染项
@@ -89,14 +95,18 @@ export function ChatMessageList({
 
   if (messages.length === 0 && !isLoading) {
     return (
-      <div className="flex items-center justify-center h-full p-4">
-        <ChatEmptyState onPromptClick={() => {}} />
+      <div className="flex items-center justify-center h-full px-4">
+        <ChatEmptyState
+          onPromptClick={onPromptClick || (() => {})}
+          setupState={setupState}
+        />
       </div>
     );
   }
 
   return (
     <div className="flex-1 custom-scrollbar" style={{ overscrollBehavior: 'contain' }}>
+      <div className="max-w-[48rem] mx-auto w-full">
       <Virtuoso
         totalCount={renderItems.length}
         data={renderItems}
@@ -120,7 +130,7 @@ export function ChatMessageList({
                     if (el) messageRefs.current[message.id] = el; else delete messageRefs.current[message.id];
                   }
                 }}
-                className='ml-4 mr-2'
+                className='px-2'
                 style={{ contain: 'layout paint', transform: 'translateZ(0)' }}
               >
                 <VersionedAssistantGroup
@@ -146,6 +156,7 @@ export function ChatMessageList({
               className='ml-4 mr-2'
               style={{ minHeight: 56, contain: 'layout paint', transform: 'translateZ(0)' }}
             >
+              {message.role === 'assistant' && <ContextCompactionNotice messageId={message.id} />}
               <ChatMessage
                 id={message.id}
                 content={message.content}
@@ -163,6 +174,7 @@ export function ChatMessageList({
                 onSaveThinkingDuration={onSaveThinkingDuration}
                 documentReference={message.document_reference}
                 knowledgeBaseReference={message.knowledge_base_reference}
+                citations={message.citations}
                 images={message.images}
                 viewModel={message.segments_vm}
                 segments={message.segments}
@@ -174,7 +186,11 @@ export function ChatMessageList({
           );
         }}
         components={{
-          Footer: () => (messagesEndRef ? <div ref={messagesEndRef} /> : null),
+          // The footer doubles as the scroll anchor, so the bottom spacer stays
+          // part of the scroll content and keeps the last message off the composer.
+          Footer: () => (
+            <div ref={messagesEndRef} className="h-6" aria-hidden="true" />
+          ),
         }}
         style={{ height: '100%' }}
         ref={(instance) => {
@@ -199,6 +215,7 @@ export function ChatMessageList({
           onRegisterScrollToMessage(api);
         }}
       />
+      </div>
       {isLoading && messages.length === 0 && (
         <div className="flex justify-center p-4">
           <FoldingLoader size={36} />

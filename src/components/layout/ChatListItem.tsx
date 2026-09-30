@@ -46,9 +46,9 @@ export function ChatListItem({
       className={cn(
         "chat-list-item flex items-center p-2 rounded-md mb-1 cursor-pointer transition-all duration-200 group",
         isActive
-          ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:bg-gray-700/80 hover:shadow-md scale-[1.01]"
-          : "bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:scale-[1.02] hover:shadow-sm",
-        isUnread && !isActive && "bg-gradient-to-r from-orange-50 to-red-50 dark:bg-gradient-to-r dark:from-orange-900/60 dark:to-red-900/60 relative"
+          ? "bg-slate-200/50 dark:bg-slate-700/50 border border-slate-300/50 dark:border-slate-600/50 hover:shadow-md scale-[1.01]"
+          : "bg-white/40 dark:bg-gray-800/60 hover:bg-slate-100/60 dark:hover:bg-gray-700/60 hover:scale-[1.02] hover:shadow-sm",
+        isUnread && !isActive && "bg-slate-100/50 dark:bg-slate-800/40 border-l-2 border-slate-400/60 dark:border-slate-500/50 relative"
       )}
       onClick={() => onSelect(id)}
     >
@@ -69,7 +69,7 @@ export function ChatListItem({
             {tags.map((tag, index) => (
               <span 
                 key={index}
-                className="inline-block text-xs bg-gradient-to-r from-blue-100 to-indigo-100 dark:bg-gradient-to-r dark:from-blue-800/50 dark:to-indigo-800/50 px-1.5 py-0.5 rounded text-indigo-700 dark:text-indigo-200 shadow-sm dark:shadow-none"
+                className="inline-block text-xs font-mono bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-600/50 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300"
               >
                 {tag}
               </span>

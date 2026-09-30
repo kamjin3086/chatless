@@ -1,144 +1,143 @@
 /**
- * Agent 会话工作区（默认 AppData）
+ * Agent 会话工作目录（@WorkDir）的前端入口。
  *
- * 目标：
- * - 让脚本/中间文件/产物有稳定落点，避免写到 skills 目录或用户 Documents
- * - 通过 conversationAttachmentStore 注入 @WorkDir，供 filesystem/shell_executor 默认使用
+ * 设计目标：用户能在自己的文件系统里找到 AI 产物，而不是在应用数据目录里翻。
+ * 目录结构：`文档/Chatless/<标题>-<会话 ID 摘要>/`，也是该会话的 @WorkDir。
  *
- * 目录结构：
- * appDataDir()/workspaces/<conversationId>/
- *  - work/  脚本与临时文件
- *  - out/   产物
- *  - logs/  日志与校验摘要
- *  - manifest.json  本次会话产物/脚本/命令清单（最小骨架）
+ * 目录的创建、定位、导出与清理全部由 Rust 命令完成（`workspace_*`）：这些动作写
+ * 在用户的真实文件系统上，渲染进程的 plugin-fs 作用域覆盖不到那里。会话→目录的
+ * 映射由 Rust 持有，前端不再按短 ID 扫目录回找，改标题也不会移动已有目录。
  */
 
+import {
+  exportWorkspace,
+  ensureWorkspace,
+  revealWorkspace,
+  trashAllWorkspaces,
+  trashWorkspace,
+} from '@/lib/tauri/workspaceCommands';
+
 export type ConversationWorkspace = {
+  /** 会话工作目录（@WorkDir）。 */
   root: string;
-  workDir: string;
-  outDir: string;
-  logsDir: string;
   manifestPath: string;
+  /** 这次调用真的建了目录。 */
+  created: boolean;
+  /** 目录现在存在于磁盘上。false 表示这个会话还没有落地过。 */
+  exists: boolean;
+  adoptedLegacy: boolean;
 };
 
-function normalize(p: string): string {
-  return String(p || '').trim().replace(/\\/g, '/');
+export type WorkspaceTrashOutcome = {
+  removed: string[];
+  failed: Array<{ conversationId: string; error: string }>;
+};
+
+/**
+ * 解析一个会话的工作目录。目录一旦确定，路径恒定：改标题不会移动它，
+ * 目录被删会按原路径重建。
+ *
+ * 默认只登记位置（`materialize: false`）：纯聊天的会话不该在用户的文档目录里
+ * 留下空文件夹。真正落地发生在 `ensureConversationWorkspaceMaterialized`，
+ * 也就是这个会话第一次用到文件或命令的时候。
+ */
+export async function ensureConversationWorkspace(params: {
+  conversationId: string;
+  title?: string;
+  /** true = 现在就在磁盘上建出目录（用户主动打开/导出，或工具即将运行）。 */
+  materialize?: boolean;
+}): Promise<ConversationWorkspace> {
+  const conversationId = String(params.conversationId || '').trim();
+  if (!conversationId) throw new Error('conversationId is required');
+  const info = await ensureWorkspace(conversationId, params.title, params.materialize === true);
+  return {
+    root: info.root,
+    manifestPath: info.manifestPath,
+    created: info.created,
+    exists: info.exists,
+    adoptedLegacy: info.adoptedLegacy,
+  };
 }
 
-export async function getConversationWorkspaceRoot(conversationId: string): Promise<string> {
+/**
+ * 保证会话工作目录已经存在于磁盘上，返回它的路径。
+ *
+ * 只在"这个会话要真的动文件了"时调用：工具执行前、用户点开目录时。已经在磁盘上的
+ * 会话不会再走 IPC。
+ */
+export async function ensureConversationWorkspaceMaterialized(
+  conversationId: string,
+  title?: string,
+): Promise<string | undefined> {
+  const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
   const cid = String(conversationId || '').trim();
-  if (!cid) throw new Error('conversationId is required');
+  if (!cid) return undefined;
+  const attachments = useConversationAttachmentStore.getState();
+  if (attachments.isWorkspaceMaterialized(cid)) return attachments.getSessionDir(cid);
 
-  const { appDataDir, join } = await import('@tauri-apps/api/path');
-  const base = await appDataDir();
-  const root = await join(base, 'workspaces', cid);
-  return normalize(root);
+  const workspace = await ensureConversationWorkspace({ conversationId: cid, title, materialize: true });
+  attachments.setWorkingDir(cid, workspace.root);
+  attachments.markWorkspaceMaterialized(cid);
+  return workspace.root;
 }
 
-export async function ensureConversationWorkspace(conversationId: string): Promise<ConversationWorkspace> {
-  const root = await getConversationWorkspaceRoot(conversationId);
+/** 把一个会话自带的产物目录复制到用户选择的位置。 */
+export async function exportConversationWorkspace(
+  conversationId: string,
+  destinationDir: string,
+): Promise<{
+  destination: string | null;
+  files: number;
+  bytes: number;
+  skippedSymlinks: number;
+  /** 会话还没有落地过，因此没有产物可导出。 */
+  sourceMissing: boolean;
+}> {
+  const result = await exportWorkspace(String(conversationId || '').trim(), String(destinationDir || '').trim());
+  return {
+    destination: result.destination,
+    files: result.files,
+    bytes: result.bytes,
+    skippedSymlinks: result.skippedSymlinks,
+    sourceMissing: result.sourceMissing,
+  };
+}
 
-  const { join } = await import('@tauri-apps/api/path');
-  const { mkdir, exists, writeTextFile } = await import('@tauri-apps/plugin-fs');
+/** 在文件管理器中定位会话工作目录。 */
+export async function revealConversationWorkspace(conversationId: string): Promise<void> {
+  await revealWorkspace(String(conversationId || '').trim());
+}
 
-  const workDir = normalize(await join(root, 'work'));
-  const outDir = normalize(await join(root, 'out'));
-  const logsDir = normalize(await join(root, 'logs'));
-  const manifestPath = normalize(await join(root, 'manifest.json'));
-
-  // 确保目录存在
-  await mkdir(root, { recursive: true });
-  await mkdir(workDir, { recursive: true });
-  await mkdir(outDir, { recursive: true });
-  await mkdir(logsDir, { recursive: true });
-
-  // 最小 manifest：仅在不存在时创建，避免覆盖用户/历史数据
-  try {
-    const has = await exists(manifestPath);
-    if (!has) {
-      const now = Date.now();
-      const manifest = {
-        version: 1,
+/**
+ * 移入系统回收站并移除记录。
+ *
+ * `onRemoved` 只在命令真正成功后调用：清理失败时记录必须保留，界面才能重试，
+ * 而不是显示"已清理"却什么都没发生。
+ */
+export async function trashConversationWorkspaces(
+  conversationIds: string[],
+  onRemoved?: (conversationId: string) => void,
+): Promise<WorkspaceTrashOutcome> {
+  const removed: string[] = [];
+  const failed: Array<{ conversationId: string; error: string }> = [];
+  for (const raw of conversationIds) {
+    const conversationId = String(raw || '').trim();
+    if (!conversationId) continue;
+    try {
+      await trashWorkspace(conversationId);
+      removed.push(conversationId);
+      onRemoved?.(conversationId);
+    } catch (error) {
+      failed.push({
         conversationId,
-        createdAt: now,
-        updatedAt: now,
-        notes: 'Auto-generated workspace manifest',
-        scripts: [] as Array<{ path: string; purpose?: string; createdAt: number }>,
-        commands: [] as Array<{ command: string; workingDir?: string; createdAt: number }>,
-        inputs: [] as Array<{ path: string; description?: string }>,
-        outputs: [] as Array<{ path: string; description?: string }>,
-      };
-      await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
-    }
-  } catch {
-    // ignore
-  }
-
-  return { root, workDir, outDir, logsDir, manifestPath };
-}
-
-export async function copyDirectoryRecursive(
-  sourceDir: string,
-  destinationDir: string
-): Promise<{ filesCopied: number; dirsCreated: number }> {
-  const src = normalize(sourceDir);
-  const dst = normalize(destinationDir);
-  if (!src || !dst) throw new Error('sourceDir and destinationDir are required');
-
-  const { mkdir, readDir, copyFile } = await import('@tauri-apps/plugin-fs');
-  await mkdir(dst, { recursive: true });
-
-  let filesCopied = 0;
-  let dirsCreated = 1;
-
-  const entries = await readDir(src);
-  for (const e of entries || []) {
-    const ep = normalize((e as any)?.path || '');
-    if (!ep) continue;
-    const name = String((e as any)?.name || '').trim();
-    const target = name ? `${dst}/${name}` : '';
-    if (!target) continue;
-
-    if ((e as any)?.isDirectory) {
-      const r = await copyDirectoryRecursive(ep, target);
-      filesCopied += r.filesCopied;
-      dirsCreated += r.dirsCreated;
-    } else if ((e as any)?.isFile) {
-      await copyFile(ep, target);
-      filesCopied += 1;
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
-
-  return { filesCopied, dirsCreated };
+  return { removed, failed };
 }
 
-export async function removeConversationWorkspace(conversationId: string): Promise<void> {
-  const root = await getConversationWorkspaceRoot(conversationId);
-  const { remove, exists } = await import('@tauri-apps/plugin-fs');
-  try {
-    if (await exists(root)) {
-      await remove(root, { recursive: true });
-    }
-  } catch {
-    // ignore
-  }
+export async function trashEveryConversationWorkspace(): Promise<WorkspaceTrashOutcome> {
+  const result = await trashAllWorkspaces();
+  return { removed: result.removed || [], failed: result.failed || [] };
 }
-
-export async function clearAllWorkspaces(): Promise<void> {
-  const { appDataDir, join } = await import('@tauri-apps/api/path');
-  const { remove, mkdir, exists } = await import('@tauri-apps/plugin-fs');
-  const base = normalize(await join(await appDataDir(), 'workspaces'));
-  try {
-    if (await exists(base)) {
-      await remove(base, { recursive: true });
-    }
-  } catch {
-    // ignore
-  }
-  try {
-    await mkdir(base, { recursive: true });
-  } catch {
-    // ignore
-  }
-}
-

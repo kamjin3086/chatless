@@ -1,0 +1,1088 @@
+{
+  "generatedAt": "2026-09-21T04:29:34.618Z",
+  "sampleSize": 63,
+  "chunkCount": 26,
+  "topK": 8,
+  "scope": {
+    "knowledgeBaseIds": [
+      "kb-eval"
+    ],
+    "attachmentDocumentIds": [
+      "doc-attach-meeting"
+    ]
+  },
+  "summary": {
+    "totalCases": 63,
+    "scoredCases": 59,
+    "noAnswerCases": 4,
+    "recallAt8": 1,
+    "allExpectedRecalled": 1,
+    "noAnswerClean": 4,
+    "failures": []
+  },
+  "cases": [
+    {
+      "id": "zh-short-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "过载保护 复位",
+      "expected": [
+        "cn-pdf-2"
+      ],
+      "returned": [
+        "cn-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "zh-short-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "熔断器 铜丝",
+      "expected": [
+        "cn-md-3"
+      ],
+      "returned": [
+        "cn-md-3"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "zh-short-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "折旧 残值率",
+      "expected": [
+        "cn-docx-1"
+      ],
+      "returned": [
+        "cn-docx-1",
+        "cn-docx-3",
+        "cn-docx-2"
+      ],
+      "recall": 1,
+      "returnedCount": 3,
+      "passed": true
+    },
+    {
+      "id": "zh-short-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "冷却液 低压报警",
+      "expected": [
+        "cn-pdf-3"
+      ],
+      "returned": [
+        "cn-pdf-3"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "zh-short-05",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "巡检 红外测温仪",
+      "expected": [
+        "cn-md-1"
+      ],
+      "returned": [
+        "cn-md-1",
+        "cn-md-2",
+        "cn-md-3",
+        "cn-md-4"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "zh-short-06",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "型号 HX-450 额定功率",
+      "expected": [
+        "cn-pdf-1"
+      ],
+      "returned": [
+        "cn-pdf-1",
+        "en-pdf-3",
+        "att-1"
+      ],
+      "recall": 1,
+      "returnedCount": 3,
+      "passed": true
+    },
+    {
+      "id": "zh-short-07",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "轴承 人工损坏 保修",
+      "expected": [
+        "cn-pdf-4"
+      ],
+      "returned": [
+        "cn-pdf-4",
+        "cn-md-2",
+        "att-1"
+      ],
+      "recall": 1,
+      "returnedCount": 3,
+      "passed": true
+    },
+    {
+      "id": "zh-num-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "地脚螺栓 扭矩 牛米",
+      "expected": [
+        "cn-pdf-5"
+      ],
+      "returned": [
+        "cn-pdf-5"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "zh-num-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "轴承温度 70 摄氏度",
+      "expected": [
+        "cn-md-2"
+      ],
+      "returned": [
+        "cn-md-2",
+        "cn-pdf-1",
+        "cn-pdf-4",
+        "att-1"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "zh-num-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "预算 30 万元 总经理审批",
+      "expected": [
+        "cn-docx-2"
+      ],
+      "returned": [
+        "cn-docx-2",
+        "cn-docx-1",
+        "en-pdf-2",
+        "en-pdf-4",
+        "cn-pdf-3"
+      ],
+      "recall": 1,
+      "returnedCount": 5,
+      "passed": true
+    },
+    {
+      "id": "zh-num-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "回路压力 0.45 兆帕",
+      "expected": [
+        "cn-pdf-3"
+      ],
+      "returned": [
+        "cn-pdf-3",
+        "en-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "zh-num-05",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "连续工作温度 55 摄氏度",
+      "expected": [
+        "cn-pdf-1"
+      ],
+      "returned": [
+        "cn-pdf-1",
+        "cn-md-2"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "zh-sop-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "交接班 未签字 离岗",
+      "expected": [
+        "cn-md-4"
+      ],
+      "returned": [
+        "cn-md-4"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "zh-sop-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "报废申请 第三方检测报告",
+      "expected": [
+        "cn-docx-3"
+      ],
+      "returned": [
+        "cn-docx-3"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "zh-sop-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "巡检 每两小时 四次",
+      "expected": [
+        "cn-md-1"
+      ],
+      "returned": [
+        "cn-md-1",
+        "cn-md-2",
+        "cn-md-3",
+        "cn-md-4"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "zh-sop-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "主轴轴承 上报班长",
+      "expected": [
+        "cn-md-2"
+      ],
+      "returned": [
+        "cn-md-2",
+        "cn-pdf-4",
+        "att-1",
+        "cn-pdf-1",
+        "cn-pdf-3",
+        "cn-pdf-2",
+        "cn-pdf-5"
+      ],
+      "recall": 1,
+      "returnedCount": 7,
+      "passed": true
+    },
+    {
+      "id": "zh-sop-05",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "更换轴承 T-220 专用工具",
+      "expected": [
+        "cn-pdf-4"
+      ],
+      "returned": [
+        "cn-pdf-4",
+        "cn-md-3",
+        "cn-md-2",
+        "att-1"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "zh-sop-06",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "年度保养 地脚螺栓 五年",
+      "expected": [
+        "cn-pdf-5"
+      ],
+      "returned": [
+        "cn-pdf-5",
+        "att-1"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "zh-scope-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "保养周期 90 天 调整为 60 天",
+      "expected": [
+        "att-1"
+      ],
+      "returned": [
+        "att-1",
+        "cn-pdf-5",
+        "att-3",
+        "att-2",
+        "cn-docx-2"
+      ],
+      "recall": 1,
+      "returnedCount": 5,
+      "passed": true
+    },
+    {
+      "id": "zh-scope-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "编码器线缆整改 负责人",
+      "expected": [
+        "att-2"
+      ],
+      "returned": [
+        "att-2",
+        "cn-docx-1"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "zh-scope-03",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "下次评审 二号车间会议室",
+      "expected": [
+        "att-3"
+      ],
+      "returned": [
+        "att-3",
+        "cn-md-1",
+        "att-2",
+        "att-1"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "zh-conflict-01",
+      "lang": "zh",
+      "kind": "conflict",
+      "query": "HX-450 保养周期",
+      "expected": [
+        "att-1",
+        "cn-pdf-5"
+      ],
+      "returned": [
+        "att-1",
+        "cn-pdf-5",
+        "cn-pdf-1",
+        "en-pdf-3"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "zh-cross-01",
+      "lang": "zh",
+      "kind": "cross-doc",
+      "query": "编码器 E-1042 原因",
+      "expected": [
+        "en-pdf-1",
+        "att-2"
+      ],
+      "returned": [
+        "att-2",
+        "en-pdf-1",
+        "att-1",
+        "en-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "zh-cross-02",
+      "lang": "zh",
+      "kind": "cross-doc",
+      "query": "HX-450 主轴 温度异常",
+      "expected": [
+        "cn-pdf-1",
+        "att-1"
+      ],
+      "returned": [
+        "cn-pdf-1",
+        "cn-md-2",
+        "att-1",
+        "en-pdf-3",
+        "cn-md-4",
+        "cn-pdf-3",
+        "cn-pdf-2",
+        "cn-pdf-4"
+      ],
+      "recall": 1,
+      "returnedCount": 8,
+      "passed": true
+    },
+    {
+      "id": "en-code-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "E-1042 encoder",
+      "expected": [
+        "en-pdf-1"
+      ],
+      "returned": [
+        "en-pdf-1",
+        "att-2",
+        "en-md-3",
+        "en-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "en-code-02",
+      "lang": "en",
+      "kind": "fact",
+      "query": "E-2207 coolant pressure",
+      "expected": [
+        "en-pdf-2"
+      ],
+      "returned": [
+        "en-pdf-2",
+        "en-docx-3",
+        "en-pdf-1",
+        "att-2"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "en-code-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "F-77 DC bus voltage",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "returned": [
+        "en-pdf-3",
+        "en-md-4"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "en-code-04",
+      "lang": "en",
+      "kind": "fact",
+      "query": "alarm log 30 days",
+      "expected": [
+        "en-pdf-4"
+      ],
+      "returned": [
+        "en-pdf-4",
+        "en-md-1",
+        "en-pdf-2",
+        "en-md-2",
+        "cn-pdf-3",
+        "cn-docx-2"
+      ],
+      "recall": 1,
+      "returnedCount": 6,
+      "passed": true
+    },
+    {
+      "id": "en-cmd-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "hxlog export csv",
+      "expected": [
+        "en-md-2"
+      ],
+      "returned": [
+        "en-md-2"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "en-part-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "ENC-22-KIT spare encoder",
+      "expected": [
+        "en-md-3"
+      ],
+      "returned": [
+        "en-md-3",
+        "en-pdf-1"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "en-num-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "780 V brake resistor",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "returned": [
+        "en-pdf-3"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "en-num-02",
+      "lang": "en",
+      "kind": "fact",
+      "query": "0.30 MPa controller stops spindle",
+      "expected": [
+        "en-pdf-2"
+      ],
+      "returned": [
+        "en-pdf-2",
+        "cn-pdf-3",
+        "en-pdf-1",
+        "en-pdf-4",
+        "en-md-1",
+        "cn-docx-2",
+        "en-pdf-3",
+        "en-md-2"
+      ],
+      "recall": 1,
+      "returnedCount": 8,
+      "passed": true
+    },
+    {
+      "id": "en-num-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "four hour response target",
+      "expected": [
+        "en-docx-1"
+      ],
+      "returned": [
+        "en-docx-1",
+        "en-docx-2",
+        "en-md-2"
+      ],
+      "recall": 1,
+      "returnedCount": 3,
+      "passed": true
+    },
+    {
+      "id": "en-num-04",
+      "lang": "en",
+      "kind": "fact",
+      "query": "8 percent service fee",
+      "expected": [
+        "en-docx-2"
+      ],
+      "returned": [
+        "en-docx-2"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "en-sop-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "lock out main breaker",
+      "expected": [
+        "en-md-4"
+      ],
+      "returned": [
+        "en-md-4"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "en-sop-02",
+      "lang": "en",
+      "kind": "fact",
+      "query": "escalate spindle alarm 15 minutes",
+      "expected": [
+        "en-md-1"
+      ],
+      "returned": [
+        "en-md-1",
+        "en-md-2",
+        "en-pdf-2",
+        "cn-pdf-1",
+        "en-pdf-4",
+        "en-pdf-1"
+      ],
+      "recall": 1,
+      "returnedCount": 6,
+      "passed": true
+    },
+    {
+      "id": "en-sop-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "consumables coolant filters excluded",
+      "expected": [
+        "en-docx-3"
+      ],
+      "returned": [
+        "en-docx-3",
+        "en-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "en-sop-04",
+      "lang": "en",
+      "kind": "fact",
+      "query": "alarm buffer historical log",
+      "expected": [
+        "en-pdf-4"
+      ],
+      "returned": [
+        "en-pdf-4",
+        "en-md-1",
+        "en-pdf-2",
+        "en-md-2"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "en-sop-05",
+      "lang": "en",
+      "kind": "fact",
+      "query": "reboot controller before alarm log downloaded",
+      "expected": [
+        "en-md-1"
+      ],
+      "returned": [
+        "en-md-1",
+        "en-pdf-4",
+        "en-pdf-2",
+        "en-pdf-1",
+        "en-pdf-3",
+        "en-md-2",
+        "en-md-4"
+      ],
+      "recall": 1,
+      "returnedCount": 7,
+      "passed": true
+    },
+    {
+      "id": "en-sop-06",
+      "lang": "en",
+      "kind": "fact",
+      "query": "replenishment weekly stock check",
+      "expected": [
+        "en-md-3"
+      ],
+      "returned": [
+        "en-md-3",
+        "en-pdf-1"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "en-scope-01",
+      "lang": "en",
+      "kind": "fact",
+      "query": "next review October 12",
+      "expected": [
+        "att-3"
+      ],
+      "returned": [
+        "att-3",
+        "en-docx-1"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "en-cross-01",
+      "lang": "en",
+      "kind": "cross-doc",
+      "query": "E-1042 cable routing",
+      "expected": [
+        "en-pdf-1",
+        "att-2"
+      ],
+      "returned": [
+        "en-pdf-1",
+        "att-2",
+        "en-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 3,
+      "passed": true
+    },
+    {
+      "id": "en-cross-02",
+      "lang": "en",
+      "kind": "cross-doc",
+      "query": "HX-450 保养周期 maintenance interval",
+      "expected": [
+        "att-1",
+        "cn-pdf-5"
+      ],
+      "returned": [
+        "att-1",
+        "cn-pdf-5",
+        "cn-pdf-1",
+        "en-pdf-3",
+        "en-docx-3",
+        "en-docx-2",
+        "en-docx-1"
+      ],
+      "recall": 1,
+      "returnedCount": 7,
+      "passed": true
+    },
+    {
+      "id": "none-01",
+      "lang": "zh",
+      "kind": "no-answer",
+      "query": "液压泵站 伺服阀 校准",
+      "expected": [],
+      "returned": [],
+      "recall": 1,
+      "returnedCount": 0,
+      "passed": true
+    },
+    {
+      "id": "none-02",
+      "lang": "zh",
+      "kind": "no-answer",
+      "query": "员工餐厅 菜单 补贴",
+      "expected": [],
+      "returned": [],
+      "recall": 1,
+      "returnedCount": 0,
+      "passed": true
+    },
+    {
+      "id": "none-03",
+      "lang": "en",
+      "kind": "no-answer",
+      "query": "laser cutter nozzle diameter",
+      "expected": [],
+      "returned": [],
+      "recall": 1,
+      "returnedCount": 0,
+      "passed": true
+    },
+    {
+      "id": "none-04",
+      "lang": "en",
+      "kind": "no-answer",
+      "query": "vacation carryover entitlement",
+      "expected": [],
+      "returned": [],
+      "recall": 1,
+      "returnedCount": 0,
+      "passed": true
+    },
+    {
+      "id": "mix-01",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "hx-450 驱动器 F-77",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "returned": [
+        "en-pdf-3",
+        "cn-pdf-1",
+        "att-1",
+        "cn-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "mix-02",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "E-1042 编码器 屏蔽接地",
+      "expected": [
+        "en-pdf-1"
+      ],
+      "returned": [
+        "att-2",
+        "en-pdf-1",
+        "en-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 3,
+      "passed": true
+    },
+    {
+      "id": "mix-03",
+      "lang": "en",
+      "kind": "fact",
+      "query": "T-220 轴承工具",
+      "expected": [
+        "cn-pdf-4"
+      ],
+      "returned": [
+        "cn-pdf-4",
+        "cn-md-2",
+        "att-1"
+      ],
+      "recall": 1,
+      "returnedCount": 3,
+      "passed": true
+    },
+    {
+      "id": "mix-04",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "0.30 MPa 低压",
+      "expected": [
+        "en-pdf-2"
+      ],
+      "returned": [
+        "cn-pdf-3",
+        "en-pdf-2",
+        "en-pdf-4",
+        "cn-docx-2"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "mix-05",
+      "lang": "en",
+      "kind": "fact",
+      "query": "残值率 depreciation",
+      "expected": [
+        "cn-docx-1"
+      ],
+      "returned": [
+        "cn-docx-1"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "mix-06",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "ENC-22-KIT 备件",
+      "expected": [
+        "en-md-3"
+      ],
+      "returned": [
+        "en-md-3"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "mix-07",
+      "lang": "en",
+      "kind": "fact",
+      "query": "过载保护 overload",
+      "expected": [
+        "cn-pdf-2"
+      ],
+      "returned": [
+        "cn-pdf-2"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "mix-08",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "熔断器 fuse",
+      "expected": [
+        "cn-md-3"
+      ],
+      "returned": [
+        "cn-md-3"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "mix-09",
+      "lang": "en",
+      "kind": "fact",
+      "query": "巡检 照度计",
+      "expected": [
+        "cn-md-1"
+      ],
+      "returned": [
+        "cn-md-1",
+        "cn-md-2",
+        "cn-md-3",
+        "cn-md-4"
+      ],
+      "recall": 1,
+      "returnedCount": 4,
+      "passed": true
+    },
+    {
+      "id": "mix-10",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "张工 线缆",
+      "expected": [
+        "att-2"
+      ],
+      "returned": [
+        "att-2"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "zh-fact-07",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "主轴 降额运行",
+      "expected": [
+        "cn-pdf-1"
+      ],
+      "returned": [
+        "cn-pdf-1",
+        "cn-md-2",
+        "cn-pdf-3",
+        "cn-pdf-2",
+        "cn-pdf-4",
+        "cn-pdf-5"
+      ],
+      "recall": 1,
+      "returnedCount": 6,
+      "passed": true
+    },
+    {
+      "id": "zh-fact-08",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "未完成的维修工单编号",
+      "expected": [
+        "cn-md-4"
+      ],
+      "returned": [
+        "cn-md-4",
+        "att-2",
+        "cn-docx-2",
+        "cn-md-2",
+        "cn-docx-3",
+        "att-1",
+        "cn-pdf-5"
+      ],
+      "recall": 1,
+      "returnedCount": 7,
+      "passed": true
+    },
+    {
+      "id": "zh-fact-09",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "100 万元 董事会决议",
+      "expected": [
+        "cn-docx-2"
+      ],
+      "returned": [
+        "cn-docx-2"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "en-fact-07",
+      "lang": "en",
+      "kind": "fact",
+      "query": "shield grounding encoder cable",
+      "expected": [
+        "en-pdf-1"
+      ],
+      "returned": [
+        "en-pdf-1",
+        "en-md-3"
+      ],
+      "recall": 1,
+      "returnedCount": 2,
+      "passed": true
+    },
+    {
+      "id": "en-fact-08",
+      "lang": "en",
+      "kind": "fact",
+      "query": "deceleration ramp DC bus",
+      "expected": [
+        "en-pdf-3"
+      ],
+      "returned": [
+        "en-pdf-3"
+      ],
+      "recall": 1,
+      "returnedCount": 1,
+      "passed": true
+    },
+    {
+      "id": "mix-11",
+      "lang": "zh",
+      "kind": "fact",
+      "query": "低压报警 主轴停止",
+      "expected": [
+        "cn-pdf-3"
+      ],
+      "returned": [
+        "cn-pdf-3",
+        "cn-pdf-1",
+        "cn-md-2",
+        "cn-pdf-2",
+        "cn-pdf-4",
+        "cn-pdf-5"
+      ],
+      "recall": 1,
+      "returnedCount": 6,
+      "passed": true
+    }
+  ]
+}

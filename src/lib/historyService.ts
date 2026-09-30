@@ -84,14 +84,6 @@ export class HistoryService {
           return false;
         }
         
-        // 重要性筛选 - 确保正确的布尔值比较
-        if (filter.isImportant !== undefined) {
-          const itemIsImportant = Boolean(item.isImportant);
-          if (itemIsImportant !== filter.isImportant) {
-            return false;
-          }
-        }
-        
         // 收藏筛选 - 确保正确的布尔值比较
         if (filter.isFavorite !== undefined) {
           const itemIsFavorite = Boolean(item.isFavorite);
@@ -223,7 +215,6 @@ export class HistoryService {
         totalConversations: repoStats.totalConversations,
         totalMessages: repoStats.totalMessages,
         favoriteCount: repoStats.favoriteConversations,
-        importantCount: repoStats.importantConversations,
         modelUsage: {},
         tagsUsage: {}
       };
@@ -249,38 +240,9 @@ export class HistoryService {
         totalConversations: 0,
         totalMessages: 0,
         favoriteCount: 0,
-        importantCount: 0,
         modelUsage: {},
         tagsUsage: {}
       };
-    }
-  }
-
-  /**
-   * 切换对话重要性标记
-   */
-  async toggleImportant(conversationId: string): Promise<boolean> {
-    try {
-      const dbService = this.getDatabaseService();
-      const conversationRepo = dbService.getConversationRepository();
-
-      // 获取当前状态
-      const conversation = await conversationRepo.findById(conversationId);
-      if (!conversation) {
-        console.error('对话不存在:', conversationId);
-        return false;
-      }
-
-      // 切换重要性状态
-      const currentImportant = (conversation as any).is_important ?? (conversation as any).isImportant;
-      await conversationRepo.update(conversationId, {
-        is_important: !currentImportant
-      } as any);
-
-      return true;
-    } catch (error) {
-      console.error('切换重要性标记失败:', error);
-      return false;
     }
   }
 
@@ -317,6 +279,15 @@ export class HistoryService {
    */
   async deleteConversation(conversationId: string): Promise<boolean> {
     try {
+      // Anything the conversation started (a dev server, a watcher) must not
+      // outlive it, or the port stays occupied and the process is unreachable.
+      try {
+        const { getProcessSandbox } = await import('@/lib/skills/sandbox');
+        await getProcessSandbox().stopConversationProcesses(conversationId);
+      } catch (error) {
+        console.warn('[historyService] 停止会话后台进程失败:', error);
+      }
+
       const dbService = this.getDatabaseService();
       const conversationRepo = dbService.getConversationRepository();
 
@@ -399,7 +370,6 @@ export class HistoryService {
       tags,
       timestamp: conv.updatedAt || conv.updated_at || conv.createdAt || conv.created_at,
       fullTimestamp: format(new Date(conv.updatedAt || conv.updated_at || conv.createdAt || conv.created_at), 'yyyy-MM-dd HH:mm:ss'),
-      isImportant: this.convertToBoolean(conv.isImportant || conv.is_important),
       isFavorite: this.convertToBoolean(conv.isFavorite || conv.is_favorite),
       messageCount: conv.messageCount || 0,
       lastMessage: conv.lastMessage || '',

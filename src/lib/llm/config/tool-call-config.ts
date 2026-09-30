@@ -172,9 +172,59 @@ export const PROVIDER_CONFIGS: Record<string, ProviderToolCallConfig> = {
     note: '能力取决于底层模型，大多数支持',
     docsUrl: 'https://openrouter.ai/docs#tool-use',
   },
+
+  orcarouter: {
+    id: 'orcarouter',
+    displayName: 'OrcaRouter',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://docs.orcarouter.ai/advanced/tool-calling',
+  },
+
+  mixroute: {
+    id: 'mixroute',
+    displayName: 'MixRoute',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://docs.mixroute.ai',
+  },
+
+  novita: {
+    id: 'novita',
+    displayName: 'Novita',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://novita.ai/docs',
+  },
+
+  aihubmix: {
+    id: 'aihubmix',
+    displayName: 'AIHubMix',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '能力取决于底层模型，大多数支持',
+    docsUrl: 'https://docs.aihubmix.com',
+  },
   
   // ========== OpenAI 兼容但需要特殊处理的 Provider ==========
   
+  lemonade: {
+    id: 'lemonade',
+    displayName: 'Lemonade',
+    defaultCapability: 'native',
+    streamingSupport: true,
+    parallelSupport: true,
+    note: '工具调用能力取决于 Lemonade 加载的底层模型',
+    docsUrl: 'https://lemonade-server.ai',
+  },
+
   lmstudio: {
     id: 'lmstudio',
     displayName: 'LM Studio',
@@ -224,6 +274,14 @@ export const PROVIDER_CONFIGS: Record<string, ProviderToolCallConfig> = {
  * pattern 使用正则表达式匹配模型名称
  */
 export const MODEL_CONFIGS: ModelToolCallConfig[] = [
+  // Verified local OpenAI-compatible endpoint.  Capability is tied to the
+  // model contract, not the display name of a provider such as "homelab".
+  {
+    pattern: '^qwen3\\.8[-_]?flash[-_]?next',
+    capability: 'native',
+    overrideProvider: true,
+    note: 'Qwen3.8 Flash Next 原生工具调用已通过 OpenAI-compatible 契约验证',
+  },
   // ========== GPT-OSS / Harmony 格式模型 ==========
   // GPT-OSS 使用 OpenAI Harmony 格式，不支持原生 OpenAI 工具调用 API
   // 参考: https://github.com/openai/harmony
@@ -377,6 +435,11 @@ export function inferProviderId(providerName: string): string {
   if (name.includes('deepseek')) return 'deepseek';
   if (name.includes('together')) return 'together';
   if (name.includes('openrouter')) return 'openrouter';
+  if (name.includes('orcarouter')) return 'orcarouter';
+  if (name.includes('mixroute')) return 'mixroute';
+  if (name.includes('novita')) return 'novita';
+  if (name.includes('aihubmix')) return 'aihubmix';
+  if (name.includes('lemonade')) return 'lemonade';
   if (name.includes('lmstudio') || name.includes('lm studio') || name.includes('lm-studio')) return 'lmstudio';
   if (name.includes('ollama')) return 'ollama';
   

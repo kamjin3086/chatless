@@ -3,6 +3,7 @@ import { exists } from '@tauri-apps/plugin-fs';
 import { toast } from '@/components/ui/sonner';
 import { useState } from 'react';
 import { resolveAliasPath } from '@/lib/filesystemAllowlist/displayPathAliases';
+import { openCheckedPath } from '@/lib/filesystemAllowlist/openCheckedPath';
 
 /**
  * 文件打开工具类
@@ -70,7 +71,9 @@ export class FileOpener {
       }
 
       // 使用系统默认程序打开文件
-      await openPath(normalized);
+      // 先走应用自己的命令（能打开用户目录与会话产物目录），再退回受限插件。
+      const opened = await openCheckedPath(normalized);
+      if (!opened) await openPath(normalized);
       
       toast.success('文档已打开', {
         description: `已使用系统默认程序打开: ${fileName || '文档'}`
@@ -140,7 +143,8 @@ export class FileOpener {
       const directory = cut >= 0 ? normalized.slice(0, cut) : normalized;
 
       if (this.shouldSkipDuplicate(directory)) return true;
-      await openPath(directory);
+      const openedDir = await openCheckedPath(directory);
+      if (!openedDir) await openPath(directory);
       
       toast.success('已打开文件位置');
       
@@ -163,7 +167,8 @@ export class FileOpener {
         return false;
       }
       if (this.shouldSkipDuplicate(normalized)) return true;
-      await openPath(normalized);
+      const openedTarget = await openCheckedPath(normalized);
+      if (!openedTarget) await openPath(normalized);
       return true;
     } catch (e) {
       toast.error('打开目录失败', { description: e instanceof Error ? e.message : String(e) });

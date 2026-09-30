@@ -22,14 +22,14 @@ interface PageTabsProps {
  */
 export function PageTabs({ tabs, activeTab, onTabChange, className }: PageTabsProps) {
   return (
-    <div className={cn("border-b border-slate-200/50 dark:border-slate-700/30", className)}>
-      <nav className="flex gap-0.5 px-4">
+    <div className={cn("app-topbar border-b border-slate-200/50 dark:border-slate-700/30", className)}>
+      <nav className="flex gap-0.5 px-4 min-h-8 items-center">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
             className={cn(
-              "px-3 py-2 text-sm transition-colors relative flex items-center gap-1.5",
+              "px-3 py-1.5 text-sm transition-colors relative flex items-center gap-1.5",
               activeTab === tab.id
                 ? "text-slate-800 dark:text-slate-100"
                 : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
@@ -42,6 +42,7 @@ export function PageTabs({ tabs, activeTab, onTabChange, className }: PageTabsPr
             )}
           </button>
         ))}
+        <div className="flex-1 h-8 min-w-4" data-tauri-drag-region />
       </nav>
     </div>
   );

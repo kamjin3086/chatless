@@ -121,6 +121,11 @@ export class ModelConfigService {
     return this.modelConfigs.get(modelId) || null;
   }
 
+  getModelContextLength(modelId: string): number | undefined {
+    const value = this.getModelConfig(modelId)?.contextLength;
+    return Number.isFinite(value) && (value as number) > 0 ? value : undefined;
+  }
+
   /**
    * 获取所有模型配置
    */

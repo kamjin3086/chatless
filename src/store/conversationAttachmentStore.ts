@@ -1,34 +1,69 @@
 /**
- * 会话级“附加内容”状态（非持久化）
+ * 会话级“附加内容”状态。
  *
- * 用于提升 Agent 体验：例如“附加工作目录”，让当前会话期间 filesystem 可在该目录及子目录工作。
- * 注意：这是临时授权，仅在应用运行期存在。
+ * 用于提升 Agent 体验：例如“附加工作目录”，让当前会话的 Agent 可以在该目录及子目录工作。
+ *
+ * 挂载目录的作用域是**这个会话**：勾选后重启仍然有效，卸载即撤销。它不会被写进
+ * 全局文件白名单——那会让"选一个工作目录"变成一条永久授权，安全设置里很快就会
+ * 堆满无法人工审计的条目。真正的访问校验仍在执行时按调用授予。
  */
 
 import { create } from 'zustand';
-import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
+import { persist } from 'zustand/middleware';
 
 type ConversationId = string;
 
 interface ConversationAttachmentState {
   /**
-   * 会话级默认工作区（系统自动创建并注入为 @WorkDir）
-   * - 用于脚本/中间文件/产物的默认落点
-   * - 不一定需要在输入框下方展示（避免噪音）
+   * 会话自带的产物目录（文档/Chatless/<标题>-<会话 ID 摘要>；旧会话沿用原应用数据目录）。
+   * 没有挂载目录时它就是 @WorkDir。
    */
-  workingDirByConversation: Record<ConversationId, string | undefined>;
+  sessionDirByConversation: Record<ConversationId, string | undefined>;
 
   /**
-   * 用户手动挂载目录（通过 + 号选择）
-   * - 仅用于授权/便捷访问/展示
-   * - 输入框下方彩色标签条只展示这类“用户主动挂载”
+   * 该会话的工作目录是否已经在磁盘上落地。
+   *
+   * 目录采用"用到才建"策略：只有工具真的要动文件、或用户主动打开/导出时才创建，
+   * 纯聊天的会话不在用户的文档目录里留空文件夹。这个标记只是内存缓存，
+   * 重启后第一次使用会重新确认一次。
+   */
+  workspaceExistsByConversation: Record<ConversationId, boolean | undefined>;
+
+  /**
+   * 用户手动挂载目录（通过 + 号选择）。
+   * 一旦挂载，它就是该会话的 @WorkDir：相对路径与默认落点都指向这里。
    */
   mountedDirByConversation: Record<ConversationId, string | undefined>;
 
-  /** 设置系统默认 @WorkDir（自动） */
-  setWorkingDir: (conversationId: string, absolutePath: string) => void;
+  /** 会话工作目录解析失败的原因（不持久化；用于界面提示与重试）。 */
+  workspaceErrorByConversation: Record<ConversationId, string | undefined>;
+
+  /** 会话挂载的知识库（Agent knowledge_* 工具注入条件） */
+  knowledgeBaseByConversation: Record<ConversationId, { id: string; name: string } | undefined>;
+
+  setKnowledgeBase: (conversationId: string, kb: { id: string; name: string }) => void;
+  clearKnowledgeBase: (conversationId: string) => void;
+  getKnowledgeBase: (conversationId: string) => { id: string; name: string } | undefined;
+
+  /** 记录会话自带的产物目录（系统自动解析，不作为用户授权） */
+  setWorkingDir: (conversationId: string, absolutePath: string, exists?: boolean) => void;
   clearWorkingDir: (conversationId: string) => void;
+  /** 实际生效的 @WorkDir：挂载目录优先，否则会话产物目录 */
   getWorkingDir: (conversationId: string) => string | undefined;
+  /** 仅会话自带产物目录（不返回挂载目录）——应用元数据只写这里 */
+  getSessionDir: (conversationId: string) => string | undefined;
+  /** 会话目录是否已经存在于磁盘上。 */
+  isWorkspaceMaterialized: (conversationId: string) => boolean;
+  markWorkspaceMaterialized: (conversationId: string) => void;
+  /**
+   * 会话自带的产物目录是否正在被这个会话当作 @WorkDir 使用。
+   * 用户挂载了自己的目录之后就是 false：应用不该在用户的项目旁边再建一个文件夹。
+   */
+  isSessionDirInUse: (conversationId: string) => boolean;
+
+  setWorkspaceError: (conversationId: string, message: string) => void;
+  clearWorkspaceError: (conversationId: string) => void;
+  getWorkspaceError: (conversationId: string) => string | undefined;
 
   /** 设置用户手动挂载目录（显示在输入框下方） */
   setMountedDir: (conversationId: string, absolutePath: string) => void;
@@ -40,42 +75,96 @@ function normalizePath(p: string): string {
   return String(p || '').trim().replace(/\\/g, '/');
 }
 
-export const useConversationAttachmentStore = create<ConversationAttachmentState>((set, get) => ({
-  workingDirByConversation: {},
+export const useConversationAttachmentStore = create<ConversationAttachmentState>()(persist((set, get) => ({
+  sessionDirByConversation: {},
+  workspaceExistsByConversation: {},
   mountedDirByConversation: {},
+  workspaceErrorByConversation: {},
+  knowledgeBaseByConversation: {},
 
-  setWorkingDir: (conversationId, absolutePath) => {
+  setKnowledgeBase: (conversationId, kb) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid || !kb?.id) return;
+    set((state) => ({
+      knowledgeBaseByConversation: { ...state.knowledgeBaseByConversation, [cid]: kb },
+    }));
+  },
+
+  clearKnowledgeBase: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return;
+    set((state) => {
+      const next = { ...state.knowledgeBaseByConversation };
+      delete next[cid];
+      return { knowledgeBaseByConversation: next };
+    });
+  },
+
+  getKnowledgeBase: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return undefined;
+    return get().knowledgeBaseByConversation[cid];
+  },
+
+
+  setWorkingDir: (conversationId, absolutePath, exists = true) => {
     const cid = String(conversationId || '').trim();
     const p = normalizePath(absolutePath);
     if (!cid || !p) return;
     set((state) => ({
-      workingDirByConversation: { ...state.workingDirByConversation, [cid]: p },
+      sessionDirByConversation: { ...state.sessionDirByConversation, [cid]: p },
+      workspaceExistsByConversation: { ...state.workspaceExistsByConversation, [cid]: exists },
     }));
-
-    // 自动加入 filesystem 白名单（你选择了 workdir 自动授权）
-    // 注意：该目录的 alias 仍由会话注入的 @WorkDir 表达，持久化条目不强制占用 alias 名称，避免冲突。
-    void ensureAllowlistedDirectory({
-      path: p,
-      source: 'workdir',
-      permissions: { read: true, write: true, create: true, delete: false },
-      reconnect: true,
-    });
+    // 会话产物目录不写入持久白名单：运行期由流水线合成的 @WorkDir 条目 +
+    // 每次调用的 call-scoped grant 授权。否则每个新会话都会往用户的安全设置里
+    // 塞一条 UUID 路径，白名单很快就没法人工审计了。
   },
 
   clearWorkingDir: (conversationId) => {
     const cid = String(conversationId || '').trim();
     if (!cid) return;
     set((state) => {
-      const next = { ...state.workingDirByConversation };
+      const next = { ...state.sessionDirByConversation };
       delete next[cid];
-      return { workingDirByConversation: next };
+      const exists = { ...state.workspaceExistsByConversation };
+      delete exists[cid];
+      return { sessionDirByConversation: next, workspaceExistsByConversation: exists };
     });
   },
 
   getWorkingDir: (conversationId) => {
     const cid = String(conversationId || '').trim();
     if (!cid) return undefined;
-    return get().workingDirByConversation[cid];
+    const mounted = get().mountedDirByConversation[cid];
+    if (mounted) return mounted;
+    return get().sessionDirByConversation[cid];
+  },
+
+  getSessionDir: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return undefined;
+    return get().sessionDirByConversation[cid];
+  },
+
+  isWorkspaceMaterialized: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return false;
+    return get().workspaceExistsByConversation[cid] === true;
+  },
+
+  markWorkspaceMaterialized: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return;
+    set((state) => ({
+      workspaceExistsByConversation: { ...state.workspaceExistsByConversation, [cid]: true },
+    }));
+  },
+
+  isSessionDirInUse: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return false;
+    const state = get();
+    return !!state.sessionDirByConversation[cid] && !state.mountedDirByConversation[cid];
   },
 
   setMountedDir: (conversationId, absolutePath) => {
@@ -85,14 +174,6 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     set((state) => ({
       mountedDirByConversation: { ...state.mountedDirByConversation, [cid]: p },
     }));
-
-    // 用户手动挂载：作为 attachment 来源写入 allowlist（更语义化，且可在设置页追溯）
-    void ensureAllowlistedDirectory({
-      path: p,
-      source: 'attachment',
-      permissions: { read: true, write: true, create: true, delete: false },
-      reconnect: true,
-    });
   },
 
   clearMountedDir: (conversationId) => {
@@ -110,5 +191,37 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     if (!cid) return undefined;
     return get().mountedDirByConversation[cid];
   },
+
+  setWorkspaceError: (conversationId, message) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return;
+    set((state) => ({
+      workspaceErrorByConversation: { ...state.workspaceErrorByConversation, [cid]: message },
+    }));
+  },
+
+  clearWorkspaceError: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return;
+    set((state) => {
+      const next = { ...state.workspaceErrorByConversation };
+      delete next[cid];
+      return { workspaceErrorByConversation: next };
+    });
+  },
+
+  getWorkspaceError: (conversationId) => {
+    const cid = String(conversationId || '').trim();
+    if (!cid) return undefined;
+    return get().workspaceErrorByConversation[cid];
+  },
+}), {
+  name: 'conversation-knowledge-mounts',
+  // 知识库挂载与附加目录是会话级偏好；文档附件是 SQLite 关系，不进 localStorage。
+  // 会话自带产物目录由 Rust 持有映射，也不在这里持久化。
+  partialize: (state) => ({
+    knowledgeBaseByConversation: state.knowledgeBaseByConversation,
+    mountedDirByConversation: state.mountedDirByConversation,
+  }),
 }));
 

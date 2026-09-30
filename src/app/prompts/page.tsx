@@ -74,7 +74,7 @@ export default function PromptsPage() {
   };
 
   return (
-    <div className="h-full w-full flex flex-col bg-white/95 dark:bg-slate-900/95 overflow-hidden">
+    <div className="h-full w-full flex flex-col bg-white/95 dark:bg-slate-900/95 overflow-hidden glass-surface">
       {/* 顶部工具栏 */}
       <PromptsHeader />
       

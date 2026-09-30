@@ -1,5 +1,4 @@
 import { ParameterPolicyEngine } from '@/lib/llm/ParameterPolicy';
-import { useChatStore } from '@/store/chatStore';
 
 /**
  * 根据 provider/model 和会话上下文，组装对话参数（含策略与 MCP servers）。
@@ -37,47 +36,6 @@ export async function composeChatOptions(
     // ignore mcp fetch errors
   }
 
-  // 3) 原生工具调用支持
-  // 规则（明确区分）：
-  // - chat 模式：仅允许 web_search（且仅当用户开启网络搜索）
-  // - agent 模式：允许注入全部工具（skills + mcp + web_search）
-    const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
-  const st = useChatStore.getState();
-  const conv: any =
-    conversationId ? st.conversations.find((c: any) => c.id === conversationId) : null;
-  const toolMode: 'chat' | 'agent' =
-    (conv?.tool_mode as any) || (st as any).sessionToolMode || 'chat';
-
-  
-  if (toolMode === 'chat') {
-    // Search results are injected before the model request by HistoryBuilder.
-    // Avoid tools/tool_choice here: many OpenAI-compatible endpoints reject them.
-    return refined;
-  }
-  
-  // toolMode === 'agent'：注入全部工具
-  const injection = await buildMcpSystemInjections(
-    userContent,
-    conversationId || undefined,
-    provider,
-    model,
-    { forceInject: true }
-  );
-
-  // 不支持 native tool 的模型：跳过工具注入，作为普通对话模型使用
-  if (injection.useNativeTools && injection.nativeTools && injection.nativeTools.length > 0) {
-      // 转换为 ToolDefinition 格式
-      (refined as any).tools = injection.nativeTools.map((t: any) => ({
-        name: t.name,
-        description: t.description,
-        parameters: t.parameters,
-      }));
-      (refined as any).toolChoice = 'auto';
-      (refined as any).__useNativeTools = true;
-
-      
-      console.debug('[OptionComposer] 启用原生工具调用，工具数量:', injection.nativeTools.length);
-  }
-
+  // 工具与 system 由 AgentLoopRunner 在每次运行中统一注入。
   return refined;
 }

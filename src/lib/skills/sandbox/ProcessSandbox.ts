@@ -26,7 +26,37 @@ interface TauriShellResult {
   stdout: string;
   stderr: string;
   duration_ms: number;
+  /** 超时被终止；stdout/stderr 是终止前抓到的输出 */
+  timed_out?: boolean;
   error?: string;
+}
+
+/** One of the background processes started through `shell__start`. */
+export interface ManagedProcessOutput {
+  executionId: string;
+  running: boolean;
+  exitCode?: number | null;
+  stdout: string;
+  stderr: string;
+  stdoutBytes: number;
+  stderrBytes: number;
+  stdoutDropped: number;
+  stderrDropped: number;
+}
+
+export interface ManagedProcessSummary {
+  executionId: string;
+  pid: number;
+  command: string;
+  workingDir: string;
+  name?: string;
+  conversationId: string;
+  runId?: string;
+  running: boolean;
+  exitCode?: number | null;
+  startedAt: number;
+  stdoutBytes: number;
+  stderrBytes: number;
 }
 
 /**
@@ -203,6 +233,7 @@ export class ProcessSandbox extends BaseSandboxExecutor {
           timeout_ms: options.timeoutMs || this.securityConfig.maxTimeout || 30000,
           env: options.env || {},
           max_output_size: this.securityConfig.maxOutputSize || 1024 * 1024,
+          raw_last_arg: options.verbatimLastArg === true,
         },
       });
 
@@ -213,8 +244,10 @@ export class ProcessSandbox extends BaseSandboxExecutor {
         stderr: tauriResult.stderr,
         duration: tauriResult.duration_ms,
         error: tauriResult.error,
-        status: tauriResult.success ? 'completed' : 
-                tauriResult.error?.includes('超时') ? 'timeout' : 'failed',
+        timedOut: tauriResult.timed_out === true,
+        status: tauriResult.success ? 'completed'
+          : (tauriResult.timed_out || tauriResult.error?.includes('超时')) ? 'timeout'
+            : 'failed',
       };
 
       // 触发事件
@@ -247,6 +280,106 @@ export class ProcessSandbox extends BaseSandboxExecutor {
   }
 
   /**
+   * Start a long-running process (dev server, watch, long build).
+   *
+   * Returns as soon as the child is spawned; output is read through
+   * `readManagedProcess` and the process is stopped with `stopManagedProcess`.
+   * This is what makes "run the site locally and check it" possible at all:
+   * a blocking call would be killed by its own timeout.
+   *
+   * The process belongs to a conversation: it stays alive after the reply that
+   * started it, and only that conversation can read or stop it.
+   */
+  async startManagedProcess(params: {
+    executionId: string;
+    conversationId: string;
+    runId?: string;
+    name?: string;
+    command: string;
+    args?: string[];
+    workingDir?: string;
+    env?: Record<string, string>;
+    /** See CommandPlan.verbatimLastArg: `cmd /c "line"` needs an unescaped arg. */
+    verbatimLastArg?: boolean;
+  }): Promise<{ executionId: string; pid: number }> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<{ execution_id: string; pid: number }>('start_shell_process', {
+      conversationId: params.conversationId,
+      runId: params.runId,
+      name: params.name,
+      options: {
+        execution_id: params.executionId,
+        command: params.command,
+        args: params.args || [],
+        working_dir: params.workingDir,
+        timeout_ms: this.securityConfig.maxTimeout || 30000,
+        env: params.env || {},
+        max_output_size: this.securityConfig.maxOutputSize || 1024 * 1024,
+        raw_last_arg: params.verbatimLastArg === true,
+      },
+    });
+    return { executionId: raw.execution_id, pid: raw.pid };
+  }
+
+  async readManagedProcess(executionId: string, limit?: number, conversationId?: string): Promise<ManagedProcessOutput> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<Record<string, unknown>>('read_shell_process', {
+      executionId,
+      conversationId,
+      limit: limit ?? null,
+    });
+    return {
+      executionId: String(raw.execution_id ?? executionId),
+      running: Boolean(raw.running),
+      exitCode: (raw.exit_code as number | null | undefined) ?? null,
+      stdout: String(raw.stdout ?? ''),
+      stderr: String(raw.stderr ?? ''),
+      stdoutBytes: Number(raw.stdout_bytes ?? 0),
+      stderrBytes: Number(raw.stderr_bytes ?? 0),
+      stdoutDropped: Number(raw.stdout_dropped ?? 0),
+      stderrDropped: Number(raw.stderr_dropped ?? 0),
+    };
+  }
+
+  async stopManagedProcess(executionId: string, conversationId?: string): Promise<{ stopped: boolean; exitCode?: number | null }> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<{ stopped: boolean; exit_code?: number | null }>('stop_shell_process', {
+      executionId,
+      conversationId,
+    });
+    return { stopped: Boolean(raw?.stopped), exitCode: raw?.exit_code ?? null };
+  }
+
+  async listManagedProcesses(conversationId?: string): Promise<ManagedProcessSummary[]> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const rows = await invoke<Array<Record<string, unknown>>>('list_shell_processes', { conversationId });
+    return (rows || []).map((raw) => ({
+      executionId: String(raw.execution_id ?? ''),
+      pid: Number(raw.pid ?? 0),
+      command: String(raw.command ?? ''),
+      workingDir: String(raw.working_dir ?? ''),
+      name: raw.name ? String(raw.name) : undefined,
+      conversationId: String(raw.conversation_id ?? ''),
+      runId: raw.run_id ? String(raw.run_id) : undefined,
+      running: Boolean(raw.running),
+      exitCode: (raw.exit_code as number | null | undefined) ?? null,
+      startedAt: Number(raw.started_at ?? 0),
+      stdoutBytes: Number(raw.stdout_bytes ?? 0),
+      stderrBytes: Number(raw.stderr_bytes ?? 0),
+    }));
+  }
+
+  /**
+   * Terminates every process a conversation started. Used when the session is
+   * deleted, so a dev server cannot outlive the chat that launched it.
+   */
+  async stopConversationProcesses(conversationId: string): Promise<number> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const stopped = await invoke<number>('stop_conversation_processes', { conversationId });
+    return Number(stopped ?? 0);
+  }
+
+  /**
    * 取消执行
    */
   async cancel(executionId: string): Promise<boolean> {
@@ -255,7 +388,7 @@ export class ProcessSandbox extends BaseSandboxExecutor {
       // 通知 Tauri 后端取消（如果支持）
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('cancel_safe_shell', { execution_id: executionId });
+        await invoke('cancel_safe_shell', { executionId });
       } catch {
         // ignore
       }

@@ -47,6 +47,8 @@ export interface EmbeddingConfig {
   tokenizerPath?: string;
   apiUrl?: string;
   maxBatchSize?: number;
+  /** Maximum input tokens accepted by the configured embedding model. */
+  maxLength?: number;
   timeout?: number;
 }
 
@@ -102,4 +104,4 @@ export class EmbeddingGenerationError extends EmbeddingError {
 
 /**
  * 嵌入服务和策略的通用配置
- */ 
+ */

@@ -2,6 +2,7 @@
 // key 一律使用小写名称（与 ProviderSettings 中的 provider.name.toLowerCase() 对齐）
 export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
   // —— 本地 / 免密类（无强制密钥，但可提供使用文档或官网） ——
+  lemonade: 'https://lemonade-server.ai',
   'lm studio': 'https://lmstudio.ai',
   ollama: 'https://ollama.com',
 
@@ -21,10 +22,13 @@ export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
 
   // —— 常见 OpenAI 兼容聚合 / 代理（国际） —— //
   openrouter: 'https://openrouter.ai/keys',
+  orcarouter: 'https://www.orcarouter.ai/console',
+  mixroute: 'https://console.mixroute.ai/invite/4YtWjOYd',
+  novita: 'https://novita.ai/?ref=nwmwmjy&utm_source=affiliate',
   '302ai': 'https://302.ai',
   aihubmix: 'https://aihubmix.com',
-  tokenflux: 'https://tokenflux.io',
-  ocoolai: 'https://ocoolai.com',
+  tokenflux: 'https://tokenflux.ai',
+  ocoolai: 'https://one.ocoolai.com',
   groq: 'https://console.groq.com/keys',
   mistral: 'https://console.mistral.ai/api-keys',
   perplexity: 'https://www.perplexity.ai/settings/api',
@@ -34,12 +38,10 @@ export const PROVIDER_KEY_DOC_LINKS: Record<string, string> = {
   jina: 'https://jina.ai',
   together: 'https://api.together.xyz',
   fireworks: 'https://fireworks.ai',
-  'github models': 'https://docs.github.com/en/github-models',
 
   // —— 国内 / 区域主流与云厂商 —— //
   'moonshot ai': 'https://platform.moonshot.cn',
   zhipu: 'https://open.bigmodel.cn',
-  yi: 'https://platform.lingyiwanwu.com',
   modelscope: 'https://modelscope.cn',
   bailian: 'https://dashscope.aliyuncs.com',
   stepfun: 'https://platform.stepfun.com',

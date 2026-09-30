@@ -20,7 +20,7 @@ export const DATABASE_SCHEMA = {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       model_id TEXT NOT NULL,
-      tool_mode TEXT DEFAULT 'chat',
+      tool_mode TEXT DEFAULT 'agent',
       is_important BOOLEAN DEFAULT 0,
       is_favorite BOOLEAN DEFAULT 0
     )
@@ -44,6 +44,7 @@ export const DATABASE_SCHEMA = {
       segments TEXT,
       version_group_id TEXT,
       version_index INTEGER,
+      citations TEXT,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
     )
   `,
@@ -69,7 +70,13 @@ export const DATABASE_SCHEMA = {
       updated_at INTEGER NOT NULL,
       tags TEXT,
       folder_path TEXT,
-      is_indexed BOOLEAN DEFAULT 0
+      is_indexed BOOLEAN DEFAULT 0,
+      file_hash TEXT,
+      parser_version TEXT,
+      chunk_schema_version TEXT,
+      embedding_model TEXT,
+      embedding_dimension INTEGER,
+      embedding_fingerprint TEXT
     )
   `,
   knowledge_chunks: `
@@ -96,6 +103,48 @@ export const DATABASE_SCHEMA = {
       FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
       FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE,
       UNIQUE(document_id, knowledge_base_id)
+    )
+  `,
+  source_blocks: `
+    CREATE TABLE IF NOT EXISTS source_blocks (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      knowledge_base_id TEXT NOT NULL,
+      block_index INTEGER NOT NULL,
+      block_type TEXT NOT NULL,
+      text TEXT NOT NULL,
+      page INTEGER,
+      section_path TEXT,
+      line_start INTEGER,
+      line_end INTEGER,
+      char_start INTEGER,
+      char_end INTEGER,
+      metadata TEXT DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
+    )
+  `,
+  retrieval_chunks: `
+    CREATE TABLE IF NOT EXISTS retrieval_chunks (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      knowledge_base_id TEXT NOT NULL,
+      source_start_block INTEGER NOT NULL,
+      source_end_block INTEGER NOT NULL,
+      source_text TEXT NOT NULL,
+      search_text TEXT NOT NULL,
+      metadata TEXT DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
+    )
+  `,
+  retrieval_chunks_fts: `
+    CREATE VIRTUAL TABLE IF NOT EXISTS retrieval_chunks_fts USING fts5(
+      chunk_id UNINDEXED,
+      search_text,
+      tokenize = 'unicode61'
     )
   `,
   dev_schema_info: `
@@ -142,4 +191,6 @@ export const DATABASE_INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_doc_knowledge_mappings_document_id ON doc_knowledge_mappings(document_id)",
   "CREATE INDEX IF NOT EXISTS idx_doc_knowledge_mappings_knowledge_base_id ON doc_knowledge_mappings(knowledge_base_id)",
   "CREATE INDEX IF NOT EXISTS idx_doc_knowledge_mappings_status ON doc_knowledge_mappings(status)",
-]; 
+  "CREATE INDEX IF NOT EXISTS idx_source_blocks_doc ON source_blocks(document_id, knowledge_base_id, block_index)",
+  "CREATE INDEX IF NOT EXISTS idx_retrieval_chunks_kb ON retrieval_chunks(knowledge_base_id, document_id)",
+];

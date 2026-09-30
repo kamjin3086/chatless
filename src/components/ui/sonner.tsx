@@ -342,7 +342,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
             ...props.toastOptions?.classNames,
             // 精致轻盈风格：半透明毛玻璃、柔和阴影、可选中文本
             toast:
-              "relative rounded-xl border px-3.5 py-2.5 backdrop-blur-lg " +
+              "relative rounded-xl border px-3.5 py-2.5 backdrop-blur-lg glass-overlay " +
               "shadow-[0_8px_28px_rgba(0,0,0,0.08)] ring-1 ring-black/5 " +
               "bg-white/80 text-slate-800 border-white/40 " +
               "dark:bg-slate-900/80 dark:text-slate-100 dark:border-white/10 dark:ring-white/10 " +

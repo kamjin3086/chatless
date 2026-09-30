@@ -1,9 +1,9 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { InputField } from "./InputField";
-import { KeyRound, MoreHorizontal, SlidersHorizontal, Brain, Workflow, Camera, Trash2, Zap, RotateCcw } from "lucide-react";
+import { KeyRound, MoreHorizontal, SlidersHorizontal, Brain, Workflow, Camera, Trash2, Zap, RotateCcw, Check } from "lucide-react";
 import type { ModelMetadata } from "@/lib/metadata/types";
 import { toast } from "@/components/ui/sonner";
 import { getModelCapabilities } from "@/lib/provider/staticModels";
@@ -65,12 +65,12 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
   }, [editingModelKey]);
 
   return (
-    <div className="group/item w-full flex items-center gap-1 pl-2 py-0.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors rounded">
+    <div className="group/item w-full flex items-center gap-1 px-1.5 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors rounded-md">
       {/* 左侧：模型名与能力标记 */}
-      <div className="flex flex-row items-center justify-start flex-auto min-w-0 pr-1 gap-1 text-[11px]">
+      <div className="flex flex-row items-center justify-start flex-auto min-w-0 pr-1 gap-1.5 text-sm">
         <button
           type="button"
-          className="text-left text-[11px] font-medium text-gray-700 dark:text-gray-300 truncate hover:bg-gray-100/60 dark:hover:bg-gray-800/60 rounded px-0.5"
+          className="text-left text-sm font-medium text-slate-700 dark:text-slate-300 truncate hover:text-slate-900 dark:hover:text-slate-100 rounded px-0.5"
           title={model.name}
           onClick={async()=>{ 
             try { 
@@ -93,7 +93,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
           return (
             <span className="inline-flex items-center gap-0.5 text-gray-400">
               {items.filter(i=>i.ok).map((i, idx) => (
-                <i.Icon key={idx} className="w-3 h-3" title={i.title} />
+                <i.Icon key={idx} className="w-3.5 h-3.5" title={i.title} />
               ))}
             </span>
           );
@@ -208,42 +208,30 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
               <MoreHorizontal className="w-3 h-3" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="bottom" align="end" className="w-56 p-1">
-            {/* 头部标题 */}
-            <div className="px-2 py-1.5 border-b border-gray-200/60 dark:border-gray-700/60">
-              <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate block" title={model.label || model.name}>
-                {model.label || model.name}
-              </span>
-            </div>
+          <DropdownMenuContent side="bottom" align="end" className="w-48">
+            <DropdownMenuLabel className="truncate" title={model.label || model.name}>
+              {model.label || model.name}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
 
-            {/* 参数设置 */}
-            <DropdownMenuItem 
-              className="flex items-center gap-2 px-2 py-1.5 text-[11px] cursor-pointer" 
+            <DropdownMenuItem
               onSelect={() => {
                 onOpenParameters(model.name, model.label);
               }}
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
-              <span>参数设置</span>
+              <SlidersHorizontal />
+              参数设置
             </DropdownMenuItem>
 
-            {/* 策略设置 */}
             {allowStrategyActions && (
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="flex items-center gap-2 px-2 py-1.5 text-[11px] cursor-pointer">
-                  <Workflow className="w-3.5 h-3.5 text-gray-500" />
-                  <span className="flex-1">请求策略</span>
-                  {strategy && (
-                    <span className="px-1.5 py-0.5 text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded">
-                      {strategy}
-                    </span>
-                  )}
+                <DropdownMenuSubTrigger>
+                  <Workflow />
+                  请求策略
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-44 p-1">
-                  {/* 自动推断 */}
-                  <DropdownMenuItem 
-                    className="flex items-center gap-2 px-2 py-1.5 text-[11px]"
-                    onSelect={async(e: any) => {
+                <DropdownMenuSubContent className="w-48">
+                  <DropdownMenuItem
+                    onSelect={async (e: any) => {
                       e?.preventDefault?.();
                       try {
                         const { inferStrategyFromModelId } = require('@/lib/provider/strategyInference');
@@ -253,61 +241,64 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                         await specializedStorage.models.setModelStrategy(providerName, model.name, st);
                         onStrategyChange?.(st);
                         toast.success('已自动推断并设置策略');
-                      } catch(err) { 
-                        console.error(err); 
-                        toast.error('自动推断失败'); 
+                      } catch (err) {
+                        console.error(err);
+                        toast.error('自动推断失败');
                       }
                     }}
                   >
-                    <Zap className="w-3 h-3 text-purple-500" />
-                    <span>自动推断</span>
+                    <Zap />
+                    自动推断
                   </DropdownMenuItem>
-                  
+
                   <DropdownMenuSeparator />
-                  
-                  {/* 策略选项 */}
-                  {['openai-compatible','openai-responses','openai','anthropic','gemini','deepseek'].map((s) => (
-                    <DropdownMenuItem 
-                      key={s}
-                      className={`flex items-center gap-2 px-2 py-1.5 text-[11px] ${strategy === s ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300' : ''}`}
-                      onSelect={async(e: any) => {
+
+                  {([
+                    ['openai-compatible', 'OpenAI Compatible'],
+                    ['openai-responses', 'OpenAI Responses'],
+                    ['openai', 'OpenAI Strict'],
+                    ['anthropic', 'Anthropic'],
+                    ['gemini', 'Gemini'],
+                    ['deepseek', 'DeepSeek'],
+                  ] as const).map(([id, label]) => (
+                    <DropdownMenuItem
+                      key={id}
+                      onSelect={async (e: any) => {
                         e?.preventDefault?.();
-                        try { 
-                          const { specializedStorage } = await import('@/lib/storage'); 
-                          await specializedStorage.models.setModelStrategy(providerName, model.name, s as any); 
-                          onStrategyChange?.(s); 
-                          toast.success('已更新策略'); 
-                        } catch(err) { 
-                          console.error(err); 
-                          toast.error('更新策略失败'); 
+                        try {
+                          const { specializedStorage } = await import('@/lib/storage');
+                          await specializedStorage.models.setModelStrategy(providerName, model.name, id as any);
+                          onStrategyChange?.(id);
+                          toast.success('已更新策略');
+                        } catch (err) {
+                          console.error(err);
+                          toast.error('更新策略失败');
                         }
                       }}
                     >
-                      <div className={`w-1.5 h-1.5 rounded-full ${strategy === s ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
-                      <span>{s}</span>
+                      <Check className={strategy === id ? "opacity-100" : "opacity-0"} />
+                      {label}
                     </DropdownMenuItem>
                   ))}
-                  
+
                   <DropdownMenuSeparator />
-                  
-                  {/* 清除策略 */}
-                  <DropdownMenuItem 
-                    className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-gray-500"
-                    onSelect={async(e: any) => {
+
+                  <DropdownMenuItem
+                    onSelect={async (e: any) => {
                       e?.preventDefault?.();
-                      try { 
-                        const { specializedStorage } = await import('@/lib/storage'); 
-                        await specializedStorage.models.removeModelStrategy(providerName, model.name); 
-                        onStrategyChange?.(null); 
-                        toast.success('已清除覆盖'); 
-                      } catch(err) { 
-                        console.error(err); 
-                        toast.error('清除失败'); 
+                      try {
+                        const { specializedStorage } = await import('@/lib/storage');
+                        await specializedStorage.models.removeModelStrategy(providerName, model.name);
+                        onStrategyChange?.(null);
+                        toast.success('已清除覆盖');
+                      } catch (err) {
+                        console.error(err);
+                        toast.error('清除失败');
                       }
                     }}
                   >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>重置为默认</span>
+                    <RotateCcw />
+                    重置为默认
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
@@ -315,27 +306,23 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
 
             <DropdownMenuSeparator />
 
-            {/* 重命名 */}
-            <div className="px-1">
-              {(() => {
-                const { ProviderRenameModelDialog } = require('./ProviderRenameModelDialog');
-                return (
-                  <ProviderRenameModelDialog providerName={providerName} modelName={model.name} currentLabel={model.label} />
-                );
-              })()}
-            </div>
+            {(() => {
+              const { ProviderRenameModelDialog } = require('./ProviderRenameModelDialog');
+              return (
+                <ProviderRenameModelDialog providerName={providerName} modelName={model.name} currentLabel={model.label} />
+              );
+            })()}
             {canDelete && allowDelete && (
               <>
                 <DropdownMenuSeparator />
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <DropdownMenuItem 
-                      variant="destructive" 
-                      className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-red-600 dark:text-red-400 cursor-pointer" 
-                      onSelect={(e:any)=>e?.preventDefault?.()}
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={(e: any) => e?.preventDefault?.()}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>删除模型</span>
+                      <Trash2 />
+                      删除模型
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>

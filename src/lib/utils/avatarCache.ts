@@ -11,7 +11,7 @@ const memoryCache = new Map<string, string>(); // key -> dataURL
 const PERSIST_FILE = 'logo-cache.json';
 
 function buildKey(seed: string, size: number): string {
-  return `avatar:${seed}:${size}`;
+  return `avatar:v2:${seed}:${size}`;
 }
 
 // 同步获取头像：优先内存，其次即时生成

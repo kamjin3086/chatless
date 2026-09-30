@@ -1,7 +1,6 @@
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from '@/lib/mcp/nativeTools/filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nativeTools/shellExecutor';
-import { AGENT_CONTEXT_SERVER_NAME, AGENT_CONTEXT_TOOLS } from '@/lib/mcp/nativeTools/agentContext';
 
 type Normalized = { serverName: string; toolName: string };
 
@@ -87,20 +86,7 @@ function inferFromBareToolName(toolName: string): Normalized | null {
     return { serverName: WEB_SEARCH_SERVER_NAME, toolName: t };
   }
 
-  // Agent Context 工具
-  const ctxSet = new Set(AGENT_CONTEXT_TOOLS.map((x) => x.name));
-  if (ctxSet.has(t)) return { serverName: AGENT_CONTEXT_SERVER_NAME, toolName: t };
-  if (t === 'save_research' || t === 'save_plan' || t === 'log_error' || t === 'update_step') {
-    return { serverName: AGENT_CONTEXT_SERVER_NAME, toolName: t };
-  }
-  if (t.startsWith('ctx_')) {
-    return { serverName: AGENT_CONTEXT_SERVER_NAME, toolName: t.slice('ctx_'.length) };
-  }
-
   // Tools Registry 工具
-  if (t === 'discover' || t === 'load') {
-    return { serverName: 'tools', toolName: t };
-  }
   if (t.startsWith('tools_')) {
     return { serverName: 'tools', toolName: t.slice('tools_'.length) };
   }

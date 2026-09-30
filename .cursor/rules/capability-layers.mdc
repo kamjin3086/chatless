@@ -1,0 +1,41 @@
+---
+description: Chatless 能力分层。改动前先判断属于核心、可选包、扩展生态还是明确不做，避免把可选能力做进默认启动路径。
+alwaysApply: true
+---
+
+# 能力分层
+
+新功能必须落入其中一层。无法归类则先不要做。
+
+## Core（默认最好，始终维护）
+
+- 多 Provider、本地模型、参数策略
+- 本地 SQLite、隐私、会话与消息
+- 稳定流式渲染、thinking 分离、长会话性能
+- Prompt 管理、附件、基础文件能力
+- 轻量 Agent 运行内核（事件、取消、审批）
+- 权限与审批 UX（ToolCard、allowlist）
+
+## 官方可选包（默认零成本，关闭后接近不存在）
+
+- Knowledge / RAG / 本地嵌入
+- MCP 客户端
+- Skills
+- WebDAV 同步
+- Coding Pack（项目搜索、解释、patch 预览、受控脚本）
+- 高级自动化（后台任务等）
+
+## 扩展生态（优先 MCP / Skill，不进核心）
+
+- 浏览器自动化、Computer Use
+- GitHub / Notion / 数据库等第三方服务
+- 远程 Agent、A2A
+- 专业办公或垂直工作流
+
+## 禁止进入产品身份的能力
+
+- 代码编辑器、补全、云沙箱、自动 PR
+- 默认扫描整机或默认开放 Desktop/Documents/Downloads
+- 为“看起来先进”引入的框架：LangGraph、云端 Agent SDK、微服务、RSC 重构
+
+Coding Pack 证明通用 Agent 能处理代码，不是 Chatless 的身份。

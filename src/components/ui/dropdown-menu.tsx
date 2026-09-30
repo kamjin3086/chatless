@@ -43,7 +43,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "bg-white/95 dark:bg-gray-900/95 backdrop-blur-md text-slate-900 dark:text-gray-100 border border-gray-200/60 dark:border-gray-700/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[10rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl p-1.5 shadow-2xl",
+          "glass-overlay glass-float-menu bg-white/95 dark:bg-gray-900/95 backdrop-blur-md text-slate-900 dark:text-gray-100 border border-gray-200/60 dark:border-gray-700/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[10rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl p-1 shadow-xl",
           className
         )}
         {...props}
@@ -75,7 +75,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-gradient-to-r data-[highlighted]:from-blue-50 data-[highlighted]:to-indigo-50/80 dark:data-[highlighted]:from-blue-900/20 dark:data-[highlighted]:to-indigo-900/20 data-[variant=destructive]:text-red-600 data-[variant=destructive]:data-[highlighted]:from-red-50 data-[variant=destructive]:data-[highlighted]:to-red-100/80 dark:data-[variant=destructive]:text-red-400 dark:data-[variant=destructive]:data-[highlighted]:from-red-900/20 dark:data-[variant=destructive]:data-[highlighted]:to-red-800/20 [&_svg:not([class*='text-'])]:text-gray-500 dark:[&_svg:not([class*='text-'])]:text-gray-400 relative flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-hidden select-none transition-all duration-150 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-slate-100/80 data-[highlighted]:text-slate-800 dark:data-[highlighted]:bg-white/10 dark:data-[highlighted]:text-slate-100 data-[variant=destructive]:text-red-600 data-[variant=destructive]:data-[highlighted]:bg-red-50/80 dark:data-[variant=destructive]:text-red-400 dark:data-[variant=destructive]:data-[highlighted]:bg-red-900/20 [&_svg:not([class*='text-'])]:text-slate-500 dark:[&_svg:not([class*='text-'])]:text-slate-400 relative flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-hidden select-none transition-colors duration-150 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -158,7 +158,7 @@ function DropdownMenuLabel({
       data-slot="dropdown-menu-label"
       data-inset={inset}
       className={cn(
-        "px-2 py-1.5 text-sm font-medium data-[inset]:pl-8",
+        "px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 data-[inset]:pl-8",
         className
       )}
       {...props}
@@ -214,7 +214,7 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[inset]:pl-8",
+        "focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-slate-100/80 data-[state=open]:text-slate-800 dark:data-[state=open]:bg-white/10 dark:data-[state=open]:text-slate-100 data-[highlighted]:bg-slate-100/80 data-[highlighted]:text-slate-800 dark:data-[highlighted]:bg-white/10 dark:data-[highlighted]:text-slate-100 flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-hidden select-none data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -233,7 +233,7 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "bg-white text-slate-900 dark:bg-gray-900 dark:text-gray-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-lg border border-slate-200/80 dark:border-slate-700/70 p-1 shadow-lg ring-1 ring-black/5 dark:ring-white/10",
+        "glass-overlay glass-float-menu bg-white/95 dark:bg-gray-900/95 backdrop-blur-md text-slate-900 dark:text-gray-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-xl border border-gray-200/60 dark:border-gray-700/60 p-1 shadow-xl",
         className
       )}
       {...props}

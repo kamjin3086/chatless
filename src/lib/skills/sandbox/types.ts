@@ -36,6 +36,11 @@ export interface ExecuteOptions {
   env?: Record<string, string>;
   /** 是否捕获输出 */
   captureOutput?: boolean;
+  /**
+   * 最后一个参数不转义、由后端按原样加引号传入（Windows 上 `cmd /c "整行"` 需要）。
+   * 见 `src/lib/shell/commandPlan.ts`。
+   */
+  verbatimLastArg?: boolean;
 }
 
 /**
@@ -54,6 +59,8 @@ export interface ExecuteResult {
   duration: number;
   /** 错误信息（如果失败） */
   error?: string;
+  /** 是否因为超时被终止（此时 stdout/stderr 是终止前的输出） */
+  timedOut?: boolean;
   /** 执行状态 */
   status: ExecutionStatus;
 }

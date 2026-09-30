@@ -2,6 +2,16 @@
  * RAG查询相关的类型定义
  */
 
+export type {
+  SourceBlock,
+  SourceBlockType,
+  SourceLocator,
+  ParsedDocument,
+  RetrievalChunk,
+  Evidence,
+  Citation,
+} from './evidenceTypes';
+
 /**
  * RAG查询参数
  */
@@ -56,6 +66,10 @@ export interface RAGQueryResult {
   answer: string;
   /** 检索到的相关片段 */
   chunks: RetrievedChunk[];
+  /** 可验证证据（v2） */
+  evidence?: import('./evidenceTypes').Evidence[];
+  /** 程序校验后的引用 */
+  citations?: import('./evidenceTypes').Citation[];
   /** 查询元数据 */
   metadata: {
     /** 查询时间戳 */
@@ -159,6 +173,13 @@ export interface RAGQueryProgress {
  * 流式RAG响应
  */
 export interface RAGStreamResponse {
-  type: 'progress' | 'chunk' | 'answer' | 'complete' | 'error';
-  data: RAGQueryProgress | RetrievedChunk | string | RAGQueryResult | Error;
+  type: 'progress' | 'chunk' | 'answer' | 'evidence' | 'complete' | 'error';
+  data:
+    | RAGQueryProgress
+    | RetrievedChunk
+    | string
+    | RAGQueryResult
+    | Error
+    | import('./evidenceTypes').Evidence[]
+    | import('./evidenceTypes').Citation[];
 } 

@@ -1,16 +1,77 @@
 "use client";
 
+import { useEffect, useRef, useState } from 'react';
 import { Palette } from 'lucide-react';
 import { ToggleSwitch } from "./ToggleSwitch";
 import { SelectField } from "./SelectField";
 import { useUiPreferences } from "@/store/uiPreferences";
-// import type { SectionIconPreset } from "./SectionIcon";
+import { toast } from "@/components/ui/sonner";
+import {
+  clearGlassWallpaperFile,
+  isWallpaperDataUrl,
+  loadGlassWallpaperUrl,
+  saveGlassWallpaper,
+} from "@/lib/glass/wallpaper";
 
 export function PersonalizationSettings() {
   const ui = useUiPreferences();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl: string | null = null;
+
+    const run = async () => {
+      if (!ui.glassWallpaperFile) {
+        setPreviewUrl(null);
+        return;
+      }
+      if (isWallpaperDataUrl(ui.glassWallpaperFile)) {
+        setPreviewUrl(ui.glassWallpaperFile);
+        return;
+      }
+      const url = await loadGlassWallpaperUrl(ui.glassWallpaperFile);
+      if (cancelled) {
+        if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+        return;
+      }
+      createdUrl = url && url.startsWith('blob:') ? url : null;
+      setPreviewUrl(url);
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [ui.glassWallpaperFile]);
+
+  const handlePickWallpaper = async (file: File | undefined) => {
+    if (!file) return;
+    setPicking(true);
+    try {
+      const stored = await saveGlassWallpaper(file);
+      ui.setGlassWallpaperFile(stored);
+      if (!ui.glassTheme) ui.setGlassTheme(true);
+      toast.success('壁纸已更新');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '设置壁纸失败';
+      toast.error(msg);
+    } finally {
+      setPicking(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleClearWallpaper = async () => {
+    await clearGlassWallpaperFile(ui.glassWallpaperFile);
+    ui.setGlassWallpaperFile(null);
+  };
 
   return (
-    <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-6 space-y-6 bg-white dark:bg-gray-900/50 shadow-sm">
+    <div className="settings-card border border-gray-100 dark:border-gray-800 rounded-2xl p-6 space-y-6 bg-white dark:bg-gray-900/50 shadow-sm">
       {/* 头部 */}
       <div className="flex items-center gap-3 pb-4 border-b border-gray-50 dark:border-gray-800">
         <Palette className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -32,6 +93,58 @@ export function PersonalizationSettings() {
            onChange={ui.setLowAnimationMode}
            tooltip="减少过渡动画和淡入淡出效果，适合性能较弱的设备"
          />
+
+         <ToggleSwitch
+           label="玻璃主题"
+           checked={ui.glassTheme}
+           onChange={ui.setGlassTheme}
+           tooltip="半透明毛玻璃面板。搭配壁纸时效果最接近沉浸式对话界面，可随时关闭"
+         />
+
+         {ui.glassTheme && (
+           <div className="flex items-center justify-between gap-4 py-1">
+             <div className="flex items-center gap-3 min-w-0">
+               <div className="w-14 h-9 rounded-md overflow-hidden border border-slate-200/70 dark:border-slate-700/60 bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+                 {previewUrl ? (
+                   // eslint-disable-next-line @next/next/no-img-element
+                   <img src={previewUrl} alt="" className="w-full h-full object-cover" />
+                 ) : (
+                   <div className="w-full h-full glass-wallpaper-fallback" />
+                 )}
+               </div>
+               <div className="min-w-0">
+                 <div className="text-xs text-slate-700 dark:text-slate-300">聊天壁纸</div>
+                 <div className="text-[10px] text-slate-400">可选。不设壁纸时使用内置渐变</div>
+               </div>
+             </div>
+             <div className="flex items-center gap-2 flex-shrink-0">
+               <input
+                 ref={fileInputRef}
+                 type="file"
+                 accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
+                 className="hidden"
+                 onChange={(e) => void handlePickWallpaper(e.target.files?.[0])}
+               />
+               <button
+                 type="button"
+                 disabled={picking}
+                 onClick={() => fileInputRef.current?.click()}
+                 className="h-7 px-2 text-xs rounded border border-slate-200/70 dark:border-slate-700/50 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+               >
+                 {picking ? '处理中…' : '选择图片'}
+               </button>
+               {ui.glassWallpaperFile && (
+                 <button
+                   type="button"
+                   onClick={() => void handleClearWallpaper()}
+                   className="h-7 px-2 text-xs rounded text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
+                 >
+                   清除
+                 </button>
+               )}
+             </div>
+           </div>
+         )}
 
          <ToggleSwitch
            label="显示设置页图标"
@@ -58,8 +171,8 @@ export function PersonalizationSettings() {
                 const { getCurrentWindow, LogicalSize } = await import('@tauri-apps/api/window');
                 const win = getCurrentWindow();
                 await win.setSize(new LogicalSize(w, h));
-                const { saveWindowState, StateFlags } = await import('@tauri-apps/plugin-window-state');
-                await saveWindowState(StateFlags.ALL);
+                const { savePersistedWindowState } = await import('@/lib/window/windowState');
+                await savePersistedWindowState();
               } catch (err) {
                 console.warn('设置窗口尺寸失败:', err);
               }
@@ -134,4 +247,4 @@ export function PersonalizationSettings() {
        </div>
     </div>
   );
-} 
+}

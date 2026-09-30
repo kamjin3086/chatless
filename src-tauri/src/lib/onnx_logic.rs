@@ -3,7 +3,7 @@ use ndarray::Array2;
 use ort::{session::Session, value::Tensor};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
-use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
+use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
 pub struct OnnxState {
   pub session: Mutex<Option<Session>>,
@@ -25,23 +25,39 @@ pub fn tokenize_batch(
   tokenizer_path: String,
   max_length: usize,
 ) -> Result<TokenizationOutput, String> {
+  tokenize_batch_core(texts, &tokenizer_path, max_length)
+}
+
+/// Production tokenisation rules, callable without Tauri state so the
+/// acceptance harness exercises the same length check and padding.
+pub fn tokenize_batch_core(
+  texts: Vec<String>,
+  tokenizer_path: &str,
+  max_length: usize,
+) -> Result<TokenizationOutput, String> {
   // Load tokenizer file
   let mut tokenizer =
-    Tokenizer::from_file(&tokenizer_path).map_err(|e| format!("Failed to load tokenizer: {e}"))?;
+    Tokenizer::from_file(tokenizer_path).map_err(|e| format!("Failed to load tokenizer: {e}"))?;
 
-  // Configure padding & truncation
+  // Validate with the real tokenizer. Silently truncating changes the text
+  // represented by a vector while the lexical/citation path keeps the full
+  // chunk, which makes retrieval evidence unreliable.
+  tokenizer.with_padding(None);
+  tokenizer.with_truncation(None).map_err(|e| e.to_string())?;
+  let lengths = tokenizer.encode_batch(texts.clone(), true)
+    .map_err(|e| format!("Tokenization failed: {e}"))?
+    .into_iter().map(|encoding| encoding.len()).collect::<Vec<_>>();
+  if let Some((index, length)) = lengths.iter().enumerate().find(|(_, length)| **length > max_length) {
+    return Err(format!("Embedding input {index} has {length} tokens, exceeding model limit {max_length}; rebuild with smaller chunks"));
+  }
+
+  // Configure padding only after every input passed the length check.
   tokenizer
     .with_padding(Some(PaddingParams {
       strategy: PaddingStrategy::BatchLongest,
       pad_to_multiple_of: Some(8),
       ..Default::default()
-    }))
-    .with_truncation(Some(TruncationParams {
-      max_length,
-      strategy: tokenizers::TruncationStrategy::LongestFirst,
-      ..Default::default()
-    }))
-    .map_err(|e| e.to_string())?;
+    }));
 
   // Encode batch
   let encodings = tokenizer
@@ -102,7 +118,18 @@ pub async fn generate_embedding(
     let session = session_guard
       .as_mut()
       .ok_or("ONNX Session not initialized")?;
+    embed_with_session(session, input)
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
 
+/// Mean-pooled, mask-weighted sentence embeddings from an initialised session.
+/// Shared by the command above and the local-model acceptance harness.
+pub fn embed_with_session(
+  session: &mut Session,
+  input: EmbeddingInput,
+) -> Result<Vec<Vec<f32>>, String> {
     // Convert to ndarray
     let batch = input.input_ids.len();
     if batch == 0 {
@@ -135,7 +162,17 @@ pub async fn generate_embedding(
       .map_err(|e| e.to_string())?;
 
     // Extract token_embeddings
-    let hidden_state = outputs["token_embeddings"]
+    // Sentence-transformer exports name this output `token_embeddings`; other
+    // BERT-family exports (for example the Chinese BGE export) use
+    // `last_hidden_state`.  Both carry the same [batch, seq, hidden] tensor.
+    let output = outputs
+      .get("token_embeddings")
+      .or_else(|| outputs.get("last_hidden_state"))
+      .ok_or_else(|| {
+        let names: Vec<String> = outputs.keys().map(|name| name.to_string()).collect();
+        format!("Unsupported model outputs {names:?}: expected token_embeddings or last_hidden_state")
+      })?;
+    let hidden_state = output
       .try_extract_array::<f32>()
       .map_err(|e| e.to_string())?;
 
@@ -175,9 +212,6 @@ pub async fn generate_embedding(
     }
 
     Ok(results)
-  })
-  .await
-  .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

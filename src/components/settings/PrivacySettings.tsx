@@ -4,10 +4,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
-import { Shield, Trash2, HardDrive, Settings2 } from "lucide-react";
+import { Shield, Trash2, HardDrive, Settings2, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Book } from "lucide-react";
-import { SQLiteVectorStore } from "@/lib/retrieval/strategies/SQLiteVectorStore";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -67,20 +66,9 @@ export function PrivacySettings() {
     try {
       const dbService = DatabaseService.getInstance();
       await dbService.initialize();
-      // 新增: 一站式清理知识库相关数据（文档、映射、知识片段）
-      if (typeof (dbService as any).clearKnowledgeData === 'function') {
-        // 新增方法 (v>=0.9.0)
-        await (dbService as any).clearKnowledgeData();
-      } else {
-        // 向后兼容旧版本：仍按旧流程执行
-        await dbService.clearAllDocuments();
-      }
+      await dbService.clearKnowledgeData();
 
-      // 同时清理向量索引
-      const store = new SQLiteVectorStore();
-      await store.clear();
-
-      toast.success("已清空知识库文档与向量索引");
+      toast.success("已清空知识库文档与索引");
     } catch (e: any) {
       toast.error(`清理失败: ${e?.message || "未知错误"}`);
     } finally {
@@ -213,12 +201,11 @@ export function PrivacySettings() {
       await db.initialize();
 
       for (const conv of data.conversations) {
-        // 导入时保持原有的重要和收藏状态，如果没有则默认为false
+        // 导入时保持原有的收藏状态，如果没有则默认为 false
         const newConv = await db.createConversation(
           conv.title || '导入对话', 
           conv.model_id || 'unknown',
           {
-            is_important: conv.is_important || false,
             is_favorite: conv.is_favorite || false
           }
         );
@@ -246,42 +233,43 @@ export function PrivacySettings() {
     <SettingsCard>
       <SettingsSectionHeader
         icon={Shield}
-        title="隐私设置"
+        title="数据与备份"
       />
 
-      {/* 导入 / 导出 备份按钮 */}
-      <div className="flex flex-wrap gap-3 mb-3">
+      <div className="flex flex-wrap gap-2">
         <input type="file" accept="application/json" hidden ref={fileInputRef} onChange={handleFileChange} />
-        <Button variant="outline" size="sm" className="flex items-center gap-1 min-w-[140px] justify-center" onClick={triggerImport} disabled={importing}>
-          <Upload className={`w-4 h-4 ${importing ? 'animate-spin' : ''}`} />
-          <span>{importing ? '导入中...' : '导入聊天备份'}</span>
+        <Button variant="outline" size="sm" className="h-7 px-2.5" onClick={triggerImport} disabled={importing}>
+          <Upload className={`w-3.5 h-3.5 ${importing ? "animate-spin" : ""}`} />
+          {importing ? "导入中..." : "导入备份"}
         </Button>
-        <Button variant="outline" size="sm" className="flex items-center gap-1 min-w-[140px] justify-center" onClick={exportChats} disabled={exporting}>
-          <DownloadIcon className={`w-4 h-4 ${exporting ? 'animate-spin' : ''}`} />
-          <span>{exporting ? '导出中...' : '导出聊天记录'}</span>
+        <Button variant="outline" size="sm" className="h-7 px-2.5" onClick={exportChats} disabled={exporting}>
+          <DownloadIcon className={`w-3.5 h-3.5 ${exporting ? "animate-spin" : ""}`} />
+          {exporting ? "导出中..." : "导出记录"}
         </Button>
       </div>
 
       <Collapsible>
         <CollapsibleTrigger asChild>
-          <Button variant="outline" size="sm" className="mb-3 flex items-center gap-1">
-            <Shield className="w-4 h-4" />
-            <span>显示/隐藏危险操作</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3 h-7 px-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 data-[state=open]:[&_svg]:rotate-180"
+          >
+            <ChevronDown className="w-3.5 h-3.5 transition-transform" />
+            危险操作
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-
-      {/* 危险操作区域 */}
-      <div className="flex flex-wrap gap-3">
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
-              className="flex items-center gap-1 min-w-[140px] justify-center"
+              className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
               <span>清空聊天记录</span>
             </Button>
           </AlertDialogTrigger>
@@ -323,11 +311,11 @@ export function PrivacySettings() {
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
-              className="flex items-center gap-1 min-w-[140px] justify-center"
+              className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10"
             >
-              <Book className="w-4 h-4" />
+              <Book className="w-3.5 h-3.5" />
               <span>清空知识库数据</span>
             </Button>
           </AlertDialogTrigger>
@@ -368,8 +356,8 @@ export function PrivacySettings() {
         {/* 清空模型缓存 */}
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center gap-1 min-w-[140px] justify-center border-destructive text-destructive hover:bg-destructive/10">
-              <HardDrive className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10">
+              <HardDrive className="w-3.5 h-3.5" />
               <span>清空模型缓存</span>
             </Button>
           </AlertDialogTrigger>
@@ -409,8 +397,8 @@ export function PrivacySettings() {
         {/* 恢复出厂设置 */}
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center gap-1 min-w-[140px] justify-center border-destructive text-destructive hover:bg-destructive/10">
-              <Settings2 className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10">
+              <Settings2 className="w-3.5 h-3.5" />
               <span>恢复出厂设置</span>
             </Button>
           </AlertDialogTrigger>
@@ -452,4 +440,4 @@ export function PrivacySettings() {
       </Collapsible>
     </SettingsCard>
   );
-} 
+}

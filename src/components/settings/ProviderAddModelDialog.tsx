@@ -80,7 +80,7 @@ export function ProviderAddModelDialog({ providerName, onAdded }: { providerName
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="secondary" className="h-6 px-2 text-[11px] border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">添加</Button>
+        <Button type="button" size="sm" variant="outline" className="h-8 px-3 text-xs rounded-lg">添加</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[720px] border-slate-200/80 dark:border-slate-700/80 shadow-lg">
         <DialogHeader className="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
@@ -124,7 +124,7 @@ export function ProviderAddModelDialog({ providerName, onAdded }: { providerName
                 </Select>
               </div>
               <div className="col-span-1 flex items-center gap-1 justify-end">
-                <Button type="button" aria-label="添加一行" variant="outline" className="h-7 w-7 rounded-md bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200/50 dark:border-blue-800/40 p-0 transition-colors" onClick={addRow}>+</Button>
+                <Button type="button" aria-label="添加一行" variant="outline" className="h-7 w-7 rounded-md p-0" onClick={addRow}>+</Button>
                 <Button type="button" aria-label="删除该行" variant="outline" className="h-7 w-7 rounded-md text-slate-500 dark:text-slate-400 border-slate-200/70 dark:border-slate-700/70 p-0 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={()=>removeRow(idx)} disabled={rows.length<=1}>−</Button>
               </div>
             </div>
@@ -132,7 +132,7 @@ export function ProviderAddModelDialog({ providerName, onAdded }: { providerName
         </div>
         <DialogFooter className="border-t border-slate-200/60 dark:border-slate-700/60 pt-3 gap-2">
           <Button variant="outline" className="h-8 px-3 text-xs border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={()=>setOpen(false)} disabled={saving}>取消</Button>
-          <Button className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white transition-colors" onClick={submit} disabled={saving || !canSubmit}>{saving? '保存中…' : '批量添加/更新'}</Button>
+          <Button className="h-8 px-3 text-xs" onClick={submit} disabled={saving || !canSubmit}>{saving? '保存中…' : '批量添加/更新'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

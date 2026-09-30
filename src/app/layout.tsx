@@ -9,9 +9,23 @@ import '@/commands/defaultCommands';
 import { useEffect, useRef } from "react";
 import { useGlobalFontSize } from "@/hooks/useGlobalFontSize";
 import { useUiPreferences } from "@/store/uiPreferences";
+import { useLocaleStore } from "@/store/localeStore";
+import { getHtmlLang } from "@/i18n";
 import { listen } from '@tauri-apps/api/event';
 import { useRouter } from "next/navigation";
 import { preloadInitialLogos } from '@/lib/utils/logoPreloader';
+import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
+import { isTauriEnvironment } from '@/lib/utils/environment';
+
+// The custom title bar is a platform capability, not a user setting, so the
+// class has to exist before the first paint (waiting for an effect makes the
+// title bar jump).  Applying it while the client bundle is evaluated means
+// <html> carries a class the server could not render; the root element below
+// therefore opts out of hydration checking for its own attributes, which is
+// what the class and the storage-driven locale need.
+if (typeof window !== 'undefined' && isTauriEnvironment()) {
+  document.documentElement.classList.add('custom-titlebar');
+}
 
 // 动态导入系统托盘管理器
 const initializeTray = async () => {
@@ -96,6 +110,7 @@ if (process.env.NODE_ENV === 'development') {
   import('@/lib/services/documentSync').then(() => {
     // 文档同步服务已加载
   }).catch(console.error);
+
   }, 1000); // 延迟1秒加载，让主界面先渲染
 }
 
@@ -157,9 +172,15 @@ export default function RootLayout({
 
   // 订阅 UI 偏好
   const { initialized, simpleMode, lowAnimationMode, sidebarWidth, sidebarIconSize } = useUiPreferences();
+  const { locale, initialized: localeInitialized } = useLocaleStore();
   
   // 获取 Next.js 路由实例
   const router = useRouter();
+
+  useEffect(() => {
+    if (!localeInitialized) return;
+    document.documentElement.lang = getHtmlLang(locale);
+  }, [locale, localeInitialized]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -212,9 +233,13 @@ export default function RootLayout({
     }
   }, [initialized, simpleMode, lowAnimationMode, sidebarWidth, sidebarIconSize]);
 
+  // suppressHydrationWarning: the client adds the title-bar class before
+  // hydration and the locale store applies the saved language on load, so the
+  // root element's attributes are intentionally client-first.
   return (
-    <html lang="zh-CN" className="h-full">
+    <html lang={getHtmlLang(locale)} className="h-full" suppressHydrationWarning>
       <body className={`${inter.variable} h-full bg-background text-foreground antialiased`}>
+        <WindowTitleBar />
         <TauriApp>
           {children}
         </TauriApp>

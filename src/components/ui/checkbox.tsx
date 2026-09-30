@@ -12,21 +12,22 @@ const Checkbox = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CheckboxPrimitive.Root
     ref={ref}
+    data-slot="checkbox"
     className={cn(
-      "relative inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border border-gray-300 bg-white cursor-pointer transition-colors",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-2 ring-offset-white",
+      "relative inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border border-slate-300/80 bg-white/60 dark:border-slate-600/60 dark:bg-white/8 cursor-pointer transition-colors",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30 focus-visible:ring-offset-2 ring-offset-white dark:ring-offset-slate-900",
       "disabled:cursor-not-allowed disabled:opacity-60",
       className
     )}
     {...props}
   >
-    {/* 选中/半选中时：用指示器铺满背景，避免 data-state 变体兼容性问题 */}
     <CheckboxPrimitive.Indicator
+      data-slot="checkbox-indicator"
       className={cn(
-        "absolute inset-0 rounded-[3px] bg-blue-600 text-white flex items-center justify-center"
+        "absolute inset-0 rounded-[3px] glass-checkbox-on bg-sky-500/85 dark:bg-sky-400/75 text-white flex items-center justify-center"
       )}
     >
-      <Check className="h-3.5 w-3.5" />
+      <Check className="h-3 w-3" strokeWidth={2.5} />
     </CheckboxPrimitive.Indicator>
   </CheckboxPrimitive.Root>
 ))

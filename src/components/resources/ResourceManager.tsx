@@ -476,7 +476,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
   }, [documents, showIndexedOnly, sortOption]);
   
   return (
-    <div className="h-full flex flex-col bg-white/95 dark:bg-slate-900/95">
+    <div className="h-full flex flex-col bg-white/95 dark:bg-slate-900/95 glass-surface">
       {/* 拖放上传卡片 */}
       <div className="p-4">
         <ResourceUploader onUploadSuccess={handleUploadSuccess} displayType="dropzone" />
@@ -618,10 +618,10 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="输入备注内容..."
-              className="min-h-[120px] rounded-lg border-slate-200 dark:border-slate-700 focus:border-blue-400 dark:focus:border-blue-500 transition-colors"
+              className="min-h-[120px]"
             />
           </div>
-          <DialogFooter className="border-t border-slate-100/80 dark:border-slate-800/60 pt-4 bg-gradient-to-t from-slate-50/30 to-transparent dark:from-slate-900/20">
+          <DialogFooter className="border-t border-slate-200/40 dark:border-slate-700/40 pt-4 glass-dialog-footer">
             <Button variant="outline" onClick={closeNoteDialog} className="rounded-lg">取消</Button>
             <Button onClick={saveNote} className="rounded-lg shadow-sm">保存</Button>
           </DialogFooter>

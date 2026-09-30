@@ -1,25 +1,25 @@
 // 调试期间保留有限 console，勿全局禁用 no-console
-// NOTE: 由于在聊天流程中集成 RAG 流式逻辑，临时超出 500 行限制。
-// 后续可提取为专用 Hook 或工具文件以符合文件规模规范。
+// Conversation actions delegate generation to the unified Agent runtime.
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
+import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useChatStore } from "@/store/chatStore";
-import { cancelStream, type Message as LlmMessage, StreamCallbacks } from '@/lib/llm';
-import { ChatGateway } from '@/lib/chat/ChatGateway';
+import { type Message as LlmMessage } from '@/lib/llm';
 import { HistoryBuilder } from '@/lib/chat/HistoryBuilder';
 import type { Message, Conversation } from "@/types/chat";
 import { exportConversationMarkdown } from '@/lib/chat/actions/download';
 // import { retryAssistantMessage } from '@/lib/chat/actions/retry';
-import { runRagFlow } from '@/lib/chat/actions/ragFlow';
-import { MessageAutoSaver } from '@/lib/chat/MessageAutoSaver';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { composeChatOptions } from '@/lib/chat/OptionComposer';
 import { usePromptStore } from '@/store/promptStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { performanceMonitor } from '@/lib/performance/PerformanceMonitor';
-import { StreamOrchestrator } from '@/lib/chat/stream';
+import {
+  startIdleGenerationWatch,
+  type IdleGenerationWatchHandle,
+} from '@/lib/chat/idleGenerationWatch';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { AgentLoopRunner } from '@/lib/mcp/agentLoop';
 import { useAuthorizationStore } from '@/store/authorizationStore';
@@ -38,7 +38,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   const addMessage = useChatStore((state) => state.addMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
   const deleteMessage = useChatStore((state) => state.deleteMessage);
-  const updateMessageContentInMemory = useChatStore((state) => state.updateMessageContentInMemory);
   const updateConversation = useChatStore((state) => state.updateConversation);
   const setInputDraft = useChatStore((s)=>s.setInputDraft);
   const notifyStreamStart = useChatStore((s)=>s.notifyStreamStart);
@@ -62,35 +61,19 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
   // MCP 工具递归计数已迁移到 streamToolMiddleware
 
-  const [generationTimeout, setGenerationTimeout] = useState<NodeJS.Timeout | null>(null);
-  const lastActivityTimeRef = useRef<number>(Date.now());
   const [isStale, setIsStale] = useState(false);
+  const lastActivityTimeRef = useRef<number>(Date.now());
   
-  // isGenerating 只代表“LLM SSE 正在流式输出”；工具阶段（running/pending_auth）也应视为“agent 正在运行”
-  const hasBlockingTool = useChatStore((state) => {
-    try {
-      const cid = state.currentConversationId;
-      const conv: any = cid ? state.conversations.find((c: any) => c.id === cid) : null;
-      const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        const m: any = msgs[i];
-        if (!m || m.role !== 'assistant') continue;
-        // 关键：不要依赖 message.status === 'loading'。
-        // 在某些残留/恢复会话或中途异常场景，message 可能不是 loading，但工具卡仍在 running/pending_auth。
-        const rawSegs: any[] = Array.isArray(m.segments) ? m.segments : [];
-        const vmItems: any[] = Array.isArray(m.segments_vm?.items) ? m.segments_vm.items : [];
-        const segs = rawSegs.length > 0 ? rawSegs : vmItems;
-        for (const s of segs) {
-          if (s?.kind === 'toolCard' && (s.status === 'running' || s.status === 'pending_auth')) return true;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return false;
+  // 运行状态来自 AgentRunState；UI 不再扫描工具卡片推断是否仍在执行。
+  const agentRunActive = useChatStore((state) => {
+    const cid = state.currentConversationId;
+    if (!cid) return false;
+    const conv = state.conversations.find((c) => c.id === cid);
+    const assistant = [...(conv?.messages || [])].reverse().find((m) => m.role === 'assistant');
+    return Boolean(assistant?.id && state.agentRuns?.[assistant.id]?.running);
   });
 
-  const isLoading = (isGenerating && !isStale) || hasBlockingTool;
+  const isLoading = (isGenerating && !isStale) || agentRunActive;
 
   // 优化的流式更新状态管理
   const currentContentRef = useRef<string>('');
@@ -109,9 +92,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     pendingUpdate: false
   });
   
-  // 全局计时器引用（未使用，移除以减噪）
-  const genTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const autoSaverRef = useRef<MessageAutoSaver | null>(null);
+  const idleWatchRef = useRef<IdleGenerationWatchHandle | null>(null);
   
   // 添加内容变化检测变量
   const lastSavedContentRef = useRef('');
@@ -120,14 +101,15 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   const debouncedTokenUpdateRef = useRef<NodeJS.Timeout | null>(null);
 
   // stop 二次确认：第一次 stop 停生成/链路；短时间内再次 stop 则尝试强制取消正在运行的工具
-  const stopArmRef = useRef<{ messageId: string; armedAt: number } | null>(null);
+  const [stopGenerationHint, setStopGenerationHint] = useState<string | null>(null);
 
   const navigateToSettings = useCallback((tab: string = 'localModels') => {
     router.push(`/settings?tab=${tab}`);
   }, [router]);
 
   // 将错误信息压缩为短文本，避免右下角提示过长
-  // 注意：目前新架构中 onError 由 StreamOrchestrator 统一处理，此函数暂时保留供重试等场景使用
+  // onError is handled by StreamOrchestrator; this helper remains for retry
+  // and provider setup paths.
   // const _briefErrorText = useCallback((err: unknown, maxLen: number = 180): string => trimToastDescription(err, maxLen) || '', []);
 
   const checkApiKeyValidity = useCallback(async (providerName: string, modelId: string): Promise<boolean> => {
@@ -255,88 +237,19 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   ): Promise<LlmMessage[]> => {
     const hb = new HistoryBuilder();
     
-    // 0. 注入当前时间（永远置顶），帮助模型理解“今天/最新/现在”等时间语义，并提升实时信息查询准确性
-    try {
-      const wsMod: any = await import('@/store/webSearchStore').catch(() => null);
-      const webSearchEnabled = !!wsMod?.useWebSearchStore?.getState?.().isWebSearchEnabled;
-      const { buildTimeContextMessage, isTimeRelatedQuery } = await import('@/lib/prompts/TimeContext');
-      const includeInSearch = webSearchEnabled || isTimeRelatedQuery(userContent);
-      const timeMsg = buildTimeContextMessage(includeInSearch);
-      if (timeMsg && timeMsg.trim()) hb.addSystem(timeMsg);
-
-    } catch { /* ignore */ }
-
-    // Chat mode performs web search before calling the model. This keeps search
-    // usable with OpenAI-compatible endpoints that reject tools/tool_choice.
-    try {
-      const wsMod = await import('@/store/webSearchStore');
-      const cfg = wsMod.useWebSearchStore.getState();
-      const conv = useChatStore.getState().conversations.find((c: any) => c.id === conversationId);
-      const toolMode = (conv?.tool_mode || (useChatStore.getState() as any).sessionToolMode || 'chat') as string;
-      if (cfg.isWebSearchEnabled && toolMode === 'chat' && userContent.trim()) {
-        const searchProvider = cfg.getConversationProvider(conversationId);
-        const { getProviderCredentials, isMissingRequiredCredentials } = await import('@/lib/websearch/registry');
-        const keys = {
-          apiKeyGoogle: cfg.apiKeyGoogle, cseIdGoogle: cfg.cseIdGoogle,
-          apiKeyBing: cfg.apiKeyBing, apiKeyOllama: cfg.apiKeyOllama,
-          apiKeyTavily: cfg.apiKeyTavily, apiKeyBrave: cfg.apiKeyBrave,
-          searxngBaseUrl: cfg.searxngBaseUrl,
-        };
-        if (isMissingRequiredCredentials(searchProvider, keys)) {
-          hb.addSystem(`网络搜索未执行：${searchProvider} 的必要配置不完整。请提醒用户检查网络搜索设置。`);
-        } else {
-          const { apiKey, cseId } = getProviderCredentials(searchProvider, keys);
-          const { buildSearchRequest } = await import('@/lib/websearch/request');
-          const { invoke } = await import('@tauri-apps/api/core');
-          const request = buildSearchRequest(cfg, searchProvider, userContent, apiKey, cseId);
-          const results = await invoke<Array<{ source_title: string; snippet: string; url: string }>>(
-            'native_web_search', { request }
-          );
-          const sources = results.map((item, index) =>
-            `[${index + 1}] ${item.source_title}\nURL: ${item.url}\n摘要: ${item.snippet}`
-          ).join('\n\n');
-          hb.addSystem(
-            `以下是应用刚刚通过 ${searchProvider} 获取的网络搜索结果。请基于这些结果回答，并用对应 URL 标注来源；不要虚构未出现的信息。\n\n${sources}`
-          );
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      hb.addSystem(`网络搜索失败：${message}。请明确告知用户搜索失败，不要假装已获得实时结果。`);
-    }
-    
-    // 1. 添加系统提示词
-    try {
-      const conv = useChatStore.getState().conversations.find((c: any) => c.id === conversationId);
-      const applied = conv?.system_prompt_applied;
-      if (applied?.promptId) {
-        const prompt = usePromptStore.getState().prompts.find((p: any) => p.id === applied.promptId);
-        if (prompt) {
-          const rendered = renderPromptContent(prompt.content, applied.variableValues);
-          if (rendered && rendered.trim()) hb.addSystem(rendered);
-        }
-      }
-      
-      // 2. 添加MCP系统注入
-      try {
-        const { buildMcpSystemInjections } = await import('@/lib/mcp/promptInjector');
-        // 传递 provider 和 model 以正确判断工具调用能力
-        const injection = await buildMcpSystemInjections(userContent, conversationId, provider, model);
-        for (const m of injection.systemMessages) {
-          const c = String((m as any).content || '');
-          // 避免重复注入时间（因为我们已经在顶部注入了）
-          if (c.startsWith('【当前时间】') || c.startsWith('当前时间：')) continue;
-          hb.addSystem(c);
-        }
-      } catch { /* 忽略MCP注入失败 */ }
-    } catch { /* 忽略系统提示构建失败 */ }
+    // No system text is added here.  The prompt composer owns the single system
+    // message (time, user prompt, environment, capabilities), so the history
+    // stays free of duplicated or per-turn system blocks.
+    //
+    // Web search is a native tool in the unified Agent runtime: no hidden
+    // pre-search happens here either, so the model stays in charge.
     
     // 3. 处理历史消息
     if (messages && messages.length > 0) {
       // 如果指定了excludeMessagesAfterIndex，只取该索引之前的消息
       const messagesToUse = options?.excludeMessagesAfterIndex !== undefined
         ? messages.slice(0, options.excludeMessagesAfterIndex)
-        : messages.slice(-10); // 默认只取最近10条
+        : messages;
       
       // 对于有版本的消息，只使用每个版本组的最新版本
       const { getLatestVersionMessages } = await import('@/lib/chat/MessageVersionHelper');
@@ -358,6 +271,11 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     return hb.take();
   }, []);
 
+  const stopGenerationIdleWatch = useCallback(() => {
+    idleWatchRef.current?.stop();
+    idleWatchRef.current = null;
+  }, []);
+
   const handleSendMessage = useCallback(async (
     content: string, 
     documentData?: { 
@@ -368,10 +286,47 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         summary: string 
       }; 
       contextData: string 
+      sourceContent?: string
+      sourceBytes?: Uint8Array
     },
     knowledgeBase?: { id: string; name: string },
-    options?: { conversation?: Conversation, conversationId?: string, images?: string[] }
+    options?: { conversation?: Conversation, conversationId?: string, images?: string[], planOnly?: boolean }
   ) => {
+    // 运行中输入是当前任务的补充，而不是启动竞争的第二个循环。
+    const steeringConversationId = options?.conversationId || currentConversationId;
+    if (steeringConversationId) {
+      const state = useChatStore.getState();
+      const activeConversation = state.conversations.find((c) => c.id === steeringConversationId);
+      const activeRunId = Object.entries(state.agentRuns || {})
+        .find(([, run]) => run.running && run.conversationId === steeringConversationId)?.[0];
+      const activeAssistant = activeRunId
+        ? { id: activeRunId }
+        : [...(activeConversation?.messages || [])]
+          .reverse()
+          .find((message: any) => message?.role === 'assistant' && message?.status === 'loading');
+      const steeringContent = documentData?.contextData
+        ? `${content.trim()}\n\n[补充资料]\n${documentData.contextData.slice(0, 12000)}`.trim()
+        : content;
+      let attachmentDocumentIds: string[] | undefined;
+      if (activeAssistant?.id && documentData?.sourceBytes?.length) {
+        const { attachDocumentToConversation } = await import('@/lib/documents/conversationDocumentService');
+        const attached = await attachDocumentToConversation({
+          conversationId: steeringConversationId,
+          name: documentData.documentReference.fileName,
+          bytes: documentData.sourceBytes,
+        });
+        attachmentDocumentIds = [attached.documentId];
+      }
+      if (activeAssistant?.id && await AgentLoopRunner.steer(activeAssistant.id, {
+        text: steeringContent,
+        images: options?.images,
+        attachmentDocumentIds,
+      })) {
+        toast.info('补充已排队', { description: '当前步骤完成后交给模型处理。' });
+        return;
+      }
+    }
+
     const modelToUse = selectedModelId;
     if (!modelToUse) {
       toast.error('请先选择一个AI模型', {
@@ -463,6 +418,16 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       knowledge_base_reference: knowledgeBase,
       images: options?.images
     };
+    let attachmentDocumentIds: string[] | undefined;
+    if (documentData?.sourceBytes?.length) {
+      const { attachDocumentToConversation } = await import('@/lib/documents/conversationDocumentService');
+      const attached = await attachDocumentToConversation({
+        conversationId: finalConversationId,
+        name: documentData.documentReference.fileName,
+        bytes: documentData.sourceBytes,
+      });
+      attachmentDocumentIds = [attached.documentId];
+    }
     await addMessage(newMessage);
 
     // 标题生成改为在首次 AI 回复完成后触发，避免并发与限流压力。
@@ -482,8 +447,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
     const thinking_start_time = Date.now();
     const assistantMessageId = uuidv4();
-    // 为本次生成定义一个“流实例ID”，并在回调中校验，避免并发/二次流导致的串写
-    const streamInstanceId = uuidv4();
     const assistantMessage: Message = {
       id: assistantMessageId,
       conversation_id: finalConversationId,
@@ -510,23 +473,20 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       }
     } catch { /* 若校验不可用则继续，让 Provider 触发 onError */ }
 
-    // 如果选择了知识库，则优先走 RAG 流程
-    if (knowledgeBase) {
-      const handled = await runRagFlow({
-        query: content,
-        knowledgeBaseId: knowledgeBase.id,
-        assistantMessageId,
-        thinkingStartTime: thinking_start_time,
-        conversationId: finalConversationId,
-        currentContentRef,
-        updateMessage,
-        updateMessageContentInMemory,
-        setTokenCount,
-        modelId: modelToUse,
-        provider: effectiveProvider,
-        apiKey: undefined, // API密钥会从设置中自动获取
-      });
-      if (handled) return;
+    if (finalConversationId) {
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        if (knowledgeBase) {
+          useConversationAttachmentStore.getState().setKnowledgeBase(finalConversationId, {
+            id: knowledgeBase.id,
+            name: knowledgeBase.name,
+          });
+        } else {
+          useConversationAttachmentStore.getState().clearKnowledgeBase(finalConversationId);
+        }
+      } catch {
+        /* noop */
+      }
     }
 
     // 构建历史消息（含系统提示词 + MCP 上下文【混合模式】）
@@ -544,106 +504,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
     // 调试信息已移除，避免控制台噪音
 
-    // agent/chat 分流：agent 使用 while(true) AgentLoop；chat 使用单轮 StreamOrchestrator
-    const toolModeForRun = (() => {
-      try {
-        const st = useChatStore.getState() as any;
-        const conv = (st.conversations || []).find((c: any) => c && c.id === finalConversationId);
-        return ((conv?.tool_mode as ('chat' | 'agent') | undefined) || st.sessionToolMode || 'chat') as 'chat' | 'agent';
-      } catch {
-        return 'chat';
-      }
-    })();
-
-    let streamCallbacks: StreamCallbacks | null = null;
-    if (toolModeForRun !== 'agent') {
-      // 使用新的 StreamOrchestrator 架构（chat 模式）
-      const orchestrator = new StreamOrchestrator({
-        messageId: assistantMessageId,
-        conversationId: finalConversationId,
-        provider: effectiveProvider,
-        model: modelToUse,
-        originalUserContent: content,
-        historyForLlm: historyForLlm as any,
-        onUIUpdate: () => {},
-        onError: (error) => {
-          console.error('[StreamOrchestrator] 错误:', error);
-          toast.error('流式处理错误', { description: error.message });
-        },
-      });
-
-      streamCallbacks = orchestrator.createCallbacks();
-
-      // 包装 onStart 以保留现有逻辑
-      const originalOnStart = streamCallbacks.onStart;
-      streamCallbacks.onStart = () => {
-        originalOnStart?.();
-
-        // 通知 UI
-        try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
-
-        // 超时监控（chat 模式单轮）
-        if (genTimeoutRef.current) clearTimeout(genTimeoutRef.current);
-        genTimeoutRef.current = setInterval(() => {
-          if (Date.now() - lastActivityTimeRef.current > 120000) {
-            handleStopGeneration();
-            void updateMessage(assistantMessageId, {
-              status: 'error',
-              content: '响应超时',
-              thinking_duration: Math.floor((Date.now() - thinking_start_time) / 1000)
-            });
-            toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
-            if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
-          }
-        }, 5000);
-        setGenerationTimeout(genTimeoutRef.current);
-
-        // Token 计数重置
-        setTokenCount(0);
-        batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
-      };
-
-      // 包装 onEvent 以保留性能监控
-      const originalOnEvent = streamCallbacks.onEvent;
-      streamCallbacks.onEvent = (event: any) => {
-        if ((streamCallbacks as any).__instanceId !== streamInstanceId) return;
-        lastActivityTimeRef.current = Date.now();
-
-        const perfId = `onEvent_${event?.type}`;
-        performanceMonitor.start(perfId, { type: event?.type, messageId: assistantMessageId });
-        try {
-          originalOnEvent?.(event);
-        } finally {
-          performanceMonitor.end(perfId);
-        }
-      };
-
-      // 包装 onComplete
-      const originalOnComplete = streamCallbacks.onComplete;
-      streamCallbacks.onComplete = async () => {
-        try {
-          await originalOnComplete?.();
-        } finally {
-          if (genTimeoutRef.current) {
-            clearInterval(genTimeoutRef.current);
-            setGenerationTimeout(null);
-          }
-        }
-      };
-
-      // 包装 onError
-      const originalOnError = streamCallbacks.onError;
-      streamCallbacks.onError = (error: Error) => {
-        originalOnError?.(error);
-        if (genTimeoutRef.current) {
-          clearInterval(genTimeoutRef.current);
-          setGenerationTimeout(null);
-        }
-      };
-
-      // 标记当前回调归属的流实例
-      (streamCallbacks as any).__instanceId = streamInstanceId;
-    }
+    let sendErrorNotified = false;
 
     if (modelToUse) {
       // 参数优先级：会话参数（可覆盖/可显式禁用） > 模型级参数 > 系统默认
@@ -681,38 +542,34 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
         // 4) 合并，确保会话级覆盖模型级
         baseOptions = { ...filteredModelOpts, ...sessionOpts };
+        // 输出预算：关闭 / 手动 / 自动三态在这里收敛，窗口取用户填写与服务商上报的较小值。
+        baseOptions = ModelParametersService.applyOutputBudget(
+          baseOptions,
+          ModelParametersService.resolveBudgetParameters(modelParams, sessionParameters),
+        );
 
         const composed = await composeChatOptions(effectiveProvider, modelToUse, baseOptions, currentConversationId || null, content);
 
-        if (toolModeForRun === 'agent') {
-          try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
-          await AgentLoopRunner.run({
+        try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
+        await AgentLoopRunner.run({
             assistantMessageId,
             conversationId: finalConversationId,
             provider: effectiveProvider,
             model: modelToUse,
             historyForLlm: historyForLlm as any,
             originalUserContent: content,
+            input: { text: content, images: options?.images, attachmentDocumentIds },
             options: composed,
+            planOnly: options?.planOnly,
             runtimeHooks: {
               onAgentStart: () => {
-                if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
-                genTimeoutRef.current = setInterval(() => {
-                  if (Date.now() - lastActivityTimeRef.current > 120000) {
-                    handleStopGeneration();
-                    void updateMessage(assistantMessageId, {
-                      status: 'error',
-                      content: '响应超时',
-                      thinking_duration: Math.floor((Date.now() - thinking_start_time) / 1000),
-                    });
-                    toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
-                    if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
-                  }
-                }, 5000);
-                setGenerationTimeout(genTimeoutRef.current);
-
+                lastActivityTimeRef.current = Date.now();
                 setTokenCount(0);
                 batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
+              },
+              onStreamError: () => {
+                sendErrorNotified = true;
+                stopGenerationIdleWatch();
               },
               onStreamEvent: (event: any) => {
                 lastActivityTimeRef.current = Date.now();
@@ -735,28 +592,18 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
                   performanceMonitor.end(perfId);
                 }
               },
-              onAgentEnd: () => {
-                if (genTimeoutRef.current) {
-                  clearInterval(genTimeoutRef.current);
-                  setGenerationTimeout(null);
-                }
-              },
             },
-          });
-          return;
-        }
+        });
+        return;
 
-        const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
-        if (!streamCallbacks) throw new Error('streamCallbacks is not initialized');
-        await gateway.stream(historyForLlm, streamCallbacks as any);
       } catch (err) {
+        if (!sendErrorNotified) {
+          showSendErrorToast(err, { providerName: effectiveProvider });
+        }
         const msg = err instanceof Error ? err.message : String(err);
         void updateMessage(assistantMessageId, {
           status: 'error',
           content: `发送失败：${msg}`,
-        });
-        toast.error('发送失败', {
-          description: msg,
         });
         return;
       }
@@ -787,23 +634,10 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   }, [selectedModelId, currentProviderName, handleSendMessage, checkApiKeyValidity, navigateToSettings]);
 
   const handleStopGeneration = useCallback(() => {
-    try {
-      cancelStream();
-    } catch {
-      // 取消流失败，忽略
-    }
-    
-    // 停止并尽量落盘当前内容，防止丢尾部
-    autoSaverRef.current?.stop();
-    void autoSaverRef.current?.flush().catch(() => {}).finally(() => {
-      autoSaverRef.current = null;
-    });
-
-    // 清理所有定时器
-    if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
+    setStopGenerationHint('正在停止生成…');
+    stopGenerationIdleWatch();
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
     if (debouncedTokenUpdateRef.current) clearTimeout(debouncedTokenUpdateRef.current);
-    setGenerationTimeout(null);
     
     // 不清空 currentContentRef，保留已生成文本；也不重置 tokenCount，让用户看到该次统计
     
@@ -814,14 +648,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         .pop();
       
       if (lastAssistantMessage) {
-        // 二次点击 stop：尝试强制取消正在执行的工具（best-effort）
-        const now = Date.now();
-        const armed = stopArmRef.current;
-        const secondClick =
-          !!armed &&
-          armed.messageId === lastAssistantMessage.id &&
-          now - armed.armedAt < 6000;
-
         // 停止不仅要停 SSE，还要停止整个 agent loop（阻止后续 follow-up / tool 链路继续推进）
         try {
           ToolCallCoordinator.getInstance().cancelMessage(lastAssistantMessage.id);
@@ -884,68 +710,10 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
           // ignore
         }
 
-        // 若有运行中的 shell 工具，首次 stop 仅“上锁”，提示二次确认；二次 stop 才真正 cancel
-        try {
-          const st = useChatStore.getState();
-          const conv = st.conversations.find((c) => c.id === currentConversationId);
-          const msg: any = conv?.messages.find((m) => m.id === lastAssistantMessage.id);
-          const segs: any[] = Array.isArray(msg?.segments) ? msg.segments : [];
-          const runningShellCards = segs.filter(
-            (s) =>
-              s?.kind === 'toolCard' &&
-              s?.server === 'shell_executor' &&
-              s?.id &&
-              s?.status === 'running'
-          );
-
-          if (runningShellCards.length > 0) {
-            if (!secondClick) {
-              stopArmRef.current = { messageId: lastAssistantMessage.id, armedAt: now };
-              toast.info('已停止生成', {
-                description: '检测到有正在执行的命令。若需强制中止工具执行，请在 6 秒内再次点击停止按钮。',
-              });
-            } else {
-              stopArmRef.current = null;
-              void (async () => {
-                try {
-                  const sandbox = getProcessSandbox();
-                  for (const card of runningShellCards) {
-                    const executionId = `shell:${lastAssistantMessage.id}:${String(card.id)}`;
-                    try {
-                      await sandbox.cancel(executionId);
-                    } catch {
-                      // ignore
-                    }
-                    try {
-                      st.dispatchMessageAction(lastAssistantMessage.id, {
-                        type: 'TOOL_RESULT',
-                        server: String(card.server),
-                        tool: String(card.tool),
-                        ok: false,
-                        errorMessage: '用户中止',
-                        cardId: String(card.id),
-                      } as any);
-                    } catch {
-                      // ignore
-                    }
-                  }
-                } catch {
-                  // ignore
-                }
-              })();
-              toast.info('已请求中止工具', { description: '已发送取消请求（best-effort）。' });
-            }
-          } else {
-            stopArmRef.current = null;
-          }
-        } catch {
-          stopArmRef.current = null;
-        }
-
-        const thinking_duration = lastAssistantMessage.thinking_start_time 
+        const thinking_duration = lastAssistantMessage.thinking_start_time
           ? Math.floor((Date.now() - lastAssistantMessage.thinking_start_time) / 1000)
           : 0;
-        
+
         // 若用户主动停止且思考栏仍在计时，手动发出 THINK_END 以终止计时显示
         try {
           const st = useChatStore.getState();
@@ -965,16 +733,73 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         });
       }
     }
-  }, [currentConversation, updateMessage]);
+  }, [currentConversation, updateMessage, currentConversationId]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setStopGenerationHint((prev) => {
+        if (prev === '正在停止生成…') return null;
+        return prev;
+      });
+    }
+  }, [isLoading]);
 
   // 清理函数
   useEffect(() => {
     return () => {
-      if (genTimeoutRef.current) clearInterval(genTimeoutRef.current);
+      idleWatchRef.current?.stop();
       if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
       if (debouncedTokenUpdateRef.current) clearTimeout(debouncedTokenUpdateRef.current);
     };
   }, []);
+
+  // 统一空闲超时：isGenerating 期间由 IdleWatch 监控；工具 running 时不误杀
+  useEffect(() => {
+    if (!isGenerating) {
+      setIsStale(false);
+      stopGenerationIdleWatch();
+      return;
+    }
+
+    setIsStale(false);
+    lastActivityTimeRef.current = Date.now();
+
+    const st = useChatStore.getState();
+    const cid = st.currentConversationId;
+    if (!cid) return;
+
+    stopGenerationIdleWatch();
+    idleWatchRef.current = startIdleGenerationWatch({
+      conversationId: cid,
+      getLastActivityMs: () => lastActivityTimeRef.current,
+      onIdle: () => {
+        setIsStale(true);
+        handleStopGeneration();
+        const currentState = useChatStore.getState();
+        const current = currentState.conversations.find((c) => c.id === currentState.currentConversationId);
+        const loadingMessage = current?.messages?.find((m) => m.status === 'loading');
+        if (loadingMessage) {
+          const content = currentContentRef.current || '';
+          void currentState.finalizeStreamedMessage(
+            loadingMessage.id,
+            'aborted',
+            content,
+            loadingMessage.model,
+          ).catch(() => {});
+          void updateMessage(loadingMessage.id, {
+            status: 'error',
+            content: content.trim() || '响应超时',
+          });
+        }
+        toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
+        stopGenerationIdleWatch();
+      },
+    });
+
+    return () => {
+      stopGenerationIdleWatch();
+    };
+  }, [isGenerating, handleStopGeneration, updateMessage, stopGenerationIdleWatch]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     if (currentConversationId && newTitle && newTitle.trim() !== '') {
@@ -996,6 +821,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     if (idx < 0) return;
     const target = conv.messages[idx];
     if (target.role !== 'assistant') return;
+    const continueStoppedRun = target.status === 'aborted' || String(target.content || '').includes('[用户停止了生成]');
     // 找前一个 user
     let userIdx = idx - 1;
     while (userIdx >= 0 && conv.messages[userIdx].role !== 'user') userIdx--;
@@ -1061,14 +887,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     );
 
 
-    // 重新生成时增加轻微扰动，降低“逐字复读”的概率（不影响工具调用链路）
-    try {
-      (historyForLlm as any).unshift({
-        role: 'system',
-        content: `【重试生成】这是同一问题的重新生成版本。请避免复用上一版本的句子组织方式与措辞；如果内容相同也要换一种表达方式。\nnonce=${Date.now()}`,
-      });
-    } catch { /* noop */ }
-
     const apiKeyValid = await checkApiKeyValidity(effectiveProvider, modelToUse);
     if (!apiKeyValid) {
       toast.error('API密钥无效', { description: '请前往设置页面配置有效的API密钥' });
@@ -1077,120 +895,90 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       return;
     }
 
-    // —— 使用新架构：StreamOrchestrator（带早期抑制阀与GPT‑OSS工具指令识别） ——
-    const thinking_start_time = Date.now();
-    const streamInstanceId = uuidv4();
-    const orchestrator = new StreamOrchestrator({
-      messageId: newAssistantId,
-      conversationId: conv.id,
-      provider: effectiveProvider,
-      model: modelToUse,
-      originalUserContent: userMsg.content,
-      historyForLlm: historyForLlm as any,
-      onUIUpdate: () => {},
-      onError: (error) => {
-        autoSaverRef.current?.flush();
-        toast.error('流式处理错误', { description: error.message });
-      },
-    });
-    const streamCallbacks: StreamCallbacks = orchestrator.createCallbacks();
-    const originalOnStart = streamCallbacks.onStart;
-    streamCallbacks.onStart = () => {
-      originalOnStart?.();
-      // 重置引用与自动保存
-      currentContentRef.current = '';
-      pendingContentRef.current = '';
-      autoSaverRef.current = new MessageAutoSaver(async (latest) => {
-        await updateMessage(newAssistantId, {
-          content: latest,
-          thinking_start_time,
-        });
-      }, 1000);
-      setTokenCount(0);
-      batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
-    };
-    const originalOnEvent = streamCallbacks.onEvent;
-    streamCallbacks.onEvent = (event: any) => {
-      if ((streamCallbacks as any).__instanceId !== streamInstanceId) return;
-      lastActivityTimeRef.current = Date.now();
-      const perfId = `onEvent_retry_${event?.type}`;
-      performanceMonitor.start(perfId, { type: event?.type, mode: 'orchestrator-retry', messageId: newAssistantId });
-      try {
-        originalOnEvent?.(event);
-      } finally {
-        performanceMonitor.end(perfId);
-      }
-    };
-    const originalOnComplete = streamCallbacks.onComplete;
-    streamCallbacks.onComplete = async () => {
-      try {
-        await originalOnComplete?.();
-      } finally {
-        autoSaverRef.current?.flush();
-        setTokenCount(0);
-        autoSaverRef.current = null;
-      }
-    };
-    const originalOnError = streamCallbacks.onError;
-    streamCallbacks.onError = (error: Error) => {
-      originalOnError?.(error);
-      autoSaverRef.current?.flush();
-      setTokenCount(0);
-      autoSaverRef.current = null;
-    };
-    (streamCallbacks as any).__instanceId = streamInstanceId;
-
     try {
       const modelParams = await ModelParametersService.getModelParameters(effectiveProvider, modelToUse);
       const modelOpts = ModelParametersService.convertToChatOptions(modelParams);
-      const composed = await composeChatOptions(effectiveProvider, modelToUse, modelOpts, currentConversationId || null, userMsg.content);
-      const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
-      await gateway.stream(historyForLlm as any, streamCallbacks);
-    } catch {
-      try {
-        const composed = await composeChatOptions(effectiveProvider, modelToUse, {}, currentConversationId || null, userMsg.content);
-        const gateway = new ChatGateway({ provider: effectiveProvider, model: modelToUse, options: composed });
-        await gateway.stream(historyForLlm as any, streamCallbacks);
-      } catch (err) {
-        void updateMessage(newAssistantId, { status: 'error', content: (err instanceof Error ? err.message : '重试失败') });
+      let sessionOpts: Record<string, any> = {};
+      if (sessionParameters) {
+        sessionOpts = ModelParametersService.convertToChatOptions(sessionParameters);
       }
-    }
-  }, [currentConversationId, currentConversation, currentProviderName, checkApiKeyValidity, updateMessage, updateMessageContentInMemory]);
-
-  useEffect(() => {
-    if (isGenerating) {
-      setIsStale(false);
-      lastActivityTimeRef.current = Date.now();
-      
-      if (generationTimeout) clearTimeout(generationTimeout);
-      
-      const timeout = setTimeout(() => {
-        if (Date.now() - lastActivityTimeRef.current > 120000) {
-          setIsStale(true);
-          const currentState = useChatStore.getState();
-          const current = currentState.conversations.find(c => c.id === currentState.currentConversationId);
-          const loadingMessage = current?.messages?.find(m => m.status === 'loading');
-          
-          if (loadingMessage) {
-            const content = currentContentRef.current || '';
-            currentState.finalizeStreamedMessage(loadingMessage.id, 'aborted', content, loadingMessage.model)
-              .catch(() => {});
-          }
-        }
-      }, 120000);
-      setGenerationTimeout(timeout);
-    } else {
-      if (generationTimeout) {
-        clearTimeout(generationTimeout);
-        setGenerationTimeout(null);
+      const filteredModelOpts: Record<string, any> = { ...modelOpts };
+      const maybeDelete = (flag: boolean | undefined, key: string) => {
+        if (flag === false && key in filteredModelOpts) delete filteredModelOpts[key];
+      };
+      if (sessionParameters) {
+        const sp: any = sessionParameters;
+        maybeDelete(sp.enableTemperature, 'temperature');
+        maybeDelete(sp.enableMaxTokens, 'maxTokens');
+        maybeDelete(sp.enableTopP, 'topP');
+        maybeDelete(sp.enableTopK, 'topK');
+        maybeDelete(sp.enableMinP, 'minP');
+        maybeDelete(sp.enableFrequencyPenalty, 'frequencyPenalty');
+        maybeDelete(sp.enablePresencePenalty, 'presencePenalty');
+        maybeDelete(sp.enableStopSequences, 'stop');
       }
-      setIsStale(false);
+      const composed = await composeChatOptions(
+        effectiveProvider,
+        modelToUse,
+        ModelParametersService.applyOutputBudget(
+          { ...filteredModelOpts, ...sessionOpts },
+          ModelParametersService.resolveBudgetParameters(modelParams, sessionParameters),
+        ),
+        conv.id,
+        userMsg.content,
+      );
+      try { notifyStreamStart(conv.id); } catch { /* noop */ }
+      await AgentLoopRunner.run({
+        assistantMessageId: newAssistantId,
+        conversationId: conv.id,
+        provider: effectiveProvider,
+        model: modelToUse,
+        historyForLlm: historyForLlm as any,
+        originalUserContent: userMsg.content,
+        continuationRunId: continueStoppedRun ? target.id : undefined,
+        continuationPrompt: continueStoppedRun ? '继续完成尚未完成的任务。不要重复已经完成的操作。' : undefined,
+        // Regenerating revises the answer from the existing record.  It must
+        // never silently repeat a prior write, shell command, or MCP action.
+        regenerate: !continueStoppedRun,
+        regenerationParentRunId: !continueStoppedRun ? target.id : undefined,
+        options: composed,
+        runtimeHooks: {
+          onAgentStart: () => {
+            lastActivityTimeRef.current = Date.now();
+            setTokenCount(0);
+            batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
+          },
+          onStreamError: () => {
+            stopGenerationIdleWatch();
+          },
+          onStreamEvent: (event: any) => {
+            lastActivityTimeRef.current = Date.now();
+            const t = String(event?.type || '');
+            if (t === 'content_token' || t === 'thinking_token') {
+              batchUpdateRef.current.tokenCount += 1;
+              if (batchUpdateRef.current.tokenCount >= 10) {
+                const delta = batchUpdateRef.current.tokenCount;
+                batchUpdateRef.current.tokenCount = 0;
+                setTokenCount((prev) => prev + delta);
+              }
+            }
+          },
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '重试失败';
+      void updateMessage(newAssistantId, { status: 'error', content: message });
     }
-    
-    return () => {
-      if (generationTimeout) clearTimeout(generationTimeout);
-    };
-  }, [isGenerating]);
+  }, [
+    currentConversationId,
+    currentConversation,
+    currentProviderName,
+    sessionParameters,
+    notifyStreamStart,
+    stopGenerationIdleWatch,
+    checkApiKeyValidity,
+    updateMessage,
+  ]);
 
   // Placeholder handler for share（仍待实现）
   const handleShare = useCallback(() => {}, []);
@@ -1207,6 +995,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     handleSendMessage,
     handleStopGeneration,
     handleEmptyStatePromptClick,
+    stopGenerationHint,
     handleTitleChange,
     handleDeleteConversation,
     handleRetryMessage,

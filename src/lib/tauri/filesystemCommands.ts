@@ -7,7 +7,7 @@
  * 3. snake_case → camelCase 返回值转换
  */
 
-import { keysToSnakeCase, keysToCamelCase } from './caseTransform';
+import { invokeBackend } from './backendCommand';
 
 // ============================================
 // 类型定义（前端使用 camelCase）
@@ -36,6 +36,10 @@ export interface OkResult {
   ok: boolean;
   message: string;
   path: string;
+  /** 本次覆盖前保存的版本 ID（有历史时才返回）。 */
+  historyId?: string;
+  /** 该文件当前保留的历史版本数。 */
+  historyCount?: number;
 }
 
 /** 读取文件结果 */
@@ -47,6 +51,8 @@ export interface ReadFileResult {
   endLine: number;
   content: string;
   truncated: boolean;
+  /** sha256 of the whole file; an edit can pass it back to detect staleness. */
+  hash: string;
 }
 
 // ============================================
@@ -63,6 +69,78 @@ export interface ReadFileParams {
 export interface WriteFileParams {
   path: string;
   content: string;
+}
+
+export interface EditFileParams {
+  path: string;
+  find: string;
+  replace: string;
+  all?: boolean;
+  /** sha256 returned by the last read; a stale value refuses the edit. */
+  expectedHash?: string;
+}
+
+export interface EditFileResult {
+  ok: boolean;
+  path: string;
+  replacements: number;
+  line?: number | null;
+  reason?: string | null;
+  candidates: string[];
+  historyId?: string;
+  historyCount?: number;
+}
+
+export interface FileHistoryVersion {
+  id: string;
+  createdAt: number;
+  bytes: number;
+  /** 产生这次覆盖的操作：write / edit / restore */
+  tool: string;
+  sha256: string;
+}
+
+export interface FileHistoryResult {
+  ok: boolean;
+  path: string;
+  versions: FileHistoryVersion[];
+}
+
+export interface SearchFilesParams {
+  root: string;
+  query: string;
+  glob?: string;
+  limit?: number;
+  regex?: boolean;
+  /** content | filename | both (default both). */
+  mode?: 'content' | 'filename' | 'both';
+}
+
+export interface SearchMatch {
+  path: string;
+  /** 1-based line number; absent for a filename match. */
+  line?: number | null;
+  text: string;
+  kind: 'content' | 'filename';
+}
+
+export interface SearchSkip {
+  path: string;
+  reason: string;
+}
+
+export interface SearchFilesResult {
+  ok: boolean;
+  root: string;
+  mode: 'content' | 'filename' | 'both';
+  matches: SearchMatch[];
+  truncated: boolean;
+  /** Part of the tree could not be read, so "no matches" is not conclusive. */
+  partial: boolean;
+  filesScanned: number;
+  skippedCount: number;
+  skipped: SearchSkip[];
+  limit: number;
 }
 
 export interface ListDirectoryParams {
@@ -111,22 +189,28 @@ export interface SetAllowlistParams {
   version?: number;
 }
 
+/**
+ * 一次调用授权（run/call 级）。只存在于 Rust 内存中，不写入磁盘，
+ * 也不会成为其他会话或其他调用的授权。
+ */
+export interface GrantCallScopeParams {
+  runId: string;
+  callId?: string;
+  path: string;
+  read?: boolean;
+  write?: boolean;
+  create?: boolean;
+  delete?: boolean;
+}
+
+export interface RevokeCallScopeParams {
+  runId: string;
+  callId?: string;
+}
+
 // ============================================
 // 内部工具函数
 // ============================================
-
-let cachedInvoke: typeof import('@tauri-apps/api/core').invoke | null = null;
-
-/**
- * 获取 invoke 函数（惰性加载，避免 SSR 报错）
- */
-async function getInvoke(): Promise<typeof import('@tauri-apps/api/core').invoke> {
-  if (!cachedInvoke) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    cachedInvoke = invoke;
-  }
-  return cachedInvoke;
-}
 
 /**
  * 封装的 invoke 调用
@@ -138,10 +222,7 @@ async function invokeFs<TParams, TResult>(
   command: string,
   params: TParams
 ): Promise<TResult> {
-  const invoke = await getInvoke();
-  const snakeCasePayload = keysToSnakeCase(params);
-  const result = await invoke<unknown>(command, { payload: snakeCasePayload });
-  return keysToCamelCase(result) as TResult;
+  return invokeBackend<TResult>(command, params as Record<string, unknown>);
 }
 
 // ============================================
@@ -160,6 +241,46 @@ export async function readFile(params: ReadFileParams): Promise<ReadFileResult> 
  */
 export async function writeFile(params: WriteFileParams): Promise<OkResult> {
   return invokeFs<WriteFileParams, OkResult>('filesystem_write_file', params);
+}
+
+/**
+ * 某个文件保留的历史版本（最近 20 版，最新在前）。
+ * 覆盖/编辑前的内容会自动保存到应用数据目录，不污染用户目录。
+ */
+export async function fileHistory(path: string): Promise<FileHistoryResult> {
+  return invokeFs<{ path: string }, FileHistoryResult>('filesystem_file_history', { path });
+}
+
+/**
+ * 恢复到某个历史版本。恢复前会把当前内容也记入历史，所以恢复本身可以撤销。
+ */
+export async function restoreFileVersion(path: string, versionId: string): Promise<OkResult> {
+  return invokeFs<{ path: string; versionId: string }, OkResult>('filesystem_restore_file_version', {
+    path,
+    versionId,
+  });
+}
+
+/**
+ * Opens a path with the system default application. Goes through Rust because
+ * the renderer's opener plugin cannot reach the user's own directories.
+ */
+export async function openPathChecked(path: string): Promise<OkResult> {
+  return invokeFs<{ path: string }, OkResult>('filesystem_open_path', { path });
+}
+
+/**
+ * 精确编辑：把 find 替换为 replace（默认要求唯一匹配）
+ */
+export async function editFile(params: EditFileParams): Promise<EditFileResult> {
+  return invokeFs<EditFileParams, EditFileResult>('filesystem_edit_file', params);
+}
+
+/**
+ * 在目录中搜索内容/文件名
+ */
+export async function searchFiles(params: SearchFilesParams): Promise<SearchFilesResult> {
+  return invokeFs<SearchFilesParams, SearchFilesResult>('filesystem_search_files', params);
 }
 
 /**
@@ -211,6 +332,16 @@ export async function setAllowlist(params: SetAllowlistParams): Promise<OkResult
   return invokeFs<SetAllowlistParams, OkResult>('filesystem_set_allowlist', params);
 }
 
+/** 登记一次调用授权（仅内存，绑定 run/call） */
+export async function grantCallScope(params: GrantCallScopeParams): Promise<{ ok: boolean; path: string }> {
+  return invokeFs<GrantCallScopeParams, { ok: boolean; path: string }>('filesystem_grant_call_scope', params);
+}
+
+/** 撤销某个 run/call 的一次性授权 */
+export async function revokeCallScope(params: RevokeCallScopeParams): Promise<OkResult> {
+  return invokeFs<RevokeCallScopeParams, OkResult>('filesystem_revoke_call_scope', params);
+}
+
 // ============================================
 // 命名空间导出（方便使用）
 // ============================================
@@ -225,6 +356,8 @@ export const filesystemCommands = {
   deleteByPattern,
   renameFile,
   setAllowlist,
+  grantCallScope,
+  revokeCallScope,
 } as const;
 
 export default filesystemCommands;

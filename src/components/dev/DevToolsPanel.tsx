@@ -128,8 +128,8 @@ export function DevToolsPanel({ onClose }: DevToolsPanelProps) {
             </div>
 
       {isVisible && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 glass-scrim bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden glass-overlay">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-lg font-semibold">开发工具面板</h2>
               <Button

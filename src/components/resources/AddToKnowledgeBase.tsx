@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, CheckCircle2, AlertCircle, FileText, Brain, Database } from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { toast } from '@/components/ui/sonner';
+import { truncateDisplayName } from '@/lib/filesystem/safeFileName';
 
 interface AddToKnowledgeBaseProps {
   open: boolean;
@@ -137,8 +138,8 @@ export function AddToKnowledgeBase({
 
         <div className="py-4">
           {!adding ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              将文档 <span className="font-medium text-gray-700 dark:text-gray-300">"{documentTitle}"</span> 添加到以下知识库:
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 break-words">
+              将文档 <span className="font-medium text-gray-700 dark:text-gray-300" title={documentTitle}>"{truncateDisplayName(documentTitle, 56)}"</span> 添加到以下知识库:
             </p>
           ) : (
             <div className="mb-4">

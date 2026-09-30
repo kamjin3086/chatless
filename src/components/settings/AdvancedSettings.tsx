@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SettingsCard, SettingsPageHeader } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { NetworkSettings } from "./NetworkSettings";
+import { ToggleSwitch } from "./ToggleSwitch";
 import { startupMonitor } from "@/lib/utils/startupPerformanceMonitor";
 import { downloadService } from "@/lib/utils/downloadService";
 import { detectTauriEnvironment } from "@/lib/utils/environment";

@@ -91,15 +91,16 @@ export function ActionPanelContent({
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
+        data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}
         className={cn(
           // 基础样式
-          "z-[9950] rounded-xl border",
+          "z-[9950] rounded-xl border glass-overlay glass-float-menu",
           // 背景和模糊
           "bg-white/95 dark:bg-gray-800/95 backdrop-blur-md",
           // 阴影和边框
-          "shadow-lg ring-1 ring-black/5 dark:ring-white/10",
+          "shadow-lg",
           // 动画
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",

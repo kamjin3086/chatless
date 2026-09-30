@@ -104,7 +104,7 @@ export function ContextMenu({ children, menuItems, disabled = false }: ContextMe
         <div
           ref={menuRef}
           className={cn(
-            "context-menu fixed z-50 min-w-48 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700",
+            "context-menu glass-overlay fixed z-50 min-w-48 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700",
             "bg-white dark:bg-gray-800 shadow-xl ring-1 ring-black/5 dark:ring-white/5",
             "py-2 text-sm text-gray-700 dark:text-gray-200",
             "animate-in fade-in-0 zoom-in-95 duration-100"
@@ -142,12 +142,10 @@ export function ContextMenu({ children, menuItems, disabled = false }: ContextMe
 // 预定义的菜单项创建函数
 export const createConversationMenuItems = (
   conversationId: string,
-  isImportant: boolean,
   isStarred: boolean,
   onEdit: (id: string) => void,
   onDelete: (id: string) => void,
   onStar: (id: string) => void,
-  onToggleImportant: (id: string) => void,
   onDuplicate?: (id: string) => void,
   onExport?: (id: string) => void
 ): MenuItem[] => [
@@ -176,11 +174,6 @@ export const createConversationMenuItems = (
     id: 'star',
     text: isStarred ? '取消收藏' : '收藏对话',
     action: () => onStar(conversationId)
-  },
-  {
-    id: 'important',
-    text: isImportant ? '取消重要标记' : '标记为重要',
-    action: () => onToggleImportant(conversationId)
   },
   {
     id: 'duplicate',

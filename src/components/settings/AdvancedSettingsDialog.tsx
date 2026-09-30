@@ -55,10 +55,10 @@ const STRATEGY_OPTIONS: { value: ToolCallStrategy; label: string; description: s
 // 能力标签
 function CapabilityBadge({ capability }: { capability: string }) {
   const styles: Record<string, string> = {
-    native: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    prompt: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    experimental: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-    none: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500',
+    native: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    prompt: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    experimental: 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+    none: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
   };
   const labels: Record<string, string> = {
     native: '原生支持',
@@ -67,7 +67,7 @@ function CapabilityBadge({ capability }: { capability: string }) {
     none: '不支持',
   };
   return (
-    <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium', styles[capability] || styles.none)}>
+    <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium', styles[capability] || styles.none)}>
       {labels[capability] || capability}
     </span>
   );
@@ -134,7 +134,7 @@ export function AdvancedSettingsDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-blue-600" />
+            <Globe className="w-5 h-5 text-slate-500 dark:text-slate-400" />
             {provider.name} - 高级设置
           </DialogTitle>
           <DialogDescription>
@@ -148,12 +148,12 @@ export function AdvancedSettingsDialog({
             <div className="flex items-center justify-between">
               <div className="flex-1 space-y-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-medium">浏览器请求模式</h3>
+                  <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">浏览器请求模式</h3>
                   {isUpdating && (
-                    <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
+                    <Loader2 className="w-3 h-3 animate-spin text-sky-500" />
                   )}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   默认请求方式已适合大多数情况，如遇网络问题可尝试此模式
                 </p>
               </div>
@@ -188,12 +188,12 @@ export function AdvancedSettingsDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Wrench className="w-4 h-4 text-blue-600" />
-                  <h3 className="text-sm font-medium">工具调用策略</h3>
+                  <Wrench className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">工具调用策略</h3>
                 </div>
                 <CapabilityBadge capability={providerConfig.defaultCapability} />
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {providerConfig.note || `${provider.name} 默认使用${providerConfig.defaultCapability === 'native' ? '原生' : '提示词'}工具调用`}
               </p>
             </div>
@@ -208,21 +208,26 @@ export function AdvancedSettingsDialog({
                     className={cn(
                       'flex flex-col items-center p-2 rounded-lg border text-center transition-all',
                       effectiveStrategy === option.value
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        ? 'glass-chip-active border-sky-400/60 bg-sky-50 dark:bg-sky-900/20'
+                        : 'border-slate-300/80 dark:border-slate-600/60 bg-white/40 dark:bg-white/5 hover:border-slate-400/80 dark:hover:border-slate-500'
                     )}
                   >
                     <span
                       className={cn(
-                        'p-1.5 rounded mb-1',
+                        'p-1.5 rounded-md mb-1',
                         effectiveStrategy === option.value
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                          ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                       )}
                     >
                       {option.icon}
                     </span>
-                    <span className="text-[11px] font-medium">{option.label}</span>
+                    <span className={cn(
+                      'text-[11px] font-medium',
+                      effectiveStrategy === option.value
+                        ? 'text-sky-700 dark:text-sky-300'
+                        : 'text-slate-600 dark:text-slate-300'
+                    )}>{option.label}</span>
                   </button>
                 ))}
               </div>
@@ -230,14 +235,14 @@ export function AdvancedSettingsDialog({
 
             {/* 覆盖提示 */}
             {hasOverride && (
-              <div className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-sky-50 dark:bg-sky-900/20 border border-sky-200/70 dark:border-sky-800/40">
+                <div className="flex items-center gap-2 text-xs text-sky-700 dark:text-sky-300">
                   <Info className="w-3.5 h-3.5" />
                   <span>已覆盖默认策略</span>
                 </div>
                 <button
                   onClick={() => removeProviderOverride(providerId)}
-                  className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700"
+                  className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-200"
                 >
                   <RotateCcw className="w-3 h-3" />
                   重置
@@ -246,7 +251,7 @@ export function AdvancedSettingsDialog({
             )}
 
             {/* 功能说明 */}
-            <div className="text-[10px] text-gray-400 dark:text-gray-500 space-y-1">
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 space-y-1">
               <p>• <strong>原生API</strong>：通过 API 的 tools 参数传递工具定义，更稳定</p>
               <p>• <strong>提示词</strong>：在 System Prompt 中注入工具描述，兼容性更广</p>
             </div>

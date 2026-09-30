@@ -32,12 +32,13 @@ export function RecentModelsList({
   return (
     <>
       {recentModelDetails.map(({ provider, model }) => (
-        <SelectItem key={`${provider.name}::${model.name}`} value={`${provider.name}::${model.name}`} className="p-0 focus:bg-transparent">
+        <SelectItem key={`${provider.name}::${model.name}`} value={`${provider.name}::${model.name}`} className="p-0 m-0 pr-7 rounded-md">
           <ModelSelectItem
             provider={provider}
             model={model}
             isDefault={globalDefaultModel === `${provider.name}/${model.name}`}
             isSelected={currentModelId === model.name}
+            showProviderIcon
             onSetDefault={onSetDefault}
             onOpenParameters={onOpenParameters}
           />

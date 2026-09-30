@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { useMemo } from 'react';
-import { MemoizedMarkdown } from '@/components/chat/MemoizedMarkdown';
+import { StreamingMarkdown } from '@/components/chat/StreamingMarkdown';
 
 interface SkillMdRendererProps {
   content: string;
@@ -17,7 +17,7 @@ export function SkillMdRenderer({ content, className }: SkillMdRendererProps) {
   const markdown = useMemo(() => stripFrontmatter(String(content || '')), [content]);
 
   return (
-    <MemoizedMarkdown
+    <StreamingMarkdown
       content={markdown}
       sizeOverride="small"
       className={cn('prose prose-sm dark:prose-invert max-w-none', className)}

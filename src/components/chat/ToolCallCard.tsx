@@ -7,11 +7,7 @@ import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { useChatStore } from '@/store/chatStore';
 import { toast } from '@/components/ui/sonner';
-import { resumeToolCallFromCard } from '@/lib/mcp/approval/resumeToolFromCard';
 import { presentToolCard } from './toolCardPresentation';
-import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
-import { getProcessSandbox } from '@/lib/skills/sandbox';
-import { continueAfterToolCardAction } from '@/lib/mcp/approval/continueToolAfterCardAction';
 
 type ToolCallStatus = 'success' | 'error' | 'running' | 'pending_auth' | 'stopped';
 
@@ -36,51 +32,62 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   
   const authKey = cardId && messageId ? `${messageId}:${cardId}` : undefined;
   const isPendingAuth = status === 'pending_auth' || (!!authKey && hasPendingAuthorization(authKey));
+  // Filesystem approvals can cover a whole folder, so the card offers the
+  // time range of the grant instead of a bare yes/no.
+  const pendingAuth = useAuthorizationStore((state) =>
+    authKey ? state.pendingAuthorizations.get(authKey) : undefined);
+  const approvalScope = pendingAuth?.scope;
+  const filesystemScope = approvalScope?.kind === 'filesystem' ? approvalScope : undefined;
+  const shellScope = approvalScope?.kind === 'shell' ? approvalScope : undefined;
+  const directoryScope = filesystemScope && filesystemScope.op !== 'delete'
+    ? filesystemScope
+    : undefined;
 
   const rememberHint =
-    isPendingAuth && String(server || '').toLowerCase() === 'filesystem' && presentation.kind === 'path'
+    isPendingAuth
+      && String(server || '').toLowerCase() === 'shell_executor'
+      && typeof (args as any)?.workingDir === 'string'
+      && String((args as any).workingDir).trim()
       ? '确认后会记住该目录'
-      : isPendingAuth && String(server || '').toLowerCase() === 'shell_executor' && typeof (args as any)?.workingDir === 'string' && String((args as any).workingDir).trim()
-        ? '确认后会记住该目录'
-        : undefined;
+      : undefined;
   
   const handleApprove = React.useCallback(() => {
     if (!authKey || !messageId || !cardId) return;
-    try {
-      useChatStore.getState().dispatchMessageAction(messageId, {
-        type: 'TOOL_HIT',
-        server,
-        tool,
-        args,
-        cardId,
-      });
-    } catch { /* ignore */ }
-
     const ok = approveAuthorization(authKey);
     if (!ok) {
-      toast.info('审批已接收', { description: '正在尝试恢复执行…' });
-      void resumeToolCallFromCard({
-        assistantMessageId: messageId,
-        cardId,
-        server,
-        tool,
-        args,
-      }).catch((e) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        toast.error('恢复执行失败', { description: msg });
-        try {
-          useChatStore.getState().dispatchMessageAction(messageId, {
-            type: 'TOOL_RESULT',
-            server,
-            tool,
-            ok: false,
-            errorMessage: `恢复执行失败：${msg}`,
-            cardId,
-          } as any);
-        } catch { /* ignore */ }
-      });
+      toast.info('审批已失效', { description: '请点击“继续”重新检查权限。' });
     }
-  }, [authKey, messageId, cardId, server, tool, args, approveAuthorization]);
+  }, [authKey, messageId, cardId, approveAuthorization]);
+
+  const handleApproveWith = React.useCallback((decision: 'always' | 'unrestricted') => {
+    if (!authKey || !messageId || !cardId) return;
+    const ok = approveAuthorization(authKey, decision);
+    if (!ok) {
+      toast.info('审批已失效', { description: '请点击“继续”重新检查权限。' });
+      return;
+    }
+    if (decision === 'always') {
+      toast.success(shellScope ? '以后所有命令都不再询问' : '该文件夹已加入白名单，读写不再询问');
+      return;
+    }
+    // Turning prompts off must be as easy to undo as it was to enable.
+    const conversationId = pendingAuth?.conversationId;
+    toast.success('本会话内文件操作不再询问', {
+      action: conversationId
+        ? {
+            label: '恢复询问',
+            onClick: () => {
+              void import('@/lib/mcp/accessPolicy')
+                .then(({ setConversationAccess }) => {
+                  setConversationAccess(shellScope ? 'shell' : 'fs', conversationId, 'ask');
+                  toast.info(shellScope ? '已恢复命令询问' : '已恢复文件操作询问');
+                })
+                .catch(() => {});
+            },
+          }
+        : undefined,
+    });
+  }, [authKey, messageId, cardId, approveAuthorization, pendingAuth?.conversationId, shellScope]);
   
   const handleReject = React.useCallback(() => {
     if (!authKey || !messageId || !cardId) return;
@@ -100,81 +107,6 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
       toast.info('已拒绝');
     }
   }, [authKey, messageId, cardId, server, tool, rejectAuthorization]);
-
-  const handleStopRunning = React.useCallback(() => {
-    if (!messageId || !cardId) return;
-    const coord = ToolCallCoordinator.getInstance();
-    coord.cancelToolCard(messageId, cardId);
-
-    if (String(server || '').toLowerCase() === 'shell_executor') {
-      try {
-        const sandbox = getProcessSandbox();
-        const executionId = `shell:${messageId}:${String(cardId)}`;
-        void sandbox.cancel(executionId);
-      } catch { /* ignore */ }
-    }
-
-    try {
-      useChatStore.getState().dispatchMessageAction(messageId, {
-        type: 'TOOL_RESULT',
-        server,
-        tool,
-        ok: false,
-        errorMessage: 'stopped',
-        cardId,
-      } as any);
-    } catch { /* ignore */ }
-    toast.info('已停止');
-    try {
-      const st = useChatStore.getState() as any;
-      const conv = (st.conversations || []).find((c: any) => (c?.messages || []).some((m: any) => m?.id === messageId));
-      const isAgent = String(conv?.tool_mode || '').toLowerCase() === 'agent';
-      if (!isAgent) {
-        void continueAfterToolCardAction({
-          assistantMessageId: messageId,
-          cardId,
-          server,
-          tool,
-          args,
-          result: { skipped: true, reason: 'USER_STOPPED' },
-        }).catch(() => {});
-      }
-    } catch { /* ignore */ }
-  }, [messageId, cardId, server, tool, args]);
-
-  const handleSkipRunning = React.useCallback(() => {
-    if (!messageId || !cardId) return;
-    const coord = ToolCallCoordinator.getInstance();
-    coord.cancelToolCard(messageId, cardId);
-
-    try {
-      useChatStore.getState().dispatchMessageAction(messageId, {
-        type: 'TOOL_RESULT',
-        server,
-        tool,
-        ok: false,
-        errorMessage: 'skipped',
-        cardId,
-      } as any);
-    } catch { /* ignore */ }
-
-    toast.info('已跳过');
-    try {
-      const st = useChatStore.getState() as any;
-      const conv = (st.conversations || []).find((c: any) => (c?.messages || []).some((m: any) => m?.id === messageId));
-      const isAgent = String(conv?.tool_mode || '').toLowerCase() === 'agent';
-      if (!isAgent) {
-        void continueAfterToolCardAction({
-          assistantMessageId: messageId,
-          cardId,
-          server,
-          tool,
-          args,
-          result: { skipped: true, reason: 'USER_SKIPPED' },
-        }).catch(() => {});
-      }
-    } catch { /* ignore */ }
-  }, [messageId, cardId, server, tool, args]);
 
   // 状态样式
   const statusColor = isPendingAuth 
@@ -206,13 +138,16 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
 
   // 是否有详情可展开
   const hasDetails = (args && Object.keys(args).length > 0) || resultPreview || errorMessage;
+  const resultUnknown = String(errorMessage || '').includes('EXECUTION_UNKNOWN');
 
   return (
     <div className="text-xs">
       {/* 预览行：可点击展开 */}
       <div 
         className={cn(
-          "flex items-center gap-1.5 py-0.5 rounded transition-colors",
+          // 允许换行：审批按钮在窄窗口下会掉到下一行右侧，而不是把整行撑出消息列
+          // （撑出去的部分此前会被右下角的悬浮控件压住）。
+          "flex flex-wrap items-center gap-x-1.5 gap-y-1 py-0.5 rounded transition-colors",
           hasDetails && "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30"
         )}
         onClick={() => hasDetails && setExpanded(!expanded)}
@@ -235,7 +170,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         </span>
 
         {/* 工具名称和摘要 */}
-        <div className="flex-1 min-w-0 flex items-center gap-1 truncate">
+        <div className="flex-1 min-w-[8rem] flex items-center gap-1 truncate">
           {(server === WEB_SEARCH_SERVER_NAME || server === 'web_search') && (
             <Globe className="w-3 h-3 text-blue-500 shrink-0" />
           )}
@@ -261,40 +196,78 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
 
         {/* 审批按钮 */}
         {isPendingAuth && (
-          <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={handleApprove}
-              className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-              title={rememberHint || '确认'}
-            >
-              确认
-            </button>
+          <div
+            className="shrink-0 ml-auto flex flex-wrap items-center justify-end gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {shellScope ? (
+              <>
+                <button
+                  onClick={handleApprove}
+                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  title={`只运行这一次：${shellScope.command || ''}`}
+                >
+                  仅本次
+                </button>
+                <button
+                  onClick={() => handleApproveWith('unrestricted')}
+                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                  title="本会话内所有命令都不再询问，可在设置里改回"
+                >
+                  本会话不再询问
+                </button>
+                <button
+                  onClick={() => handleApproveWith('always')}
+                  className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  title="以后所有命令都不再询问，可在设置里改回"
+                >
+                  始终不再询问
+                </button>
+              </>
+            ) : filesystemScope ? (
+              <>
+                <button
+                  onClick={handleApprove}
+                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  title={`只允许这一次：${filesystemScope.path}`}
+                >
+                  仅本次
+                </button>
+                {directoryScope && (
+                  <button
+                    onClick={() => handleApproveWith('always')}
+                    className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition-colors"
+                    title={`把该文件夹加入白名单，长期允许读写（删除仍需确认）：${directoryScope.directory}`}
+                  >
+                    以后都允许
+                  </button>
+                )}
+                <button
+                  onClick={() => handleApproveWith('unrestricted')}
+                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                  title="本会话内所有文件操作（含删除）都不再询问，可在设置里改回"
+                >
+                  本会话不再询问
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleApprove}
+                className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                title={rememberHint || '确认'}
+              >
+                确认
+              </button>
+            )}
             <button
               onClick={handleReject}
               className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
             >
-              取消
+              {approvalScope ? '拒绝' : '取消'}
             </button>
           </div>
         )}
 
-        {/* 运行中操作 */}
-        {!isPendingAuth && status === 'running' && (
-          <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={handleStopRunning}
-              className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
-            >
-              停止
-            </button>
-            <button
-              onClick={handleSkipRunning}
-              className="px-2 py-0.5 text-[10px] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
-            >
-              跳过
-            </button>
-          </div>
-        )}
       </div>
 
       {/* 展开的详情区域 - 使用 CSS 过渡避免跳动 */}
@@ -328,6 +301,11 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {/* 错误信息 */}
           {status === 'error' && (
             <div>
+              {resultUnknown && (
+                <div className="text-amber-600 dark:text-amber-400 bg-amber-50/70 dark:bg-amber-900/20 rounded p-1.5 mb-1 text-[10px]">
+                  执行结果未知。系统不会自动重试，请通过“继续”重新核对后再决定。
+                </div>
+              )}
               <div className="text-red-500/80 mb-0.5">错误</div>
               <div className="text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-900/10 rounded p-1.5 whitespace-pre-wrap break-all text-[10px]">
                 {errorMessage || '未知错误'}

@@ -71,6 +71,8 @@ export interface ToolCallEvent extends BaseStreamEvent {
     toolName?: string;
     arguments?: string;
   };
+  /** Lossless provider payload needed when replaying this tool turn. */
+  providerData?: Record<string, unknown>;
 }
 
 /**
@@ -128,10 +130,15 @@ export const createStreamEvent = {
     timestamp: Date.now()
   }),
   
-  toolCall: (toolCall: string, parsed?: ToolCallEvent['parsed']): ToolCallEvent => ({
+  toolCall: (
+    toolCall: string,
+    parsed?: ToolCallEvent['parsed'],
+    providerData?: ToolCallEvent['providerData']
+  ): ToolCallEvent => ({
     type: 'tool_call',
     toolCall,
     parsed,
+    providerData,
     timestamp: Date.now()
   }),
   

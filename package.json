@@ -13,7 +13,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify": "pnpm lint:ci && pnpm typecheck && pnpm build",
     "format": "biome format src --write && biome organize-imports src --write",
-    "test": "echo \"No tests specified yet\" && exit 0",
+    "test": "vitest run",
     "tauri": "tauri",
     "generate:settings-index": "node scripts/generate-settings-index.cjs",
     "update:app-info": "node scripts/update-app-info.js",
@@ -124,7 +124,8 @@
     "tsx": "^4.19.1",
     "tw-animate-css": "^1.2.8",
     "typescript": "~5.8.3",
-    "typescript-eslint": "^8.30.1"
+    "typescript-eslint": "^8.30.1",
+    "vitest": "^3.2.4"
   },
   "packageManager": "pnpm@9.15.4"
 }

@@ -9,9 +9,15 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X, Folder } from "lucide-react";
+import {
+  Plus, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X, Folder,
+  ExternalLink, RotateCcw,
+} from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { cn } from "@/lib/utils";
+import { FileOpener } from "@/lib/utils/fileOpener";
+import { toast } from "@/components/ui/sonner";
+import { revealConversationWorkspace } from "@/lib/agentWorkspace/workspaceService";
 import { useConversationAttachmentStore } from "@/store/conversationAttachmentStore";
 import { useChatStore } from "@/store/chatStore";
 import {
@@ -51,10 +57,37 @@ export function AttachmentMenu({
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loadingKb, setLoadingKb] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const { setMountedDir, clearMountedDir, getMountedDir } = useConversationAttachmentStore();
+  const { setMountedDir, clearMountedDir, getMountedDir, getSessionDir } = useConversationAttachmentStore();
   const currentConvId = useChatStore((s) => s.currentConversationId);
   const effectiveConvId = conversationId || currentConvId || "";
-  const workingDir = effectiveConvId ? getMountedDir(effectiveConvId) : undefined;
+  // mountedDir 是用户显式选定的；sessionDir 是应用为每个会话准备的默认产物目录。
+  // 选定目录会取代默认目录成为这个会话的 @WorkDir（卸载后回到默认）。
+  const mountedDir = effectiveConvId ? getMountedDir(effectiveConvId) : undefined;
+  const sessionDir = effectiveConvId ? getSessionDir(effectiveConvId) : undefined;
+  const activeWorkingDir = mountedDir || sessionDir;
+
+  const basename = (p: string): string => {
+    const s = String(p || '').replace(/\\/g, '/').replace(/\/+$/g, '');
+    const i = s.lastIndexOf('/');
+    return i >= 0 ? s.slice(i + 1) : s;
+  };
+
+  const pickWorkingDir = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "选择这个会话的工作目录",
+      });
+      if (!selected || typeof selected !== "string" || !effectiveConvId) return;
+      setMountedDir(effectiveConvId, selected);
+    } catch {
+      // 用户取消或对话框不可用
+    } finally {
+      setOpen(false);
+    }
+  };
 
   // 加载知识库列表
   useEffect(() => {
@@ -87,7 +120,7 @@ export function AttachmentMenu({
       : true
   );
 
-  const hasAnyAttachment = hasDocument || selectedKnowledgeBase || !!workingDir;
+  const hasAnyAttachment = hasDocument || selectedKnowledgeBase || !!mountedDir;
 
   // 主菜单视图
   const renderMainView = () => (
@@ -98,40 +131,46 @@ export function AttachmentMenu({
       />
 
       <ActionPanelList>
-        {/* 工作目录（filesystem 白名单来源之一） */}
+        {/* 工作目录：默认是会话自己的产物目录，用户选定后会取代它。 */}
         <ActionPanelItem
-          icon={<Folder className={cn("w-4 h-4", workingDir ? "text-emerald-500" : "text-emerald-400")} />}
-          title={workingDir ? "工作目录已附加" : "附加工作目录"}
-          description={workingDir ? "当前会话可用 @WorkDir/..." : "临时授权当前会话访问该目录及子目录"}
-          selected={!!workingDir}
-          onClick={async () => {
-            try {
-              const { open } = await import("@tauri-apps/plugin-dialog");
-              const selected = await open({ directory: true, multiple: false });
-              if (!selected || typeof selected !== "string") return;
-              if (effectiveConvId) setMountedDir(effectiveConvId, selected);
-            } catch {
-              // ignore
-            } finally {
-              setOpen(false);
-            }
-          }}
-          suffix={
-            workingDir ? (
-              <button
-                className="text-[11px] text-rose-500 hover:text-rose-600 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (effectiveConvId) clearMountedDir(effectiveConvId);
-                  setOpen(false);
-                }}
-                title="移除工作目录"
-              >
-                移除
-              </button>
-            ) : null
+          icon={<Folder className={cn("w-4 h-4", mountedDir ? "text-emerald-500" : "text-slate-400")} />}
+          title={mountedDir ? "更换工作目录" : "选择工作目录"}
+          description={
+            mountedDir
+              ? `已选定：${basename(mountedDir)}`
+              : sessionDir
+                ? `当前：会话默认目录（${basename(sessionDir)}）`
+                : "让本会话的 Agent 在这个目录里工作"
           }
+          onClick={() => void pickWorkingDir()}
         />
+
+        {activeWorkingDir && (
+          <ActionPanelItem
+            icon={<ExternalLink className="w-4 h-4 text-slate-400" />}
+            title="打开工作目录"
+            description="在文件管理器中查看 Agent 的产物"
+            onClick={() => handleAction(() => {
+              if (mountedDir) {
+                void FileOpener.openDirectory(mountedDir);
+                return;
+              }
+              // 会话目录"用到才建"，所以打开时由后端先落地再定位。
+              void revealConversationWorkspace(effectiveConvId).catch((error) => {
+                toast.error("打开工作目录失败", { description: String(error) });
+              });
+            })}
+          />
+        )}
+
+        {mountedDir && (
+          <ActionPanelItem
+            icon={<RotateCcw className="w-4 h-4 text-slate-400" />}
+            title="改回会话默认目录"
+            description="撤销本次选择；产物仍放进会话自己的文件夹"
+            onClick={() => handleAction(() => clearMountedDir(effectiveConvId))}
+          />
+        )}
 
         <ActionPanelDivider />
 
@@ -256,10 +295,10 @@ export function AttachmentMenu({
           size="icon"
           disabled={disabled}
           className={cn(
-            "h-8 w-8 shrink-0 rounded-lg transition-all duration-150",
+            "composer-tool h-8 w-8 shrink-0 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
             hasAnyAttachment
-              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
-              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              ? "glass-chip-ok"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
           title="附加内容"
         >

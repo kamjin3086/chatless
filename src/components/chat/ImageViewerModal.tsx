@@ -61,8 +61,8 @@ export function ImageViewerModal({ open, onClose, src, filename }: ImageViewerMo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center" onClick={onClose}>
-      <div className="relative w-[92vw] h-[92vh] bg-white dark:bg-slate-900 rounded-lg shadow-xl" onClick={(e)=>e.stopPropagation()}>
+    <div className="fixed inset-0 z-[1000] glass-scrim bg-black/70 backdrop-blur-sm flex items-center justify-center" onClick={onClose}>
+      <div className="relative w-[92vw] h-[92vh] bg-white dark:bg-slate-900 rounded-lg shadow-xl glass-overlay" onClick={(e)=>e.stopPropagation()}>
         {/* Toolbar */}
         <div className="absolute top-2 right-2 flex items-center gap-2">
           <button className="px-2 py-1 text-xs rounded bg-slate-800 text-white hover:bg-slate-700" onClick={download}>下载</button>

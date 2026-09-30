@@ -1,7 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 /.vscode/
-/.cursor/
+/.cursor/*
+!/.cursor/rules/
+!/.cursor/rules/**
 
 # dependencies
 /node_modules
@@ -10,6 +12,13 @@
 
 # testing
 /coverage
+
+# acceptance harness build artifacts (regenerate with docs/acceptance scripts)
+/docs/acceptance/*.sqlite
+/docs/acceptance/*.sqlite-wal
+/docs/acceptance/*.sqlite-shm
+# the desktop e2e build keeps its own target dir so it never locks the dev build
+/src-tauri/target-e2e/
 
 # next.js
 /.next/
@@ -52,6 +61,7 @@ temp-*.md
 *_TEMP.*
 *_temp.*
 *.tmp
+*.tmp-*
 
 # development notes and documentation
 *_NOTES.md
@@ -67,4 +77,3 @@ temp-*.md
 .private/
 .private/**/*
 .private/**
-

@@ -8,6 +8,15 @@ import { migration_006 } from './scripts/006_add_core_indexes';
 import { migration_007 } from './scripts/007_add_message_versioning';
 import { migration_008 } from './scripts/008_add_conversation_tool_mode';
 import { migration_009 } from './scripts/009_add_prompt_sync_fields';
+import { migration_010 } from './scripts/010_add_vector_embeddings';
+import { migration_011 } from './scripts/011_add_agent_run_events';
+import { migration_012 } from './scripts/012_evidence_rag_v2';
+import { migration_013 } from './scripts/013_agent_run_checkpoints';
+import { migration_014 } from './scripts/014_document_chunks';
+import { migration_015 } from './scripts/015_document_index_lifecycle';
+import { migration_016 } from './scripts/016_tool_result_attachments';
+import { migration_017 } from './scripts/017_agent_approvals';
+import { migration_018 } from './scripts/018_agent_run_lineage';
 // 合并到 v2 后，这里不再注册 v3/v4
 /**
  * 迁移注册器
@@ -36,6 +45,15 @@ export class MigrationRegistry {
     this.register(migration_007);
     this.register(migration_008);
     this.register(migration_009);
+    this.register(migration_010);
+    this.register(migration_011);
+    this.register(migration_012);
+    this.register(migration_013);
+    this.register(migration_014);
+    this.register(migration_015);
+    this.register(migration_016);
+    this.register(migration_017);
+    this.register(migration_018);
     // v3+v4 已合并到 v2，无需注册
   }
 

@@ -2,6 +2,7 @@ import { specializedStorage } from './storage';
 import { DEFAULT_MODEL_PARAMETERS } from '@/types/model-params';
 import type { ModelParameters } from '@/types/model-params';
 import { adaptFieldsForProvider } from './llm/provider-field-support';
+import { resolveOutputBudget } from './llm/outputBudget';
 
 export class ModelParametersService {
   /**
@@ -46,6 +47,66 @@ export class ModelParametersService {
       console.error('删除模型参数失败:', error);
       throw error;
     }
+  }
+
+  /**
+   * Records a context window reported by the provider's model list.
+   *
+   * It is stored separately from the user's own value so neither side has to win
+   * outright: the effective window is the smaller of the two, and a provider that
+   * later shrinks its window cannot be masked by a stale larger number.
+   */
+  static async recordObservedContextWindow(
+    providerName: string,
+    modelId: string,
+    contextWindow: number,
+  ): Promise<boolean> {
+    const window = Math.floor(Number(contextWindow));
+    if (!Number.isFinite(window) || window <= 0) return false;
+    try {
+      const saved = await ModelParametersService.getModelParameters(providerName, modelId);
+      if (saved.observedContextWindow === window) return false;
+      await ModelParametersService.setModelParameters(providerName, modelId, {
+        ...saved,
+        observedContextWindow: window,
+      });
+      return true;
+    } catch (error) {
+      console.warn('[ModelParameters] 记录服务商上报的上下文窗口失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 实际生效的上下文窗口：用户填写与服务商上报取较小值。
+   * 只有两边都没有时才算未知（未知 = 不下发 max_tokens）。
+   */
+  static effectiveContextWindow(
+    params: { contextWindow?: number; observedContextWindow?: number } | null | undefined,
+  ): number | undefined {
+    const toPositive = (value: unknown) => {
+      const parsed = Math.floor(Number(value));
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    };
+    const user = toPositive(params?.contextWindow);
+    const observed = toPositive(params?.observedContextWindow);
+    if (user && observed) return Math.min(user, observed);
+    return user ?? observed;
+  }
+
+  /**
+   * 会话参数只覆盖"要不要下发输出上限"，窗口始终来自模型本身。
+   */
+  static resolveBudgetParameters(
+    model: ModelParameters,
+    session?: ModelParameters | null,
+  ): ModelParameters {
+    if (!session) return model;
+    return {
+      ...model,
+      enableMaxTokens: session.enableMaxTokens ?? model.enableMaxTokens,
+      contextWindow: session.contextWindow ?? model.contextWindow,
+    };
   }
 
   /**
@@ -114,6 +175,41 @@ export class ModelParametersService {
   }
 
   /**
+   * 唯一的下发上限判定点。
+   *
+   * - `enableMaxTokens === false` → 关闭，不下发；
+   * - `options.maxTokens` 有值（手动启用或会话覆盖）→ 按有效窗口收敛后下发；
+   * - 否则 → 自动：**不下发**，由服务端决定单次能输出多久。
+   *
+   * 有效窗口同时写进 `contextWindowTokens`，供上下文管理器判断是否需要压缩历史。
+   */
+  static applyOutputBudget(
+    options: Record<string, any>,
+    params: { contextWindow?: number; observedContextWindow?: number; enableMaxTokens?: boolean },
+  ): Record<string, any> {
+    const next = { ...options };
+    const window = ModelParametersService.effectiveContextWindow(params);
+
+    // 关闭：不管别处填了什么，都不下发。
+    if (params?.enableMaxTokens === false) {
+      delete next.maxTokens;
+    } else {
+      // options 里存在 maxTokens 只可能来自"手动启用"或会话覆盖（convertToChatOptions
+      // 在自动模式下不下发），所以这里能区分自动与手动。自动模式交给服务端。
+      const budget = resolveOutputBudget({
+        contextWindow: window,
+        userMaxTokens: typeof options.maxTokens === 'number' ? options.maxTokens : undefined,
+      });
+      if (typeof budget === 'number') next.maxTokens = budget;
+      else delete next.maxTokens;
+    }
+
+    if (window) next.contextWindowTokens = window;
+    else delete next.contextWindowTokens;
+    return next;
+  }
+
+  /**
    * 反向解析：将通用 ChatOptions 拆解回 ModelParameters 结构（基础参数 + 高级参数）
    * - 会尽量从顶层或 generationConfig 中提取基础参数
    * - 其余参数保留在 advancedOptions 中，且会移除与基础参数重复的字段
@@ -130,6 +226,11 @@ export class ModelParametersService {
       (typeof src.maxTokens === 'number' ? src.maxTokens :
         (typeof src.maxOutputTokens === 'number' ? src.maxOutputTokens :
           (typeof gen.maxOutputTokens === 'number' ? gen.maxOutputTokens : DEFAULT_MODEL_PARAMETERS.maxTokens)));
+
+    // The context window is a capability we track, never a request field.
+    const contextWindow: number | undefined =
+      (typeof src.contextWindow === 'number' ? src.contextWindow :
+        (typeof gen.contextWindow === 'number' ? gen.contextWindow : undefined));
 
     const topP: number =
       (typeof src.topP === 'number' ? src.topP :
@@ -159,6 +260,7 @@ export class ModelParametersService {
     delete advanced.temperature;
     delete advanced.maxTokens;
     delete advanced.maxOutputTokens;
+    delete advanced.contextWindow;
     delete advanced.topP;
     delete advanced.topK;
     delete advanced.minP;
@@ -169,6 +271,7 @@ export class ModelParametersService {
     if (advanced.generationConfig && typeof advanced.generationConfig === 'object') {
       if (advanced.generationConfig.temperature !== undefined) delete advanced.generationConfig.temperature;
       if (advanced.generationConfig.maxOutputTokens !== undefined) delete advanced.generationConfig.maxOutputTokens;
+      if (advanced.generationConfig.contextWindow !== undefined) delete advanced.generationConfig.contextWindow;
       if (advanced.generationConfig.topP !== undefined) delete advanced.generationConfig.topP;
       if (advanced.generationConfig.stopSequences !== undefined) delete advanced.generationConfig.stopSequences;
       // 如果 generationConfig 变空对象，保留（兼容后续可能新增字段），不特殊处理
@@ -177,6 +280,7 @@ export class ModelParametersService {
     return {
       temperature,
       maxTokens,
+      contextWindow,
       topP,
       topK,
       minP,

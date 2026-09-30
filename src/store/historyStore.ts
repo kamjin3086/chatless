@@ -47,7 +47,6 @@ interface HistoryState {
   toggleStats: () => void;
   
   // 数据操作
-  toggleImportant: (id: string) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   batchDelete: () => Promise<void>;
@@ -282,32 +281,6 @@ export const useHistoryStore = create<HistoryState>()(
       if (newShowStats && !get().stats) {
         console.log('[HistoryStore] Loading stats because showStats is true and stats is null');
         get().loadStats();
-      }
-    },
-
-    // 切换重要性
-    toggleImportant: async (id) => {
-      try {
-        const success = await historyService.toggleImportant(id);
-        
-        if (success) {
-          set(state => {
-            const item = state.historyItems.find(item => item.id === id);
-            if (item) {
-              item.isImportant = !item.isImportant;
-            }
-            
-            // 同时更新分组历史中的项目
-            state.groupedHistory.forEach(group => {
-              const groupItem = group.items.find(item => item.id === id);
-              if (groupItem) {
-                groupItem.isImportant = !groupItem.isImportant;
-              }
-            });
-          });
-        }
-      } catch (error) {
-        console.error('切换重要性失败:', error);
       }
     },
 

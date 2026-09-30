@@ -1,4 +1,4 @@
-use crate::env_setup::EnvironmentSetup;
+use crate::mcp::repair::{self, RunnerKind};
 use crate::mcp::state::{McpService, McpState};
 use crate::mcp::types::McpServerConfig;
 use rmcp::{
@@ -16,47 +16,7 @@ use rmcp::{
 use reqwest::Url;
 use std::net::IpAddr;
 use tauri::State;
-use tokio::process::Command;
 use tokio::time::{timeout, Duration};
-
-// —— 工具：从 npx 参数中提取第一个包名（用于首次安装的预拉取） ——
-fn extract_npx_package(args: &Option<Vec<String>>) -> Option<String> {
-  if let Some(a) = args {
-    for it in a {
-      // 跳过常见的 flags（以 - 开头）
-      if it.starts_with('-') {
-        continue;
-      }
-      return Some(it.clone());
-    }
-  }
-  None
-}
-
-async fn npx_prefetch_package(pkg: &str) -> Result<(), String> {
-  // 只下载依赖，不启动 MCP；最长等待 4 分钟以适配首次安装
-  let mut pre = Command::new("npx");
-
-  // [关键步骤] 为Windows平台设置无窗口创建标志
-  #[cfg(windows)]
-  {
-    pre.creation_flags(0x08000000); // CREATE_NO_WINDOW
-  }
-
-  pre.env("NPM_CONFIG_LOGLEVEL", "silent");
-  pre.env("NO_COLOR", "1");
-  pre.env("NPX_Y", "1");
-  pre.args(["-y", "-p", pkg, "node", "-e", "process.exit(0)"]);
-  log::info!("[MCP/npx] prefetch package: {}", pkg);
-  let status = timeout(Duration::from_secs(240), pre.status())
-    .await
-    .map_err(|_| "npx prefetch timeout".to_string())?
-    .map_err(|e| e.to_string())?;
-  if !status.success() {
-    return Err(format!("npx prefetch failed with code {:?}", status.code()));
-  }
-  Ok(())
-}
 
 fn is_path_like(arg: &str) -> bool {
   if arg.is_empty() {
@@ -109,21 +69,6 @@ pub async fn mcp_connect(
     return Ok(());
   }
 
-  // 检查环境是否支持 MCP 服务
-  if !crate::env_setup::can_run_mcp_services() {
-    let health = crate::env_setup::get_environment_health();
-    let missing_tools = health.missing_critical_tools.join(", ");
-    let recommendations = health.recommendations.join("\n");
-
-    let error_msg = format!(
-      "Cannot connect to MCP server: Required tools are missing: {}\n\nInstallation recommendations:\n{}",
-      missing_tools, recommendations
-    );
-
-    log::error!("[MCP] {}", error_msg);
-    return Err(error_msg);
-  }
-
   match config.r#type.as_str() {
     "stdio" => {
       log::info!(
@@ -135,112 +80,28 @@ pub async fn mcp_connect(
         .command
         .clone()
         .ok_or_else(|| "command required for stdio".to_string())?;
+      let args = config.args.clone().unwrap_or_default();
       log::info!("[MCP/stdio] Command name: {}", cmd_name);
 
-      // —— 基础安全校验：仅允许白名单命令或显式路径；另允许 Windows 包装器 cmd /c ——
-      let is_path = cmd_name.contains('/') || cmd_name.contains('\\');
-      log::debug!("[MCP/stdio] Command is_path: {}", is_path);
+      let (inner_cmd, _) = repair::unwrap_cmd_wrapper(&cmd_name, &args);
+      let is_path = inner_cmd.contains('/') || inner_cmd.contains('\\');
+      log::debug!("[MCP/stdio] Inner command: {} is_path={}", inner_cmd, is_path);
 
       if !is_path {
         const ALLOW: [&str; 3] = ["npx", "uvx", "bunx"];
-        let is_wrapper_cmd = cmd_name.eq_ignore_ascii_case("cmd")
-          && config
-            .args
-            .as_ref()
-            .map(|a| {
-              a.get(0)
-                .map(|s| s.eq_ignore_ascii_case("/c"))
-                .unwrap_or(false)
-            })
-            .unwrap_or(false)
-          && config.args.as_ref().map(|a| a.len() >= 2).unwrap_or(false);
-
-        log::debug!("[MCP/stdio] Is wrapper cmd: {}", is_wrapper_cmd);
-        log::debug!("[MCP/stdio] Allowed commands: {:?}", ALLOW);
-
-        if !ALLOW.contains(&cmd_name.as_str()) && !is_wrapper_cmd {
+        let stem = std::path::Path::new(&inner_cmd)
+          .file_stem()
+          .and_then(|s| s.to_str())
+          .unwrap_or(inner_cmd.as_str());
+        if !ALLOW.iter().any(|a| stem.eq_ignore_ascii_case(a)) {
           let error_msg = format!(
-            "command '{}' is not allowed. use one of: npx, uvx, bunx, an absolute path, or Windows wrapper 'cmd /c <cmd>'",
+            "command '{}' is not allowed. use one of: npx, uvx, bunx, an absolute path, or Windows wrapper 'cmd /c <npx|uvx|bunx>'",
             cmd_name
           );
           log::error!("[MCP/stdio] Security check failed: {}", error_msg);
           return Err(error_msg);
         }
       }
-
-      // 构造命令的闭包，便于重试
-      let build_cmd = || {
-        log::debug!("[MCP/stdio] Building command: {}", cmd_name);
-
-        let mut c = Command::new(&cmd_name);
-
-        // [关键步骤] 为Windows平台设置无窗口创建标志
-        #[cfg(windows)]
-        {
-          c.creation_flags(0x08000000); // CREATE_NO_WINDOW
-          log::debug!("[MCP/stdio] Set Windows CREATE_NO_WINDOW flag");
-        }
-
-        // 动态设置环境变量，特别是对于 npm 相关命令
-        if cmd_name == "npx" || cmd_name == "npm" || cmd_name == "node" {
-          log::debug!(
-            "[MCP/stdio] Setting up environment for {} command",
-            cmd_name
-          );
-
-          // 获取当前环境设置（用于调试）
-          let _current_path = std::env::var("PATH").unwrap_or_default();
-
-          // 如果检测到工具不可用，尝试重新设置环境
-          let env_checker = EnvironmentSetup::new();
-          if !env_checker.verify_tool_availability(&cmd_name) {
-            log::warn!(
-              "[MCP/stdio] Tool {} not found in current PATH, attempting to refresh environment",
-              cmd_name
-            );
-
-            // 尝试设置环境变量
-            if let Ok(()) = EnvironmentSetup::new().setup() {
-              // 重新获取环境设置以获取更新后的 PATH
-              let updated_env = EnvironmentSetup::new();
-              let updated_path = updated_env.get_updated_path();
-              c.env("PATH", updated_path);
-              log::info!("[MCP/stdio] Updated PATH for {} command", cmd_name);
-            } else {
-              log::warn!(
-                "[MCP/stdio] Failed to setup environment for {} command",
-                cmd_name
-              );
-            }
-          } else {
-            log::debug!("[MCP/stdio] Tool {} is available in current PATH", cmd_name);
-          }
-        }
-
-        if let Some(args) = &config.args {
-          c.args(args);
-          log::debug!("[MCP/stdio] Added args: {:?}", args);
-        }
-
-        if let Some(envs) = &config.env {
-          for (k, v) in envs {
-            c.env(k, v);
-            log::debug!("[MCP/stdio] Set env: {}={}", k, v);
-          }
-        }
-
-        if cmd_name == "npx" {
-          c.env("NPM_CONFIG_LOGLEVEL", "silent");
-          c.env("NO_COLOR", "1");
-          c.env("NPX_Y", "1");
-          log::debug!("[MCP/stdio] Set npx-specific environment variables");
-        }
-
-        // Log the final command for debugging
-        log::info!("[MCP/stdio] Built command: {} {:?}", cmd_name, config.args);
-
-        c
-      };
 
       // —— 参数校验，避免简单的 shell 注入字符 ——
       if let Some(args) = &config.args {
@@ -367,7 +228,7 @@ pub async fn mcp_connect(
       }
 
       // —— 调试日志 ——
-      log::info!("[MCP/stdio] Command validation passed, spawning process");
+      log::info!("[MCP/stdio] Command validation passed, resolving runner");
       log::debug!(
         "[MCP/stdio] Final command details: cmd='{}' args={:?} envs={}",
         cmd_name,
@@ -375,45 +236,52 @@ pub async fn mcp_connect(
         config.env.as_ref().map(|v| v.len()).unwrap_or(0)
       );
 
-      // 一次尝试的封装
-      let try_connect = || async {
-        log::debug!("[MCP/stdio] Attempting to spawn child process");
-        let cmd = build_cmd();
+      let mut resolved = repair::prepare_stdio(&cmd_name, &args).await?;
+      log::info!(
+        "[MCP/stdio] Resolved program: {} runner={:?} package={:?} repaired={}",
+        resolved.program,
+        resolved.runner,
+        resolved.package,
+        resolved.repaired_runner
+      );
 
-        // Log current working directory and environment for debugging
-        if let Ok(current_dir) = std::env::current_dir() {
-          log::debug!("[MCP/stdio] Current working directory: {:?}", current_dir);
-        }
-
-        if let Ok(path) = std::env::var("PATH") {
-          log::debug!("[MCP/stdio] PATH environment: {}", path);
-        }
-
-        match TokioChildProcess::new(cmd.configure(|_c| {})) {
-          Ok(process) => {
-            log::debug!("[MCP/stdio] Child process created successfully");
-            let service: McpService = ().serve(process).await.map_err(|e| {
-              log::error!("[MCP/stdio] Service creation failed: {}", e);
-              e.to_string()
-            })?;
-            log::info!("[MCP/stdio] MCP service created successfully");
-            Ok::<McpService, String>(service)
-          }
-          Err(e) => {
-            log::error!("[MCP/stdio] Failed to create child process: {}", e);
-            Err(e.to_string())
+      let extra_env = config.env.clone();
+      let connect_once = |program: String, spawn_args: Vec<String>, runner: RunnerKind| {
+        let extra_env = extra_env.clone();
+        async move {
+          log::debug!("[MCP/stdio] Attempting to spawn child process: {program}");
+          let cmd = repair::build_stdio_command(&program, &spawn_args, extra_env.as_ref(), runner);
+          match TokioChildProcess::new(cmd.configure(|_c| {})) {
+            Ok(process) => {
+              let service: McpService = ().serve(process).await.map_err(|e| {
+                log::error!("[MCP/stdio] Service creation failed: {}", e);
+                e.to_string()
+              })?;
+              log::info!("[MCP/stdio] MCP service created successfully");
+              Ok::<McpService, String>(service)
+            }
+            Err(e) => {
+              log::error!("[MCP/stdio] Failed to create child process: {}", e);
+              Err(e.to_string())
+            }
           }
         }
       };
 
-      // 第一次尝试（可能在 npx 首次下载时失败/超时）
       log::info!("[MCP/stdio] Starting first connection attempt with 30s timeout");
-      let first = timeout(Duration::from_secs(30), try_connect())
-        .await
-        .map_err(|_| {
-          log::error!("[MCP/stdio] First connection attempt timed out");
-          "Connect timeout (stdio)".to_string()
-        });
+      let first = timeout(
+        Duration::from_secs(30),
+        connect_once(
+          resolved.program.clone(),
+          resolved.args.clone(),
+          resolved.runner,
+        ),
+      )
+      .await
+      .map_err(|_| {
+        log::error!("[MCP/stdio] First connection attempt timed out");
+        "Connect timeout (stdio)".to_string()
+      });
 
       match first {
         Ok(Ok(service)) => {
@@ -427,46 +295,69 @@ pub async fn mcp_connect(
         Ok(Err(e)) | Err(e) => {
           log::warn!("[MCP/stdio] First connection attempt failed: {}", e);
 
-          if cmd_name == "npx" {
-            if let Some(pkg) = extract_npx_package(&config.args) {
-              log::info!(
-                "[MCP/stdio] First connect failed: {}. prefetching {}...",
-                e,
-                pkg
-              );
-              // 预下载失败则直接返回组合错误
-              match npx_prefetch_package(&pkg).await {
-                Ok(()) => {
-                  log::info!("[MCP/stdio] Package prefetch successful, retrying connection");
-                }
-                Err(pe) => {
-                  log::error!("[MCP/stdio] Package prefetch failed: {}", pe);
-                  return Err(format!("{}; prefetch: {}", e, pe));
-                }
+          if !resolved.runner.is_package_runner() {
+            log::error!("[MCP/stdio] Connection failed for direct executable, cannot repair");
+            return Err(e);
+          }
+
+          let mut last = e.clone();
+          if repair::looks_like_missing_program(&e) {
+            match repair::ensure_runner(resolved.runner).await {
+              Ok(program) => {
+                log::info!("[MCP/stdio] Runner restored at {program}");
+                resolved.program = program;
+                resolved.repaired_runner = true;
               }
+              Err(re) => {
+                last = format!("{}; repair: {}", e, re);
+                log::error!("[MCP/stdio] Runner repair failed: {}", re);
+              }
+            }
+          }
 
-              // 预下载成功后重试
-              log::info!("[MCP/stdio] Starting second connection attempt after prefetch");
-              let second = timeout(Duration::from_secs(30), try_connect())
-                .await
-                .map_err(|_| {
-                  log::error!("[MCP/stdio] Second connection attempt timed out");
-                  "Connect timeout (stdio, after prefetch)".to_string()
-                })??;
+          if let Some(pkg) = resolved.package.clone() {
+            log::info!("[MCP/stdio] Prefetching package {pkg} after first failure");
+            if let Err(pe) = repair::prefetch(resolved.runner, &resolved.program, &pkg).await {
+              log::warn!("[MCP/stdio] Package prefetch failed (will still retry): {}", pe);
+              last = format!("{}; prefetch: {}", last, pe);
+            } else {
+              log::info!("[MCP/stdio] Package prefetch successful, retrying connection");
+            }
+          } else if repair::looks_like_missing_program(&e)
+            && repair::looks_like_missing_program(&last)
+          {
+            return Err(last);
+          }
 
+          log::info!("[MCP/stdio] Starting second connection attempt after repair/prefetch");
+          let second = timeout(
+            Duration::from_secs(30),
+            connect_once(
+              resolved.program.clone(),
+              resolved.args.clone(),
+              resolved.runner,
+            ),
+          )
+          .await
+          .map_err(|_| {
+            log::error!("[MCP/stdio] Second connection attempt timed out");
+            "Connect timeout (stdio, after prefetch)".to_string()
+          });
+
+          match second {
+            Ok(Ok(service)) => {
               log::info!(
                 "[MCP/stdio] Second connection attempt successful for server: {}",
                 name
               );
-              state.0.insert(name, second);
+              state.0.insert(name, service);
               Ok(())
-            } else {
-              log::error!("[MCP/stdio] Failed to extract package name from npx args");
-              Err(e)
             }
-          } else {
-            log::error!("[MCP/stdio] Connection failed and not using npx, cannot retry");
-            Err(e)
+            Ok(Err(e2)) | Err(e2) => Err(if last != e {
+              format!("{}; retry: {}", last, e2)
+            } else {
+              e2
+            }),
           }
         }
       }

@@ -87,7 +87,7 @@ export default function HistoryToolbar() {
 
   return (
     <>
-      <div className="border-b border-gray-100 dark:border-slate-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-4 text-gray-700 dark:text-gray-300">
+      <div className="border-b border-gray-100 dark:border-slate-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-4 text-gray-700 dark:text-gray-300 glass-surface">
         {/* 主工具栏 - 简化版 */}
         <div className="flex items-center justify-between p-4 gap-4">
           {/* 左侧：搜索 */}

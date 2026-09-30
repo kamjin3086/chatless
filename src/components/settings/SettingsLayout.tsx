@@ -3,6 +3,7 @@
 import { SettingsSidebar } from "./SettingsSidebar";
 import { useProviderManagement } from '@/hooks/useProviderManagement';
 import { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
 
 interface SettingsLayoutProps {
   children: React.ReactNode;
@@ -77,14 +78,26 @@ export function SettingsLayout({ children, activeTab, onTabChange }: SettingsLay
       observer.disconnect();
     };
   }, [activeTab]);
+
+  const isProviderManager = activeTab === "localModels";
+
   return (
-    <div className="flex flex-col h-full bg-white/90 dark:bg-gray-950/90 overflow-hidden">
-        {/* 头部暂时隐藏以保持简洁 */}
-        <div className="flex flex-1 overflow-hidden">
-             {/* 设置侧边栏 */}
+    <div className={cn(
+      "flex flex-col h-full overflow-hidden",
+      !isProviderManager && "settings-shell"
+    )}>
+        <div className="flex flex-1 min-h-0 overflow-hidden">
              <SettingsSidebar activeTab={activeTab} onTabChange={onTabChange} />
-             {/* 设置内容区域 - 优化边距，提高空间利用率 */}
-             <main ref={mainRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 bg-white/80 dark:bg-gray-900/80 custom-scrollbar text-sm">
+             <main
+               ref={mainRef}
+               onScroll={handleScroll}
+               className={cn(
+                 "settings-main flex-1 min-h-0 custom-scrollbar text-sm",
+                 isProviderManager
+                   ? "overflow-hidden p-0"
+                   : "overflow-y-auto px-5 py-4"
+               )}
+             >
                {children}
              </main>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useEffect, useState } from 'react';
-import { Copy, Star, RefreshCcw, Check, Trash2, Loader2 } from 'lucide-react';
+import { Copy, Star, RefreshCcw, Check, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ContextMenu, createMessageMenuItems } from '@/components/ui/context-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -43,6 +43,7 @@ interface ChatMessageProps {
     id: string;
     name: string;
   };
+  citations?: Message['citations'];
   images?: string[];
   segments?: Message['segments'];
   viewModel?: Message['segments_vm'];
@@ -95,6 +96,7 @@ function ChatMessageComponent({
   
   // 知识库引用props
   knowledgeBaseReference,
+  citations,
   images,
   segments,
   viewModel,
@@ -126,6 +128,7 @@ function ChatMessageComponent({
 
   const isUser = role === "user";
   const isStreaming = status === 'loading';
+  const isError = status === 'error';
   // 生成期间不显示时间与模型，避免视觉抖动；完成后再显示
   const formattedTime = isStreaming ? '' : formatTimestamp(timestamp);
 
@@ -145,20 +148,19 @@ function ChatMessageComponent({
     );
   }, [segments]);
   
-  // 🔑 检测 viewModel 中的 isComplete 标志
-  // 只有当 FSM 真正进入 COMPLETE 状态时，才认为消息完全结束
-  const isViewModelComplete = viewModel?.flags?.isComplete === true;
+  const isSettled = !isStreaming && status !== 'sending' && status !== 'pending';
+  const shouldShowTimestamp = isSettled && !hasRunningToolCall && !isAgentLoopRunning;
   
-  // 🔑 决定是否显示时间戳和模型名称：
-  // - 正在流式时不显示
-  // - 有正在运行的工具调用时不显示
-  // - FSM 未完成时不显示（即使 status 是 sent）
-  // - AgentLoop 运行中不显示
-  const shouldShowTimestamp = !isStreaming && !hasRunningToolCall && isViewModelComplete && !isAgentLoopRunning;
-  
+  // 思考中已经有自己的活动指示（思考栏的 spinner + 计时），不要再叠一个"处理中..."。
+  const isThinkingActive = !isUser && (
+    !!viewModel?.flags?.isThinking ||
+    (Array.isArray(segments) && segments.length > 0 && (segments[segments.length - 1] as any)?.kind === 'think')
+  );
+
   // 🔑 决定是否显示 AgentLoop 运行指示器
-  // 条件：AI消息 + AgentLoop 正在运行 + 当前没有活跃的工具卡片正在运行
-  const shouldShowAgentLoopIndicator = !isUser && isAgentLoopRunning && !hasRunningToolCall;
+  // 条件：AI消息 + AgentLoop 正在运行 + 没有活跃的工具卡片 + 不在思考中
+  // （同一时刻只允许一个"正在忙"的指示器）
+  const shouldShowAgentLoopIndicator = !isUser && isAgentLoopRunning && !hasRunningToolCall && !isThinkingActive;
   
   // 仅对"正在生成/刚发送"的消息开启入场动画；历史消息不做入场动画，避免切换会话时整列表闪烁
   // 🔑 修复：如果消息已经入场过，不再触发入场动画
@@ -186,6 +188,7 @@ function ChatMessageComponent({
           id={id}
           // 关键：把上层透传的 segments 优先交给 AIMessageBlock 做段驱动渲染（包含 think 段）
           segments={Array.isArray(segments) ? (segments as any) : undefined}
+          citations={citations}
           viewModel={viewModel as any}
           onStreamingComplete={(duration) => {
             if (onSaveThinkingDuration) {
@@ -193,7 +196,7 @@ function ChatMessageComponent({
             }
           }}
         />;
-  }, [isUser, id, content, documentReference?.fileName, contextData, knowledgeBaseReference?.id, images?.length, onEdit, onCopy, isStreaming, thinking_duration, thinking_start_time, onSaveThinkingDuration, segments, viewModel]);
+  }, [isUser, id, content, documentReference?.fileName, contextData, knowledgeBaseReference?.id, citations, images?.length, onEdit, onCopy, isStreaming, thinking_duration, thinking_start_time, onSaveThinkingDuration, segments, viewModel]);
 
   // ⚠️ 【Fallback机制】：优先使用 segments，仅在 segments 为空时使用 content
   // 
@@ -236,11 +239,12 @@ function ChatMessageComponent({
   return (
     <div
       className={cn(
-        "flex chat-transition group mt-2 mb-2 relative w-full",
-        isUser 
-          ? "flex-row-reverse justify-start max-w-[85%] ml-auto" 
-          : "max-w-[85%]"
+        "flex chat-transition group mt-2 mb-2 relative w-full focus-within:outline-none",
+        isUser
+          ? "flex-row-reverse justify-start max-w-[min(85%,42rem)] ml-auto"
+          : "max-w-[min(100%,48rem)]"
       )}
+      tabIndex={-1}
     >
       {/* 头像隐藏 */}
       {/* <div className="w-8 shrink-0"></div> */}
@@ -272,11 +276,19 @@ function ChatMessageComponent({
           >
             <div className={cn(
               isUser ? "max-w-full min-w-0" : "w-full max-w-full min-w-0",
-              // 混合优化：减少圆角和边框，更紧凑
               isUser
                 ? "px-2.5 py-1.5 text-[14px] leading-[1.4] rounded-lg bg-blue-50/60 dark:bg-slate-800/40"
-                : "px-2 py-1.5 rounded-lg"
+                : cn(
+                    "px-2 py-1.5 rounded-lg",
+                    isError && "border border-red-200/80 dark:border-red-800/60 bg-red-50/40 dark:bg-red-950/20"
+                  )
             )}>
+              {isError && !isUser && (
+                <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 mb-2 font-medium">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>生成失败</span>
+                </div>
+              )}
               {messageContent}
             </div>
           </motion.div>
@@ -308,26 +320,50 @@ function ChatMessageComponent({
           </div>
         )}
 
-        {/* 时间戳和模型信息：仅在非流式、非追问阶段、非 AgentLoop 运行时显示，避免生成中抖动 */}
+        {/* 错误态常驻重试入口 */}
+        {!isUser && isError && onRetry && !shouldShowTimestamp && (
+          <div className="flex items-center gap-2 ml-1 mt-1.5 self-start">
+            <button
+              onClick={onRetry}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+              aria-label="重试生成"
+            >
+              <RefreshCcw className="w-3 h-3" />
+              {String(content || '').includes('[用户停止了生成]') ? '继续' : '重试'}
+            </button>
+          </div>
+        )}
+
+        {/* 元数据与操作：默认隐身，hover / 焦点时出现一次 */}
         {shouldShowTimestamp && (formattedTime || (!isUser && model)) && (
           <div className={cn(
-            "flex items-center justify-between flex-nowrap text-[11px] text-slate-500 dark:text-slate-400 ml-1 mt-1",
+            "flex items-center justify-between flex-nowrap text-[11px] text-slate-400 dark:text-slate-500 ml-1 mt-1",
+            "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150",
+            isError && "opacity-100",
             isUser ? "self-end" : "self-start w-full"
           )}>
-            <div className="flex items-center gap-2 min-w-0 whitespace-nowrap overflow-hidden">
+            <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap overflow-hidden">
               {!isUser && model && (
-                <span className="font-medium truncate max-w-[40vw]">{model}</span>
+                <span className="truncate max-w-[40vw]">{model}</span>
+              )}
+              {!isUser && model && formattedTime && (
+                <span className="text-slate-300 dark:text-slate-600">·</span>
               )}
               <span className="shrink-0">{formattedTime}</span>
             </div>
-            {/* AI消息功能按钮 - 更轻量的设计 */}
             {!isUser && (
-              <div className="flex items-center gap-0.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto">
+              <div className="flex items-center gap-0.5 whitespace-nowrap">
                 {onRetry && (
                   <button
                     onClick={onRetry}
-                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
-                    title="重试"
+                    className={cn(
+                      "p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
+                      isError
+                        ? "text-red-500 hover:text-red-600 dark:text-red-400"
+                        : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    )}
+                    title={String(content || '').includes('[用户停止了生成]') || status === 'aborted' ? '继续' : '重试'}
+                    aria-label={String(content || '').includes('[用户停止了生成]') || status === 'aborted' ? '继续任务' : '重试生成'}
                   >
                     <RefreshCcw className="w-3 h-3" />
                   </button>
@@ -335,27 +371,30 @@ function ChatMessageComponent({
                 <button
                   onClick={() => handleCopy(copyVisibleText)}
                   className={cn(
-                    "p-1 rounded transition-colors",
+                    "p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
                     isCopied
                       ? "text-emerald-500"
                       : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                   )}
                   title={isCopied ? "已复制" : "复制"}
+                  aria-label={isCopied ? "已复制" : "复制消息"}
                 >
                   {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 </button>
                 <button
                   onClick={() => setConfirmOpen(true)}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
                   title="删除"
+                  aria-label="删除消息"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
                 {onStar && (
                   <button
                     onClick={() => onStar(id)}
-                    className="p-1 text-slate-400 hover:text-amber-500 rounded transition-colors"
+                    className="p-1 text-slate-400 hover:text-amber-500 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
                     title="收藏"
+                    aria-label="收藏消息"
                   >
                     <Star className="w-3 h-3" />
                   </button>
@@ -431,4 +470,4 @@ export const ChatMessage = React.memo(
       prev.viewModel === next.viewModel
     );
   }
-); 
+);

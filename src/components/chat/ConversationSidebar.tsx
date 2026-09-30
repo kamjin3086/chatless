@@ -29,7 +29,6 @@ export function ConversationSidebar({
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const toggleStarConversation = useChatStore((state) => state.toggleStarConversation);
-  const toggleImportant = useChatStore((state) => state.toggleImportant);
   const duplicateConversation = useChatStore((state) => state.duplicateConversation);
   const isLoading = useChatStore((state) => state.isLoadingConversations);
 
@@ -98,10 +97,6 @@ export function ConversationSidebar({
   }, [clickTimeoutId]);
 
   // 星标直接使用 toggleStarConversation
-
-  const handleToggleImportant = (conversationId: string) => {
-    toggleImportant(conversationId);
-  };
 
   const handleDuplicateConversation = (conversationId: string) => {
     duplicateConversation(conversationId);
@@ -204,13 +199,15 @@ export function ConversationSidebar({
                 onRenameKeyDown={handleRenameKeyDown}
                 onDelete={handleDeleteClick}
                 onStar={toggleStarConversation}
-                onToggleImportant={handleToggleImportant}
                 onDuplicate={handleDuplicateConversation}
                 onExport={downloadConversation}
               />
             </div>
           )}
-          style={{ height: '100%' }}
+          // A conversation list scrolls vertically only. Virtuoso's scroller
+          // defaults to `overflow-x: auto`, so one wide child (a long model name)
+          // is enough to grow a horizontal scrollbar.
+          style={{ height: '100%', overflowX: 'hidden' }}
         />
       </div>
       <DeleteConversationDialog

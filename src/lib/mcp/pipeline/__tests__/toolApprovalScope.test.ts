@@ -1,0 +1,254 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
+import { ToolInvocation } from '../ToolInvocation';
+import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
+
+const mocks = vi.hoisted(() => ({
+  setAllowlist: vi.fn(async () => ({ ok: true })),
+  grantCallScope: vi.fn(async () => ({ ok: true, path: '' })),
+  revokeCallScope: vi.fn(async () => ({ ok: true })),
+  appendWorkspaceToolStep: vi.fn(async () => {}),
+  approvals: [] as Array<{ id: string; onApprove: (decision?: 'once' | 'always' | 'unrestricted') => void }>,
+  decision: 'once' as 'once' | 'always' | 'unrestricted',
+  addedDirectories: [] as Array<{ path: string; permissions: Record<string, boolean> }>,
+}));
+
+vi.mock('@/lib/tauri/filesystemCommands', () => ({
+  setAllowlist: mocks.setAllowlist,
+  grantCallScope: mocks.grantCallScope,
+  revokeCallScope: mocks.revokeCallScope,
+}));
+
+vi.mock('@/store/authorizationStore', () => ({
+  useAuthorizationStore: {
+    getState: () => ({
+      addPendingAuthorization: (auth: { id: string; onApprove: (decision?: 'once' | 'always' | 'unrestricted') => void }) => {
+        mocks.approvals.push(auth);
+        // Simulate the user's decision; "允许本次" by default.
+        auth.onApprove(mocks.decision);
+      },
+    }),
+  },
+}));
+
+vi.mock('@/store/filesystemAllowlistStore', () => ({
+  useFilesystemAllowlistStore: { getState: () => ({
+    directories: [],
+    load: async () => {},
+    getByPath: () => undefined,
+    addDirectory: async (directory: { path: string; permissions: Record<string, boolean> }) => {
+      mocks.addedDirectories.push(directory);
+    },
+    updateDirectory: async (_id: string, patch: { path: string; permissions: Record<string, boolean> }) => {
+      mocks.addedDirectories.push(patch);
+    },
+  }) },
+}));
+
+vi.mock('@/store/conversationAttachmentStore', () => ({
+  useConversationAttachmentStore: { getState: () => ({ getWorkingDir: () => undefined }) },
+}));
+
+vi.mock('@/lib/mcp/authorizationConfig', () => ({ shouldAutoAuthorize: async () => false }));
+vi.mock('@/lib/mcp/experience/agentExperienceConfig', () => ({
+  getAgentExperienceConfig: async () => ({ maxToolRetries: 0 }),
+}));
+vi.mock('@/lib/agentWorkspace/manifestService', () => ({
+  appendWorkspaceToolStep: mocks.appendWorkspaceToolStep,
+}));
+vi.mock('../ToolCardUpdater', () => ({
+  markError: () => {}, markPendingAuth: () => {}, markSuccess: () => {},
+}));
+vi.mock('@/lib/database/services/DatabaseService', () => ({
+  DatabaseService: {
+    getInstance: () => ({
+      getDbManager: () => ({
+        getConnectionUrl: () => 'sqlite::memory:',
+        executeTransaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ execute: async () => {} }),
+      }),
+    }),
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.approvals.length = 0;
+  mocks.addedDirectories.length = 0;
+  mocks.decision = 'once';
+  clearConversationAccess('fs', 'conv-1');
+  clearConversationAccess('shell', 'conv-1');
+});
+
+describe('one-time filesystem approval', () => {
+  it('grants the approved call without writing the persistent allowlist', async () => {
+    const adapter = {
+      server: 'filesystem',
+      canHandle: () => true,
+      execute: vi.fn(async () => ({ ok: true })),
+    };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    const invocation = new ToolInvocation({
+      assistantMessageId: 'run-1',
+      conversationId: 'conv-1',
+      server: 'filesystem',
+      tool: 'write_file',
+      args: { path: 'C:/outside/dir/file.txt', content: 'hello' },
+      callId: 'call-1',
+    });
+
+    const result = await pipeline.run(invocation);
+
+    expect(adapter.execute).toHaveBeenCalledOnce();
+    expect(result).toEqual({ ok: true });
+    expect(mocks.grantCallScope).toHaveBeenCalledWith({
+      runId: 'run-1', callId: 'call-1', path: 'C:/outside/dir',
+      read: false, write: true, create: false, delete: false,
+    });
+    // The approval must never become a persistent authorization.
+    const persistedPaths = mocks.setAllowlist.mock.calls
+      .flatMap((call) => ((call[0] as { directories?: Array<{ path: string }> })?.directories || []).map((d) => d.path));
+    expect(persistedPaths).toEqual([]);
+    expect(mocks.revokeCallScope).toHaveBeenCalledWith({ runId: 'run-1', callId: 'call-1' });
+  });
+
+  it('binds a delete approval to the exact target instead of its parent', async () => {
+    const adapter = {
+      server: 'filesystem',
+      canHandle: () => true,
+      execute: vi.fn(async () => ({ ok: true })),
+    };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    const invocation = new ToolInvocation({
+      assistantMessageId: 'run-2',
+      conversationId: 'conv-1',
+      server: 'filesystem',
+      tool: 'delete_file',
+      args: { path: 'C:/outside/dir/file.txt' },
+      callId: 'call-2',
+    });
+
+    await pipeline.run(invocation);
+
+    expect(mocks.grantCallScope).toHaveBeenCalledWith({
+      runId: 'run-2', callId: 'call-2', path: 'C:/outside/dir/file.txt',
+      read: true, write: false, create: false, delete: true,
+    });
+  });
+});
+
+describe('directory-level filesystem approval', () => {
+  const adapter = () => ({
+    server: 'filesystem',
+    canHandle: () => true,
+    execute: vi.fn(async () => ({ ok: true })),
+  });
+
+  const write = (pipeline: ToolExecutionPipeline, id: string, path: string) => pipeline.run(
+    new ToolInvocation({
+      assistantMessageId: id,
+      conversationId: 'conv-1',
+      server: 'filesystem',
+      tool: 'write_file',
+      args: { path, content: 'hello' },
+      callId: id,
+    }),
+  );
+
+  it('stops asking entirely after "本会话不再询问" is chosen', async () => {
+    const exec = adapter();
+    const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
+    mocks.decision = 'unrestricted';
+
+    await write(pipeline, 'run-a', 'C:/outside/dir/first.txt');
+    expect(mocks.approvals).toHaveLength(1);
+    // Turning prompts off for the session must not touch the allowlist.
+    expect(mocks.addedDirectories).toEqual([]);
+
+    mocks.grantCallScope.mockClear();
+    // A different folder, and a delete, run without another prompt.
+    await write(pipeline, 'run-b', 'D:/elsewhere/second.txt');
+    await pipeline.run(new ToolInvocation({
+      assistantMessageId: 'run-c',
+      conversationId: 'conv-1',
+      server: 'filesystem',
+      tool: 'delete_file',
+      args: { path: 'D:/elsewhere/second.txt' },
+      callId: 'run-c',
+    }));
+
+    expect(mocks.approvals).toHaveLength(1);
+    expect(mocks.grantCallScope).toHaveBeenCalledWith({
+      runId: 'run-b', callId: 'run-b', path: 'D:/elsewhere',
+      read: false, write: true, create: false, delete: false,
+    });
+  });
+
+  it('persists the folder without delete after "以后都允许" is chosen', async () => {
+    const exec = adapter();
+    const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
+    mocks.decision = 'always';
+
+    await write(pipeline, 'run-c', 'C:/outside/keep/file.txt');
+
+    expect(mocks.addedDirectories).toEqual([
+      expect.objectContaining({ path: 'C:/outside/keep',
+        permissions: { read: true, write: true, create: true, delete: false } }),
+    ]);
+  });
+
+  it('stops asking for shell commands after the user turns prompts off', async () => {
+    const exec = {
+      server: 'shell',
+      canHandle: () => true,
+      execute: vi.fn(async () => ({ ok: true })),
+    };
+    const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
+    mocks.decision = 'unrestricted';
+    const run = (id: string, command: string) => pipeline.run(new ToolInvocation({
+      assistantMessageId: id,
+      conversationId: 'conv-1',
+      server: 'shell',
+      tool: 'run',
+      args: { shell: 'cmd', command },
+      callId: id,
+    }));
+
+    await run('run-shell-a', 'echo %USERPROFILE%');
+    expect(mocks.approvals).toHaveLength(1);
+    // The card knows it is approving a command, not a path.
+    expect(mocks.approvals[0]).toMatchObject({ scope: { kind: 'shell', command: 'echo %USERPROFILE%' } });
+
+    await run('run-shell-b', 'git status');
+    expect(mocks.approvals).toHaveLength(1);
+    expect(exec.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks before starting a background process but never for logs, list or stop', async () => {
+    const exec = {
+      server: 'shell',
+      canHandle: () => true,
+      execute: vi.fn(async () => ({ ok: true })),
+    };
+    const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
+    const run = (id: string, tool: string, args: Record<string, unknown>) => pipeline.run(new ToolInvocation({
+      assistantMessageId: id,
+      conversationId: 'conv-1',
+      server: 'shell',
+      tool,
+      args,
+      callId: id,
+    }));
+
+    // Starting a server is a side effect: it goes through the approval card.
+    await run('run-start', 'start', { command: 'pnpm dev' });
+    expect(mocks.approvals).toHaveLength(1);
+    expect(mocks.approvals[0]).toMatchObject({ scope: { kind: 'shell', command: 'pnpm dev' } });
+
+    // Reading, listing and stopping a process the agent started do not.
+    await run('run-logs', 'logs', { executionId: 'shell:run-start:card' });
+    await run('run-list', 'list', {});
+    await run('run-stop', 'stop', { executionId: 'shell:run-start:card' });
+    expect(mocks.approvals).toHaveLength(1);
+    expect(exec.execute).toHaveBeenCalledTimes(4);
+  });
+});

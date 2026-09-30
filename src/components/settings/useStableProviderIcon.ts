@@ -30,7 +30,10 @@ export function useStableProviderIcon(provider: ProviderWithStatus) {
   const catalogDef = AVAILABLE_PROVIDERS_CATALOG.find((c) => c.name === provider.name);
   const catalogIdBase = catalogDef ? `/llm-provider-icon/${catalogDef.id}` : null;
   const iconBaseFromProp = iconIsCatalog ? iconStr.replace(/\.(svg|png|webp|jpeg|jpg)$/i, "") : null;
-  const candidateBases = [catalogIdBase, iconBaseFromProp, nameSlugBase].filter(Boolean) as string[];
+  const candidateBases = React.useMemo(
+    () => [catalogIdBase, iconBaseFromProp, nameSlugBase].filter(Boolean) as string[],
+    [catalogIdBase, iconBaseFromProp, nameSlugBase]
+  );
 
   // 是否“有目录 logo 的高概率候选”：存在目录定义或传入即为目录路径
   const _likelyCatalog = !!catalogDef || iconIsCatalog;

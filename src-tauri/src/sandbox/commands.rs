@@ -4,22 +4,175 @@
 
 use crate::sandbox::validator::{CommandValidator, ValidationResult};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tauri::AppHandle;
 use tauri::Manager;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 
 lazy_static! {
-  static ref RUNNING_SHELLS: Mutex<HashMap<String, Arc<tokio::sync::Mutex<tokio::process::Child>>>> =
+  // Waiting for a child never holds this lock. Windows keeps a Job handle;
+  // Unix uses the pid as a process-group id.
+  static ref RUNNING_SHELLS: Mutex<HashMap<String, ManagedProcess>> =
     Mutex::new(HashMap::new());
+  /// Long-running processes started by `start_shell_process`, keyed by the id the
+  /// agent uses to read logs and stop them.
+  static ref MANAGED_SHELLS: Mutex<HashMap<String, std::sync::Arc<ManagedShell>>> =
+    Mutex::new(HashMap::new());
+  /// Start-up slots already promised to a conversation but whose process is not
+  /// in `MANAGED_SHELLS` yet. Reserving before spawning keeps two concurrent
+  /// starts from both passing the limit check.
+  static ref MANAGED_STARTS: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+  /// Cancellation that arrived while a process was still being spawned, keyed by
+  /// the execution id the caller already knows.
+  static ref CANCEL_INTENTS: Mutex<std::collections::HashSet<String>> =
+    Mutex::new(std::collections::HashSet::new());
 }
+
+/// Bytes kept per stream for a managed process. Only the tail is retained: for a
+/// dev server or a build, the most recent lines are what matters.
+const MANAGED_LOG_CAP: usize = 256 * 1024;
+/// Concurrent running managed processes allowed per conversation.
+const MANAGED_PROCESS_LIMIT: usize = 4;
+/// Finished entries kept per conversation so their last output stays readable.
+const MANAGED_FINISHED_LIMIT: usize = 16;
+const MANAGED_LOG_DEFAULT_LIMIT: usize = 8 * 1024;
+const MANAGED_LOG_MAX_LIMIT: usize = 16 * 1024;
+/// Bound on remembered cancellation intents whose process never appeared.
+const CANCEL_INTENT_LIMIT: usize = 256;
+
+/// Bounded tail buffer: keeps the newest bytes and counts everything seen.
+struct TailBuffer {
+  data: VecDeque<u8>,
+  total: usize,
+}
+
+impl TailBuffer {
+  fn new() -> Self {
+    Self { data: VecDeque::with_capacity(8192), total: 0 }
+  }
+
+  fn push(&mut self, chunk: &[u8]) {
+    self.total += chunk.len();
+    for byte in chunk {
+      self.data.push_back(*byte);
+    }
+    while self.data.len() > MANAGED_LOG_CAP {
+      self.data.pop_front();
+    }
+  }
+
+  /// Last `limit` bytes, plus how many bytes were dropped from the front.
+  fn tail(&self, limit: usize) -> (String, usize) {
+    let limit = limit.min(MANAGED_LOG_MAX_LIMIT).max(1);
+    let take = limit.min(self.data.len());
+    let start = self.data.len() - take;
+    let bytes: Vec<u8> = self.data.iter().skip(start).copied().collect();
+    // Dropped = everything the caller asked for but we no longer hold.
+    let dropped = self.total.saturating_sub(take);
+    (String::from_utf8_lossy(&bytes).into_owned(), dropped)
+  }
+}
+
+struct ManagedShellState {
+  stdout: TailBuffer,
+  stderr: TailBuffer,
+  running: bool,
+  exit_code: Option<i32>,
+}
+
+struct ManagedShell {
+  pid: u32,
+  #[cfg(windows)]
+  job: std::sync::Arc<JobHandle>,
+  command: String,
+  working_dir: String,
+  started_at: i64,
+  state: std::sync::Arc<Mutex<ManagedShellState>>,
+  /// The chat that owns this process. Only that conversation may read or stop
+  /// it, and deleting the conversation takes the process with it.
+  conversation_id: String,
+  run_id: Option<String>,
+  name: Option<String>,
+}
+
+/// Owner information for one managed process. It comes from the execution
+/// context, never from model-supplied arguments.
+#[derive(Debug, Clone, Default)]
+pub struct ManagedProcessOwner {
+  pub conversation_id: String,
+  pub run_id: Option<String>,
+  pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StartedShell {
+  pub execution_id: String,
+  pub pid: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ManagedShellOutput {
+  pub execution_id: String,
+  pub running: bool,
+  pub exit_code: Option<i32>,
+  pub stdout: String,
+  pub stderr: String,
+  pub stdout_bytes: usize,
+  pub stderr_bytes: usize,
+  /// Bytes dropped because the retained window is bounded.
+  pub stdout_dropped: usize,
+  pub stderr_dropped: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ManagedShellSummary {
+  pub execution_id: String,
+  pub pid: u32,
+  pub command: String,
+  pub working_dir: String,
+  pub conversation_id: String,
+  /// The run that started it, so a reply can be traced to what it left running.
+  pub run_id: Option<String>,
+  pub name: Option<String>,
+  pub running: bool,
+  pub exit_code: Option<i32>,
+  pub started_at: i64,
+  pub stdout_bytes: usize,
+  pub stderr_bytes: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StoppedShell {
+  pub stopped: bool,
+  pub exit_code: Option<i32>,
+}
+
+/// Owns the Windows Job Object handle exactly once. Cloning the `Arc` shares
+/// ownership; the handle closes when the last reference drops, so cancellation
+/// and normal completion can never double-close the same handle value.
+#[cfg(windows)]
+struct JobHandle(isize);
+
+#[cfg(windows)]
+impl Drop for JobHandle {
+  fn drop(&mut self) {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    unsafe {
+      let _ = CloseHandle(HANDLE(self.0 as *mut core::ffi::c_void));
+    }
+  }
+}
+
+#[derive(Clone)]
+struct ManagedProcess { pid: u32, #[cfg(windows)] job: std::sync::Arc<JobHandle> }
 
 /// Shell 执行结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +189,8 @@ pub struct ShellResult {
   pub duration_ms: u64,
   /// 错误信息（如果失败）
   pub error: Option<String>,
+  /// 是否因为超时被终止（此时 stdout/stderr 是终止前的输出）
+  pub timed_out: bool,
 }
 
 /// 执行选项
@@ -59,6 +214,30 @@ pub struct ExecuteOptions {
   /// 最大输出大小（字节），默认 1MB
   #[serde(default = "default_max_output")]
   pub max_output_size: usize,
+  /// Windows only: append the final argument verbatim, wrapped in quotes.
+  /// `cmd.exe /c "<line>"` is the documented form for a line that contains
+  /// quotes; escaping them as `\"` makes cmd hand literal backslashes to the
+  /// program, so `node -e "process.exit(3)"` quietly exits 0.
+  #[serde(default)]
+  pub raw_last_arg: bool,
+}
+
+/// Places the program arguments on the command, honouring `raw_last_arg`.
+fn apply_program_args(cmd: &mut Command, options: &ExecuteOptions) {
+  #[cfg(windows)]
+  {
+    use std::os::windows::process::CommandExt;
+    if options.raw_last_arg {
+      if let Some((last, rest)) = options.args.split_last() {
+        cmd.args(rest);
+        // tokio's Command is a thin wrapper; the raw escape hatch lives on the
+        // std one it owns.
+        cmd.as_std_mut().raw_arg(format!("\"{last}\""));
+        return;
+      }
+    }
+  }
+  cmd.args(&options.args);
 }
 
 fn default_timeout() -> u64 {
@@ -67,6 +246,153 @@ fn default_timeout() -> u64 {
 
 fn default_max_output() -> usize {
   1024 * 1024 // 1MB
+}
+
+async fn kill_process_tree(process: ManagedProcess) -> std::io::Result<()> {
+  if process.pid == 0 {
+    return Ok(());
+  }
+  #[cfg(windows)]
+  {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
+    use windows::Win32::System::JobObjects::TerminateJobObject;
+    use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
+    let job = HANDLE(process.job.0 as *mut core::ffi::c_void);
+    unsafe {
+      TerminateJobObject(job, 1).map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error.to_string()))?;
+    }
+    // Confirm the tree is actually gone before reporting success. A process
+    // that already exited makes OpenProcess fail, which counts as confirmed.
+    unsafe {
+      if let Ok(handle) = OpenProcess(PROCESS_SYNCHRONIZE, false, process.pid) {
+        let waited = WaitForSingleObject(handle, 2000);
+        let _ = CloseHandle(handle);
+        if waited != WAIT_OBJECT_0 {
+          return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "取消后进程仍在运行（2 秒内未退出）",
+          ));
+        }
+      }
+    }
+    Ok(())
+  }
+  #[cfg(not(windows))]
+  {
+    let status = Command::new("kill")
+      .args(["-TERM", &format!("-{}", process.pid)])
+      .status()
+      .await?;
+    if !status.success() { return Err(std::io::Error::new(std::io::ErrorKind::Other, "process-group TERM failed")); }
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let alive = Command::new("kill").args(["-0", &format!("-{}", process.pid)]).status().await?.success();
+    if alive {
+      let killed = Command::new("kill").args(["-KILL", &format!("-{}", process.pid)]).status().await?;
+      if !killed.success() { return Err(std::io::Error::new(std::io::ErrorKind::Other, "process-group KILL failed")); }
+    }
+    Ok(())
+  }
+}
+
+/// A start-up slot promised to one conversation. It is returned to the pool
+/// when the guard drops, whether the spawn succeeded, failed or was cancelled.
+struct StartSlot {
+  conversation_id: String,
+}
+
+impl Drop for StartSlot {
+  fn drop(&mut self) {
+    if let Ok(mut starts) = MANAGED_STARTS.lock() {
+      if let Some(count) = starts.get_mut(&self.conversation_id) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+          starts.remove(&self.conversation_id);
+        }
+      }
+    }
+  }
+}
+
+fn is_running(entry: &ManagedShell) -> bool {
+  entry.state.lock().map(|state| state.running).unwrap_or(false)
+}
+
+/// Counts what a conversation already has running, plus starts in flight, and
+/// reserves a slot if there is room.
+fn reserve_start_slot(conversation_id: &str) -> Result<StartSlot, String> {
+  let running = {
+    let map = MANAGED_SHELLS
+      .lock()
+      .map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+    map.values()
+      .filter(|entry| entry.conversation_id == conversation_id && is_running(entry))
+      .count()
+  };
+  let mut starts = MANAGED_STARTS
+    .lock()
+    .map_err(|_| "MANAGED_STARTS lock poisoned".to_string())?;
+  let pending = starts.get(conversation_id).copied().unwrap_or(0);
+  if running + pending >= MANAGED_PROCESS_LIMIT {
+    return Err(format!(
+      "本会话后台进程已达上限（{MANAGED_PROCESS_LIMIT}），先停止一个再启动新的"
+    ));
+  }
+  *starts.entry(conversation_id.to_string()).or_insert(0) += 1;
+  Ok(StartSlot { conversation_id: conversation_id.to_string() })
+}
+
+fn remember_cancel_intent(execution_id: &str) {
+  if let Ok(mut intents) = CANCEL_INTENTS.lock() {
+    if intents.len() >= CANCEL_INTENT_LIMIT {
+      intents.clear();
+    }
+    intents.insert(execution_id.to_string());
+  }
+}
+
+/// True when the caller cancelled this id before the process existed.
+fn take_cancel_intent(execution_id: &str) -> bool {
+  CANCEL_INTENTS
+    .lock()
+    .map(|mut intents| intents.remove(execution_id))
+    .unwrap_or(false)
+}
+
+/// Keeps at most `MANAGED_FINISHED_LIMIT` finished entries per conversation.
+fn evict_finished_entries(
+  map: &mut HashMap<String, std::sync::Arc<ManagedShell>>,
+  conversation_id: &str,
+) {
+  let mut finished: Vec<(String, i64)> = map
+    .iter()
+    .filter(|(_, entry)| entry.conversation_id == conversation_id && !is_running(entry))
+    .map(|(id, entry)| (id.clone(), entry.started_at))
+    .collect();
+  if finished.len() < MANAGED_FINISHED_LIMIT {
+    return;
+  }
+  finished.sort_by_key(|(_, started_at)| *started_at);
+  for (id, _) in finished.iter().take(finished.len() - MANAGED_FINISHED_LIMIT + 1) {
+    map.remove(id);
+  }
+}
+
+/// Marks a finished process and waits for its output readers to see EOF, so a
+/// stop returns after the last lines are readable rather than before.
+async fn await_exit(state: &std::sync::Arc<Mutex<ManagedShellState>>, budget: Duration) -> bool {
+  let deadline = std::time::Instant::now() + budget;
+  loop {
+    let running = state.lock().map(|guard| guard.running).unwrap_or(false);
+    if !running {
+      // Give the drain tasks a moment to flush whatever is still in the pipe.
+      tokio::time::sleep(Duration::from_millis(20)).await;
+      return true;
+    }
+    if std::time::Instant::now() >= deadline {
+      return false;
+    }
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
 }
 
 /// 取消正在运行的 shell 命令（best-effort）
@@ -84,13 +410,376 @@ pub async fn cancel_safe_shell(execution_id: String) -> Result<bool, String> {
     map.remove(&id)
   };
 
-  if let Some(child_arc) = handle {
-    let mut child = child_arc.lock().await;
-    let _ = child.kill().await;
+  if let Some(process) = handle {
+    kill_process_tree(process).await.map_err(|error| format!("取消进程树失败: {error}"))?;
     return Ok(true);
   }
 
+  // The same id namespace covers background processes started by the agent, so
+  // stopping a run also stops whatever it left running.
+  let managed = {
+    let map = MANAGED_SHELLS
+      .lock()
+      .map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+    map.get(&id).cloned()
+  };
+  if let Some(entry) = managed {
+    if is_running(&entry) {
+      kill_process_tree(ManagedProcess { pid: entry.pid, #[cfg(windows)] job: entry.job.clone() })
+        .await
+        .map_err(|error| format!("取消后台进程失败: {error}"))?;
+      await_exit(&entry.state, Duration::from_millis(2000)).await;
+    }
+    return Ok(true);
+  }
+
+  // The run may be cancelled while its process is still being spawned. Record
+  // the intent so the new child is terminated instead of escaping the stop.
+  remember_cancel_intent(&id);
   Ok(false)
+}
+
+/// 安全执行 shell 命令
+///
+/// 启动一个后台进程（dev server、watch、长构建）。
+///
+/// 复用 blocking 执行相同的安全校验、Job Object 归属与输出排空，但不等待退出：
+/// 输出进入有界尾部缓冲，由 `read_shell_process` 增量读取，`stop_shell_process` 终止。
+#[tauri::command]
+pub async fn start_shell_process(
+  app: AppHandle,
+  options: ExecuteOptions,
+  conversation_id: String,
+  run_id: Option<String>,
+  name: Option<String>,
+) -> Result<StartedShell, String> {
+  let app_data_dir = app
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("无法获取应用数据目录: {}", e))?;
+  let conversation_id = conversation_id.trim().to_string();
+  if conversation_id.is_empty() {
+    return Err("conversation_id is required for a managed process".to_string());
+  }
+  start_managed_process(
+    options,
+    app_data_dir,
+    ManagedProcessOwner { conversation_id, run_id, name },
+  )
+  .await
+}
+
+/// Spawn a managed process.  Kept separate from the command so the lifecycle can
+/// be exercised with a real child process in tests and through the acceptance
+/// bridge.
+pub async fn start_managed_process(
+  options: ExecuteOptions,
+  app_data_dir: PathBuf,
+  owner: ManagedProcessOwner,
+) -> Result<StartedShell, String> {
+  let execution_id = options
+    .execution_id
+    .clone()
+    .unwrap_or_default()
+    .trim()
+    .to_string();
+  if execution_id.is_empty() {
+    return Err("execution_id is required for a managed process".to_string());
+  }
+  if owner.conversation_id.trim().is_empty() {
+    return Err("conversation_id is required for a managed process".to_string());
+  }
+
+  {
+    let map = MANAGED_SHELLS.lock().map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+    if map.contains_key(&execution_id) {
+      return Err(format!("进程 {execution_id} 已存在"));
+    }
+  }
+  let _slot = reserve_start_slot(owner.conversation_id.trim())?;
+
+  let validator = CommandValidator::new();
+
+  let full_command = if options.args.is_empty() {
+    options.command.clone()
+  } else {
+    format!("{} {}", options.command, options.args.join(" "))
+  };
+  let cmd_result = validator.validate_command(&full_command);
+  if !cmd_result.valid {
+    return Err(format!(
+      "命令安全校验失败: {}",
+      cmd_result.reason.unwrap_or_else(|| "未知原因".to_string())
+    ));
+  }
+
+  let working_dir = match options.working_dir.clone().filter(|dir| !dir.trim().is_empty()) {
+    Some(dir) => {
+      let path_result = validator.validate_path(&dir);
+      if !path_result.valid {
+        return Err(format!(
+          "工作目录校验失败: {}",
+          path_result.reason.unwrap_or_else(|| "未知原因".to_string())
+        ));
+      }
+      PathBuf::from(dir)
+    }
+    None => app_data_dir.clone(),
+  };
+  if !working_dir.exists() {
+    tokio::fs::create_dir_all(&working_dir)
+      .await
+      .map_err(|e| format!("无法创建工作目录: {}", e))?;
+  }
+
+  let mut cmd = Command::new(&options.command);
+  apply_program_args(&mut cmd, &options);
+  cmd.current_dir(&working_dir);
+  cmd.stdout(Stdio::piped());
+  cmd.stderr(Stdio::piped());
+  cmd.stdin(Stdio::null());
+  for (key, value) in &options.env {
+    cmd.env(key, value);
+  }
+  // The user's own environment is inherited: git, ssh and package managers read
+  // their configuration from HOME/USERPROFILE, and rewriting those made
+  // ordinary commands behave differently from the user's terminal.
+  #[cfg(windows)]
+  {
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+  }
+  #[cfg(not(windows))]
+  {
+    cmd.process_group(0);
+  }
+
+  #[cfg(windows)]
+  let job = {
+    use windows::Win32::System::JobObjects::{CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE};
+    let job = unsafe { CreateJobObjectW(None, None) }.map_err(|error| format!("创建 Job Object 失败: {error}"))?;
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+      SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info as *const _ as *const core::ffi::c_void,
+        std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32)
+        .map_err(|error| format!("配置 Job Object 失败: {error}"))?;
+    }
+    std::sync::Arc::new(JobHandle(job.0 as isize))
+  };
+
+  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let pid = child.id().unwrap_or_default();
+
+  #[cfg(windows)]
+  {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::AssignProcessToJobObject;
+    let raw_process = match child.raw_handle() {
+      Some(raw) => raw,
+      None => {
+        let _ = child.kill().await;
+        return Err("无法获取子进程句柄".to_string());
+      }
+    };
+    if let Err(error) =
+      unsafe { AssignProcessToJobObject(HANDLE(job.0 as *mut core::ffi::c_void), HANDLE(raw_process)) }
+    {
+      let _ = child.kill().await;
+      let _ = child.wait().await;
+      return Err(format!("绑定 Job Object 失败: {error}"));
+    }
+  }
+
+  let state = std::sync::Arc::new(Mutex::new(ManagedShellState {
+    stdout: TailBuffer::new(),
+    stderr: TailBuffer::new(),
+    running: true,
+    exit_code: None,
+  }));
+
+  // A stop that arrived while this process was still spawning must still land:
+  // kill the child now instead of registering something nobody can reach.
+  if take_cancel_intent(&execution_id) {
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+    return Ok(StartedShell { execution_id, pid });
+  }
+
+  if let Some(reader) = child.stdout.take() {
+    let state = state.clone();
+    tokio::spawn(async move {
+      let mut reader = reader;
+      let mut buffer = [0_u8; 8192];
+      while let Ok(count) = reader.read(&mut buffer).await {
+        if count == 0 { break; }
+        if let Ok(mut guard) = state.lock() {
+          guard.stdout.push(&buffer[..count]);
+        }
+      }
+    });
+  }
+  if let Some(reader) = child.stderr.take() {
+    let state = state.clone();
+    tokio::spawn(async move {
+      let mut reader = reader;
+      let mut buffer = [0_u8; 8192];
+      while let Ok(count) = reader.read(&mut buffer).await {
+        if count == 0 { break; }
+        if let Ok(mut guard) = state.lock() {
+          guard.stderr.push(&buffer[..count]);
+        }
+      }
+    });
+  }
+
+  let wait_state = state.clone();
+  tokio::spawn(async move {
+    let status = child.wait().await;
+    if let Ok(mut guard) = wait_state.lock() {
+      guard.running = false;
+      guard.exit_code = status.ok().and_then(|s| s.code());
+    }
+  });
+
+  let entry = std::sync::Arc::new(ManagedShell {
+    pid,
+    #[cfg(windows)]
+    job,
+    command: full_command,
+    working_dir: working_dir.to_string_lossy().to_string(),
+    started_at: now_ms(),
+    state,
+    conversation_id: owner.conversation_id.trim().to_string(),
+    run_id: owner.run_id.clone(),
+    name: owner.name.clone(),
+  });
+
+  {
+    let mut map = MANAGED_SHELLS.lock().map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+    evict_finished_entries(&mut map, &owner.conversation_id);
+    map.insert(execution_id.clone(), entry);
+  }
+
+  log::info!("[Sandbox] Started managed process {} (pid {})", execution_id, pid);
+  Ok(StartedShell { execution_id, pid })
+}
+
+#[tauri::command]
+pub async fn read_shell_process(
+  execution_id: String,
+  conversation_id: String,
+  limit: Option<usize>,
+) -> Result<ManagedShellOutput, String> {
+  let entry = {
+    let map = MANAGED_SHELLS.lock().map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+    map.get(execution_id.trim())
+      .filter(|entry| entry.conversation_id == conversation_id.trim())
+      .cloned()
+  }
+  .ok_or_else(|| format!("未知的后台进程（或不属于当前会话）: {execution_id}"))?;
+
+  let limit = limit.unwrap_or(MANAGED_LOG_DEFAULT_LIMIT);
+  let state = entry.state.lock().map_err(|_| "managed process lock poisoned".to_string())?;
+  let (stdout, stdout_dropped) = state.stdout.tail(limit);
+  let (stderr, stderr_dropped) = state.stderr.tail(limit);
+  Ok(ManagedShellOutput {
+    execution_id: execution_id.trim().to_string(),
+    running: state.running,
+    exit_code: state.exit_code,
+    stdout,
+    stderr,
+    stdout_bytes: state.stdout.total,
+    stderr_bytes: state.stderr.total,
+    stdout_dropped,
+    stderr_dropped,
+  })
+}
+
+#[tauri::command]
+pub async fn stop_shell_process(execution_id: String, conversation_id: String) -> Result<StoppedShell, String> {
+  let id = execution_id.trim().to_string();
+  let entry = {
+    let map = MANAGED_SHELLS.lock().map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+    map.get(&id)
+      .filter(|entry| entry.conversation_id == conversation_id.trim())
+      .cloned()
+  };
+  let Some(entry) = entry else {
+    return Err(format!("未知的后台进程（或不属于当前会话）: {id}"));
+  };
+  let exit_code = entry.state.lock().ok().and_then(|state| state.exit_code);
+  if !is_running(&entry) {
+    return Ok(StoppedShell { stopped: false, exit_code });
+  }
+  // Keep the entry registered while stopping: if the tree refuses to die the
+  // caller still has a handle to try again instead of an orphaned process.
+  kill_process_tree(ManagedProcess { pid: entry.pid, #[cfg(windows)] job: entry.job.clone() })
+    .await
+    .map_err(|error| format!("停止后台进程失败: {error}"))?;
+  await_exit(&entry.state, Duration::from_millis(2000)).await;
+  let exit_code = entry.state.lock().ok().and_then(|state| state.exit_code).or(exit_code);
+  Ok(StoppedShell { stopped: true, exit_code })
+}
+
+#[tauri::command]
+pub async fn list_shell_processes(conversation_id: String) -> Result<Vec<ManagedShellSummary>, String> {
+  let map = MANAGED_SHELLS.lock().map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+  let mut out: Vec<ManagedShellSummary> = Vec::with_capacity(map.len());
+  for (id, entry) in map.iter() {
+    if entry.conversation_id != conversation_id.trim() {
+      continue;
+    }
+    let state = entry.state.lock().map_err(|_| "managed process lock poisoned".to_string())?;
+    out.push(ManagedShellSummary {
+      execution_id: id.clone(),
+      pid: entry.pid,
+      command: entry.command.clone(),
+      working_dir: entry.working_dir.clone(),
+      conversation_id: entry.conversation_id.clone(),
+      run_id: entry.run_id.clone(),
+      name: entry.name.clone(),
+      running: state.running,
+      exit_code: state.exit_code,
+      started_at: entry.started_at,
+      stdout_bytes: state.stdout.total,
+      stderr_bytes: state.stderr.total,
+    });
+  }
+  out.sort_by_key(|entry| entry.started_at);
+  Ok(out)
+}
+
+/// Terminates everything a conversation started. Used when the chat is deleted
+/// so a dev server cannot outlive the session that launched it.
+#[tauri::command]
+pub async fn stop_conversation_processes(conversation_id: String) -> Result<usize, String> {
+  let conversation_id = conversation_id.trim().to_string();
+  let entries: Vec<(String, std::sync::Arc<ManagedShell>)> = {
+    let map = MANAGED_SHELLS.lock().map_err(|_| "MANAGED_SHELLS lock poisoned".to_string())?;
+    map.iter()
+      .filter(|(_, entry)| entry.conversation_id == conversation_id && is_running(entry))
+      .map(|(id, entry)| (id.clone(), entry.clone()))
+      .collect()
+  };
+  let mut stopped = 0_usize;
+  for (id, entry) in entries {
+    match kill_process_tree(ManagedProcess { pid: entry.pid, #[cfg(windows)] job: entry.job.clone() }).await {
+      Ok(()) => {
+        await_exit(&entry.state, Duration::from_millis(2000)).await;
+        stopped += 1;
+        log::info!("[Sandbox] Stopped managed process {id} with its conversation");
+      }
+      Err(error) => log::warn!("[Sandbox] Could not stop managed process {id}: {error}"),
+    }
+  }
+  Ok(stopped)
+}
+
+fn now_ms() -> i64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map(|d| d.as_millis() as i64)
+    .unwrap_or(0)
 }
 
 /// 安全执行 shell 命令
@@ -105,22 +794,26 @@ pub async fn run_safe_shell(
   app: AppHandle,
   options: ExecuteOptions,
 ) -> Result<ShellResult, String> {
-  let start_time = std::time::Instant::now();
-
   // 获取应用数据目录作为默认允许目录
   let app_data_dir = app
     .path()
     .app_data_dir()
     .map_err(|e| format!("无法获取应用数据目录: {}", e))?;
+  run_blocking_shell(options, app_data_dir).await
+}
 
-  // 创建校验器，限制工作目录
-  let validator = CommandValidator::new().with_allowed_working_dirs(vec![
-    app_data_dir.to_string_lossy().to_string(),
-    // 也允许临时目录
-    std::env::temp_dir().to_string_lossy().to_string(),
-  ]);
+/// The blocking-command body, kept free of `AppHandle` so the timeout,
+/// cancellation and output rules can be exercised with a real child process and
+/// through the acceptance bridge.
+pub async fn run_blocking_shell(options: ExecuteOptions, app_data_dir: PathBuf) -> Result<ShellResult, String> {
+  let start_time = std::time::Instant::now();
 
-  // 构建完整命令用于校验
+  // Whether a command may run is the user's decision (see the approval card);
+  // the sandbox keeps only the destructive-pattern backstop.  The allowlist that
+  // used to live here also rejected the shells themselves (cmd.exe, powershell)
+  // and confined the working directory to the app data folder.
+  let validator = CommandValidator::new();
+
   let full_command = if options.args.is_empty() {
     options.command.clone()
   } else {
@@ -160,7 +853,7 @@ pub async fn run_safe_shell(
 
   // 构建命令
   let mut cmd = Command::new(&options.command);
-  cmd.args(&options.args);
+  apply_program_args(&mut cmd, &options);
   cmd.current_dir(&working_dir);
   cmd.stdout(Stdio::piped());
   cmd.stderr(Stdio::piped());
@@ -170,15 +863,17 @@ pub async fn run_safe_shell(
   for (key, value) in &options.env {
     cmd.env(key, value);
   }
-
-  // 设置安全相关的环境变量
-  cmd.env("HOME", app_data_dir.to_string_lossy().to_string());
-  cmd.env("USERPROFILE", app_data_dir.to_string_lossy().to_string());
+  // HOME/USERPROFILE are inherited from the user's own environment: git, ssh and
+  // package managers read their configuration from there.
 
   // Windows 特定：隐藏窗口
   #[cfg(windows)]
   {
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+  }
+  #[cfg(not(windows))]
+  {
+    cmd.process_group(0);
   }
 
   log::info!(
@@ -202,70 +897,69 @@ pub async fn run_safe_shell(
     );
   }
 
+  // The Job Object must exist before the process does, so a failed bind can
+  // never leave an unmanaged child running outside the job.
+  #[cfg(windows)]
+  let job = {
+    use windows::Win32::System::JobObjects::{CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE};
+    let job = unsafe { CreateJobObjectW(None, None) }.map_err(|error| format!("创建 Job Object 失败: {error}"))?;
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+      SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info as *const _ as *const core::ffi::c_void,
+        std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32)
+        .map_err(|error| format!("配置 Job Object 失败: {error}"))?;
+    }
+    std::sync::Arc::new(JobHandle(job.0 as isize))
+  };
+
   // 启动进程
-  let child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
-  let child = Arc::new(tokio::sync::Mutex::new(child));
+  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let pid = child.id().unwrap_or_default();
+
+  #[cfg(windows)]
+  {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::AssignProcessToJobObject;
+    let raw_process = match child.raw_handle() {
+      Some(raw) => raw,
+      None => {
+        let _ = child.kill().await;
+        return Err("无法获取子进程句柄".to_string());
+      }
+    };
+    if let Err(error) =
+      unsafe { AssignProcessToJobObject(HANDLE(job.0 as *mut core::ffi::c_void), HANDLE(raw_process)) }
+    {
+      // Never report a started command that escaped the job: kill it first.
+      let _ = child.kill().await;
+      let _ = child.wait().await;
+      return Err(format!("绑定 Job Object 失败: {error}"));
+    }
+  }
 
   // 注册到全局 map（用于 cancel）
   let exec_id = options.execution_id.clone().unwrap_or_default();
   if !exec_id.trim().is_empty() {
     if let Ok(mut map) = RUNNING_SHELLS.lock() {
-      map.insert(exec_id.clone(), child.clone());
+      map.insert(exec_id.clone(), ManagedProcess { pid, #[cfg(windows)] job: job.clone() });
     }
   }
 
   // 获取输出流
-  let (stdout, stderr) = {
-    let mut guard = child.lock().await;
-    (guard.stdout.take(), guard.stderr.take())
-  };
+  let stdout = child.stdout.take();
+  let stderr = child.stderr.take();
 
   // 异步读取输出
   let max_output = options.max_output_size;
 
-  let stdout_handle = tokio::spawn(async move {
-    let mut output = String::new();
-    if let Some(stdout) = stdout {
-      let mut reader = BufReader::new(stdout).lines();
-      while let Ok(Some(line)) = reader.next_line().await {
-        if output.len() + line.len() < max_output {
-          if !output.is_empty() {
-            output.push('\n');
-          }
-          output.push_str(&line);
-        } else {
-          output.push_str("\n[输出已截断]");
-          break;
-        }
-      }
-    }
-    output
-  });
-
-  let stderr_handle = tokio::spawn(async move {
-    let mut output = String::new();
-    if let Some(stderr) = stderr {
-      let mut reader = BufReader::new(stderr).lines();
-      while let Ok(Some(line)) = reader.next_line().await {
-        if output.len() + line.len() < max_output {
-          if !output.is_empty() {
-            output.push('\n');
-          }
-          output.push_str(&line);
-        } else {
-          output.push_str("\n[输出已截断]");
-          break;
-        }
-      }
-    }
-    output
-  });
+  let stdout_handle = tokio::spawn(drain_output(stdout, max_output));
+  let stderr_handle = tokio::spawn(drain_output(stderr, max_output));
 
   // 等待命令完成（带超时）
   let timeout_duration = Duration::from_millis(options.timeout_ms);
   let wait_result = timeout(timeout_duration, async {
-    let mut guard = child.lock().await;
-    guard.wait().await
+    child.wait().await
   })
   .await;
 
@@ -289,6 +983,7 @@ pub async fn run_safe_shell(
         stdout,
         stderr,
         duration_ms,
+        timed_out: false,
         error: if status.success() {
           None
         } else {
@@ -304,25 +999,45 @@ pub async fn run_safe_shell(
         stdout: String::new(),
         stderr: String::new(),
         duration_ms,
+        timed_out: false,
         error: Some(format!("命令执行失败: {}", e)),
       })
     }
     Err(_) => {
-      // 超时，尝试终止进程
+      // Timeout: kill the tree, but keep whatever the command already printed.
+      // A build or install that fails late is exactly the case where the
+      // captured output is the only way to tell what happened.
       log::warn!("[Sandbox] Command timed out after {}ms", options.timeout_ms);
-      {
-        let mut guard = child.lock().await;
-        let _ = guard.kill().await;
+      let process = ManagedProcess { pid, #[cfg(windows)] job: job.clone() };
+      // Report a failed tree kill as a result rather than an early return, so
+      // the registry entry is always cleared and a reused pid can never be
+      // cancelled by a later request.
+      let kill_result = kill_process_tree(process).await;
+      let stdout = stdout_handle.await.unwrap_or_default();
+      let stderr = stderr_handle.await.unwrap_or_default();
+      match kill_result {
+        Ok(()) => {
+          let _ = child.wait().await;
+          Ok(ShellResult {
+            success: false,
+            exit_code: -1,
+            stdout,
+            stderr,
+            duration_ms: options.timeout_ms,
+            timed_out: true,
+            error: Some(format!("命令执行超时 ({}ms)", options.timeout_ms)),
+          })
+        }
+        Err(error) => Ok(ShellResult {
+          success: false,
+          exit_code: -1,
+          stdout,
+          stderr,
+          duration_ms: options.timeout_ms,
+          timed_out: true,
+          error: Some(format!("命令超时且终止进程树失败: {error}")),
+        }),
       }
-
-      Ok(ShellResult {
-        success: false,
-        exit_code: -1,
-        stdout: String::new(),
-        stderr: String::new(),
-        duration_ms: options.timeout_ms,
-        error: Some(format!("命令执行超时 ({}ms)", options.timeout_ms)),
-      })
     }
   };
 
@@ -447,5 +1162,537 @@ fn create_unavailable_result(runtime: &str, error: Option<String>) -> RuntimeChe
     error,
     install_hint,
     download_url,
+  }
+}
+
+// Keep draining after the display cap. Closing a full output pipe can block or
+// terminate the child; lines() also allows an unbounded single-line allocation.
+async fn drain_output<R: AsyncRead + Unpin>(reader: Option<R>, limit: usize) -> String {
+  let Some(mut reader) = reader else { return String::new(); };
+  // Keep both ends: build and install failures print their cause last, while
+  // the useful context (what was running) is at the start.
+  let head_limit = limit / 2;
+  let tail_limit = limit.saturating_sub(head_limit);
+  let mut head: Vec<u8> = Vec::new();
+  let mut tail: VecDeque<u8> = VecDeque::new();
+  let mut buffer = [0_u8; 8192];
+  let mut total = 0_usize;
+  while let Ok(count) = reader.read(&mut buffer).await {
+    if count == 0 { break; }
+    total += count;
+    let chunk = &buffer[..count];
+    if head.len() < head_limit {
+      let take = (head_limit - head.len()).min(chunk.len());
+      head.extend_from_slice(&chunk[..take]);
+      for byte in &chunk[take..] {
+        tail.push_back(*byte);
+      }
+    } else {
+      for byte in chunk {
+        tail.push_back(*byte);
+      }
+    }
+    while tail.len() > tail_limit {
+      tail.pop_front();
+    }
+  }
+  let head_text = String::from_utf8_lossy(&head).into_owned();
+  let tail_text: String = String::from_utf8_lossy(&tail.iter().copied().collect::<Vec<u8>>()).into_owned();
+  let omitted = total.saturating_sub(head_text.len() + tail_text.len());
+  if omitted == 0 {
+    return format!("{head_text}{tail_text}");
+  }
+  format!("{head_text}\n[…已省略 {omitted} 字节…]\n{tail_text}")
+}
+
+#[cfg(test)]
+mod output_tests {
+  use super::{drain_output, TailBuffer, MANAGED_LOG_CAP};
+  use tokio::io::AsyncWriteExt;
+  use tokio::time::{timeout, Duration};
+
+  #[tokio::test]
+  async fn drains_beyond_cap_without_newlines() {
+    let (reader, mut writer) = tokio::io::duplex(64);
+    let producer = tokio::spawn(async move {
+      writer.write_all(&vec![b'x'; 100_000]).await.unwrap();
+    });
+    let output = timeout(Duration::from_secs(2), drain_output(Some(reader), 100)).await.unwrap();
+    producer.await.unwrap();
+    // Head and tail are both kept; the omitted count is reported in between.
+    assert!(output.starts_with(&"x".repeat(50)), "head missing: {output:.80}");
+    assert!(output.ends_with(&"x".repeat(50)), "tail missing");
+    assert!(output.contains("已省略"), "omitted marker missing: {output}");
+  }
+
+  #[tokio::test]
+  async fn keeps_the_tail_of_a_long_output() {
+    let (reader, mut writer) = tokio::io::duplex(64);
+    let producer = tokio::spawn(async move {
+      writer.write_all(&vec![b'a'; 60_000]).await.unwrap();
+      writer.write_all(b"\nBUILD FAILED: missing module\n").await.unwrap();
+    });
+    let output = timeout(Duration::from_secs(2), drain_output(Some(reader), 4000)).await.unwrap();
+    producer.await.unwrap();
+
+    assert!(output.contains("BUILD FAILED"), "the error at the end must survive truncation");
+    assert!(output.len() <= 4000 + 64);
+  }
+
+  #[tokio::test]
+  async fn tail_buffer_keeps_newest_bytes_and_counts_everything() {
+    let mut buffer = TailBuffer::new();
+    buffer.push(&vec![b'y'; MANAGED_LOG_CAP + 1024]);
+    buffer.push(b"final-line");
+
+    let (text, dropped) = buffer.tail(64);
+    assert!(text.ends_with("final-line"));
+    assert_eq!(buffer.total, MANAGED_LOG_CAP + 1024 + 10);
+    assert!(dropped > 0, "older bytes must be reported as dropped");
+  }
+
+  #[tokio::test]
+  async fn preserves_line_endings_and_utf8() {
+    let data = "第一行\r\nsecond\n".as_bytes();
+    assert_eq!(drain_output(Some(data), 100).await, "第一行\r\nsecond\n");
+  }
+}
+
+/// A command that prints and then keeps running must still be legible: the
+/// timeout kills the tree, but what it already printed is the whole point.
+#[cfg(test)]
+mod blocking_timeout_tests {
+  use super::*;
+
+  fn options(command: &str, args: Vec<String>, timeout_ms: u64) -> ExecuteOptions {
+    ExecuteOptions {
+      execution_id: Some(format!("blocking-timeout-{}", std::process::id())),
+      command: command.to_string(),
+      args,
+      working_dir: Some(std::env::temp_dir().to_string_lossy().to_string()),
+      timeout_ms,
+      env: HashMap::new(),
+      max_output_size: 1024 * 1024,
+      raw_last_arg: false,
+    }
+  }
+
+  #[tokio::test]
+  #[cfg(windows)]
+  async fn a_timed_out_command_still_returns_what_it_printed() {
+    let result = run_blocking_shell(
+      options("cmd.exe", vec![
+        "/C".into(),
+        "echo late-build-error & ping -n 30 127.0.0.1 > nul".into(),
+      ], 1500),
+      std::env::temp_dir(),
+    )
+    .await
+    .expect("the timeout is a result, not an error");
+
+    assert!(result.timed_out, "the timeout must be reported");
+    assert!(!result.success);
+    assert!(
+      result.stdout.contains("late-build-error"),
+      "output printed before the timeout must survive: {:?}",
+      result.stdout
+    );
+  }
+
+  /// `cmd /c` mangles a command line whose quotes were escaped as `\"`: the
+  /// program receives literal backslashes instead. The plan therefore asks for
+  /// the whole line as one verbatim, quoted argument.
+  #[tokio::test]
+  #[cfg(windows)]
+  async fn a_quoted_command_line_reaches_the_program_unchanged() {
+    let mut opts = options("cmd.exe", vec![
+      "/d".into(),
+      "/s".into(),
+      "/c".into(),
+      // The plan sends the line as the caller wrote it; the backend adds the
+      // outer quotes that `cmd /c` needs.
+      "echo \"quoted value\"".into(),
+    ], 5_000);
+    opts.raw_last_arg = true;
+    let result = run_blocking_shell(opts, std::env::temp_dir()).await.expect("run");
+
+    assert!(result.success, "cmd should have run the line: {:?}", result.stderr);
+    let stdout = result.stdout.trim().to_string();
+    assert_eq!(stdout, "\"quoted value\"", "cmd must see the line as written");
+    assert!(!stdout.contains("\\\""), "the quotes must not stay backslash-escaped");
+  }
+
+  #[tokio::test]
+  #[cfg(not(windows))]
+  async fn a_timed_out_command_still_returns_what_it_printed() {
+    let result = run_blocking_shell(
+      options("sh", vec!["-c".into(), "echo late-build-error; sleep 30".into()], 1500),
+      std::env::temp_dir(),
+    )
+    .await
+    .expect("the timeout is a result, not an error");
+
+    assert!(result.timed_out);
+    assert!(!result.success);
+    assert!(result.stdout.contains("late-build-error"), "{:?}", result.stdout);
+  }
+}
+
+/// Real process test: a managed child must actually be terminated, and within
+/// the cancellation budget, rather than only reported as cancelled.
+#[cfg(all(test, windows))]
+mod tree_tests {
+  use super::*;
+
+  #[tokio::test]
+  async fn terminates_a_real_process_tree_within_two_seconds() {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+      AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+      SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    let mut child = std::process::Command::new("cmd")
+      .args(["/C", "ping -n 60 127.0.0.1 > nul"])
+      .spawn()
+      .expect("spawn a long running child");
+    let job = unsafe { CreateJobObjectW(None, None) }.expect("create job object");
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+      SetInformationJobObject(
+        job,
+        JobObjectExtendedLimitInformation,
+        &info as *const _ as *const core::ffi::c_void,
+        std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+      )
+      .expect("configure job object");
+      AssignProcessToJobObject(job, HANDLE(child.as_raw_handle())).expect("bind child to job object");
+    }
+
+    let pid = child.id();
+    let process = ManagedProcess {
+      pid,
+      job: std::sync::Arc::new(JobHandle(job.0 as isize)),
+    };
+    let started = std::time::Instant::now();
+    kill_process_tree(process).await.expect("terminate the process tree");
+    let elapsed = started.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "cancellation took {elapsed:?}");
+
+    let status = child.wait().expect("reap the child");
+    assert!(!status.success(), "a terminated process must not report success");
+  }
+}
+
+/// The agent's background-process path: start, read incremental output, stop.
+/// Real children, so the Job Object wiring is exercised rather than mocked.
+#[cfg(test)]
+mod managed_process_tests {
+  use super::*;
+
+  const CONVERSATION: &str = "conversation-under-test";
+
+  fn options(id: &str, command: &str, args: Vec<String>) -> ExecuteOptions {
+    let mut env = HashMap::new();
+    env.insert("CHATLESS_TEST".to_string(), "1".to_string());
+    ExecuteOptions {
+      execution_id: Some(id.to_string()),
+      command: command.to_string(),
+      args,
+      working_dir: Some(std::env::temp_dir().to_string_lossy().to_string()),
+      timeout_ms: 5_000,
+      env,
+      max_output_size: 1024 * 1024,
+      raw_last_arg: false,
+    }
+  }
+
+  fn owner() -> ManagedProcessOwner {
+    ManagedProcessOwner {
+      conversation_id: CONVERSATION.to_string(),
+      run_id: Some("run-under-test".to_string()),
+      name: Some("test-process".to_string()),
+    }
+  }
+
+  async fn wait_for_line(id: &str, needle: &str) -> String {
+    for _ in 0..40 {
+      let output = read_shell_process(id.to_string(), CONVERSATION.to_string(), Some(4096))
+        .await
+        .expect("read process output");
+      if output.stdout.contains(needle) {
+        return output.stdout;
+      }
+      tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    panic!("process never printed {needle}");
+  }
+
+  #[tokio::test]
+  #[cfg(windows)]
+  async fn reads_incremental_output_and_reports_exit() {
+    let id = format!("managed-test-{}", std::process::id());
+    let _ = stop_shell_process(id.clone(), CONVERSATION.to_string()).await;
+    let started = start_managed_process(
+      options(&id, "cmd.exe", vec![
+        "/C".into(),
+        "echo first-line & ping -n 3 127.0.0.1 > nul & echo second-line".into(),
+      ]),
+      std::env::temp_dir(),
+      owner(),
+    )
+    .await
+    .expect("start managed process");
+    assert!(started.pid > 0);
+
+    wait_for_line(&id, "first-line").await;
+    // The process finishes on its own; the entry stays readable.
+    for _ in 0..40 {
+      let output = read_shell_process(id.clone(), CONVERSATION.to_string(), Some(4096)).await.unwrap();
+      if !output.running {
+        assert!(output.stdout.contains("second-line"));
+        assert_eq!(output.exit_code, Some(0));
+        break;
+      }
+      tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    let listed = list_shell_processes(CONVERSATION.to_string()).await.expect("list processes");
+    assert!(listed.iter().any(|entry| entry.execution_id == id));
+    assert!(listed.iter().all(|entry| entry.conversation_id == CONVERSATION));
+    let stopped = stop_shell_process(id.clone(), CONVERSATION.to_string())
+      .await
+      .expect("stop finished process");
+    assert!(!stopped.stopped, "an exited process is not reported as stopped");
+  }
+
+  #[tokio::test]
+  #[cfg(windows)]
+  async fn stops_a_running_process() {
+    let id = format!("managed-stop-{}", std::process::id());
+    let _ = stop_shell_process(id.clone(), CONVERSATION.to_string()).await;
+    start_managed_process(
+      options(&id, "cmd.exe", vec!["/C".into(), "ping -n 60 127.0.0.1 > nul".into()]),
+      std::env::temp_dir(),
+      owner(),
+    )
+    .await
+    .expect("start long running process");
+
+    let started = std::time::Instant::now();
+    let stopped = stop_shell_process(id.clone(), CONVERSATION.to_string())
+      .await
+      .expect("stop running process");
+    assert!(stopped.stopped);
+    assert!(started.elapsed() < Duration::from_secs(2), "stop must be prompt");
+
+    // The tail of a stopped process stays readable, so the caller can explain
+    // what happened instead of losing the output with the handle.
+    let logs = read_shell_process(id.clone(), CONVERSATION.to_string(), Some(2048))
+      .await
+      .expect("a stopped process keeps its logs");
+    assert!(!logs.running);
+    let after = stop_shell_process(id, CONVERSATION.to_string()).await.expect("second stop is a no-op");
+    assert!(!after.stopped);
+  }
+
+  #[tokio::test]
+  #[cfg(windows)]
+  async fn another_conversation_cannot_read_or_stop_the_process() {
+    let id = format!("managed-owner-{}", std::process::id());
+    let _ = stop_shell_process(id.clone(), CONVERSATION.to_string()).await;
+    start_managed_process(
+      options(&id, "cmd.exe", vec!["/C".into(), "ping -n 60 127.0.0.1 > nul".into()]),
+      std::env::temp_dir(),
+      owner(),
+    )
+    .await
+    .expect("start long running process");
+
+    let other = "some-other-conversation".to_string();
+    assert!(read_shell_process(id.clone(), other.clone(), Some(1024)).await.is_err());
+    assert!(stop_shell_process(id.clone(), other.clone()).await.is_err());
+    assert!(list_shell_processes(other).await.expect("list").is_empty());
+
+    // The owner still can, and the process is really gone.
+    assert!(stop_shell_process(id.clone(), CONVERSATION.to_string()).await.expect("owner stop").stopped);
+  }
+
+  #[tokio::test]
+  #[cfg(windows)]
+  async fn the_per_conversation_limit_is_enforced_before_spawning() {
+    let conversation = format!("limit-conversation-{}", std::process::id());
+    let mut ids: Vec<String> = Vec::new();
+    for index in 0..MANAGED_PROCESS_LIMIT {
+      let id = format!("managed-limit-{}-{index}", std::process::id());
+      let result = start_managed_process(
+        options(&id, "cmd.exe", vec!["/C".into(), "ping -n 60 127.0.0.1 > nul".into()]),
+        std::env::temp_dir(),
+        ManagedProcessOwner { conversation_id: conversation.clone(), ..Default::default() },
+      )
+      .await;
+      assert!(result.is_ok(), "start {index} should fit in the budget: {result:?}");
+      ids.push(id);
+    }
+
+    let overflow = start_managed_process(
+      options("managed-limit-overflow", "cmd.exe", vec![]),
+      std::env::temp_dir(),
+      ManagedProcessOwner { conversation_id: conversation.clone(), ..Default::default() },
+    )
+    .await;
+    assert!(overflow.is_err(), "the fifth concurrent process must be refused");
+
+    let stopped = stop_conversation_processes(conversation).await.expect("clean up the conversation");
+    assert_eq!(stopped, MANAGED_PROCESS_LIMIT);
+    for id in ids {
+      assert!(read_shell_process(id, CONVERSATION.to_string(), Some(64)).await.is_err());
+    }
+  }
+
+  #[tokio::test]
+  #[cfg(not(windows))]
+  async fn reads_incremental_output_and_reports_exit() {
+    let id = format!("managed-test-{}", std::process::id());
+    let _ = stop_shell_process(id.clone(), CONVERSATION.to_string()).await;
+    start_managed_process(
+      options(&id, "sh", vec!["-c".into(), "echo first-line; sleep 0.2; echo second-line".into()]),
+      std::env::temp_dir(),
+      owner(),
+    )
+    .await
+    .expect("start managed process");
+
+    wait_for_line(&id, "first-line").await;
+    for _ in 0..40 {
+      let output = read_shell_process(id.clone(), CONVERSATION.to_string(), Some(4096)).await.unwrap();
+      if !output.running {
+        assert!(output.stdout.contains("second-line"));
+        break;
+      }
+      tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let _ = stop_shell_process(id, CONVERSATION.to_string()).await;
+  }
+}
+
+/// End-to-end shape of "write a site and run it locally": serve a file from a
+/// background process, read the listening line from its logs, fetch the page,
+/// then stop it.  Real child process, real HTTP request.
+#[cfg(all(test, windows))]
+mod local_server_tests {
+  use super::*;
+
+  const CONVERSATION: &str = "local-server-conversation";
+
+  #[tokio::test]
+  async fn serves_a_page_and_stops() {
+    let id = format!("local-server-{}", std::process::id());
+    let _ = stop_shell_process(id.clone(), CONVERSATION.to_string()).await;
+    let root = std::env::temp_dir().join(format!("chatless-site-{}", std::process::id()));
+    std::fs::create_dir_all(&root).expect("create site dir");
+    std::fs::write(root.join("index.html"), "<h1>chatless-e2e</h1>").expect("write index.html");
+    // Port chosen well outside the usual dev-server range for this test.
+    let port = 8731;
+
+    // Collect problems instead of panicking mid-test: the server must be
+    // stopped even when an assertion fails, or the port stays occupied.
+    let mut problems: Vec<String> = Vec::new();
+    if let Err(error) = start_managed_process(
+      ExecuteOptions {
+        execution_id: Some(id.clone()),
+        command: "python".to_string(),
+        // -u keeps the serving banner out of python's pipe buffer.
+        args: vec!["-u".into(), "-m".into(), "http.server".into(), port.to_string(), "--bind".into(), "127.0.0.1".into()],
+        working_dir: Some(root.to_string_lossy().to_string()),
+        timeout_ms: 5_000,
+        env: HashMap::new(),
+        max_output_size: 1024 * 1024,
+        raw_last_arg: false,
+      },
+      root.clone(),
+      ManagedProcessOwner {
+        conversation_id: CONVERSATION.to_string(),
+        run_id: Some("local-server-run".to_string()),
+        name: Some("site".to_string()),
+      },
+    )
+    .await
+    {
+      problems.push(format!("start failed: {error}"));
+    }
+
+    let mut last_logs = String::new();
+    let mut listening = false;
+    for _ in 0..60 {
+      match read_shell_process(id.clone(), CONVERSATION.to_string(), Some(4096)).await {
+        Ok(output) => {
+          last_logs = format!("stdout={:?} stderr={:?}", output.stdout, output.stderr);
+          if output.stderr.contains("Serving HTTP") || output.stdout.contains("Serving HTTP") {
+            listening = true;
+            break;
+          }
+          if !output.running {
+            break;
+          }
+        }
+        Err(error) => {
+          problems.push(format!("read failed: {error}"));
+          break;
+        }
+      }
+      tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    if !listening {
+      problems.push(format!("server never reported that it was listening; logs: {last_logs}"));
+    }
+
+    if listening {
+      // Localhost must bypass any system proxy, and a bounded timeout keeps a
+      // misconfigured server from hanging the test suite.
+      match reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(10)).build() {
+        Ok(client) => match client
+          .get(format!("http://127.0.0.1:{port}/index.html"))
+          .send()
+          .await
+        {
+          Ok(response) => match response.text().await {
+            Ok(body) => {
+              if !body.contains("chatless-e2e") {
+                problems.push(format!("unexpected body: {body}"));
+              }
+            }
+            Err(error) => problems.push(format!("read body failed: {error}")),
+          },
+          Err(error) => problems.push(format!("fetch failed: {error}")),
+        },
+        Err(error) => problems.push(format!("http client failed: {error}")),
+      }
+    }
+
+    let stopped = stop_shell_process(id.clone(), CONVERSATION.to_string()).await.expect("stop the server");
+    if listening && !stopped.stopped {
+      problems.push("the running server must be reported as stopped".to_string());
+    }
+    // The handle stays readable so the caller can quote the last lines, but the
+    // process must be gone.
+    match read_shell_process(id.clone(), CONVERSATION.to_string(), Some(1024)).await {
+      Ok(output) if output.running => problems.push("the stopped server is still running".to_string()),
+      Ok(_) => {}
+      Err(error) => problems.push(format!("a stopped process lost its logs: {error}")),
+    }
+    let remaining = list_shell_processes(CONVERSATION.to_string())
+      .await
+      .expect("list")
+      .into_iter()
+      .filter(|entry| entry.running)
+      .count();
+    if remaining != 0 {
+      problems.push(format!("{remaining} managed process(es) still running"));
+    }
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(problems.is_empty(), "{problems:?}");
   }
 }

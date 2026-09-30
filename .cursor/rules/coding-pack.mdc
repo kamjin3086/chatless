@@ -1,0 +1,33 @@
+---
+description: Coding Pack 边界。可以做轻量代码处理，但不得把 Chatless 做成专业编码 Agent 或默认开启编码套件。
+globs: src/lib/mcp/**,src/lib/skills/**,src/lib/agentWorkspace/**,src/lib/filesystem*/**,src-tauri/src/filesystem/**,src-tauri/src/sandbox/**
+alwaysApply: false
+---
+
+# Coding Pack
+
+允许 Chatless 处理代码相关任务，证明通用 Agent 实用。不允许与 Cursor / Claude Code / Codex 正面竞争。
+
+## 允许（可选、需授权、默认可关）
+
+- 会话显式 `project__attach`，不默认扫描整机
+- 递归 glob / grep、分段读取、路径别名
+- 解释代码、日志、配置
+- `apply_patch` + diff 预览，写入前审批
+- 只读 git status/diff/log；写操作按风险分级，禁止默认 force
+- 受控运行 lint / test / 脚本；结果结构化
+- 只读注入 `AGENTS.md` 等项目说明
+
+## 禁止
+
+- 内置编辑器、补全、LSP、云沙箱、自动 PR、多 Agent 编码编排
+- 把搜索/修改/验证全部塞进不受限 `shell__run`
+- 扩大默认 FS/HTTP/Opener 权限来“方便编码”
+- 未授权工作区、未审批写入、未确认的破坏性 git/shell
+- 让普通聊天用户承担 Git worktree 或并行写仓库的复杂度
+
+## 验证方式
+
+先做只读理解 + 小修改预览。用挂载率、复用率、任务完成率决定是否加深。需求弱就维持可选；需求强也只加深 Pack，不改产品身份。
+
+实现时复用现有 allowlist、ToolCard、审批和 `@WorkDir`，不要平行再做一套权限模型。

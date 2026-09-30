@@ -30,12 +30,13 @@ export default function ExtensionsPage() {
   }, [searchParams]);
 
   return (
-    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden glass-surface">
       {/* 顶部 Tab */}
       <PageTabs
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        className="glass-surface"
       />
 
       {/* 内容区域 */}

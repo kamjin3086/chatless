@@ -1,19 +1,19 @@
 "use client";
 
-import React from "react";
-import { SelectItem, SelectLabel, SelectGroup } from "@/components/ui/select";
+import React, { useState } from "react";
+import { SelectItem, SelectGroup } from "@/components/ui/select";
 import { ChevronRight } from "lucide-react";
 import { ModelSelectItem } from "./ModelSelectItem";
 import { Bot, Search } from "lucide-react";
-import type { ProviderMetadata } from '@/lib/metadata/types';
-import { useState } from "react";
+import type { ProviderMetadata } from "@/lib/metadata/types";
 import { cn } from "@/lib/utils";
+import { ProviderGlyph } from "./ProviderGlyph";
 
 interface ModelListProps {
   models: ProviderMetadata[];
   globalDefaultModel: string | null;
   currentModelId: string | null;
-  currentSelection?: string | null; // provider::model 形式，用于精确高亮
+  currentSelection?: string | null;
   searchQuery: string;
   onSetDefault: (e: React.MouseEvent, providerName: string, modelName: string) => void;
   onOpenParameters?: (providerName: string, modelId: string, modelLabel?: string) => void;
@@ -30,23 +30,21 @@ export function ModelList({
 }: ModelListProps) {
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(() => {
     const initial = new Set<string>();
-    if (currentSelection && currentSelection.includes('::')) {
-      const providerName = currentSelection.split('::')[0];
+    if (currentSelection && currentSelection.includes("::")) {
+      const providerName = currentSelection.split("::")[0];
       if (providerName) initial.add(providerName);
     } else if (currentModelId) {
-      const provider = models.find(p => p.models.some(m => m.name === currentModelId));
+      const provider = models.find((p) => p.models.some((m) => m.name === currentModelId));
       if (provider) initial.add(provider.name);
     }
     return initial;
   });
 
-  // 当外部当前选择变化时，确保对应的 provider 被展开
-  // 保留已有展开项，但至少保证目标 provider 展开
   React.useEffect(() => {
-    if (!currentSelection || !currentSelection.includes('::')) return;
-    const providerName = currentSelection.split('::')[0];
+    if (!currentSelection || !currentSelection.includes("::")) return;
+    const providerName = currentSelection.split("::")[0];
     if (!providerName) return;
-    setExpandedProviders(prev => {
+    setExpandedProviders((prev) => {
       if (prev.has(providerName)) return prev;
       const next = new Set(prev);
       next.add(providerName);
@@ -55,24 +53,25 @@ export function ModelList({
   }, [currentSelection]);
 
   const toggleProvider = (name: string) => {
-    setExpandedProviders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(name)) newSet.delete(name); else newSet.add(name);
-      return newSet;
+    setExpandedProviders((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
     });
   };
 
   if (models.length === 0) {
     return (
-      <div className="py-6 text-center text-gray-500 dark:text-gray-400">
+      <div className="py-6 text-center text-slate-500 dark:text-slate-400">
         {searchQuery ? (
           <>
-            <Search className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">未找到匹配的模型</p>
           </>
         ) : (
           <>
-            <Bot className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <Bot className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">无可用模型数据</p>
           </>
         )}
@@ -80,36 +79,60 @@ export function ModelList({
     );
   }
 
+  const searching = searchQuery.trim().length > 0;
+
   return (
-    <>
+    <div className="flex flex-col gap-0.5">
       {models.map((provider) => {
-        const expanded = expandedProviders.has(provider.name);
+        const expanded = searching || expandedProviders.has(provider.name);
+        const providerLabel = (provider as { displayName?: string }).displayName || provider.name;
         return (
           <SelectGroup key={provider.name}>
-            <div
-              className="flex items-center justify-between px-2.5 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 h-8 px-2 rounded-md hover:bg-slate-100/80 dark:hover:bg-white/6 cursor-pointer"
               onClick={() => toggleProvider(provider.name)}
             >
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                {(provider as any).displayName || provider.name}
+              <ProviderGlyph provider={provider} size={16} />
+              <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                {providerLabel}
               </span>
-              <ChevronRight className={cn("w-3 h-3 transition-transform", expanded && "rotate-90")}/>
-            </div>
-            {expanded && provider.models.map((model) => (
-              <SelectItem key={`${provider.name}::${model.name}`} value={`${provider.name}::${model.name}`} className="p-0 focus:bg-transparent">
-                <ModelSelectItem
-                  provider={provider}
-                  model={model}
-                  isDefault={globalDefaultModel === `${provider.name}/${model.name}`}
-                  isSelected={currentSelection ? currentSelection === `${provider.name}::${model.name}` : (currentModelId === model.name)}
-                  onSetDefault={onSetDefault}
-                  onOpenParameters={onOpenParameters}
-                />
-              </SelectItem>
-            ))}
+              <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                {provider.models.length}
+              </span>
+              <ChevronRight
+                className={cn(
+                  "w-3.5 h-3.5 shrink-0 text-slate-400 transition-transform",
+                  expanded && "rotate-90"
+                )}
+              />
+            </button>
+            {expanded &&
+              provider.models.map((model) => (
+                <SelectItem
+                  key={`${provider.name}::${model.name}`}
+                  value={`${provider.name}::${model.name}`}
+                  className="p-0 m-0 pr-7 rounded-md"
+                >
+                  <div className="pl-6 w-full">
+                    <ModelSelectItem
+                      provider={provider}
+                      model={model}
+                      isDefault={globalDefaultModel === `${provider.name}/${model.name}`}
+                      isSelected={
+                        currentSelection
+                          ? currentSelection === `${provider.name}::${model.name}`
+                          : currentModelId === model.name
+                      }
+                      onSetDefault={onSetDefault}
+                      onOpenParameters={onOpenParameters}
+                    />
+                  </div>
+                </SelectItem>
+              ))}
           </SelectGroup>
         );
       })}
-    </>
+    </div>
   );
-} 
+}

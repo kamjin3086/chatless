@@ -31,7 +31,7 @@ export function InfoBanner({ id, message, type = 'warning', className, ...rest }
 
   const colors = {
     warning: "bg-yellow-50 dark:bg-yellow-900/30 border-yellow-300/60 dark:border-yellow-700/60 text-yellow-800 dark:text-yellow-200",
-    info: "bg-blue-50 dark:bg-blue-900/30 border-blue-300/60 dark:border-blue-700/60 text-blue-800 dark:text-blue-200",
+    info: "bg-slate-100/70 dark:bg-white/8 border-slate-300/60 dark:border-white/12 text-slate-700 dark:text-slate-200",
     error: "bg-red-50 dark:bg-red-900/30 border-red-300/60 dark:border-red-700/60 text-red-800 dark:text-red-200",
   };
 

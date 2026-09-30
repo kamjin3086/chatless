@@ -1,40 +1,250 @@
 "use client";
-import React, { useState } from "react";
-import { InputField } from "./InputField";
+import React, { useEffect, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { 
-  MoreVertical, Undo2, KeyRound, ExternalLink, Settings, 
-  Sliders
-} from "lucide-react";
+import { KeyRound, ExternalLink, CheckCircle2, XCircle, Loader2, AlertTriangle, Eye, EyeOff, Pencil } from "lucide-react";
 import type { ProviderWithStatus } from "@/hooks/useProviderManagement";
 import { toast } from "@/components/ui/sonner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
-import { AdvancedSettingsDialog } from "@/components/settings/AdvancedSettingsDialog";
+import { cn } from "@/lib/utils";
+import { resolveConnectionHintStatus } from "@/lib/provider/connectionHintStatus";
+import { formatConnectionCheckMessage } from "@/lib/provider/formatConnectionCheckMessage";
+
+function ConnectionStatusHint({
+  provider,
+  isConnecting,
+}: {
+  provider: ProviderWithStatus;
+  isConnecting?: boolean;
+}) {
+  const message = formatConnectionCheckMessage(
+    provider.statusTooltip || provider.temporaryMessage || provider.lastMessage
+  );
+  const status = resolveConnectionHintStatus(!!isConnecting, provider);
+
+  if (!status) return null;
+
+  const styles: Record<string, { icon: React.ReactNode; className: string; label: string }> = {
+    CONNECTING: {
+      icon: <Loader2 className="w-3 h-3 animate-spin" />,
+      className: "text-slate-500 dark:text-slate-400",
+      label: "检测中",
+    },
+    CONNECTED: {
+      icon: <CheckCircle2 className="w-3 h-3" />,
+      className: "text-emerald-600 dark:text-emerald-400",
+      label: "连接正常",
+    },
+    NOT_CONNECTED: {
+      icon: <XCircle className="w-3 h-3" />,
+      className: "text-red-600 dark:text-red-400",
+      label: "无法连接",
+    },
+    NO_KEY: {
+      icon: <KeyRound className="w-3 h-3" />,
+      className: "text-slate-500 dark:text-slate-400",
+      label: "未配置密钥",
+    },
+    NO_FETCHER: {
+      icon: <AlertTriangle className="w-3 h-3" />,
+      className: "text-slate-500 dark:text-slate-400",
+      label: "无法拉取",
+    },
+  };
+
+  const entry = styles[status];
+  if (!entry) return null;
+
+  const tip =
+    message && message !== entry.label
+      ? message
+      : status === "NO_FETCHER"
+        ? "无法拉取模型列表"
+        : null;
+
+  const chip = (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 text-xs leading-none whitespace-nowrap",
+        entry.className,
+        tip && "cursor-default"
+      )}
+    >
+      {entry.icon}
+      {entry.label}
+    </span>
+  );
+
+  if (!tip) return chip;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className="inline-flex min-w-0 max-w-full outline-none">
+          {chip}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="end" className="max-w-xs">
+        <p className="text-xs leading-relaxed">{tip}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function IconButton({
+  title,
+  onClick,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 dark:hover:text-slate-300 dark:hover:bg-white/8 transition-colors"
+    >
+      {children}
+    </button>
+  );
+}
+
+function InlineEditableValue({
+  value,
+  onCommit,
+  placeholder,
+  emptyLabel,
+  mono,
+  secret,
+  extra,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  placeholder: string;
+  emptyLabel: string;
+  mono?: boolean;
+  secret?: boolean;
+  extra?: React.ReactNode;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [reveal, setReveal] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [editing]);
+
+  const commit = () => {
+    const next = draft.trim();
+    onCommit(next);
+    setEditing(false);
+    setReveal(false);
+  };
+
+  const cancel = () => {
+    setDraft(value);
+    setEditing(false);
+    setReveal(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="relative min-w-0">
+        <input
+          ref={inputRef}
+          value={draft}
+          type={secret && !reveal ? "password" : "text"}
+          placeholder={placeholder}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancel();
+            }
+          }}
+          className={cn(
+            "w-full h-8 px-2.5 pr-8 rounded-md border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-slate-800/60 text-[13px] text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-400/50",
+            mono && "font-mono"
+          )}
+        />
+        {secret && (
+          <button
+            type="button"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-600 rounded"
+            title={reveal ? "隐藏" : "显示"}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setReveal((v) => !v)}
+          >
+            {reveal ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const hasValue = value.trim().length > 0;
+  const shown = !hasValue
+    ? emptyLabel
+    : secret && !reveal
+      ? "••••••••"
+      : value;
+
+  return (
+    <div className="flex items-center gap-0.5 min-w-0 h-8">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className={cn(
+          "min-w-0 flex-1 text-left truncate text-[13px] leading-8",
+          hasValue
+            ? "text-slate-700 dark:text-slate-200"
+            : "text-slate-400 dark:text-slate-500",
+          mono && hasValue && "font-mono"
+        )}
+        title={hasValue && !secret ? value : undefined}
+      >
+        {shown}
+      </button>
+      <IconButton title="编辑" onClick={() => setEditing(true)}>
+        <Pencil className="w-3.5 h-3.5" />
+      </IconButton>
+      {secret && hasValue && (
+        <IconButton title={reveal ? "隐藏密钥" : "显示密钥"} onClick={() => setReveal((v) => !v)}>
+          {reveal ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+        </IconButton>
+      )}
+      {extra}
+    </div>
+  );
+}
 
 interface ProviderConnectionSectionProps {
   provider: ProviderWithStatus;
   localUrl: string;
   setLocalUrl: (v: string) => void;
   onUrlChange: (providerName: string, url: string) => void;
-  onResetUrl: () => void;
   showApiKeyFields: boolean;
   localDefaultApiKey: string;
   setLocalDefaultApiKey: (v: string) => void;
   docUrl?: string;
   onDefaultApiKeyChange: (providerName: string, apiKey: string) => void;
   onDefaultApiKeyBlur: (providerName: string) => void;
-  endpointPreview?: string; // 新增：展示实际请求地址示例
-  // 新增：高级设置相关
-  onPreferenceChange?: (providerName: string, preferences: { useBrowserRequest?: boolean }) => Promise<void>;
-  /** 是否显示行内的三点菜单（默认显示）。外部已提供总菜单时可关闭 */
-  showInlineMenu?: boolean;
+  endpointPreview?: string;
+  isConnecting?: boolean;
 }
 
 export function ProviderConnectionSection(props: ProviderConnectionSectionProps) {
@@ -43,7 +253,6 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
     localUrl,
     setLocalUrl,
     onUrlChange,
-    onResetUrl,
     showApiKeyFields,
     localDefaultApiKey,
     setLocalDefaultApiKey,
@@ -51,172 +260,95 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
     onDefaultApiKeyChange,
     onDefaultApiKeyBlur,
     endpointPreview,
-    onPreferenceChange,
+    isConnecting,
   } = props;
 
-  const [showAdvancedDialog, setShowAdvancedDialog] = useState(false);
+  const repoName = provider.aliases?.[0] || provider.name;
 
   return (
-    <div className="space-y-2.5">
-       <div className="group flex items-center gap-2">
-         <label className="text-xs font-medium text-slate-600 dark:text-slate-400 w-20 flex-shrink-0">
-           服务地址
-         </label>
-         <div className="flex-1 flex items-center gap-1.5">
-           <div className="flex-1 relative">
-             <input
-               value={localUrl}
-               onChange={(e) => { setLocalUrl(e.target.value); }}
-               onBlur={() => {
-                 const repoName = provider.aliases?.[0] || provider.name;
-                 onUrlChange(repoName, localUrl);
-               }}
-               placeholder={provider.name.toLowerCase()==='ollama' ? 'http://localhost:11434' : '服务地址'}
-               className="w-full h-8 px-2.5 bg-white dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400/50 transition-colors hover:border-slate-300 dark:hover:border-slate-600 dark:text-slate-200 text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500"
-             />
-           </div>
-           {/* 地址预览按钮 - Tooltip形式 */}
-           {endpointPreview && (
-             <TooltipProvider>
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <button
-                     type="button"
-                     className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded transition-colors"
-                     title="查看地址预览"
-                   >
-                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                       <path d="M12 5C7 5 2.73 8.11 1 12.5 2.73 16.89 7 20 12 20s9.27-3.11 11-7.5C21.27 8.11 17 5 12 5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/>
-                     </svg>
-                   </button>
-                 </TooltipTrigger>
-                 <TooltipContent side="bottom" align="end" className="max-w-md">
-                   <p className="text-xs break-all">{endpointPreview}</p>
-                 </TooltipContent>
-               </Tooltip>
-             </TooltipProvider>
-           )}
-           {props.showInlineMenu !== false && (
-          <TooltipProvider>
-            <DropdownMenu>
+    <TooltipProvider delayDuration={200}>
+      <div className={cn("grid gap-x-5 gap-y-1", showApiKeyFields ? "grid-cols-2" : "grid-cols-1")}>
+        <div className="flex h-5 items-center gap-2 min-w-0">
+          <label className="shrink-0 whitespace-nowrap text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400">
+            服务地址
+          </label>
+          <div className="ml-auto min-w-0 flex justify-end">
+            <ConnectionStatusHint provider={provider} isConnecting={isConnecting} />
+          </div>
+        </div>
+
+        {showApiKeyFields ? (
+          <div className="flex h-5 items-center gap-2 min-w-0">
+            <label className="shrink-0 whitespace-nowrap text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400">
+              API 密钥
+            </label>
+            {docUrl && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const { linkOpener } = await import("@/lib/utils/linkOpener");
+                    const success = await linkOpener.openLink(docUrl);
+                    if (!success) toast.error("无法打开链接，请稍后重试");
+                  } catch (error) {
+                    console.error("打开链接失败:", error);
+                    toast.error("打开链接失败");
+                  }
+                }}
+                className="ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                获取密钥
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        <InlineEditableValue
+          key={`${provider.name}-url`}
+          value={localUrl}
+          placeholder={provider.name.toLowerCase() === "ollama" ? "http://localhost:11434" : "https://…"}
+          emptyLabel="未设置服务地址"
+          mono
+          onCommit={(next) => {
+            setLocalUrl(next);
+            onUrlChange(repoName, next);
+          }}
+          extra={
+            endpointPreview ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className={`relative p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded focus:outline-none transition-colors ${
-                        provider.preferences?.useBrowserRequest ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : ''
-                      }`}
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                      {provider.preferences?.useBrowserRequest && (
-                        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-500 rounded-full border border-white dark:border-slate-800"></div>
-                      )}
-                    </button>
-                  </DropdownMenuTrigger>
+                  <button
+                    type="button"
+                    className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 dark:hover:text-slate-300 dark:hover:bg-white/8"
+                    title="实际请求地址"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px]">
-                  高级设置
-                  {provider.preferences?.useBrowserRequest && <div className="text-blue-400">（已启用浏览器模式）</div>}
+                <TooltipContent side="bottom" align="end" className="max-w-md">
+                  <p className="text-xs break-all">{endpointPreview}</p>
                 </TooltipContent>
               </Tooltip>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="flex items-center gap-1.5 text-xs font-semibold">
-                  <Settings className="w-3.5 h-3.5 text-blue-600" />
-                  提供商设置
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                
-                <DropdownMenuItem 
-                  onClick={onResetUrl} 
-                  className="flex items-center gap-2 px-2 py-2 text-xs"
-                >
-                  <div className="flex items-center justify-center w-7 h-7 bg-slate-100 dark:bg-slate-700 rounded">
-                    <Undo2 className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-medium">重置地址</span>
-                    <span className="text-[10px] text-slate-500">恢复默认配置</span>
-                  </div>
-                </DropdownMenuItem>
-                
-                <DropdownMenuSeparator />
-                
-                <DropdownMenuItem 
-                  onClick={() => setShowAdvancedDialog(true)} 
-                  className="flex items-center gap-2 px-2 py-2 text-xs"
-                >
-                  <div className="flex items-center justify-center w-7 h-7 bg-blue-100 dark:bg-blue-900/50 rounded">
-                    <Sliders className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium">高级选项</span>
-                      {provider.preferences?.useBrowserRequest && (
-                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-slate-500">请求方式等</span>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </TooltipProvider>
-          )}
-        </div>
-      </div>
+            ) : null
+          }
+        />
 
-      {showApiKeyFields && (
-        <div className="flex items-center gap-1.5">
-          <InputField
-            label="API密钥"
-            type="password"
+        {showApiKeyFields ? (
+          <InlineEditableValue
+            key={`${provider.name}-key`}
             value={localDefaultApiKey}
-            onChange={(e) => {
-              setLocalDefaultApiKey(e.target.value);
-            }}
-            onBlur={() => {
-              const repoName = provider.aliases?.[0] || provider.name;
-              onDefaultApiKeyChange(repoName, localDefaultApiKey);
+            placeholder="可选，部分服务不需要"
+            emptyLabel="未设置"
+            secret
+            onCommit={(next) => {
+              setLocalDefaultApiKey(next);
+              onDefaultApiKeyChange(repoName, next);
               onDefaultApiKeyBlur(repoName);
             }}
-            placeholder="密钥"
-            className="h-8 text-xs w-full"
-            wrapperClassName="mb-0 flex-1"
-            icon={<KeyRound className="w-3.5 h-3.5 text-slate-400" />}
-            inline
-            labelWidthClassName="w-20"
           />
-          {docUrl && (
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  const { linkOpener } = await import("@/lib/utils/linkOpener");
-                  const success = await linkOpener.openLink(docUrl);
-                  if (!success) toast.error('无法打开链接，请稍后重试');
-                } catch (error) {
-                  console.error('打开链接失败:', error);
-                  toast.error('打开链接失败');
-                }
-              }}
-              className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded transition-colors"
-              title="前往密钥管理"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* 高级设置弹窗 */}
-      <AdvancedSettingsDialog
-        open={showAdvancedDialog}
-        onOpenChange={setShowAdvancedDialog}
-        provider={provider}
-        onPreferenceChange={onPreferenceChange}
-      />
-    </div>
+        ) : null}
+      </div>
+    </TooltipProvider>
   );
 }
-

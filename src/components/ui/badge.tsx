@@ -10,11 +10,11 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-blue-300/50 dark:border-blue-600/50 bg-gradient-to-r from-blue-500 to-indigo-500 text-white [a&]:hover:from-blue-600 [a&]:hover:to-indigo-600 [a&]:hover:shadow-md",
+          "border-slate-300/50 dark:border-white/15 bg-slate-700 text-white [a&]:hover:bg-slate-800",
         secondary:
-          "border-gray-200/60 dark:border-gray-700/50 bg-gradient-to-r from-gray-100 to-slate-100 text-gray-700 dark:from-gray-800 dark:to-slate-800 dark:text-gray-300 [a&]:hover:from-gray-200 [a&]:hover:to-slate-200 dark:[a&]:hover:from-gray-700 dark:[a&]:hover:to-slate-700",
+          "border-slate-200/60 dark:border-white/12 bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300 [a&]:hover:bg-slate-200 dark:[a&]:hover:bg-white/16",
         destructive:
-          "border-red-300/50 dark:border-red-600/50 bg-gradient-to-r from-red-500 to-rose-500 text-white [a&]:hover:from-red-600 [a&]:hover:to-rose-600 [a&]:hover:shadow-md focus-visible:ring-red-500/20 dark:focus-visible:ring-red-500/40",
+          "border-red-300/50 dark:border-red-600/50 bg-red-600 text-white [a&]:hover:bg-red-700 focus-visible:ring-red-500/20 dark:focus-visible:ring-red-500/40",
         outline:
           "text-gray-700 dark:text-gray-300 border-gray-300/60 dark:border-gray-600/50 bg-white/60 dark:bg-gray-900/40 backdrop-blur-sm [a&]:hover:bg-gray-50 dark:[a&]:hover:bg-gray-800/60 [a&]:hover:border-gray-400/60",
       },

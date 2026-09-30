@@ -6,6 +6,8 @@ import { resolveResource } from '@tauri-apps/api/path';
 import { Image } from '@tauri-apps/api/image';
 import { defaultWindowIcon } from '@tauri-apps/api/app';
 import { platform } from '@tauri-apps/plugin-os';
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
 
 // 系统托盘管理类
 class SystemTrayManager {
@@ -17,6 +19,9 @@ class SystemTrayManager {
     if (this.isInitialized) return;
 
     try {
+      const locale = useLocaleStore.getState().locale;
+      const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+
       // 创建真正的分割线
       const separator1 = await PredefinedMenuItem.new({ item: 'Separator' });
       const separator2 = await PredefinedMenuItem.new({ item: 'Separator' });
@@ -26,24 +31,24 @@ class SystemTrayManager {
         items: [
           {
             id: 'new_chat',
-            text: '新建聊天',
+            text: t('tray.newChat'),
             action: () => this.createNewChat()
           },
           separator1,
           {
             id: 'minimize',
-            text: '最小化到托盘',
+            text: t('tray.minimize'),
             action: () => this.minimizeToTray()
           },
           separator2,
           {
             id: 'settings',
-            text: '设置',
+            text: t('tray.settings'),
             action: () => this.navigateTo('settings')
           },
           {
             id: 'quit',
-            text: '退出',
+            text: t('tray.quit'),
             action: () => this.quit()
           }
         ]

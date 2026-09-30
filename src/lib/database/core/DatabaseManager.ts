@@ -194,6 +194,11 @@ export class DatabaseManager {
     return this.db;
   }
 
+  /** The exact plugin pool key used by backend transactional commands. */
+  getConnectionUrl(): string {
+    return `sqlite:${this.config.dbPath}`;
+  }
+
   /**
    * 执行SQL查询
    */
@@ -518,4 +523,4 @@ export class DatabaseManager {
 /**
  * 默认数据库配置
  */
-export const defaultDatabaseConfig: DatabaseConfig = getDefaultDatabaseConfig(); 
+export const defaultDatabaseConfig: DatabaseConfig = getDefaultDatabaseConfig();

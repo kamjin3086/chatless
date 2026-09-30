@@ -24,7 +24,7 @@ export function SkillCard({
       onClick={onClick}
       className={cn(
         'group relative flex flex-col text-left w-full p-3 rounded-lg border transition-colors duration-150',
-        'bg-white/80 dark:bg-slate-900/60',
+        'bg-white/40 dark:bg-slate-900/40 glass-panel',
         'hover:border-slate-300/80 dark:hover:border-slate-600/60',
         'focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600',
         selected

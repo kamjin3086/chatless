@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { Send, StopCircle, CornerDownLeft } from "lucide-react";
+import { ListChecks, Send, StopCircle } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,6 @@ import { toast } from '@/components/ui/sonner';
 // 输入框上方“长条附加项”已移除：保留输入框下方彩色标签条即可
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
-import { ChatModeSelector, type ChatMode } from './input/ChatModeSelector';
 import { AttachmentMenu } from './input/AttachmentMenu';
 import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
 import { WebSearchToggle } from './input/WebSearchToggle';
@@ -25,7 +24,6 @@ import { useChatStore } from '@/store/chatStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
 import { useUiSession } from '@/store/uiSession';
-import { useWebSearchStore } from '@/store/webSearchStore';
 import { useRouter } from 'next/navigation';
 import { detectTauriEnvironment } from "@/lib/utils/environment";
 import { getProcessSandbox } from "@/lib/skills/sandbox";
@@ -66,19 +64,23 @@ interface ChatInputProps {
         summary: string;
       };
       contextData: string;
+      sourceContent?: string;
+      sourceBytes?: Uint8Array;
     },
     knowledgeBase?: {
       id: string;
       name: string;
     },
-    options?: { images?: string[] }
-  ) => void;
+    options?: { images?: string[]; planOnly?: boolean }
+  ) => void | Promise<void>;
   onImageUpload?: (file: File) => void;
   onFileUpload?: (file: File) => void;
   isLoading?: boolean;
   tokenCount?: number;
   disabled?: boolean;
   onStopGeneration?: () => void;
+  /** 停止按钮旁的提示文案（如二次确认强制中止） */
+  stopGenerationHint?: string | null;
   onBeforeSendMessage?: () => Promise<boolean>;
   selectedKnowledgeBaseId?: string; // 来自URL参数或父组件的知识库ID
   editingMessage?: EditingMessageData | null;
@@ -101,6 +103,7 @@ export function ChatInput({
   isLoading = false,
   disabled = false,
   onStopGeneration,
+  stopGenerationHint,
   onBeforeSendMessage,
   selectedKnowledgeBaseId,
   tokenCount = 0,
@@ -122,14 +125,16 @@ export function ChatInput({
   const [attachedDocument, setAttachedDocument] = useState<{
     name: string;
     content: string;
+    fullContent: string;
     summary: string;
     fileSize: number;
+    bytes: Uint8Array;
   } | null>(null);
 
   // 知识库选择相关状态
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState<KnowledgeBase | null>(null);
   const [allKnowledgeBases, setAllKnowledgeBases] = useState<KnowledgeBase[]>([]);
-  
+
   // 加载知识库列表
   useEffect(() => {
     (async () => {
@@ -142,31 +147,24 @@ export function ChatInput({
       }
     })();
   }, []);
-  
+
   // 知识库选项（用于上拉选择）
-  const knowledgeBaseOptions = useMemo(() => 
+  const knowledgeBaseOptions = useMemo(() =>
     allKnowledgeBases.map(kb => ({ id: kb.id, label: kb.name })),
     [allKnowledgeBases]
   );
-  
+
   // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
-  
-  const _webSearch = useWebSearchStore();
+
   const _router = useRouter();
-  const setConversationToolMode = useChatStore((s: any) => s.setConversationToolMode);
-  const currentToolMode = useChatStore((s: any) => {
-    const id = s.currentConversationId;
-    const conv = id ? s.conversations.find((c: any) => c.id === id) : null;
-    return (conv?.tool_mode as ('chat'|'agent') | undefined) || s.sessionToolMode || 'chat';
-  });
-  
+
   // MCP 服务器状态
   const [_mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
     all: [],
     connected: [],
     enabled: [],
   });
-  
+
   // 加载 MCP 服务器状态
   useEffect(() => {
     (async () => {
@@ -180,13 +178,16 @@ export function ChatInput({
       }
     })();
   }, []);
-  
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
   // —— 输入框高度控制：默认自适应，支持顶部拖拽，最大不超过视口 40% ——
   const MIN_INPUT_HEIGHT = 66; // 与样式中的 min-h 保持一致
   const [maxInputHeight, setMaxInputHeight] = useState<number>(Math.floor(window.innerHeight * 0.4));
-  const sessionManualHeight = useUiSession((s)=> s.chatInputHeight);
-  const setSessionManualHeight = useUiSession((s)=> s.setChatInputHeight);
+  const sessionManualHeight = useUiSession((s: any)=> s.chatInputHeight);
+  const setSessionManualHeight = useUiSession((s: any)=> s.setChatInputHeight);
+  const planOnly = useUiSession((s: any) => s.getPlanOnly(currentConvId));
+  const setPlanOnly = useUiSession((s: any) => s.setPlanOnly);
   const [manualHeight, setManualHeight] = useState<number | null>(sessionManualHeight);
   const [resizing, setResizing] = useState<{ startY: number; startH: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,42 +207,19 @@ export function ChatInput({
   };
 
   // === 会话内草稿：仅在切换会话/失焦/卸载时提交，避免输入过程中重渲染导致光标跳动 ===
-  const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
   // 统一的“agent 是否仍在运行”信号：不要只依赖父组件 isLoading（它只覆盖 LLM stream 阶段）
   const storeAgentRunning = useChatStore((s: any) => {
     const cid = conversationId || s.currentConversationId;
     if (!cid) return false;
     const conv = (s.conversations || []).find((c: any) => c && c.id === cid);
-    const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
-    // 1) 任意消息仍为 loading
-    if (msgs.some((m) => m && m.status === 'loading')) return true;
-    // 2) 任意 toolCard 仍在运行/等待授权（即使 stream 已结束）
-    for (const m of msgs) {
-      const segs: any[] = Array.isArray(m?.segments) ? m.segments : [];
-      for (const seg of segs) {
-        if (seg?.kind === 'toolCard' && (seg.status === 'running' || seg.status === 'pending_auth')) {
-          return true;
-        }
-      }
-    }
-    return false;
+    const lastAssistant = [...(Array.isArray(conv?.messages) ? conv.messages : [])]
+      .reverse()
+      .find((m: any) => m?.role === 'assistant' && m.id);
+    return Boolean(lastAssistant?.id && s.agentRuns?.[lastAssistant.id]?.running);
   });
-  // AgentLoop 运行态：用于避免“仍在 loop 中但 Stop 按钮闪烁”
-  const agentRunActive = useChatStore((s: any) => {
-    const cid = conversationId || s.currentConversationId;
-    if (!cid) return false;
-    const conv = (s.conversations || []).find((c: any) => c && c.id === cid);
-    const toolMode = (conv?.tool_mode as ('chat' | 'agent') | undefined) || s.sessionToolMode || 'chat';
-    if (toolMode !== 'agent') return false;
-    const msgs: any[] = Array.isArray(conv?.messages) ? conv.messages : [];
-    const lastAssistant = [...msgs].reverse().find((m) => m && m.role === 'assistant' && m.id);
-    if (!lastAssistant?.id) return false;
-    const runs = s.agentRuns || {};
-    return !!runs[String(lastAssistant.id)]?.running;
-  });
-  const effectiveLoading = isLoading || storeAgentRunning || agentRunActive;
+  const effectiveLoading = isLoading || storeAgentRunning;
   const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
-  // 仅展示用户主动挂载的目录（通过 + 号选择），不展示系统自动 @WorkDir
+  // 输入栏只展示用户**选定**的工作目录；会话默认目录在 + 菜单里说明，不作为标签出现。
   const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;
   const clearInputDraft = useChatStore((s)=>s.clearInputDraft);
   const setInputDraft = useChatStore((s)=>s.setInputDraft);
@@ -325,9 +303,15 @@ export function ChatInput({
     }
   };
 
-  // 移除知识库选择
-  const _handleRemoveKnowledgeBase = () => {
+  // 移除知识库选择；如果知识库来自深链接，同时清掉 URL，避免参数 effect 立刻重新挂载它。
+  const removeSelectedKnowledgeBase = () => {
     setSelectedKnowledgeBase(null);
+    if (selectedKnowledgeBaseId && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('knowledgeBase');
+      const query = params.toString();
+      _router.replace(`${window.location.pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    }
   };
 
   const adjustTextareaHeight = () => {
@@ -431,7 +415,7 @@ export function ChatInput({
   const [skillMentionOpen, setSkillMentionOpen] = useState<boolean>(false);
   const [textareaScroll, setTextareaScroll] = useState<number>(0);
   const overlayRef = useRef<HTMLDivElement>(null);
-  
+
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -439,12 +423,12 @@ export function ChatInput({
     setOverlayFont(cs.fontFamily);
     setOverlayFontSize(cs.fontSize);
     setOverlayLineHeight(cs.lineHeight);
-    
+
     // 监听textarea滚动，同步到覆盖层
     const handleScroll = () => {
       setTextareaScroll(el.scrollTop);
     };
-    
+
     el.addEventListener('scroll', handleScroll);
     return () => el.removeEventListener('scroll', handleScroll);
   }, [textareaRef.current]);
@@ -541,7 +525,6 @@ export function ChatInput({
 
   const handleSend = async () => {
     if (!inputValue.trim() && !attachedDocument) return;
-    if (effectiveLoading) return;
 
     // 发送前检查
     if (onBeforeSendMessage) {
@@ -609,14 +592,10 @@ export function ChatInput({
         }
       } catch { /* noop */ }
     }
-    
-    // 规则（明确区分）：
-    // - chat -> agent 只能通过：手动切换，或在 @/# 面板中“选择”了 MCP/Skill（见面板 onSelect）
-    // - 仅输入文本中包含 @xxx / #xxx 不触发自动切换
 
     if (attachedImages.length > 0) {
       const imagesData = attachedImages.map(img => img.base64Data);
-      onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData });
+      await onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData, planOnly });
     } else if (editingMessage) {
       // 编辑模式下，保留原引用信息
       const docRef = editingMessage.documentReference
@@ -625,10 +604,11 @@ export function ChatInput({
             contextData: editingMessage.contextData || ''
           }
         : undefined;
-      onSendMessage(
+      await onSendMessage(
         userMessage,
         docRef,
-        editingMessage.knowledgeBaseReference
+        editingMessage.knowledgeBaseReference,
+        { planOnly }
       );
       // 退出编辑模式
       onCancelEdit?.();
@@ -643,18 +623,30 @@ export function ChatInput({
         }
       } catch { /* noop */ }
 
-      onSendMessage(contentToSend, {
+      await onSendMessage(contentToSend, {
         documentReference: {
           fileName: attachedDocument.name,
           fileType: attachedDocument.name.split('.').pop() || 'unknown',
           fileSize: attachedDocument.fileSize,
           summary: attachedDocument.summary
         },
-        contextData: attachedDocument.content
-      }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined);
+        contextData: attachedDocument.content,
+        sourceContent: attachedDocument.fullContent,
+        sourceBytes: attachedDocument.bytes,
+      }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
     } else {
       // 普通消息，如果有选中的知识库则传递
-      onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined);
+      await onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
+    }
+
+    // onSendMessage only resolves after the supplement and its attachments are
+    // durable, so every accepted input can now be cleared consistently.
+    if (effectiveLoading) {
+      setInputValue('');
+      setAttachedDocument(null);
+      setAttachedImages([]);
+      const convId = conversationId || useChatStore.getState().currentConversationId;
+      if (convId) clearInputDraft(convId);
     }
 
     // 不立即把高度重置为 auto，保持用户手动高度（或让 onStart 信号处理）
@@ -699,15 +691,15 @@ export function ChatInput({
         fr.onerror = reject;
         fr.readAsDataURL(file);
       });
-      
+
       // 将Data URL转换为纯base64字符串（Ollama API要求）
       const base64Data = dataUrl.split(',')[1];
-      
-      setAttachedImages(prev => [...prev, { 
-        name: file.name, 
+
+      setAttachedImages(prev => [...prev, {
+        name: file.name,
         dataUrl, // 保留原始Data URL用于UI显示
         base64Data, // 纯base64数据用于API调用
-        fileSize: file.size 
+        fileSize: file.size
       }]);
     }
     e.target.value = "";
@@ -726,7 +718,7 @@ export function ChatInput({
       e.target.value = "";
       return;
     }
-    
+
     if (supportedTypes.includes(fileExtension || '')) {
       // 处理文档解析
       await handleDocumentParsing(file);
@@ -734,17 +726,17 @@ export function ChatInput({
       // 处理其他类型文件上传
       onFileUpload(file);
     }
-    
+
     e.target.value = "";
   };
 
   const handleDocumentParsing = async (file: File) => {
     setIsParsingDocument(true);
-    
+
     try {
       // 使用DocumentParser解析文件
       const result = await DocumentParser.parseFileObject(file, { maxFileSize: 20 * 1024 * 1024, timeoutMs: 30_000 });
-      
+
       if (result.success && result.content) {
         const summary = DocumentParser.getDocumentSummary(result.content, 150);
         // 生成安全预览，防止误把超长文本拼进后续提示词
@@ -753,8 +745,10 @@ export function ChatInput({
         setAttachedDocument({
           name: file.name,
           content: DocumentParser.cleanDocumentContent(preview),
+          fullContent: DocumentParser.cleanDocumentContent(result.content),
           summary,
-          fileSize: file.size
+          fileSize: file.size,
+          bytes: new Uint8Array(await file.arrayBuffer()),
         });
       } else {
         // 解析失败，显示错误信息
@@ -767,7 +761,7 @@ export function ChatInput({
       if (textareaRef.current) {
         textareaRef.current.focus();
       }
-      
+
     } catch (error) {
       console.error('文档解析失败:', error);
       toast.error(`文档解析失败`, {
@@ -824,7 +818,10 @@ export function ChatInput({
   }, [textareaRef.current]);
 
   return (
-    <div className="input-area w-full bg-gradient-to-br from-white/40 via-slate-50/30 to-white/40 dark:from-gray-800/80 dark:via-slate-900/70 dark:to-gray-800/80 backdrop-blur-xl shadow-lg rounded-2xl mx-0 mb-4 p-2 sm:p-3 overflow-x-hidden border border-slate-200/40 dark:border-slate-700/40 max-w-full transition-all">
+    <div className={cn(
+      "input-area w-full max-w-full mb-2",
+      disabled && "opacity-45 pointer-events-none"
+    )}>
       {/* 编辑模式提示栏 */}
       {editingMessage && (
         <div className="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-300 dark:border-yellow-700 text-xs text-yellow-800 dark:text-yellow-200 rounded-md px-3 py-1 mb-2">
@@ -853,7 +850,41 @@ export function ChatInput({
 
       {/* 文档附加展示已移至下方彩色标签条 */}
 
-      <div className="relative flex w-full rounded-xl border border-slate-300/50 dark:border-slate-600/50 bg-white dark:bg-slate-900/90 backdrop-blur-sm shadow-sm hover:border-slate-400/60 dark:hover:border-slate-500/60 focus-within:border-blue-400/60 dark:focus-within:border-blue-500/60 focus-within:ring-2 focus-within:ring-blue-100/50 dark:focus-within:ring-blue-900/30 transition-all duration-200" onDragOver={(e)=>{ const dt=(e as React.DragEvent).dataTransfer; if (!dt) return; const hasFile = Array.from(dt.items||[]).some((it)=> it.kind==='file'); if (hasFile || dt.getData('text/uri-list')) { e.preventDefault(); dt.dropEffect='copy'; } }} onDrop={async (e)=>{ const dt=(e as React.DragEvent).dataTransfer; if (!dt) return; const files=Array.from(dt.files||[]); const imgs=files.filter(f=>f.type.startsWith('image/')); if (imgs.length>0){ e.preventDefault(); for (const f of imgs) await appendImageFromBlob(f, f.name||'dropped.png'); return; } const url = dt.getData('text/uri-list')||dt.getData('text/plain'); if (url && /^(https?:|data:)/i.test(url)){ e.preventDefault(); try{ const resp=await fetch(url); const blob=await resp.blob(); if (blob.type.startsWith('image/')) await appendImageFromBlob(blob, `dropped-${Date.now()}.${(blob.type.split('/')[1]||'png')}`);}catch{ /* noop */ }} } }>
+      <div
+        className="relative flex w-full overflow-hidden rounded-2xl border border-slate-300/40 dark:border-slate-600/40 bg-white/35 dark:bg-slate-900/35 hover:border-slate-400/50 dark:hover:border-slate-500/50 focus-within:border-sky-400/45 dark:focus-within:border-sky-400/40 focus-within:ring-0 transition-colors duration-200 composer-box"
+        onDragOver={(e) => {
+          const dt = (e as React.DragEvent).dataTransfer;
+          if (!dt) return;
+          const hasFile = Array.from(dt.items || []).some((it) => it.kind === "file");
+          if (hasFile || dt.getData("text/uri-list")) {
+            e.preventDefault();
+            dt.dropEffect = "copy";
+          }
+        }}
+        onDrop={async (e) => {
+          const dt = (e as React.DragEvent).dataTransfer;
+          if (!dt) return;
+          const files = Array.from(dt.files || []);
+          const imgs = files.filter((f) => f.type.startsWith("image/"));
+          if (imgs.length > 0) {
+            e.preventDefault();
+            for (const f of imgs) await appendImageFromBlob(f, f.name || "dropped.png");
+            return;
+          }
+          const url = dt.getData("text/uri-list") || dt.getData("text/plain");
+          if (url && /^(https?:|data:)/i.test(url)) {
+            e.preventDefault();
+            try {
+              const resp = await fetch(url);
+              const blob = await resp.blob();
+              if (blob.type.startsWith("image/"))
+                await appendImageFromBlob(blob, `dropped-${Date.now()}.${blob.type.split("/")[1] || "png"}`);
+            } catch {
+              /* noop */
+            }
+          }
+        }}
+      >
         {/* 顶部拖拽手柄：按住可向上/下调整高度，封顶 60vh */}
         <div
           className="absolute top-0 left-0 right-0 h-2 cursor-n-resize z-[3]"
@@ -1025,9 +1056,9 @@ export function ChatInput({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="开始对话吧… 输入 / 调用提示词 @ 指定MCP # 引用技能"
+          placeholder={disabled ? "请先选择模型" : "发送消息"}
           className={cn(
-            "relative z-[1] w-full pl-8 sm:pl-10 pr-32 sm:pr-36 py-[10px] pb-10 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[66px] placeholder:text-[12px] sm:placeholder:text-[13px] placeholder:text-gray-400/80 dark:placeholder:text-gray-400/70",
+            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 py-[10px] pb-10 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[66px] placeholder:text-[13px] placeholder:text-gray-400/70 dark:placeholder:text-gray-500/60",
             (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-gray-900 dark:caret-gray-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-gray-900 dark:text-gray-100 tabular-nums"
           )}
           style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }}
@@ -1044,13 +1075,6 @@ export function ChatInput({
             setInputValue(next);
             setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
             setMentionOpen(false);
-            // 显式使用 @mcp：自动切到 agent（仅此情形）
-            try {
-              const convId = currentConvId || conversationId || '';
-              if (convId && currentToolMode === 'chat') {
-                void setConversationToolMode?.(convId, 'agent');
-              }
-            } catch { /* ignore */ }
           }}
           onClose={()=>setMentionOpen(false)}
         />
@@ -1065,26 +1089,26 @@ export function ChatInput({
             setInputValue(next);
             setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
             setSkillMentionOpen(false);
-            // 显式使用 #skill：自动切到 agent（仅此情形）
-            try {
-              const convId = currentConvId || conversationId || '';
-              if (convId && currentToolMode === 'chat') {
-                void setConversationToolMode?.(convId, 'agent');
-              }
-            } catch { /* ignore */ }
           }}
           onClose={()=>setSkillMentionOpen(false)}
         />
-        {/* 左下角工具栏：模式切换 + 附件 + 搜索 + MCP + 更多 */}
-        <div className="absolute left-2 sm:left-3 bottom-3 z-[2] flex items-center gap-1">
-          {/* 模式选择器 */}
-          <ChatModeSelector
-            mode={currentToolMode as ChatMode}
-            onModeChange={(mode) => {
-              void setConversationToolMode?.(conversationId || '', mode);
-            }}
+        {/* 左下角工具栏：次要能力统一弱图标 */}
+        <div className="absolute left-2 sm:left-3 bottom-2.5 z-[2] flex items-center gap-0.5">
+          {/* 仅规划开关：运行期间锁定，避免同一回合改变执行语义 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setPlanOnly(!planOnly, currentConvId)}
             disabled={disabled || effectiveLoading}
-          />
+            className={cn(
+              "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-slate-100 dark:hover:bg-slate-800",
+              planOnly && "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40"
+            )}
+            title={planOnly ? "仅规划：关闭后才会执行写入和命令" : "仅规划"}
+            aria-label={planOnly ? "关闭仅规划" : "开启仅规划"}
+          >
+            <ListChecks className="w-4 h-4" />
+          </Button>
 
           {/* 附件菜单 */}
           <AttachmentMenu
@@ -1094,7 +1118,13 @@ export function ChatInput({
             selectedKnowledgeBase={selectedKnowledgeBase}
             onPickImage={() => imageInputRef.current?.click()}
             onPickDocument={() => fileInputRef.current?.click()}
-            onSelectKnowledgeBase={setSelectedKnowledgeBase}
+            onSelectKnowledgeBase={(kb) => {
+              if (kb) {
+                setSelectedKnowledgeBase(kb);
+              } else {
+                removeSelectedKnowledgeBase();
+              }
+            }}
             conversationId={conversationId}
           />
 
@@ -1138,53 +1168,76 @@ export function ChatInput({
             disabled={disabled}
           />
         </div>
-        <div className="absolute right-2 sm:right-3 bottom-3 z-[2] flex items-center gap-1.5 sm:gap-2">
-       
-          <div className="p-0.5 text-gray-400" title="Shift+Enter 换行">
-                  <CornerDownLeft className="w-4 h-4" />
-                </div>
-            {/* Token 指示：放在按钮左侧，等宽数字 + 最小宽度，样式 T: 277 */}
+        <div className="absolute right-2 sm:right-3 bottom-2.5 z-[2] flex items-center gap-1.5 sm:gap-2">
             {tokenCount > 0 && (
-              <span className="text-xs text-gray-500 mr-2 select-none font-mono tabular-nums inline-flex items-center justify-end min-w-[64px]">
-                T: {tokenCount}
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 mr-1 select-none font-mono tabular-nums hidden sm:inline">
+                T:{tokenCount}
               </span>
             )}
             {effectiveLoading ? (
               <div className="flex items-center gap-2">
+                {stopGenerationHint && (
+                  <span className="hidden sm:inline text-[10px] text-amber-600 dark:text-amber-400 max-w-[180px] leading-tight text-right">
+                    {stopGenerationHint}
+                  </span>
+                )}
                 <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 select-none">
                   <span className="relative inline-flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-60 animate-ping" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500" />
                   </span>
-                  Agent 运行中
+                  {'处理中'}
                 </span>
+                {(inputValue.trim() || attachedDocument) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleSend}
+                    className="composer-tool h-8 w-8 rounded-md border-0 bg-transparent text-slate-600 shadow-none hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    title="排队补充"
+                    aria-label="排队补充"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={onStopGeneration}
-                  className="h-8 w-8 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 rounded-full"
-                  title="停止（停止生成/停止工具链路）"
+                  className={cn(
+                    "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                    "text-slate-600 dark:text-slate-300"
+                  )}
+                  title={stopGenerationHint || "停止（停止生成/停止工具链路）"}
+                  aria-label={stopGenerationHint || "停止生成"}
                 >
                   <StopCircle className="w-5 h-5" />
                 </Button>
               </div>
+            ) : disabled ? (
+              <div
+                className="composer-tool h-8 w-8 rounded-md text-slate-400/55 dark:text-slate-500/55 flex items-center justify-center"
+                aria-hidden
+              >
+                <Send className="w-4 h-4" />
+              </div>
             ) : (
-            <>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleSend}
-                disabled={disabled || effectiveLoading || (!inputValue.trim() && !attachedDocument)}
+                disabled={!inputValue.trim() && !attachedDocument}
                 className={cn(
-                  "h-8 w-8 rounded-full text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-opacity",
-                  (disabled || effectiveLoading || (!inputValue.trim() && !attachedDocument)) && 'opacity-0 pointer-events-none'
+                  "composer-tool composer-send h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                  ((!inputValue.trim() && !attachedDocument)) && "opacity-40 pointer-events-none"
                 )}
+                title="发送 (Enter)"
+                aria-label="发送消息"
               >
-                <Send className="w-5 h-5" />
+                <Send className="w-4 h-4" />
               </Button>
-            </>
           )}
-          
+
         </div>
       </div>
 
@@ -1194,19 +1247,20 @@ export function ChatInput({
         webSearchEnabled={false}
         selectedKnowledgeBase={selectedKnowledgeBase}
         availableKnowledgeBases={knowledgeBaseOptions}
-        onRemoveKnowledgeBase={() => setSelectedKnowledgeBase(null)}
+        onRemoveKnowledgeBase={removeSelectedKnowledgeBase}
         onSelectKnowledgeBase={(id) => {
           const kb = allKnowledgeBases.find(k => k.id === id);
           if (kb) setSelectedKnowledgeBase(kb);
         }}
         workingDir={mountedDir}
-        onRemoveWorkingDir={() => {
+        workingDirAttached={Boolean(mountedDir)}
+        onRemoveWorkingDir={mountedDir ? () => {
           try {
             if (currentConvId) clearMountedDir(String(currentConvId));
           } catch {
             // ignore
           }
-        }}
+        } : undefined}
         attachedDocument={attachedDocument ? { name: attachedDocument.name, fileSize: attachedDocument.fileSize } : undefined}
         onRemoveDocument={() => removeAttachedDocument()}
         enabledMcpServers={[]}
@@ -1217,4 +1271,4 @@ export function ChatInput({
       {/* 会话参数弹窗已迁移到上层 Chat 页面统一挂载 */}
     </div>
   );
-} 
+}

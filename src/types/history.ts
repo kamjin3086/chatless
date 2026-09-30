@@ -7,7 +7,6 @@ export interface HistoryItem {
   tags: string[];
   timestamp: number;
   fullTimestamp: string;
-  isImportant: boolean;
   isFavorite: boolean;
   messageCount: number;
   lastMessage: string;
@@ -19,7 +18,6 @@ export interface HistoryFilter {
   dateRange: 'today' | 'yesterday' | 'week' | 'month' | 'all';
   model?: string;
   tags?: string[];
-  isImportant?: boolean;
   isFavorite?: boolean;
   searchQuery?: string;
 }
@@ -34,7 +32,6 @@ export interface HistoryStats {
   totalConversations: number;
   totalMessages: number;
   favoriteCount: number;
-  importantCount: number;
   modelUsage: Record<string, number>;
   tagsUsage: Record<string, number>;
 } 

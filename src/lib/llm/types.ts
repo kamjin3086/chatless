@@ -13,6 +13,10 @@ export interface Message {
   tool_call_id?: string;
   tool_calls?: ToolCallRequest[];
   name?: string;
+  /** Provider-specific fields (reasoning content, thought signatures, etc.). */
+  providerData?: Record<string, unknown>;
+  /** Original provider message, kept for lossless replay when required. */
+  raw?: unknown;
 }
 
 export interface StreamCallbacks {

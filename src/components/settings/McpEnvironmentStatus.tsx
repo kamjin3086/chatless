@@ -1,12 +1,8 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { AlertTriangle, CheckCircle, XCircle, ExternalLink, RefreshCw } from "lucide-react";
-import FoldingLoader from "@/components/ui/FoldingLoader";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ToolAvailability {
   tool_name: string;
@@ -22,12 +18,12 @@ interface EnvironmentHealth {
   recommendations: string[];
 }
 
-export function McpEnvironmentStatus() {
+export function useMcpEnvironmentHealth() {
   const [health, setHealth] = useState<EnvironmentHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadHealthStatus = async () => {
+  const reload = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -38,67 +34,48 @@ export function McpEnvironmentStatus() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadHealthStatus();
   }, []);
 
-  const openNodeJsWebsite = () => {
-    window.open("https://nodejs.org/", "_blank");
-  };
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
-  if (loading) {
-    return (
-      <Alert variant="default" className="flex items-center gap-2">
-        <FoldingLoader size={16} />
-        <span>正在检测 MCP 依赖…</span>
-      </Alert>
-    );
-  }
+  return { health, loading, error, reload };
+}
 
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <XCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
+export function McpEnvironmentStatus({
+  health,
+  loading,
+  error,
+}: {
+  health: EnvironmentHealth | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const unhealthy = !loading && !error && health && !health.overall_healthy;
 
-  if (!health) {
-    return (
-      <Alert variant="destructive">
-        <XCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>Failed to load environment status</AlertDescription>
-      </Alert>
-    );
+  let text = "MCP 依赖已就绪";
+  if (loading) text = "正在检测 MCP 依赖…";
+  else if (error || !health) text = "暂时无法检测 MCP 依赖";
+  else if (!health.overall_healthy) {
+    text = `缺少工具：${health.missing_critical_tools.join("、")}`;
   }
 
   return (
-    <Alert variant={health.overall_healthy ? "success" : "default"} className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        {health.overall_healthy ? (
-          <CheckCircle className="h-4 w-4 text-green-600" />
-        ) : (
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-        )}
-        <span>
-          {health.overall_healthy
-            ? "所有 MCP 依赖已就绪，服务可正常运行"
-            : `缺少工具：${health.missing_critical_tools.join(", ")}`}
-        </span>
-      </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={loadHealthStatus}
-        title="重新检测"
-      >
-        <RefreshCw size={16} />
-      </Button>
-    </Alert>
+    <h2
+      className={cn(
+        "text-sm font-medium tracking-tight",
+        error || (!health && !loading)
+          ? "text-slate-500 dark:text-slate-400"
+          : unhealthy
+          ? "text-amber-700 dark:text-amber-400"
+          : "text-slate-600 dark:text-slate-300"
+      )}
+    >
+      {unhealthy && (
+        <AlertTriangle className="inline-block w-3.5 h-3.5 mr-1.5 -mt-0.5" />
+      )}
+      {text}
+    </h2>
   );
 }
