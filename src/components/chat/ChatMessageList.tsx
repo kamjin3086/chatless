@@ -21,6 +21,15 @@ interface ChatMessageListProps {
   messagesEndRef?: React.RefObject<HTMLDivElement | null>;
   /** 外部滚动容器（推荐传入父级滚动容器） */
   scrollParentRef?: React.RefObject<HTMLDivElement | null>;
+  /**
+   * 外部滚动容器元素。
+   *
+   * 优先于 `scrollParentRef`：Virtuoso 要求 `customScrollParent` 在挂载时就确定，
+   * 而 ref 在首次渲染时还是 null（要等 commit 之后才赋值），于是 Virtuoso 会先用
+   * 自己的滚动容器挂载、下一次渲染才切换过来——跟随滚动的行为会因此飘忽。
+   * 传元素本身，并在拿到元素之前不渲染列表，挂载即确定。
+   */
+  scrollParent?: HTMLDivElement | null;
   /** 注册一个按消息ID滚动的API，便于父组件实现"跳转到具体消息" */
   onRegisterScrollToMessage?: (fn: (id: string) => void) => void;
   /** 首次挂载时的初始可视区域顶端索引（用于快速定位） */
@@ -42,6 +51,7 @@ export function ChatMessageList({
   messageRefs,
   messagesEndRef,
   scrollParentRef,
+  scrollParent,
   onRegisterScrollToMessage,
   initialTopMostItemIndex,
   shouldFollowOutput = false,
@@ -111,7 +121,7 @@ export function ChatMessageList({
         totalCount={renderItems.length}
         data={renderItems}
         useWindowScroll={false}
-        customScrollParent={scrollParentRef?.current || undefined}
+        customScrollParent={scrollParent || scrollParentRef?.current || undefined}
         increaseViewportBy={400}
         followOutput={shouldFollowOutput ? 'auto' : false}
         alignToBottom={shouldFollowOutput}

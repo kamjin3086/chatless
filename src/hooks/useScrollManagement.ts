@@ -1,10 +1,22 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 // 滚动配置常量
-const SCROLL_BOTTOM_THRESHOLD = 100; // 接近底部的判定距离
-const USER_SCROLL_TIMEOUT = 1000; // 用户停止滚动后的超时时间
-const CONTENT_CHANGE_TIMEOUT = 500; // 内容变化检测超时
-const SCROLL_SENSITIVITY = 5; // 滚动检测灵敏度（像素）
+/** 距离底部多远算"接近底部"（决定新消息提示的显示）。 */
+const SCROLL_BOTTOM_THRESHOLD = 100;
+/** 距离底部多近才算"真的在底部"（决定是否恢复跟随）。 */
+const BOTTOM_EPSILON = 8;
+/**
+ * 一次滚轮/触摸/按键手势在多长时间内仍算"用户意图"。
+ * 只有用户意图才能改变跟随模式；流式渲染自身造成的 scrollTop 变化
+ * （布局重排、锚点修正、自动贴底）不再被误判成"用户滚上去了"。
+ */
+const USER_INTENT_WINDOW = 700;
+/** 我们自己写入 scrollTop 后，这段时间内、且位置吻合的滚动事件不算用户滚动。 */
+const PROGRAMMATIC_SCROLL_WINDOW = 250;
+/** 手势收敛等待时间：滚轮停下来之后再判断方向。 */
+const GESTURE_SETTLE_MS = 140;
+/** 向上累计超过这个距离，视为"用户想往上读"。用累计值过滤回弹与惯性噪音。 */
+const UPWARD_INTENT_PX = 12;
 
 export const useScrollManagement = (
     messagesContainerRef: React.RefObject<HTMLDivElement | null>, 
@@ -18,26 +30,54 @@ export const useScrollManagement = (
   // 核心状态：是否应该自动滚动到底部
   const [shouldFollowOutput, setShouldFollowOutput] = useState(true);
   
-  // UI 状态：是否显示"回到底部"按钮
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  // UI 状态：用户是否离开过底部（"回到底部"按钮）
+  const [isAwayFromBottom, setIsAwayFromBottom] = useState(false);
   
   // 是否有新消息（用户查看历史时）
   const [hasNewMessageWhileAway, setHasNewMessageWhileAway] = useState(false);
   
   // Refs - 不触发重渲染
-  const isUserScrollingRef = useRef(false); // 用户是否正在主动滚动
-  const lastScrollTopRef = useRef(0);
+  const isUserScrollingRef = useRef(false); // 跟随是否被用户手势关掉
   const previousConversationIdRef = useRef<string | null>(null);
   const lastMessageCountRef = useRef(0);
-  const userScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const contentChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessagesLengthRef = useRef(0);
+  /** 最近一次用户手势（滚轮/触摸/按键/按下指针）的时间戳。 */
+  const lastUserIntentRef = useRef(0);
+  /** 手势期间累计的向上滚动距离。 */
+  const upwardIntentRef = useRef(0);
+  /** 最近一次由代码写入的滚动位置，用于识别"这不是用户滚的"。 */
+  const programmaticScrollRef = useRef<{ top: number; at: number } | null>(null);
+  /** shouldFollowOutput 的同步镜像，供事件回调立即读取（state 更新是异步的）。 */
+  const followingRef = useRef(true);
 
-  // 判断是否接近底部
   const isNearBottom = useCallback((container: HTMLElement) => {
     const { scrollTop, scrollHeight, clientHeight } = container;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    return distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
+    return scrollHeight - scrollTop - clientHeight <= SCROLL_BOTTOM_THRESHOLD;
+  }, []);
+
+  const isAtBottom = useCallback((container: HTMLElement) => {
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    return scrollHeight - scrollTop - clientHeight <= BOTTOM_EPSILON;
+  }, []);
+
+  const setFollowing = useCallback((next: boolean) => {
+    followingRef.current = next;
+    isUserScrollingRef.current = !next;
+    setShouldFollowOutput(next);
+    if (next) setHasNewMessageWhileAway(false);
+  }, []);
+
+  const markUserIntent = useCallback((upwardPx = 0) => {
+    lastUserIntentRef.current = performance.now();
+    if (upwardPx > 0) upwardIntentRef.current += upwardPx;
+  }, []);
+
+  /** 只有代码自己贴底时才走这里，这样 scroll 事件不会被误判成用户滚动。 */
+  const pinToBottom = useCallback((container: HTMLElement) => {
+    const target = container.scrollHeight - container.clientHeight;
+    if (Math.abs(container.scrollTop - target) <= 1) return;
+    programmaticScrollRef.current = { top: target, at: performance.now() };
+    container.scrollTop = target;
   }, []);
 
   // 监听会话切换和消息变化
@@ -55,23 +95,12 @@ export const useScrollManagement = (
 
     // 会话切换：重置所有状态
     if (isNewConversation) {
-      console.log('[Scroll] 会话切换，重置状态');
-      setShouldFollowOutput(true);
-      setShowScrollToBottom(false);
+      setFollowing(true);
+      setIsAwayFromBottom(false);
       setHasNewMessageWhileAway(false);
-      isUserScrollingRef.current = false;
+      upwardIntentRef.current = 0;
       previousConversationIdRef.current = currentConversationId;
       lastMessagesLengthRef.current = messagesLength;
-      
-      // 清除所有定时器
-      if (userScrollTimeoutRef.current) {
-        clearTimeout(userScrollTimeoutRef.current);
-        userScrollTimeoutRef.current = null;
-      }
-      if (contentChangeTimeoutRef.current) {
-        clearTimeout(contentChangeTimeoutRef.current);
-        contentChangeTimeoutRef.current = null;
-      }
       return;
     }
 
@@ -79,243 +108,235 @@ export const useScrollManagement = (
     const messagesCountChanged = messagesLength !== lastMessagesLengthRef.current;
     lastMessagesLengthRef.current = messagesLength;
 
-    // 有新消息或消息数量变化
     if (hasNewMessage || messagesCountChanged) {
-      console.log('[Scroll] 消息变化，hasNew:', hasNewMessage, 'countChanged:', messagesCountChanged);
-      
-      // 清除之前的内容变化定时器
-      if (contentChangeTimeoutRef.current) {
-        clearTimeout(contentChangeTimeoutRef.current);
-      }
-      
-      // 设置内容变化检测
-      contentChangeTimeoutRef.current = setTimeout(() => {
-        contentChangeTimeoutRef.current = null;
-      }, CONTENT_CHANGE_TIMEOUT);
-
       // 如果用户正在查看历史，显示新消息提示
       if (isUserScrollingRef.current) {
-        console.log('[Scroll] 用户查看历史时有新消息');
         setHasNewMessageWhileAway(true);
-      } else if (shouldFollowOutput) {
-        // 用户未手动滚动，自动跟随
-        console.log('[Scroll] 自动跟随新消息');
+      } else if (followingRef.current) {
         requestAnimationFrame(() => {
-          if (container && !isUserScrollingRef.current) {
-            const target = container.scrollHeight - container.clientHeight;
-            container.scrollTop = target;
-          }
+          const node = messagesContainerRef.current;
+          if (node && followingRef.current) pinToBottom(node);
         });
       }
     }
 
     previousConversationIdRef.current = currentConversationId;
-  }, [messages, currentConversationId, shouldFollowOutput, messagesContainerRef]);
+  }, [messages, currentConversationId, messagesContainerRef, pinToBottom, setFollowing]);
 
-  // 滚动监听：检测用户滚动行为
+  // 滚动监听：区分"用户意图"与"渲染副作用"
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    /** A held pointer (scrollbar drag) keeps intent alive for as long as it is down. */
+    let pointerDown = false;
+
     const handleScroll = () => {
       const scrollTop = container.scrollTop;
-      const scrollDiff = scrollTop - lastScrollTopRef.current;
       const nearBottom = isNearBottom(container);
-      
-      // 更新"回到底部"按钮显示状态
-      setShowScrollToBottom(!nearBottom);
-      
-      // 清除之前的用户滚动超时
-      if (userScrollTimeoutRef.current) {
-        clearTimeout(userScrollTimeoutRef.current);
+      setIsAwayFromBottom(!nearBottom);
+
+      const programmatic = programmaticScrollRef.current;
+      const isOurScroll =
+        !!programmatic &&
+        performance.now() - programmatic.at < PROGRAMMATIC_SCROLL_WINDOW &&
+        Math.abs(scrollTop - programmatic.top) <= 2;
+
+      // 布局变化（Markdown 重排、代码高亮、字体度量）和自动贴底都会改
+      // scrollTop。它们既不能停止跟随，也不能恢复跟随。
+      if (isOurScroll) return;
+      const hasUserIntent =
+        pointerDown || performance.now() - lastUserIntentRef.current <= USER_INTENT_WINDOW;
+      if (!hasUserIntent) return;
+
+      if (isAtBottom(container)) {
+        if (!followingRef.current) setFollowing(true);
+        upwardIntentRef.current = 0;
+        return;
       }
-      
-      // 检测用户滚动（需要有明显的滚动距离）
-      if (Math.abs(scrollDiff) > SCROLL_SENSITIVITY) {
-        const isScrollingUp = scrollDiff < 0;
-        
-        // 向上滚动：停止自动跟随
-        if (isScrollingUp) {
-          console.log('[Scroll] 用户向上滚动，停止自动跟随');
-          isUserScrollingRef.current = true;
-          setShouldFollowOutput(false);
-        }
-        
-        // 向下滚动到底部：恢复自动跟随
-        if (!isScrollingUp && nearBottom) {
-          console.log('[Scroll] 用户滚动到底部，恢复自动跟随');
-          isUserScrollingRef.current = false;
-          setShouldFollowOutput(true);
-          setHasNewMessageWhileAway(false); // 清除新消息提示
-        }
-        
-        // 设置超时：一段时间后清除用户滚动标记
-        if (!nearBottom) {
-          userScrollTimeoutRef.current = setTimeout(() => {
-            // 如果用户停止滚动一段时间后还没到底部，保持停止状态
-            userScrollTimeoutRef.current = null;
-          }, USER_SCROLL_TIMEOUT);
-        }
-      }
-      
-      lastScrollTopRef.current = scrollTop;
+
+      // 视口确实离开底部，才停止跟随。触控板在底部回弹产生的 scroll 事件
+      // 不会离开底部，因此不会再误杀跟随。
+      if (!nearBottom && followingRef.current) setFollowing(false);
     };
 
-    // 鼠标滚轮事件：快速响应滚动
+    /**
+     * 手势收敛：滚轮/触摸停下来之后再判断方向。
+     * 用户只想往上读一点（还没离开 100px 判定区）时同样应该停止跟随，
+     * 但向下的惯性或底部回弹不能算。
+     */
+    const settleGesture = () => {
+      settleTimer = null;
+      const upward = upwardIntentRef.current;
+      upwardIntentRef.current = 0;
+      if (upward < UPWARD_INTENT_PX) {
+        // 没有向上意图时，只有真的在底部才恢复跟随
+        if (isAtBottom(container)) setFollowing(true);
+        return;
+      }
+      const scrollable = container.scrollHeight - container.clientHeight > BOTTOM_EPSILON;
+      if (scrollable) setFollowing(false);
+    };
+
+    const scheduleSettle = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(settleGesture, GESTURE_SETTLE_MS);
+    };
+
     const handleWheel = (event: WheelEvent) => {
-      const nearBottom = isNearBottom(container);
-      
-      // 向上滚轮：立即停止自动跟随
-      if (event.deltaY < 0) {
-        isUserScrollingRef.current = true;
-        setShouldFollowOutput(false);
-      }
-      
-      // 向下滚轮到底部：恢复自动跟随
-      if (event.deltaY > 0 && nearBottom) {
-        isUserScrollingRef.current = false;
-        setShouldFollowOutput(true);
-        setHasNewMessageWhileAway(false);
-      }
+      // 只累计向上意图；向下的惯性/回弹不会停止跟随。
+      markUserIntent(event.deltaY < 0 ? -event.deltaY : 0);
+      scheduleSettle();
     };
 
     // 触摸事件：移动端支持
     let touchStartY = 0;
     const handleTouchStart = (event: TouchEvent) => {
       touchStartY = event.touches[0].clientY;
+      markUserIntent();
     };
 
     const handleTouchMove = (event: TouchEvent) => {
       const touchY = event.touches[0].clientY;
       const diff = touchY - touchStartY;
-      const nearBottom = isNearBottom(container);
-      
-      // 向上滑动：停止自动跟随
-      if (diff > 15) {
-        isUserScrollingRef.current = true;
-        setShouldFollowOutput(false);
+      // 手指往下拖动 = 内容往上滚 = 向上意图
+      if (diff > 0) markUserIntent(diff);
+      touchStartY = touchY;
+    };
+
+    const handleTouchEnd = () => scheduleSettle();
+
+    // 键盘翻页也能停止跟随
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'PageUp' || event.key === 'ArrowUp' || event.key === 'Home') {
+        markUserIntent(UPWARD_INTENT_PX);
+        scheduleSettle();
+      } else if (event.key === 'PageDown' || event.key === 'ArrowDown' || event.key === 'End' || event.key === ' ') {
+        markUserIntent();
+        scheduleSettle();
       }
-      
-      // 向下滑动到底部：恢复自动跟随
-      if (diff < -15 && nearBottom) {
-        isUserScrollingRef.current = false;
-        setShouldFollowOutput(true);
-        setHasNewMessageWhileAway(false);
-      }
+    };
+
+    // 拖动滚动条不会触发 wheel，但会先按下指针；按住期间一直算用户意图，
+    // 否则一次很长的拖拽会超出意图窗口，自动贴底又会把视图抢回去。
+    const handlePointerDown = () => {
+      pointerDown = true;
+      markUserIntent();
+    };
+    const handlePointerUp = () => {
+      if (!pointerDown) return;
+      pointerDown = false;
+      markUserIntent();
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     container.addEventListener('wheel', handleWheel, { passive: true });
     container.addEventListener('touchstart', handleTouchStart, { passive: true });
     container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('keydown', handleKeyDown);
+    container.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    window.addEventListener('pointerup', handlePointerUp, { passive: true });
+    window.addEventListener('pointercancel', handlePointerUp, { passive: true });
 
     return () => {
       container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', handleWheel);
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', handleTouchMove);
-      
-      if (userScrollTimeoutRef.current) {
-        clearTimeout(userScrollTimeoutRef.current);
-      }
-      if (contentChangeTimeoutRef.current) {
-        clearTimeout(contentChangeTimeoutRef.current);
-      }
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('keydown', handleKeyDown);
+      container.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+      if (settleTimer) clearTimeout(settleTimer);
     };
-  }, [isNearBottom, messagesContainerRef]);
+  }, [isAtBottom, isNearBottom, markUserIntent, messagesContainerRef, setFollowing]);
 
   // 导航到指定消息
   const handleNavigateToMessage = useCallback((messageId: string) => {
-    console.log('[Scroll] 导航到消息:', messageId);
     const messageElement = messageRefs.current[messageId];
     if (messageElement && messagesContainerRef.current) {
-      // 停止自动跟随
-      isUserScrollingRef.current = true;
-      setShouldFollowOutput(false);
-      
-      // 滚动到消息
+      setFollowing(false);
       messageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [messagesContainerRef]);
+  }, [messagesContainerRef, setFollowing]);
 
   // 滚动到顶部
   const handleScrollToTop = useCallback(() => {
-    console.log('[Scroll] 滚动到顶部');
     const container = messagesContainerRef.current;
     if (!container) return;
     
-    // 停止自动跟随
-    isUserScrollingRef.current = true;
-    setShouldFollowOutput(false);
-    
+    setFollowing(false);
+    programmaticScrollRef.current = { top: 0, at: performance.now() };
     container.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [messagesContainerRef]);
+  }, [messagesContainerRef, setFollowing]);
 
   // 滚动到底部
   const handleScrollToBottom = useCallback(() => {
-    console.log('[Scroll] 手动滚动到底部');
     const container = messagesContainerRef.current;
     if (!container) return;
     
-    // 恢复自动跟随
-    isUserScrollingRef.current = false;
-    setShouldFollowOutput(true);
-    setShowScrollToBottom(false);
-    setHasNewMessageWhileAway(false);
-    
-    // 平滑滚动到底部
-    const target = container.scrollHeight - container.clientHeight;
-    container.scrollTo({ top: target, behavior: 'smooth' });
-  }, [messagesContainerRef]);
+    setFollowing(true);
+    setIsAwayFromBottom(false);
+    upwardIntentRef.current = 0;
+    programmaticScrollRef.current = {
+      top: container.scrollHeight - container.clientHeight,
+      at: performance.now(),
+    };
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [messagesContainerRef, setFollowing]);
 
   // 如果接近底部，确保滚动到底部
   const ensureBottomIfNear = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
     
-    if (isNearBottom(container) && shouldFollowOutput) {
+    if (isNearBottom(container) && followingRef.current) {
       requestAnimationFrame(() => {
-        if (container) {
-          const target = container.scrollHeight - container.clientHeight;
-          container.scrollTop = target;
-        }
+        const node = messagesContainerRef.current;
+        if (node && followingRef.current) pinToBottom(node);
       });
     }
-  }, [messagesContainerRef, isNearBottom, shouldFollowOutput]);
+  }, [messagesContainerRef, isNearBottom, pinToBottom]);
 
   /**
-   * ✅ 稳定跟随：流式期间（尤其是代码块渲染）会产生"二次布局变化"
-   * 
-   * 典型现象：
-   * - token 已经在继续追加，但渲染 Markdown（代码块/换行/字体度量）会在稍后重新排版，导致 scrollHeight 突增
-   * - Virtuoso 的 followOutput=auto 会认为用户"离开了底部"，从而停止跟随
+   * 流式期间逐帧贴底。
    *
-   * 解决思路：
-   * - 仅在 shouldFollowOutput 且用户未主动滚动时启用
-   * - 监听 DOM 变化（MutationObserver），在下一帧将滚动位置重新钉到底部
-   * - 采用 scrollTop 直接赋值（避免 smooth 造成追赶延迟）
-   * 
-   * 修复：即使 isLoading=false，只要 shouldFollowOutput=true 就应该监听 DOM 变化
-   * 因为消息内容可能在 isLoading 变为 false 后仍有渲染变化（如 Markdown 解析、代码高亮）
+   * 之前跟随依赖 MutationObserver：只有 DOM 真的变化时才补一次。虚拟列表
+   * （Virtuoso）经常只改样式/测量，不产生 mutation；Markdown 重排又发生在
+   * 下一帧，于是 token 还在追加、界面却停住不动——即"偶尔不跟随"。
+   * 现在只要在跟随模式且正在生成，就每帧直接对齐到底部，不依赖任何事件触发。
+   */
+  useEffect(() => {
+    if (!isLoading || !shouldFollowOutput) return;
+    let rafId: number | null = null;
+    const tick = () => {
+      const container = messagesContainerRef.current;
+      if (container && followingRef.current) pinToBottom(container);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [isLoading, shouldFollowOutput, messagesContainerRef, pinToBottom]);
+
+  /**
+   * 流式结束后的收尾：代码高亮、图片、字体度量可能都在最后一帧之后才定型，
+   * 不会再走上面的逐帧循环，所以仍然监听 DOM（含 style/class 变化）补一次。
    */
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    // 修复：移除 isLoading 的强制检查，只要 shouldFollowOutput=true 就启用监听
-    // 这样可以确保即使在非加载状态下，内容变化也能触发滚动
     if (!shouldFollowOutput) return;
 
     let rafId: number | null = null;
     const stickToBottomIfNeeded = () => {
       rafId = null;
-      if (!shouldFollowOutput) return;
-      if (isUserScrollingRef.current) return; // 用户主动查看历史时不打扰
-      // 只要用户处于"跟随模式"，就允许在布局变化后补一次到底部
-      const target = container.scrollHeight - container.clientHeight;
-      // 仅当不在底部时才滚动，避免不必要的滚动操作
-      if (Math.abs(container.scrollTop - target) > 5) {
-        container.scrollTop = target;
-      }
+      if (!followingRef.current) return;
+      pinToBottom(container);
     };
 
     const schedule = () => {
@@ -323,20 +344,19 @@ export const useScrollManagement = (
       rafId = requestAnimationFrame(stickToBottomIfNeeded);
     };
 
-    const mo = new MutationObserver(() => {
-      schedule();
-    });
+    const mo = new MutationObserver(schedule);
     try {
       mo.observe(container, {
         childList: true,
         subtree: true,
         characterData: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
       });
     } catch {
       // 某些环境下（极少）可能不允许 observe，忽略即可
     }
 
-    // 初始化时立即检查一次
     schedule();
 
     return () => {
@@ -346,10 +366,7 @@ export const useScrollManagement = (
         rafId = null;
       }
     };
-  }, [messagesContainerRef, shouldFollowOutput]);
-
-  // 简化：Virtuoso 作为唯一滚动跟随控制者
-  const computedFollowOutput = shouldFollowOutput;
+  }, [messagesContainerRef, shouldFollowOutput, pinToBottom]);
 
   return {
     messageRefs,
@@ -358,10 +375,10 @@ export const useScrollManagement = (
     handleScrollToTop,
     handleScrollToBottom,
     ensureBottomIfNear,
-    showScrollToBottom,
-    isAtBottom: !showScrollToBottom,
+    // 不再跟随时也给出"回到底部"，否则用户往上读一点就找不回按钮
+    showScrollToBottom: isAwayFromBottom || !shouldFollowOutput,
+    isAtBottom: !isAwayFromBottom,
     hasNewMessageWhileAway,
-    // 导出给 Virtuoso 使用的 followOutput 状态
-    shouldFollowOutput: computedFollowOutput,
+    shouldFollowOutput,
   };
 };
