@@ -35,6 +35,16 @@ export interface ProcessedOutput {
   
   /** 流是否完成 */
   isComplete: boolean;
+
+  /**
+   * 上游模型输出了 chat template 的回合边界标记（例如 `<|im_end|>`）。
+   * 该标记之后的内容属于模型自行续写的下一轮，已被丢弃；provider 可据此
+   * 提前结束读取。详见 `turnBoundary.ts`。
+   */
+  turnEnded?: boolean;
+
+  /** 回合边界之后被丢弃的字符数（仅诊断用途）。 */
+  turnEndDroppedChars?: number;
 }
 
 /**

@@ -25,6 +25,7 @@ import type { ThinkingModeStrategy } from './types';
 import { OllamaThinkingStrategy } from './ollama-thinking-strategy';
 import { StandardThinkingStrategy } from './standard-thinking-strategy';
 import { DeepSeekReasoningStrategy } from './deepseek-reasoning-strategy';
+import { guardTurnBoundaries } from './turnBoundary';
 
 export class ThinkingStrategyFactory {
   /**
@@ -47,12 +48,12 @@ export class ThinkingStrategyFactory {
     
     // DeepSeek模型
     if (lowerModel.includes('deepseek')) {
-      return new DeepSeekReasoningStrategy();
+      return guardTurnBoundaries(new DeepSeekReasoningStrategy());
     }
     
     // 其他使用标准策略
     // 包括：gpt-*, claude-*, gemini-*, 等
-    return new StandardThinkingStrategy();
+    return guardTurnBoundaries(new StandardThinkingStrategy());
   }
   
   /**
@@ -67,7 +68,7 @@ export class ThinkingStrategyFactory {
    * ```
    */
   static createOllamaStrategy(): ThinkingModeStrategy {
-    return new OllamaThinkingStrategy();
+    return guardTurnBoundaries(new OllamaThinkingStrategy());
   }
   
   /**
@@ -82,7 +83,7 @@ export class ThinkingStrategyFactory {
    * ```
    */
   static createStandardStrategy(): ThinkingModeStrategy {
-    return new StandardThinkingStrategy();
+    return guardTurnBoundaries(new StandardThinkingStrategy());
   }
   
   /**
@@ -97,7 +98,7 @@ export class ThinkingStrategyFactory {
    * ```
    */
   static createDeepSeekStrategy(): ThinkingModeStrategy {
-    return new DeepSeekReasoningStrategy();
+    return guardTurnBoundaries(new DeepSeekReasoningStrategy());
   }
 }
 

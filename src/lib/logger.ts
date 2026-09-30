@@ -59,6 +59,15 @@ class Logger {
       if (typeof window !== 'undefined' && window.__TAURI__) {
         // 附加控制台到Tauri日志系统
         await attachConsole();
+
+        // Rust 侧才是真正做过滤的日志级别。启动时把持久化的级别重新下发一遍，
+        // 否则重启后会静默退回 info，调试级别的 dump 又会消失。
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('set_log_level', { level: this.logLevel });
+        } catch {
+          // 命令不可用时忽略：日志级别只影响调试输出
+        }
         
         // 设置控制台转发
         if (this.shouldOutput) {

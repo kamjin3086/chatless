@@ -9,6 +9,8 @@ import { toOpenAIMessage } from './messageMapping';
 import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
 import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { readContextWindow } from '@/lib/llm/modelWindow';
+import { TURN_BOUNDARY_STOP_SEQUENCES } from '@/lib/llm/chatTemplateTokens';
+import { dumpLlmRequest, isLlmDebugEnabled, reportTurnBoundary } from '../debugLog';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -67,6 +69,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
   private aborted: boolean = false;
   private currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private thinkingStrategy: ThinkingModeStrategy;
+  /** Avoids repeating the turn-boundary warning for one stream. */
+  private turnBoundaryReported: boolean = false;
 
   constructor(baseUrl: string, apiKey?: string, displayName: string = 'OpenAI-Compatible') {
     super(displayName, baseUrl, apiKey);
@@ -167,6 +171,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
     if (o.presencePenalty !== undefined && mapped.presence_penalty === undefined)
       mapped.presence_penalty = o.presencePenalty;
     if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
+    // A model that leaks its chat template also keeps generating the turns after
+    // it. Asking the server to stop on the boundary tokens ends the turn there
+    // instead; a sequence that never appears in honest output is a no-op. An
+    // explicit stop list from the caller is left untouched.
+    //
+    // Deliberately OpenAI-compatible only: self-hosted servers and gateways are
+    // where the template leaks, while the official OpenAI provider rejects `stop`
+    // on some reasoning models with a 400.
+    if (mapped.stop === undefined) mapped.stop = [...TURN_BOUNDARY_STOP_SEQUENCES];
 
     const body: Record<string, unknown> = {
       model,
@@ -198,14 +211,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
     }
 
-    // DevTools：打印完整请求体（仅开发环境）
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        `%c[OpenAICompatibleProvider] Request → ${url}`,
-        'color: #4CAF50; font-weight: bold;'
-      );
-      console.log('%c请求体 JSON:', 'color: #2196F3; font-weight: bold;');
-      console.log(JSON.stringify(body, null, 2));
+    // DevTools / opt-in debug log：打印完整请求体
+    if (process.env.NODE_ENV === 'development' || isLlmDebugEnabled()) {
+      dumpLlmRequest({ provider: this.name, model, url, body });
     }
 
 
@@ -215,6 +223,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     try {
       this.aborted = false;
+      this.turnBoundaryReported = false;
       // 重置策略状态
       this.thinkingStrategy.reset();
       
@@ -256,7 +265,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       // 只有“根本没有响应”才是传输失败。HTTP 错误响应本身带着服务端的解释，
       // 再换一条传输重发同一请求会真的发出第二次请求，并把这份解释盖掉。
       if (!resp) {
-        await this.startSSEFallback(url, apiKey || null, body, cb);
+        await this.startSSEFallback(url, apiKey || null, body, cb, model);
         return;
       }
       if (!resp.ok) {
@@ -271,7 +280,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       if (contentType.includes('text/event-stream')) {
         // 🔧 修复：直接使用当前响应的 body 流，而不是重新发起请求
         // 之前的实现会调用 startSSEFallback 再次发送请求，导致服务端收到两个相同请求
-        await this.processSSEResponse(resp, cb);
+        await this.processSSEResponse(resp, cb, model);
         return;
       }
 
@@ -338,6 +347,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const token = this.toThinkingToken(delta, json);
         if (token) {
           const result = this.thinkingStrategy.processToken(token);
+          this.handleTurnBoundary(result, model);
           parsedOkCount++;
           contentEmittedChars += (token.content || '').length + (token.reasoning_content || '').length;
 
@@ -430,6 +440,26 @@ export class OpenAICompatibleProvider extends BaseProvider {
    * closed think block per token, so the same text came out once as thinking
    * and once as body, and the tags leaked into the visible answer.
    */
+  /**
+   * The model wrote past its own end-of-turn token. The strategy guard already
+   * dropped the continuation; stop the upstream generation instead of letting
+   * it burn tokens on turns nobody asked for, and record what happened.
+   */
+  private handleTurnBoundary(result: { turnEnded?: boolean; turnEndDroppedChars?: number } | undefined, model?: string): void {
+    if (!result?.turnEnded || this.turnBoundaryReported) return;
+    this.turnBoundaryReported = true;
+    reportTurnBoundary({
+      provider: this.name,
+      model: model || '',
+      droppedChars: result.turnEndDroppedChars || 0,
+    });
+    try {
+      void this.currentReader?.cancel();
+    } catch {
+      /* the stream may already be closed */
+    }
+  }
+
   private toThinkingToken(delta: any, json: any) {
     const reasoningPiece = typeof delta?.reasoning_content === 'string' ? delta.reasoning_content : undefined;
     const contentPiece: string | undefined =
@@ -476,7 +506,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
    * 处理已有的 SSE 响应流（避免重新发起请求）
    * 直接读取 Response.body 作为 SSE 流
    */
-  private async processSSEResponse(resp: Response, cb: StreamCallbacks): Promise<void> {
+  private async processSSEResponse(resp: Response, cb: StreamCallbacks, model?: string): Promise<void> {
     // 重置策略状态
     this.thinkingStrategy.reset();
     
@@ -557,6 +587,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const token = this.toThinkingToken(delta, json);
         if (token) {
           const result = this.thinkingStrategy.processToken(token);
+          this.handleTurnBoundary(result, model);
           this.dispatchEvents(result.events || [], cb);
         }
         // 检查 finish_reason：完成前同样冲刷工具调用
@@ -612,10 +643,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
     url: string,
     apiKey: string | null,
     body: unknown,
-    cb: StreamCallbacks
+    cb: StreamCallbacks,
+    model?: string
   ) {
     // 重置策略状态
     this.thinkingStrategy.reset();
+    this.turnBoundaryReported = false;
 
     const terminal = createStreamTerminal(cb);
     try {
@@ -687,6 +720,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
               const token = this.toThinkingToken(delta, json);
               if (token) {
                 const result = this.thinkingStrategy.processToken(token);
+                this.handleTurnBoundary(result, model);
                 this.dispatchEvents(result.events || [], cb);
               }
               

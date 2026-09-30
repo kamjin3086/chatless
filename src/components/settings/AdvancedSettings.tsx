@@ -11,16 +11,28 @@ import { detectTauriEnvironment } from "@/lib/utils/environment";
 import { toast } from "@/components/ui/sonner";
 import { LogsIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 export function AdvancedSettings() {
   const [logLevel, setLogLevelState] = useState<'none'|'error'|'warn'|'info'|'debug'>('info');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // 显示持久化的级别，避免界面显示“信息”而实际级别是调试。
+    try {
+      setLogLevelState(logger.getLogLevel() as 'none'|'error'|'warn'|'info'|'debug');
+    } catch {
+      /* 默认 info */
+    }
+  }, []);
 
   const handleLevelChange = async (val: string) => {
     const lvl = val as 'none'|'error'|'warn'|'info'|'debug';
     setLogLevelState(lvl);
 
     try {
+      // 调试级别同时打开 LLM 请求体的 dump（见 @/lib/llm/debugLog）。
+      await logger.setLogLevel(lvl);
       const isTauri = await detectTauriEnvironment();
       if (isTauri) {
         const { invoke } = await import('@tauri-apps/api/core');
