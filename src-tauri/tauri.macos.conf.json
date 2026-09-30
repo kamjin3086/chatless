@@ -15,6 +15,7 @@
     ],
     "macOS": {
       "signingIdentity": "-",
+      "entitlements": "Entitlements.plist",
       "dmg": {
         "appPosition": {
           "x": 180,
