@@ -58,8 +58,10 @@ OAuth implementation was merged. No comments were posted to the existing issues.
   resource configuration. It includes a checksum and runtime requirements, and
   deliberately retains the existing user-data and updater behavior.
 - Remote CI exposed Node 18's missing global Web Crypto, absent Linux GTK build
-  dependencies and an ignored shared test fixture. Use Node 22, pin the declared
-  pnpm version, install native dependencies and track the required test fixture.
+  dependencies, an ignored shared test fixture and a `cargo check` that needs the
+  `frontendDist` directory to exist. Use Node 22, pin the declared pnpm version,
+  install native dependencies, track the required test fixture and provide the
+  frontend directory before the Rust check.
 
 ## Validation
 
