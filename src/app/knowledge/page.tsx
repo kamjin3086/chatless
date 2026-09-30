@@ -162,7 +162,11 @@ export default function KnowledgePage() {
   const confirmDeleteKb = async () => {
     if (!kbToDelete) return;
     try {
-      await KnowledgeService.deleteKnowledgeBase(kbToDelete.id);
+      const deleted = await KnowledgeService.deleteKnowledgeBase(kbToDelete.id);
+      if (!deleted) {
+        toast.error('未找到该知识库，请刷新后重试');
+        return;
+      }
       setKnowledgeBases(prev => prev.filter(item => item.id !== kbToDelete.id));
       toast.success('知识库已删除');
     } catch {

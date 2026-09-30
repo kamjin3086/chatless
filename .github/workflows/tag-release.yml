@@ -395,6 +395,17 @@ jobs:
           TAURI_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
          
+      - name: Verify macOS application signature
+        if: ${{ matrix.platform == 'macos' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/release/bundle/macos/Chatless.app"
+          test -d "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --display --verbose=2 "$app"
+          echo "::notice::The application is ad-hoc signed, not Apple notarized. Gatekeeper may still require user approval."
+
       - name: List generated bundles (macOS only)
         if: ${{ matrix.platform == 'macos' }}
         run: |
