@@ -244,4 +244,4 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     initialized: true,
   });
   applyNightBrightnessCss(clampNightBrightness(typeof nightBrightness === 'number' ? nightBrightness : 100));
-})(); 
+})();
