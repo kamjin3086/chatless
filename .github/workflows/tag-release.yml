@@ -457,6 +457,13 @@ jobs:
           echo "Test artifacts cleaned"
         shell: bash
       
+      - name: Package Windows no-install ZIP
+        if: ${{ matrix.os == 'windows-2022' }}
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: ./scripts/package-windows-portable.ps1 -Version $env:RELEASE_VERSION
+
       - name: Upload artifacts (filtered bundles only)
         uses: actions/upload-artifact@v4
         with:
@@ -481,6 +488,7 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/msi/*.msi.sig
+            src-tauri/target/release/bundle/portable/*_portable.zip
             src-tauri/target/release/bundle/**/*.sha256*
           retention-days: 7
 
@@ -831,6 +839,7 @@ jobs:
             artifacts/**/*.msi.sig
             artifacts/**/*.nsis.zip
             artifacts/**/*.nsis.zip.sig
+            artifacts/**/*_portable.zip
             artifacts/**/*.sha256*
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
@@ -1043,6 +1052,7 @@ jobs:
             "*.msi.sig"
             "*.nsis.zip"
             "*.nsis.zip.sig"
+            "*_portable.zip"
             "*.sha256*"
             "update.json"
             "update-proxy.json"

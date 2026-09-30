@@ -57,6 +57,7 @@ yarn-error.log*
 # temporary files and scripts
 test-*.js
 test-*.ts
+!src/lib/chat/stream/__tests__/test-utils.ts
 temp-*.md
 *_TEMP.*
 *_temp.*

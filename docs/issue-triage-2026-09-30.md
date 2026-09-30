@@ -44,15 +44,32 @@ independent verification on current main. Do not merge this head.
    provider identity, origin and credential generation in cache scope without
    exposing raw keys; discard stale responses after identity changes.
 
-The maintainer must still decide whether to accept a dedicated OrcaRouter OAuth
-integration or request a smaller ordinary API-key provider contribution.
+Subsequent verification found that main already contains an ordinary OrcaRouter
+provider (`catalog.ts`, shared OpenAI-compatible strategy, model presets, icon,
+attribution and tool-call configuration). Under the maintainer's explicit
+instruction, PR #73 was politely closed as superseded on 2026-09-30; no dedicated
+OAuth implementation was merged. No comments were posted to the existing issues.
+
+## Additional maintenance changes
+
+- Added an opt-in close-to-tray preference, default false. An unavailable tray
+  falls back to normal close; hiding the window does not shut down services.
+- Added a Windows x64 no-install ZIP using the existing executable and bundle
+  resource configuration. It includes a checksum and runtime requirements, and
+  deliberately retains the existing user-data and updater behavior.
+- Remote CI exposed Node 18's missing global Web Crypto, absent Linux GTK build
+  dependencies and an ignored shared test fixture. Use Node 22, pin the declared
+  pnpm version, install native dependencies and track the required test fixture.
 
 ## Validation
 
-- 72 test files, 350 tests passed after isolating the browser-fetch fallback in
+- 73 test files, 355 tests passed after isolating the browser-fetch fallback in
   nativeToolStreams.test.ts. Previously the test reached the real network and
   timed out; no production transport behavior was changed by this test fix.
 - `pnpm typecheck` and `pnpm lint:ci` passed.
 - Release workflow YAML and macOS configuration JSON parsed successfully.
+- The ZIP packaging fixture verified executable/resource/loader/readme entries,
+  SHA-256 output and rejection of an invalid version. This is not a clean-machine
+  Windows executable smoke test.
 - macOS codesign/Gatekeeper, Windows LTSC 1809 and interactive intermittent
   scrolling have not been reproduced or verified in this Windows-only check.

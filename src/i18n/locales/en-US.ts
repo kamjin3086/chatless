@@ -14,6 +14,7 @@ const enUS: TranslationDict = {
   'settings.general.theme': 'Theme',
   'settings.general.nightBrightness': 'Night brightness',
   'settings.general.minimizeToTray': 'Minimize to system tray when clicking minimize',
+  'settings.general.closeToTray': 'Close window to tray (quit from the tray menu)',
   'settings.general.closeConfirm': 'Confirm before closing',
   'tray.newChat': 'New Chat',
   'tray.minimize': 'Minimize to Tray',
