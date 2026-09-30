@@ -96,10 +96,9 @@ describe('prompt language', () => {
       expectAllEnglish(name, text);
     }
 
-    // Nothing outside the known-unused set should be added under tool-docs
-    // without a deliberate decision: the rest is not loaded today.
-    const unused = new Set(['followup_first.txt', 'followup_forced.txt']);
+    // Nothing else belongs under tool-docs: a new document must be a deliberate
+    // decision about whether it is loaded (and therefore English) or unused.
     const entries = readdirSync(join(process.cwd(), 'public', 'tool-docs'));
-    expect(entries.filter((e) => e.endsWith('.txt') && !unused.has(e)).sort()).toEqual([...LOADED_TOOL_DOCS].sort());
+    expect(entries.sort()).toEqual([...LOADED_TOOL_DOCS].sort());
   });
 });
