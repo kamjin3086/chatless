@@ -11,7 +11,6 @@ import { HistoryBuilder } from '@/lib/chat/HistoryBuilder';
 import type { Message, Conversation } from "@/types/chat";
 import { exportConversationMarkdown } from '@/lib/chat/actions/download';
 // import { retryAssistantMessage } from '@/lib/chat/actions/retry';
-import { MessageAutoSaver } from '@/lib/chat/MessageAutoSaver';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { composeChatOptions } from '@/lib/chat/OptionComposer';
 import { usePromptStore } from '@/store/promptStore';
@@ -94,7 +93,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   });
   
   const idleWatchRef = useRef<IdleGenerationWatchHandle | null>(null);
-  const autoSaverRef = useRef<MessageAutoSaver | null>(null);
   
   // 添加内容变化检测变量
   const lastSavedContentRef = useRef('');
@@ -544,8 +542,11 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
         // 4) 合并，确保会话级覆盖模型级
         baseOptions = { ...filteredModelOpts, ...sessionOpts };
-        // 输出预算：用户值优先，其次按已知上下文窗口自适应；窗口未知则不下发
-        baseOptions = ModelParametersService.applyOutputBudget(baseOptions, modelParams);
+        // 输出预算：关闭 / 手动 / 自动三态在这里收敛，窗口取用户填写与服务商上报的较小值。
+        baseOptions = ModelParametersService.applyOutputBudget(
+          baseOptions,
+          ModelParametersService.resolveBudgetParameters(modelParams, sessionParameters),
+        );
 
         const composed = await composeChatOptions(effectiveProvider, modelToUse, baseOptions, currentConversationId || null, content);
 
@@ -634,12 +635,6 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
   const handleStopGeneration = useCallback(() => {
     setStopGenerationHint('正在停止生成…');
-    // 停止并尽量落盘当前内容，防止丢尾部
-    autoSaverRef.current?.stop();
-    void autoSaverRef.current?.flush().catch(() => {}).finally(() => {
-      autoSaverRef.current = null;
-    });
-
     stopGenerationIdleWatch();
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
     if (debouncedTokenUpdateRef.current) clearTimeout(debouncedTokenUpdateRef.current);
@@ -925,7 +920,10 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
       const composed = await composeChatOptions(
         effectiveProvider,
         modelToUse,
-        ModelParametersService.applyOutputBudget({ ...filteredModelOpts, ...sessionOpts }, modelParams),
+        ModelParametersService.applyOutputBudget(
+          { ...filteredModelOpts, ...sessionOpts },
+          ModelParametersService.resolveBudgetParameters(modelParams, sessionParameters),
+        ),
         conv.id,
         userMsg.content,
       );

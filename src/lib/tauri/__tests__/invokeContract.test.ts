@@ -48,7 +48,7 @@ function matchingIndex(text: string, start: number, open: string, close: string)
   return -1;
 }
 
-type RustCommand = { command: string; required: string[] };
+type RustCommand = { command: string; required: string[]; payloadStruct?: string };
 
 function rustCommands(): Map<string, RustCommand> {
   const commands = new Map<string, RustCommand>();
@@ -66,6 +66,7 @@ function rustCommands(): Map<string, RustCommand> {
       if (paramsEnd < 0) continue;
       const params = text.slice(paramsStart + 1, paramsEnd);
       const required: string[] = [];
+      let payloadStruct: string | undefined;
       for (const raw of splitTopLevel(params)) {
         const parsed = /^\s*(\w+)\s*:\s*([\s\S]+)$/.exec(raw);
         if (!parsed) continue;
@@ -73,11 +74,51 @@ function rustCommands(): Map<string, RustCommand> {
         if (INJECTED_TYPE.test(paramType)) continue;
         if (/^\s*Option\s*</.test(paramType)) continue;
         required.push(paramName);
+        if (paramName === 'payload') {
+          // `payload: WriteFilePayload` - the fields live in that struct, and a
+          // call site through the payload helper never spells `payload` itself.
+          const name = paramType.trim().split('::').pop() ?? '';
+          if (/^\w+$/.test(name)) payloadStruct = name;
+        }
       }
-      commands.set(name, { command: name, required });
+      commands.set(name, { command: name, required, payloadStruct });
     }
   }
   return commands;
+}
+
+type RustPayloadStruct = { fields: string[] };
+
+/**
+ * Fields a payload struct requires from the renderer. `Option<..>`, `#[serde(default)]`
+ * and `#[serde(skip_serializing_if=..)]` fields are optional and are not listed.
+ */
+function rustPayloadStructs(): Map<string, RustPayloadStruct> {
+  const structs = new Map<string, RustPayloadStruct>();
+  for (const file of walk(rustRoot, ['.rs'])) {
+    const text = fs.readFileSync(file, 'utf8');
+    const structPattern = /pub\s+struct\s+(\w+)\s*\{([^}]*)\}/g;
+    let match: RegExpExecArray | null;
+    while ((match = structPattern.exec(text)) !== null) {
+      const [, name, body] = match;
+      const fields: string[] = [];
+      let optional = false;
+      for (const line of body.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#[serde(')) {
+          if (/default|skip_serializing_if/.test(trimmed)) optional = true;
+          continue;
+        }
+        const field = /^(?:pub\s+)?(\w+)\s*:\s*(.+?),?$/.exec(trimmed);
+        if (!field) continue;
+        const [, fieldName, fieldType] = field;
+        if (!optional && !/^Option\s*</.test(fieldType.trim())) fields.push(fieldName);
+        optional = false;
+      }
+      structs.set(name, { fields });
+    }
+  }
+  return structs;
 }
 
 function splitTopLevel(text: string): string[] {
@@ -144,16 +185,27 @@ function objectLiteralKeys(text: string, start: number): { keys: string[]; hasSp
   return { keys, hasSpread };
 }
 
-type CallSite = { file: string; line: number; command: string; keys: string[]; hasSpread: boolean };
+type CallSite = {
+  file: string;
+  line: number;
+  command: string;
+  keys: string[];
+  hasSpread: boolean;
+  /** True for `invokeBackend`, which builds the `payload` wrapper itself. */
+  wrapped: boolean;
+};
 
 function invokeCallSites(): CallSite[] {
   const sites: CallSite[] = [];
   for (const file of walk(tsRoot, ['.ts', '.tsx'])) {
     if (file.includes(`${path.sep}__tests__${path.sep}`)) continue;
     const text = fs.readFileSync(file, 'utf8');
-    const pattern = /(?<![\w.$])invoke\b/g;
+    // `invokeBackend` is the shared payload/casing helper; both spellings reach a
+    // Rust command, so both have to satisfy the contract.
+    const pattern = /(?<![\w.$])(invokeBackend|invoke)\b/g;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
+      const wrapped = match[1] === 'invokeBackend';
       let cursor = match.index + match[0].length;
       if (text[cursor] === '<') {
         const genericsEnd = matchingIndex(text, cursor, '<', '>');
@@ -171,16 +223,16 @@ function invokeCallSites(): CallSite[] {
       const rest = args.slice(commandMatch[0].length);
       const line = text.slice(0, match.index).split('\n').length;
       if (!/^\s*,/.test(rest)) {
-        sites.push({ file, line, command, keys: [], hasSpread: false });
+        sites.push({ file, line, command, keys: [], hasSpread: false, wrapped });
         continue;
       }
       const braceIndex = args.indexOf('{', args.indexOf(commandMatch[0]) + commandMatch[0].length);
       if (braceIndex < 0) {
-        sites.push({ file, line, command, keys: [], hasSpread: true });
+        sites.push({ file, line, command, keys: [], hasSpread: true, wrapped });
         continue;
       }
       const { keys, hasSpread } = objectLiteralKeys(args, braceIndex);
-      sites.push({ file, line, command, keys, hasSpread });
+      sites.push({ file, line, command, keys, hasSpread, wrapped });
     }
   }
   return sites;
@@ -190,6 +242,7 @@ const toCamelCase = (name: string) => name.replace(/_([a-z0-9])/g, (_, char: str
 
 describe('Tauri invoke argument contract', () => {
   const commands = rustCommands();
+  const payloadStructs = rustPayloadStructs();
   const sites = invokeCallSites();
 
   it('finds both sides of the contract', () => {
@@ -203,13 +256,30 @@ describe('Tauri invoke argument contract', () => {
       const spec = commands.get(site.command);
       if (!spec) continue;
       if (site.hasSpread) continue;
+      const relative = path.relative(repoRoot, site.file).replace(/\\/g, '/');
+      if (site.wrapped) {
+        // The helper wraps these keys in `payload`, so what matters is that they
+        // cover the fields the Rust payload struct actually requires.
+        const struct = spec.payloadStruct ? payloadStructs.get(spec.payloadStruct) : undefined;
+        if (!struct) continue;
+        for (const field of struct.fields) {
+          if (!site.keys.includes(toCamelCase(field))) {
+            problems.push(`${relative}:${site.line} invoke('${site.command}') is missing '${toCamelCase(field)}'`);
+          }
+        }
+        continue;
+      }
       for (const param of spec.required) {
         if (!site.keys.includes(toCamelCase(param))) {
-          const relative = path.relative(repoRoot, site.file).replace(/\\/g, '/');
           problems.push(`${relative}:${site.line} invoke('${site.command}') is missing '${toCamelCase(param)}'`);
         }
       }
     }
     expect(problems).toEqual([]);
+  });
+
+  it('covers the shared payload helper, so new commands cannot skip the check', () => {
+    expect(sites.some((site) => site.wrapped)).toBe(true);
+    expect(payloadStructs.size).toBeGreaterThan(5);
   });
 });

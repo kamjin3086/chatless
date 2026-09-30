@@ -12,27 +12,14 @@ export async function openCheckedPath(path: string): Promise<boolean> {
   if (!target) return false;
   if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return false;
 
-  const runId = `ui-open:${Date.now()}`;
-  const callId = `open-${Math.random().toString(16).slice(2)}`;
-  let granted = false;
   try {
-    const { grantCallScope, revokeCallScope, openPathChecked } = await import('@/lib/tauri/filesystemCommands');
+    const { openPathChecked } = await import('@/lib/tauri/filesystemCommands');
+    const { withOneShotGrant } = await import('@/lib/filesystemAllowlist/oneShotGrant');
     // The user is clicking a path this session already produced or mounted; the
     // grant is scoped to this one open and revoked immediately after.
-    await grantCallScope({ runId, callId, path: target, read: true });
-    granted = true;
-    await openPathChecked(target);
+    await withOneShotGrant({ path: target, scope: 'open', read: true }, () => openPathChecked(target));
     return true;
   } catch {
     return false;
-  } finally {
-    if (granted) {
-      try {
-        const { revokeCallScope } = await import('@/lib/tauri/filesystemCommands');
-        await revokeCallScope({ runId, callId });
-      } catch {
-        // the grant expires on its own
-      }
-    }
   }
 }

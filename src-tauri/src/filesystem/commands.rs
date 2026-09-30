@@ -28,17 +28,22 @@ fn sha256_hex(bytes: &[u8]) -> String {
 /// Backs up a file's current content before it is overwritten.
 ///
 /// Returns the recorded version plus the number of versions the file now has.
-/// History is best-effort: if it cannot be written, the file operation still
-/// proceeds (the user would rather have their edit than a failed call).
+/// A failure is an error, not a warning: the callers promise the previous
+/// content can be restored, so an overwrite without a copy must not happen.
+/// A file that does not exist yet has nothing to back up (`Ok(None)`).
 async fn record_previous_version(
   data_dir: &Path,
   abs_path: &str,
   tool: &str,
-) -> Option<(crate::filesystem::history::FileVersion, u32)> {
-  let existing = tokio::fs::read(abs_path).await.ok()?;
+) -> Result<Option<(crate::filesystem::history::FileVersion, u32)>, String> {
+  let existing = match tokio::fs::read(abs_path).await {
+    Ok(bytes) => bytes,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+    Err(error) => return Err(format!("HISTORY_READ_FAILED: 读取现有内容失败: {error}")),
+  };
   let version = crate::filesystem::history::record_version(data_dir, abs_path, &existing, tool, None).await?;
   let count = crate::filesystem::history::list_versions(data_dir, abs_path).await.len() as u32;
-  Some((version, count))
+  Ok(Some((version, count)))
 }
 
 /// One write at a time per real path: two edits to the same file must not
@@ -65,7 +70,7 @@ fn comparable_for_lock(path: &str) -> String {
 
 /// Replace a file's contents through a sibling temp file, so a failed write
 /// leaves the original intact instead of truncating it.
-async fn write_file_atomically(path: &Path, content: &str) -> Result<(), String> {
+async fn write_file_atomically(path: &Path, content: &[u8]) -> Result<(), String> {
   let directory = path.parent().ok_or_else(|| "目标路径没有父目录".to_string())?;
   let file_name = path
     .file_name()
@@ -431,8 +436,8 @@ pub async fn edit_file_inner(
   let result = match outcome {
     EditOutcome::Applied { content, replacements, line } => {
       // The pre-edit content is what "撤销这次编辑" needs.
-      let history = record_previous_version(data_dir, &abs, "edit").await;
-      write_file_atomically(Path::new(&abs), &content).await?;
+      let history = record_previous_version(data_dir, &abs, "edit").await?;
+      write_file_atomically(Path::new(&abs), content.as_bytes()).await?;
       EditFileResult {
         ok: true,
         path: abs.clone(),
@@ -716,8 +721,8 @@ pub async fn write_file_inner(
   let _guard = lock.lock().await;
   // Keep the previous content before it is replaced: an overwrite is otherwise
   // unrecoverable.
-  let history = record_previous_version(data_dir, &abs, "write").await;
-  write_file_atomically(Path::new(&abs), &content).await?;
+  let history = record_previous_version(data_dir, &abs, "write").await?;
+  write_file_atomically(Path::new(&abs), content.as_bytes()).await?;
 
   Ok(OkResult {
     ok: true,
@@ -1105,9 +1110,10 @@ pub async fn restore_version_inner(
 
   let content = crate::filesystem::history::read_version(data_dir, &abs, &payload.version_id).await?;
   // Snapshot what is on disk now, so "restore" is just another step in history.
-  let history = record_previous_version(data_dir, &abs, "restore").await;
-  let text = String::from_utf8_lossy(&content).into_owned();
-  write_file_atomically(Path::new(&abs), &text).await?;
+  let history = record_previous_version(data_dir, &abs, "restore").await?;
+  // Restore the exact bytes that were recorded; a lossy string round trip would
+  // corrupt any file that is not valid UTF-8.
+  write_file_atomically(Path::new(&abs), &content).await?;
 
   Ok(OkResult {
     ok: true,
@@ -1206,6 +1212,103 @@ mod tests {
       .expect("read history after restore");
     assert_eq!(after.versions.len(), 2);
     assert_eq!(after.versions[0].tool, "restore");
+
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+  }
+
+  /// The promise is "the previous content is recoverable". When the history
+  /// directory cannot be written, the overwrite must be refused and the file
+  /// left exactly as it was.
+  #[tokio::test]
+  async fn an_overwrite_is_refused_when_the_backup_cannot_be_written() {
+    let data_dir = std::env::temp_dir().join(format!("chatless-history-blocked-{}", std::process::id()));
+    let work_dir = std::env::temp_dir().join(format!("chatless-history-blocked-work-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+    std::fs::create_dir_all(&data_dir).unwrap();
+    std::fs::create_dir_all(&work_dir).unwrap();
+    // A regular file where the history root belongs makes every backup fail.
+    std::fs::write(data_dir.join("file-history"), b"blocked").unwrap();
+
+    let state = FilesystemAllowlistState::default();
+    let target = work_dir.join("output.txt");
+    let path = target.to_string_lossy().replace('\\', "/");
+    set_allowlist_inner(&data_dir, &state, SetAllowlistPayload {
+      version: Some(1),
+      directories: vec![AllowlistDirectory {
+        path: work_dir.to_string_lossy().replace('\\', "/"),
+        permissions: FsPermissions { read: true, write: true, create: true, delete: false },
+      }],
+    })
+    .await
+    .expect("allowlist the work directory");
+
+    std::fs::write(&target, b"version one").unwrap();
+    let error = write_file_inner(&data_dir, &state, WriteFilePayload {
+      path: path.clone(), content: "version two".to_string(),
+    })
+    .await
+    .unwrap_err();
+    assert!(error.starts_with("HISTORY_WRITE_FAILED"), "{error}");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "version one", "the original file is untouched");
+
+    let edit_error = edit_file_inner(&data_dir, &state, EditFilePayload {
+      path,
+      find: "version one".to_string(),
+      replace: "version two".to_string(),
+      all: None,
+      expected_hash: None,
+    })
+    .await
+    .unwrap_err();
+    assert!(edit_error.starts_with("HISTORY_WRITE_FAILED"), "{edit_error}");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "version one");
+
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+  }
+
+  /// Restoring a version must reproduce the recorded bytes, including content
+  /// that is not valid UTF-8.
+  #[tokio::test]
+  async fn restoring_a_version_reproduces_the_exact_bytes() {
+    let data_dir = std::env::temp_dir().join(format!("chatless-restore-bytes-{}", std::process::id()));
+    let work_dir = std::env::temp_dir().join(format!("chatless-restore-bytes-work-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+    std::fs::create_dir_all(&data_dir).unwrap();
+    std::fs::create_dir_all(&work_dir).unwrap();
+
+    let state = FilesystemAllowlistState::default();
+    let target = work_dir.join("blob.bin");
+    let path = target.to_string_lossy().replace('\\', "/");
+    set_allowlist_inner(&data_dir, &state, SetAllowlistPayload {
+      version: Some(1),
+      directories: vec![AllowlistDirectory {
+        path: work_dir.to_string_lossy().replace('\\', "/"),
+        permissions: FsPermissions { read: true, write: true, create: true, delete: false },
+      }],
+    })
+    .await
+    .expect("allowlist the work directory");
+
+    let original: Vec<u8> = vec![0x00, 0xFF, 0xFE, 0x41, 0x0A];
+    std::fs::write(&target, &original).unwrap();
+    write_file_inner(&data_dir, &state, WriteFilePayload {
+      path: path.clone(), content: "text now".to_string(),
+    })
+    .await
+    .expect("overwrite");
+
+    let history = file_history_inner(&data_dir, &state, FileHistoryPayload { path: path.clone() })
+      .await
+      .expect("read history");
+    let version_id = history.versions[0].id.clone();
+    restore_version_inner(&data_dir, &state, RestoreVersionPayload { path, version_id })
+      .await
+      .expect("restore");
+    assert_eq!(std::fs::read(&target).unwrap(), original);
 
     let _ = std::fs::remove_dir_all(&data_dir);
     let _ = std::fs::remove_dir_all(&work_dir);

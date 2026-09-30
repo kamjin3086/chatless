@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatHeader } from '@/components/chat/ChatHeader';
-import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
 import { ScrollToBottomButton } from '@/components/chat/ScrollToBottomButton';
 import { SessionParametersDialog } from '@/components/chat/SessionParametersDialog';
@@ -119,7 +118,6 @@ export default function ChatPage() {
   const {
     messageRefs,
     messagesEndRef: managedEndRef,
-    handleScrollToTop,
     handleScrollToBottom,
     ensureBottomIfNear,
     showScrollToBottom,
@@ -320,11 +318,15 @@ export default function ChatPage() {
         tokenCount={tokenCount}
         hasSessionParameters={!!currentSessionParameters}
         onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
+        navigationMessages={currentConversation.messages as Message[]}
+        onNavigateToMessage={navigateToMessage}
       />
       <div className="flex-1 flex overflow-hidden">
-        <main className="flex-1 flex flex-col">
+        <main className="flex-1 flex flex-col min-h-0">
+          {/* 消息区单独定位：悬浮导航条锚在“消息区”底部，而不是整个面板底部（否则会压住输入框） */}
+          <div className="relative flex-1 min-h-0">
           <div
-            className="flex-1 custom-scrollbar"
+            className="absolute inset-0 custom-scrollbar"
             ref={scrollContainerRef}
             onMouseEnter={() => { if (scrollContainerRef.current) scrollContainerRef.current.style.overflowY = 'auto'; }}
             onMouseLeave={() => { if (scrollContainerRef.current) scrollContainerRef.current.style.overflowY = 'hidden'; }}
@@ -358,25 +360,20 @@ export default function ChatPage() {
             show={hasNewMessageWhileAway && !isInputAreaHovered}
             onClick={handleScrollToBottom}
           />
-          
-          {/* 回到底部按钮 - 用户向上滚动时显示 */}
-          <ScrollToBottomButton 
-            show={showScrollToBottom && !hasNewMessageWhileAway && !isInputAreaHovered}
-            onClick={handleScrollToBottom}
-          />
-          
-          {/* 工具栏 - 超过3条消息时显示，且不在输入框区域时显示 */}
-          <div 
-            className={`fixed right-6 md:right-8 bottom-38 md:bottom-48 z-40 transition-opacity duration-300 ${
-              isInputAreaHovered ? 'opacity-0 pointer-events-none' : 'opacity-100'
-            }`}
-          >
-            <ChatToolbar
-              messages={currentConversation.messages as Message[]}
-              onNavigateToMessage={navigateToMessage}
-              onScrollToTop={handleScrollToTop}
-              onScrollToBottom={handleScrollToBottom}
-            />
+
+          {/*
+            悬浮控件：界面右侧、垂直居中，只留一个"回到底部"大圆钮。
+            顶部/底部/定位三个小图标与它功能重叠（底部就是同一个动作），且竖排后
+            互相压在一起；消息导航已移到聊天头部，这里因此只保留这一个按钮。
+          */}
+          <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
+            <div className="pointer-events-auto">
+              <ScrollToBottomButton
+                show={showScrollToBottom && !hasNewMessageWhileAway && !isInputAreaHovered}
+                onClick={handleScrollToBottom}
+              />
+            </div>
+          </div>
           </div>
           <div 
             className="bg-transparent"

@@ -27,7 +27,6 @@ export default function HistoryList() {
     loadGroupedHistory,
     loadStats,
     toggleSelection,
-    toggleImportant,
     toggleFavorite,
     deleteItem,
     exportItem,
@@ -56,10 +55,6 @@ export default function HistoryList() {
   const handleSelectChange = useCallback((id: string, _selected: boolean) => {
     toggleSelection(id);
   }, [toggleSelection]);
-
-  const handleToggleImportant = useCallback(async (id: string) => {
-    await toggleImportant(id);
-  }, [toggleImportant]);
 
   const handleToggleFavorite = useCallback(async (id: string) => {
     await toggleFavorite(id);
@@ -220,7 +215,6 @@ export default function HistoryList() {
                     {...item} 
                     isSelected={selectedItems.includes(item.id)}
                     onSelectChange={handleSelectChange}
-                    onToggleImportant={handleToggleImportant}
                     onToggleFavorite={handleToggleFavorite}
                     onView={handleView}
                     onContinue={handleContinue}

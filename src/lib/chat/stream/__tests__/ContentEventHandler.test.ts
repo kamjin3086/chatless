@@ -61,7 +61,9 @@ describe('ContentEventHandler', () => {
       });
 
       const contents = store.getContents();
-      expect(contents['test-msg-123']).toBe('Hello');
+      // 正文不再每个 token 写 store：UI 以 segments 为准，正文按 200 字符或 flush 落盘。
+      expect(contents['test-msg-123']).toBe('');
+      expect((context as any)._contentAppender.getContent()).toBe('Hello');
     });
 
     it('should accumulate content over multiple tokens', () => {
@@ -77,7 +79,33 @@ describe('ContentEventHandler', () => {
       expect(actions).toHaveLength(3);
 
       const contents = store.getContents();
-      expect(contents['test-msg-123']).toBe('Hello World');
+      expect(contents['test-msg-123']).toBe('');
+      expect((context as any)._contentAppender.getContent()).toBe('Hello World');
+    });
+
+    it('writes the accumulated content to the store only when flushed', () => {
+      const context = createTestContext();
+
+      handler.handle(createContentTokenEvent('Hello'), context);
+      handler.handle(createContentTokenEvent(' World'), context);
+      expect(store.getUpdateCalls()).toBe(0);
+
+      (context as any)._contentAppender.flush();
+      expect(store.getContents()['test-msg-123']).toBe('Hello World');
+      expect(store.getUpdateCalls()).toBe(1);
+    });
+
+    it('does not write the store more than once per autosave window', () => {
+      const context = createTestContext();
+      const chunk = 'x'.repeat(50);
+
+      // 50 个 chunk × 50 字符 = 2500 字符 → 200 字符窗口只应落盘 12 次左右，而不是 50 次。
+      for (let i = 0; i < 50; i += 1) handler.handle(createContentTokenEvent(chunk), context);
+
+      const writes = store.getUpdateCalls();
+      expect((context as any)._contentAppender.getContent()).toHaveLength(2500);
+      expect(writes).toBeLessThanOrEqual(Math.ceil(2500 / 200) + 1);
+      expect(writes).toBeLessThan(50);
     });
 
     it('should not dispatch action if content is empty', () => {

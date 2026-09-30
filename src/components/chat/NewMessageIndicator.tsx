@@ -29,7 +29,8 @@ export function NewMessageIndicator({ show, onClick, className }: NewMessageIndi
           }}
           onClick={onClick}
           className={cn(
-            "fixed left-1/2 -translate-x-1/2 bottom-28 z-50",
+            // 锚定在聊天面板内，而不是整个窗口，避免浮到侧边栏/其他区域上方。
+            "absolute left-1/2 -translate-x-1/2 bottom-28 z-50",
             "flex items-center gap-2 px-4 py-2",
             "bg-blue-500 dark:bg-blue-600",
             "text-white text-sm font-medium",

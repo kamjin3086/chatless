@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } f
 import StorageUtil from '@/lib/storage';
 import { useUiPreferences } from '@/store/uiPreferences';
 import { cn } from "@/lib/utils";
-import {  X, Clock, Star, Flag, RotateCcw, ListPlus } from 'lucide-react';
+import {  X, Clock, Star, RotateCcw, ListPlus } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 // import { SidebarHeader } from './SidebarHeader';
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
@@ -161,7 +161,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
   const [isSearching, setIsSearching] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite' | 'important'>('recent');
+  const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite'>('recent');
   
   const createConversation = useChatStore((state) => state.createConversation);
   const conversations = useChatStore((state) => state.conversations);
@@ -190,7 +190,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   }, []);
 
   // 处理分类筛选
-  const handleFilterChange = (filter: 'recent' | 'favorite' | 'important') => {
+  const handleFilterChange = (filter: 'recent' | 'favorite') => {
     setActiveFilter(filter);
     // 如果在搜索模式，清除搜索
     if (isSearching) {
@@ -207,9 +207,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       switch (activeFilter) {
         case 'favorite':
           result = conversations.filter((conv: Conversation) => (conv as any)['is_favorite']);
-          break;
-        case 'important':
-          result = conversations.filter((conv: Conversation) => (conv as any)['is_important']);
           break;
         case 'recent':
         default:
@@ -331,18 +328,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                 >
                   <Star className={cn("w-3 h-3", activeFilter === 'favorite' && "fill-current")} />
                   <span>收藏</span>
-                </button>
-                <button 
-                  className={cn(
-                    "px-2 py-1 rounded-md transition-colors flex items-center gap-1",
-                    activeFilter === 'important' 
-                      ? "text-sky-700 dark:text-sky-300" 
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                  )} 
-                  onClick={() => handleFilterChange('important')}
-                >
-                  <Flag className="w-3 h-3" />
-                  <span>重要</span>
                 </button>
               </div>
             </div>

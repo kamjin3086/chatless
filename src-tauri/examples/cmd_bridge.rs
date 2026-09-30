@@ -20,6 +20,11 @@ use chatless_lib::sandbox::commands::{
   start_managed_process, stop_conversation_processes, stop_shell_process, ExecuteOptions,
   ManagedProcessOwner,
 };
+use chatless_lib::workspace::commands::{
+  ensure_inner as workspace_ensure_inner, export_inner as workspace_export_inner,
+  trash_all_inner as workspace_trash_all_inner, trash_inner as workspace_trash_inner,
+  WorkspaceEnsurePayload, WorkspaceExportPayload, WorkspaceIdPayload,
+};
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -143,6 +148,37 @@ impl Bridge {
         Ok(json!(stop_conversation_processes(string("conversationId")).await?))
       }
       "cancel_safe_shell" => Ok(json!(cancel_safe_shell(string("executionId")).await?)),
+      // The bridge has no AppHandle, so the "documents" folder lives inside its
+      // own data dir; everything else is the production implementation.
+      "workspace_ensure" => {
+        let payload: WorkspaceEnsurePayload = serde_json::from_value(parse("payload")?).map_err(|e| e.to_string())?;
+        let documents = self.data_dir.join("documents");
+        Ok(serde_json::to_value(
+          workspace_ensure_inner(
+            &self.data_dir,
+            &documents,
+            &payload.conversation_id,
+            payload.title.as_deref(),
+            payload.materialize.unwrap_or(false),
+          )
+          .await?,
+        )
+        .unwrap())
+      }
+      "workspace_export" => {
+        let payload: WorkspaceExportPayload = serde_json::from_value(parse("payload")?).map_err(|e| e.to_string())?;
+        Ok(serde_json::to_value(
+          workspace_export_inner(&self.data_dir, &payload.conversation_id, &payload.destination_dir).await?,
+        )
+        .unwrap())
+      }
+      "workspace_trash" => {
+        let payload: WorkspaceIdPayload = serde_json::from_value(parse("payload")?).map_err(|e| e.to_string())?;
+        Ok(serde_json::to_value(workspace_trash_inner(&self.data_dir, &payload.conversation_id).await?).unwrap())
+      }
+      "workspace_trash_all" => {
+        Ok(serde_json::to_value(workspace_trash_all_inner(&self.data_dir).await?).unwrap())
+      }
       "check_runtime_environment" => Ok(serde_json::to_value(
         chatless_lib::sandbox::commands::check_runtime_environment(string("runtime")).await?,
       )

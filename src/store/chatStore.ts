@@ -6,6 +6,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import { startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { AgentRunEventStore } from '@/lib/mcp/agentLoop/AgentRunEventStore';
+import { planEmptyConversationReuse } from '@/lib/chat/emptyConversationReuse';
+import { initModel, reduce } from '@/lib/chat/messageFsm';
 
 const getDatabaseService = () => {
   const service = DatabaseService.getInstance();
@@ -16,6 +18,51 @@ const getDatabaseService = () => {
     throw new Error('数据库服务未初始化，请等待应用启动完成');
   }
 };
+
+/**
+ * 解析会话工作目录并写入内存缓存。
+ *
+ * 目录身份由 Rust 持有，失败时必须留下可见痕迹：只写日志会让用户在一个没有
+ * @WorkDir 的会话里继续工作，直到工具调用报"没有授权目录"才发现。
+ */
+async function resolveConversationWorkspace(conversationId: string, title?: string): Promise<void> {
+  const cid = String(conversationId || '').trim();
+  if (!cid) return;
+  const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+  const attachments = useConversationAttachmentStore.getState();
+  try {
+    const { ensureConversationWorkspace } = await import('@/lib/agentWorkspace/workspaceService');
+    // 只登记位置，不在磁盘上建目录：目录在这个会话第一次真正用到文件时才出现。
+    const workspace = await ensureConversationWorkspace({ conversationId: cid, title, materialize: false });
+    attachments.setWorkingDir(cid, workspace.root, workspace.exists);
+    attachments.clearWorkspaceError(cid);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    attachments.setWorkspaceError(cid, message);
+    try {
+      const { toast } = await import('@/components/ui/sonner');
+      toast.error('无法准备会话工作目录', { description: message });
+    } catch {
+      // 提示失败不影响会话本身
+    }
+  }
+}
+
+/**
+ * 数据库里确实一条消息都没有的会话 ID。
+ *
+ * 不能看 store 里的 `messages`：它是懒加载的，重启后每个会话都挂着空数组。
+ * 只有数据库能回答"这个会话是不是空的"。
+ */
+async function listConversationIdsWithoutMessages(conversationIds: string[]): Promise<Set<string>> {
+  if (conversationIds.length === 0) return new Set<string>();
+  const dbService = getDatabaseService();
+  const rows = await dbService
+    .getDbManager()
+    .select<{ conversation_id: string }>('SELECT conversation_id FROM messages GROUP BY conversation_id');
+  const withMessages = new Set((rows || []).map((row) => String(row.conversation_id)));
+  return new Set(conversationIds.filter((id: string) => !withMessages.has(id)));
+}
 
 interface ChatState {
   conversations: Conversation[];
@@ -70,7 +117,6 @@ interface ChatActions {
   setLastUsedModelForChat: (chatId: string, modelIdentifier: string) => void;
   setSessionLastSelectedModel: (modelIdentifier: string) => void;
   toggleStarConversation: (conversationId: string) => Promise<void>;
-  toggleImportant: (conversationId: string) => Promise<void>;
   duplicateConversation: (conversationId: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   // 段驱动富文本：高频内存更新（不落库）
@@ -179,7 +225,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
               model_id: convAny.model_id || convAny.model_id || 'default',
               model_provider: convAny.model_provider || null,
               model_full_id: convAny.model_full_id || (convAny.model_provider ? `${convAny.model_provider}/${convAny.model_id}` : convAny.model_id),
-              is_important: convAny.is_important === true || convAny.is_important === 1,
               is_favorite: convAny.is_favorite === true || convAny.is_favorite === 1,
               messages: [], // 首次不加载消息，按需加载
             };
@@ -204,7 +249,12 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
           if (!get().currentConversationId && loadedConversations.length > 0) {
             console.log(`🔄 [LOAD-CONVERSATIONS] 设置当前会话: ${loadedConversations[0].id}`);
-            set({ currentConversationId: loadedConversations[0].id });
+            const restored = loadedConversations[0];
+            set({ currentConversationId: restored.id });
+            // The restored conversation is selected directly here, so its @WorkDir
+            // has to be resolved explicitly - otherwise the first message after a
+            // restart runs without a working directory.
+            await resolveConversationWorkspace(restored.id, restored.title);
           }
 
           console.log(`[LOAD-CONVERSATIONS] 会话加载完成，总计: ${loadedConversations.length} 个`);
@@ -391,6 +441,44 @@ export const useChatStore = create<ChatState & ChatActions>()(
       },
 
       createConversation: async (title, modelId, providerName) => {
+        // 空白会话有且仅有一个：连点"+"只切换/清理，不再堆空壳。
+        try {
+          const plan = planEmptyConversationReuse({
+            conversationIds: get().conversations.map((c: Conversation) => c.id),
+            withoutMessages: await listConversationIdsWithoutMessages(
+              get().conversations.map((c: Conversation) => c.id),
+            ),
+            drafts: get().inputDrafts,
+          });
+          if (plan.reuse) {
+            // 先清理多余空壳（走既有的删除路径，附件的会话状态也一并收掉）。
+            for (const staleId of plan.remove) {
+              try {
+                await get().deleteConversation(staleId);
+              } catch (error) {
+                console.warn('[CREATE-CONVERSATION] 清理多余的空会话失败:', staleId, error);
+              }
+            }
+            set({ currentConversationId: plan.reuse });
+            if (plan.remove.length > 0) {
+              try {
+                const { toast } = await import('@/components/ui/sonner');
+                toast.info('已回到空白会话', {
+                  description: `顺手清理了 ${plan.remove.length} 个多余的空会话`,
+                });
+              } catch {
+                // 提示失败不影响会话
+              }
+            }
+            // 复用已有会话时也要保证它的 @WorkDir 已解析（重启后内存里没有缓存）。
+            const reused = get().conversations.find((c: Conversation) => c.id === plan.reuse);
+            await resolveConversationWorkspace(plan.reuse, reused?.title);
+            return plan.reuse;
+          }
+        } catch (error) {
+          console.warn('[CREATE-CONVERSATION] 检查空白会话失败，按新建处理:', error);
+        }
+
         const now = Date.now();
         const newConversation: Conversation = {
           id: uuidv4(),
@@ -401,7 +489,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
           model_id: modelId || 'default',
           model_provider: providerName,
           model_full_id: providerName ? `${providerName}/${modelId}` : modelId,
-          is_important: false,
           is_favorite: false,
         };
 
@@ -422,7 +509,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
             model_id: modelId || 'default',
             model_provider: providerName || null,
             model_full_id: providerName ? `${providerName}/${modelId}` : modelId,
-            is_important: 0,
             is_favorite: 0,
           } as any);
 
@@ -435,39 +521,22 @@ export const useChatStore = create<ChatState & ChatActions>()(
           throw error;
         }
 
-        // 解析会话工作目录并注入 @WorkDir（文档/Chatless/<标题>-<短ID>）
-        try {
-          const { ensureConversationWorkspace } = await import('@/lib/agentWorkspace/workspaceService');
-          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-          const ws = await ensureConversationWorkspace({
-            conversationId: newConversation.id,
-            title: newConversation.title,
-          });
-          useConversationAttachmentStore.getState().setWorkingDir(newConversation.id, ws.root);
-        } catch (e) {
-          console.warn('[CREATE-CONVERSATION] init workspace failed:', e);
-        }
+        // 解析会话工作目录并注入 @WorkDir（文档/Chatless/<标题>-<摘要>）
+        await resolveConversationWorkspace(newConversation.id, newConversation.title);
 
         return newConversation.id;
       },
 
       setCurrentConversation: (id) => {
         set({ currentConversationId: id });
-        // 切换会话时解析 @WorkDir（attachment store 非持久化，需要时重建）
+        // 切换会话时解析 @WorkDir（映射由 Rust 持有，这里只刷新内存缓存）
         void (async () => {
-          try {
-            const cid = String(id || '').trim();
-            if (!cid) return;
-            const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-            const existing = useConversationAttachmentStore.getState().getSessionDir(cid);
-            if (existing) return;
-            const { ensureConversationWorkspace } = await import('@/lib/agentWorkspace/workspaceService');
-            const title = get().conversations.find((c) => c.id === cid)?.title;
-            const ws = await ensureConversationWorkspace({ conversationId: cid, title });
-            useConversationAttachmentStore.getState().setWorkingDir(cid, ws.root);
-          } catch {
-            // ignore
-          }
+          const cid = String(id || '').trim();
+          if (!cid) return;
+          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+          if (useConversationAttachmentStore.getState().getSessionDir(cid)) return;
+          const title = get().conversations.find((c) => c.id === cid)?.title;
+          await resolveConversationWorkspace(cid, title);
         })();
       },
 
@@ -499,7 +568,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
               updated_at: now,
               messages: [],
               model_id: 'default',
-              is_important: false,
               is_favorite: false,
             };
             state.conversations.unshift(conversation);
@@ -782,8 +850,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
           if (idsToFlush.length === 0) return;
 
           
-          const { initModel, reduce } = require('@/lib/chat/messageFsm');
-
           // 保留快照，避免后续清空队列导致 shouldPersist 误判
           const persistFlags = new Map<string, boolean>();
           
@@ -879,7 +945,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
               const nextMessages: any[] = [...(conv.messages as any[])];
               nextMessages[idx] = nextMsg;
               (conv as any).messages = nextMessages;
-              conv.updated_at = Date.now();
+              // 流式期间不动 updated_at：它一变，侧边栏的 ConversationItem（memo 里比较
+              // updated_at）和一些依赖时间的标签就会每帧重渲染。结束时（STREAM_END）写一次。
+              if (ended) conv.updated_at = Date.now();
             }
           });
           
@@ -1076,23 +1144,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
             conversation.updated_at = Date.now();
           }
         });
-        // The sessions folder is named after the title. Rename it only while the
-        // folder is still empty, so a path already handed to the model never moves.
-        void (async () => {
-          try {
-            const cid = String(conversationId || '').trim();
-            if (!cid) return;
-            const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-            const attachment = useConversationAttachmentStore.getState();
-            const current = attachment.getSessionDir(cid);
-            if (!current) return;
-            const { renameConversationWorkspaceIfPristine } = await import('@/lib/agentWorkspace/workspaceService');
-            const renamed = await renameConversationWorkspaceIfPristine({ conversationId: cid, currentRoot: current, title });
-            if (renamed && renamed !== current) attachment.setWorkingDir(cid, renamed);
-          } catch {
-            // A failed rename only costs a nicer folder name.
-          }
-        })();
+        // 目录名来自创建时的标题，改标题不再移动目录：路径一旦交给模型就必须恒定，
+        // 否则"第几个会话对应哪个文件夹"会随标题编辑而漂移。
       },
 
       finalizeStreamedMessage: async (messageId: string, finalStatus: string, finalContent: string, model?: string) => {
@@ -1191,7 +1244,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
             const mId = updates.model_id || targetConv?.model_id || '';
             dbUpdates.model_full_id = updates.model_provider ? `${updates.model_provider}/${mId}` : mId;
           }
-          if ('is_important' in updates) dbUpdates.is_important = updates.is_important ? 1 : 0;
           if ('is_favorite' in updates) dbUpdates.is_favorite = updates.is_favorite ? 1 : 0;
 
           await conversationRepo.update(id, dbUpdates);
@@ -1229,6 +1281,31 @@ export const useChatStore = create<ChatState & ChatActions>()(
           }
           delete state.lastUsedModelPerChat[id];
         });
+
+        // 会话级的挂载与 @WorkDir 缓存随会话一起消失。用户的文件保持原样：
+        // 清理产物是设置里的一次显式操作，不是"删会话"的副作用。
+        try {
+          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+          const attachments = useConversationAttachmentStore.getState();
+          attachments.clearMountedDir(id);
+          attachments.clearWorkingDir(id);
+          attachments.clearWorkspaceError(id);
+        } catch {
+          // 清理缓存失败不影响删除本身
+        }
+
+        // Deleting the open conversation selects another one directly, so resolve
+        // its @WorkDir the same way a manual switch would.
+        const current = get().currentConversationId;
+        if (current) {
+          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+          if (!useConversationAttachmentStore.getState().getSessionDir(current)) {
+            await resolveConversationWorkspace(
+              current,
+              get().conversations.find((c: Conversation) => c.id === current)?.title,
+            );
+          }
+        }
 
         try {
           const dbService = getDatabaseService();
@@ -1311,26 +1388,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
         }
       },
 
-      toggleImportant: async (conversationId: string) => {
-        try {
-          const conversation = get().conversations.find(c => c.id === conversationId);
-          if (!conversation) {
-            console.error(`Conversation ${conversationId} not found`);
-            return;
-          }
-
-          const newImportantStatus = !conversation.is_important;
-
-          await get().updateConversation(conversationId, {
-            is_important: newImportantStatus
-          });
-
-          console.log(`会话 ${conversationId} 重要状态已更新为: ${newImportantStatus}`);
-        } catch (error) {
-          console.error('❌ [STORE] Failed to toggle important status:', error);
-        }
-      },
-
       duplicateConversation: async (conversationId: string) => {
         try {
           const dbService = getDatabaseService();
@@ -1355,7 +1412,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
             model_id: originalConv.model_id,
             model_provider: (originalConv as any).model_provider,
             model_full_id: (originalConv as any).model_full_id,
-            is_important: originalConv.is_important,
             is_favorite: originalConv.is_favorite,
             messages: []
           };
@@ -1368,7 +1424,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
             model_id: originalConv.model_id,
             model_provider: (originalConv as any).model_provider || null,
             model_full_id: (originalConv as any).model_full_id || ((originalConv as any).model_provider ? `${(originalConv as any).model_provider}/${originalConv.model_id}` : originalConv.model_id),
-            is_important: originalConv.is_important ? 1 : 0,
             is_favorite: originalConv.is_favorite ? 1 : 0,
           } as any);
 

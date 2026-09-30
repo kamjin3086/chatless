@@ -142,12 +142,10 @@ export function ContextMenu({ children, menuItems, disabled = false }: ContextMe
 // 预定义的菜单项创建函数
 export const createConversationMenuItems = (
   conversationId: string,
-  isImportant: boolean,
   isStarred: boolean,
   onEdit: (id: string) => void,
   onDelete: (id: string) => void,
   onStar: (id: string) => void,
-  onToggleImportant: (id: string) => void,
   onDuplicate?: (id: string) => void,
   onExport?: (id: string) => void
 ): MenuItem[] => [
@@ -176,11 +174,6 @@ export const createConversationMenuItems = (
     id: 'star',
     text: isStarred ? '取消收藏' : '收藏对话',
     action: () => onStar(conversationId)
-  },
-  {
-    id: 'important',
-    text: isImportant ? '取消重要标记' : '标记为重要',
-    action: () => onToggleImportant(conversationId)
   },
   {
     id: 'duplicate',

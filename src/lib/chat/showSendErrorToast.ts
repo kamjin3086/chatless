@@ -20,11 +20,31 @@ function extractHttpStatus(text: string): number | null {
   return bare ? Number(bare[1]) : null;
 }
 
+/**
+ * Pull the provider's own explanation out of an error body.
+ *
+ * Servers answer a rejected request with `{"error":{"message":"..."}}`.  That
+ * sentence is the only actionable part — telling the user to "check the provider
+ * configuration" for a request the provider explained in full sends them to the
+ * wrong place.
+ */
+function extractProviderMessage(text: string): string | null {
+  const match = text.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (!match) return null;
+  try {
+    const decoded = JSON.parse(`"${match[1]}"`) as string;
+    return decoded.replace(/\s+/g, ' ').trim() || null;
+  } catch {
+    return match[1].trim() || null;
+  }
+}
+
 export function formatSendError(error: unknown): SendErrorInfo {
   const code = (error as { code?: string } | null)?.code;
   const raw = error instanceof Error ? error.message : String(error ?? '');
   const msg = raw.replace(/\s+/g, ' ').trim();
   const status = extractHttpStatus(msg);
+  const providerMessage = extractProviderMessage(msg);
 
   if (code === 'NO_KEY' || /NO_KEY|未配置 API 密钥/i.test(msg)) {
     return {
@@ -57,6 +77,15 @@ export function formatSendError(error: unknown): SendErrorInfo {
     return {
       title: '请求过于频繁',
       description: '请稍后再试。',
+      isNetwork: false,
+      openProviderSettings: false,
+    };
+  }
+
+  if (status === 400 || (providerMessage && status === null)) {
+    return {
+      title: '模型拒绝了这次请求',
+      description: providerMessage || '请检查这次请求的内容与所选模型是否兼容。',
       isNetwork: false,
       openProviderSettings: false,
     };

@@ -1,6 +1,14 @@
+import { DEFAULT_MAX_OUTPUT_TOKENS } from '@/lib/llm/outputBudget';
+
 export interface ModelParameters {
   // 启用/禁用控制（为每个基础参数提供可选开关）
   enableTemperature?: boolean;
+  /**
+   * 输出上限三态：
+   * - `undefined`（默认）= 自动，按上下文窗口推算，窗口未知则不下发；
+   * - `true` = 手动，下发下面的 maxTokens（并按窗口收敛）；
+   * - `false` = 关闭，始终不下发。
+   */
   enableMaxTokens?: boolean;
   enableTopP?: boolean;
   enableTopK?: boolean;
@@ -19,6 +27,11 @@ export interface ModelParameters {
    * 由服务端决定输出长度。provider 上报或用户填写后才会自适应下发 max_tokens。
    */
   contextWindow?: number;
+  /**
+   * 服务商上报的上下文窗口。与用户填写的 contextWindow 分开保存，
+   * 实际生效值取两者中较小的一个；用户不需要为了"接受上报值"而清空自己的填写。
+   */
+  observedContextWindow?: number;
   topP: number;
   topK: number;
   minP: number;
@@ -43,10 +56,9 @@ export interface ModelConfig {
 
 export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
   // 参数默认不下发，交给模型自身默认值。
-  // 例外：maxTokens 默认开启，但真正下发多少由 resolveOutputBudget 依据
-  // 已知上下文窗口决定；窗口未知时仍然不下发。
+  // maxTokens 默认是"自动"（enableMaxTokens 不填）：不向模型下发该参数，
+  // 单次输出多久由服务端决定；用户手动设值时才下发。
   enableTemperature: false,
-  enableMaxTokens: true,
   enableTopP: false,
   enableTopK: false,
   enableMinP: false,
@@ -56,7 +68,7 @@ export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
   enableThinking: false,  // 默认不启用思考（避免不兼容的模型报错）
   enableStreaming: true,  // 默认启用流式响应（大多数情况下需要实时输出）
   temperature: 0.7,
-  maxTokens: 8192,
+  maxTokens: DEFAULT_MAX_OUTPUT_TOKENS,
   topP: 1.0,
   topK: 0,
   minP: 0,

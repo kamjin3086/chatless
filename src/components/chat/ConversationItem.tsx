@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ContextMenu, createConversationMenuItems } from "@/components/ui/context-menu";
-import { Flag, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { cn } from "@/lib/utils";
@@ -26,7 +26,6 @@ interface ConversationItemProps {
   onRenameKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onDelete: (e: React.MouseEvent, conv: Conversation) => void;
   onStar: (id: string) => void;
-  onToggleImportant: (id: string) => void;
   onDuplicate: (id: string) => void;
   onExport: (id: string) => void;
 }
@@ -45,7 +44,6 @@ function ConversationItemImpl({
   onRenameKeyDown,
   onDelete,
   onStar,
-  onToggleImportant,
   onDuplicate,
   onExport,
 }: ConversationItemProps) {
@@ -66,12 +64,10 @@ function ConversationItemImpl({
     <ContextMenu
       menuItems={createConversationMenuItems(
         conversation.id,
-        conversation.is_important,
         (conversation as any).is_favorite,
         (_id) => onRenameStart({ stopPropagation: () => {} } as React.MouseEvent, conversation),
         (_id) => onDelete({ stopPropagation: () => {} } as React.MouseEvent, conversation),
         onStar,
-        onToggleImportant,
         onDuplicate,
         onExport
       )}
@@ -101,28 +97,16 @@ function ConversationItemImpl({
             />
           ) : (
             <div className="flex items-center gap-1.5 min-w-0 w-full">
-              {(conversation.is_important || (conversation as any).is_favorite) && (
+              {(conversation as any).is_favorite && (
                 <div className="flex items-center gap-0.5 flex-shrink-0">
-                  {conversation.is_important && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Flag className="w-3 h-3 text-red-500 dark:text-red-400 fill-current" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>重要对话</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {(conversation as any).is_favorite && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Star className="w-3 h-3 text-yellow-500 dark:text-yellow-400 fill-current" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>已收藏</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Star className="w-3 h-3 text-yellow-500 dark:text-yellow-400 fill-current" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>已收藏</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               )}
               <div
@@ -141,7 +125,7 @@ function ConversationItemImpl({
             <span className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{compactTime}</span>
             {/* 模型名：使用opacity控制显示，min-h保证高度不跳动 */}
             <span className="text-slate-300 dark:text-slate-600 transition-opacity duration-200 group-hover:opacity-100 opacity-0 pointer-events-none">·</span>
-            <div className="flex items-center transition-opacity duration-200 group-hover:opacity-100 opacity-0 pointer-events-none">
+            <div className="flex items-center min-w-0 flex-1 transition-opacity duration-200 group-hover:opacity-100 opacity-0 pointer-events-none">
               <ModelLabelSpan conversation={conversation} />
             </div>
           </div>
@@ -178,7 +162,9 @@ function ModelLabelSpan({ conversation }: { conversation: Conversation }) {
   const display = label || conversation.model_id;
   return (
     <span
-      className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap overflow-hidden text-ellipsis truncate max-w-[10rem] sm:max-w-[12rem]"
+      // No fixed rem width: the label truncates to whatever room the row has left,
+      // instead of widening the row past the sidebar.
+      className="text-[10px] text-slate-500 dark:text-slate-400 min-w-0 max-w-full truncate"
       title={(conversation as any).model_full_id || conversation.model_id}
     >
       {display}
@@ -195,8 +181,7 @@ export const ConversationItem = React.memo(ConversationItemImpl, (prev, next) =>
     && a.updated_at === b.updated_at
     && a.model_id === b.model_id
     && (a as any).model_provider === (b as any).model_provider
-    && (a as any).is_favorite === (b as any).is_favorite
-    && a.is_important === b.is_important;
+    && (a as any).is_favorite === (b as any).is_favorite;
   return (
     sameConv
     && prev.isCurrent === next.isCurrent

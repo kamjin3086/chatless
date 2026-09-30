@@ -110,6 +110,7 @@ if (process.env.NODE_ENV === 'development') {
   import('@/lib/services/documentSync').then(() => {
     // 文档同步服务已加载
   }).catch(console.error);
+
   }, 1000); // 延迟1秒加载，让主界面先渲染
 }
 

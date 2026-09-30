@@ -32,4 +32,16 @@ describe('formatSendError', () => {
     expect(info.isNetwork).toBe(true);
     expect(info.openProviderSettings).toBe(true);
   });
+
+  it("shows the provider's own reason for a rejected request", () => {
+    // Regression: a provider-side 400 was reported as "check the provider
+    // configuration", hiding the sentence that says what was wrong.
+    const info = formatSendError(new Error(
+      'HTTP 400 Bad Request: {"error":{"message":"message 5 has role \'system\' after a non-system turn"}}',
+    ));
+
+    expect(info.title).toBe('模型拒绝了这次请求');
+    expect(info.description).toContain("has role 'system' after a non-system turn");
+    expect(info.openProviderSettings).toBe(false);
+  });
 });

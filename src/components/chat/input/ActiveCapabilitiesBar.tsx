@@ -74,12 +74,14 @@ export function ActiveCapabilitiesBar({
   // 锚点元素
   const knowledgeBaseRef = useRef<HTMLButtonElement>(null);
 
-  // 简化：状态栏仅展示“已附加内容”（不展示“已启用”文案与过多技术项）
+  // 简化：状态栏仅展示“已附加内容”（不展示“已启用”文案与过多技术项）。
+  // 工作目录只在**用户自己选过**的时候出现：默认的会话产物目录是每个人的默认值，
+  // 每个新会话都宣告一次只是噪音，它的入口在 + 菜单里。
   const hasAny =
     selectedKnowledgeBase ||
     enabledMcpServers.length > 0 ||
     hasSessionParameters ||
-    !!workingDir ||
+    (workingDirAttached && !!workingDir) ||
     !!attachedDocument;
 
   if (!hasAny) {
@@ -133,8 +135,8 @@ export function ActiveCapabilitiesBar({
           </button>
         )}
 
-        {/* 工作目录标签 - 绿色系 */}
-        {workingDir && (
+        {/* 工作目录标签 - 绿色系：只表示“用户选定的目录”，点击打开、× 改回默认 */}
+        {workingDir && workingDirAttached && (
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -147,22 +149,19 @@ export function ActiveCapabilitiesBar({
               "hover:bg-emerald-100 dark:hover:bg-emerald-900/50",
               "border border-emerald-200/50 dark:border-emerald-800/50"
             )}
-            title={workingDir}
+            title={`${workingDir}\n本会话的工作目录（你选定的）：点右侧 × 改回会话默认`}
           >
             <Folder className="w-3 h-3" />
             {/* 只显示文件夹名，悬浮显示完整路径 */}
             <span className="max-w-[160px] truncate">{basename(workingDir)}</span>
             <ExternalLink className="w-3 h-3 opacity-40 group-hover:opacity-100" />
-            {/* 会话自带的产物目录不能移除，只能打开；附加的用户目录才可以摘下。 */}
-            {workingDirAttached && (
-              <X
-                className="w-3 h-3 opacity-40 group-hover:opacity-100 hover:text-emerald-700 dark:hover:text-emerald-300"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveWorkingDir?.();
-                }}
-              />
-            )}
+            <X
+              className="w-3 h-3 opacity-40 group-hover:opacity-100 hover:text-emerald-700 dark:hover:text-emerald-300"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveWorkingDir?.();
+              }}
+            />
           </button>
         )}
 

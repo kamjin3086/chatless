@@ -88,65 +88,22 @@ export function AIMessageBlock({
     onStreamingCompleteRef.current = onStreamingComplete;
   }, [onStreamingComplete]);
 
-  // 检查内容是否包含think标签 - 只要检测到<think>就开始显示思考栏
-  const hasThinkTags = useMemo(() => content.includes('<think>'), [content]);
-  const hasThinkCloseTag = useMemo(() => content.includes('</think>'), [content]);
-
-  useEffect(() => {
-    // 仅在出现疑似 think 标签残片、或 viewModel 标记思考中时打点，避免刷屏
-    const should =
-      hasThinkTags ||
-      hasThinkCloseTag ||
-      !!viewModel?.flags?.isThinking ||
-      (Array.isArray(viewModel?.items) && viewModel.items.some((s: any) => s?.kind === 'think')) ||
-      (Array.isArray(segments) && segments.some((s: any) => s?.kind === 'think'));
-    if (!should) return;
-
-    // 调试日志已移除，此 effect 仅保留作为渲染信号检测占位
-    void 0;
-  }, [id, isStreaming, content, hasThinkTags, hasThinkCloseTag, viewModel?.flags?.isThinking, viewModel?.items, segments]);
-
-      // 提前解析工具调用格式：<use_mcp_tool>（推荐）或 <tool_call>（兼容）或 JSON 格式的 {"type":"tool_call",...}
-  const hasToolCallEarly = useMemo(() => 
-    content.includes('<tool_call>') || 
-    content.includes('<use_mcp_tool>') || 
-    /"type"\s*:\s*"tool_call"/i.test(content), 
-  [content]);
-  useMemo(() => {
-    if (!hasToolCallEarly) return null;
-    // 1) XML 包裹
-    const mXml = content.match(/<tool_call>([\s\S]*?)<\/tool_call>/i);
-    if (mXml && mXml[1]) {
-      try {
-        const obj = JSON.parse(mXml[1]);
-        return { server: obj.server, tool: obj.tool, args: obj.parameters || obj.args || {} };
-      } catch { /* ignore */ }
-    }
-    // 2) 代码块/纯文本 JSON
-    try {
-      // 尝试抓取最短含有 server/tool 的片段
-      const mJson = content.match(/\{[\s\S]*?"type"\s*:\s*"tool_call"[\s\S]*?\}/i);
-      if (mJson && mJson[0]) {
-        const obj = JSON.parse(mJson[0]);
-        return { server: obj.server || obj.mcp, tool: obj.tool || obj.tool_name, args: obj.parameters || obj.args || {} };
-      }
-    } catch { /* ignore */ }
-    return null;
-  }, [content, hasToolCallEarly]);
-
-  // 提取已嵌入的卡片标记（可支持多次调用）
-  useMemo(() => {
-    // 渲染阶段统一在 mixedSegments 内处理
-    return null;
-  }, [content]);
-
-  // 已去除非必要的状态写入，避免在流式阶段造成更新环
+  // 提前解析工具调用格式：<use_mcp_tool>（推荐）或 <tool_call>（兼容）或 JSON 格式的 {"type":"tool_call",...}
+  // 只在流式期间计算：非流式消息不需要这个提示，而它要对整段正文做三次扫描 + 正则。
+  const hasToolCallEarly = useMemo(() =>
+    isStreaming && (
+      content.includes('<tool_call>') ||
+      content.includes('<use_mcp_tool>') ||
+      /"type"\s*:\s*"tool_call"/i.test(content)
+    ),
+  [content, isStreaming]);
 
   const historicalState = useMemo(() => {
     if (isStreaming) return null;
     
 
     
+    const hasThinkTags = content.includes('<think>');
     const { thinkingContent, regularContent } = extractThinkAndRegular(content);
     if (!thinkingContent && !hasThinkTags) {
       return {
@@ -165,7 +122,7 @@ export function AIMessageBlock({
       isThinking: false,
       isFinished: true
     };
-  }, [content, isStreaming, thinkingDuration, hasThinkTags]);
+  }, [content, isStreaming, thinkingDuration]);
 
   // 计算实时经过的时间 - 使用定时器避免每次渲染都调用Date.now()
   const [realTimeElapsed, setRealTimeElapsed] = useState(() => {

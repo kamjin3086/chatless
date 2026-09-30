@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Clock, RotateCcw } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
+import { withOneShotGrant } from '@/lib/filesystemAllowlist/oneShotGrant';
 import { fileHistory, restoreFileVersion, type FileHistoryVersion } from '@/lib/tauri/filesystemCommands';
 
 /**
@@ -11,6 +12,15 @@ import { fileHistory, restoreFileVersion, type FileHistoryVersion } from '@/lib/
  *
  * 历史保存在应用数据目录（不写进用户目录），所以这里只显示时间、大小和来源操作。
  */
+/** 后端拒绝读取时，给出可执行的原因而不是一句原始错误。 */
+function describeHistoryError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('forbidden')) {
+    return '这个文件当前不在授权范围内。让 Agent 再读一次该文件，或把它所在的目录附加为工作目录后再试。';
+  }
+  return message;
+}
+
 export function FileHistoryPopover({ path, disabled }: { path: string; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,10 +32,11 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
     setLoading(true);
     setError(null);
     try {
-      const result = await fileHistory(path);
+      // 用户点了这个文件的历史按钮：给这一次读取一个最小授权，读完立即撤销。
+      const result = await withOneShotGrant({ path, scope: 'history', read: true }, () => fileHistory(path));
       setVersions(result?.versions || []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(describeHistoryError(e));
       setVersions([]);
     } finally {
       setLoading(false);
@@ -35,11 +46,14 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
   const restore = async (version: FileHistoryVersion) => {
     setRestoring(version.id);
     try {
-      await restoreFileVersion(path, version.id);
+      await withOneShotGrant(
+        { path, scope: 'restore', read: true, write: true },
+        () => restoreFileVersion(path, version.id),
+      );
       toast.success('已恢复该版本', { description: new Date(version.createdAt).toLocaleString() });
       await load();
     } catch (e) {
-      toast.error('恢复失败', { description: e instanceof Error ? e.message : String(e) });
+      toast.error('恢复失败', { description: describeHistoryError(e) });
     } finally {
       setRestoring(null);
     }
@@ -61,10 +75,6 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
           aria-label="历史版本"
           className="inline-flex items-center rounded px-1 py-0.5 text-slate-400 hover:text-slate-600
             dark:hover:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
         >
           <Clock className="w-3 h-3" />
         </button>
@@ -104,7 +114,9 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
           </div>
         )}
         <div className="px-1 pt-1.5 text-[10px] text-slate-400">
-          恢复前会先把当前内容也存成历史，所以可以再撤销。
+          应用内写入与编辑会先存一份副本，每个文件最多保留 20 版（总量约 200MB）。
+          恢复前也会把当前内容存成历史，所以恢复本身可以再撤销。
+          通过终端或外部编辑器做的修改不在此列。
         </div>
       </PopoverContent>
     </Popover>

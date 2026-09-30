@@ -488,7 +488,7 @@ export function ModelParametersDialog({
             enabled={parameters.enableMaxTokens !== false}
             onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableMaxTokens: v }))}
             label="Max Tokens"
-            help="限制单次回复能生成的最大 Token 数。默认 8192，并按下方上下文窗口自动调整；关闭后不向模型下发该参数。"
+            help="限制单次回复能生成的最大 Token 数。默认“自动”：不下发该参数，由服务端决定能输出多久；拖动即为手动值（按上下文窗口收敛）；关闭则始终不下发。"
             min={MODEL_PARAMETER_LIMITS.maxTokens.min}
             max={MODEL_PARAMETER_LIMITS.maxTokens.max}
             step={MODEL_PARAMETER_LIMITS.maxTokens.step}
@@ -499,7 +499,7 @@ export function ModelParametersDialog({
           />
           <ParamSliderRow
             label="Context Window"
-            help="模型上下文窗口（tokens）。由服务商上报时自动填写；未知时不下发 Max Tokens，由服务端决定输出长度。"
+            help="模型上下文窗口（tokens），只用于判断何时压缩历史。服务商上报的值会单独记录，实际按两者中较小的一个执行；都不知道时不压缩历史，也不会因此拦住发送。"
             min={MODEL_PARAMETER_LIMITS.contextWindow.min}
             max={MODEL_PARAMETER_LIMITS.contextWindow.max}
             step={MODEL_PARAMETER_LIMITS.contextWindow.step}
@@ -508,6 +508,14 @@ export function ModelParametersDialog({
             inputMin={MODEL_PARAMETER_LIMITS.contextWindow.inputMin}
             inputMax={MODEL_PARAMETER_LIMITS.contextWindow.inputMax}
           />
+          {typeof parameters.observedContextWindow === 'number' && parameters.observedContextWindow > 0 && (
+            <div className="px-3 pb-2 text-[10px] text-slate-400 dark:text-slate-500">
+              服务商上报：{parameters.observedContextWindow.toLocaleString()} tokens
+              {parameters.contextWindow && parameters.contextWindow !== parameters.observedContextWindow
+                ? `；实际按 ${Math.min(parameters.contextWindow, parameters.observedContextWindow).toLocaleString()} 执行`
+                : ''}
+            </div>
+          )}
           <ParamSliderRow
             enabled={parameters.enableTopP !== false}
             onEnabledChange={(v) => setParameters((prev) => ({ ...prev, enableTopP: v }))}

@@ -128,20 +128,13 @@ function getContentAppender(context: StreamContext) {
   const anyCtx = context as any;
   if (anyCtx._contentAppender) return anyCtx._contentAppender as ReturnType<typeof createContentAppender>;
   const st = useChatStore.getState();
+  // 起始内容只读一次：之后正文由 appender 自己累积，不再每个 chunk 回读 store。
+  const conv = st.conversations.find((c: any) => c && c.id === context.conversationId);
+  const msg: any = conv?.messages?.find((m: any) => m && m.id === context.messageId);
   const appender = createContentAppender({
     assistantMessageId: context.messageId,
-    updateMessageContentInMemory: st.updateMessageContentInMemory,
+    initialContent: String(msg?.content || ''),
     updateMessage: st.updateMessage,
-    getCurrentContent: () => {
-      try {
-        const fresh = useChatStore.getState();
-        const conv = fresh.conversations.find((c: any) => c && c.id === context.conversationId);
-        const msg: any = conv?.messages?.find((m: any) => m && m.id === context.messageId);
-        return String(msg?.content || '');
-      } catch {
-        return '';
-      }
-    },
   });
   anyCtx._contentAppender = appender;
   return appender;

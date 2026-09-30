@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useHistoryStore } from '@/store/historyStore';
 import { useEffect } from 'react';
-import { MessageSquare, Star, Flag, Bot, TrendingUp, Calendar } from 'lucide-react';
+import { MessageSquare, Star, Bot, TrendingUp, Calendar } from 'lucide-react';
 
 export default function HistoryStats() {
   const { stats, showStats, loadStats } = useHistoryStore();
@@ -73,20 +73,6 @@ export default function HistoryStats() {
             <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.favoriteCount}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               占比 {stats.totalConversations > 0 ? Math.round((stats.favoriteCount / stats.totalConversations) * 100) : 0}%
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* 重要对话数 */}
-        <Card className="glass-panel bg-white/40 dark:bg-slate-900/40 backdrop-blur-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">重要对话</CardTitle>
-            <Flag className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.importantCount}</div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              占比 {stats.totalConversations > 0 ? Math.round((stats.importantCount / stats.totalConversations) * 100) : 0}%
             </p>
           </CardContent>
         </Card>

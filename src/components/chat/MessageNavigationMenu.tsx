@@ -75,8 +75,9 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
   return (
     <DropdownMenuContent 
       className="w-80 max-h-96 overflow-hidden flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200"
-      side="top"
-      align="start"
+      // 触发按钮在聊天头部右侧，菜单按常规往下、右对齐展开。
+      side="bottom"
+      align="end"
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
       <DropdownMenuLabel className="text-sm text-slate-800 dark:text-slate-100">

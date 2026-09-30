@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Star, Flag, Clock, Calendar, CalendarDays, CalendarRange } from 'lucide-react';
+import { Star, Clock, Calendar, CalendarDays, CalendarRange } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useHistoryStore } from '@/store/historyStore';
 
-type FilterType = 'all' | 'today' | 'week' | 'month' | 'favorite' | 'important';
+type FilterType = 'all' | 'today' | 'week' | 'month' | 'favorite';
 
 interface HistoryQuickFilterProps {
   onFilterChange?: (filter: FilterType) => void;
@@ -23,22 +23,19 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
     // 根据筛选类型设置存储状态
     switch (filter) {
       case 'all':
-        setFilter({ dateRange: 'all', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'all', isFavorite: undefined });
         break;
       case 'today':
-        setFilter({ dateRange: 'today', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'today', isFavorite: undefined });
         break;
       case 'week':
-        setFilter({ dateRange: 'week', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'week', isFavorite: undefined });
         break;
       case 'month':
-        setFilter({ dateRange: 'month', isImportant: undefined, isFavorite: undefined });
+        setFilter({ dateRange: 'month', isFavorite: undefined });
         break;
       case 'favorite':
-        setFilter({ dateRange: 'all', isFavorite: true, isImportant: undefined });
-        break;
-      case 'important':
-        setFilter({ dateRange: 'all', isImportant: true, isFavorite: undefined });
+        setFilter({ dateRange: 'all', isFavorite: true });
         break;
     }
   };
@@ -104,14 +101,6 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
           >
             <Star className={cn("h-3.5 w-3.5", activeFilter === 'favorite' ? "text-slate-700 dark:text-slate-200" : "text-slate-500 dark:text-slate-400")}/>
             收藏
-          </Button>
-          <Button 
-            onClick={() => handleFilterClick('important')} 
-            className={getButtonClasses('important')} 
-            variant="ghost"
-          >
-            <Flag className={cn("h-3.5 w-3.5", activeFilter === 'important' ? "text-slate-700 dark:text-slate-200" : "text-slate-500 dark:text-slate-400")}/>
-            重要
           </Button>
         </div>
       </div>

@@ -60,4 +60,45 @@ describe('native provider stream contracts', () => {
     expect(onComplete).toHaveBeenCalledTimes(reason === 'tool_calls' ? 1 : 0);
     expect(onError).toHaveBeenCalledTimes(reason === 'length' ? 1 : 0);
   });
+
+  it('reports the HTTP error body instead of re-sending the request on another transport', async () => {
+    // Regression: a non-OK response used to trigger a full second request over
+    // the SSE fallback.  The retry hid the server's own explanation behind a
+    // transport error and generated the same completion twice.
+    const body = '{"error":{"message":"message 5 has role \'system\' after a non-system turn"}}';
+    mock.fetch.mockResolvedValue(new Response(body, {
+      status: 400, statusText: 'Bad Request', headers: { 'content-type': 'application/json' },
+    }));
+    const provider = new OpenAICompatibleProvider('https://example.test', 'fixture');
+    vi.spyOn(provider as any, 'getApiKey').mockResolvedValue('fixture');
+    const onError = vi.fn(), onComplete = vi.fn();
+
+    await provider.chatStream('test', [], { onError, onComplete } as any);
+
+    expect(mock.fetch).toHaveBeenCalledTimes(1);
+    expect(mock.connect).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0][0].message)).toContain("has role 'system' after a non-system turn");
+    expect((onError.mock.calls[0][0] as any).code).toBe('PROVIDER_HTTP_ERROR');
+  });
+
+  it('keeps the first error when the fallback transport closes afterwards', async () => {
+    // Regression: the transport close produced a second, vaguer error that
+    // replaced the server's real message in the UI.
+    mock.fetch.mockRejectedValue(new Error('no tauri transport'));
+    mock.connect.mockImplementation(async (_config, cb) => {
+      cb.onError(new Error('HTTP 400 Bad Request: {"error":{"message":"context length exceeded"}}'));
+      cb.onClose();
+    });
+    const provider = new OpenAICompatibleProvider('https://example.test', 'fixture');
+    vi.spyOn(provider as any, 'getApiKey').mockResolvedValue('fixture');
+    const onError = vi.fn(), onComplete = vi.fn();
+
+    await provider.chatStream('test', [], { onError, onComplete } as any);
+
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0][0].message)).toContain('context length exceeded');
+  });
 });

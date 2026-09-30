@@ -74,6 +74,8 @@ docx-rust = "0.1.10"
 pulldown-cmark = "0.9.3"
 sha2 = "0.10"
 hex = "0.4"
+# 清理会话工作目录时移入系统回收站（可撤销），不做永久删除。
+trash = "5.2.9"
 jieba-rs = { version = "0.7", default-features = false, features = ["default-dict"] }
 tauri-plugin-log = "2"
 log = "0.4"

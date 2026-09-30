@@ -14,7 +14,7 @@ import { useHistoryStore } from '@/store/historyStore';
 
 // 统计组件
 import { AnalyticsToolbar } from "@/components/analytics/AnalyticsToolbar";
-import { MessageSquare, Bot, Tags, TrendingUp, Star, Flag } from "lucide-react";
+import { MessageSquare, Bot, Tags, TrendingUp, Star } from "lucide-react";
 import { historyService } from "@/lib/historyService";
 import { HistoryStats as HistoryStatsType } from "@/types/history";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -162,19 +162,6 @@ function AnalyticsContent() {
               <div className="text-xl font-semibold text-slate-800 dark:text-slate-100">{stats?.favoriteCount || 0}</div>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 占比 {stats && stats.totalConversations > 0 ? Math.round((stats.favoriteCount / stats.totalConversations) * 100) : 0}%
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium text-slate-500">重要对话</CardTitle>
-              <Flag className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-xl font-semibold text-slate-800 dark:text-slate-100">{stats?.importantCount || 0}</div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                占比 {stats && stats.totalConversations > 0 ? Math.round((stats.importantCount / stats.totalConversations) * 100) : 0}%
               </p>
             </CardContent>
           </Card>

@@ -145,7 +145,9 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
       {/* 预览行：可点击展开 */}
       <div 
         className={cn(
-          "flex items-center gap-1.5 py-0.5 rounded transition-colors",
+          // 允许换行：审批按钮在窄窗口下会掉到下一行右侧，而不是把整行撑出消息列
+          // （撑出去的部分此前会被右下角的悬浮控件压住）。
+          "flex flex-wrap items-center gap-x-1.5 gap-y-1 py-0.5 rounded transition-colors",
           hasDetails && "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30"
         )}
         onClick={() => hasDetails && setExpanded(!expanded)}
@@ -168,7 +170,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         </span>
 
         {/* 工具名称和摘要 */}
-        <div className="flex-1 min-w-0 flex items-center gap-1 truncate">
+        <div className="flex-1 min-w-[8rem] flex items-center gap-1 truncate">
           {(server === WEB_SEARCH_SERVER_NAME || server === 'web_search') && (
             <Globe className="w-3 h-3 text-blue-500 shrink-0" />
           )}
@@ -194,7 +196,10 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
 
         {/* 审批按钮 */}
         {isPendingAuth && (
-          <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="shrink-0 ml-auto flex flex-wrap items-center justify-end gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
             {shellScope ? (
               <>
                 <button

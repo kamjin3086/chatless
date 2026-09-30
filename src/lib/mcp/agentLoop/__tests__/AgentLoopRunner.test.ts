@@ -199,11 +199,17 @@ describe('AgentLoopRunner execution boundaries', () => {
     expect(vi.mocked(AgentRunEventStore.ensureRun)).toHaveBeenCalledWith(
       expect.objectContaining({ parentRunId: 'prior', runKind: 'regeneration' }));
     const history = mocks.stream.mock.calls[0][2] as Message[];
-    const note = history.find((message) => message.role === 'system' && String(message.content).includes('file body'));
+    // The notes are run notes tagged as user turns: a system message this late
+    // in the conversation makes providers reject the whole request
+    // ("message N has role 'system' after a non-system turn").
+    const note = history.find((message) => message.role === 'user' && String(message.content).includes('file body'));
     expect(note).toBeDefined();
+    expect(history.filter((message) => message.role === 'system').every((message) => history.indexOf(message) === 0))
+      .toBe(true);
     // The facts are inserted before the user turn, so the model revises the
     // answer instead of continuing the previous one.
-    expect(history.indexOf(note!)).toBeLessThan(history.findIndex((message) => message.role === 'user'));
+    const lastUserIndex = history.reduce((last, message, index) => (message.role === 'user' ? index : last), -1);
+    expect(history.indexOf(note!)).toBeLessThan(lastUserIndex);
   });
 
   it('retains steering received during a final text response', async () => {

@@ -22,6 +22,9 @@ pub mod sandbox;
 #[path = "filesystem/mod.rs"]
 pub mod filesystem;
 
+#[path = "workspace/mod.rs"]
+pub mod workspace;
+
 #[tauri::command]
 fn exit(app: tauri::AppHandle, code: i32) {
   #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -297,7 +300,15 @@ pub fn run() {
       filesystem::commands::filesystem_rename_file,
       filesystem::commands::filesystem_file_history,
       filesystem::commands::filesystem_restore_file_version,
-      filesystem::commands::filesystem_open_path
+      filesystem::commands::filesystem_open_path,
+      // —— Session workspace (Documents/Chatless, Rust-owned identity) ——
+      workspace::commands::workspace_ensure,
+      workspace::commands::workspace_export,
+      workspace::commands::workspace_trash,
+      workspace::commands::workspace_trash_all,
+      workspace::commands::workspace_reveal,
+      workspace::commands::workspace_read_manifest,
+      workspace::commands::workspace_write_manifest
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -1,22 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  ensureAllowlistedDirectory: vi.fn(async () => {}),
-}));
-
-vi.mock('@/lib/filesystemAllowlist', () => ({
-  ensureAllowlistedDirectory: mocks.ensureAllowlistedDirectory,
-}));
+// zustand's persist middleware attaches `store.persist` only when a storage
+// exists; without this stub the whole API is missing in the node test env.
+vi.hoisted(() => {
+  const values = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  });
+});
 
 import { useConversationAttachmentStore } from '../conversationAttachmentStore';
 
 const CONVERSATION = 'conv-1';
 
 beforeEach(() => {
-  mocks.ensureAllowlistedDirectory.mockClear();
   useConversationAttachmentStore.setState({
     sessionDirByConversation: {},
     mountedDirByConversation: {},
+    workspaceErrorByConversation: {},
     knowledgeBaseByConversation: {},
   } as never);
 });
@@ -42,20 +45,49 @@ describe('@WorkDir resolution', () => {
     expect(useConversationAttachmentStore.getState().getWorkingDir(CONVERSATION))
       .toBe('C:/Users/x/Documents/Chatless/线缆整改-3f9a21');
   });
+});
 
-  it('never persists the session folder into the filesystem allowlist', () => {
-    // One permanent entry per conversation is what made the security settings
-    // unauditable; the session folder is authorized per call instead.
-    useConversationAttachmentStore.getState().setWorkingDir(CONVERSATION, 'C:/Users/x/Documents/Chatless/a-3f9a21');
-    expect(mocks.ensureAllowlistedDirectory).not.toHaveBeenCalled();
+describe('attachment persistence', () => {
+  it('keeps an attached directory across restarts, scoped to its conversation', () => {
+    // "附加目录" is a conversation-scoped grant the user asked for: it must survive
+    // a restart and disappear when the user detaches it.
+    useConversationAttachmentStore.getState().setMountedDir(CONVERSATION, 'D:/projects/site');
+    const persisted = useConversationAttachmentStore.persist.getOptions().partialize!({
+      ...useConversationAttachmentStore.getState(),
+      mountedDirByConversation: { [CONVERSATION]: 'D:/projects/site' },
+    }) as Record<string, unknown>;
+    expect(persisted.mountedDirByConversation).toEqual({ [CONVERSATION]: 'D:/projects/site' });
+    // The session folder is owned by the backend mapping, not localStorage.
+    expect(persisted.sessionDirByConversation).toBeUndefined();
   });
 
-  it('still persists a directory the user attached themselves', () => {
-    useConversationAttachmentStore.getState().setMountedDir(CONVERSATION, 'D:/projects/site');
-    expect(mocks.ensureAllowlistedDirectory).toHaveBeenCalledTimes(1);
-    expect(mocks.ensureAllowlistedDirectory).toHaveBeenCalledWith(expect.objectContaining({
-      path: 'D:/projects/site',
-      source: 'attachment',
-    }));
+  it('records why a workspace could not be prepared, so the UI can offer a retry', () => {
+    const store = useConversationAttachmentStore.getState();
+    store.setWorkspaceError(CONVERSATION, 'WORKSPACE_PERMISSION_DENIED: 创建会话目录失败');
+    expect(useConversationAttachmentStore.getState().getWorkspaceError(CONVERSATION))
+      .toContain('WORKSPACE_PERMISSION_DENIED');
+
+    useConversationAttachmentStore.getState().clearWorkspaceError(CONVERSATION);
+    expect(useConversationAttachmentStore.getState().getWorkspaceError(CONVERSATION)).toBeUndefined();
+  });
+
+  it('tracks whether the session folder is the one in use, and whether it exists yet', () => {
+    const store = useConversationAttachmentStore.getState();
+    // Resolved but not created: a chat-only conversation.
+    store.setWorkingDir(CONVERSATION, 'C:/Users/x/Documents/Chatless/新对话-ab12cd', false);
+    expect(useConversationAttachmentStore.getState().isSessionDirInUse(CONVERSATION)).toBe(true);
+    expect(useConversationAttachmentStore.getState().isWorkspaceMaterialized(CONVERSATION)).toBe(false);
+
+    // The user picked their own folder: the session folder is out of the picture.
+    store.setMountedDir(CONVERSATION, 'D:/projects/site');
+    expect(useConversationAttachmentStore.getState().isSessionDirInUse(CONVERSATION)).toBe(false);
+    // The mounted folder is what the agent works in.
+    expect(useConversationAttachmentStore.getState().getWorkingDir(CONVERSATION)).toBe('D:/projects/site');
+
+    useConversationAttachmentStore.getState().clearMountedDir(CONVERSATION);
+    expect(useConversationAttachmentStore.getState().isSessionDirInUse(CONVERSATION)).toBe(true);
+
+    useConversationAttachmentStore.getState().markWorkspaceMaterialized(CONVERSATION);
+    expect(useConversationAttachmentStore.getState().isWorkspaceMaterialized(CONVERSATION)).toBe(true);
   });
 });

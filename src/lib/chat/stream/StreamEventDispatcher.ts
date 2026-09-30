@@ -26,16 +26,12 @@ export interface StreamEventDispatcher {
 
 export function createStreamEventDispatcher(opts: StreamEventDispatcherOptions): StreamEventDispatcher {
   const st = useChatStore.getState();
-  const getCurContent = (): string => {
-    const conv = st.conversations.find(c=>c.id===opts.conversationId);
-    const msg = conv?.messages.find(m=>m.id===opts.assistantMessageId);
-    return (msg?.content || '') + '';
-  };
+  const convForContent = st.conversations.find(c=>c.id===opts.conversationId);
+  const msgForContent = convForContent?.messages.find(m=>m.id===opts.assistantMessageId);
   const appender = createContentAppender({
     assistantMessageId: opts.assistantMessageId,
-    updateMessageContentInMemory: st.updateMessageContentInMemory,
+    initialContent: String(msgForContent?.content || ''),
     updateMessage: st.updateMessage,
-    getCurrentContent: getCurContent
   });
   let hadText = false;
   let pending: null | { server: string; tool: string; cardId: string } = null;

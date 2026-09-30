@@ -201,12 +201,11 @@ export function PrivacySettings() {
       await db.initialize();
 
       for (const conv of data.conversations) {
-        // 导入时保持原有的重要和收藏状态，如果没有则默认为false
+        // 导入时保持原有的收藏状态，如果没有则默认为 false
         const newConv = await db.createConversation(
           conv.title || '导入对话', 
           conv.model_id || 'unknown',
           {
-            is_important: conv.is_important || false,
             is_favorite: conv.is_favorite || false
           }
         );

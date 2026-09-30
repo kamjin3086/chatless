@@ -244,10 +244,16 @@ export class AgentLoopRunner {
               return `- ${event.server}.${event.tool} → ${clipped}`;
             });
           if (digest.length) {
+            // A run note, not a second system prompt.  Providers reject a
+            // system message that appears after a non-system turn — the
+            // homelab gateway answers HTTP 400 "message N has role 'system'
+            // after a non-system turn" and the whole retry fails.  Runtime
+            // notes therefore render as a tagged user turn, exactly like
+            // ConversationEventLog does for context_change events.
             const note: LlmMessage = {
-              role: 'system',
+              role: 'user',
               content: [
-                '【上一次运行已完成的工具结果】',
+                '【运行提示】上一次运行已完成的工具结果：',
                 ...digest,
                 '这些是既成事实；不要重复这些操作，也不要沿用上一次的回答，请重新组织回答。',
               ].join('\n'),
@@ -322,7 +328,10 @@ export class AgentLoopRunner {
 
       const markStreamFailed = async (reason: string) => {
         streamFailed = true;
-        const short = String(reason || 'unknown').slice(0, 200);
+        // Providers explain failures in the body of their error response; the
+        // recorded reason is the only surviving copy, so it must not be cut
+        // down to a fragment that hides the cause.
+        const short = String(reason || 'unknown').slice(0, 2000);
         await controlPlane.record({
           type: 'context_change',
           kind: 'other',

@@ -12,6 +12,9 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import { PromptPill } from './PromptPill';
 import { useEffect } from 'react';
 import { getEnabledConfiguredServers, getConnectedServers, getEnabledServersForConversation, setEnabledServersForConversation } from '@/lib/mcp/chatIntegration';
+import { LocateFixed } from 'lucide-react';
+import { MessageNavigationMenu } from './MessageNavigationMenu';
+import type { Message } from '@/types/chat';
 
 interface ChatHeaderProps {
   title: string;
@@ -29,6 +32,9 @@ interface ChatHeaderProps {
   /** 会话参数：入口从输入框迁移到右上角三点菜单 */
   hasSessionParameters?: boolean;
   onOpenSessionParameters?: () => void;
+  /** 消息导航（长会话里跳转到指定消息）；为空时不显示入口 */
+  navigationMessages?: Message[];
+  onNavigateToMessage?: (messageId: string) => void;
 }
 
 export function ChatHeader({
@@ -46,6 +52,8 @@ export function ChatHeader({
   tokenCount: _tokenCount = 0,
   hasSessionParameters,
   onOpenSessionParameters,
+  navigationMessages,
+  onNavigateToMessage,
 }: ChatHeaderProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [_mcpAll, setMcpAll] = useState<string[]>([]);
@@ -139,6 +147,26 @@ export function ChatHeader({
             />
           
           <PromptPill />
+
+          {/* 消息导航：长会话里跳转到指定消息。放在头部而不是悬浮在消息上，避免遮挡内容 */}
+          {onNavigateToMessage && (navigationMessages?.length || 0) >= 2 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  title="消息导航"
+                  aria-label="消息导航"
+                >
+                  <LocateFixed className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <MessageNavigationMenu
+                messages={navigationMessages || []}
+                onNavigateToMessage={onNavigateToMessage}
+                onClose={() => {}}
+              />
+            </DropdownMenu>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

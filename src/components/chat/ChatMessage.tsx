@@ -151,9 +151,16 @@ function ChatMessageComponent({
   const isSettled = !isStreaming && status !== 'sending' && status !== 'pending';
   const shouldShowTimestamp = isSettled && !hasRunningToolCall && !isAgentLoopRunning;
   
+  // 思考中已经有自己的活动指示（思考栏的 spinner + 计时），不要再叠一个"处理中..."。
+  const isThinkingActive = !isUser && (
+    !!viewModel?.flags?.isThinking ||
+    (Array.isArray(segments) && segments.length > 0 && (segments[segments.length - 1] as any)?.kind === 'think')
+  );
+
   // 🔑 决定是否显示 AgentLoop 运行指示器
-  // 条件：AI消息 + AgentLoop 正在运行 + 当前没有活跃的工具卡片正在运行
-  const shouldShowAgentLoopIndicator = !isUser && isAgentLoopRunning && !hasRunningToolCall;
+  // 条件：AI消息 + AgentLoop 正在运行 + 没有活跃的工具卡片 + 不在思考中
+  // （同一时刻只允许一个"正在忙"的指示器）
+  const shouldShowAgentLoopIndicator = !isUser && isAgentLoopRunning && !hasRunningToolCall && !isThinkingActive;
   
   // 仅对"正在生成/刚发送"的消息开启入场动画；历史消息不做入场动画，避免切换会话时整列表闪烁
   // 🔑 修复：如果消息已经入场过，不再触发入场动画

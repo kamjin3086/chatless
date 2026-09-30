@@ -323,6 +323,15 @@ export class StreamOrchestrator {
     }
     this.didHandleComplete = true;
 
+    // 先把流式正文缓冲刷进 store：自动保存是每 200 字符一次，这里要读的是最新正文
+    // （卡片标记判断与最终 content 都依赖它）。flush 内部的 store 写入是同步的。
+    try {
+      const appender = (this.context as any)?._contentAppender;
+      appender?.flush?.();
+    } catch {
+      /* noop */
+    }
+
     // 注意：useChatStore.getState() 返回的是"快照对象"；
     // handleComplete 内部会 dispatchMessageAction（会更新 store），因此不能长期复用同一个快照读取 segments。
     const store = useChatStore.getState();

@@ -218,10 +218,9 @@ export function ChatInput({
     return Boolean(lastAssistant?.id && s.agentRuns?.[lastAssistant.id]?.running);
   });
   const effectiveLoading = isLoading || storeAgentRunning;
-  const { getMountedDir, getWorkingDir, clearMountedDir } = useConversationAttachmentStore();
-  // 显示真正生效的 @WorkDir：挂载了用户目录就是它，否则是会话自己的产物目录。
+  const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
+  // 输入栏只展示用户**选定**的工作目录；会话默认目录在 + 菜单里说明，不作为标签出现。
   const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;
-  const effectiveWorkDir = currentConvId ? getWorkingDir(String(currentConvId)) : undefined;
   const clearInputDraft = useChatStore((s)=>s.clearInputDraft);
   const setInputDraft = useChatStore((s)=>s.setInputDraft);
   const prevConvRef = useRef<string | null>(null);
@@ -1253,7 +1252,7 @@ export function ChatInput({
           const kb = allKnowledgeBases.find(k => k.id === id);
           if (kb) setSelectedKnowledgeBase(kb);
         }}
-        workingDir={effectiveWorkDir}
+        workingDir={mountedDir}
         workingDirAttached={Boolean(mountedDir)}
         onRemoveWorkingDir={mountedDir ? () => {
           try {

@@ -3,6 +3,7 @@ import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
+import { DEFAULT_MAX_OUTPUT_TOKENS } from '@/lib/llm/outputBudget';
 import { createStreamEvent } from '../types/stream-events';
 import { 
   type ToolDefinition, 
@@ -97,6 +98,14 @@ export class AnthropicProvider extends BaseProvider {
     const mapped: any = { ...restOpts };
     if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
     if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;
+    // Anthropic 的 max_tokens 是必填字段：自动模式下我们没有下发值，这里必须补一个。
+    // 窗口已知时取窗口的 1/8（夹在 1024 与 8192 之间），否则用手动滑块的默认值。
+    if (mapped.max_tokens === undefined) {
+      const window = Number((o as any).contextWindowTokens);
+      mapped.max_tokens = Number.isFinite(window) && window > 0
+        ? Math.max(1024, Math.min(DEFAULT_MAX_OUTPUT_TOKENS, Math.floor(window / 8)))
+        : DEFAULT_MAX_OUTPUT_TOKENS;
+    }
     if (o.stop !== undefined && mapped.stop_sequences === undefined) mapped.stop_sequences = o.stop;
     if (o.topP !== undefined && mapped.top_p === undefined) mapped.top_p = o.topP;
     if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;

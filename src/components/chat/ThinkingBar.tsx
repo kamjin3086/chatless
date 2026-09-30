@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { MemoizedMarkdown } from './MemoizedMarkdown';
+import { StreamingMarkdown } from './StreamingMarkdown';
 
 interface ThinkingBarProps {
   thinkingContent: string;
@@ -33,36 +33,11 @@ export const ThinkingBar = ({
   isActive = false,
 }: ThinkingBarProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [displayedContent, setDisplayedContent] = useState(thinkingContent);
-  const lastUpdateTimeRef = useRef(0);
-  const animationFrameRef = useRef<number | null>(null);
 
   const formattedDuration = formatDuration(durationSeconds);
 
-  useEffect(() => {
-    if (!isActive) {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      setDisplayedContent(thinkingContent);
-      return;
-    }
-
-    const update = () => {
-      const now = Date.now();
-      if (now - lastUpdateTimeRef.current > 50) {
-        setDisplayedContent(thinkingContent);
-        lastUpdateTimeRef.current = now;
-      }
-      animationFrameRef.current = requestAnimationFrame(update);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(update);
-
-    return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [thinkingContent, isActive]);
-
-  const hasContent = displayedContent.trim().length > 0;
+  // 内容由父级按帧推入；这里不再自己跑 rAF 二次节流（那是多余的重复渲染）。
+  const hasContent = thinkingContent.trim().length > 0;
 
   const getLastLine = (text: string): string => {
     if (!text) return '';
@@ -71,7 +46,7 @@ export const ThinkingBar = ({
     return text.substring(lastIndex + 1);
   };
 
-  const displayText = isActive ? getLastLine(displayedContent) : thinkingContent;
+  const displayText = isActive ? getLastLine(thinkingContent) : thinkingContent;
 
   if (isActive) {
     return (
@@ -103,7 +78,7 @@ export const ThinkingBar = ({
         {isExpanded && hasContent && (
           <div className="mt-2 pl-4 text-sm border-l border-slate-200/60 dark:border-slate-700/50">
             <div className="markdown-content-area text-slate-600 dark:text-slate-300">
-              <MemoizedMarkdown content={displayedContent} sizeOverride="small" />
+              <StreamingMarkdown content={thinkingContent} sizeOverride="small" isStreaming={isActive} />
             </div>
           </div>
         )}
@@ -131,7 +106,7 @@ export const ThinkingBar = ({
       {isExpanded && hasContent && (
         <div className="mt-2 pl-4 text-sm border-l border-slate-200/40 dark:border-slate-700/40">
           <div className="markdown-content-area text-slate-600 dark:text-slate-300">
-            <MemoizedMarkdown content={displayedContent} sizeOverride="small" />
+            <StreamingMarkdown content={thinkingContent} sizeOverride="small" />
           </div>
         </div>
       )}

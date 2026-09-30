@@ -1,4 +1,4 @@
-import { ensureConversationWorkspace } from '@/lib/agentWorkspace/workspaceService';
+import { readWorkspaceManifest, writeWorkspaceManifest } from '@/lib/tauri/workspaceCommands';
 
 type FileChangeOp = 'read' | 'list' | 'write' | 'create' | 'delete' | 'rename' | 'other';
 
@@ -142,26 +142,19 @@ export async function appendWorkspaceToolStep(params: {
   if (!cid) return;
 
   await enqueue(cid, async () => {
-    // The manifest belongs to the session's own folder. It must never be written
-    // into a directory the user mounted (that would drop app metadata into their
-    // project), so this uses the session directory rather than @WorkDir.
+    // 清单属于会话自带的产物目录：既不写进用户挂载的项目（那会把应用元数据丢进
+    // 他们的仓库），也不因为"挂载了别的目录"而在旁边另建一个会话文件夹。
+    // 会话目录是否已落地由执行管线在工具真正运行前决定，这里只负责写。
     const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-    const { useChatStore } = await import('@/store/chatStore');
     const attachment = useConversationAttachmentStore.getState();
-    const ws = await ensureConversationWorkspace({
-      conversationId: cid,
-      title: useChatStore.getState().conversations.find((c) => c.id === cid)?.title,
-      knownRoot: attachment.getSessionDir(cid),
-    });
-    if (attachment.getSessionDir(cid) !== ws.root) {
-      attachment.setWorkingDir(cid, ws.root);
-    }
-    const { readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
+    if (!attachment.isSessionDirInUse(cid)) return;
 
     let manifest: WorkspaceManifest | null = null;
     try {
-      const txt = await readTextFile(ws.manifestPath);
-      manifest = safeJsonParse(String(txt || '')) as any;
+      // Goes through Rust: the session folder lives in the user's documents, which
+      // the renderer's filesystem scope cannot reach.
+      const text = await readWorkspaceManifest(cid);
+      manifest = text ? (safeJsonParse(text) as any) : null;
     } catch {
       manifest = null;
     }
@@ -220,7 +213,7 @@ export async function appendWorkspaceToolStep(params: {
     // Outputs: any filesystem write/create/rename that landed inside the
     // session's own folder. A mounted project directory is the user's, so it is
     // not listed as "generated output".
-    const sessionDir = normKey(ws.root);
+    const sessionDir = normKey(attachment.getSessionDir(cid) || '');
     for (const fc of step.fileChanges || []) {
       if (fc.op !== 'write' && fc.op !== 'create' && fc.op !== 'rename' && fc.op !== 'delete') continue;
       const pKey = normKey(fc.path);
@@ -240,9 +233,9 @@ export async function appendWorkspaceToolStep(params: {
     manifest.updatedAt = now;
 
     try {
-      await writeTextFile(ws.manifestPath, JSON.stringify(manifest, null, 2));
+      await writeWorkspaceManifest(cid, JSON.stringify(manifest, null, 2));
     } catch {
-      // ignore
+      // 清单是辅助留痕，写失败不影响工具结果
     }
   });
 }

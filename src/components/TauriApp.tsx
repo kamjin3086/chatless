@@ -141,6 +141,17 @@ export function TauriApp({ children }: TauriAppProps) {
         await loadConversations();
         startupMonitor.endPhase('会话加载');
 
+        // 开发环境：装上流式渲染性能探针（控制台 __chatlessPerf.runFixture()）。
+        // 必须挂在客户端组件里——放在 app/layout.tsx 只会跑在服务端。
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const { installStreamingProbe } = await import('@/lib/perf/streamingProbe');
+            installStreamingProbe();
+          } catch (error) {
+            console.warn('[TauriApp] 装载流式探针失败:', error);
+          }
+        }
+
         // 预编译关键路由：在初始化完成后立即触发 /chat 的编译
         // 这样当用户导航到聊天页面时，编译已经在后台完成
         try {

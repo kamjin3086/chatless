@@ -157,7 +157,6 @@ export class DatabaseService {
     title: string,
     modelId: string,
     options?: {
-      is_important?: boolean;
       is_favorite?: boolean;
     }
   ): Promise<Conversation> {
@@ -183,13 +182,6 @@ export class DatabaseService {
    */
   public async updateConversationTitle(conversationId: string, title: string): Promise<Conversation> {
     return this.getConversationRepository().updateTitle(conversationId, title);
-  }
-
-  /**
-   * 切换重要标记
-   */
-  public async toggleConversationImportant(conversationId: string): Promise<Conversation> {
-    return this.getConversationRepository().toggleImportant(conversationId);
   }
 
   /**

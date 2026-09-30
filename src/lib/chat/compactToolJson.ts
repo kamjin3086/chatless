@@ -45,6 +45,13 @@ export function parseCompactToolJson(text: string): CompactToolJson | null {
 }
 
 export function splitTextAndToolJson(text: string): Array<{ type: 'text' | 'tool'; text: string; tool?: CompactToolJson }> {
+  // 快速路径：没有围栏就不可能有紧凑工具调用，省掉整段正则与 JSON 解析。
+  // 唯一例外是"整段就是一个裸 JSON 工具调用"，那种情况要保持原来的识别行为。
+  if (!text.includes('```')) {
+    const trimmed = text.trim();
+    if (!(trimmed.startsWith('{') && trimmed.endsWith('}'))) return [{ type: 'text', text }];
+  }
+
   const parts: Array<{ type: 'text' | 'tool'; text: string; tool?: CompactToolJson }> = [];
   const fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
   let last = 0;

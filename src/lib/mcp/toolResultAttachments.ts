@@ -10,10 +10,33 @@ const INLINE_LIMIT = 16_000;
 const PREVIEW_HEAD = 4_000;
 const PREVIEW_TAIL = 4_000;
 
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/**
+ * Slice by index without splitting a surrogate pair.
+ *
+ * Cutting a pair leaves a lone surrogate in the string.  Once serialized into a
+ * request body that becomes a `\udXXX` escape the provider cannot encode, and
+ * real endpoints reject the whole request with HTTP 400 ("chat template
+ * rejected the request").  Emoji in file names and tool output are common far
+ * below the preview boundary, so every slice that feeds the model must be
+ * pair-aware.
+ */
+export function safeSlice(text: string, start: number, end?: number): string {
+  let from = Math.max(0, Math.floor(start));
+  let to = Math.min(text.length, Math.floor(end ?? text.length));
+  if (from > 0 && from < text.length && isLowSurrogate(text.charCodeAt(from))) from -= 1;
+  if (to > 0 && to < text.length && isLowSurrogate(text.charCodeAt(to))) to -= 1;
+  if (to < from) return '';
+  return text.slice(from, to);
+}
+
 export function buildResultPreview(serialized: string): string {
   if (serialized.length <= PREVIEW_HEAD + PREVIEW_TAIL) return serialized;
-  const head = serialized.slice(0, PREVIEW_HEAD);
-  const tail = serialized.slice(-PREVIEW_TAIL);
+  const head = safeSlice(serialized, 0, PREVIEW_HEAD);
+  const tail = safeSlice(serialized, serialized.length - PREVIEW_TAIL);
   const omitted = serialized.length - head.length - tail.length;
   return `${head}\n[…已省略 ${omitted} 字符，完整内容见附件…]\n${tail}`;
 }
@@ -54,7 +77,7 @@ export async function readToolResultAttachment(params: {
   const content = await readTextFile(rows[0].file_path);
   const offset = Math.max(0, Math.floor(params.offset || 0));
   const limit = Math.min(16000, Math.max(1000, Math.floor(params.limit || 8000)));
-  const text = content.slice(offset, offset + limit);
+  const text = safeSlice(content, offset, offset + limit);
   return { ok: true, attachmentId: params.id, offset, text,
     nextOffset: offset + text.length < content.length ? offset + text.length : undefined,
     complete: offset + text.length >= content.length };

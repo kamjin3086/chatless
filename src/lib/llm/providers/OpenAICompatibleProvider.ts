@@ -16,6 +16,47 @@ import {
 } from '../types/tool-schema';
 
 /**
+ * One terminal signal per request.
+ *
+ * A single request can report more than one terminal event: a server error
+ * followed by the transport closing, or a completion marker followed by EOF.
+ * Only the first one reaches the caller.  Without that rule the later, vaguer
+ * transport message overwrites the provider's real explanation and the user is
+ * told to check their configuration for a request the server already rejected
+ * with a specific reason.
+ */
+function createStreamTerminal(cb: StreamCallbacks) {
+  let settled = false;
+  return {
+    get settled(): boolean {
+      return settled;
+    },
+    complete(): boolean {
+      if (settled) return false;
+      settled = true;
+      cb.onComplete?.();
+      return true;
+    },
+    fail(error: Error): boolean {
+      if (settled) return false;
+      settled = true;
+      cb.onError?.(error);
+      return true;
+    },
+  };
+}
+
+type ProviderHttpError = Error & { code?: string; status?: number };
+
+function createProviderHttpError(status: number, statusText: string, detail: string): ProviderHttpError {
+  const suffix = detail ? `: ${detail}` : '';
+  const error = new Error(`HTTP ${status} ${statusText}`.trim() + suffix) as ProviderHttpError;
+  error.code = 'PROVIDER_HTTP_ERROR';
+  error.status = status;
+  return error;
+}
+
+/**
  * OpenAI 兼容 Provider（宽松解析版）
  * - 专供各类 OpenAI 兼容聚合/代理服务
  * - 兼容两种事件负载："data: {json}" 与 直接 "{json}"，并识别 "[DONE]"
@@ -168,17 +209,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
     }
 
 
-    // 防止重复触发完成回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、reader.done 等多条完成分支
-    let didComplete = false;
-    const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
-      if (didComplete) {
-
-        return;
-      }
-      didComplete = true;
-
-      cb.onComplete?.();
-    };
+    // 防止重复触发终态回调：同一条 SSE 流可能同时命中 [DONE]、finish_reason、
+    // reader.done 等多条完成分支，也可能在服务端报错后再收到一次传输关闭。
+    const terminal = createStreamTerminal(cb);
 
     try {
       this.aborted = false;
@@ -220,8 +253,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
       }
 
-      if (!resp || !resp.ok) {
+      // 只有“根本没有响应”才是传输失败。HTTP 错误响应本身带着服务端的解释，
+      // 再换一条传输重发同一请求会真的发出第二次请求，并把这份解释盖掉。
+      if (!resp) {
         await this.startSSEFallback(url, apiKey || null, body, cb);
+        return;
+      }
+      if (!resp.ok) {
+        const detail = await this.readErrorBody(resp);
+        terminal.fail(createProviderHttpError(resp.status, resp.statusText, detail));
         return;
       }
 
@@ -257,12 +297,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
       let reasoningContent = '';
       
       const processDelta = (json: any) => {
-        if (!json || didComplete) return;
+        if (!json || terminal.settled) return;
         const finishReason = json?.choices?.[0]?.finish_reason;
         if (finishReason === 'length' || finishReason === 'content_filter') {
           toolCallState.clear();
-          didComplete = true;
-          cb.onError?.(new Error(`Response incomplete: ${finishReason}`));
+          terminal.fail(new Error(`Response incomplete: ${finishReason}`));
           return;
         }
         // 1) 先提取内容（包含最终 message.content），避免因 finish_reason 过早 return 丢失末帧内容
@@ -314,7 +353,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          completeOnce('finish_reason_or_done', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
+          terminal.complete();
           // —— 诊断输出：NDJSON 模式统计 —— 
           try {
             console.debug('[OpenAICompatibleProvider] NDJSON complete', {
@@ -344,8 +383,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
           }
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          if (!didComplete && toolCallState.size > 0) throw new Error('Tool response ended before a completion marker');
-          completeOnce('reader_done', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
+          if (!terminal.settled && toolCallState.size > 0) throw new Error('Tool response ended before a completion marker');
+          terminal.complete();
           break;
         }
         buffer += decoder.decode(value, { stream: true });
@@ -354,7 +393,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           const line = buffer.slice(0, idx).trim();
           buffer = buffer.slice(idx + 1);
           if (!line || line === '[DONE]') {
-            if (line === '[DONE]' && !didComplete) {
+            if (line === '[DONE]' && !terminal.settled) {
               this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               const result = this.thinkingStrategy.processToken({ done: true });
               if (!cb.onEvent) {
@@ -363,7 +402,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
               if (result.events && result.events.length > 0) {
                 result.events.forEach(event => cb.onEvent!(event));
               }
-              completeOnce('line_DONE', { rawLineCount, parsedOkCount, contentEmittedChars, toolCallsCount: toolCallState.size });
+              terminal.complete();
             } 
             continue; 
           }
@@ -377,7 +416,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
     } catch (error: any) {
       console.error('[OpenAICompatibleProvider] stream error:', error);
-      cb.onError?.(error);
+      // A stream that already reported its answer must not be turned into an
+      // error by a late transport hiccup.
+      terminal.fail(error instanceof Error ? error : new Error(String(error)));
     }
   }
 
@@ -414,6 +455,24 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   /**
+   * Read the provider's own explanation for an HTTP failure.
+   *
+   * Providers put the actionable reason in the body ("message 5 has role
+   * 'system' after a non-system turn", "context length exceeded", ...).  That
+   * text is what the user needs; the status line alone is not diagnosable.
+   */
+  private async readErrorBody(resp: Response): Promise<string> {
+    const MAX = 2000;
+    try {
+      const text = await (typeof resp.clone === 'function' ? resp.clone() : resp).text();
+      const compact = String(text || '').replace(/\s+/g, ' ').trim();
+      return compact.length > MAX ? `${compact.slice(0, MAX)}…` : compact;
+    } catch {
+      return '';
+    }
+  }
+
+  /**
    * 处理已有的 SSE 响应流（避免重新发起请求）
    * 直接读取 Response.body 作为 SSE 流
    */
@@ -426,13 +485,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     // SSE 工具调用增量状态（LM Studio/OpenAI compat streaming：delta.tool_calls 分块发送，需要累积）
     const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
     let reasoningContent = '';
-    let didComplete = false;
-    const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
-      if (didComplete) return;
-      didComplete = true;
-
-      cb.onComplete?.();
-    };
+    const terminal = createStreamTerminal(cb);
     
     const reader = resp.body?.getReader();
     if (!reader) {
@@ -444,7 +497,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
     let buffer = '';
     
     const processLine = (line: string) => {
-      if (didComplete) return;
+      if (terminal.settled) return;
       const trimmedLine = line.trim();
       if (!trimmedLine) return;
       
@@ -461,7 +514,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
         const result = this.thinkingStrategy.processToken({ done: true });
         this.dispatchEvents(result.events || [], cb, true);
-        completeOnce('DONE', { toolCallsCount: toolCallState.size });
+        terminal.complete();
         return;
       }
       
@@ -473,9 +526,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
         }
         const finishReason = json?.choices?.[0]?.finish_reason;
         if (finishReason === 'length' || finishReason === 'content_filter') {
-          cb.onError?.(new Error(`Response incomplete: ${finishReason}`));
           toolCallState.clear();
-          didComplete = true;
+          terminal.fail(new Error(`Response incomplete: ${finishReason}`));
           return;
         }
 
@@ -512,7 +564,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
           this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
+          terminal.complete();
         }
       } catch {
         // JSON 解析失败，忽略
@@ -528,12 +580,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
           if (buffer.trim()) {
             processLine(buffer);
           }
-          if (!didComplete && toolCallState.size > 0) {
+          if (!terminal.settled && toolCallState.size > 0) {
             throw new Error('Tool response ended before a completion marker');
           }
           const result = this.thinkingStrategy.processToken({ done: true });
           this.dispatchEvents(result.events || [], cb, true);
-          completeOnce('reader_done', { toolCallsCount: toolCallState.size });
+          terminal.complete();
           break;
         }
         
@@ -547,9 +599,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
       }
     } catch (error: any) {
       if (this.aborted) {
-        completeOnce('aborted', { toolCallsCount: toolCallState.size });
+        terminal.complete();
       } else {
-        cb.onError?.(error);
+        terminal.fail(error instanceof Error ? error : new Error(String(error)));
       }
     } finally {
       this.currentReader = null;
@@ -564,18 +616,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
   ) {
     // 重置策略状态
     this.thinkingStrategy.reset();
-    
+
+    const terminal = createStreamTerminal(cb);
     try {
       // SSE fallback 工具调用增量状态（与 processSSEResponse 保持一致）
       const toolCallState: Map<number, { id: string; name: string; arguments: string }> = new Map();
       let reasoningContent = '';
-      let didComplete = false;
-      const completeOnce = (_reason: string, _data?: Record<string, unknown>) => {
-        if (didComplete) return;
-        didComplete = true;
-
-        cb.onComplete?.();
-      };
       
       await this.sseClient.startConnection(
         {
@@ -590,18 +636,18 @@ export class OpenAICompatibleProvider extends BaseProvider {
         },
         {
           onStart: cb.onStart,
-          onError: cb.onError,
+          onError: (error: Error) => { terminal.fail(error); },
           onData: (rawData: string) => {
             // —— 诊断：统计 —— 
             // 注意：SSE 由后端拆“行”，这里统计的是每个 data 行
-            if (didComplete) return;
+            if (terminal.settled) return;
             const payload = rawData.startsWith('data:') ? rawData.substring(5).trim() : rawData.trim();
             if (!payload) return;
             if (payload === '[DONE]') {
               this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
               const result = this.thinkingStrategy.processToken({ done: true });
               this.dispatchEvents(result.events || [], cb, true);
-              completeOnce('DONE', { toolCallsCount: toolCallState.size });
+              terminal.complete();
               this.sseClient.stopConnection();
               return;
             }
@@ -610,9 +656,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
               const delta = json?.choices?.[0]?.delta ?? {};
               const finishReason = json?.choices?.[0]?.finish_reason;
               if (finishReason === 'length' || finishReason === 'content_filter') {
-                cb.onError?.(new Error(`Response incomplete: ${finishReason}`));
                 toolCallState.clear();
-                didComplete = true;
+                terminal.fail(new Error(`Response incomplete: ${finishReason}`));
                 this.sseClient.stopConnection();
                 return;
               }
@@ -649,7 +694,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
                 this.emitPendingToolCalls(toolCallState, cb, reasoningContent);
                 const result = this.thinkingStrategy.processToken({ done: true });
                 this.dispatchEvents(result.events || [], cb, true);
-                completeOnce('finish_reason', { finishReason, toolCallsCount: toolCallState.size });
+                terminal.complete();
                 this.sseClient.stopConnection();
               }
             } catch (err) {
@@ -658,16 +703,16 @@ export class OpenAICompatibleProvider extends BaseProvider {
           },
           onClose: () => {
             try { console.debug('[OpenAICompatibleProvider] SSE closed'); } catch { /* noop */ }
-            if (!didComplete) {
-              didComplete = true;
-              cb.onError?.(new Error('SSE transport ended before a completion marker'));
-            }
+            // Only meaningful when nothing else settled this request: a server
+            // error already delivered to the caller must not be replaced by
+            // this vaguer transport message.
+            terminal.fail(new Error('SSE transport ended before a completion marker'));
           }
         }
       );
     } catch (error) {
       console.error('[OpenAICompatibleProvider] SSE fallback failed:', error);
-      cb.onError?.(error as any);
+      terminal.fail(error instanceof Error ? error : new Error(String(error)));
     }
   }
 

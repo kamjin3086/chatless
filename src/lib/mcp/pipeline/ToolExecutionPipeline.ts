@@ -734,6 +734,23 @@ export class ToolExecutionPipeline {
     // are revoked in the finally block below, so an approval never outlives the
     // call it was given for.
     if (sessionWorkDir) {
+      // The session folder is created on first real use. The model is about to
+      // touch files or run a command with this directory as its cwd, so it has to
+      // exist now - a chat that never gets here leaves no folder behind.
+      //
+      // When the user mounted their own directory, @WorkDir is that directory and
+      // the session folder stays uncreated: no second folder next to their project.
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const attachments = useConversationAttachmentStore.getState();
+        if (attachments.isSessionDirInUse(invocation.conversationId)
+          && !attachments.isWorkspaceMaterialized(invocation.conversationId)) {
+          const { ensureConversationWorkspaceMaterialized } = await import('@/lib/agentWorkspace/workspaceService');
+          await ensureConversationWorkspaceMaterialized(invocation.conversationId);
+        }
+      } catch (error) {
+        console.warn('[ToolExecutionPipeline] 准备工作目录失败:', error);
+      }
       callGrants.push({
         path: sessionWorkDir,
         permissions: { read: true, write: true, create: true, delete: false },

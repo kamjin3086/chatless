@@ -8,6 +8,7 @@ import { ProviderRegistry } from "@/lib/llm";
 import { specializedStorage } from "@/lib/storage";
 import { MODEL_FETCH_RULES, type ModelFetchRule } from "@/config/modelFetchRules";
 import { tauriFetch } from "@/lib/request";
+import { readContextWindow } from '@/lib/llm/modelWindow';
 import {
   refreshAutoProviderModels,
   shouldSkipModelFetch,
@@ -188,7 +189,14 @@ export class ProviderModelService {
             if (label === undefined || label === null || String(label).trim() === '') {
               label = String(id);
             }
-            return { name: String(id), label: String(label), aliases: [String(id)] };
+            // 规则拉取同样要把服务端上报的上下文窗口带上，否则后面无法记录。
+            const contextWindow = readContextWindow(it);
+            return {
+              name: String(id),
+              label: String(label),
+              aliases: [String(id)],
+              ...(contextWindow ? { contextWindow } : null),
+            };
           }).filter((m) => m.name);
           ruleSuccess = true;
           // 将结果写入调试结果文件
@@ -207,6 +215,7 @@ export class ProviderModelService {
         if (ruleSuccess) {
           // 规则存在即认为其为权威来源（允许空数组）
           await modelRepository.save(name, onlineList as any, ttl);
+          await this.recordObservedContextWindows(name, onlineList);
           await defaultCacheManager.set(EVENTS.providerModels(name), true);
           return;
         }
@@ -217,15 +226,33 @@ export class ProviderModelService {
     //    目前 OllamaProvider 实现了 fetchModels，会访问 /api/tags。
     let online: Array<{ name: string; label?: string; aliases?: string[] }> | null = null;
     try {
-      const strategy: any = ProviderRegistry.get(name);
-      if (strategy && typeof strategy.fetchModels === 'function') {
+      const providers = await providerRepository.getAll();
+      const target = providers.find((p) => p.name === name);
+      const effectiveUrl = target?.url?.trim() || (name === 'Ollama' ? 'http://localhost:11434' : '');
+      // 自定义 provider（例如 homelab）在注册表里只有"某个时刻同步过"的实例：
+      // 启动顺序稍有差别就会 miss，于是退回"只有名字"的兜底分支，服务端上报的
+      // context 也会一起丢掉。这里按 provider 自己的 strategy 现场建一个实例，
+      // 不依赖注册表的同步时机，也不会改写共享实例的 baseUrl。
+      let strategy: any = ProviderRegistry.get(name);
+      if (!strategy) {
+        const strategyId = String((target as any)?.strategy || 'openai-compatible');
+        const { createProviderInstance } = await import('@/lib/llm/strategy-factory');
+        strategy = createProviderInstance(
+          {
+            id: name.toLowerCase(),
+            name,
+            strategy: strategyId,
+            requiresKey: !!target?.requiresKey,
+            defaultUrl: effectiveUrl,
+          } as any,
+          effectiveUrl,
+          target?.apiKey ?? undefined,
+        );
+      } else if (strategy.baseUrl !== effectiveUrl) {
         // 确保使用最新的 URL（例如 Ollama 可能由设置页更新）
-        const providers = await providerRepository.getAll();
-        const target = providers.find((p) => p.name === name);
-        const effectiveUrl = target?.url?.trim() || (name === 'Ollama' ? 'http://localhost:11434' : '');
-        if (strategy.baseUrl !== effectiveUrl) {
-          strategy.baseUrl = effectiveUrl;
-        }
+        strategy.baseUrl = effectiveUrl;
+      }
+      if (strategy && typeof strategy.fetchModels === 'function') {
         online = await strategy.fetchModels();
       }
     } catch (e) {
@@ -256,7 +283,14 @@ export class ProviderModelService {
       }
     } else {
       // 在线失败：使用现有缓存与静态模型的并集，避免界面空白
-      for (const m of existing) byName.set(m.name, m);
+      for (const m of existing as any[]) {
+        // 缓存文件里存的是模型名字符串数组；早期版本直接读 m.name 会得到 undefined，
+        // 既丢模型也丢窗口信息。
+        const entry = typeof m === 'string'
+          ? { provider: name, name: m, label: m, aliases: [m] }
+          : m;
+        if (entry?.name) byName.set(entry.name, entry);
+      }
       for (const s of staticList) {
         if (!byName.has(s.id)) byName.set(s.id, { provider: name, name: s.id, label: s.label, aliases: [s.id] });
       }
@@ -288,19 +322,34 @@ export class ProviderModelService {
       // 排序异常则保持合并后的原始顺序，避免影响功能
     }
     await modelRepository.save(name, merged, ttl);
-    // Remember a reported window so the output budget still knows it after a
-    // restart; a window the user typed is never overwritten.
+    await this.recordObservedContextWindows(name, merged);
+    await defaultCacheManager.set(EVENTS.providerModels(name), true);
+  }
+
+  /**
+   * 记录服务端上报的上下文窗口（与用户手填值分开保存）。
+   *
+   * 之前只有"常规拉取"路径会记录，规则拉取会提前 return；自定义 provider 又会
+   * 退化成只有名字的列表——两条路都不会写入窗口，于是请求侧只能按未知窗口（8K）
+   * 规划，正常的一轮也会被判成超预算。
+   */
+  private async recordObservedContextWindows(
+    providerName: string,
+    models: Array<{ name?: string; contextWindow?: number }>,
+  ): Promise<void> {
     try {
       const { ModelParametersService } = await import('@/lib/model-parameters');
-      for (const model of merged as Array<{ name: string; contextWindow?: number }>) {
-        if (model.contextWindow) {
-          await ModelParametersService.setContextWindowIfUnset(name, model.name, model.contextWindow);
-        }
+      for (const model of models || []) {
+        if (!model?.name || !model.contextWindow) continue;
+        await ModelParametersService.recordObservedContextWindow(
+          providerName,
+          model.name,
+          model.contextWindow,
+        );
       }
     } catch (error) {
       console.warn('[ProviderModelService] 记录模型上下文窗口失败:', error);
     }
-    await defaultCacheManager.set(EVENTS.providerModels(name), true);
   }
 }
 

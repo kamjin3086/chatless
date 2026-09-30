@@ -1,7 +1,7 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, FileUp, Trash2, Eye, MessageSquare, Flag, Bot, Clock, Hash, ArrowRightCircle } from 'lucide-react';
+import { Star, FileUp, Trash2, Eye, MessageSquare, Bot, Clock, Hash, ArrowRightCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 import { memo } from 'react';
@@ -16,7 +16,6 @@ interface HistoryCardProps {
   tags: string[];
   timestamp: number;
   fullTimestamp: string;
-  isImportant?: boolean;
   isFavorite?: boolean;
   messageCount: number;
   lastMessage: string;
@@ -24,7 +23,6 @@ interface HistoryCardProps {
   updatedAt: number;
   isSelected?: boolean;
   onSelectChange?: (id: string, selected: boolean) => void;
-  onToggleImportant?: (id: string) => void;
   onView?: (id: string) => void;
   onContinue?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -41,12 +39,10 @@ const HistoryCard = memo(function HistoryCard({
   tags,
   timestamp,
   fullTimestamp,
-  isImportant = false,
   isFavorite = false,
   messageCount,
   isSelected = false,
   onSelectChange,
-  onToggleImportant,
   onView,
   onContinue,
   onDelete,
@@ -83,10 +79,7 @@ const HistoryCard = memo(function HistoryCard({
   return (
     <SectionCard
       selected={isSelected}
-      className={cn(
-        "history-card-hover will-change-transform",
-        isImportant && "border-l-4 border-red-500"
-      )}
+      className={cn("history-card-hover will-change-transform")}
     >
       <div className="px-3 py-2.5">
         {/* 头部：选择框、标题、时间 */}
@@ -97,11 +90,8 @@ const HistoryCard = memo(function HistoryCard({
               onCheckedChange={(checked) => onSelectChange?.(id, !!checked)}
               className="h-4 w-4 transition-all duration-150"
             />
-            {/* 重要和收藏状态始终可见 */}
+            {/* 收藏状态始终可见 */}
             <div className="flex items-center gap-1">
-              {isImportant && (
-                <Flag className="h-3 w-3 text-red-500 history-status-icon" />
-              )}
               {isFavorite && (
                 <Star className="h-3 w-3 text-yellow-500 fill-current history-status-icon" />
               )}
@@ -176,16 +166,6 @@ const HistoryCard = memo(function HistoryCard({
                 title={isFavorite ? "取消收藏" : "收藏"}
               >
                 <Star className="h-3 w-3" />
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-red-500 transition-all duration-150 cursor-pointer"
-                onClick={() => onToggleImportant?.(id)}
-                title={isImportant ? "取消重要" : "标记重要"}
-              >
-                <Flag className="h-3 w-3" />
               </Button>
               
               <Button

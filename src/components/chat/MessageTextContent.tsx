@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from 'react';
 import { splitTextAndToolJson } from '@/lib/chat/compactToolJson';
 import { CompactToolJsonLine } from './CompactToolJsonLine';
 import { StreamingMarkdown } from './StreamingMarkdown';
@@ -15,7 +16,8 @@ export function MessageTextContent({
   isStreaming: boolean;
   citations?: Citation[];
 }) {
-  const parts = splitTextAndToolJson(text);
+  // 父级每帧都会用新的 text 渲染；切分结果按文本缓存，避免重复扫描。
+  const parts = useMemo(() => splitTextAndToolJson(text), [text]);
   const hasToolOnly = parts.length === 1 && parts[0]?.type === 'tool';
 
   if (hasToolOnly && parts[0]?.tool) {

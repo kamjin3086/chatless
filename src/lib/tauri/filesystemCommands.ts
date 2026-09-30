@@ -7,7 +7,7 @@
  * 3. snake_case → camelCase 返回值转换
  */
 
-import { keysToSnakeCase, keysToCamelCase } from './caseTransform';
+import { invokeBackend } from './backendCommand';
 
 // ============================================
 // 类型定义（前端使用 camelCase）
@@ -212,19 +212,6 @@ export interface RevokeCallScopeParams {
 // 内部工具函数
 // ============================================
 
-let cachedInvoke: typeof import('@tauri-apps/api/core').invoke | null = null;
-
-/**
- * 获取 invoke 函数（惰性加载，避免 SSR 报错）
- */
-async function getInvoke(): Promise<typeof import('@tauri-apps/api/core').invoke> {
-  if (!cachedInvoke) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    cachedInvoke = invoke;
-  }
-  return cachedInvoke;
-}
-
 /**
  * 封装的 invoke 调用
  * - 自动将参数转换为 snake_case
@@ -235,10 +222,7 @@ async function invokeFs<TParams, TResult>(
   command: string,
   params: TParams
 ): Promise<TResult> {
-  const invoke = await getInvoke();
-  const snakeCasePayload = keysToSnakeCase(params);
-  const result = await invoke<unknown>(command, { payload: snakeCasePayload });
-  return keysToCamelCase(result) as TResult;
+  return invokeBackend<TResult>(command, params as Record<string, unknown>);
 }
 
 // ============================================

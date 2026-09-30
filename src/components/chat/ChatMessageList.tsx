@@ -1,6 +1,7 @@
 import React from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { ChatMessage } from './ChatMessage';
+import { ContextCompactionNotice } from './ContextCompactionNotice';
 import { VersionedAssistantGroup } from './VersionedAssistantGroup';
 import { Message } from '@/types/chat';
 import FoldingLoader from '@/components/ui/FoldingLoader';
@@ -155,6 +156,7 @@ export function ChatMessageList({
               className='ml-4 mr-2'
               style={{ minHeight: 56, contain: 'layout paint', transform: 'translateZ(0)' }}
             >
+              {message.role === 'assistant' && <ContextCompactionNotice messageId={message.id} />}
               <ChatMessage
                 id={message.id}
                 content={message.content}

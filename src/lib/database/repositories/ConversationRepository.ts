@@ -22,7 +22,6 @@ export class ConversationRepository extends BaseRepository<Conversation> {
     title: string,
     modelId: string,
     options: {
-      is_important?: boolean;
       is_favorite?: boolean;
       model_provider?: string;
     } = {}
@@ -35,7 +34,6 @@ export class ConversationRepository extends BaseRepository<Conversation> {
       model_id: modelId, // 使用数据库schema中的字段名
       model_provider: options.model_provider,
       model_full_id: options.model_provider ? `${options.model_provider}/${modelId}` : modelId,
-      is_important: options.is_important || false,
       is_favorite: options.is_favorite || false
     } as any;
 
@@ -111,23 +109,6 @@ export class ConversationRepository extends BaseRepository<Conversation> {
   }
 
   /**
-   * 切换重要标记
-   */
-  async toggleImportant(conversationId: string): Promise<Conversation> {
-    const conversation = await this.findById(conversationId);
-    if (!conversation) {
-      throw this.createNotFoundError(conversationId);
-    }
-
-    const newImportantStatus = conversation.is_important;
-    const updated = await this.update(conversationId, { 
-      is_important: !newImportantStatus 
-    } as any);
-
-    return this.mapToConversation(updated);
-  }
-
-  /**
    * 切换收藏标记
    */
   async toggleFavorite(conversationId: string): Promise<Conversation> {
@@ -178,15 +159,14 @@ export class ConversationRepository extends BaseRepository<Conversation> {
       const newTitle = `clone of ${originalConversation.title}`;
       
       await transaction.execute(`
-        INSERT INTO conversations (id, title, created_at, updated_at, model_id, is_important, is_favorite)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, title, created_at, updated_at, model_id, is_favorite)
+        VALUES (?, ?, ?, ?, ?, ?)
       `, [
         newConversationId,
         newTitle,
         Date.now(),
         Date.now(),
         originalConversation.model_id,
-        originalConversation.is_important ? 1 : 0,
         originalConversation.is_favorite ? 1 : 0
       ]);
 
@@ -228,14 +208,12 @@ export class ConversationRepository extends BaseRepository<Conversation> {
    */
   async getStatistics(): Promise<{
     totalConversations: number;
-    importantConversations: number;
     favoriteConversations: number;
     totalMessages: number;
   }> {
     const stats = await this.dbManager.select(`
       SELECT 
         COUNT(*) as totalConversations,
-        SUM(CASE WHEN is_important = 1 THEN 1 ELSE 0 END) as importantConversations,
         SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END) as favoriteConversations,
         (SELECT COUNT(*) FROM messages) as totalMessages
       FROM conversations
@@ -243,7 +221,6 @@ export class ConversationRepository extends BaseRepository<Conversation> {
 
     return stats[0] || {
       totalConversations: 0,
-      importantConversations: 0,
       favoriteConversations: 0,
       totalMessages: 0
     };
@@ -286,7 +263,6 @@ export class ConversationRepository extends BaseRepository<Conversation> {
       model_id: record.model_id,
       model_provider: record.model_provider,
       model_full_id: record.model_full_id,
-      is_important: this.convertToBoolean(record.is_important),
       is_favorite: this.convertToBoolean(record.is_favorite),
       messages: record.messages || []
     };

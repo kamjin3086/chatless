@@ -4,17 +4,28 @@ import {
   type ConversationEvent,
   type RenderMode,
 } from '@/lib/mcp/pipeline/context/ConversationEventLog';
-import { ContextWindowManager } from '@/lib/mcp/pipeline/context/ContextWindowManager';
+import { ContextWindowManager, type ContextCheckpoint } from '@/lib/mcp/pipeline/context/ContextWindowManager';
 import { AgentRunEventStore, type AgentRunStatus } from './AgentRunEventStore';
+import { enforceSingleLeadingSystem } from '@/lib/mcp/prompt/systemPlacement';
+import { useContextCompactionStore } from '@/store/contextCompactionStore';
 
 const contextWindowManager = new ContextWindowManager();
+
+/**
+ * 会话级摘要检查点（进程内）。
+ *
+ * 运行检查点按 assistantMessageId 存，而每发一条消息就是一个新 run，于是同一段旧
+ * 历史会被反复摘要、反复花 token。这里按会话缓存最近一次摘要，历史没变就直接续用。
+ * 进程重启后退化为重新摘要一次——这是最省事的做法，不值得为此加表或改结构。
+ */
+const conversationCheckpoints = new Map<string, ContextCheckpoint>();
 
 export class AgentRunControlPlane {
   readonly eventLog = new ConversationEventLog();
   private seq = 0;
   private cancelled = false;
   private writes: Promise<void> = Promise.resolve();
-  private checkpoint: Awaited<ReturnType<typeof AgentRunEventStore.loadLatestCheckpoint>> = undefined;
+  private checkpoint: ContextCheckpoint | undefined = undefined;
 
   constructor(
     readonly runId: string,
@@ -123,7 +134,8 @@ export class AgentRunControlPlane {
       reserveOutputTokens: params.reserveOutputTokens,
       prefixMessages: params.prefixMessages, tools: params.tools,
       allowSummarize: true,
-      checkpoint: this.checkpoint,
+      // 本 run 的检查点优先；没有就用会话上一次的，实现跨轮续写。
+      checkpoint: this.checkpoint ?? conversationCheckpoints.get(this.conversationId),
       onCheckpoint: async (checkpoint) => {
         const saveCheckpoint = (AgentRunEventStore as typeof AgentRunEventStore & {
           saveCheckpoint?: typeof AgentRunEventStore.saveCheckpoint;
@@ -132,9 +144,25 @@ export class AgentRunControlPlane {
           await saveCheckpoint.call(AgentRunEventStore, this.runId, checkpoint);
         }
         this.checkpoint = checkpoint;
+        conversationCheckpoints.set(this.conversationId, checkpoint);
+      },
+      onCompacted: (info) => {
+        try {
+          useContextCompactionStore.getState().setNotice({
+            messageId: this.assistantMessageId,
+            conversationId: this.conversationId,
+            coveredMessages: info.coveredMessages,
+            summary: info.summary,
+            reused: info.reused,
+            at: Date.now(),
+          });
+        } catch {
+          // 提示只是辅助信息，写不进去不影响本轮
+        }
       },
     });
-    return [...params.prefixMessages, ...compactedVariable];
+    // One leading system message, whatever the individual builders produced.
+    return enforceSingleLeadingSystem([...params.prefixMessages, ...compactedVariable]);
   }
 
   isCancelled(): boolean {

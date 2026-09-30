@@ -63,21 +63,34 @@ fn meta_path(key_dir: &Path, id: &str) -> PathBuf {
   key_dir.join(format!("{id}.json"))
 }
 
-/// 记录一版旧内容。返回写入的版本信息；写历史失败不影响主流程。
+/// 版本 ID：毫秒时间 + 进程内单调计数器 + 进程号。
+///
+/// 只用"毫秒 + 进程号"时，同一毫秒内的两次覆盖会撞 ID，后写入的版本会把前一个
+/// 覆盖掉；计数器保证同一进程内每次记录都唯一。
+fn next_version_id(created_at: i64) -> String {
+  use std::sync::atomic::{AtomicU64, Ordering};
+  static COUNTER: AtomicU64 = AtomicU64::new(0);
+  let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+  format!("{created_at}-{counter}-{}", std::process::id() % 100000)
+}
+
+/// 记录一版旧内容。
+///
+/// 失败会返回错误而不是静默跳过：调用方承诺"覆盖前一定留了可恢复副本"，
+/// 拿不到副本时就不能继续覆盖原文件。
 pub async fn record_version(
   data_dir: &Path,
   path: &str,
   content: &[u8],
   tool: &str,
   run_id: Option<&str>,
-) -> Option<FileVersion> {
+) -> Result<FileVersion, String> {
   let dir = key_dir(data_dir, path);
   if let Err(error) = tokio::fs::create_dir_all(&dir).await {
-    log::warn!("[file-history] 创建历史目录失败: {error}");
-    return None;
+    return Err(format!("HISTORY_WRITE_FAILED: 创建历史目录失败: {error}"));
   }
   let created_at = now_ms();
-  let id = format!("{created_at}-{}", std::process::id() % 100000);
+  let id = next_version_id(created_at);
   let version = FileVersion {
     id: id.clone(),
     created_at,
@@ -88,24 +101,22 @@ pub async fn record_version(
   };
 
   if let Err(error) = tokio::fs::write(content_path(&dir, &id), content).await {
-    log::warn!("[file-history] 写入历史内容失败: {error}");
-    return None;
+    return Err(format!("HISTORY_WRITE_FAILED: 写入历史内容失败: {error}"));
   }
   match serde_json::to_string_pretty(&version) {
     Ok(json) => {
       if let Err(error) = tokio::fs::write(meta_path(&dir, &id), json).await {
-        log::warn!("[file-history] 写入历史元数据失败: {error}");
-        return None;
+        // Do not leave a content blob without metadata behind: it would be
+        // invisible to list_versions and occupy space forever.
+        let _ = tokio::fs::remove_file(content_path(&dir, &id)).await;
+        return Err(format!("HISTORY_WRITE_FAILED: 写入历史元数据失败: {error}"));
       }
     }
-    Err(error) => {
-      log::warn!("[file-history] 序列化历史元数据失败: {error}");
-      return None;
-    }
+    Err(error) => return Err(format!("HISTORY_WRITE_FAILED: 序列化历史元数据失败: {error}")),
   }
 
   prune(data_dir, &dir).await;
-  Some(version)
+  Ok(version)
 }
 
 /// 列出某个路径的版本，最新在前。
@@ -130,19 +141,30 @@ pub async fn list_versions(data_dir: &Path, path: &str) -> Vec<FileVersion> {
   versions
 }
 
-/// 读取某一版内容。
+/// 读取某一版内容，并校验它与记录时的字节完全一致。
+///
+/// 返回原始字节：恢复必须能还原非 UTF-8 文件，也要能证明拿到的就是那一版。
 pub async fn read_version(data_dir: &Path, path: &str, version_id: &str) -> Result<Vec<u8>, String> {
   if version_id.contains('/') || version_id.contains('\\') || version_id.contains("..") {
     return Err("版本 ID 不合法".to_string());
   }
   let dir = key_dir(data_dir, path);
   let meta = meta_path(&dir, version_id);
-  if tokio::fs::metadata(&meta).await.is_err() {
-    return Err(format!("找不到该版本: {version_id}"));
-  }
-  tokio::fs::read(content_path(&dir, version_id))
+  let text = tokio::fs::read_to_string(&meta)
     .await
-    .map_err(|error| format!("读取历史版本失败: {error}"))
+    .map_err(|_| format!("找不到该版本: {version_id}"))?;
+  let expected: FileVersion = serde_json::from_str(&text)
+    .map_err(|error| format!("历史版本元数据损坏: {version_id}: {error}"))?;
+  let bytes = tokio::fs::read(content_path(&dir, version_id))
+    .await
+    .map_err(|error| format!("读取历史版本失败: {error}"))?;
+  let actual = sha256_hex(&bytes);
+  if !actual.eq_ignore_ascii_case(&expected.sha256) {
+    return Err(format!(
+      "HISTORY_CHECKSUM_MISMATCH: 历史版本内容与记录不一致: {version_id}"
+    ));
+  }
+  Ok(bytes)
 }
 
 /// 淘汰超量版本：先是单文件超过上限，再是全局体积。
@@ -245,12 +267,68 @@ mod tests {
   async fn keeps_only_the_newest_versions_per_file() {
     let data = temp_dir("prune");
     for index in 0..(MAX_VERSIONS_PER_FILE + 5) {
-      record_version(&data, "C:/work/a.txt", format!("v{index}").as_bytes(), "edit", None).await;
+      record_version(&data, "C:/work/a.txt", format!("v{index}").as_bytes(), "edit", None)
+        .await
+        .expect("version recorded");
     }
     let versions = list_versions(&data, "C:/work/a.txt").await;
     assert_eq!(versions.len(), MAX_VERSIONS_PER_FILE);
     // newest first
     assert!(versions[0].created_at >= versions[versions.len() - 1].created_at);
+    let _ = std::fs::remove_dir_all(&data);
+  }
+
+  #[tokio::test]
+  async fn versions_recorded_in_the_same_millisecond_do_not_collide() {
+    let data = temp_dir("unique-ids");
+    let mut ids: Vec<String> = Vec::new();
+    for index in 0..8 {
+      let version = record_version(&data, "C:/work/a.txt", format!("v{index}").as_bytes(), "write", None)
+        .await
+        .expect("version recorded");
+      ids.push(version.id);
+    }
+    let unique: std::collections::HashSet<&String> = ids.iter().collect();
+    assert_eq!(unique.len(), ids.len(), "every overwrite keeps its own version id");
+    assert_eq!(list_versions(&data, "C:/work/a.txt").await.len(), 8);
+    let _ = std::fs::remove_dir_all(&data);
+  }
+
+  #[tokio::test]
+  async fn reads_non_utf8_content_byte_for_byte() {
+    let data = temp_dir("bytes");
+    // 0xFF is not valid UTF-8: a lossy round trip would return U+FFFD instead.
+    let original: Vec<u8> = vec![0x00, 0xFF, 0xFE, 0x41];
+    let version = record_version(&data, "C:/work/blob.bin", &original, "write", None)
+      .await
+      .expect("version recorded");
+    let restored = read_version(&data, "C:/work/blob.bin", &version.id).await.unwrap();
+    assert_eq!(restored, original);
+    let _ = std::fs::remove_dir_all(&data);
+  }
+
+  #[tokio::test]
+  async fn refuses_a_version_whose_content_no_longer_matches_its_hash() {
+    let data = temp_dir("checksum");
+    let version = record_version(&data, "C:/work/a.txt", b"original", "write", None)
+      .await
+      .expect("version recorded");
+    let dir = key_dir(&data, "C:/work/a.txt");
+    std::fs::write(content_path(&dir, &version.id), b"tampered").unwrap();
+    let error = read_version(&data, "C:/work/a.txt", &version.id).await.unwrap_err();
+    assert!(error.starts_with("HISTORY_CHECKSUM_MISMATCH"), "{error}");
+    let _ = std::fs::remove_dir_all(&data);
+  }
+
+  #[tokio::test]
+  async fn reports_an_unwritable_history_directory() {
+    let data = temp_dir("unwritable");
+    // A regular file where the history root should be makes create_dir_all fail.
+    std::fs::write(data.join("file-history"), b"blocked").unwrap();
+    let error = record_version(&data, "C:/work/a.txt", b"content", "write", None)
+      .await
+      .unwrap_err();
+    assert!(error.starts_with("HISTORY_WRITE_FAILED"), "{error}");
     let _ = std::fs::remove_dir_all(&data);
   }
 
