@@ -42,19 +42,19 @@ export const SKILL_SERVER_NAME = 'skill';
 
 export const SKILL_LIST_TOOL: McpTool = {
   name: 'list',
-  description: '列出已安装的技能（仅返回名称/ID，不含使用方法）。要使用技能必须先调用 skill__use 获取指南。',
+  description: 'List the installed skills (names and ids only, no usage). Call skill__guide before using one.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '搜索关键字' },
+        query: { type: 'string', description: 'Search keywords' },
         mode: {
           type: 'string',
           enum: ['task', 'admin'],
-          description: 'task=任务匹配 | admin=管理',
+          description: 'task = match to a task | admin = administration',
         },
-        enabledOnly: { type: 'boolean', description: '仅已启用（默认 true）' },
-        limit: { type: 'number', description: '最多条数（默认 30）' },
+        enabledOnly: { type: 'boolean', description: 'Enabled skills only (default true)' },
+        limit: { type: 'number', description: 'Maximum entries (default 30)' },
       },
       required: [],
     },
@@ -63,13 +63,13 @@ export const SKILL_LIST_TOOL: McpTool = {
 
 export const SKILL_GUIDE_TOOL: McpTool = {
   name: 'guide',
-  description: '获取技能的完整操作指南（SKILL.md）。返回内容包含：依赖检查、执行步骤、示例命令。调用后根据需要再读取其他文件。',
+  description: 'Read a skill\'s full guide (SKILL.md): dependency checks, steps and example commands. Read other files afterwards if the guide asks for it.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（从 skill__list 获取）' },
-        name: { type: 'string', description: 'Skill 名称（模糊匹配）' },
+        id: { type: 'string', description: 'Skill id (from skill__list)' },
+        name: { type: 'string', description: 'Skill name (fuzzy match)' },
       },
       required: [],
     },
@@ -80,14 +80,14 @@ export const SKILL_GUIDE_TOOL: McpTool = {
 
 export const SKILL_INSTALL_TOOL: McpTool = {
   name: 'install',
-  description: '安装技能（从 Git 仓库或 ZIP）',
+  description: 'Install a skill (from a git repository or a ZIP)',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        repoUrl: { type: 'string', description: 'Git 仓库地址（优先）' },
-        zipPath: { type: 'string', description: 'ZIP 文件本地路径' },
-        overwrite: { type: 'boolean', description: '是否覆盖已存在的同名技能' },
+        repoUrl: { type: 'string', description: 'Git repository URL (preferred)' },
+        zipPath: { type: 'string', description: 'Local path of a ZIP file' },
+        overwrite: { type: 'boolean', description: 'Overwrite a skill with the same name' },
       },
       required: [],
     },
@@ -96,13 +96,13 @@ export const SKILL_INSTALL_TOOL: McpTool = {
 
 export const SKILL_UNINSTALL_TOOL: McpTool = {
   name: 'uninstall',
-  description: '卸载技能（需 confirm=true）',
+  description: 'Uninstall a skill (confirm=true is required)',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
-        confirm: { type: 'boolean', description: '必须为 true 才会卸载' },
+        id: { type: 'string', description: 'Skill id (required)' },
+        confirm: { type: 'boolean', description: 'Must be true; otherwise nothing happens' },
       },
       required: ['id'],
     },
@@ -113,12 +113,12 @@ export const SKILL_UNINSTALL_TOOL: McpTool = {
 
 export const SKILL_ENABLE_TOOL: McpTool = {
   name: 'enable',
-  description: '启用技能。',
+  description: 'Enable a skill.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
+        id: { type: 'string', description: 'Skill id (required)' },
       },
       required: ['id'],
     },
@@ -127,12 +127,12 @@ export const SKILL_ENABLE_TOOL: McpTool = {
 
 export const SKILL_DISABLE_TOOL: McpTool = {
   name: 'disable',
-  description: '禁用技能。',
+  description: 'Disable a skill.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
+        id: { type: 'string', description: 'Skill id (required)' },
       },
       required: ['id'],
     },
@@ -143,12 +143,12 @@ export const SKILL_DISABLE_TOOL: McpTool = {
 
 export const SKILL_UPDATE_TOOL: McpTool = {
   name: 'update',
-  description: '更新技能（仅限 Git 安装的）',
+  description: 'Update a skill (git-installed skills only)',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
+        id: { type: 'string', description: 'Skill id (required)' },
       },
       required: ['id'],
     },
@@ -159,13 +159,13 @@ export const SKILL_UPDATE_TOOL: McpTool = {
 
 export const SKILL_LIST_RESOURCES_TOOL: McpTool = {
   name: 'list_resources',
-  description: '列出技能提供的资源文件（模板、示例代码、配置样例）。用于了解 skill 包含哪些可参考的内容。',
+  description: 'List the resource files a skill ships (templates, example code, sample configs).',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
-        max: { type: 'number', description: '最多返回多少个文件（默认 50）' },
+        id: { type: 'string', description: 'Skill id (required)' },
+        max: { type: 'number', description: 'Maximum files to return (default 50)' },
       },
       required: ['id'],
     },
@@ -174,14 +174,14 @@ export const SKILL_LIST_RESOURCES_TOOL: McpTool = {
 
 export const SKILL_GET_TEMPLATE_TOOL: McpTool = {
   name: 'get_template',
-  description: '获取技能提供的模板或示例代码（只读）。用于参考 skill 的最佳实践，然后用 fs__write 写入用户目录。',
+  description: 'Read a template or example shipped by a skill (read-only). Reference it, then use fs__write to create the user\'s file.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
-        name: { type: 'string', description: '资源文件名（从 skill__list_resources 获取）' },
-        maxLines: { type: 'number', description: '最多读取行数（用于大文件）' },
+        id: { type: 'string', description: 'Skill id (required)' },
+        name: { type: 'string', description: 'Resource file name (from skill__list_resources)' },
+        maxLines: { type: 'number', description: 'Maximum lines to read (for large files)' },
       },
       required: ['id', 'name'],
     },
@@ -196,14 +196,14 @@ export const SKILL_READ_FILE_TOOL = SKILL_GET_TEMPLATE_TOOL;
 
 export const SKILL_EDIT_RESOURCE_TOOL: McpTool = {
   name: 'edit_resource',
-  description: '编辑技能包的内部资源文件。⚠️ 仅当用户明确要求修改 skill 包本身时使用。普通任务输出请用 fs__write + @WorkDir。',
+  description: 'Edit a file inside a skill package. Use ONLY when the user explicitly asks to change the skill itself; ordinary task output belongs in fs__write + @WorkDir.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
-        name: { type: 'string', description: '资源文件名（必填）' },
-        content: { type: 'string', description: '新内容（必填）' },
+        id: { type: 'string', description: 'Skill id (required)' },
+        name: { type: 'string', description: 'Resource file name (required)' },
+        content: { type: 'string', description: 'New content (required)' },
       },
       required: ['id', 'name', 'content'],
     },
@@ -214,12 +214,12 @@ export const SKILL_EDIT_RESOURCE_TOOL: McpTool = {
 
 export const SKILL_CHECK_DEPS_TOOL: McpTool = {
   name: 'check_deps',
-  description: '检查技能依赖是否满足',
+  description: 'Check whether the dependencies of a skill are satisfied',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Skill ID（必填）' },
+        id: { type: 'string', description: 'Skill id (required)' },
       },
       required: ['id'],
     },

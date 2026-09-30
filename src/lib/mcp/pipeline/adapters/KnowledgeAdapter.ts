@@ -241,7 +241,7 @@ export class KnowledgeAdapter implements ToolAdapter {
     }
 
     if (!scope.documentIds.length) {
-      return { ok: false, error: 'NO_KNOWLEDGE_BASE', message: '当前会话没有可访问的知识库或附件。' };
+      return { ok: false, error: 'NO_KNOWLEDGE_BASE', message: 'This session has no knowledge base or attachment it can reach.' };
     }
 
     if (tool === 'search') {
@@ -266,15 +266,15 @@ export class KnowledgeAdapter implements ToolAdapter {
     const evidenceId = String(args.evidenceId || '').trim();
     const prior = evidenceId ? readEvidence(runId, evidenceId) : undefined;
     if (evidenceId && !prior) {
-      return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: '引用不存在或不属于本次运行，请重新搜索。' };
+      return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: 'That citation does not exist or does not belong to this run. Search again.' };
     }
     const documentId = String(args.documentId || prior?.documentId || '').trim();
     if (!documentId || !scope.documentIds.includes(documentId)) {
-      return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: '文档不存在或当前会话未挂载该文档。' };
+      return { ok: false, error: 'DOCUMENT_NOT_FOUND', message: 'The document does not exist, or this session does not have it mounted.' };
     }
     const docs = await db.select<any>('SELECT id, title, file_hash, active_index_batch_id FROM documents WHERE id = ? LIMIT 1', [documentId]);
     const document = docs[0];
-    if (!document?.active_index_batch_id) return { ok: false, error: 'INDEX_NOT_READY', message: '文档尚未建立关键词索引。' };
+    if (!document?.active_index_batch_id) return { ok: false, error: 'INDEX_NOT_READY', message: 'The document has no keyword index yet.' };
     const batchId = String(document.active_index_batch_id);
     const pageArg = args.page == null ? undefined : Number(args.page);
 
@@ -285,12 +285,12 @@ export class KnowledgeAdapter implements ToolAdapter {
 
     if (hasCursorArg(args.cursor)) {
       const parsed = parseCursor(args.cursor);
-      if (!parsed) return { ok: false, error: 'CURSOR_INVALID', message: '阅读游标格式无效，请重新读取。' };
+      if (!parsed) return { ok: false, error: 'CURSOR_INVALID', message: 'The read cursor is malformed. Read again.' };
       if (parsed.documentId !== documentId) {
-        return { ok: false, error: 'CURSOR_INVALID', message: '阅读游标与文档不匹配，请重新读取。' };
+        return { ok: false, error: 'CURSOR_INVALID', message: 'The read cursor does not belong to this document. Read again.' };
       }
       if (parsed.batchId !== batchId) {
-        return { ok: false, error: 'CURSOR_INVALID', message: '文档已重建，该阅读游标已失效，请重新搜索或从头阅读。' };
+        return { ok: false, error: 'CURSOR_INVALID', message: 'The document was re-indexed and this cursor is stale. Search again or read from the start.' };
       }
       startChunkIndex = parsed.chunkIndex;
       startOffset = parsed.offset;
@@ -301,11 +301,11 @@ export class KnowledgeAdapter implements ToolAdapter {
       if (anchorIndex < 0 && prior.retrievalChunkId) {
         const hit = await db.select<any>('SELECT id, chunk_index FROM document_chunks WHERE id = ? AND batch_id = ?',
           [prior.retrievalChunkId, batchId]);
-        if (!hit.length) return { ok: false, error: 'CURSOR_INVALID', message: '文档已重建，请重新搜索。' };
+        if (!hit.length) return { ok: false, error: 'CURSOR_INVALID', message: 'The document was re-indexed. Search again.' };
         anchorIndex = Number(hit[0].chunk_index);
       }
       if (anchorIndex < 0) {
-        return { ok: false, error: 'CURSOR_INVALID', message: '该引用没有可定位的原文范围，请重新搜索。' };
+        return { ok: false, error: 'CURSOR_INVALID', message: 'That citation has no locatable source range. Search again.' };
       }
       const before = args.before == null ? 1 : Math.min(32, int(args.before, 0));
       const after = args.after == null ? 1 : Math.min(32, int(args.after, 0));
@@ -324,7 +324,7 @@ export class KnowledgeAdapter implements ToolAdapter {
       charLimit: charLimit(args.limit), endChunkIndex, page: pageArg });
     if (!read.delivered.length) {
       return { ok: true, documentId, document: document.title, text: '', complete: true,
-        message: pageArg != null ? `没有匹配第 ${pageArg} 页的内容。` : '没有可读取的内容。' };
+        message: pageArg != null ? `Nothing matched page ${pageArg}.` : 'There is nothing to read.' };
     }
     const delivered = citeDelivery(runId, {
       documentId, documentName: document.title, documentHash: document.file_hash, batchId,

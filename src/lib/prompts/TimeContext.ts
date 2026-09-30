@@ -13,9 +13,9 @@
 export function getCurrentTimeInfo(): {
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
-  weekday: string; // 星期几
-  datetime: string; // 完整日期时间
-  timestamp: number; // 时间戳
+  weekday: string; // English weekday name, prompts are English
+  datetime: string; // full date and time
+  timestamp: number; // epoch milliseconds
 } {
   const now = new Date();
   
@@ -25,14 +25,14 @@ export function getCurrentTimeInfo(): {
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   
-  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const weekday = weekdays[now.getDay()];
   
   return {
     date: `${year}-${month}-${day}`,
     time: `${hours}:${minutes}`,
     weekday,
-    datetime: `${year}年${month}月${day}日 ${weekday} ${hours}:${minutes}`,
+    datetime: `${year}-${month}-${day} ${weekday} ${hours}:${minutes}`,
     timestamp: now.getTime(),
   };
 }
@@ -45,30 +45,32 @@ export function getCurrentTimeInfo(): {
 export function buildTimeContextMessage(includeInSearch: boolean = false): string {
   const timeInfo = getCurrentTimeInfo();
   
-  let message = `【当前时间】${timeInfo.datetime}`;
+  let message = `【Current time】${timeInfo.datetime}`;
   
   if (includeInSearch) {
     message += `
 
-【重要】：
-- 当用户问"今天"、"现在"、"最新"等时间相关问题时，请使用上述当前时间
-- 进行网络搜索时，应在查询中包含具体日期（如"${timeInfo.date}"）以获取最新信息
-- 例如：用户问"今天新闻"，应搜索"${timeInfo.date} 新闻"或"${timeInfo.datetime.split(' ')[0]}新闻"`;
+【Important】
+- When the user asks about "today", "now" or "the latest", use the time above.
+- Put the concrete date (for example "${timeInfo.date}") into web search queries so the results are current.
+- Example: for "today's news", search for "${timeInfo.date} news".`;
   }
   
   return message;
 }
 
 /**
- * 构建简洁的时间上下文消息（用于追问阶段）
+ * Shorter time context, for follow-up turns.
  */
 export function buildSimpleTimeContext(): string {
   const timeInfo = getCurrentTimeInfo();
-  return `当前时间：${timeInfo.datetime}`;
+  return `Current time: ${timeInfo.datetime}`;
 }
 
 /**
  * 检查用户问题是否涉及时间相关查询
+ *
+ * 关键词表是意图检测，不是提示词，所以保留两种语言。
  */
 export function isTimeRelatedQuery(content: string): boolean {
   const timeKeywords = [
@@ -103,13 +105,14 @@ export function enhanceQueryWithTime(query: string): string {
   const hasTimeKeyword = timeKeywords.some(keyword => query.includes(keyword));
   
   if (hasTimeKeyword) {
-    // 替换时间关键词为具体日期
+    // 替换时间关键词为具体日期（中英文关键词都算命中）
     let enhanced = query;
     timeKeywords.forEach(keyword => {
       if (enhanced.includes(keyword)) {
         enhanced = enhanced.replace(keyword, `${timeInfo.date}`);
       }
     });
+    enhanced = enhanced.replace(/\b(today|now|currently|current|latest)\b/gi, timeInfo.date);
     return enhanced;
   }
   

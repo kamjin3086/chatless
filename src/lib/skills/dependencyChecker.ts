@@ -59,16 +59,16 @@ const RUNTIME_INFO: Record<string, {
   description: string;
 }> = {
   python: {
-    installHint: '请安装 Python 3.8 或更高版本。\n\nWindows: 从官网下载安装包\nmacOS: brew install python3\nLinux: sudo apt install python3',
+    installHint: 'Install Python 3.8 or newer.\n\nWindows: download the installer from python.org\nmacOS: brew install python3\nLinux: sudo apt install python3',
     downloadUrl: 'https://www.python.org/downloads/',
     minVersion: '3.8.0',
-    description: 'Python 编程语言运行时',
+    description: 'Python language runtime',
   },
   node: {
-    installHint: '请安装 Node.js 18 或更高版本。\n\nWindows/macOS: 从官网下载安装包\nLinux: 使用 nvm 或包管理器安装',
+    installHint: 'Install Node.js 18 or newer.\n\nWindows/macOS: download the installer from nodejs.org\nLinux: install with nvm or your package manager',
     downloadUrl: 'https://nodejs.org/',
     minVersion: '18.0.0',
-    description: 'Node.js JavaScript 运行时',
+    description: 'Node.js JavaScript runtime',
   },
 };
 
@@ -486,7 +486,7 @@ export async function quickCheckRuntime(
       result = await checkNode();
       break;
     default:
-      return { available: false, hint: `不支持的运行时: ${runtime}` };
+      return { available: false, hint: `Unsupported runtime: ${runtime}` };
   }
   
   return {

@@ -263,7 +263,7 @@ export class ToolExecutionPipeline {
         ok: false,
         error: {
           code: 'PLAN_ONLY_BLOCKED',
-          message: `计划模式禁止执行有副作用的工具: ${server}.${tool}`,
+          message: `Plan-only mode forbids tools with side effects: ${server}.${tool}`,
           server,
           tool,
         },

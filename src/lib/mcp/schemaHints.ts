@@ -14,8 +14,8 @@ export async function buildSchemaHint(server: string, tool: string): Promise<str
 
     // 无 schema 的情况，尽量返回描述信息
     if (!schema || typeof schema !== 'object') {
-      const descPart = description ? `描述：${description}\n` : '';
-      return `工具"${server}.${tool}"参数说明：\n${descPart}该工具未提供详细的参数Schema。请将arguments设为JSON对象，根据工具描述填写合适的参数。`;
+      const descPart = description ? `Description: ${description}\n` : '';
+      return `Arguments for "${server}.${tool}":\n${descPart}This tool does not publish a parameter schema. Pass arguments as a JSON object and pick the fields from the description.`;
     }
 
     const props: Record<string, any> = schema.properties || {};
@@ -41,10 +41,10 @@ export async function buildSchemaHint(server: string, tool: string): Promise<str
     }
 
     const exampleJson = JSON.stringify(exampleObject, null, 2);
-    const requiredStr = requiredList.length ? `必填参数：${requiredList.join(', ')}` : '无显式必填参数';
-    const header = `工具"${server}.${tool}"参数说明：`;
-    const descPart = description ? `功能描述：${description}` : '';
-    const paramsHeader = `参数列表（共${propNames.length}个）：`;
+    const requiredStr = requiredList.length ? `Required parameters: ${requiredList.join(', ')}` : 'No explicitly required parameters';
+    const header = `Arguments for "${server}.${tool}":`;
+    const descPart = description ? `What it does: ${description}` : '';
+    const paramsHeader = `Parameters (${propNames.length} in total):`;
 
     return [
       header,
@@ -52,9 +52,9 @@ export async function buildSchemaHint(server: string, tool: string): Promise<str
       paramsHeader,
       paramLines.join('\n'),
       requiredStr,
-      '示例 arguments：',
+      'Example arguments:',
       exampleJson,
-      '请严格遵循上述参数定义与必填项，按 JSON 传入 arguments 字段。'
+      'Follow the parameter definitions and required fields exactly, and pass them as a JSON arguments field.'
     ].filter(Boolean).join('\n');
   } catch {
     // 忽略细节错误，返回简要提示
@@ -116,9 +116,9 @@ export async function buildDetailedToolGuide(
 
     // 无 schema 的场景：仅给出描述与提示
     if (!schema || typeof schema !== 'object') {
-      const header = `工具"${server}.${tool}"详细说明：`;
-      const descPart = description ? `功能描述：${description}` : '';
-      const tips = '该工具未提供详细的参数Schema。请将arguments设为JSON对象，根据描述和错误信息填写所需参数。';
+      const header = `Details for "${server}.${tool}":`;
+      const descPart = description ? `What it does: ${description}` : '';
+      const tips = 'This tool does not publish a parameter schema. Pass arguments as a JSON object and pick the fields from its description and the error message.';
       const text = [header, descPart, tips].filter(Boolean).join('\n');
       return { text, spec };
     }
@@ -182,9 +182,9 @@ export async function buildDetailedToolGuide(
     spec.suggestedArguments = example;
 
     // 文本化输出（分页/截断基础处理）
-    const header = `工具"${server}.${tool}"详细说明：`;
-    const descPart = description ? `功能描述：${description}` : '';
-    const requiredStr = requiredList.length ? `必填参数：${requiredList.join(', ')}` : '无显式必填参数';
+    const header = `Details for "${server}.${tool}":`;
+    const descPart = description ? `What it does: ${description}` : '';
+    const requiredStr = requiredList.length ? `Required parameters: ${requiredList.join(', ')}` : 'No explicitly required parameters';
 
     const allParamLines: string[] = [];
     const propNames = Object.keys(props);
@@ -202,26 +202,26 @@ export async function buildDetailedToolGuide(
     const MAX_PARAM_LINES = 80;
     const shownParamLines = allParamLines.slice(0, MAX_PARAM_LINES);
     if (allParamLines.length > MAX_PARAM_LINES) {
-      shownParamLines.push(`... 其余 ${allParamLines.length - MAX_PARAM_LINES} 项已省略`);
+      shownParamLines.push(`... ${allParamLines.length - MAX_PARAM_LINES} more parameters omitted`);
     }
 
     const issuesLines: string[] = [];
-    if (missingRequired.length) issuesLines.push(`缺失必填：${missingRequired.join(', ')}`);
-    if (unknownKeys.length) issuesLines.push(`未知参数：${unknownKeys.join(', ')}`);
-    if (typeMismatches.length) issuesLines.push(`类型不匹配：${typeMismatches.map(i=>`${i.key}(期望:${i.expected}, 实际:${i.actual})`).join('; ')}`);
-    if (enumViolations.length) issuesLines.push(`枚举不匹配：${enumViolations.map(i=>`${i.key}(允许:${i.expected.join('|')}, 实际:${JSON.stringify(i.actual)})`).join('; ')}`);
-    const issuesBlock = issuesLines.length ? issuesLines.join('\n') : '未检测到显著参数问题或未提供参数。';
+    if (missingRequired.length) issuesLines.push(`Missing required: ${missingRequired.join(', ')}`);
+    if (unknownKeys.length) issuesLines.push(`Unknown parameters: ${unknownKeys.join(', ')}`);
+    if (typeMismatches.length) issuesLines.push(`Type mismatches: ${typeMismatches.map(i=>`${i.key}(expected:${i.expected}, actual:${i.actual})`).join('; ')}`);
+    if (enumViolations.length) issuesLines.push(`Enum mismatches: ${enumViolations.map(i=>`${i.key}(allowed:${i.expected.join('|')}, actual:${JSON.stringify(i.actual)})`).join('; ')}`);
+    const issuesBlock = issuesLines.length ? issuesLines.join('\n') : 'No significant argument problems detected, or no arguments were provided.';
 
     const exampleJson = JSON.stringify(example, null, 2);
     const text = [
       header,
       descPart,
-      '参数定义：',
+      'Parameter definitions:',
       shownParamLines.join('\n'),
       requiredStr,
-      '参数问题诊断：',
+      'Argument diagnostics:',
       issuesBlock,
-      '建议的最小可行 arguments：',
+      'Suggested minimal arguments:',
       exampleJson,
     ].filter(Boolean).join('\n');
 

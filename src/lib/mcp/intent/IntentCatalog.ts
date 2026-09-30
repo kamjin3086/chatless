@@ -39,7 +39,7 @@ export const INTENT_RULES: IntentRule[] = [
       { toolName: 'list_directory', argumentTemplate: '{"path":"."}', label: '列出目录' },
       { toolName: 'directory_tree', argumentTemplate: '{"path":"."}', label: '目录树' }
     ],
-    hint: '若要查看本地目录/文件清单，请调用具备 list_directory 或 directory_tree 的 Server。'
+    hint: 'To see a local directory or file listing, call a server that provides list_directory or directory_tree.'
   },
   {
     id: 'read-file',
@@ -50,7 +50,7 @@ export const INTENT_RULES: IntentRule[] = [
       { toolName: 'read_file', argumentTemplate: '{"path":"<文件路径>"}', label: '读取文件' },
       { toolName: 'read_multiple_files', argumentTemplate: '{"paths":["<文件1>","<文件2>"]}', label: '读取多个文件' }
     ],
-    hint: '若要读取文件内容，请调用具备 read_file/read_multiple_files 的 Server。'
+    hint: 'To read file contents, call a server that provides read_file/read_multiple_files.'
   },
   {
     id: 'write-file',
@@ -62,7 +62,7 @@ export const INTENT_RULES: IntentRule[] = [
       { toolName: 'edit_file', argumentTemplate: '{"path":"<文件路径>","patch":"<diff>"}', label: '编辑补丁' },
       { toolName: 'create_directory', argumentTemplate: '{"path":"<目录路径>"}', label: '新建目录' }
     ],
-    hint: '若要创建/修改文件或目录，请调用具备 write_file/edit_file/create_directory 的 Server。'
+    hint: 'To create or modify files and directories, call a server that provides write_file/edit_file/create_directory.'
   },
   {
     id: 'move-file',
@@ -72,7 +72,7 @@ export const INTENT_RULES: IntentRule[] = [
     toolCandidates: [
       { toolName: 'move_file', argumentTemplate: '{"from":"<源路径>","to":"<目标路径>"}', label: '移动/重命名' }
     ],
-    hint: '若要移动或重命名文件，请调用具备 move_file 的 Server。'
+    hint: 'To move or rename files, call a server that provides move_file.'
   },
   {
     id: 'git-basic',
@@ -88,7 +88,7 @@ export const INTENT_RULES: IntentRule[] = [
       { toolName: 'git_log', argumentTemplate: '{}', label: 'git log' },
       { toolName: 'git_reset', argumentTemplate: '{"paths":["<文件或目录>"]}', label: 'git reset' }
     ],
-    hint: '若要进行 git 操作，请调用包含对应 git_* 工具的 Server（status/diff/commit/add/reset/log 等）。'
+    hint: 'To run git operations, call a server with the matching git_* tools (status/diff/commit/add/reset/log and so on).'
   }
 ];
 

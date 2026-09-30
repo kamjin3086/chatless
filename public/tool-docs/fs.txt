@@ -1,23 +1,23 @@
-fs__* — 文件系统工具
+fs__* — filesystem tools
 
-## 工具列表
+## Tools
 
-| 工具 | 用途 |
-|------|------|
-| fs__read | 读取文件内容 |
-| fs__write | 写入文件（覆盖） |
-| fs__ls | 列出目录内容 |
-| fs__mkdir | 创建目录（递归） |
-| fs__rm | 删除文件 |
-| fs__mv | 重命名/移动文件 |
+| Tool | Purpose |
+|------|---------|
+| fs__read | read a file |
+| fs__write | write a file (overwrites) |
+| fs__ls | list a directory |
+| fs__mkdir | create a directory (recursive) |
+| fs__rm | delete a file |
+| fs__mv | rename / move a file |
 
-## 路径格式
+## Path formats
 
-- 支持别名：`@WorkDir/...`（自动解析）
-- Windows：`C:/Users/...`（推荐正斜杠）
-- Unix：`/home/user/...`
+- Alias: `@WorkDir/...` (resolved automatically)
+- Windows: `C:/Users/...` (forward slashes preferred)
+- Unix: `/home/user/...`
 
-## 使用示例
+## Examples
 
 ```
 fs__read({ path: "@WorkDir/config.json" })
@@ -28,26 +28,26 @@ fs__rm({ path: "@WorkDir/temp.txt" })
 fs__mv({ oldPath: "@WorkDir/a.txt", newPath: "@WorkDir/b.txt" })
 ```
 
-## 操作前检查
+## Before you act
 
-- 不确定路径？→ 先 fs__ls 确认
-- 覆盖文件？→ 先 fs__read 或提示用户
-- 新建文件？→ 确认父目录存在
+- Unsure about the path? List it with fs__ls first.
+- Overwriting a file? Read it first, or tell the user.
+- Creating a file? Make sure the parent directory exists.
 
-## 授权机制
+## Authorization
 
-- 直接调用，无需先探测权限
-- 越界访问会弹出授权卡片
+- Call the tool directly; do not probe permissions first.
+- Access outside the allowed scope raises an authorization card for the user.
 
-## 错误处理
+## Errors
 
-- AUTH_DENIED → 提示用户授权
-- PATH_NOT_FOUND → 检查路径拼写
+- AUTH_DENIED → ask the user to authorize
+- PATH_NOT_FOUND → check the spelling of the path
 
-## 与 shell__run 的选择
+## fs__* or shell__run?
 
-| 场景 | 推荐 |
-|------|------|
-| 简单文件操作 | fs__*（优先） |
-| 调用外部程序 | shell__run |
-| 批量/复杂转换 | shell__run 脚本模式 |
+| Task | Use |
+|------|-----|
+| Simple file work | fs__* (preferred) |
+| Running an external program | shell__run |
+| Batch or complex transformation | shell__run with a script |

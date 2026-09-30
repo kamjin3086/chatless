@@ -35,7 +35,7 @@ export type ContextCheckpoint = {
 
 const summaryInstruction: LlmMessage = {
   role: 'system',
-  content: '压缩以下旧对话为简洁记录，保留用户目标与约束、关键发现及来源、已执行操作与副作用、未完成事项和阅读进度。不要编造。',
+  content: 'Compress the following older conversation into a concise record: the user goals and constraints, key findings with their sources, actions already taken and their side effects, what is still open, and how far the reading got. Never invent anything.',
 };
 
 export class ContextWindowManager {
@@ -71,7 +71,7 @@ export class ContextWindowManager {
     const tail = messages.slice(split);
     const historyFingerprint = await sha256Hex(JSON.stringify(messages.slice(0, split)));
     if (opts.checkpoint?.coveredMessages === split && opts.checkpoint.historyFingerprint === historyFingerprint) {
-      const reused: LlmMessage[] = [{ role: 'system', content: `【对话历史摘要】\n${opts.checkpoint.summary}` }, ...tail];
+      const reused: LlmMessage[] = [{ role: 'system', content: `【Conversation summary】\n${opts.checkpoint.summary}` }, ...tail];
       if (estimateTokens(reused) <= budget) {
         opts.onCompacted?.({ summary: opts.checkpoint.summary, coveredMessages: split, reused: true });
         return reused;
@@ -101,8 +101,8 @@ export class ContextWindowManager {
     let summary = seedSummary;
     const summarize = async (part: LlmMessage[]): Promise<void> => {
       const prompt: LlmMessage[] = [summaryInstruction];
-      if (summary) prompt.push({ role: 'system', content: `【已有摘要】\n${summary}` });
-      prompt.push(...part, { role: 'user' as const, content: '请输出摘要。' });
+      if (summary) prompt.push({ role: 'system', content: `【Existing summary】\n${summary}` });
+      prompt.push(...part, { role: 'user' as const, content: 'Write the summary.' });
       if (estimateTokens(prompt) > capacity) {
         throw new Error('待压缩历史超出摘要请求预算；原始历史已保留');
       }
@@ -119,8 +119,8 @@ export class ContextWindowManager {
     for (const message of prefix.slice(coveredStart)) {
       if (segment.length) {
         const probe: LlmMessage[] = [summaryInstruction];
-        if (summary) probe.push({ role: 'system', content: `【已有摘要】\n${summary}` });
-        probe.push(...segment, message, { role: 'user' as const, content: '请输出摘要。' });
+        if (summary) probe.push({ role: 'system', content: `【Existing summary】\n${summary}` });
+        probe.push(...segment, message, { role: 'user' as const, content: 'Write the summary.' });
         if (estimateTokens(probe) > capacity) {
           await summarize(segment);
           segment = [];
@@ -132,7 +132,7 @@ export class ContextWindowManager {
     if (!summary) throw new Error('历史压缩返回空摘要；原始历史已保留');
     await opts.onCheckpoint?.({ summary, coveredMessages: split, historyFingerprint });
     opts.onCompacted?.({ summary, coveredMessages: split, reused: false });
-    const result: LlmMessage[] = [{ role: 'system', content: `【对话历史摘要】\n${summary}` }, ...tail];
+    const result: LlmMessage[] = [{ role: 'system', content: `【Conversation summary】\n${summary}` }, ...tail];
     if (estimateTokens(result) > budget) throw new Error('压缩后仍超出上下文预算；原始历史已保留');
     return result;
   }

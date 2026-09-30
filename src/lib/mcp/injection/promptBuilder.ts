@@ -31,7 +31,7 @@ import { getSkillManager } from '@/lib/skills';
 import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
-import { buildAgentContractBlock, resolvePromptLocale } from '@/lib/mcp/prompt/agentContract';
+import { buildAgentContractBlock } from '@/lib/mcp/prompt/agentContract';
 import type { PromptBlock } from '@/lib/mcp/prompt/composition';
 import { getToolDoc } from './toolDocLoader';
 
@@ -91,16 +91,16 @@ export async function buildInitialPrompt(
       id: 'runtime-environment',
       layer: 'conversation',
       order: 10,
-      content: `【运行环境 - ${g.platformLabel}（强制遵守）】
+      content: `【Runtime environment - ${g.platformLabel} (binding)】
 
 Shell: ${g.preferredShell}
 
-规则：
+Rules:
 ${g.rules.map((r) => `- ${r}`).join('\n')}
 
-${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
+${cmdExamples ? `Common commands:\n${cmdExamples}` : ''}
 
-💡 创建目录优先用 fs__mkdir，而非 shell 命令`,
+Prefer fs__mkdir over a shell command when creating a directory.`,
     });
   } catch {
     // ignore
@@ -132,27 +132,17 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
   // a command that asks for input fails.  Say that once, in the conversation
   // layer, instead of letting the agent discover it by hanging.
   try {
-    const gitGuidance = resolvePromptLocale(context.locale) === 'en'
-      ? [
-          '【Version control and GitHub】',
-          '- `git` and `gh` run through shell__run. Running a command still follows the shell trust setting,',
-          '  so a first command outside the trusted scope may need the user to approve it.',
-          '- Commands must be non-interactive: stdin is closed. Do not run commands that wait for input',
-          '  (a bare `git commit`, interactive rebase, a push that prompts for a password).',
-          '- Commit with `git commit -m "..."`. If a push needs credentials it fails immediately; report that to the user.',
-          '- Use a logged-in `gh` for pull requests and issues. If `gh auth status` says you are not logged in,',
-          '  ask the user to run `gh auth login` instead of retrying the same command.',
-          '- Start anything long-running (dev server, watcher) with shell__start instead of blocking on it.',
-        ].join('\n')
-      : [
-          '【版本控制与 GitHub】',
-          '- `git` 与 `gh` 通过 shell__run 使用；命令是否直接执行取决于用户的 Shell 信任设置，',
-          '  首次执行落在信任范围外的命令可能需要用户批准。',
-          '- 命令必须非交互：stdin 已关闭。不要执行会等待输入的命令（不带 -m 的 git commit、交互式 rebase、需要密码的推送）。',
-          '- 提交用 `git commit -m "…"`；推送若远端要求凭据会直接失败，此时把失败信息转述给用户。',
-          '- PR/issue 等 GitHub 操作用已登录的 `gh`；若 `gh auth status` 显示未登录，请让用户执行 `gh auth login`，不要反复重试同一命令。',
-          '- 需要长时间运行的东西（dev server、watch）用 shell__start，不要用阻塞命令等待。',
-        ].join('\n');
+    const gitGuidance = [
+      '【Version control and GitHub】',
+      '- `git` and `gh` run through shell__run. Running a command still follows the shell trust setting,',
+      '  so a first command outside the trusted scope may need the user to approve it.',
+      '- Commands must be non-interactive: stdin is closed. Do not run commands that wait for input',
+      '  (a bare `git commit`, interactive rebase, a push that prompts for a password).',
+      '- Commit with `git commit -m "..."`. If a push needs credentials it fails immediately; report that to the user.',
+      '- Use a logged-in `gh` for pull requests and issues. If `gh auth status` says you are not logged in,',
+      '  ask the user to run `gh auth login` instead of retrying the same command.',
+      '- Start anything long-running (dev server, watcher) with shell__start instead of blocking on it.',
+    ].join('\n');
     blocks.push({
       id: 'git-guidance',
       layer: 'conversation',
@@ -215,7 +205,7 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
 
   // Keep the default contract small. Native schemas carry the detailed
   // operation surface; prompt text must not become a second tool protocol.
-  blocks.push(buildAgentContractBlock(resolvePromptLocale(context.locale)));
+  blocks.push(buildAgentContractBlock());
 
   // Models without native tool support remain chat-only. Do not inject a
   // textual fallback protocol that can be mistaken for an executable call.
@@ -234,12 +224,12 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
           layer: 'conversation',
           order: 20,
           content:
-            '【当前会话工作目录】\n' +
+            '【Working directory for this session】\n' +
             `- @WorkDir -> ${wd}\n` +
             (attached
-              ? '- 这是用户为本会话附加的目录：默认就在这里读写，写文件前先看清楚现有内容。\n'
-              : '- 这是本会话自己的产物目录：相对路径与新建文件默认落在它里面。\n') +
-            '- 用相对路径或 @WorkDir/... 均可；访问该目录之外的路径需要用户授权。',
+              ? '- The user attached this directory: read and write here by default, and look at the existing contents before overwriting.\n'
+              : '- This is the session scratch directory: relative paths and new files land here by default.\n') +
+            '- Use a relative path or @WorkDir/...; anything outside this directory needs the user to authorize it.',
         });
       }
       // The current mount is the authority. Historic messages and prior
@@ -256,10 +246,10 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
           layer: 'conversation',
           order: 30,
           content:
-            '【文档检索规则】\n' +
-            '当前会话有可访问的知识库或临时附件。需要查资料时先使用 knowledge__list/knowledge__search，再用 knowledge__read 读取完整原文。\n' +
-            '文档事实只能引用工具返回的 evidenceId，引用格式为 [[E1]]；不要编造文档、页码或引用。\n' +
-            '如果只读取了部分长文档，必须说明覆盖范围；文档没有依据时明确说无法确认。一般知识和推断要与文档事实分开。',
+            '【Document retrieval rules】\n' +
+            'This session has a knowledge base or attached documents. To look something up, call knowledge__list/knowledge__search first, then knowledge__read for the full text.\n' +
+            'A document fact may only be cited with the evidenceId the tool returned, in the format [[E1]]. Never invent documents, pages or citations.\n' +
+            'If you only read part of a long document, say what the coverage was; when the documents do not support an answer, say it cannot be confirmed. Keep general knowledge and inference separate from document facts.',
         });
       }
     }
@@ -301,7 +291,7 @@ ${cmdExamples ? `常用命令：\n${cmdExamples}` : ''}
       id: 'plan-only-mode',
       layer: 'turn',
       order: 20,
-      content: '【仅规划模式】只允许有界读取、检索与只读工具；写入、Shell 与未知副作用一律不执行，先给出计划等待用户确认。',
+      content: '【Plan-only mode】Only bounded reads, retrieval and read-only tools are allowed. Writes, shell commands and anything with unknown side effects must not run: produce a plan and wait for the user to confirm it.',
     });
   }
   
@@ -518,69 +508,4 @@ async function injectSkillsIndex(
     console.warn('[PromptBuilder] Skills 索引注入失败:', error);
     // 不阻塞主流程
   }
-}
-
-/**
- * 将工具定义转换为文本格式的提示词
- * 用于不支持 native tool API 的模型
- * 
- * @param tools 工具定义列表
- * @returns 格式化的工具 schema 提示词
- */
-function buildToolSchemaPrompt(tools: NativeToolDefinition[]): string {
-  if (!tools || tools.length === 0) return '';
-
-  const toolDescriptions = tools.map((tool, index) => {
-    const { name, description, parameters } = tool;
-    
-    // 构建参数说明
-    let paramsText = '';
-    if (parameters && parameters.properties) {
-      const props = parameters.properties as Record<string, { type?: string; description?: string; enum?: string[] }>;
-      const required = parameters.required || [];
-      
-      const paramsList = Object.entries(props).map(([paramName, paramDef]) => {
-        const isRequired = required.includes(paramName);
-        const typeStr = paramDef.type || 'any';
-        const desc = paramDef.description || '';
-        const enumStr = paramDef.enum ? ` (可选值: ${paramDef.enum.join(', ')})` : '';
-        const requiredMark = isRequired ? ' [必填]' : ' [可选]';
-        return `    - ${paramName}: ${typeStr}${requiredMark}${enumStr}${desc ? ` - ${desc}` : ''}`;
-      });
-      
-      paramsText = paramsList.length > 0 
-        ? `\n  参数:\n${paramsList.join('\n')}` 
-        : '\n  参数: 无';
-    } else {
-      paramsText = '\n  参数: 无';
-    }
-
-    return `${index + 1}. ${name}\n  描述: ${description}${paramsText}`;
-  }).join('\n\n');
-
-  return `【可用工具列表】
-
-你可以使用以下工具来完成任务。调用工具时，请使用以下 JSON 格式：
-
-\`\`\`json
-{
-  "server": "服务器名称",
-  "tool": "工具名称",
-  "arguments": {
-    "参数名": "参数值"
-  }
-}
-\`\`\`
-
-**重要**：JSON 必须以 \`{"server":\` 开头，\`"tool":\` 紧随其后。
-
-工具列表：
-
-${toolDescriptions}
-
-调用规则：
-- 工具名格式为 "server__tool"，调用时 server 填 "__" 前的部分，tool 填后面的部分
-- 例如：fs__read → server: "fs", tool: "read"
-- 必填参数必须提供，可选参数可省略
-- 一次只调用一个工具，等待结果后再决定下一步`;
 }

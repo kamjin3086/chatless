@@ -1,135 +1,137 @@
-Skills (skills__*) — 工具使用指南
+Skills (skills__*) — how to use them
 
-## 用途
-Skills 是预定义的任务模板（SKILL.md + actions），提供特定场景的最佳实践。
-使用 skill 时，它将成为权威的分步指南。
+## What they are
+A skill is a predefined task template (a SKILL.md plus actions) that encodes the
+best practice for one specific job. Once you use a skill, its guide is the
+authoritative step-by-step procedure.
 
-## 何时使用（重要）
-仅在以下情况使用 skills：
-- 用户显式提到 skill（skill id/name，或 @skill 语法）
-- 从技能索引中，你高置信度地判断某个 skill 直接匹配任务
+## When to use a skill (important)
+Use the skills tools only when:
+- the user explicitly mentions a skill (skill id/name, or the @skill syntax), or
+- the skill index tells you, with high confidence, that one skill matches the task.
 
-否则（无显式提及，任务与现有 skills 无关）：不要调用 skills 工具，直接用 fs/shell 完成。
+Otherwise (no explicit mention, no matching skill): do not call the skills tools.
+Finish the task with fs/shell directly.
 
-## 技能不匹配时的处理（关键！）
+## When no skill matches (critical)
 
-⚠️ **Skills 只是高级抽象，Tools 才是真正的能力！**
+⚠️ **Skills are only a high-level abstraction - the tools are the real capability.**
 
-当没有匹配的 Skill 时，**不要反复查询 skills，而是转向组合使用已注册的 Tools**：
+When no skill matches, **stop querying skills and move to composing the registered tools**:
 
-### 可用的基础 Tools（你的手和眼）
-- `web__search`：网络搜索
-- `web__fetch`：抓取网页内容
-- `web__download`：下载文件
-- `fs__*`：文件读写、目录操作
-- `shell__run`：执行命令
+### The base tools (your hands and eyes)
+- `web__search`: search the web
+- `web__fetch`: fetch page contents
+- `web__download`: download a file
+- `fs__*`: read/write files, work with directories
+- `shell__run`: run commands
 
-### 正确决策流程
-1. 调用 `list_available_skills` **一次**
-2. 有匹配的 Skill → 使用 Skill
-3. **没有匹配的 Skill → 立即停止 skills 工具，转向 Tools 组合**
-4. 分析任务需要哪些能力 → 组合使用 web/fs/shell
+### The right decision flow
+1. Call `list_available_skills` **once**
+2. A skill matches → use that skill
+3. **No skill matches → stop using the skills tools and compose tools instead**
+4. Work out which capabilities the task needs → combine web/fs/shell
 
-### 示例
-- 用户："搜索猫的图片并保存"
-  - 没有图片搜索 Skill？没关系！
-  - 方案：`web__search(猫 图片)` → `web__download(图片URL)` → `fs__ls(验证)`
-  
-- 用户："翻译这个网页"
-  - 没有翻译 Skill？
-  - 方案：`web__fetch(url)` → 获取内容 → 直接翻译并回复
+### Examples
+- User: "search for cat pictures and save them"
+  - No image-search skill? That is fine.
+  - Plan: `web__search(cat pictures)` → `web__download(image URL)` → `fs__ls` to verify
 
-### ⚠️ 禁止的行为
-- 反复调用 `list_available_skills`（已经查过一次了！）
-- 只因没有 Skill 就说"无法完成"（还有 Tools 呢！）
-- 忽略已注册的 web/fs/shell 工具
+- User: "translate this web page"
+  - No translation skill?
+  - Plan: `web__fetch(url)` → translate the contents → answer
 
-## 标准工作流
-1. 先调用 `skills__get_skill_instructions({ skillId })` 获取指导
-2. 如有 actions，调用 `skills__list_skill_actions({ skillId })` 查看可用操作
-3. 使用返回的 actionId 执行操作（不要猜测 actionId）
-4. 如仅有指导无 actions：分解为 fs/shell 步骤执行
-5. 用 fs__ls 验证输出结果
+### ⚠️ Do not
+- call `list_available_skills` over and over (you already looked)
+- report "cannot do it" just because no skill matched (the tools are still there)
+- ignore the registered web/fs/shell tools
 
-## 高效阅读（行范围）
-- `skills__get_skill_instructions` 支持 `startLine`/`endLine` 参数（1-based），返回 `totalLines`
-- 优先按行范围读取相关部分，避免将整个 SKILL.md 拉入上下文
+## Standard workflow
+1. Call `skills__get_skill_instructions({ skillId })` first
+2. If the skill has actions, call `skills__list_skill_actions({ skillId })`
+3. Run an action with the actionId that was returned (never guess an actionId)
+4. If the skill has guidance but no actions: break it down into fs/shell steps
+5. Verify the output with fs__ls
 
-## 与文件导向工作流结合
+## Reading efficiently (line ranges)
+- `skills__get_skill_instructions` accepts `startLine`/`endLine` (1-based) and returns `totalLines`
+- Read the relevant range instead of pulling a whole SKILL.md into the context
 
-### Skill 内嵌工作流模板
-高级 Skill 可在 SKILL.md 中定义工作流模板：
+## Combined with the file-oriented workflow
+
+### A skill can define a workflow template
+An advanced skill may define a workflow template in its SKILL.md:
 
 ```markdown
-## 工作流模板（可选）
+## Workflow template (optional)
 
-执行此 Skill 时，建议创建以下文件结构：
+When running this skill, create this file structure:
 
 @WorkDir/.agent/
-├── todo.md          # 任务计划（使用下方模板）
-├── research/        # 研究结果目录
-└── output/          # 最终输出目录
+├── todo.md          # task plan (use the template below)
+├── research/        # research results
+└── output/          # final output
 
-### todo.md 模板
-任务：{skill 名称} - {用户目标}
-状态：进行中
+### todo.md template
+Task: {skill name} - {user goal}
+Status: in progress
 
-步骤：
-1. [ ] {skill 定义的步骤1}
-2. [ ] {skill 定义的步骤2}
+Steps:
+1. [ ] {step 1 as defined by the skill}
+2. [ ] {step 2 as defined by the skill}
 ...
 ```
 
-### Agent 行为
-当 Skill 包含工作流模板时：
-1. 读取 Skill 指导
-2. 检测到工作流模板 → 在 @WorkDir/.agent/ 创建对应结构
-3. 用模板初始化 todo.md
-4. 按 todo.md 逐步执行，每完成一步更新状态
-5. 研究结果写入 research/*.md，最终输出写入 output/
+### Agent behaviour
+When a skill carries a workflow template:
+1. read the skill guidance
+2. notice the template → create the structure under @WorkDir/.agent/
+3. initialise todo.md from the template
+4. work through todo.md, updating the status after every step
+5. put research notes in research/*.md and the final output in output/
 
-### 会话恢复
-用户中断后返回：
-1. 检查 @WorkDir/.agent/todo.md
-2. 如存在未完成的 Skill 任务，询问用户是否继续
-3. 用户确认后，从断点继续
+### Resuming a session
+When the user comes back after an interruption:
+1. check @WorkDir/.agent/todo.md
+2. if an unfinished skill task is there, ask whether to continue
+3. after confirmation, resume from the recorded step
 
-## 重要语义
-- "保存了脚本" ≠ "任务完成"，必须执行命令并验证输出
-- 研究结果写入文件后，上下文只保留摘要
-- 每步完成后更新 todo.md 状态
+## Semantics that matter
+- "saved the script" is not "task finished": run it and check the output
+- once research is written to a file, keep only a summary in the context
+- update the todo.md status after every step
 
-## Skill 工具 vs FS 工具（语义明确）
+## Skill tools vs fs tools
 
-### Skill 资源工具
-| 工具 | 用途 | 何时使用 |
-|------|------|----------|
-| `skill__list_resources` | 列出 skill 包的资源 | 了解 skill 提供了什么 |
-| `skill__get_template` | 获取模板内容（只读） | 参考/复制模板 |
-| `skill__edit_resource` | 编辑 skill 包资源 | **仅当用户要求修改 skill 本身** |
+### Skill resource tools
+| Tool | Purpose | When |
+|------|---------|------|
+| `skill__list_resources` | list the resources of a skill package | to see what the skill offers |
+| `skill__get_template` | read a template (read-only) | to reference or copy it |
+| `skill__edit_resource` | edit a resource inside the package | **only when the user asks to change the skill itself** |
 
-### FS 工具
-| 工具 | 用途 | 何时使用 |
-|------|------|----------|
-| `fs__write` | 写入用户文件 | **任务输出的默认选择** |
-| `fs__read` | 读取用户文件 | 读取用户目录的文件 |
+### fs tools
+| Tool | Purpose | When |
+|------|---------|------|
+| `fs__write` | write a user file | **the default for task output** |
+| `fs__read` | read a user file | to read files in the user's directories |
 
-### 决策流程
+### Decision flow
 ```
-用户要我写文件 →
-  ├─ 是任务输出（报告、文档、代码）？ → fs__write + @WorkDir ✅
-  └─ 是修改 skill 包本身？ → skill__edit_resource ✅
-     └─ 用户没有明确说要改 skill？ → 默认用 fs__write ✅
+The user asks me to write a file →
+  ├─ is it task output (report, document, code)? → fs__write + @WorkDir ✅
+  └─ is it a change to the skill package itself? → skill__edit_resource ✅
+     └─ did the user not ask to change the skill? → default to fs__write ✅
 ```
 
-### 示例对比
+### Examples
 ```
-场景1：用户说"生成一个报告"
+Case 1: "generate a report"
 ✅ fs__write({ path: "@WorkDir/report.docx", content: "..." })
 
-场景2：用户说"修改 docx skill 的模板"
+Case 2: "edit the template of the docx skill"
 ✅ skill__edit_resource({ id: "docx", name: "template.md", content: "..." })
 
-场景3：用户说"用 docx skill 生成文档"
-✅ skill__get_template 获取模板 → fs__write 写入用户目录
+Case 3: "use the docx skill to generate a document"
+✅ skill__get_template to read the template → fs__write into the user's directory
 ```

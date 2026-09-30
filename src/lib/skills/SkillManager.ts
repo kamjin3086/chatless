@@ -662,12 +662,12 @@ export class SkillManager {
         const shellModule = await import('@tauri-apps/plugin-shell');
         Command = (shellModule as any).Command;
       } catch {
-        return { ok: false, message: 'Git 更新需要 shell 插件。' };
+        return { ok: false, message: 'Updating from git needs the shell plugin.' };
       }
 
       // git available
       const okGit = await this.checkGitAvailable();
-      if (!okGit) return { ok: false, message: '未检测到 Git，请先安装并配置到 PATH。' };
+      if (!okGit) return { ok: false, message: 'Git was not found. Install it and put it on PATH first.' };
 
       const r = await Command.create('git', ['-C', skill.path, 'pull', '--ff-only']).execute();
       if (r.code !== 0) {
@@ -675,7 +675,7 @@ export class SkillManager {
       }
 
       await this.refresh();
-      return { ok: true, message: '更新完成' };
+      return { ok: true, message: 'Update finished' };
     });
   }
 
@@ -689,7 +689,7 @@ export class SkillManager {
 
     return this.withLock(`reinstall:${id}`, async () => {
       await this.importFromZip(zp, { overwrite: true, targetSkillId: id });
-      return { ok: true, message: '覆盖安装完成' };
+      return { ok: true, message: 'Overwrite install finished' };
     });
   }
 
@@ -862,18 +862,18 @@ export class SkillManager {
     });
 
     // 精简版规则：强调必须调用 skill__guide 获取操作指南
-    const header = `## 可用 Skills
+    const header = `## Available skills
 
-⚠️ 此列表仅含名称，不含操作方法。
+⚠️ This list is names only - it does not contain the instructions.
 
-使用流程：
-1. skill__guide → 获取操作指南（SKILL.md）
-2. 按指南执行，如需 skill 包内的模板/脚本 → skill__list_files + skill__read_file
-3. 使用 shell__run、fs__* 完成任务
+How to use one:
+1. skill__guide → read the guide (SKILL.md)
+2. Follow it; for templates or scripts inside the package use skill__list_resources + skill__get_template
+3. Do the work with shell__run and fs__*
 
-❌ 禁止：跳过 skill__guide 直接操作
+❌ Never: act on a skill without calling skill__guide first
 
-已启用：`;
+Enabled: `;
     return header + '\n' + lines.join('\n');
   }
 

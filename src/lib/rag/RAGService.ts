@@ -219,8 +219,8 @@ export class RAGService {
   }
 
   private getEvidenceSystemPrompt(): string {
-    return `你是一个知识库助手。你只能根据用户消息中提供的 Evidence 块作答。
-规则：仅使用 Evidence 原文；引用用 [[E编号]]；证据不足时明确说明无法作答。`;
+    return `You are a knowledge base assistant. Answer only from the evidence blocks provided in the user message.
+Rules: use only the evidence text; cite with [[E...]] markers; when the evidence is not enough, say plainly that you cannot answer from the knowledge base.`;
   }
 
   /**
@@ -445,7 +445,7 @@ export class RAGService {
       const messages: LLMMessage[] = [
         {
           role: 'system',
-          content: `你是一个知识库助手，基于提供的上下文信息回答用户问题。请确保回答准确、简洁，并且基于给定的上下文。如果上下文中没有相关信息，请明确说明。`
+          content: `You are a knowledge base assistant. Answer the user's question from the context provided: accurate, concise, and grounded in that context. If the context does not contain the answer, say so explicitly.`
         },
         {
           role: 'user',

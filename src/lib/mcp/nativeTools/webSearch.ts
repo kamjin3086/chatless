@@ -4,14 +4,14 @@ export const WEB_SEARCH_SERVER_NAME = 'web';
 
 export const WEB_SEARCH_TOOL_SCHEMA: McpTool = {
   name: 'search',
-  description: '搜索互联网（可加 site:域名 限定网站）',
+  description: 'Search the internet (add site:example.com to restrict it to one site)',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: '搜索关键词，例如 "猫图片 site:pexels.com"',
+          description: 'Search keywords, for example "cat images site:pexels.com"',
         },
       },
       required: ['query'],
@@ -21,14 +21,14 @@ export const WEB_SEARCH_TOOL_SCHEMA: McpTool = {
 
 export const WEB_FETCH_TOOL_SCHEMA: McpTool = {
   name: 'fetch',
-  description: '抓取网页内容，返回标题、正文、链接',
+  description: 'Fetch a page and return its title, body text and links',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         url: {
           type: 'string',
-          description: '网页地址或 API URL',
+          description: 'Page URL or API URL',
         },
       },
       required: ['url'],
@@ -38,22 +38,22 @@ export const WEB_FETCH_TOOL_SCHEMA: McpTool = {
 
 export const WEB_DOWNLOAD_TOOL_SCHEMA: McpTool = {
   name: 'download',
-  description: '下载文件到本地（需提供直链 URL）',
+  description: 'Download a file to disk (the URL must be a direct link)',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
         url: {
           type: 'string',
-          description: '文件直链地址（必须是可直接下载的 URL，不是页面链接）',
+          description: 'Direct link to the file (a URL that downloads, not a page link)',
         },
         savePath: {
           type: 'string',
-          description: '保存路径（相对于 @WorkDir 或绝对路径）。例如: "images/cat.jpg"',
+          description: 'Where to save it (relative to @WorkDir, or an absolute path). Example: "images/cat.jpg"',
         },
         filename: {
           type: 'string',
-          description: '可选：自定义文件名',
+          description: 'Optional: a custom file name',
         },
       },
       required: ['url', 'savePath'],

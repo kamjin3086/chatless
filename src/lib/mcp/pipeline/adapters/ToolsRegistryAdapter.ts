@@ -81,7 +81,7 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       results: page,
       nextCursor: offset + page.length < matches.length ? offset + page.length : null,
       total: matches.length,
-      hint: page.length ? '匹配能力将在下一模型步生效。' : '没有匹配的工具。',
+      hint: page.length ? 'The matching capability becomes available in the next model step.' : 'No tools matched.',
     };
   }
 }

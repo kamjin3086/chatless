@@ -269,7 +269,7 @@ export class SkillExecutor {
     // Pre-execute hook
     if (skill.hooks?.pre_execute) {
       steps.push(createStep('pre-execute', '准备阶段', {
-        description: '执行前置处理',
+        description: 'Run the pre-step',
         command: skill.hooks.pre_execute,
         skippable: false,
       }));
@@ -277,14 +277,14 @@ export class SkillExecutor {
     
     // Main execution
     steps.push(createStep('main', '主要执行', {
-      description: '执行技能核心逻辑',
+      description: 'Run the skill core',
       skippable: false,
     }));
     
     // Verify hook
     if (skill.hooks?.verify) {
       steps.push(createStep('verify', '验证结果', {
-        description: '验证执行结果',
+        description: 'Verify the result',
         command: skill.hooks.verify,
         skippable: true,
         dependsOn: ['main'],
@@ -294,7 +294,7 @@ export class SkillExecutor {
     // Post-execute hook
     if (skill.hooks?.post_execute) {
       steps.push(createStep('post-execute', '清理阶段', {
-        description: '执行后置处理',
+        description: 'Run the post-step',
         command: skill.hooks.post_execute,
         skippable: true,
         dependsOn: skill.hooks.verify ? ['verify'] : ['main'],

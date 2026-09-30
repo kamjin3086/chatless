@@ -1,110 +1,66 @@
-tools__* — 工具发现与加载
+tools__* — tool discovery and loading
 
-## 设计理念
+## Design principle
 
-"Tool 越少，AI 越聪明"
+"Fewer tools, smarter model"
 
-系统按需加载工具，避免工具过多分散注意力。
+Tools are loaded on demand so a long tool list does not dilute attention.
 
-## 工具列表
+## tools__search
 
-| 工具 | 用途 |
-|------|------|
-| tools__discover | 查看可用但未加载的工具组 |
-| tools__load | 请求加载特定工具组 |
-
----
-
-## tools__discover
-
-查看系统中还有哪些工具可用。
+Searches the complete tool catalog by tool name or description. A capability
+group that matches becomes available in the **next** model step.
 
 ```
-tools__discover({})
+tools__search({ query: "run a command" })
+tools__search({ query: "knowledge base", limit: 20 })
 ```
 
-**返回示例**：
-```json
-{
-  "loadedGroups": [
-    { "id": "core", "name": "核心文件", "description": "read, write, ls" }
-  ],
-  "availableGroups": [
-    { "id": "shell", "name": "命令执行", "description": "运行系统命令", "howToLoad": "调用 tools__load({ group: \"shell\" })" },
-    { "id": "web", "name": "网络工具", "description": "搜索、抓取、下载" },
-    { "id": "ctx", "name": "上下文管理", "description": "任务计划、研究记录" }
-  ],
-  "hint": "有 3 个工具组未加载。如需使用，调用 tools__load 加载。"
-}
-```
+Parameters:
 
-**何时使用**：
-- 当前工具无法完成任务
-- 想了解系统还有什么能力
+| Parameter | Meaning |
+|-----------|---------|
+| query | tool or capability keywords (required) |
+| cursor | zero-based result offset, for paging |
+| limit | maximum results (default 20, max 50) |
 
----
+**When to use it**:
+- the loaded tools cannot finish the task
+- you want to know what else the system can offer
 
-## tools__load
+The core tools (files, shell, web, tool_result) are always loaded and are not
+part of the catalog.
 
-请求加载特定工具组。
+## Capability groups
 
-```
-tools__load({ group: "shell" })
-tools__load({ group: "web" })
-tools__load({ group: "ctx" })
-```
+Beyond the core tools the system has these groups. They are not in the request
+until something asks for them:
 
-**可用的组**：
+| Group | Contains | Use for |
+|-------|----------|---------|
+| skill | skill__* | querying skills, managing skill resources |
+| prompt | system__* | listing, creating, editing and deleting prompts |
+| knowledge | knowledge__list, knowledge__search, knowledge__read | searching and reading the knowledge base mounted in this session |
 
-| group | 包含的工具 | 适用场景 |
-|-------|-----------|----------|
-| fs_extra | fs__mkdir, fs__rm, fs__mv | 创建/删除/移动文件 |
-| shell | shell__run | 运行 git/npm/python 等命令 |
-| web | web__search, web__fetch, web__download | 网络搜索、抓取、下载 |
-| ctx | ctx__save_plan, ctx__save_research 等 | 复杂任务管理 |
-| skills | skills__* | 预定义任务模板 |
+knowledge is different: it is decided per turn from what the session has
+mounted, so it appears and disappears on its own.
 
-**返回示例**：
-```json
-{
-  "ok": true,
-  "message": "已请求加载工具组: 命令执行（run）",
-  "note": "工具将在下一轮对话中可用。请继续你的任务。"
-}
-```
+## Workflow
 
-**注意**：
-- 工具在**下一轮对话**才可用
-- 加载后继续你的任务即可
+### Example: a command has to run
 
----
+1. notice that shell__run is not in the tool list
+2. `tools__search({ query: "run a command" })`
+3. carry on describing the task; the tool is available next step
 
-## 使用流程
+### Example: a file has to be downloaded
 
-### 场景：需要运行 git 命令
+1. notice that web__download is missing
+2. `tools__search({ query: "download a file" })`
+3. continue the task
 
-1. 发现当前没有 shell__run 工具
-2. 调用 tools__discover 确认
-3. 调用 tools__load({ group: "shell" })
-4. 继续描述任务，下一轮将有 shell__run 可用
+## Notes
 
-### 场景：需要下载文件
-
-1. 发现没有 web__download
-2. 调用 tools__load({ group: "web" })
-3. 继续任务
-
----
-
-## 自动加载
-
-系统会根据用户输入自动检测意图，预加载相关工具组：
-
-| 用户输入关键词 | 自动加载 |
-|----------------|----------|
-| git/npm/运行/执行 | shell |
-| 搜索/下载/网页 | web |
-| 计划/研究/复杂 | ctx |
-| 创建目录/删除 | fs_extra |
-
-大多数情况下不需要手动加载。
+- a search result is a catalog entry, not permission: the group still has to be
+  in the next request before you can call it
+- do not search repeatedly for the same capability
