@@ -91,7 +91,7 @@ export async function buildInitialPrompt(
       id: 'runtime-environment',
       layer: 'conversation',
       order: 10,
-      content: `【Runtime environment - ${g.platformLabel} (binding)】
+      content: `[Runtime environment - ${g.platformLabel} (binding)]
 
 Shell: ${g.preferredShell}
 
@@ -133,7 +133,7 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   // layer, instead of letting the agent discover it by hanging.
   try {
     const gitGuidance = [
-      '【Version control and GitHub】',
+      '[Version control and GitHub]',
       '- `git` and `gh` run through shell__run. Running a command still follows the shell trust setting,',
       '  so a first command outside the trusted scope may need the user to approve it.',
       '- Commands must be non-interactive: stdin is closed. Do not run commands that wait for input',
@@ -224,7 +224,7 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
           layer: 'conversation',
           order: 20,
           content:
-            '【Working directory for this session】\n' +
+            '[Working directory for this session]\n' +
             `- @WorkDir -> ${wd}\n` +
             (attached
               ? '- The user attached this directory: read and write here by default, and look at the existing contents before overwriting.\n'
@@ -246,7 +246,7 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
           layer: 'conversation',
           order: 30,
           content:
-            '【Document retrieval rules】\n' +
+            '[Document retrieval rules]\n' +
             'This session has a knowledge base or attached documents. To look something up, call knowledge__list/knowledge__search first, then knowledge__read for the full text.\n' +
             'A document fact may only be cited with the evidenceId the tool returned, in the format [[E1]]. Never invent documents, pages or citations.\n' +
             'If you only read part of a long document, say what the coverage was; when the documents do not support an answer, say it cannot be confirmed. Keep general knowledge and inference separate from document facts.',
@@ -291,7 +291,7 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
       id: 'plan-only-mode',
       layer: 'turn',
       order: 20,
-      content: '【Plan-only mode】Only bounded reads, retrieval and read-only tools are allowed. Writes, shell commands and anything with unknown side effects must not run: produce a plan and wait for the user to confirm it.',
+      content: '[Plan-only mode] Only bounded reads, retrieval and read-only tools are allowed. Writes, shell commands and anything with unknown side effects must not run: produce a plan and wait for the user to confirm it.',
     });
   }
   

@@ -253,7 +253,7 @@ export class AgentLoopRunner {
             const note: LlmMessage = {
               role: 'user',
               content: [
-                '【Run note】Tool results already completed by the previous run:',
+                '[Run note] Tool results already completed by the previous run:',
                 ...digest,
                 'These are established facts. Do not repeat those operations and do not reuse the previous answer; write the answer again from scratch.',
               ].join('\n'),

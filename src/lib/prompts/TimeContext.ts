@@ -45,12 +45,12 @@ export function getCurrentTimeInfo(): {
 export function buildTimeContextMessage(includeInSearch: boolean = false): string {
   const timeInfo = getCurrentTimeInfo();
   
-  let message = `【Current time】${timeInfo.datetime}`;
+  let message = `[Current time] ${timeInfo.datetime}`;
   
   if (includeInSearch) {
     message += `
 
-【Important】
+[Important]
 - When the user asks about "today", "now" or "the latest", use the time above.
 - Put the concrete date (for example "${timeInfo.date}") into web search queries so the results are current.
 - Example: for "today's news", search for "${timeInfo.date} news".`;

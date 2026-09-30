@@ -106,8 +106,8 @@ export class ConversationEventLog {
           // Run notes (cancelled / interrupted / stream failed) belong to the
           // conversation record, not to the prompt prefix.  Rendering them as a
           // tagged user note keeps exactly one system message per request and
-          // matches the 【工具调用结果】 convention used above.
-          out.push({ role: 'user', content: `【Run note】${e.content}` });
+          // matches the [Tool result] convention used above.
+          out.push({ role: 'user', content: `[Run note] ${e.content}` });
           continue;
         }
         if (e.type === 'tool_call_requested') {
@@ -153,7 +153,7 @@ export class ConversationEventLog {
           // 没有 tool_call_id 时无法走原生语义，退化为 text_wrapper
           if (!id) {
             const content = [
-              '【Tool result】',
+              '[Tool result]',
               `Tool: ${e.server}.${e.tool}`,
               `Arguments: ${safeJson(e.args || {})}`,
               `Result: ${safeJson(e.output)}`,
@@ -207,13 +207,13 @@ export class ConversationEventLog {
       if (e.type === 'context_change') {
         // Keep the request free of extra system messages: run notes are tagged
         // user notes, the same convention used for tool results below.
-        out.push({ role: 'user', content: `【Run note】${e.content}` });
+        out.push({ role: 'user', content: `[Run note] ${e.content}` });
         continue;
       }
       if (e.type === 'tool_call_output') {
         completedTextCalls.add(callKeyOf(e));
         const content = [
-          '【Tool result】',
+          '[Tool result]',
           `Tool: ${e.server}.${e.tool}`,
           `Arguments: ${safeJson(e.args || {})}`,
           `Result: ${safeJson(e.output)}`,
@@ -236,7 +236,7 @@ export class ConversationEventLog {
       out.push({
         role: 'user',
         content: [
-          '【Tool result】',
+          '[Tool result]',
           `Tool: ${request.server}.${request.tool}`,
           `Arguments: ${safeJson(request.args || {})}`,
           `Result: ${safeJson(pendingResultPayload(startedTextCalls.has(key)))}`,

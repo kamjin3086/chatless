@@ -34,15 +34,19 @@ Translating a prompt never changes what the user reads.
 
 ## Notes
 
-- Section delimiters keep the `【...】` style that the prompt layer already used
-  for its English contract; they are punctuation, not prose.
+- Section delimiters are plain ASCII brackets, for example `[Tool result]` or
+  `[How you work]`. CJK brackets (`【...】`) used to carry those labels; they
+  were replaced so the whole prompt is one consistent ASCII surface.
+- Text that the user pastes into a conversation is never rewritten - only
+  prompts written by the app follow this policy.
 - Chat-template control tokens (`<|im_end|>` and friends) are handled separately
   in `src/lib/llm/chatTemplateTokens.ts` - see `docs/llm-troubleshooting.md`.
-- Known prompt assets that are **not referenced by any code** and are still
-  Chinese. They are either dead or reserved, so they were left alone:
-  `public/tool-docs/core/*.txt`, `public/tool-docs/followup_*.txt`,
-  `src/lib/agent/agentWorkflowTools.ts`,
-  `src/lib/mcp/nativeTools/systemSkills.ts`,
-  `src/lib/mcp/providerAdapters.ts`,
-  `src/lib/skills/skillTools.ts`, `src/lib/skills/skillFileTools.ts`.
-  Delete them, or translate them when they are wired up.
+- Known prompt assets that are **not referenced by any code** were deleted
+  rather than translated: the `public/tool-docs/core/*.txt` and
+  `followup_*.txt` documents, `src/lib/agent/agentWorkflowTools.ts`,
+  `src/lib/mcp/nativeTools/systemSkills.ts`, `src/lib/mcp/providerAdapters.ts`,
+  `src/lib/mcp/schemaHints.ts`, the `SkillsToolAdapter`/`SkillsFsAdapter` files
+  and `src/lib/skills/skillFileTools.ts`.
+- `src/lib/skills/skillTools.ts` is still imported by the skill execution plan
+  panel in the chat page, so it stays; the model no longer receives those tools
+  (it gets `skill__*` instead), which makes its Chinese strings UI-side only.

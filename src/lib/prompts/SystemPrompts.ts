@@ -28,7 +28,7 @@ export const MCPPrompts = {
    * 联网检索策略
    */
   webSearchPolicy: [
-    '【Web search policy】',
+    '[Web search policy]',
     '• Use it when the answer needs current or real-time information, or the user asks for it.',
     '• search: look for something from scratch; keep the core entities in the query.',
     '• fetch: read a page when you already have a concrete URL.',

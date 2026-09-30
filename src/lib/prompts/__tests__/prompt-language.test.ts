@@ -16,35 +16,39 @@ import { userFsTools } from '@/lib/userFs/userFsTools';
 
 /**
  * Prompts are English-only on purpose: English instructions behaved noticeably
- * more consistently across providers and models. The answer language is a
- * separate instruction ("answer in the language the user wrote in"), so this
- * guard says nothing about what the user reads.
+ * more consistently across providers and models. Section labels use ASCII
+ * brackets (`[Tool result]`), not the CJK brackets they used to carry. The
+ * answer language is a separate instruction ("answer in the language the user
+ * wrote in"), so this guard says nothing about what the user reads.
  *
  * See docs/prompt-language.md. UI strings, user-facing errors, log lines and
  * intent-detection keyword lists are deliberately not covered.
  */
 const CJK = /[\u4e00-\u9fff]/;
+/** CJK brackets were the old section delimiters; prompts use ASCII brackets now. */
+const CJK_BRACKETS = /[\u3010\u3011]/;
 
 /** Loaded at runtime into tool descriptions, so they are prompts too. */
 const LOADED_TOOL_DOCS = ['fs.txt', 'shell_run.txt', 'web.txt', 'tools.txt', 'skills.txt', 'web_search.txt'];
 
-function findCjk(value: unknown, path = '$', out: string[] = []): string[] {
+function findForbidden(value: unknown, path = '$', out: string[] = []): string[] {
   if (typeof value === 'string') {
-    if (CJK.test(value)) out.push(`${path}: ${value.slice(0, 80)}`);
+    if (CJK.test(value)) out.push(`CJK in ${path}: ${value.slice(0, 80)}`);
+    else if (CJK_BRACKETS.test(value)) out.push(`CJK brackets in ${path}: ${value.slice(0, 80)}`);
     return out;
   }
   if (Array.isArray(value)) {
-    value.forEach((entry, index) => findCjk(entry, `${path}[${index}]`, out));
+    value.forEach((entry, index) => findForbidden(entry, `${path}[${index}]`, out));
     return out;
   }
   if (value && typeof value === 'object') {
-    for (const [key, entry] of Object.entries(value)) findCjk(entry, `${path}.${key}`, out);
+    for (const [key, entry] of Object.entries(value)) findForbidden(entry, `${path}.${key}`, out);
   }
   return out;
 }
 
 function expectAllEnglish(label: string, value: unknown) {
-  expect(findCjk(value), label).toEqual([]);
+  expect(findForbidden(value), label).toEqual([]);
 }
 
 describe('prompt language', () => {

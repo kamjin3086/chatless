@@ -98,7 +98,7 @@ describe('context preservation', () => {
 
     expect(vi.mocked(chat).mock.calls.length).toBe(callsAfterFirst);
     expect(info.value?.reused).toBe(true);
-    expect(String((again[0] as any).content)).toContain('【Conversation summary】');
+    expect(String((again[0] as any).content)).toContain('[Conversation summary]');
   });
 
   it('continues from an older checkpoint instead of re-summarizing the whole history', async () => {
@@ -120,7 +120,7 @@ describe('context preservation', () => {
 
     const prompt = JSON.stringify(vi.mocked(chat).mock.calls.at(-1)?.[2] || []);
     // 旧摘要被带上继续写，且最早的消息不再重复送进摘要请求。
-    expect(prompt).toContain('【Existing summary】');
+    expect(prompt).toContain('[Existing summary]');
     expect(prompt).toContain('S1');
     expect(prompt).not.toContain('MSG-0');
     expect(info.value?.reused).toBe(false);
