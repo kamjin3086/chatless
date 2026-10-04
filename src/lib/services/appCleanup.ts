@@ -145,18 +145,26 @@ export class AppCleanupService {
    */
   private async setupMinimizeToTrayListener(currentWindow: import('@tauri-apps/api/window').Window): Promise<void> {
     try {
-      await currentWindow.onResized(async () => {
-        const { useUiPreferences } = await import('@/store/uiPreferences');
-        if (!useUiPreferences.getState().minimizeToTray) return;
+      // Deferred on purpose: querying the window from inside the resize notification can
+      // make macOS emit another resize (see WindowTitleBar.tsx), i.e. an endless loop.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await currentWindow.onResized(() => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          void (async () => {
+            const { useUiPreferences } = await import('@/store/uiPreferences');
+            if (!useUiPreferences.getState().minimizeToTray) return;
 
-        try {
-          const minimized = await currentWindow.isMinimized();
-          if (minimized) {
-            await currentWindow.hide();
-          }
-        } catch (error) {
-          console.warn('⚠️ 最小化到托盘失败:', error);
-        }
+            try {
+              const minimized = await currentWindow.isMinimized();
+              if (minimized) {
+                await currentWindow.hide();
+              }
+            } catch (error) {
+              console.warn('⚠️ 最小化到托盘失败:', error);
+            }
+          })();
+        }, 200);
       });
     } catch (error) {
       console.warn('⚠️ 设置最小化到托盘监听器失败:', error);

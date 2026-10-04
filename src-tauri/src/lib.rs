@@ -39,13 +39,18 @@ fn exit(app: tauri::AppHandle, code: i32) {
 }
 
 /// Keep size/position, never restore the OS title bar (custom title bar owns chrome).
+///
+/// `VISIBLE` is deliberately not restored: hiding the window to the tray saved
+/// `visible: false`, so the next launch came up with no window at all - the dock
+/// icon stayed, the process ran, nothing was on screen and there was no window to
+/// click. The window is always shown on launch now; hiding it stays a runtime
+/// action (tray menu / close-to-tray).
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn persisted_window_state_flags() -> tauri_plugin_window_state::StateFlags {
   use tauri_plugin_window_state::StateFlags;
   StateFlags::SIZE
     | StateFlags::POSITION
     | StateFlags::MAXIMIZED
-    | StateFlags::VISIBLE
     | StateFlags::FULLSCREEN
 }
 
@@ -129,6 +134,11 @@ pub fn run() {
         if let Some(win) = app.get_webview_window("main") {
           use tauri_plugin_window_state::WindowExt;
           let _ = win.restore_state(flags);
+          // The plugin also restores a saved *hidden* state, which leaves a
+          // running process with no window at all: dock icon present, nothing on
+          // screen, and nothing to click. Desktop builds always come up visible;
+          // hiding stays a runtime action (tray / close-to-tray).
+          let _ = win.show();
           let _ = win.set_decorations(false);
 
           // Borderless windows get no corners from macOS, and the configured
@@ -138,7 +148,7 @@ pub fn run() {
           {
             macos_window::apply(&win);
             // The restored window state may already be maximized.
-            macos_window::sync_corner_radius(&win);
+            macos_window::sync_corner_radius();
           }
         }
       }
@@ -185,7 +195,9 @@ pub fn run() {
       #[cfg(target_os = "macos")]
       {
         if matches!(event, tauri::WindowEvent::Resized(_)) {
-          macos_window::sync_corner_radius(window);
+          // No window handle is passed on purpose: see macos_window.rs.
+          let _ = window;
+          macos_window::sync_corner_radius();
         }
       }
       #[cfg(not(target_os = "macos"))]
