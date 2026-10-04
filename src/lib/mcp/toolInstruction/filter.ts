@@ -28,6 +28,7 @@ import {
 } from './patterns';
 import { getDefaultPipeline } from './formats';
 import { ToolCallDetector } from '../ToolCallDetector';
+import { containsTemplateTokens, stripTemplateTokens } from '@/lib/llm/chatTemplateTokens';
 
 // 不完整标签的正则模式（用于流式清理）
 const INCOMPLETE_XML_PATTERNS = {
@@ -56,6 +57,16 @@ export function filterToolInstructions(
   options: FilterOptions = { mode: 'display' }
 ): string {
   if (!text) return '';
+
+  // Chat-template control tokens (``<|im_end|>``, ``<|im_start|>user``, ...) are
+  // never part of an answer. The streaming guard drops them, but messages stored
+  // before that guard existed - and text that arrives through paths without a
+  // thinking strategy - still have to render cleanly, so strip them here too.
+  // Done before the detector fast path, which would otherwise return untouched.
+  if (containsTemplateTokens(text)) {
+    text = stripTemplateTokens(text);
+    if (!text) return '';
+  }
   
   // 快速路径：使用统一的 ToolCallDetector 进行检测
   const detector = ToolCallDetector.getInstance();
