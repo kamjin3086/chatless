@@ -6,15 +6,15 @@ export const USER_FS_SERVER_NAME = 'user_fs';
 export const userFsTools: SkillToolDefinition[] = [
   {
     name: 'list_authorized_directories',
-    description: '列出用户已授权的目录（alias -> path）及其读写权限。',
+    description: 'List the directories the user authorized (alias -> path) with their read/write permissions.',
     handler: async () => listAuthorizedDirectories(),
   },
   {
     name: 'read_user_file',
-    description: '读取用户授权目录中的文件内容。路径必须使用 alias，例如 @ProjectDocs/readme.md。',
+    description: 'Read a file inside a user-authorized directory. The path must use an alias, for example @ProjectDocs/readme.md.',
     parameters: {
-      path: { type: 'string', description: '文件路径（必须使用 @Alias/...）', required: true },
-      maxLines: { type: 'number', description: '最多读取的行数（可选）' },
+      path: { type: 'string', description: 'File path (must use @Alias/...)', required: true },
+      maxLines: { type: 'number', description: 'Maximum lines to read (optional)' },
     },
     handler: async (params) => {
       const p = typeof (params as any).path === 'string' ? (params as any).path : String((params as any).path ?? '');
@@ -24,10 +24,10 @@ export const userFsTools: SkillToolDefinition[] = [
   },
   {
     name: 'write_user_file',
-    description: '写入用户授权目录中的文件（会覆盖）。路径必须使用 alias，例如 @ProjectDocs/output.txt。',
+    description: 'Write a file inside a user-authorized directory (overwrites). The path must use an alias, for example @ProjectDocs/output.txt.',
     parameters: {
-      path: { type: 'string', description: '文件路径（必须使用 @Alias/...）', required: true },
-      content: { type: 'string', description: '要写入的内容', required: true },
+      path: { type: 'string', description: 'File path (must use @Alias/...)', required: true },
+      content: { type: 'string', description: 'Content to write', required: true },
     },
     handler: async (params) => {
       const p = typeof (params as any).path === 'string' ? (params as any).path : String((params as any).path ?? '');

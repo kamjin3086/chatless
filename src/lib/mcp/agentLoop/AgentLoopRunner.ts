@@ -253,9 +253,9 @@ export class AgentLoopRunner {
             const note: LlmMessage = {
               role: 'user',
               content: [
-                '【运行提示】上一次运行已完成的工具结果：',
+                '[Run note] Tool results already completed by the previous run:',
                 ...digest,
-                '这些是既成事实；不要重复这些操作，也不要沿用上一次的回答，请重新组织回答。',
+                'These are established facts. Do not repeat those operations and do not reuse the previous answer; write the answer again from scratch.',
               ].join('\n'),
             };
             const lastIndex = conversationHistory.length - 1;
@@ -525,16 +525,16 @@ export class AgentLoopRunner {
           let out: unknown = req.preResult;
           let executed = false;
           if (regenerate) {
-            out = { ok: false, error: { code: 'REGENERATE_TOOL_BLOCKED', message: '重新生成只允许组织已有记录，禁止执行工具。' } };
+            out = { ok: false, error: { code: 'REGENERATE_TOOL_BLOCKED', message: 'Regeneration may only reorganise existing records; tools must not run.' } };
           } else if (steeringInputs.get(assistantMessageId)?.length) {
             steeringPreempted = true;
-            out = { ok: false, error: { code: 'NOT_DISPATCHED', message: '收到用户补充，调用未执行，等待模型重新决定。' } };
+            out = { ok: false, error: { code: 'NOT_DISPATCHED', message: 'The user added input; the call did not run while the model decides again.' } };
           } else if (terminalStatus) {
-            out = { ok: false, error: { code: 'NOT_DISPATCHED', message: '运行已暂停，调用未执行' } };
+            out = { ok: false, error: { code: 'NOT_DISPATCHED', message: 'The run is paused; the call did not run' } };
           } else if (isCancelled(assistantMessageId, ctrl.signal)) {
-            out = { ok: false, error: { code: 'CANCELLED', message: '调用已取消' } };
+            out = { ok: false, error: { code: 'CANCELLED', message: 'The call was cancelled' } };
           } else if (out === undefined && req.server === 'knowledge' && knowledgeToolCalls >= 12) {
-            out = { ok: false, error: { code: 'KNOWLEDGE_TOOL_BUDGET', message: '已达到本轮文档读取上限，未读取剩余内容。' } };
+            out = { ok: false, error: { code: 'KNOWLEDGE_TOOL_BUDGET', message: 'The document read budget for this run is used up; the remaining content was not read.' } };
             terminalStatus = 'paused';
           } else if (out === undefined) {
             if (req.server === 'knowledge') knowledgeToolCalls += 1;
@@ -556,7 +556,7 @@ export class AgentLoopRunner {
               executed = true;
               out = await DEFAULT_PIPELINE.run(inv);
               if (isPipelineSkipped(out)) {
-                out = { ok: false, error: { code: 'SKIPPED', message: '调用未执行' } };
+                out = { ok: false, error: { code: 'SKIPPED', message: 'The call did not run' } };
               }
             } catch (error) {
               // A thrown execution error cannot establish whether a side effect

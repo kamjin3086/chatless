@@ -59,7 +59,7 @@ export async function externalizeLargeToolResult(params: {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [id, params.conversationId, params.runId, params.callId,
     filePath, new TextEncoder().encode(serialized).length, await sha256Hex(serialized), Date.now()]);
   return { ok: true, truncated: true, attachmentId: id, totalChars: serialized.length,
-    preview: buildResultPreview(serialized), message: '完整工具结果已保存。需要更多内容时使用 tool_result__read。' };
+    preview: buildResultPreview(serialized), message: 'The full tool result was saved. Use tool_result__read for more of it.' };
 }
 
 export async function readToolResultAttachment(params: {

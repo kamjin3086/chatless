@@ -1,31 +1,31 @@
-shell__run — 运行命令
+shell__run — run a command
 
-## 定位
-运行外部程序和系统命令。
-**文件操作首选 fs 工具！**
+## Scope
+Runs external programs and system commands.
+**For file work, prefer the fs tools.**
 
-## 工具选择
+## Choosing a tool
 
-| 任务 | 推荐工具 |
-|------|----------|
-| 读/写/删文件、创建目录 | fs__*（首选） |
-| 下载文件 | web__download |
-| 运行程序/命令 | shell__run |
+| Task | Use |
+|------|-----|
+| Read/write/delete files, create directories | fs__* (preferred) |
+| Download a file | web__download |
+| Run a program or command | shell__run |
 
-## 平台原生命令
+## Use the platform's native commands
 
-**根据当前平台使用对应的原生命令！**
+**Match the commands to the current platform.**
 
 ### Windows → PowerShell
 
 ```powershell
-# 直接写 PowerShell 命令即可（不要再手动包一层 powershell -Command）
+# Write PowerShell directly (do not wrap it in `powershell -Command` again)
 New-Item -ItemType Directory -Path 'images' -Force
 Remove-Item -Path 'temp' -Recurse -Force
 Copy-Item -Path 'a.txt' -Destination 'b.txt'
 Invoke-WebRequest -Uri 'URL' -OutFile 'file.zip'
 
-# 直接运行程序
+# Run programs directly
 python script.py
 node app.js
 git status
@@ -40,24 +40,24 @@ rm -rf temp
 cp a.txt b.txt
 curl -L -o file.zip "URL"
 
-# 运行程序
+# Run programs
 python3 script.py
 node app.js
 git status
 npm install
 ```
 
-## 常见错误
+## Common mistakes
 
-| 错误 | 修正 |
-|------|------|
-| Windows 用 mkdir -p | 用 PowerShell New-Item |
-| Windows 用 rm -rf | 用 PowerShell Remove-Item |
-| Windows 用 curl | 用 Invoke-WebRequest |
+| Mistake | Fix |
+|---------|-----|
+| `mkdir -p` on Windows | use PowerShell `New-Item` |
+| `rm -rf` on Windows | use PowerShell `Remove-Item` |
+| `curl` on Windows | use `Invoke-WebRequest` |
 
-## 脚本模式（复杂逻辑）
+## Script mode (complex logic)
 
-传入代码块，系统自动执行：
+Pass a code block and it is executed for you:
 
 ```python
 import os
@@ -65,28 +65,28 @@ for i, f in enumerate(os.listdir("photos")):
     os.rename(f"photos/{f}", f"photos/img_{i:03d}.jpg")
 ```
 
-## 参数
+## Parameters
 
-- command：要执行的命令。**支持 @WorkDir 别名**（如 `node @WorkDir/script.js`）
-- workingDir：工作目录（可选）。支持 @WorkDir、@别名、绝对路径
-- timeout：超时毫秒（默认 30000）
+- command: the command to run. **Accepts the @WorkDir alias** (for example `node @WorkDir/script.js`)
+- workingDir: working directory (optional). Accepts @WorkDir, another alias, or an absolute path.
+- timeout: milliseconds before the command is killed (default 30000)
 
-## @WorkDir 别名用法
+## The @WorkDir alias
 
-命令中的 `@WorkDir` 会自动替换为用户工作目录的绝对路径：
+`@WorkDir` inside a command is replaced with the absolute path of the user's working directory:
 
 ```
-# 示例
+# Examples
 node @WorkDir/script.js
 cd @WorkDir && npm install
 python @WorkDir/tools/convert.py
 ```
 
-## shell 选择（重要）
+## Choosing `shell` (important)
 
-- Windows：auto / cmd / powershell（pwsh 视为 powershell）
-- macOS/Linux：auto / bash
+- Windows: auto / cmd / powershell (pwsh counts as powershell)
+- macOS/Linux: auto / bash
 
-提示：
-- shell 是“命令解释器类型”，不是运行时（不要填 node/python）。
-- `cd ... && ...` 这种包含 shell 语法的命令，请用 auto 或显式 cmd/powershell/bash。
+Notes:
+- `shell` is the command interpreter, not a runtime (never pass node/python here).
+- Commands that use shell syntax such as `cd ... && ...` need auto, or an explicit cmd/powershell/bash.

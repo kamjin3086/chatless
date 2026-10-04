@@ -51,7 +51,7 @@ export class FilesystemAdapter implements ToolAdapter {
         ok: false,
         error: {
           code: 'UNRESOLVED_ALIAS',
-          message: `${unresolved} 没有对应的已授权目录，请改用相对路径、@WorkDir 或绝对路径。`,
+          message: `${unresolved} does not match an authorized directory. Use a relative path, @WorkDir, or an absolute path instead.`,
         },
         resultStatus: 'failed',
       };
@@ -104,7 +104,7 @@ export class FilesystemAdapter implements ToolAdapter {
             error: {
               code: 'INVALID_ARGUMENTS',
               message: 'replace is required (pass "" to delete the matched text)',
-              hints: ['必须同时给出 find 与 replace；删除内容时显式传 replace=""'],
+              hints: ['Both find and replace are required; pass replace="" explicitly to delete the matched text'],
             },
           };
         }
@@ -121,10 +121,10 @@ export class FilesystemAdapter implements ToolAdapter {
             error: {
               code: result.reason || 'EDIT_FAILED',
               message: stale
-                ? '文件在读取后已被修改，编辑未执行。请重新读取该文件再编辑。'
+                ? 'The file changed after it was read, so the edit did not run. Read it again before editing.'
                 : result.reason === 'EDIT_MATCH_NOT_UNIQUE'
-                  ? '原文匹配到多处，请给出更长的唯一片段，或用 all=true 全部替换'
-                  : '原文未找到，请按候选行核对缩进与空白后重试',
+                  ? 'The passage matches in several places. Give a longer unique passage, or pass all=true to replace every match'
+                  : 'The passage was not found. Check the indentation and whitespace against the candidate lines and try again',
               candidates: result.candidates,
             },
           };
@@ -154,7 +154,7 @@ export class FilesystemAdapter implements ToolAdapter {
             ok: false,
             error: {
               code: 'INVALID_ARGUMENTS',
-              message: `mode 只能是 content / filename / both，收到: ${modeRaw}`,
+              message: `mode must be content / filename / both, received: ${modeRaw}`,
             },
           };
         }

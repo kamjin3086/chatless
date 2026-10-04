@@ -77,8 +77,8 @@ export class InjectionManager {
     if (!context.forceInject && !decision.shouldInject) {
       // Even when no tooling is injected the contract still has to reach the
       // model, so the chat-only path renders the stable contract plus time.
-      const { buildAgentContractBlock, resolvePromptLocale } = await import('@/lib/mcp/prompt/agentContract');
-      const blocks: PromptBlock[] = [buildAgentContractBlock(resolvePromptLocale(context.locale))];
+      const { buildAgentContractBlock } = await import('@/lib/mcp/prompt/agentContract');
+      const blocks: PromptBlock[] = [buildAgentContractBlock()];
       try {
         const { buildTimeContextMessage, isTimeRelatedQuery } = await import('@/lib/prompts/TimeContext');
         const isTimeRelated = isTimeRelatedQuery(context.userContent);

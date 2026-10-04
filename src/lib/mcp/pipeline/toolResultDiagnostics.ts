@@ -58,12 +58,12 @@ export function buildHelpfulNonOkMessage(id: ToolId, result: any): { message: st
     ];
 
     const message = [head, detail].filter(Boolean).join('\n');
-    return { message: message || '删除失败（ok=false）', hints };
+    return { message: message || 'The operation failed (ok=false)', hints };
   }
 
   // 通用兜底：尽量把对象结构“读得懂”
   const keys = result && typeof result === 'object' ? Object.keys(result).slice(0, 12) : [];
-  const message = `工具返回 ok=false，但缺少明确的 error/message。可用字段：${keys.join(', ') || '(none)'}`;
+  const message = `The tool returned ok=false without a clear error/message. Available fields: ${keys.join(', ') || '(none)'}`;
   const hints = [
     '检查工具参数是否完整/拼写正确（必要时先用 ls 确认路径存在）。',
     '如果涉及授权：确认已对目录授权（allowlist）后重试。',

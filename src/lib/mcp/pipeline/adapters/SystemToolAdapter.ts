@@ -224,8 +224,8 @@ export class SystemToolAdapter implements ToolAdapter {
       id,
       originalContent: existing.content,
       proposedContent: existing.content, // 占位：实际应由 Agent 基于 goal 生成
-      optimizationGoal: goal || '(未指定)',
-      note: '优化建议已生成。如需应用，请调用 system__update_prompt 更新 content 字段。',
+      optimizationGoal: goal || '(not specified)',
+      note: 'Suggestions generated. To apply them, call system__update_prompt and update the content field.',
     };
   }
 }

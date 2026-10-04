@@ -5,7 +5,7 @@ import {
   orderBlocks,
   type PromptBlock,
 } from '../composition';
-import { buildAgentContractBlock, resolvePromptLocale } from '../agentContract';
+import { buildAgentContractBlock } from '../agentContract';
 import { observePromptComposition, resetPromptCompositionLog } from '../compositionLog';
 
 const block = (id: string, layer: PromptBlock['layer'], order: number, content = id): PromptBlock =>
@@ -49,7 +49,7 @@ describe('prompt composition', () => {
   });
 
   it('keeps the stable layer untouched when a conversation block is added', () => {
-    const contract = buildAgentContractBlock('zh');
+    const contract = buildAgentContractBlock();
     const withoutKnowledge = composeSystemPrompt([contract, block('runtime-environment', 'conversation', 10, 'win32')]);
     const withKnowledge = composeSystemPrompt([
       contract,
@@ -72,19 +72,18 @@ describe('prompt composition', () => {
 });
 
 describe('agent contract', () => {
-  it('ships a Chinese and an English contract and defaults to Chinese', () => {
-    const zh = buildAgentContractBlock(resolvePromptLocale('zh'));
-    const en = buildAgentContractBlock(resolvePromptLocale('en-US'));
+  it('ships a single English contract, whichever UI language is active', () => {
+    const contract = buildAgentContractBlock();
 
-    expect(zh.content).toContain('用用户提问时使用的语言回答');
-    expect(en.content).toContain('the language the user wrote in');
-    expect(resolvePromptLocale(undefined)).toBe('zh');
-    expect(zh.id).toBe(en.id);
+    expect(contract.content).toContain('the language the user wrote in');
+    // The reply language follows the user, not the prompt language.
+    expect(contract.content).not.toMatch(/[\u4e00-\u9fff]/);
+    expect(contract.id).toBe('agent-contract');
   });
 
   it('is stable for the conversation, so the prefix stays cacheable', () => {
-    const first = composeSystemPrompt([buildAgentContractBlock('zh')]);
-    const second = composeSystemPrompt([buildAgentContractBlock('zh')]);
+    const first = composeSystemPrompt([buildAgentContractBlock()]);
+    const second = composeSystemPrompt([buildAgentContractBlock()]);
 
     expect(second.stableFingerprint).toBe(first.stableFingerprint);
   });

@@ -1,128 +1,128 @@
-Web Search Tools (web_search__*) — 网络工具使用指南
+Web Search Tools (web_search__*) — how to use them
 
-## 可用工具
+## Tools
 
 ### web_search__search
-在互联网搜索信息。
+Searches the internet.
 
 ### web_search__fetch
-抓取网页内容，返回标题、正文和链接。
+Fetches a page and returns its title, body text and links.
 
 ### web_search__download
-下载文件到本地。参数：url（直链！）、savePath、filename（可选）
+Downloads a file to disk. Parameters: url (a DIRECT link), savePath, filename (optional)
 
 ---
 
-## ⚠️ 图片下载：必须使用 Pexels API（最可靠）
+## ⚠️ Downloading images: use the Pexels API (most reliable)
 
-**不要用通用搜索下载图片！** 搜索结果的 URL 通常无法直接下载。
+**Do not use general search to download images.** The URLs in search results are
+usually not directly downloadable.
 
-### Pexels API（推荐，无需 API Key）
+### Pexels API (recommended, no API key)
 
-直接 fetch Pexels 搜索 API，返回 JSON 含直链：
+Fetch the Pexels search page; the HTML contains direct image links:
 
 ```
-1. fetch Pexels 搜索页面获取图片信息：
+1. Fetch the Pexels search page:
    web_search__fetch({ url: "https://www.pexels.com/search/cat/" })
-   → 从返回的 HTML 中提取 images.pexels.com 链接
+   → extract images.pexels.com links from the returned HTML
 
-2. 直接下载（直链格式）：
+2. Download the direct link:
    web_search__download({
      url: "https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?auto=compress&cs=tinysrgb&w=800",
      savePath: "images/cat.jpg"
    })
 ```
 
-### 已验证可用的图片直链格式
+### Direct link formats known to work
 
-| 来源 | 直链格式 | 示例 |
-|------|----------|------|
+| Source | Direct link format | Example |
+|--------|--------------------|---------|
 | Pexels | `https://images.pexels.com/photos/{id}/{name}.jpeg?w=800` | `https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?w=800` |
 | Unsplash | `https://images.unsplash.com/photo-{id}?w=800` | `https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800` |
 
-### ❌ 常见错误
+### ❌ Common mistakes
 
-- `https://unsplash.com/photos/xxx` → 页面链接，需登录
+- `https://unsplash.com/photos/xxx` → a page, and it needs a login
 - `https://unsplash.com/photos/xxx/download` → 404
-- 通用搜索结果中的图片 URL → 大多无法直接下载
+- image URLs taken straight out of general search results → usually not downloadable
 
-### ✅ 正确流程（下载猫图片）
+### ✅ The correct flow (download a cat photo)
 
 ```
-步骤1: 获取 Pexels 页面
+Step 1: fetch the Pexels page
 web_search__fetch({ url: "https://www.pexels.com/search/cat/" })
 
-步骤2: 从返回内容中提取 images.pexels.com 链接
-（寻找形如 https://images.pexels.com/photos/xxxxx/xxxxx.jpeg 的 URL）
+Step 2: extract an images.pexels.com link from the response
+(look for URLs shaped like https://images.pexels.com/photos/xxxxx/xxxxx.jpeg)
 
-步骤3: 下载
+Step 3: download it
 web_search__download({
   url: "https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?w=800",
   savePath: "images/cat1.jpg"
 })
 
-步骤4: 验证
+Step 4: verify
 filesystem__list_directory({ path: "@WorkDir/images" })
 ```
 
 ---
 
-## 免费资源 API（无需搜索直接调用）
+## Free resource APIs (call them directly, no search)
 
-### 天气查询 - wttr.in
-无需 API Key，直接 fetch 即可。
+### Weather - wttr.in
+No API key; fetch it directly.
 
-用法：
 ```
-# 获取天气（纯文本）
+# Plain text weather
 web_search__fetch({ url: "https://wttr.in/Beijing?format=3" })
 → "Beijing: ☀️ +5°C"
 
-# 详细天气（格式化）
+# Detailed weather (formatted)
 web_search__fetch({ url: "https://wttr.in/Shanghai?format=%l:+%c+%t+%w" })
 → "Shanghai: ☁️ +8°C ↑12km/h"
 
-# 获取天气图片
+# Weather as an image
 web_search__download({ url: "https://wttr.in/Tokyo.png", savePath: "weather.png" })
 ```
 
-格式化参数：
-- %l 位置名
-- %c 天气图标
-- %C 天气描述
-- %t 温度
-- %w 风速
-- %h 湿度
-- %m 月相
+Format specifiers:
+- %l location
+- %c weather icon
+- %C weather description
+- %t temperature
+- %w wind
+- %h humidity
+- %m moon phase
 
-更多：https://github.com/chubin/wttr.in
+More: https://github.com/chubin/wttr.in
 
-### 汇率查询
+### Exchange rates
 ```
 web_search__fetch({ url: "https://api.exchangerate-api.com/v4/latest/USD" })
 ```
 
-### IP 信息
+### IP information
 ```
 web_search__fetch({ url: "https://ipinfo.io/json" })
 ```
 
-### 随机名言
+### Random quote
 ```
 web_search__fetch({ url: "https://api.quotable.io/random" })
 ```
 
 ---
 
-## 常见任务示例
+## Worked examples
 
-### 搜索并下载猫图片（正确方式）
+### Search for and download a cat photo (the right way)
 ```
 1. web_search__search({ query: "cat images site:pexels.com" })
 
-2. 从结果中找到 Pexels 图片页面 URL，提取图片 ID
+2. Pick a Pexels photo URL from the results and take the photo id from it
 
-3. 构造直链：
+3. Build the direct link:
    https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg?w=800
 
 4. web_search__download({ 
@@ -131,28 +131,28 @@ web_search__fetch({ url: "https://api.quotable.io/random" })
    })
 
 5. filesystem__list_directory({ path: "@WorkDir/images" })
-   → 验证下载结果
+   → verify the download
 ```
 
-### 查询天气并告诉用户
+### Weather for the user's city
 ```
-1. web_search__fetch({ url: "https://wttr.in/用户城市?format=%l:+%C+%t+湿度%h" })
+1. web_search__fetch({ url: "https://wttr.in/{user's city}?format=%l:+%C+%t+humidity%h" })
 
-2. 直接用结果回答用户
+2. Answer the user from the response
 ```
 
 ---
 
-## 错误处理
+## Error handling
 
-1. **下载 404**
-   - 检查 URL 是否是直链（不是页面链接）
-   - 尝试备选图片源（Pexels/Pixabay）
+1. **Download returns 404**
+   - check that the URL is a direct link (not a page link)
+   - try another source (Pexels/Pixabay)
 
-2. **图片需要登录**
-   - 使用 `images.unsplash.com` 或 `images.pexels.com` 直链
-   - 不要使用 `/download` 路径
+2. **Image requires a login**
+   - use the `images.unsplash.com` or `images.pexels.com` direct links
+   - never use a `/download` path
 
-3. **搜索无结果**
-   - 简化关键词
-   - 尝试其他图片源
+3. **Search returns nothing**
+   - simplify the keywords
+   - try another image source

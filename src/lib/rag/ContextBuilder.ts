@@ -139,18 +139,18 @@ export class ContextBuilder {
     const sourceParts: string[] = [];
 
     // 知识库信息
-    sourceParts.push(`知识库: ${chunk.knowledgeBaseName}`);
+    sourceParts.push(`Knowledge base: ${chunk.knowledgeBaseName}`);
 
     // 文档信息
     if (chunk.documentName) {
-      sourceParts.push(`文档: ${chunk.documentName}`);
+      sourceParts.push(`Document: ${chunk.documentName}`);
     }
 
     // 片段位置
-    sourceParts.push(`片段: #${chunk.chunkIndex + 1}`);
+    sourceParts.push(`Chunk: #${chunk.chunkIndex + 1}`);
 
     // 相似度分数
-    sourceParts.push(`相关性: ${(chunk.score * 100).toFixed(1)}%`);
+    sourceParts.push(`Relevance: ${(chunk.score * 100).toFixed(1)}%`);
 
     return `[${sourceParts.join(' | ')}]`;
   }

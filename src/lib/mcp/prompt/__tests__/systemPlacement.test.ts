@@ -12,13 +12,13 @@ describe('enforceSingleLeadingSystem', () => {
       message('system', 'contract'),
       message('user', 'hi'),
       message('assistant', 'hello'),
-      message('system', '【上一次运行已完成的工具结果】'),
+      message('system', '[Tool results from the previous run]'),
       message('user', 'count the images'),
     ];
 
     const output = enforceSingleLeadingSystem(input);
 
-    expect(output[0]).toEqual({ role: 'system', content: 'contract\n\n【上一次运行已完成的工具结果】' });
+    expect(output[0]).toEqual({ role: 'system', content: 'contract\n\n[Tool results from the previous run]' });
     expect(output.filter((entry) => entry.role === 'system')).toHaveLength(1);
     expect(output.slice(1).map((entry) => entry.role)).toEqual(['user', 'assistant', 'user']);
     expect(output.at(-1)?.content).toBe('count the images');
@@ -33,7 +33,7 @@ describe('enforceSingleLeadingSystem', () => {
   it('allows the leading summary system message produced by compaction', () => {
     const input = [
       message('system', 'contract'),
-      message('system', '【对话历史摘要】'),
+      message('system', '[Conversation summary]'),
       message('user', 'hi'),
     ];
 

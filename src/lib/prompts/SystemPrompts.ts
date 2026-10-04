@@ -21,19 +21,19 @@ export const MCPPrompts = {
     const list = enabled.length > 3 
       ? `${enabled.slice(0, 3).join(', ')} (+${enabled.length - 3} more)` 
       : enabled.join(', ');
-    return `可用工具: ${list}`;
+    return `Available tools: ${list}`;
   },
 
   /**
    * 联网检索策略
    */
   webSearchPolicy: [
-    '【联网检索策略】',
-    '• 使用场景：需要最新/实时信息，或用户明确要求',
-    '• search：从零寻找信息，query 包含核心实体',
-    '• fetch：已有明确 URL，读取页面内容',
-    '• 追问时：优先基于已有结果，信息不足再调用',
-    '• 不编造实时数据；失败时说明原因并给建议'
+    '[Web search policy]',
+    '• Use it when the answer needs current or real-time information, or the user asks for it.',
+    '• search: look for something from scratch; keep the core entities in the query.',
+    '• fetch: read a page when you already have a concrete URL.',
+    '• Follow-up questions: start from the results you already have and only call again if they are not enough.',
+    '• Never invent live data; if a call fails, say why and suggest what to do next.'
   ].join(' ')
 } as const;
 
@@ -43,76 +43,76 @@ export const MCPPrompts = {
 
 export const RAGPrompts = {
   /**
-   * 通用知识库助手系统提示词
+   * General knowledge-base assistant system prompt.
    */
-  knowledgeAssistant: `你是一个知识库助手，基于提供的上下文信息回答用户问题。如果上下文中没有相关信息，请明确说明。`,
+  knowledgeAssistant: `You are a knowledge-base assistant. Answer the user's question from the context provided. If the context does not contain the answer, say so explicitly.`,
 
   /**
-   * 通用问答模板
+   * General Q&A template.
    */
   general: {
-    name: '通用问答',
-    systemPrompt: `你是一个专业的智能助手，基于提供的知识库内容回答问题。
+    name: 'General Q&A',
+    systemPrompt: `You are a professional assistant that answers from the knowledge base content below.
 
-原则：
-1. 仅基于知识库内容回答，不编造信息
-2. 无相关信息时明确告知
-3. 引用具体来源
+Rules:
+1. Answer only from the knowledge base content; never invent information.
+2. If the content does not cover the question, say so.
+3. Cite the specific sources.
 
-知识库内容：
+Knowledge base content:
 {context}`,
-    userTemplate: `基于知识库内容回答：{query}`
+    userTemplate: `Answer from the knowledge base: {query}`
   },
 
   /**
-   * 技术文档模板
+   * Technical documentation template.
    */
   technical: {
-    name: '技术文档',
-    systemPrompt: `你是一个技术专家助手，帮助用户理解和应用技术文档。
+    name: 'Technical documentation',
+    systemPrompt: `You are a technical expert who helps the user understand and apply documentation.
 
-原则：
-1. 提供准确的技术信息
-2. 包含代码示例（如有）
-3. 指出注意事项
+Rules:
+1. Be accurate about the technical details.
+2. Include code examples where they help.
+3. Point out the caveats.
 
-技术知识库内容：
+Technical knowledge base content:
 {context}`,
-    userTemplate: `技术问题：{query}`
+    userTemplate: `Technical question: {query}`
   },
 
   /**
-   * 分析报告模板
+   * Analysis report template.
    */
   analytical: {
-    name: '分析报告',
-    systemPrompt: `你是一个数据分析专家，基于数据和报告进行分析。
+    name: 'Analysis report',
+    systemPrompt: `You are a data analyst working from the data and reports below.
 
-原则：
-1. 客观分析数据
-2. 指出关键发现
-3. 引用具体数据
+Rules:
+1. Analyse the data objectively.
+2. State the key findings.
+3. Cite the specific numbers.
 
-分析数据：
+Analysis data:
 {context}`,
-    userTemplate: `分析问题：{query}`
+    userTemplate: `Analysis question: {query}`
   },
 
   /**
-   * 创意写作模板
+   * Creative writing template.
    */
   creative: {
-    name: '创意写作',
-    systemPrompt: `你是一个创意写作助手，基于素材创作内容。
+    name: 'Creative writing',
+    systemPrompt: `You are a creative writing assistant working from the material below.
 
-原则：
-1. 基于素材创意发挥
-2. 保持原创性
-3. 标注灵感来源
+Rules:
+1. Build on the material.
+2. Keep it original.
+3. Mark where the inspiration came from.
 
-创作素材：
+Material:
 {context}`,
-    userTemplate: `创作要求：{query}`
+    userTemplate: `Writing brief: {query}`
   }
 } as const;
 
@@ -122,24 +122,24 @@ export const RAGPrompts = {
 
 export const DocumentPrompts = {
   /**
-   * 文档总结提示词
+   * Document summarisation prompt.
    */
-  summarize: `请对以下文档内容进行简洁总结，提取关键信息：
+  summarize: `Summarise the document below concisely and extract the key information:
 
 {content}
 
-要求：涵盖主要观点，客观准确，150字以内`,
+Cover the main points, stay accurate, and keep it under 150 words.`,
 
   /**
-   * 文档问答提示词
+   * Document Q&A prompt.
    */
   documentQA: (documentContent: string, question: string) => 
-    `基于以下文档回答问题。无相关信息时明确说明。
+    `Answer the question from the document below. If the document does not cover it, say so.
 
-文档内容：
+Document:
 ${documentContent}
 
-问题：${question}`
+Question: ${question}`
 } as const;
 
 // ================================
@@ -148,15 +148,15 @@ ${documentContent}
 
 export const ConversationPrompts = {
   /**
-   * 思考链提示词
+   * Chain-of-thought prompt.
    */
-  chainOfThought: `复杂问题处理：1) 分解问题 2) 逐步推理 3) 给出结论`,
+  chainOfThought: `For complex problems: 1) break the problem down 2) reason step by step 3) state the conclusion`,
 
   /**
-   * 角色扮演基础模板
+   * Base role-play template.
    */
   rolePlay: (role: string, context?: string) => 
-    `你现在扮演${role}。${context ? `背景：${context}` : ''} 请保持角色一致性。`
+    `You are now acting as ${role}.${context ? ` Context: ${context}` : ''} Stay in character.`
 } as const;
 
 // ================================

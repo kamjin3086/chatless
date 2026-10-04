@@ -5,23 +5,23 @@ export const KNOWLEDGE_SERVER_NAME = 'knowledge';
 export const KNOWLEDGE_SEARCH_TOOL: McpTool = {
   name: 'search',
   description:
-    '在当前会话已挂载的知识库与附件中检索（关键词，配置 embedding 后叠加语义检索）。返回 evidenceId、文档名、位置与摘要，引用时使用 [[E编号]]。',
+    'Search the knowledge bases and attachments mounted in this session (keywords, plus semantic search when embeddings are configured). Returns evidenceId, document name, location and a snippet; cite with [[E1]]-style markers.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '检索查询' },
+        query: { type: 'string', description: 'What to look for' },
         knowledgeBaseIds: {
           type: 'array',
           items: { type: 'string' },
-          description: '可选，限定知识库 ID；默认使用当前会话挂载的知识库',
+          description: 'Optional: restrict to these knowledge base ids; defaults to what this session has mounted',
         },
         documentIds: {
           type: 'array',
           items: { type: 'string' },
-          description: '可选，只在指定文档内检索；只能缩小当前会话已挂载的范围',
+          description: 'Optional: search only inside these documents; this can only narrow the mounted scope',
         },
-        limit: { type: 'number', description: '最多返回条数（默认 8）' },
+        limit: { type: 'number', description: 'Maximum results (default 8)' },
       },
       required: ['query'],
     },
@@ -30,13 +30,13 @@ export const KNOWLEDGE_SEARCH_TOOL: McpTool = {
 
 export const KNOWLEDGE_LIST_TOOL: McpTool = {
   name: 'list',
-  description: '列出当前会话可访问的知识库文档和临时附件，返回文档 ID、名称、类型、索引状态与长度。',
+  description: 'List the knowledge base documents and attachments this session can reach: id, name, type, index status and length.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        cursor: { type: 'string', description: '分页游标（可选）' },
-        limit: { type: 'number', description: '最多返回条数（默认 50）' },
+        cursor: { type: 'string', description: 'Pagination cursor (optional)' },
+        limit: { type: 'number', description: 'Maximum entries (default 50)' },
       },
     },
   },
@@ -45,18 +45,18 @@ export const KNOWLEDGE_LIST_TOOL: McpTool = {
 export const KNOWLEDGE_READ_TOOL: McpTool = {
   name: 'read',
   description:
-    '读取原文。可用 evidenceId 重新打开引用（默认扩展相邻内容），或用 documentId 配合 cursor 顺序读取长文档；返回 nextCursor 时表示还有后续内容。',
+    'Read the source text. Re-open a citation by evidenceId (neighbouring content is included by default), or read a long document sequentially with documentId and cursor; a returned nextCursor means more content follows.',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        evidenceId: { type: 'string', description: 'knowledge_search 返回的 evidenceId，如 E1；按实际交付范围重新打开原文' },
-        documentId: { type: 'string', description: '文档 ID（顺序读取或与 page 配合）' },
-        page: { type: 'number', description: 'PDF 页码（可选）' },
-        cursor: { type: 'string', description: '上一轮返回的 nextCursor；原样回传，失效时返回 CURSOR_INVALID' },
-        limit: { type: 'number', description: '读取上限，默认约 8000 tokens' },
-        before: { type: 'number', description: '按引用重新打开时向前扩展的分块数（默认 1，0 表示只读交付范围）' },
-        after: { type: 'number', description: '按引用重新打开时向后扩展的分块数（默认 1，0 表示只读交付范围）' },
+        evidenceId: { type: 'string', description: 'An evidenceId returned by knowledge_search, e.g. E1; re-opens the source around the delivered range' },
+        documentId: { type: 'string', description: 'Document id (sequential read, or together with page)' },
+        page: { type: 'number', description: 'PDF page number (optional)' },
+        cursor: { type: 'string', description: 'The nextCursor from the previous call; pass it back unchanged. An expired cursor returns CURSOR_INVALID' },
+        limit: { type: 'number', description: 'Read budget, about 8000 tokens by default' },
+        before: { type: 'number', description: 'Chunks of context before the citation when re-opening (default 1; 0 reads only the delivered range)' },
+        after: { type: 'number', description: 'Chunks of context after the citation when re-opening (default 1; 0 reads only the delivered range)' },
       },
     },
   },

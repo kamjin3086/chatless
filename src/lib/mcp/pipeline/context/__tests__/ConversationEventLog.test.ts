@@ -10,7 +10,7 @@ describe('ConversationEventLog recovery boundaries', () => {
     for (const mode of ['tool_role', 'text_wrapper'] as const) {
       const messages = log.renderForModel(mode);
       expect(messages.some((message) => message.role === 'system')).toBe(false);
-      const note = messages.find((message) => message.content.startsWith('【运行提示】'));
+      const note = messages.find((message) => message.content.startsWith('[Run note]'));
       expect(note?.role).toBe('user');
       expect(note?.content).toContain('agent_run_cancelled');
     }

@@ -12,15 +12,15 @@ export const SYSTEM_SERVER_NAME = 'system';
 
 export const SYSTEM_LIST_PROMPTS_TOOL: McpTool = {
   name: 'list_prompts',
-  description: '列出提示词',
+  description: 'List prompts',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '搜索关键字' },
-        tag: { type: 'string', description: '按标签过滤' },
-        favoriteOnly: { type: 'boolean', description: '仅返回收藏' },
-        limit: { type: 'number', description: '最多返回条数' },
+        query: { type: 'string', description: 'Search keywords' },
+        tag: { type: 'string', description: 'Filter by tag' },
+        favoriteOnly: { type: 'boolean', description: 'Favourites only' },
+        limit: { type: 'number', description: 'Maximum entries' },
       },
       required: [],
     },
@@ -29,13 +29,13 @@ export const SYSTEM_LIST_PROMPTS_TOOL: McpTool = {
 
 export const SYSTEM_GET_PROMPT_TOOL: McpTool = {
   name: 'get_prompt',
-  description: '获取提示词详情',
+  description: 'Read one prompt',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: '提示词 ID' },
-        name: { type: 'string', description: '提示词名称' },
+        id: { type: 'string', description: 'Prompt id' },
+        name: { type: 'string', description: 'Prompt name' },
       },
       required: [],
     },
@@ -44,17 +44,17 @@ export const SYSTEM_GET_PROMPT_TOOL: McpTool = {
 
 export const SYSTEM_CREATE_PROMPT_TOOL: McpTool = {
   name: 'create_prompt',
-  description: '创建提示词',
+  description: 'Create a prompt',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: '名称' },
-        content: { type: 'string', description: '内容' },
-        description: { type: 'string', description: '描述' },
-        tags: { type: 'array', items: { type: 'string' }, description: '标签' },
-        shortcuts: { type: 'array', items: { type: 'string' }, description: '快捷指令' },
-        favorite: { type: 'boolean', description: '是否收藏' },
+        name: { type: 'string', description: 'Name' },
+        content: { type: 'string', description: 'Content' },
+        description: { type: 'string', description: 'Description' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags' },
+        shortcuts: { type: 'array', items: { type: 'string' }, description: 'Shortcuts' },
+        favorite: { type: 'boolean', description: 'Mark as favourite' },
       },
       required: ['name', 'content'],
     },
@@ -63,18 +63,18 @@ export const SYSTEM_CREATE_PROMPT_TOOL: McpTool = {
 
 export const SYSTEM_UPDATE_PROMPT_TOOL: McpTool = {
   name: 'update_prompt',
-  description: '更新提示词',
+  description: 'Update a prompt',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: '提示词 ID' },
-        name: { type: 'string', description: '名称' },
-        content: { type: 'string', description: '内容' },
-        description: { type: 'string', description: '描述' },
-        tags: { type: 'array', items: { type: 'string' }, description: '标签' },
-        shortcuts: { type: 'array', items: { type: 'string' }, description: '快捷指令' },
-        favorite: { type: 'boolean', description: '收藏状态' },
+        id: { type: 'string', description: 'Prompt id' },
+        name: { type: 'string', description: 'Name' },
+        content: { type: 'string', description: 'Content' },
+        description: { type: 'string', description: 'Description' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags' },
+        shortcuts: { type: 'array', items: { type: 'string' }, description: 'Shortcuts' },
+        favorite: { type: 'boolean', description: 'Favourite flag' },
       },
       required: ['id'],
     },
@@ -83,13 +83,13 @@ export const SYSTEM_UPDATE_PROMPT_TOOL: McpTool = {
 
 export const SYSTEM_DELETE_PROMPT_TOOL: McpTool = {
   name: 'delete_prompt',
-  description: '删除提示词（需 confirm=true）',
+  description: 'Delete a prompt (confirm=true is required)',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: '提示词 ID' },
-        confirm: { type: 'boolean', description: '确认删除' },
+        id: { type: 'string', description: 'Prompt id' },
+        confirm: { type: 'boolean', description: 'Confirm the deletion' },
       },
       required: ['id'],
     },
@@ -98,13 +98,13 @@ export const SYSTEM_DELETE_PROMPT_TOOL: McpTool = {
 
 export const SYSTEM_OPTIMIZE_PROMPT_TOOL: McpTool = {
   name: 'optimize_prompt',
-  description: '生成提示词优化建议',
+  description: 'Suggest improvements for a prompt',
   input_schema: {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: '提示词 ID' },
-        optimization_goal: { type: 'string', description: '优化目标' },
+        id: { type: 'string', description: 'Prompt id' },
+        optimization_goal: { type: 'string', description: 'What to optimise for' },
       },
       required: ['id'],
     },

@@ -62,9 +62,9 @@ export class ShellExecutorAdapter implements ToolAdapter {
     );
 
     const note = [
-      plan.autoSelected ? `未显式指定 shell，已按平台默认使用 ${plan.shell}。` : undefined,
+      plan.autoSelected ? `No shell was given, so the platform default ${plan.shell} was used.` : undefined,
       !workingDir && /\b(npm|pnpm|yarn|npx)\b/i.test(command)
-        ? '提示：未提供 workingDir，命令在应用默认目录执行。依赖项目目录的命令应显式传入 workingDir。'
+        ? 'Note: no workingDir was provided, so the command runs in the app default directory. Commands that need the project directory must pass workingDir explicitly.'
         : undefined,
     ]
       .filter(Boolean)
@@ -135,7 +135,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
         command,
         shell: plan.shell,
         name: typeof args.name === 'string' ? String(args.name) : undefined,
-        message: '进程已在后台启动。用 shell__logs 读取输出，用 shell__stop 停止。',
+        message: 'The process is running in the background. Read its output with shell__logs and stop it with shell__stop.',
       };
     } catch (error) {
       return failure('START_FAILED', error instanceof Error ? error.message : String(error));
@@ -186,7 +186,7 @@ export class ShellExecutorAdapter implements ToolAdapter {
     const plan = buildWindowsNodeInstallHint(cfg.windowsRuntimeInstallStrategy);
     return failure(
       'NODE_RUNTIME_NOT_AVAILABLE',
-      ['命令包含 node/npm/pnpm/npx/yarn，但运行环境未检测到 Node.js。', hint, plan].filter(Boolean).join('\n').trim(),
+      ['The command uses node/npm/pnpm/npx/yarn, but no Node.js runtime was found.', hint, plan].filter(Boolean).join('\n').trim(),
     );
   }
 

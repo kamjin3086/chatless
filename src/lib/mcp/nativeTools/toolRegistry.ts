@@ -53,8 +53,8 @@ const CORE_WEB_TOOLS = WEB_SEARCH_TOOLS;
 export const TOOL_GROUPS: ToolGroup[] = [
   {
     id: 'core',
-    name: '核心工具',
-    description: '文件操作 + 命令执行 + 网络搜索',
+    name: 'Core tools',
+    description: 'File operations + command execution + web search',
     tools: [
       ...CORE_FS_TOOLS.map(t => ({ server: FILESYSTEM_SERVER_NAME, tool: t })),
       ...CORE_SHELL_TOOLS.map(t => ({ server: SHELL_EXECUTOR_SERVER_NAME, tool: t })),
@@ -64,20 +64,20 @@ export const TOOL_GROUPS: ToolGroup[] = [
   },
   {
     id: 'skill',
-    name: '技能系统',
-    description: '技能查询、管理和文件操作',
+    name: 'Skills',
+    description: 'Querying skills and working with skill resources',
     tools: SKILL_UNIFIED_TOOLS.map(t => ({ server: SKILL_SERVER_NAME, tool: t })),
   },
   {
     id: 'prompt',
-    name: '提示词管理',
-    description: '管理提示词（列出、创建、编辑、删除、优化）',
+    name: 'Prompt management',
+    description: 'Manage prompts (list, create, edit, delete, optimise)',
     tools: SYSTEM_PROMPT_TOOLS.map(t => ({ server: SYSTEM_SERVER_NAME, tool: t })),
   },
   {
     id: 'knowledge',
-    name: '知识库',
-    description: 'knowledge_search / knowledge_read（会话挂载知识库时）',
+    name: 'Knowledge base',
+    description: 'knowledge_search / knowledge_read (when the session has a knowledge base mounted)',
     tools: KNOWLEDGE_TOOLS.map(t => ({ server: KNOWLEDGE_SERVER_NAME, tool: t })),
   },
 ];

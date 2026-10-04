@@ -33,64 +33,68 @@ export async function getRuntimePlatform(): Promise<RuntimePlatform> {
   return 'unknown';
 }
 
+/**
+ * Shell guidance goes straight into the system prompt, so it is written in
+ * English: English instructions behaved most consistently across models.
+ */
 export function getShellGuidance(platform: RuntimePlatform): {
   platformLabel: string;
   preferredShell: string;
   rules: string[];
-  /** 平台特定的命令示例 */
+  /** Platform-specific command examples. */
   commandExamples: Record<string, string>;
 } {
   if (platform === 'windows') {
     return {
       platformLabel: 'Windows',
-      preferredShell: 'shell__run 需显式指定 shell: "cmd" 或 "powershell"',
+      preferredShell: 'shell__run requires an explicit shell: "cmd" or "powershell"',
       rules: [
-        '当前是 Windows 系统。',
-        '调用 shell__run 时，必须显式传入 shell 参数：shell="cmd" 或 shell="powershell"（不要手写 cmd.exe /c 或 powershell -Command）。',
-        'cmd 适合：dir /b、&&、.bat/.cmd 等 cmd 语义。',
-        'powershell 适合：Get-ChildItem、Remove-Item、$env: 等 PowerShell 语义。',
+        'The current platform is Windows.',
+        'When calling shell__run, always pass the shell parameter explicitly: shell="cmd" or shell="powershell" (never wrap the command in cmd.exe /c or powershell -Command yourself).',
+        'cmd fits: dir /b, &&, .bat/.cmd and other cmd semantics.',
+        'powershell fits: Get-ChildItem, Remove-Item, $env: and other PowerShell semantics.',
       ],
       commandExamples: {
-        'cmd 列目录（简洁）': 'shell__run({ shell: "cmd", command: "dir \\"路径\\" /b" })',
-        'cmd 复制文件': 'shell__run({ shell: "cmd", command: "copy \\"源\\" \\"目标\\"" })',
-        'PowerShell 列目录': 'shell__run({ shell: "powershell", command: "Get-ChildItem -Path \\"路径\\"" })',
-        'PowerShell 删除目录': 'shell__run({ shell: "powershell", command: "Remove-Item -Path \\"路径\\" -Recurse -Force" })',
-        '运行 Python': 'shell__run({ shell: "cmd", command: "python \\"脚本路径\\"" })',
-        '运行 Node': 'shell__run({ shell: "cmd", command: "node \\"脚本路径\\"" })',
+        'cmd: list a directory': 'shell__run({ shell: "cmd", command: "dir \\"path\\" /b" })',
+        'cmd: copy a file': 'shell__run({ shell: "cmd", command: "copy \\"source\\" \\"target\\"" })',
+        'powershell: list a directory': 'shell__run({ shell: "powershell", command: "Get-ChildItem -Path \\"path\\"" })',
+        'powershell: delete a directory': 'shell__run({ shell: "powershell", command: "Remove-Item -Path \\"path\\" -Recurse -Force" })',
+        'run python': 'shell__run({ shell: "cmd", command: "python \\"script path\\"" })',
+        'run node': 'shell__run({ shell: "cmd", command: "node \\"script path\\"" })',
       },
     };
   }
   if (platform === 'macos') {
     return {
       platformLabel: 'macOS',
-      preferredShell: 'shell__run 使用 shell: "bash"',
+      preferredShell: 'shell__run uses shell: "bash"',
       rules: [
-        '当前是 macOS 系统。',
-        '调用 shell__run 时，必须显式传入 shell="bash"（不要猜测/不要包多层）。',
-        '路径含空格用双引号包裹。',
+        'The current platform is macOS.',
+        'When calling shell__run, always pass shell="bash" (do not guess, do not add another layer of wrapping).',
+        'Quote paths that contain spaces with double quotes.',
       ],
       commandExamples: {
-        '列目录': 'shell__run({ shell: "bash", command: "ls -la \\"路径\\"" })',
-        '创建目录': 'shell__run({ shell: "bash", command: "mkdir -p \\"路径\\"" })',
-        '删除目录': 'shell__run({ shell: "bash", command: "rm -rf \\"路径\\"" })',
-        '读文件': 'shell__run({ shell: "bash", command: "cat \\"路径\\"" })',
+        'list a directory': 'shell__run({ shell: "bash", command: "ls -la \\"path\\"" })',
+        'create a directory': 'shell__run({ shell: "bash", command: "mkdir -p \\"path\\"" })',
+        'delete a directory': 'shell__run({ shell: "bash", command: "rm -rf \\"path\\"" })',
+        'read a file': 'shell__run({ shell: "bash", command: "cat \\"path\\"" })',
       },
     };
   }
   if (platform === 'linux') {
     return {
       platformLabel: 'Linux',
-      preferredShell: 'shell__run 使用 shell: "bash"',
+      preferredShell: 'shell__run uses shell: "bash"',
       rules: [
-        '当前是 Linux 系统。',
-        '调用 shell__run 时，必须显式传入 shell="bash"（不要猜测/不要包多层）。',
-        '路径含空格用双引号包裹。',
+        'The current platform is Linux.',
+        'When calling shell__run, always pass shell="bash" (do not guess, do not add another layer of wrapping).',
+        'Quote paths that contain spaces with double quotes.',
       ],
       commandExamples: {
-        '列目录': 'shell__run({ shell: "bash", command: "ls -la \\"路径\\"" })',
-        '创建目录': 'shell__run({ shell: "bash", command: "mkdir -p \\"路径\\"" })',
-        '删除目录': 'shell__run({ shell: "bash", command: "rm -rf \\"路径\\"" })',
-        '读文件': 'shell__run({ shell: "bash", command: "cat \\"路径\\"" })',
+        'list a directory': 'shell__run({ shell: "bash", command: "ls -la \\"path\\"" })',
+        'create a directory': 'shell__run({ shell: "bash", command: "mkdir -p \\"path\\"" })',
+        'delete a directory': 'shell__run({ shell: "bash", command: "rm -rf \\"path\\"" })',
+        'read a file': 'shell__run({ shell: "bash", command: "cat \\"path\\"" })',
       },
     };
   }
@@ -98,9 +102,8 @@ export function getShellGuidance(platform: RuntimePlatform): {
     platformLabel: 'Unknown',
     preferredShell: 'unknown',
     rules: [
-      '当前平台未知：优先使用 filesystem 工具；如必须执行命令，请先确定平台后再选择 shell。',
+      'The platform is unknown: prefer the filesystem tools. If a command is unavoidable, determine the platform before choosing a shell.',
     ],
     commandExamples: {},
   };
 }
-

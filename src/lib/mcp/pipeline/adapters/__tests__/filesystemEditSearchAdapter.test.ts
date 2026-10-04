@@ -57,7 +57,7 @@ describe('fs__edit adapter', () => {
       path: 'D:/site/a.ts', find: 'a', replace: 'b', all: false, expectedHash: 'abc',
     });
     expect(result.error.code).toBe('FILE_CHANGED');
-    expect(String(result.error.message)).toContain('已被修改');
+    expect(String(result.error.message)).toContain('changed after it was read');
   });
 
   it('turns an ambiguous match into an actionable tool error', async () => {
@@ -72,7 +72,7 @@ describe('fs__edit adapter', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('EDIT_MATCH_NOT_UNIQUE');
-    expect(String(result.error.message)).toContain('唯一');
+    expect(String(result.error.message)).toContain('unique');
     expect(result.error.candidates).toHaveLength(2);
   });
 
@@ -86,7 +86,7 @@ describe('fs__edit adapter', () => {
     );
 
     expect(result.error.code).toBe('EDIT_NO_MATCH');
-    expect(String(result.error.message)).toContain('未找到');
+    expect(String(result.error.message)).toContain('was not found');
   });
 });
 

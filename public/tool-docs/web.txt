@@ -1,26 +1,26 @@
-web__* — 网络工具
+web__* — web tools
 
-## 工具列表
+## Tools
 
-| 工具 | 用途 |
-|------|------|
-| web__search | 搜索互联网 |
-| web__fetch | 抓取网页内容 |
-| web__download | 下载文件到本地 |
+| Tool | Purpose |
+|------|---------|
+| web__search | search the internet |
+| web__fetch | fetch the contents of a page |
+| web__download | download a file to disk |
 
-## 快速示例
+## Quick examples
 
 ```
-web__search({ query: "Python 教程" })
+web__search({ query: "python tutorial" })
 web__fetch({ url: "https://wttr.in/Beijing?format=3" })
-web__download({ url: "直链URL", savePath: "file.jpg" })
+web__download({ url: "DIRECT_URL", savePath: "file.jpg" })
 ```
 
 ---
 
-## 免费 API（无需搜索，直接 fetch）
+## Free APIs (fetch directly, no search needed)
 
-### 天气
+### Weather
 
 ```
 web__fetch({ url: "https://wttr.in/Beijing?format=3" })
@@ -29,17 +29,17 @@ web__fetch({ url: "https://wttr.in/Beijing?format=3" })
 web__fetch({ url: "https://wttr.in/Shanghai?format=%l:+%c+%t+%w" })
 → "Shanghai: ☁️ +8°C ↑12km/h"
 
-# 天气图片
+# Weather as an image
 web__download({ url: "https://wttr.in/Beijing.png", savePath: "weather.png" })
 ```
 
-### 汇率
+### Exchange rates
 
 ```
 web__fetch({ url: "https://api.exchangerate-api.com/v4/latest/USD" })
 ```
 
-### IP 信息
+### IP information
 
 ```
 web__fetch({ url: "https://ipinfo.io/json" })
@@ -47,10 +47,10 @@ web__fetch({ url: "https://ipinfo.io/json" })
 
 ---
 
-## 错误处理
+## Error handling
 
-| 情况 | 处理方式 |
-|------|----------|
-| 搜索返回 [] | 换关键词或换方法 |
-| fetch 返回 "Just a moment..." | 被网站拦截，换其他网站或方法 |
-| 下载失败 | 确认 URL 是可直接下载的直链 |
+| Situation | What to do |
+|-----------|------------|
+| Search returns [] | change the keywords or the approach |
+| fetch returns "Just a moment..." | the site blocked the request; try another site or method |
+| Download fails | check that the URL is a direct link to the file |
