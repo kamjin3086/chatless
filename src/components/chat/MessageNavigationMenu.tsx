@@ -74,7 +74,7 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
 
   return (
     <DropdownMenuContent 
-      className="w-80 max-h-96 overflow-hidden flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200"
+      className="w-80 max-h-96 overflow-hidden flex flex-col bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200"
       // 触发按钮在聊天头部右侧，菜单按常规往下、右对齐展开。
       side="bottom"
       align="end"
@@ -108,7 +108,7 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
       
       <div className="p-2">
         <div className="relative">
-          <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground dark:text-gray-400" />
+          <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground dark:text-slate-400" />
           <Input
             placeholder="搜索消息内容..."
             value={searchQuery}
@@ -145,7 +145,7 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
                 </span>
               </div>
               
-              <div className="text-sm w-full text-left text-muted-foreground dark:text-gray-400">
+              <div className="text-sm w-full text-left text-muted-foreground dark:text-slate-400">
                 {highlightSearchTerm(
                   getMessagePreview(message.content), 
                   searchQuery

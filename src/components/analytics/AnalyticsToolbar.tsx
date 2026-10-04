@@ -11,10 +11,10 @@ interface AnalyticsToolbarProps {
 
 export function AnalyticsToolbar({ range, onRangeChange, onExport, onRefresh }: AnalyticsToolbarProps) {
   return (
-    <div className="flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 dark:bg-gray-800/40 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700">
       {/* 左侧筛选 */}
       <div className="flex items-center gap-2">
-        <Calendar className="h-4 w-4 text-gray-500" />
+        <Calendar className="h-4 w-4 text-slate-500" />
         <Select value={range} onValueChange={onRangeChange}>
           <SelectTrigger className="w-28 h-8">
             <SelectValue placeholder="范围" />

@@ -124,7 +124,7 @@ export function SkillMentionPanel({
           # 技能
         </span>
         <button
-          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
           onMouseDown={(e) => { e.preventDefault(); window.location.assign('/settings?tab=skills'); }}
           title="管理技能"
         >
@@ -167,7 +167,7 @@ export function SkillMentionPanel({
                 {skill.tags.slice(0, 3).map((tag, i) => (
                   <span
                     key={i}
-                    className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500"
+                    className="px-1.5 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500"
                   >
                     {tag}
                   </span>

@@ -26,7 +26,7 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
         id={id}
         className={cn(
           'w-full h-1.5 rounded-full appearance-none cursor-pointer',
-          'bg-gray-200 dark:bg-gray-700',
+          'bg-slate-200 dark:bg-slate-700',
           // Thumb (WebKit)
           '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4',
           '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500',

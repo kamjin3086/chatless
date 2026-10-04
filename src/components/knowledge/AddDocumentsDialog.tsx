@@ -181,10 +181,10 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
     if (file.type === 'chat') {
       return (
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-sm truncate text-gray-800 dark:text-gray-200 min-w-0 flex-1" title={file.name}>
+          <span className="text-sm truncate text-slate-800 dark:text-slate-200 min-w-0 flex-1" title={file.name}>
             {truncateDisplayName(file.name)}
           </span>
-          <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded dark:bg-blue-900/30 dark:text-blue-400">
+          <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md dark:bg-blue-900/30 dark:text-blue-400">
             💬 聊天文件
           </span>
         </div>
@@ -193,11 +193,11 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
     
     return (
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className="text-sm truncate text-gray-800 dark:text-gray-200 min-w-0 flex-1" title={file.name}>
+        <span className="text-sm truncate text-slate-800 dark:text-slate-200 min-w-0 flex-1" title={file.name}>
           {truncateDisplayName(file.name)}
         </span>
         {file.isAlreadyInKB && (
-          <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded dark:bg-green-900/30 dark:text-green-400">
+          <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-md dark:bg-green-900/30 dark:text-green-400">
             已入库
           </span>
         )}

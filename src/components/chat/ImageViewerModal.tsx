@@ -61,16 +61,16 @@ export function ImageViewerModal({ open, onClose, src, filename }: ImageViewerMo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] glass-scrim bg-black/70 backdrop-blur-sm flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[1000] glass-scrim bg-black/80 backdrop-blur-sm flex items-center justify-center" onClick={onClose}>
       <div className="relative w-[92vw] h-[92vh] bg-white dark:bg-slate-900 rounded-lg shadow-xl glass-overlay" onClick={(e)=>e.stopPropagation()}>
         {/* Toolbar */}
         <div className="absolute top-2 right-2 flex items-center gap-2">
-          <button className="px-2 py-1 text-xs rounded bg-slate-800 text-white hover:bg-slate-700" onClick={download}>下载</button>
-          <button className="px-2 py-1 text-xs rounded bg-slate-800 text-white hover:bg-slate-700" onClick={() => setScale((s)=>Math.min(8, +(s+0.2).toFixed(2)))}>放大</button>
-          <button className="px-2 py-1 text-xs rounded bg-slate-800 text-white hover:bg-slate-700" onClick={() => setScale((s)=>Math.max(0.2, +(s-0.2).toFixed(2)))}>缩小</button>
-          <button className="px-2 py-1 text-xs rounded bg-slate-800 text-white hover:bg-slate-700" onClick={() => { setScale(1); setOffset({x:0,y:0}); setRotate(0); }}>重置</button>
-          <button className="px-2 py-1 text-xs rounded bg-slate-800 text-white hover:bg-slate-700" onClick={() => setRotate((r)=> (r+90)%360)}>旋转</button>
-          <button className="px-2 py-1 text-xs rounded bg-slate-600 text-white hover:bg-slate-500" onClick={onClose}>关闭</button>
+          <button className="px-2 py-1 text-xs rounded-md bg-slate-800 text-white hover:bg-slate-700" onClick={download}>下载</button>
+          <button className="px-2 py-1 text-xs rounded-md bg-slate-800 text-white hover:bg-slate-700" onClick={() => setScale((s)=>Math.min(8, +(s+0.2).toFixed(2)))}>放大</button>
+          <button className="px-2 py-1 text-xs rounded-md bg-slate-800 text-white hover:bg-slate-700" onClick={() => setScale((s)=>Math.max(0.2, +(s-0.2).toFixed(2)))}>缩小</button>
+          <button className="px-2 py-1 text-xs rounded-md bg-slate-800 text-white hover:bg-slate-700" onClick={() => { setScale(1); setOffset({x:0,y:0}); setRotate(0); }}>重置</button>
+          <button className="px-2 py-1 text-xs rounded-md bg-slate-800 text-white hover:bg-slate-700" onClick={() => setRotate((r)=> (r+90)%360)}>旋转</button>
+          <button className="px-2 py-1 text-xs rounded-md bg-slate-600 text-white hover:bg-slate-500" onClick={onClose}>关闭</button>
         </div>
 
         {/* Canvas */}

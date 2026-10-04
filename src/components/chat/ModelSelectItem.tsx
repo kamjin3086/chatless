@@ -32,7 +32,7 @@ export function ModelSelectItem({
             "flex w-full items-center gap-2 rounded-md px-2 py-1 min-h-7 cursor-pointer",
             isSelected
               ? "bg-slate-200/70 dark:bg-white/10"
-              : "hover:bg-slate-100/80 dark:hover:bg-white/6"
+              : "hover:bg-slate-100/80 dark:hover:bg-white/5"
           )}
         >
           {showProviderIcon && <ProviderGlyph provider={provider} size={14} />}

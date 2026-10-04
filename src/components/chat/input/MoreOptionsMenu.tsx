@@ -32,7 +32,7 @@ export function MoreOptionsMenu({
       disabled={disabled}
       onClick={onOpenSessionParameters}
       className={cn(
-        "h-8 w-8 shrink-0 rounded text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800",
+        "h-8 w-8 shrink-0 rounded-md text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800",
         hasSessionParameters && "text-slate-700 dark:text-slate-200"
       )}
       title="会话参数"

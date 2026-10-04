@@ -484,7 +484,7 @@ export function AIMessageBlock({
                           onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
                           onDoubleClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
                         />
-                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1 bg-white/80 dark:bg-slate-900/70 backdrop-blur-md px-1.5 py-1 rounded-full shadow-sm ring-1 ring-slate-200/60 dark:ring-slate-700/60">
+                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1 bg-white/90 dark:bg-slate-900/70 backdrop-blur-md px-1.5 py-1 rounded-full shadow-sm ring-1 ring-slate-200/60 dark:ring-slate-700/60">
                           <button
                             className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
                             onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
@@ -582,7 +582,7 @@ export function AIMessageBlock({
             </div>
           )}
           {/* 悬浮显示字数 */}
-          {/* <div className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-[11px] text-gray-400 bg-gray-50/80 dark:bg-gray-800/60 backdrop-blur px-1.5 py-0.5 rounded select-none pointer-events-none">
+          {/* <div className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-[11px] text-slate-400 bg-slate-50/80 dark:bg-slate-800/60 backdrop-blur px-1.5 py-0.5 rounded-md select-none pointer-events-none">
             {(() => {
               const text = state?.regularContent || '';
               return `字数: ${text.replace(/\s+/g,'').length}`;
@@ -658,7 +658,7 @@ export function AIMessageBlock({
 
       {/* 顶部悬浮下载按钮（使用 downloadService） */}
       {lightboxOpen && images[lightboxIndex] && (
-        <div className="fixed top-3 right-3 z-[1001] bg-white/80 dark:bg-slate-900/70 backdrop-blur-md ring-1 ring-slate-200/60 dark:ring-slate-700/60 rounded-full shadow-sm p-1">
+        <div className="fixed top-3 right-3 z-[1001] bg-white/90 dark:bg-slate-900/70 backdrop-blur-md ring-1 ring-slate-200/60 dark:ring-slate-700/60 rounded-full shadow-sm p-1">
           <button
             className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
             onClick={async () => {

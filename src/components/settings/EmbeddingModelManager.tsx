@@ -272,7 +272,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-32">
-        <div className="text-gray-500">加载模型状态中...</div>
+        <div className="text-slate-500">加载模型状态中...</div>
       </div>
     );
   }
@@ -308,7 +308,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
           </Button>
         </div>
 
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           {selectedStrategy === 'local-onnx' 
             ? '本地离线推理模型，完全离线运行，无需外部服务'
             : `Ollama模型需要本地运行Ollama服务 (${ollamaUrl})`
@@ -319,7 +319,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
       {/* 模型列表 */}
       <div className="space-y-3">
         {currentModels.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-slate-500">
             该策略下暂无可用模型
           </div>
         ) : (
@@ -454,10 +454,10 @@ function ModelCard({
             <h4 className="font-medium">{model.name}</h4>
             {getStatusBadge()}
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             {model.description}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             大小: {model.size}
           </p>
         </div>
@@ -476,7 +476,7 @@ function ModelCard({
           </div>
           <Progress value={downloadProgress.progress} className="h-2" />
           {downloadProgress.speed && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-500">
               速度: {downloadProgress.speed}
               {downloadProgress.eta && ` • 剩余: ${downloadProgress.eta}`}
             </div>
@@ -486,7 +486,7 @@ function ModelCard({
 
       {/* 错误信息 */}
       {downloadProgress?.status === 'error' && downloadProgress.error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-2">
           <p className="text-sm text-red-800 dark:text-red-300">
             下载失败: {downloadProgress.error}
           </p>

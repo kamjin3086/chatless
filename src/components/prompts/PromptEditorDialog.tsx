@@ -164,7 +164,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                 <button
                   onClick={() => setShowHistory(!showHistory)}
                   className={cn(
-                    "w-7 h-7 rounded flex items-center justify-center transition-colors",
+                    "w-7 h-7 rounded-md flex items-center justify-center transition-colors",
                     showHistory 
                       ? "text-slate-700 bg-slate-200/50 dark:text-slate-200 dark:bg-slate-700/50" 
                       : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60"
@@ -177,7 +177,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               {/* 关闭 */}
               <button
                 onClick={() => onOpenChange(false)}
-                className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -200,7 +200,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                   </div>
                   <button
                     onClick={() => handleRestoreHistory(h)}
-                    className="h-6 px-2 text-[10px] text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-slate-700/50 rounded flex items-center gap-1"
+                    className="h-6 px-2 text-[10px] text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-slate-700/50 rounded-md flex items-center gap-1"
                   >
                     <RotateCcw className="w-3 h-3" />
                     恢复
@@ -268,12 +268,12 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               <input
                 onKeyDown={handleTagInput}
                 placeholder="回车添加"
-                className="glass-field w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
+                className="glass-field w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
               />
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {tags.map((t) => (
-                    <span key={t} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded border border-slate-200/60 bg-slate-100/60 dark:border-slate-600/50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300">
+                    <span key={t} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded-md border border-slate-200/60 bg-slate-100/60 dark:border-slate-600/50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300">
                       {t}
                       <button onClick={() => removeTag(t)} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
                     </span>
@@ -288,12 +288,12 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               <input
                 onKeyDown={handleShortcutInput}
                 placeholder="/指令名"
-                className="glass-field w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
+                className="glass-field w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
               />
               {shortcuts.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {shortcuts.map((s) => (
-                    <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono">
+                    <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded-md border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono">
                       /{s}
                       <button onClick={() => removeShortcut(s)} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
                     </span>
@@ -316,7 +316,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                     <button
                       onClick={onToggleFavorite}
                       className={cn(
-                        "h-7 px-2 text-xs rounded flex items-center gap-1 transition-colors",
+                        "h-7 px-2 text-xs rounded-md flex items-center gap-1 transition-colors",
                         initial?.favorite 
                           ? "text-slate-600 dark:text-slate-300" 
                           : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -329,7 +329,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                   {/* 复制 */}
                   <button
                     onClick={handleCopyContent}
-                    className="h-7 px-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded flex items-center gap-1 transition-colors"
+                    className="h-7 px-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md flex items-center gap-1 transition-colors"
                     title="复制内容"
                   >
                     <Copy className="w-3.5 h-3.5" />
@@ -338,7 +338,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
                   {onDelete && (
                     <button
                       onClick={onDelete}
-                      className="h-7 px-2 text-xs text-slate-400 hover:text-red-500 rounded flex items-center gap-1 transition-colors"
+                      className="h-7 px-2 text-xs text-slate-400 hover:text-red-500 rounded-md flex items-center gap-1 transition-colors"
                       title="删除"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -352,14 +352,14 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
             <div className="flex items-center gap-2">
               <button
                 onClick={() => onOpenChange(false)}
-                className="h-7 px-3 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                className="h-7 px-3 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!name.trim() || !content.trim()}
-                className="h-7 px-4 text-xs bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="h-7 px-4 text-xs bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 保存
               </button>

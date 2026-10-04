@@ -173,7 +173,7 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
                     <div className="flex items-center gap-1">
                       {!isConnected && (
                         <button
-                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleConnect(name);
@@ -189,7 +189,7 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
                       )}
                       {isConnected && onInsertMention && (
                         <button
-                          className="px-1.5 py-0.5 rounded text-[10px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                          className="px-1.5 py-0.5 rounded-md text-[10px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
                           onClick={(e) => {
                             e.stopPropagation();
                             onInsertMention(name);

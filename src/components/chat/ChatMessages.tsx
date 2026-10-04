@@ -129,7 +129,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
     <div className="w-full max-w-full min-w-0 flex flex-col items-stretch">
       <div className="p-4 w-full max-w-full overflow-x-hidden">
         {visibleMessages.length > maxVisibleMessages && (
-          <div className="text-center text-sm text-gray-500 my-4">
+          <div className="text-center text-sm text-slate-500 my-4">
             仅显示最近 {maxVisibleMessages} 条消息。
           </div>
         )}

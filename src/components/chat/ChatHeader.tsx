@@ -95,12 +95,12 @@ export function ChatHeader({
 
   return (
     <>
-      <div className="app-topbar h-8 px-3 border-b border-slate-200/20 dark:border-slate-700/15 flex items-center justify-between glass-surface">
+      <div className="app-topbar h-9 px-3 border-b border-slate-200/60 dark:border-white/10 flex items-center justify-between glass-surface">
         {/* 左侧：侧栏开关 + 标题 */}
         <div className="flex items-center gap-1 flex-1 min-w-0">
           <button 
             onClick={toggleSidebar} 
-            className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors" 
+            className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors" 
             title="侧边栏"
             aria-label="切换侧边栏"
           >
@@ -110,7 +110,7 @@ export function ChatHeader({
           {!isSidebarOpen && (
             <button
               onClick={handleNewChat}
-              className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+              className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
               title="新建对话"
               aria-label="新建对话"
             >
@@ -121,14 +121,14 @@ export function ChatHeader({
           <EditableTitle
             initialTitle={title}
             onTitleChange={onTitleChange}
-            className="text-xs text-slate-500 dark:text-slate-400 ml-0.5 min-w-0 max-w-[min(40vw,20rem)]"
-            inputClassName="text-xs"
+            className="text-[13px] font-medium text-slate-600 dark:text-slate-300 ml-0.5 min-w-0 max-w-[min(40vw,20rem)]"
+            inputClassName="text-[13px]"
           />
           
           {tags?.map((tag, index) => (
             <span
               key={index}
-              className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 bg-slate-100/60 dark:bg-slate-800/40 rounded hidden sm:inline"
+              className="text-[10px] text-slate-500 dark:text-slate-400 px-1.5 py-0.5 bg-slate-100/60 dark:bg-slate-800/40 rounded-md hidden sm:inline"
             >
               {tag}
             </span>
@@ -153,7 +153,7 @@ export function ChatHeader({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
                   title="消息导航"
                   aria-label="消息导航"
                 >
@@ -171,7 +171,7 @@ export function ChatHeader({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button 
-                className="p-1.5 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
                 title="更多"
                 aria-label="更多操作"
               >

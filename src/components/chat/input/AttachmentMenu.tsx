@@ -214,7 +214,7 @@ export function AttachmentMenu({
         icon={
           <button
             onClick={() => setView("main")}
-            className="p-0.5 -ml-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+            className="p-0.5 -ml-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
           >
             <ChevronLeft className="w-4 h-4 text-slate-500" />
           </button>

@@ -220,7 +220,7 @@ function CollapsibleDetailsWithControl(props: { text: string; toastIdRef: ToastI
               <span className="text-[11px]">关闭</span>
             </button>
           </div>
-          <div className="mt-1.5 max-h-[55vh] overflow-y-auto overflow-x-hidden rounded-md border border-slate-100 dark:border-white/10 bg-white/70 dark:bg-slate-900/60 p-2 text-[12px] leading-5 font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-200">
+          <div className="mt-1.5 max-h-[55vh] overflow-y-auto overflow-x-hidden rounded-md border border-slate-100 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 p-2 text-[12px] leading-5 font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-200">
             {text}
           </div>
         </div>
@@ -344,7 +344,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
             toast:
               "relative rounded-xl border px-3.5 py-2.5 backdrop-blur-lg glass-overlay " +
               "shadow-[0_8px_28px_rgba(0,0,0,0.08)] ring-1 ring-black/5 " +
-              "bg-white/80 text-slate-800 border-white/40 " +
+              "bg-white/90 text-slate-800 border-white/60 " +
               "dark:bg-slate-900/80 dark:text-slate-100 dark:border-white/10 dark:ring-white/10 " +
               "[&]:cursor-text select-text " +
               // 允许 toast 随内容增长，最多到视口的 65% 高度；超出时滚动

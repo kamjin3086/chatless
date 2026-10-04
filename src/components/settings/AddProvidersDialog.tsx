@@ -79,7 +79,7 @@ function ProviderIcon({ id, name, size = 18, src }: { id?: string; name: string;
       alt={`${name} icon`}
       width={size}
       height={size}
-      className="shrink-0 rounded-sm ring-1 ring-black/5 dark:ring-white/10 bg-gray-100 w-[18px] h-[18px]"
+      className="shrink-0 rounded-sm ring-1 ring-black/5 dark:ring-white/10 bg-slate-100 w-[18px] h-[18px]"
     />
   );
 }
@@ -367,7 +367,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">名称</label>
+              <label className="block text-xs text-slate-500 mb-1">名称</label>
               <Input
                 value={customDisplayName}
                 onChange={(e)=>{
@@ -382,20 +382,20 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                 placeholder="请输入显示名称"
               />
               {editingName && (
-                <div className="mt-1 text-[10px] text-gray-400">名称仅用于展示，唯一标识仍为 {editingName}</div>
+                <div className="mt-1 text-[10px] text-slate-400">名称仅用于展示，唯一标识仍为 {editingName}</div>
               )}
             </div>
 
             {/* 图标显示：内置显示静态图标；自定义显示头像预览 */}
             {isEditingCustom ? (
               previewAvatar && (
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
                   <Image src={previewAvatar} alt="avatar" width={20} height={20} className="rounded-md" />
                   <span>头像预览（保存后将显示）</span>
                 </div>
               )
             ) : (
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
                 {(() => {
                   const def = AVAILABLE_PROVIDERS_CATALOG.find(d=>d.name===editingName);
                   return <ProviderIcon id={def?.id} name={def?.name || editingName || ''} />;
@@ -405,15 +405,15 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
             )}
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">服务地址（可选）</label>
+              <label className="block text-xs text-slate-500 mb-1">服务地址（可选）</label>
               <Input value={customUrl} onChange={(e)=>setCustomUrl(e.target.value)} placeholder="例如：https://api.example.com/v1" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">API 密钥（可选）</label>
+              <label className="block text-xs text-slate-500 mb-1">API 密钥（可选）</label>
               <Input value={customApiKey} onChange={(e)=>setCustomApiKey(e.target.value)} placeholder="粘贴密钥（可选）" type="password" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">API 策略</label>
+              <label className="block text-xs text-slate-500 mb-1">API 策略</label>
               <Select value={customStrategy} onValueChange={(v)=>setCustomStrategy(v as CatalogStrategy)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="选择策略" />
@@ -446,17 +446,17 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-[92vw] w-[92vw] sm:w-auto sm:max-w-xl box-border p-4 sm:p-5 overflow-hidden max-h-[85vh]">
         <DialogHeader>
-          <DialogTitle className="text-[15px] font-medium text-gray-700 dark:text-gray-200">添加/管理提供商</DialogTitle>
+          <DialogTitle className="text-[15px] font-medium text-slate-700 dark:text-slate-200">添加/管理提供商</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 min-w-0">
           {/* 为避免在小屏宽度下出现水平溢出，强制容器与输入框不超出 */}
           <Input className="w-full max-w-full min-w-0" placeholder="搜索提供商..." value={keyword} onChange={(e)=>setKeyword(e.target.value)} />
           {/* 顶部TAB */}
           <div className="flex items-center gap-2 px-1">
-            <button onClick={()=>setActiveTab("builtIn")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='builtIn'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>默认</button>
-            <button onClick={()=>setActiveTab("custom")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='custom'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>自定义</button>
+            <button onClick={()=>setActiveTab("builtIn")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='builtIn'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>默认</button>
+            <button onClick={()=>setActiveTab("custom")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='custom'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>自定义</button>
           </div>
-          <div ref={listRef} className="h-[60vh] overflow-y-auto rounded-md bg-white/70 dark:bg-gray-900/20 space-y-1.5 px-1">
+          <div ref={listRef} className="h-[60vh] overflow-y-auto rounded-md bg-white/80 dark:bg-slate-900/20 space-y-1.5 px-1">
             {activeTab === 'builtIn' && (
               <>
                 {catalog.local.length > 0 && (
@@ -472,16 +472,16 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                           <ProviderIcon id={c.id} name={c.name} />
                           <div className="flex-1 min-w-0">
                             <label htmlFor={`chk-${c.id}`} className="font-medium truncate cursor-pointer select-none">{c.name}</label>
-                            <div className="text-xs text-gray-500 truncate">
+                            <div className="text-xs text-slate-500 truncate">
                               {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? '· 需要密钥' : '· 免密'}
                             </div>
-                            {c.notes ? <div className="text-[11px] text-gray-400 truncate">{c.notes}</div> : null}
+                            {c.notes ? <div className="text-[11px] text-slate-400 truncate">{c.notes}</div> : null}
                           </div>
                         </label>
                       );
                     })}
                     {catalog.rest.length > 0 && (
-                      <div className="px-2 pt-2 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <div className="px-2 pt-2 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         更多提供商
                       </div>
                     )}
@@ -490,21 +490,21 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                 {catalog.rest.map((c) => {
                   const checked = visibleMap[c.name] ?? false;
                   return (
-                    <label key={c.id} className="flex items-center gap-2.5 py-2 px-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/40 border border-transparent">
+                    <label key={c.id} className="flex items-center gap-2.5 py-2 px-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/40 border border-transparent">
                       <Checkbox checked={checked} onCheckedChange={(v)=>toggle(c.name, !!v)} id={`chk-${c.id}`} />
                       <ProviderIcon id={c.id} name={c.name} />
                       <div className="flex-1 min-w-0">
                         <label htmlFor={`chk-${c.id}`} className="font-medium truncate cursor-pointer select-none">{c.name}</label>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-slate-500 truncate">
                           {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? '· 需要密钥' : ''}
                         </div>
-                        {c.notes ? <div className="text-[11px] text-gray-400 truncate">{c.notes}</div> : null}
+                        {c.notes ? <div className="text-[11px] text-slate-400 truncate">{c.notes}</div> : null}
                       </div>
                     </label>
                   );
                 })}
                 {catalog.all.length === 0 && (
-                  <div className="py-6 text-center text-sm text-gray-500">未找到匹配的提供商</div>
+                  <div className="py-6 text-center text-sm text-slate-500">未找到匹配的提供商</div>
                 )}
               </>
             )}
@@ -515,18 +515,18 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                   const id = `chk-custom-${cp.id.replace(/\s+/g,'-')}`;
                   const checked = visibleMap[cp.id] ?? cp.isVisible;
                   return (
-                    <div key={cp.id} className="flex items-center gap-2.5 py-2 px-2 group rounded-md hover:bg-gray-50 dark:hover:bg-gray-800/40 border border-transparent">
+                    <div key={cp.id} className="flex items-center gap-2.5 py-2 px-2 group rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/40 border border-transparent">
                       <Checkbox checked={checked} onCheckedChange={(v)=>toggle(cp.id, !!v)} id={id} />
                       <ProviderIcon src={getAvatarSync(cp.id || cp.displayName, cp.displayName, 18)} name={cp.displayName} />
                       <div className="flex-1 min-w-0">
                         <label htmlFor={id} className="font-medium truncate cursor-pointer select-none">{cp.displayName}</label>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-slate-500 truncate">
                           {(cp.strategy || 'openai-compatible')} {cp.url ? `· ${cp.url}` : ''}
                         </div>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"><MoreVertical className="w-4 h-4" /></button>
+                          <button className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><MoreVertical className="w-4 h-4" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" sideOffset={6} className="min-w-36">
                           <DropdownMenuItem onClick={()=>startEdit(cp.id)}>
@@ -555,7 +555,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                   );
                 })}
                 {filteredCustoms.length === 0 && customProviders.length > 0 && keyword.trim() !== '' && (
-                  <div className="py-2 text-center text-xs text-gray-400">没有匹配的自定义提供商</div>
+                  <div className="py-2 text-center text-xs text-slate-400">没有匹配的自定义提供商</div>
                 )}
                 <div className="py-2 px-1">
                   <Button variant="soft" className="w-full" onClick={openAddModal}>
@@ -576,7 +576,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
               </DialogHeader>
               <div className="grid gap-3 py-2">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">名称</label>
+                  <label className="block text-xs text-slate-500 mb-1">名称</label>
                   <Input
                     value={customDisplayName}
                     onChange={(e)=>{
@@ -589,11 +589,11 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                     placeholder="例如：我的提供商 或 My Provider"
                   />
                   {isEditMode && editingName && (
-                    <div className="mt-1 text-[10px] text-gray-400">名称仅用于展示，唯一标识仍为 {editingName}</div>
+                    <div className="mt-1 text-[10px] text-slate-400">名称仅用于展示，唯一标识仍为 {editingName}</div>
                   )}
                 </div>
                 {previewAvatar && (
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
                     <Image src={previewAvatar} alt="avatar" width={20} height={20} className="rounded-md" />
                     <span>头像预览（保存后将显示）</span>
                   </div>
@@ -604,15 +604,15 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">服务地址（可选）</label>
+                  <label className="block text-xs text-slate-500 mb-1">服务地址（可选）</label>
                   <Input value={customUrl} onChange={(e)=>setCustomUrl(e.target.value)} placeholder="https://api.example.com/v1" />
                 </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">API 密钥（可选）</label>
+              <label className="block text-xs text-slate-500 mb-1">API 密钥（可选）</label>
               <Input value={customApiKey} onChange={(e)=>setCustomApiKey(e.target.value)} placeholder="粘贴密钥（可选）" type="password" />
             </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">API 策略</label>
+                  <label className="block text-xs text-slate-500 mb-1">API 策略</label>
                   <Select value={customStrategy} onValueChange={(v)=>setCustomStrategy(v as CatalogStrategy)}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="选择策略" />

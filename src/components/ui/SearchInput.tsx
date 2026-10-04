@@ -36,7 +36,7 @@ export function SearchInput({
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          className="glass-field w-full h-8 py-1.5 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/50 dark:bg-white/6 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200"
+          className="glass-field w-full h-8 py-1.5 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200"
           onKeyDown={(e)=>{ if (e.key === 'Enter') onSubmit?.(); }}
         />
       </div>
@@ -45,7 +45,7 @@ export function SearchInput({
 
   if (variant === "withButton") {
     return (
-      <div className={cn("flex items-center gap-1 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/50 dark:bg-white/6 glass-field", className)}>
+      <div className={cn("flex items-center gap-1 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 glass-field", className)}>
         <input
           {...rest}
           value={value}
@@ -71,7 +71,7 @@ export function SearchInput({
         onChange={onChange}
         placeholder={placeholder}
         className={cn(
-          "glass-field w-full h-8 py-1.5 px-3 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/50 dark:bg-white/6 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200",
+          "glass-field w-full h-8 py-1.5 px-3 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200",
           className
         )}
         onKeyDown={(e)=>{ if (e.key === 'Enter') onSubmit?.(); }}
@@ -87,7 +87,7 @@ export function SearchInput({
         onChange={onChange}
         placeholder={placeholder}
         className={cn(
-          "glass-field w-full h-8 py-1.5 px-3 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/50 dark:bg-white/6 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200",
+          "glass-field w-full h-8 py-1.5 px-3 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200",
           className
         )}
         onKeyDown={(e)=>{ if (e.key === 'Enter') onSubmit?.(); }}
@@ -121,7 +121,7 @@ export function SearchInput({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="glass-field w-full h-8 py-1.5 pl-8 pr-6 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/50 dark:bg-white/6 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200"
+        className="glass-field w-full h-8 py-1.5 pl-8 pr-6 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200"
         onKeyDown={(e)=>{ if (e.key === 'Enter') onSubmit?.(); }}
       />
     </div>

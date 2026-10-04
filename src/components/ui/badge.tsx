@@ -10,13 +10,13 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-slate-300/50 dark:border-white/15 bg-slate-700 text-white [a&]:hover:bg-slate-800",
+          "border-slate-300/50 dark:border-white/20 bg-slate-700 text-white [a&]:hover:bg-slate-800",
         secondary:
-          "border-slate-200/60 dark:border-white/12 bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300 [a&]:hover:bg-slate-200 dark:[a&]:hover:bg-white/16",
+          "border-slate-200/60 dark:border-white/10 bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300 [a&]:hover:bg-slate-200 dark:[a&]:hover:bg-white/20",
         destructive:
           "border-red-300/50 dark:border-red-600/50 bg-red-600 text-white [a&]:hover:bg-red-700 focus-visible:ring-red-500/20 dark:focus-visible:ring-red-500/40",
         outline:
-          "text-gray-700 dark:text-gray-300 border-gray-300/60 dark:border-gray-600/50 bg-white/60 dark:bg-gray-900/40 backdrop-blur-sm [a&]:hover:bg-gray-50 dark:[a&]:hover:bg-gray-800/60 [a&]:hover:border-gray-400/60",
+          "text-slate-700 dark:text-slate-300 border-slate-300/60 dark:border-slate-600/50 bg-white/70 dark:bg-slate-900/40 backdrop-blur-sm [a&]:hover:bg-slate-50 dark:[a&]:hover:bg-slate-800/60 [a&]:hover:border-slate-400/60",
       },
     },
     defaultVariants: {

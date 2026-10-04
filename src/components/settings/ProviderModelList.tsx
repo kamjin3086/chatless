@@ -419,7 +419,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 return (
                   <button
                     type="button"
-                    className="px-1.5 h-6 text-[11px] rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+                    className="px-1.5 h-6 text-[11px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
                     onClick={() => {
                       if (allChecked) { setAll(ids, false); return; }
                       setChecked((prev) => {
@@ -474,7 +474,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   if (searchVisible && !modelSearch.trim()) setSearchOpen(false);
                   else setSearchOpen(true);
                 }}
-                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${searchVisible ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${searchVisible ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
                 title="筛选模型"
               >
                 <Search className="w-3.5 h-3.5" />
@@ -482,7 +482,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
               <button
                 type="button"
                 onClick={() => setFilterThinking((v) => !v)}
-                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterThinking ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterThinking ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
                 title="仅显示支持思考的模型"
               >
                 <Brain className="w-3.5 h-3.5" />
@@ -490,7 +490,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
               <button
                 type="button"
                 onClick={() => setFilterTools((v) => !v)}
-                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterTools ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterTools ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
                 title="仅显示支持工具调用的模型"
               >
                 <Workflow className="w-3.5 h-3.5" />
@@ -498,7 +498,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
               <button
                 type="button"
                 onClick={() => setFilterVision((v) => !v)}
-                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterVision ? "bg-slate-200/70 text-slate-700 dark:bg-white/12 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/8"}`}
+                className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterVision ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
                 title="仅显示支持视觉的模型"
               >
                 <Camera className="w-3.5 h-3.5" />
@@ -527,8 +527,8 @@ export function ProviderModelList(props: ProviderModelListProps) {
           {isMultiStrategyProvider && batchMode && (
             <>
               <Select value={batchStrategy} onValueChange={(v:any)=>{ if (v === '__clear__') { const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void clearBatch(); } return; } if (v === '__auto__') { void applyAutoInfer(); return; } setBatchStrategy(v); const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void applyBatch(v); } }}>
-                <SelectTrigger className="w-32 h-8 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder="选择策略"/></SelectTrigger>
-                <SelectContent className="rounded min-w-[140px]">
+                <SelectTrigger className="w-32 h-8 text-[10px] rounded-md border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder="选择策略"/></SelectTrigger>
+                <SelectContent className="rounded-md min-w-[140px]">
                   <SelectItem value="__auto__" className="text-[11px] py-1.5">自动推断</SelectItem>
                   <SelectItem value="openai-compatible" className="text-[11px] py-1.5">OpenAI Compatible</SelectItem>
                   <SelectItem value="openai-responses" className="text-[11px] py-1.5">OpenAI Responses</SelectItem>
@@ -539,11 +539,11 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   <SelectItem value="__clear__" className="text-[11px] py-1.5 text-red-600">清除覆盖</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" className="h-8 px-1.5 text-[10px] rounded" onClick={() => applyBatch()}>应用</Button>
-              <Button variant="secondary" className="h-8 px-1.5 text-[10px] rounded border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>清除</Button>
+              <Button variant="outline" className="h-8 px-1.5 text-[10px] rounded-md" onClick={() => applyBatch()}>应用</Button>
+              <Button variant="secondary" className="h-8 px-1.5 text-[10px] rounded-md border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>清除</Button>
               <Button
                 variant="ghost"
-                className="h-8 px-1.5 text-[10px] rounded transition-colors"
+                className="h-8 px-1.5 text-[10px] rounded-md transition-colors"
                 onClick={() => {
                   const ids = modelsForDisplay.map(m => m.name);
                   const allChecked = ids.every(id => !!checked[id]);
@@ -595,7 +595,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                           return (
                             <button
                               type="button"
-                              className="text-[11px] px-1.5 py-0.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              className="text-[11px] px-1.5 py-0.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               onClick={() => setAll(groupIds, next)}
                             >
                               {allChecked ? "取消" : "全选"}

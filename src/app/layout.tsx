@@ -121,15 +121,15 @@ const TauriApp = dynamic<{ children: React.ReactNode }>(
     ssr: false,
     loading: () => (
       <div className="flex h-full">
-        <div className="w-16 bg-white border-r border-gray-200 h-screen flex-shrink-0">
+        <div className="w-16 bg-white border-r border-slate-200 h-screen flex-shrink-0">
           {/* 全局侧边栏占位符 */}
         </div>
         <div className="flex-1">
           <div className="flex h-full">
-            <div className="w-64 bg-gray-50 border-r border-gray-200 flex-shrink-0 h-full">
+            <div className="w-64 bg-slate-50 border-r border-slate-200 flex-shrink-0 h-full">
               {/* 聊天侧边栏占位符 */}
             </div>
-            <div className="flex-1 bg-gray-50 relative">
+            <div className="flex-1 bg-slate-50 relative">
               {/* 聊天内容占位符 + 品牌加载动画 */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <FoldingLoader size={40} />

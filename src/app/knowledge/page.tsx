@@ -211,7 +211,7 @@ export default function KnowledgePage() {
     id: kb.id,
     name: kb.name,
     icon: kb.icon || 'database',
-    iconBg: 'from-gray-400 to-gray-600',
+    iconBg: 'from-slate-400 to-slate-600',
     source: '本地',
     docCount: kb.documentCount,
     description: kb.description || '',
@@ -220,7 +220,7 @@ export default function KnowledgePage() {
   }));
 
   return (
-    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 overflow-hidden glass-surface">
+    <div className="flex flex-col h-full bg-white/100 dark:bg-slate-900/95 overflow-hidden glass-surface">
       {/* 顶部 Tab */}
       <PageTabs
         tabs={tabs}
@@ -265,7 +265,7 @@ export default function KnowledgePage() {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
+                    className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
                   >
                     <option value="recent">最近更新</option>
                     <option value="name">名称</option>
@@ -273,7 +273,7 @@ export default function KnowledgePage() {
                   </select>
                   <button
                     onClick={() => setShowCreateDialog(true)}
-                    className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1"
+                    className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     新建
@@ -319,7 +319,7 @@ export default function KnowledgePage() {
                       <p className="text-[11px] text-slate-400 mb-3">创建您的第一个知识库</p>
                       <button 
                         onClick={() => setShowCreateDialog(true)} 
-                        className="h-7 px-3 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded border border-slate-200/60 dark:border-slate-700/40 transition-colors flex items-center gap-1"
+                        className="h-7 px-3 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md border border-slate-200/60 dark:border-slate-700/40 transition-colors flex items-center gap-1"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         创建知识库

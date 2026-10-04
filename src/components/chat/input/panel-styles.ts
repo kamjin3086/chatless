@@ -10,7 +10,7 @@ export const panelContainerClass = [
   // 基础
   "glass-overlay rounded-xl border overflow-hidden",
   // 背景
-  "bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm",
+  "bg-white/100 dark:bg-slate-900/95 backdrop-blur-sm",
   // 边框和阴影
   "border-slate-200 dark:border-slate-700",
   "shadow-xl shadow-slate-200/50 dark:shadow-black/30",

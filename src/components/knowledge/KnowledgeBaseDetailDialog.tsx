@@ -81,7 +81,7 @@ export function KnowledgeBaseDetailDialog({
         <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <button
             onClick={() => { onDelete?.(); onOpenChange(false); }}
-            className="h-7 px-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded flex items-center gap-1"
+            className="h-7 px-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md flex items-center gap-1"
           >
             <Trash2 className="h-3 w-3" />
             删除
@@ -89,14 +89,14 @@ export function KnowledgeBaseDetailDialog({
           <div className="flex items-center gap-2">
             <button
               onClick={() => { onRename?.(); onOpenChange(false); }}
-              className="h-7 px-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded flex items-center gap-1"
+              className="h-7 px-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md flex items-center gap-1"
             >
               <Edit className="h-3 w-3" />
               重命名
             </button>
             <button
               onClick={() => { onManage?.(); onOpenChange(false); }}
-              className="h-7 px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center gap-1"
+              className="h-7 px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md flex items-center gap-1"
             >
               <FolderOpen className="h-3 w-3" />
               管理文档

@@ -819,7 +819,7 @@ export function ChatInput({
 
   return (
     <div className={cn(
-      "input-area w-full max-w-full mb-2",
+      "input-area w-full max-w-[var(--chat-content-max)] mx-auto mb-2",
       disabled && "opacity-45 pointer-events-none"
     )}>
       {/* 编辑模式提示栏 */}
@@ -836,7 +836,7 @@ export function ChatInput({
         <div className="flex flex-wrap gap-2 mb-2">
           {attachedImages.map((img, idx) => (
             <div key={idx} className="relative group">
-              <img src={img.dataUrl} alt="img" className="w-24 h-24 object-cover rounded" />
+              <img src={img.dataUrl} alt="img" className="w-24 h-24 object-cover rounded-md" />
               <button
                 className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-xs hidden group-hover:block"
                 onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
@@ -851,7 +851,7 @@ export function ChatInput({
       {/* 文档附加展示已移至下方彩色标签条 */}
 
       <div
-        className="relative flex w-full overflow-hidden rounded-2xl border border-slate-300/40 dark:border-slate-600/40 bg-white/35 dark:bg-slate-900/35 hover:border-slate-400/50 dark:hover:border-slate-500/50 focus-within:border-sky-400/45 dark:focus-within:border-sky-400/40 focus-within:ring-0 transition-colors duration-200 composer-box"
+        className="relative flex w-full overflow-hidden rounded-2xl border border-slate-300/40 dark:border-slate-600/40 bg-white/30 dark:bg-slate-900/35 hover:border-slate-400/50 dark:hover:border-slate-500/50 focus-within:border-sky-400/45 dark:focus-within:border-sky-400/40 focus-within:ring-0 transition-colors duration-200 composer-box"
         onDragOver={(e) => {
           const dt = (e as React.DragEvent).dataTransfer;
           if (!dt) return;
@@ -1058,8 +1058,8 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={disabled ? "请先选择模型" : "发送消息"}
           className={cn(
-            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 py-[10px] pb-10 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[66px] placeholder:text-[13px] placeholder:text-gray-400/70 dark:placeholder:text-gray-500/60",
-            (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-gray-900 dark:caret-gray-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-gray-900 dark:text-gray-100 tabular-nums"
+            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
+            (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-slate-900 dark:caret-slate-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-slate-900 dark:text-slate-100 tabular-nums"
           )}
           style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }}
           rows={3}
@@ -1170,7 +1170,7 @@ export function ChatInput({
         </div>
         <div className="absolute right-2 sm:right-3 bottom-2.5 z-[2] flex items-center gap-1.5 sm:gap-2">
             {tokenCount > 0 && (
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 mr-1 select-none font-mono tabular-nums hidden sm:inline">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-1 select-none font-mono tabular-nums hidden sm:inline">
                 T:{tokenCount}
               </span>
             )}
@@ -1216,7 +1216,7 @@ export function ChatInput({
               </div>
             ) : disabled ? (
               <div
-                className="composer-tool h-8 w-8 rounded-md text-slate-400/55 dark:text-slate-500/55 flex items-center justify-center"
+                className="composer-tool h-8 w-8 rounded-md text-slate-400 dark:text-slate-500 flex items-center justify-center"
                 aria-hidden
               >
                 <Send className="w-4 h-4" />
@@ -1228,8 +1228,10 @@ export function ChatInput({
                 onClick={handleSend}
                 disabled={!inputValue.trim() && !attachedDocument}
                 className={cn(
-                  "composer-tool composer-send h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
-                  ((!inputValue.trim() && !attachedDocument)) && "opacity-40 pointer-events-none"
+                  "composer-tool composer-send h-8 w-8 rounded-md border-0 shadow-none transition-colors",
+                  (!inputValue.trim() && !attachedDocument)
+                    ? "pointer-events-none bg-transparent text-slate-300 dark:text-slate-600"
+                    : "bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-white"
                 )}
                 title="发送 (Enter)"
                 aria-label="发送消息"

@@ -205,7 +205,7 @@ export default function McpTestPage() {
       {/* 本地测试服务器控制 */}
       <div className="flex flex-wrap gap-2">
         <button
-          className="px-3 py-1 rounded bg-teal-600 text-white"
+          className="px-3 py-1 rounded-md bg-teal-600 text-white"
           onClick={async ()=>{
             try {
               await invoke('start_local_sse_server', { address: '127.0.0.1:8787' });
@@ -214,7 +214,7 @@ export default function McpTestPage() {
           }}
         >启动简单 SSE 服务(事件流)</button>
         <button
-          className="px-3 py-1 rounded bg-teal-700 text-white"
+          className="px-3 py-1 rounded-md bg-teal-700 text-white"
           onClick={async ()=>{
             try {
               await invoke('start_local_mcp_sse', { address: '127.0.0.1:8788' });
@@ -226,11 +226,11 @@ export default function McpTestPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
         <label className="flex items-center gap-2">
           <span className="w-24">Name</span>
-          <input className="border px-2 py-1 rounded w-full" value={name} onChange={(e)=>setName(e.target.value)} />
+          <input className="border px-2 py-1 rounded-md w-full" value={name} onChange={(e)=>setName(e.target.value)} />
         </label>
         <label className="flex items-center gap-2">
           <span className="w-24">Transport</span>
-          <select className="border px-2 py-1 rounded w-full" value={transport} onChange={(e)=>setTransport(e.target.value as any)}>
+          <select className="border px-2 py-1 rounded-md w-full" value={transport} onChange={(e)=>setTransport(e.target.value as any)}>
             <option value="stdio">stdio</option>
             <option value="sse">sse</option>
             <option value="http">http</option>
@@ -240,17 +240,17 @@ export default function McpTestPage() {
           <>
             <label className="flex items-center gap-2">
               <span className="w-24">Command</span>
-              <input className="border px-2 py-1 rounded w-full" value={command} onChange={(e)=>setCommand(e.target.value)} />
+              <input className="border px-2 py-1 rounded-md w-full" value={command} onChange={(e)=>setCommand(e.target.value)} />
             </label>
             <label className="flex items-center gap-2">
               <span className="w-24">Args</span>
-              <input className="border px-2 py-1 rounded w-full" value={args} onChange={(e)=>setArgs(e.target.value)} />
+              <input className="border px-2 py-1 rounded-md w-full" value={args} onChange={(e)=>setArgs(e.target.value)} />
             </label>
           </>
         ) : (
           <label className="flex items-center gap-2 md:col-span-2">
             <span className="w-24">Base URL</span>
-            <input className="border px-2 py-1 rounded w-full" placeholder="http(s)://..." value={baseUrl} onChange={(e)=>setBaseUrl(e.target.value)} />
+            <input className="border px-2 py-1 rounded-md w-full" placeholder="http(s)://..." value={baseUrl} onChange={(e)=>setBaseUrl(e.target.value)} />
           </label>
         )}
       </div>
@@ -259,90 +259,90 @@ export default function McpTestPage() {
         <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
           <label className="flex items-center gap-2">
             <span className="w-24">Env</span>
-            <input className="border px-2 py-1 rounded w-full" placeholder="KEY=VALUE,KEY2=VALUE2 或换行分隔" value={envText} onChange={(e)=>setEnvText(e.target.value)} />
+            <input className="border px-2 py-1 rounded-md w-full" placeholder="KEY=VALUE,KEY2=VALUE2 或换行分隔" value={envText} onChange={(e)=>setEnvText(e.target.value)} />
           </label>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
           <label className="flex items-center gap-2">
             <span className="w-24">Headers</span>
-            <input className="border px-2 py-1 rounded w-full" placeholder="Authorization=Bearer xxx, X-Api-Key=xxx" value={headersText} onChange={(e)=>setHeadersText(e.target.value)} />
+            <input className="border px-2 py-1 rounded-md w-full" placeholder="Authorization=Bearer xxx, X-Api-Key=xxx" value={headersText} onChange={(e)=>setHeadersText(e.target.value)} />
           </label>
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button className="px-3 py-1 rounded bg-blue-600 text-white" onClick={connect}>Connect</button>
-        <button className="px-3 py-1 rounded bg-gray-600 text-white" onClick={disconnect}>Disconnect</button>
-        <button className="px-3 py-1 rounded bg-emerald-600 text-white" onClick={loadTools}>List Tools</button>
+        <button className="px-3 py-1 rounded-md bg-blue-600 text-white" onClick={connect}>Connect</button>
+        <button className="px-3 py-1 rounded-md bg-slate-600 text-white" onClick={disconnect}>Disconnect</button>
+        <button className="px-3 py-1 rounded-md bg-emerald-600 text-white" onClick={loadTools}>List Tools</button>
         <div className="flex items-center gap-2">
-          <select className="border px-2 py-1 rounded" value={selectedTool} onChange={e=>setSelectedTool(e.target.value)}>
+          <select className="border px-2 py-1 rounded-md" value={selectedTool} onChange={e=>setSelectedTool(e.target.value)}>
             {tools.map(t => (
               <option key={t.name} value={t.name}>{t.name}</option>
             ))}
           </select>
-          <input className="border px-2 py-1 rounded w-64" placeholder='tool args JSON' value={toolArgs} onChange={e=>setToolArgs(e.target.value)} />
+          <input className="border px-2 py-1 rounded-md w-64" placeholder='tool args JSON' value={toolArgs} onChange={e=>setToolArgs(e.target.value)} />
           <label className="flex items-center gap-1 text-sm">
             <input type="checkbox" checked={confirmTool} onChange={e=>setConfirmTool(e.target.checked)} /> Confirm
           </label>
-          <button className="px-3 py-1 rounded bg-orange-600 text-white" onClick={callSelectedTool} disabled={!tools.length}>Call Tool</button>
+          <button className="px-3 py-1 rounded-md bg-orange-600 text-white" onClick={callSelectedTool} disabled={!tools.length}>Call Tool</button>
         </div>
-        <span className="px-2 py-1 border rounded">Status: {status}</span>
-        <button className="px-3 py-1 rounded bg-fuchsia-600 text-white" onClick={useEverythingPreset}>Preset: Everything</button>
-        <button className="px-3 py-1 rounded bg-fuchsia-600 text-white" onClick={useGitPreset}>Preset: Git</button>
-        <button className="px-3 py-1 rounded bg-indigo-600 text-white" onClick={useSseTemplate}>Template: SSE</button>
-        <button className="px-3 py-1 rounded bg-indigo-700 text-white" onClick={useHttpTemplate}>Template: HTTP</button>
+        <span className="px-2 py-1 border rounded-md">Status: {status}</span>
+        <button className="px-3 py-1 rounded-md bg-fuchsia-600 text-white" onClick={useEverythingPreset}>Preset: Everything</button>
+        <button className="px-3 py-1 rounded-md bg-fuchsia-600 text-white" onClick={useGitPreset}>Preset: Git</button>
+        <button className="px-3 py-1 rounded-md bg-indigo-600 text-white" onClick={useSseTemplate}>Template: SSE</button>
+        <button className="px-3 py-1 rounded-md bg-indigo-700 text-white" onClick={useHttpTemplate}>Template: HTTP</button>
       </div>
 
       <div>
         <h2 className="font-medium">Tools</h2>
-        <pre className="p-2 bg-gray-100 rounded overflow-auto text-xs max-h-64">{JSON.stringify(tools, null, 2)}</pre>
+        <pre className="p-2 bg-slate-100 rounded-md overflow-auto text-xs max-h-64">{JSON.stringify(tools, null, 2)}</pre>
       </div>
 
       <div className="space-y-2">
         <h2 className="font-medium">Resources</h2>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500">
           说明：并非所有 MCP Server 都实现 Resources（如 mcp-server-git 通常没有）。
           如果这里一直为空，尝试将 Command 改为 <code>uvx</code> 或 <code>npx</code>，Args 改为 <code>@modelcontextprotocol/server-everything</code>，
           连接后点击 List Resources。资源 URI 示例：<code>test://static/resource/1</code>
         </p>
         <div className="flex gap-2">
-          <button className="px-3 py-1 rounded bg-indigo-600 text-white" onClick={listResources}>List Resources</button>
-          <input className="border px-2 py-1 rounded w-full" placeholder="resource uri（如 test://static/resource/1）" value={resourceUri} onChange={e=>setResourceUri(e.target.value)} />
-          <button className="px-3 py-1 rounded bg-indigo-700 text-white" onClick={readResource}>Read Resource</button>
+          <button className="px-3 py-1 rounded-md bg-indigo-600 text-white" onClick={listResources}>List Resources</button>
+          <input className="border px-2 py-1 rounded-md w-full" placeholder="resource uri（如 test://static/resource/1）" value={resourceUri} onChange={e=>setResourceUri(e.target.value)} />
+          <button className="px-3 py-1 rounded-md bg-indigo-700 text-white" onClick={readResource}>Read Resource</button>
         </div>
         {!resources && (
-          <div className="text-xs text-gray-500">暂无结果：服务器可能未实现 Resources，或尚未点击 List Resources。</div>
+          <div className="text-xs text-slate-500">暂无结果：服务器可能未实现 Resources，或尚未点击 List Resources。</div>
         )}
-        <pre className="p-2 bg-gray-100 rounded overflow-auto text-xs max-h-64">{JSON.stringify(resources, null, 2)}</pre>
-        <pre className="p-2 bg-gray-100 rounded overflow-auto text-xs max-h-64">{JSON.stringify(resourceContent, null, 2)}</pre>
+        <pre className="p-2 bg-slate-100 rounded-md overflow-auto text-xs max-h-64">{JSON.stringify(resources, null, 2)}</pre>
+        <pre className="p-2 bg-slate-100 rounded-md overflow-auto text-xs max-h-64">{JSON.stringify(resourceContent, null, 2)}</pre>
       </div>
 
       <div className="space-y-2">
         <h2 className="font-medium">Prompts</h2>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500">
           说明：若使用 <code>@modelcontextprotocol/server-everything</code>，List Prompts 会返回多个可用的提示，
           例如 <code>simple_prompt</code> / <code>complex_prompt</code> / <code>resource_prompt</code>。
           在下方输入 Prompt 名称并提供参数 JSON（如 <code>{'{'}"temperature":0.7{'}'}</code> 或 <code>{'{'}"resourceId":1{'}'}</code>），点击 Get Prompt 查看结果。
           其他服务器可能不支持该能力。
         </p>
         <div className="flex gap-2">
-          <button className="px-3 py-1 rounded bg-purple-600 text-white" onClick={listPrompts}>List Prompts</button>
+          <button className="px-3 py-1 rounded-md bg-purple-600 text-white" onClick={listPrompts}>List Prompts</button>
         </div>
         <div className="flex gap-2">
-          <input className="border px-2 py-1 rounded w-1/3" placeholder="prompt name（如 simple_prompt）" value={promptName} onChange={e=>setPromptName(e.target.value)} />
-          <input className="border px-2 py-1 rounded w-2/3" placeholder='args JSON（如 {"temperature":0.7} 或 {"resourceId":1}）' value={promptArgs} onChange={e=>setPromptArgs(e.target.value)} />
-          <button className="px-3 py-1 rounded bg-purple-700 text-white" onClick={getPrompt}>Get Prompt</button>
+          <input className="border px-2 py-1 rounded-md w-1/3" placeholder="prompt name（如 simple_prompt）" value={promptName} onChange={e=>setPromptName(e.target.value)} />
+          <input className="border px-2 py-1 rounded-md w-2/3" placeholder='args JSON（如 {"temperature":0.7} 或 {"resourceId":1}）' value={promptArgs} onChange={e=>setPromptArgs(e.target.value)} />
+          <button className="px-3 py-1 rounded-md bg-purple-700 text-white" onClick={getPrompt}>Get Prompt</button>
         </div>
         {!prompts && (
-          <div className="text-xs text-gray-500">暂无结果：服务器可能未实现 Prompts，或尚未点击 List Prompts。</div>
+          <div className="text-xs text-slate-500">暂无结果：服务器可能未实现 Prompts，或尚未点击 List Prompts。</div>
         )}
-        <pre className="p-2 bg-gray-100 rounded overflow-auto text-xs max-h-64">{JSON.stringify(prompts, null, 2)}</pre>
+        <pre className="p-2 bg-slate-100 rounded-md overflow-auto text-xs max-h-64">{JSON.stringify(prompts, null, 2)}</pre>
       </div>
 
       <div>
         <h2 className="font-medium">Log</h2>
-        <pre className="p-2 bg-gray-100 rounded overflow-auto text-xs max-h-64 whitespace-pre-wrap">{log}</pre>
+        <pre className="p-2 bg-slate-100 rounded-md overflow-auto text-xs max-h-64 whitespace-pre-wrap">{log}</pre>
       </div>
     </div>
   );

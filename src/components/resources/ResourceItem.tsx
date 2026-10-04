@@ -98,7 +98,7 @@ export function ResourceItem({
     <TooltipProvider delayDuration={100}>
       <div className="flex items-center gap-2.5 px-2 py-2 border-b border-slate-100 dark:border-slate-800/40 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
         {/* 文件图标 */}
-        <div className="flex h-7 w-7 items-center justify-center rounded bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 flex-shrink-0">
           {getFileIcon(title)}
         </div>
 
@@ -109,12 +109,12 @@ export function ResourceItem({
               {title}
             </p>
             {isChatFile && (
-              <span className="rounded px-1 py-0.5 text-[10px] border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300">
+              <span className="rounded-md px-1 py-0.5 text-[10px] border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300">
                 聊天
               </span>
             )}
             {lexicalStatus && (
-              <span className={`rounded px-1 py-0.5 text-[10px] border ${lexicalStatus === 'ready'
+              <span className={`rounded-md px-1 py-0.5 text-[10px] border ${lexicalStatus === 'ready'
                 ? 'border-emerald-200/70 bg-emerald-50/70 text-emerald-700 dark:text-emerald-400'
                 : lexicalStatus === 'failed' ? 'border-red-200/70 bg-red-50/70 text-red-700 dark:text-red-400'
                 : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
@@ -122,7 +122,7 @@ export function ResourceItem({
               </span>
             )}
             {semanticStatus && (
-              <span className={`rounded px-1 py-0.5 text-[10px] border ${semanticStatus === 'ready'
+              <span className={`rounded-md px-1 py-0.5 text-[10px] border ${semanticStatus === 'ready'
                 ? 'border-blue-200/70 bg-blue-50/70 text-blue-700 dark:text-blue-400'
                 : semanticStatus === 'failed' ? 'border-amber-200/70 bg-amber-50/70 text-amber-700 dark:text-amber-400'
                 : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
@@ -135,7 +135,7 @@ export function ResourceItem({
                   <button
                     type="button"
                     aria-label="重试语义索引"
-                    className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    className="rounded-md p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     onClick={(event) => { event.stopPropagation(); onRetrySemantic(id); }}
                   >
                     <RotateCcw className="h-3 w-3" />
@@ -150,7 +150,7 @@ export function ResourceItem({
                   <button
                     type="button"
                     aria-label="取消语义索引"
-                    className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    className="rounded-md p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     onClick={(event) => { event.stopPropagation(); onCancelSemantic(id); }}
                   >
                     <Ban className="h-3 w-3" />
@@ -164,7 +164,7 @@ export function ResourceItem({
                 {knowledgeBases.slice(0, 2).map((kb, index) => (
                   <span 
                     key={`${kb.id}-${index}`} 
-                    className={`rounded px-1 py-0.5 text-[10px] border ${
+                    className={`rounded-md px-1 py-0.5 text-[10px] border ${
                       kb.status === 'indexed' 
                         ? 'border-emerald-200/70 bg-emerald-50/70 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-900/20 dark:text-emerald-400'
                         : kb.status === 'pending' || kb.status === 'indexing'
@@ -203,7 +203,7 @@ export function ResourceItem({
           {onView && (
             <button
               onClick={() => onView(id)}
-              className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
               title={isChatFile ? '跳转到对话' : '查看'}
             >
               <Eye className="h-3.5 w-3.5" />
@@ -213,7 +213,7 @@ export function ResourceItem({
           {onAddToKnowledgeBase && (
             <button
               onClick={() => onAddToKnowledgeBase(id)}
-              className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
               title="添加到知识库"
             >
               <Database className="h-3.5 w-3.5" />
@@ -222,7 +222,7 @@ export function ResourceItem({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors">
+              <button className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors">
                 <MoreVertical className="h-3.5 w-3.5" />
               </button>
             </DropdownMenuTrigger>
@@ -285,7 +285,7 @@ export function ResourceItem({
             
             {!hideIndexedStatus && (!knowledgeBases || knowledgeBases.length === 0) && (
               <div className="text-center py-4">
-                <p className="text-gray-500 dark:text-gray-400">尚未添加到任何知识库</p>
+                <p className="text-slate-500 dark:text-slate-400">尚未添加到任何知识库</p>
               </div>
             )}
           </div>

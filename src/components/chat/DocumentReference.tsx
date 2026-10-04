@@ -72,18 +72,18 @@ export function DocumentReference({
           summary: "text-sm text-emerald-800/90 dark:text-emerald-200/90 truncate",
           expandButton: "text-xs text-emerald-600/80 dark:text-emerald-300/80 hover:text-emerald-700 dark:hover:text-emerald-200",
           expandedHeader: "text-xs text-emerald-600/70 dark:text-emerald-400/70 mb-2 font-medium",
-          expandedContent: "text-sm text-emerald-900 dark:text-emerald-100 bg-white/90 dark:bg-gray-800/90 p-3 rounded-lg border border-emerald-200/60 dark:border-emerald-800/50 max-h-60 overflow-y-auto backdrop-blur-sm shadow-sm"
+          expandedContent: "text-sm text-emerald-900 dark:text-emerald-100 bg-white/95 dark:bg-slate-800/90 p-3 rounded-lg border border-emerald-200/60 dark:border-emerald-800/50 max-h-60 overflow-y-auto backdrop-blur-sm shadow-sm"
         };
       case 'ai-message':
         return {
-          container: "border border-gray-200/60 dark:border-gray-700/50 rounded-xl bg-gradient-to-r from-gray-50/80 to-slate-50/60 dark:from-gray-800/40 dark:to-slate-800/30 p-3 my-2 shadow-sm backdrop-blur-sm",
-          fileName: "font-semibold text-gray-900 dark:text-gray-100 text-sm truncate block",
-          fileType: "text-xs text-gray-700 dark:text-gray-300 bg-gradient-to-r from-gray-100 to-slate-100 dark:from-gray-700/60 dark:to-slate-700/50 px-2 py-0.5 rounded-full border border-gray-200/50 dark:border-gray-600/50",
-          fileSize: "text-xs text-gray-600 dark:text-gray-400 font-mono",
-          summary: "text-sm text-gray-700 dark:text-gray-300 truncate",
-          expandButton: "text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200",
-          expandedHeader: "text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium",
-          expandedContent: "text-sm text-gray-900 dark:text-gray-100 bg-white/90 dark:bg-gray-800/90 p-3 rounded-lg border border-gray-200/60 dark:border-gray-700/50 max-h-60 overflow-y-auto backdrop-blur-sm shadow-sm"
+          container: "border border-slate-200/60 dark:border-slate-700/50 rounded-xl bg-gradient-to-r from-slate-50/80 to-slate-50/60 dark:from-slate-800/40 dark:to-slate-800/30 p-3 my-2 shadow-sm backdrop-blur-sm",
+          fileName: "font-semibold text-slate-900 dark:text-slate-100 text-sm truncate block",
+          fileType: "text-xs text-slate-700 dark:text-slate-300 bg-gradient-to-r from-slate-100 to-slate-100 dark:from-slate-700/60 dark:to-slate-700/50 px-2 py-0.5 rounded-full border border-slate-200/50 dark:border-slate-600/50",
+          fileSize: "text-xs text-slate-600 dark:text-slate-400 font-mono",
+          summary: "text-sm text-slate-700 dark:text-slate-300 truncate",
+          expandButton: "text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200",
+          expandedHeader: "text-xs text-slate-600 dark:text-slate-400 mb-2 font-medium",
+          expandedContent: "text-sm text-slate-900 dark:text-slate-100 bg-white/95 dark:bg-slate-800/90 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/50 max-h-60 overflow-y-auto backdrop-blur-sm shadow-sm"
         };
       default:
         return {
@@ -94,7 +94,7 @@ export function DocumentReference({
           summary: "text-sm text-blue-800 dark:text-blue-200 truncate",
           expandButton: "text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300",
           expandedHeader: "text-xs text-blue-600 dark:text-blue-400 mb-2 font-medium",
-          expandedContent: "text-sm text-blue-900 dark:text-blue-100 bg-white/90 dark:bg-gray-800/90 p-3 rounded-lg border border-blue-200/60 dark:border-blue-800/50 max-h-60 overflow-y-auto backdrop-blur-sm shadow-sm"
+          expandedContent: "text-sm text-blue-900 dark:text-blue-100 bg-white/95 dark:bg-slate-800/90 p-3 rounded-lg border border-blue-200/60 dark:border-blue-800/50 max-h-60 overflow-y-auto backdrop-blur-sm shadow-sm"
         };
     }
   };
@@ -109,7 +109,7 @@ export function DocumentReference({
     )}>
       {/* 文档引用头部 */}
       <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gradient-to-br from-gray-100 to-slate-100 dark:from-gray-700/60 dark:to-slate-700/50 flex items-center justify-center shadow-sm">
+        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gradient-to-br from-slate-100 to-slate-100 dark:from-slate-700/60 dark:to-slate-700/50 flex items-center justify-center shadow-sm">
           {getFileIcon(fileType, variant)}
         </div>
         

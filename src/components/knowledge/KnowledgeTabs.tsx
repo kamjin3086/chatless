@@ -16,7 +16,7 @@ interface KnowledgeTabsProps {
 
 export function KnowledgeTabs({ activeTab, onTabChange }: KnowledgeTabsProps) {
   return (
-    <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 glass-surface">
+    <div className="flex border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 glass-surface">
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -25,10 +25,10 @@ export function KnowledgeTabs({ activeTab, onTabChange }: KnowledgeTabsProps) {
           className={cn(
             "tab-item relative px-6 py-3 text-sm font-medium cursor-pointer transition-colors duration-200",
             tab.disabled
-              ? "text-gray-400 dark:text-gray-600 cursor-not-allowed"
+              ? "text-slate-400 dark:text-slate-600 cursor-not-allowed"
               : activeTab === tab.id
-              ? "text-primary dark:text-gray-100"
-              : "text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary"
+              ? "text-primary dark:text-slate-100"
+              : "text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary"
           )}
         >
           {tab.name}

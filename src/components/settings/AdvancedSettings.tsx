@@ -132,7 +132,7 @@ export function AdvancedSettings() {
             <select
               value={logLevel}
               onChange={(e) => handleLevelChange(e.target.value)}
-              className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+              className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
             >
               <option value="none">无</option>
               <option value="error">错误</option>
@@ -147,7 +147,7 @@ export function AdvancedSettings() {
               onClick={exportLogs}
               disabled={loading}
               className={cn(
-                "h-7 px-2 text-xs rounded flex items-center gap-1",
+                "h-7 px-2 text-xs rounded-md flex items-center gap-1",
                 "border border-slate-200/60 dark:border-slate-700/40",
                 "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
                 loading && "opacity-60"
@@ -158,7 +158,7 @@ export function AdvancedSettings() {
             </button>
             <button
               onClick={exportPerformanceReport}
-              className="h-7 px-2 text-xs rounded flex items-center gap-1 border border-slate-200/60 dark:border-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="h-7 px-2 text-xs rounded-md flex items-center gap-1 border border-slate-200/60 dark:border-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               <Download className="h-3 w-3" />
               性能报告

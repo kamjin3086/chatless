@@ -108,7 +108,7 @@ export function EnvironmentStatus() {
         </div>
         
         {!envInfo.isTauriApp && (
-          <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+          <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
             <p className="text-sm text-yellow-700 dark:text-yellow-300">
               <strong>提示：</strong>开发工具需要在Tauri应用的开发环境中运行。请使用 <code>pnpm tauri dev</code> 启动应用。
             </p>

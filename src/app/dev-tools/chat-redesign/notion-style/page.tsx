@@ -140,21 +140,21 @@ function Sidebar({
       <div className={cn(
         "h-full flex flex-col transition-all duration-200",
         isOpen ? "w-64" : "w-0 overflow-hidden",
-        isDark ? "bg-neutral-900 border-neutral-800" : "bg-gray-50 border-gray-200",
+        isDark ? "bg-slate-900 border-slate-800" : "bg-slate-50 border-slate-200",
         "border-r"
       )}>
         {/* 头部 */}
         <div className="p-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className={cn(
-              "w-6 h-6 rounded flex items-center justify-center text-xs font-semibold",
-              isDark ? "bg-neutral-700 text-neutral-300" : "bg-gray-200 text-gray-600"
+              "w-6 h-6 rounded-md flex items-center justify-center text-xs font-semibold",
+              isDark ? "bg-slate-700 text-slate-300" : "bg-slate-200 text-slate-600"
             )}>
               C
             </div>
             <span className={cn(
               "text-sm font-medium",
-              isDark ? "text-neutral-200" : "text-gray-700"
+              isDark ? "text-slate-200" : "text-slate-700"
             )}>
               Chatless
             </span>
@@ -162,8 +162,8 @@ function Sidebar({
           <button 
             onClick={onToggle}
             className={cn(
-              "p-1.5 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+              "p-1.5 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
             )}
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -174,7 +174,7 @@ function Sidebar({
         <div className="px-3 pb-2">
           <div className={cn(
             "flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm",
-            isDark ? "bg-neutral-800 text-neutral-400" : "bg-white border border-gray-200 text-gray-500"
+            isDark ? "bg-slate-800 text-slate-400" : "bg-white border border-slate-200 text-slate-500"
           )}>
             <Search className="w-3.5 h-3.5" />
             <input
@@ -184,12 +184,12 @@ function Sidebar({
               placeholder="搜索..."
               className={cn(
                 "flex-1 bg-transparent outline-none text-sm",
-                isDark ? "placeholder:text-neutral-500" : "placeholder:text-gray-400"
+                isDark ? "placeholder:text-slate-500" : "placeholder:text-slate-400"
               )}
             />
             <kbd className={cn(
-              "text-[10px] px-1 py-0.5 rounded",
-              isDark ? "bg-neutral-700 text-neutral-500" : "bg-gray-100 text-gray-400"
+              "text-[10px] px-1 py-0.5 rounded-md",
+              isDark ? "bg-slate-700 text-slate-500" : "bg-slate-100 text-slate-400"
             )}>⌘K</kbd>
           </div>
         </div>
@@ -198,13 +198,13 @@ function Sidebar({
         <div className="px-3 pb-2">
           <button className={cn(
             "w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-sm transition-colors",
-            isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-gray-100 text-gray-600"
+            isDark ? "hover:bg-slate-800 text-slate-300" : "hover:bg-slate-100 text-slate-600"
           )}>
             <Plus className="w-4 h-4" />
             <span>新对话</span>
             <kbd className={cn(
-              "ml-auto text-[10px] px-1 py-0.5 rounded",
-              isDark ? "bg-neutral-700 text-neutral-500" : "bg-gray-100 text-gray-400"
+              "ml-auto text-[10px] px-1 py-0.5 rounded-md",
+              isDark ? "bg-slate-700 text-slate-500" : "bg-slate-100 text-slate-400"
             )}>⌘N</kbd>
           </button>
         </div>
@@ -216,8 +216,8 @@ function Sidebar({
             className={cn(
               "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
               currentView === 'chat'
-                ? isDark ? "bg-neutral-800 text-neutral-200" : "bg-gray-200 text-gray-900"
-                : isDark ? "hover:bg-neutral-800/50 text-neutral-400" : "hover:bg-gray-100 text-gray-600"
+                ? isDark ? "bg-slate-800 text-slate-200" : "bg-slate-200 text-slate-900"
+                : isDark ? "hover:bg-slate-800/50 text-slate-400" : "hover:bg-slate-100 text-slate-600"
             )}
           >
             <MessageSquare className="w-4 h-4" />
@@ -228,8 +228,8 @@ function Sidebar({
             className={cn(
               "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
               currentView === 'prompts'
-                ? isDark ? "bg-neutral-800 text-neutral-200" : "bg-gray-200 text-gray-900"
-                : isDark ? "hover:bg-neutral-800/50 text-neutral-400" : "hover:bg-gray-100 text-gray-600"
+                ? isDark ? "bg-slate-800 text-slate-200" : "bg-slate-200 text-slate-900"
+                : isDark ? "hover:bg-slate-800/50 text-slate-400" : "hover:bg-slate-100 text-slate-600"
             )}
           >
             <FileText className="w-4 h-4" />
@@ -240,8 +240,8 @@ function Sidebar({
             className={cn(
               "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
               currentView === 'settings'
-                ? isDark ? "bg-neutral-800 text-neutral-200" : "bg-gray-200 text-gray-900"
-                : isDark ? "hover:bg-neutral-800/50 text-neutral-400" : "hover:bg-gray-100 text-gray-600"
+                ? isDark ? "bg-slate-800 text-slate-200" : "bg-slate-200 text-slate-900"
+                : isDark ? "hover:bg-slate-800/50 text-slate-400" : "hover:bg-slate-100 text-slate-600"
             )}
           >
             <Settings className="w-4 h-4" />
@@ -249,7 +249,7 @@ function Sidebar({
           </button>
         </div>
         
-        <div className={cn("mx-3 border-t", isDark ? "border-neutral-800" : "border-gray-200")} />
+        <div className={cn("mx-3 border-t", isDark ? "border-slate-800" : "border-slate-200")} />
         
         {/* 会话列表 */}
         <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -259,8 +259,8 @@ function Sidebar({
               <button
                 onClick={() => toggleSection('pinned')}
                 className={cn(
-                  "w-full flex items-center gap-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider rounded transition-colors",
-                  isDark ? "text-neutral-500 hover:bg-neutral-800/50" : "text-gray-400 hover:bg-gray-100"
+                  "w-full flex items-center gap-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider rounded-md transition-colors",
+                  isDark ? "text-slate-500 hover:bg-slate-800/50" : "text-slate-400 hover:bg-slate-100"
                 )}
               >
                 <ChevronRight className={cn(
@@ -296,8 +296,8 @@ function Sidebar({
             <button
               onClick={() => toggleSection('recent')}
               className={cn(
-                "w-full flex items-center gap-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider rounded transition-colors",
-                isDark ? "text-neutral-500 hover:bg-neutral-800/50" : "text-gray-400 hover:bg-gray-100"
+                "w-full flex items-center gap-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider rounded-md transition-colors",
+                isDark ? "text-slate-500 hover:bg-slate-800/50" : "text-slate-400 hover:bg-slate-100"
               )}
             >
               <ChevronRight className={cn(
@@ -331,7 +331,7 @@ function Sidebar({
         {/* 底部 */}
         <div className={cn(
           "p-3 border-t",
-          isDark ? "border-neutral-800" : "border-gray-200"
+          isDark ? "border-slate-800" : "border-slate-200"
         )}>
           <div className="flex items-center gap-2">
             <div className={cn(
@@ -341,10 +341,10 @@ function Sidebar({
               U
             </div>
             <div className="flex-1 min-w-0">
-              <div className={cn("text-sm font-medium truncate", isDark ? "text-neutral-200" : "text-gray-700")}>
+              <div className={cn("text-sm font-medium truncate", isDark ? "text-slate-200" : "text-slate-700")}>
                 用户
               </div>
-              <div className={cn("text-xs truncate", isDark ? "text-neutral-500" : "text-gray-500")}>
+              <div className={cn("text-xs truncate", isDark ? "text-slate-500" : "text-slate-500")}>
                 免费版
               </div>
             </div>
@@ -367,8 +367,8 @@ function Sidebar({
         <button
           onClick={onToggle}
           className={cn(
-            "absolute left-2 top-3 p-1.5 rounded transition-colors z-10",
-            isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+            "absolute left-2 top-3 p-1.5 rounded-md transition-colors z-10",
+            isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
           )}
         >
           <PanelLeft className="w-4 h-4" />
@@ -399,8 +399,8 @@ function ConversationItem({
       className={cn(
         "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors mb-0.5",
         isActive
-          ? isDark ? "bg-neutral-800" : "bg-gray-200"
-          : isDark ? "hover:bg-neutral-800/50" : "hover:bg-gray-100"
+          ? isDark ? "bg-slate-800" : "bg-slate-200"
+          : isDark ? "hover:bg-slate-800/50" : "hover:bg-slate-100"
       )}
       onClick={onSelect}
       onContextMenu={onContextMenu}
@@ -409,20 +409,20 @@ function ConversationItem({
     >
       <MessageSquare className={cn(
         "w-4 h-4 shrink-0",
-        isDark ? "text-neutral-500" : "text-gray-400"
+        isDark ? "text-slate-500" : "text-slate-400"
       )} />
       <span className={cn(
         "flex-1 text-sm truncate",
         isActive
-          ? isDark ? "text-neutral-100" : "text-gray-900"
-          : isDark ? "text-neutral-300" : "text-gray-600"
+          ? isDark ? "text-slate-100" : "text-slate-900"
+          : isDark ? "text-slate-300" : "text-slate-600"
       )}>
         {conv.title}
       </span>
       {isHovered && (
         <button className={cn(
-          "p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity",
-          isDark ? "hover:bg-neutral-700 text-neutral-400" : "hover:bg-gray-300 text-gray-500"
+          "p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity",
+          isDark ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-300 text-slate-500"
         )}>
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
@@ -458,13 +458,13 @@ function ContextMenuDropdown({ x, y, theme, onClose }: {
       <div
         className={cn(
           "fixed z-50 w-52 py-1 rounded-lg shadow-xl border",
-          isDark ? "bg-neutral-900 border-neutral-700" : "bg-white border-gray-200"
+          isDark ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
         )}
         style={{ left: x, top: y }}
       >
         {menuItems.map((item, i) => (
           item.type === 'divider' ? (
-            <div key={i} className={cn("my-1 border-t", isDark ? "border-neutral-800" : "border-gray-100")} />
+            <div key={i} className={cn("my-1 border-t", isDark ? "border-slate-800" : "border-slate-100")} />
           ) : (
             <button
               key={i}
@@ -472,14 +472,14 @@ function ContextMenuDropdown({ x, y, theme, onClose }: {
                 "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
                 item.danger
                   ? isDark ? "text-red-400 hover:bg-red-900/30" : "text-red-600 hover:bg-red-50"
-                  : isDark ? "text-neutral-300 hover:bg-neutral-800" : "text-gray-700 hover:bg-gray-50"
+                  : isDark ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-50"
               )}
               onClick={onClose}
             >
               <item.icon className="w-4 h-4" />
               <span className="flex-1 text-left">{item.label}</span>
               {item.shortcut && (
-                <span className={cn("text-xs", isDark ? "text-neutral-500" : "text-gray-400")}>
+                <span className={cn("text-xs", isDark ? "text-slate-500" : "text-slate-400")}>
                   {item.shortcut}
                 </span>
               )}
@@ -504,19 +504,19 @@ function ToolCallBlock({ calls, theme }: { calls: typeof mockMessages[1]['toolCa
   return (
     <div className={cn(
       "rounded-lg mb-3 overflow-hidden",
-      isDark ? "bg-neutral-800/50" : "bg-gray-100"
+      isDark ? "bg-slate-800/50" : "bg-slate-100"
     )}>
       <button
         className={cn(
           "w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors",
-          isDark ? "hover:bg-neutral-800" : "hover:bg-gray-200"
+          isDark ? "hover:bg-slate-800" : "hover:bg-slate-200"
         )}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-neutral-500" />
+          <ChevronDown className="w-4 h-4 text-slate-500" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-neutral-500" />
+          <ChevronRight className="w-4 h-4 text-slate-500" />
         )}
         <div className={cn(
           "flex items-center gap-1.5",
@@ -527,7 +527,7 @@ function ToolCallBlock({ calls, theme }: { calls: typeof mockMessages[1]['toolCa
           {allSuccess ? <Check className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           <span>{calls.length}个操作{allSuccess ? '已完成' : '执行中'}</span>
         </div>
-        <span className={cn("text-xs ml-auto", isDark ? "text-neutral-500" : "text-gray-400")}>
+        <span className={cn("text-xs ml-auto", isDark ? "text-slate-500" : "text-slate-400")}>
           {calls.reduce((acc, c) => acc + parseFloat(c.duration || '0'), 0).toFixed(1)}s
         </span>
       </button>
@@ -535,7 +535,7 @@ function ToolCallBlock({ calls, theme }: { calls: typeof mockMessages[1]['toolCa
       {isExpanded && (
         <div className={cn(
           "border-t px-3 py-2 space-y-1.5",
-          isDark ? "border-neutral-700" : "border-gray-200"
+          isDark ? "border-slate-700" : "border-slate-200"
         )}>
           {calls.map((call) => (
             <div key={call.id} className="flex items-center gap-2 text-sm">
@@ -546,15 +546,15 @@ function ToolCallBlock({ calls, theme }: { calls: typeof mockMessages[1]['toolCa
               ) : (
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
               )}
-              <span className={isDark ? "text-neutral-300" : "text-gray-600"}>{call.name}</span>
-              <span className={isDark ? "text-neutral-600" : "text-gray-400"}>→</span>
+              <span className={isDark ? "text-slate-300" : "text-slate-600"}>{call.name}</span>
+              <span className={isDark ? "text-slate-600" : "text-slate-400"}>→</span>
               <code className={cn(
-                "text-xs px-1 py-0.5 rounded",
-                isDark ? "bg-neutral-700 text-neutral-300" : "bg-gray-200 text-gray-600"
+                "text-xs px-1 py-0.5 rounded-md",
+                isDark ? "bg-slate-700 text-slate-300" : "bg-slate-200 text-slate-600"
               )}>
                 {call.target}
               </code>
-              <span className={cn("text-xs ml-auto", isDark ? "text-neutral-500" : "text-gray-400")}>
+              <span className={cn("text-xs ml-auto", isDark ? "text-slate-500" : "text-slate-400")}>
                 {call.duration}
               </span>
             </div>
@@ -589,17 +589,17 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
           "w-6 h-6 rounded-md flex items-center justify-center text-xs font-medium",
           isUser
             ? isDark ? "bg-blue-600 text-white" : "bg-blue-500 text-white"
-            : isDark ? "bg-neutral-700 text-neutral-300" : "bg-gray-200 text-gray-600"
+            : isDark ? "bg-slate-700 text-slate-300" : "bg-slate-200 text-slate-600"
         )}>
           {isUser ? 'U' : 'AI'}
         </div>
         <span className={cn(
           "text-sm font-medium",
-          isDark ? "text-neutral-200" : "text-gray-700"
+          isDark ? "text-slate-200" : "text-slate-700"
         )}>
           {isUser ? '你' : 'Assistant'}
         </span>
-        <span className={cn("text-xs", isDark ? "text-neutral-500" : "text-gray-400")}>
+        <span className={cn("text-xs", isDark ? "text-slate-500" : "text-slate-400")}>
           {message.time}
         </span>
         
@@ -611,8 +611,8 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
           <button 
             onClick={handleCopy}
             className={cn(
-              "p-1.5 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+              "p-1.5 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
             )}
             title="复制"
           >
@@ -621,8 +621,8 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
           {!isUser && (
             <button 
               className={cn(
-                "p-1.5 rounded transition-colors",
-                isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+                "p-1.5 rounded-md transition-colors",
+                isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
               )}
               title="重试"
             >
@@ -631,8 +631,8 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
           )}
           <button 
             className={cn(
-              "p-1.5 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+              "p-1.5 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
             )}
           >
             <MoreVertical className="w-3.5 h-3.5" />
@@ -646,7 +646,7 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
       {/* 消息内容 */}
       <div className={cn(
         "text-[15px] leading-relaxed whitespace-pre-wrap pl-8",
-        isDark ? "text-neutral-300" : "text-gray-700"
+        isDark ? "text-slate-300" : "text-slate-700"
       )}>
         {message.content}
       </div>
@@ -672,22 +672,22 @@ function InputArea({ theme }: { theme: Theme }) {
   return (
     <div className={cn(
       "border-t p-4",
-      isDark ? "border-neutral-800 bg-neutral-900" : "border-gray-200 bg-gray-50"
+      isDark ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-slate-50"
     )}>
       <div className="max-w-3xl mx-auto">
         {/* 模式和能力选择栏 */}
         <div className="flex items-center gap-2 mb-3">
           <div className={cn(
             "flex items-center rounded-lg p-0.5",
-            isDark ? "bg-neutral-800" : "bg-gray-200"
+            isDark ? "bg-slate-800" : "bg-slate-200"
           )}>
             <button
               onClick={() => setMode('chat')}
               className={cn(
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
                 mode === 'chat'
-                  ? isDark ? "bg-neutral-700 text-white" : "bg-white text-gray-900 shadow-sm"
-                  : isDark ? "text-neutral-400" : "text-gray-600"
+                  ? isDark ? "bg-slate-700 text-white" : "bg-white text-slate-900 shadow-sm"
+                  : isDark ? "text-slate-400" : "text-slate-600"
               )}
             >
               对话
@@ -697,8 +697,8 @@ function InputArea({ theme }: { theme: Theme }) {
               className={cn(
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5",
                 mode === 'agent'
-                  ? isDark ? "bg-neutral-700 text-white" : "bg-white text-gray-900 shadow-sm"
-                  : isDark ? "text-neutral-400" : "text-gray-600"
+                  ? isDark ? "bg-slate-700 text-white" : "bg-white text-slate-900 shadow-sm"
+                  : isDark ? "text-slate-400" : "text-slate-600"
               )}
             >
               <Zap className="w-3.5 h-3.5" />
@@ -711,8 +711,8 @@ function InputArea({ theme }: { theme: Theme }) {
             className={cn(
               "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-colors",
               showCapabilities
-                ? isDark ? "bg-neutral-700 text-neutral-200" : "bg-gray-300 text-gray-700"
-                : isDark ? "bg-neutral-800 text-neutral-300 hover:bg-neutral-700" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                ? isDark ? "bg-slate-700 text-slate-200" : "bg-slate-300 text-slate-700"
+                : isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
             )}
           >
             <Plug className="w-3.5 h-3.5" />
@@ -722,7 +722,7 @@ function InputArea({ theme }: { theme: Theme }) {
           
           <button className={cn(
             "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-colors",
-            isDark ? "bg-neutral-800 text-neutral-300 hover:bg-neutral-700" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+            isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
           )}>
             <Globe className="w-3.5 h-3.5" />
             <span>联网</span>
@@ -733,23 +733,23 @@ function InputArea({ theme }: { theme: Theme }) {
         {showCapabilities && (
           <div className={cn(
             "mb-3 p-3 rounded-lg border",
-            isDark ? "bg-neutral-800 border-neutral-700" : "bg-white border-gray-200"
+            isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"
           )}>
-            <div className={cn("text-xs font-medium mb-2", isDark ? "text-neutral-400" : "text-gray-500")}>
+            <div className={cn("text-xs font-medium mb-2", isDark ? "text-slate-400" : "text-slate-500")}>
               启用的能力
             </div>
             <div className="grid grid-cols-3 gap-2">
               {capabilities.map((cap) => (
                 <label key={cap.id} className={cn(
                   "flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors",
-                  isDark ? "hover:bg-neutral-700" : "hover:bg-gray-50"
+                  isDark ? "hover:bg-slate-700" : "hover:bg-slate-50"
                 )}>
                   <input 
                     type="checkbox" 
                     defaultChecked={cap.enabled}
-                    className="rounded border-neutral-600"
+                    className="rounded-md border-slate-600"
                   />
-                  <span className={cn("text-sm", isDark ? "text-neutral-300" : "text-gray-600")}>
+                  <span className={cn("text-sm", isDark ? "text-slate-300" : "text-slate-600")}>
                     {cap.name}
                   </span>
                 </label>
@@ -761,11 +761,11 @@ function InputArea({ theme }: { theme: Theme }) {
         {/* 输入框 */}
         <div className={cn(
           "flex items-end gap-3 p-3 rounded-xl border",
-          isDark ? "bg-neutral-800 border-neutral-700" : "bg-white border-gray-200"
+          isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"
         )}>
           <button className={cn(
             "p-2 rounded-lg transition-colors shrink-0",
-            isDark ? "hover:bg-neutral-700 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+            isDark ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-100 text-slate-500"
           )}>
             <Paperclip className="w-4 h-4" />
           </button>
@@ -776,7 +776,7 @@ function InputArea({ theme }: { theme: Theme }) {
             rows={1}
             className={cn(
               "flex-1 resize-none outline-none text-sm leading-relaxed",
-              isDark ? "bg-transparent text-neutral-200 placeholder:text-neutral-500" : "bg-transparent text-gray-700 placeholder:text-gray-400"
+              isDark ? "bg-transparent text-slate-200 placeholder:text-slate-500" : "bg-transparent text-slate-700 placeholder:text-slate-400"
             )}
             style={{ minHeight: '24px', maxHeight: '200px' }}
           />
@@ -784,7 +784,7 @@ function InputArea({ theme }: { theme: Theme }) {
             "p-2 rounded-lg transition-colors shrink-0",
             value.trim()
               ? isDark ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-blue-500 text-white hover:bg-blue-600"
-              : isDark ? "bg-neutral-700 text-neutral-500" : "bg-gray-200 text-gray-400"
+              : isDark ? "bg-slate-700 text-slate-500" : "bg-slate-200 text-slate-400"
           )}>
             <Send className="w-4 h-4" />
           </button>
@@ -793,12 +793,12 @@ function InputArea({ theme }: { theme: Theme }) {
         {/* 快捷提示 */}
         <div className={cn(
           "flex items-center gap-4 mt-2 text-xs",
-          isDark ? "text-neutral-500" : "text-gray-400"
+          isDark ? "text-slate-500" : "text-slate-400"
         )}>
-          <span><kbd className={cn("px-1 py-0.5 rounded", isDark ? "bg-neutral-800" : "bg-gray-100")}>⌘</kbd> + <kbd className={cn("px-1 py-0.5 rounded", isDark ? "bg-neutral-800" : "bg-gray-100")}>↵</kbd> 发送</span>
-          <span><kbd className={cn("px-1 py-0.5 rounded", isDark ? "bg-neutral-800" : "bg-gray-100")}>/</kbd> 命令</span>
-          <span><kbd className={cn("px-1 py-0.5 rounded", isDark ? "bg-neutral-800" : "bg-gray-100")}>@</kbd> 提及MCP</span>
-          <span><kbd className={cn("px-1 py-0.5 rounded", isDark ? "bg-neutral-800" : "bg-gray-100")}>#</kbd> 技能</span>
+          <span><kbd className={cn("px-1 py-0.5 rounded-md", isDark ? "bg-slate-800" : "bg-slate-100")}>⌘</kbd> + <kbd className={cn("px-1 py-0.5 rounded-md", isDark ? "bg-slate-800" : "bg-slate-100")}>↵</kbd> 发送</span>
+          <span><kbd className={cn("px-1 py-0.5 rounded-md", isDark ? "bg-slate-800" : "bg-slate-100")}>/</kbd> 命令</span>
+          <span><kbd className={cn("px-1 py-0.5 rounded-md", isDark ? "bg-slate-800" : "bg-slate-100")}>@</kbd> 提及MCP</span>
+          <span><kbd className={cn("px-1 py-0.5 rounded-md", isDark ? "bg-slate-800" : "bg-slate-100")}>#</kbd> 技能</span>
         </div>
       </div>
     </div>
@@ -816,9 +816,9 @@ function SettingsView({ theme }: { theme: Theme }) {
       {/* 设置导航 */}
       <div className={cn(
         "w-56 border-r p-4 overflow-y-auto",
-        isDark ? "border-neutral-800" : "border-gray-200"
+        isDark ? "border-slate-800" : "border-slate-200"
       )}>
-        <h2 className={cn("text-lg font-semibold mb-4", isDark ? "text-neutral-100" : "text-gray-900")}>
+        <h2 className={cn("text-lg font-semibold mb-4", isDark ? "text-slate-100" : "text-slate-900")}>
           设置
         </h2>
         <div className="space-y-1">
@@ -829,14 +829,14 @@ function SettingsView({ theme }: { theme: Theme }) {
               className={cn(
                 "w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors",
                 activeSection === section.id
-                  ? isDark ? "bg-neutral-800 text-neutral-100" : "bg-gray-200 text-gray-900"
-                  : isDark ? "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  ? isDark ? "bg-slate-800 text-slate-100" : "bg-slate-200 text-slate-900"
+                  : isDark ? "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
               <section.icon className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
                 <div className="text-sm font-medium">{section.name}</div>
-                <div className={cn("text-xs mt-0.5", isDark ? "text-neutral-500" : "text-gray-500")}>
+                <div className={cn("text-xs mt-0.5", isDark ? "text-slate-500" : "text-slate-500")}>
                   {section.description}
                 </div>
               </div>
@@ -872,17 +872,17 @@ function SettingSection({ title, description, theme, children }: {
   
   return (
     <div className="mb-8">
-      <h3 className={cn("text-base font-semibold mb-1", isDark ? "text-neutral-100" : "text-gray-900")}>
+      <h3 className={cn("text-base font-semibold mb-1", isDark ? "text-slate-100" : "text-slate-900")}>
         {title}
       </h3>
       {description && (
-        <p className={cn("text-sm mb-4", isDark ? "text-neutral-400" : "text-gray-500")}>
+        <p className={cn("text-sm mb-4", isDark ? "text-slate-400" : "text-slate-500")}>
           {description}
         </p>
       )}
       <div className={cn(
         "rounded-lg border p-4 space-y-4",
-        isDark ? "border-neutral-800 bg-neutral-900/50" : "border-gray-200 bg-gray-50"
+        isDark ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-slate-50"
       )}>
         {children}
       </div>
@@ -901,11 +901,11 @@ function SettingRow({ label, description, theme, children }: {
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
-        <div className={cn("text-sm font-medium", isDark ? "text-neutral-200" : "text-gray-700")}>
+        <div className={cn("text-sm font-medium", isDark ? "text-slate-200" : "text-slate-700")}>
           {label}
         </div>
         {description && (
-          <div className={cn("text-xs mt-0.5", isDark ? "text-neutral-500" : "text-gray-500")}>
+          <div className={cn("text-xs mt-0.5", isDark ? "text-slate-500" : "text-slate-500")}>
             {description}
           </div>
         )}
@@ -925,7 +925,7 @@ function Toggle({ checked, onChange, theme }: { checked: boolean; onChange: (v: 
         "w-10 h-5 rounded-full transition-colors relative",
         checked
           ? "bg-blue-600"
-          : isDark ? "bg-neutral-700" : "bg-gray-300"
+          : isDark ? "bg-slate-700" : "bg-slate-300"
       )}
     >
       <div className={cn(
@@ -950,7 +950,7 @@ function SelectInput({ value, options, onChange, theme }: {
       onChange={(e) => onChange(e.target.value)}
       className={cn(
         "px-3 py-1.5 rounded-md border text-sm outline-none",
-        isDark ? "bg-neutral-800 border-neutral-700 text-neutral-200" : "bg-white border-gray-300 text-gray-700"
+        isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-slate-300 text-slate-700"
       )}
     >
       {options.map((opt) => (
@@ -1051,28 +1051,28 @@ function ModelsSettings({ theme }: { theme: Theme }) {
               key={p.id}
               className={cn(
                 "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                isDark ? "border-neutral-700 hover:bg-neutral-800" : "border-gray-200 hover:bg-gray-100"
+                isDark ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:bg-slate-100"
               )}
             >
               <div className={cn(
                 "w-2.5 h-2.5 rounded-full",
-                p.status === 'connected' ? "bg-emerald-500" : "bg-neutral-400"
+                p.status === 'connected' ? "bg-emerald-500" : "bg-slate-400"
               )} />
               <div className="flex-1">
-                <div className={cn("text-sm font-medium", isDark ? "text-neutral-200" : "text-gray-700")}>
+                <div className={cn("text-sm font-medium", isDark ? "text-slate-200" : "text-slate-700")}>
                   {p.name}
                 </div>
-                <div className={cn("text-xs", isDark ? "text-neutral-500" : "text-gray-500")}>
+                <div className={cn("text-xs", isDark ? "text-slate-500" : "text-slate-500")}>
                   {p.status === 'connected' ? `${p.models} 个模型可用 · ${p.endpoint}` : '未配置'}
                 </div>
               </div>
-              <ChevronRight className={cn("w-4 h-4", isDark ? "text-neutral-500" : "text-gray-400")} />
+              <ChevronRight className={cn("w-4 h-4", isDark ? "text-slate-500" : "text-slate-400")} />
             </div>
           ))}
         </div>
         <button className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-          isDark ? "text-neutral-400 hover:bg-neutral-800" : "text-gray-600 hover:bg-gray-100"
+          isDark ? "text-slate-400 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100"
         )}>
           <Plus className="w-4 h-4" />
           <span>添加服务提供商</span>
@@ -1100,26 +1100,26 @@ function McpSettings({ theme }: { theme: Theme }) {
               key={s.id}
               className={cn(
                 "flex items-center gap-3 p-3 rounded-lg border",
-                isDark ? "border-neutral-700" : "border-gray-200"
+                isDark ? "border-slate-700" : "border-slate-200"
               )}
             >
               <div className={cn(
                 "w-2.5 h-2.5 rounded-full",
-                s.status === 'running' ? "bg-emerald-500" : "bg-neutral-400"
+                s.status === 'running' ? "bg-emerald-500" : "bg-slate-400"
               )} />
               <div className="flex-1">
-                <div className={cn("text-sm font-medium", isDark ? "text-neutral-200" : "text-gray-700")}>
+                <div className={cn("text-sm font-medium", isDark ? "text-slate-200" : "text-slate-700")}>
                   {s.name}
                 </div>
-                <div className={cn("text-xs", isDark ? "text-neutral-500" : "text-gray-500")}>
+                <div className={cn("text-xs", isDark ? "text-slate-500" : "text-slate-500")}>
                   v{s.version} · {s.tools} 个工具
                 </div>
               </div>
               <span className={cn(
-                "px-2 py-0.5 rounded text-xs",
+                "px-2 py-0.5 rounded-md text-xs",
                 s.status === 'running'
                   ? isDark ? "bg-emerald-900/30 text-emerald-400" : "bg-emerald-100 text-emerald-700"
-                  : isDark ? "bg-neutral-800 text-neutral-500" : "bg-gray-100 text-gray-500"
+                  : isDark ? "bg-slate-800 text-slate-500" : "bg-slate-100 text-slate-500"
               )}>
                 {s.status === 'running' ? '运行中' : '已停止'}
               </span>
@@ -1128,7 +1128,7 @@ function McpSettings({ theme }: { theme: Theme }) {
         </div>
         <button className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-          isDark ? "text-neutral-400 hover:bg-neutral-800" : "text-gray-600 hover:bg-gray-100"
+          isDark ? "text-slate-400 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100"
         )}>
           <Plus className="w-4 h-4" />
           <span>添加服务器</span>
@@ -1156,7 +1156,7 @@ function SecuritySettings({ theme }: { theme: Theme }) {
       <SettingSection title="可信目录" description="这些目录将自动授权访问" theme={theme}>
         <div className={cn(
           "p-3 rounded-lg font-mono text-sm",
-          theme === 'dark' ? "bg-neutral-800 text-neutral-400" : "bg-gray-100 text-gray-600"
+          theme === 'dark' ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"
         )}>
           ~/Desktop<br />
           ~/Documents<br />
@@ -1164,7 +1164,7 @@ function SecuritySettings({ theme }: { theme: Theme }) {
         </div>
         <button className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-          theme === 'dark' ? "text-neutral-400 hover:bg-neutral-800" : "text-gray-600 hover:bg-gray-100"
+          theme === 'dark' ? "text-slate-400 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100"
         )}>
           <Plus className="w-4 h-4" />
           <span>添加目录</span>
@@ -1182,13 +1182,13 @@ function KnowledgeSettings({ theme }: { theme: Theme }) {
       <SettingSection title="知识库" description="管理本地知识库" theme={theme}>
         <div className={cn(
           "text-center py-8",
-          isDark ? "text-neutral-500" : "text-gray-500"
+          isDark ? "text-slate-500" : "text-slate-500"
         )}>
           <Database className="w-10 h-10 mx-auto mb-3 opacity-50" />
           <p className="text-sm mb-4">暂无知识库</p>
           <button className={cn(
             "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors",
-            isDark ? "bg-neutral-800 text-neutral-200 hover:bg-neutral-700" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            isDark ? "bg-slate-800 text-slate-200 hover:bg-slate-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
           )}>
             <Plus className="w-4 h-4" />
             <span>创建知识库</span>
@@ -1256,7 +1256,7 @@ function AdvancedSettings({ theme }: { theme: Theme }) {
         <div className="flex gap-2">
           <button className={cn(
             "px-4 py-2 rounded-lg text-sm transition-colors",
-            isDark ? "bg-neutral-800 text-neutral-200 hover:bg-neutral-700" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            isDark ? "bg-slate-800 text-slate-200 hover:bg-slate-700" : "bg-slate-200 text-slate-700 hover:bg-slate-300"
           )}>
             导出数据
           </button>
@@ -1285,10 +1285,10 @@ function AboutSettings({ theme }: { theme: Theme }) {
           )}>
             C
           </div>
-          <h3 className={cn("text-lg font-semibold mb-1", isDark ? "text-neutral-100" : "text-gray-900")}>
+          <h3 className={cn("text-lg font-semibold mb-1", isDark ? "text-slate-100" : "text-slate-900")}>
             Chatless
           </h3>
-          <p className={cn("text-sm mb-4", isDark ? "text-neutral-500" : "text-gray-500")}>
+          <p className={cn("text-sm mb-4", isDark ? "text-slate-500" : "text-slate-500")}>
             版本 1.0.0
           </p>
           <button className={cn(
@@ -1327,14 +1327,14 @@ function PromptsView({ theme }: { theme: Theme }) {
       {/* 头部 */}
       <div className={cn(
         "p-4 border-b",
-        isDark ? "border-neutral-800" : "border-gray-200"
+        isDark ? "border-slate-800" : "border-slate-200"
       )}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className={cn("text-lg font-semibold", isDark ? "text-neutral-100" : "text-gray-900")}>
+            <h2 className={cn("text-lg font-semibold", isDark ? "text-slate-100" : "text-slate-900")}>
               提示词库
             </h2>
-            <p className={cn("text-sm", isDark ? "text-neutral-500" : "text-gray-500")}>
+            <p className={cn("text-sm", isDark ? "text-slate-500" : "text-slate-500")}>
               管理和使用您的提示词模板
             </p>
           </div>
@@ -1354,9 +1354,9 @@ function PromptsView({ theme }: { theme: Theme }) {
         <div className="flex items-center gap-3">
           <div className={cn(
             "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg",
-            isDark ? "bg-neutral-800" : "bg-gray-100"
+            isDark ? "bg-slate-800" : "bg-slate-100"
           )}>
-            <Search className={cn("w-4 h-4", isDark ? "text-neutral-500" : "text-gray-400")} />
+            <Search className={cn("w-4 h-4", isDark ? "text-slate-500" : "text-slate-400")} />
             <input
               type="text"
               value={searchQuery}
@@ -1364,7 +1364,7 @@ function PromptsView({ theme }: { theme: Theme }) {
               placeholder="搜索提示词..."
               className={cn(
                 "flex-1 bg-transparent outline-none text-sm",
-                isDark ? "text-neutral-200 placeholder:text-neutral-500" : "text-gray-700 placeholder:text-gray-400"
+                isDark ? "text-slate-200 placeholder:text-slate-500" : "text-slate-700 placeholder:text-slate-400"
               )}
             />
           </div>
@@ -1375,7 +1375,7 @@ function PromptsView({ theme }: { theme: Theme }) {
               "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
               showFavorites
                 ? isDark ? "bg-amber-900/30 text-amber-400" : "bg-amber-100 text-amber-700"
-                : isDark ? "bg-neutral-800 text-neutral-300 hover:bg-neutral-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             )}
           >
             <Star className={cn("w-4 h-4", showFavorites && "fill-current")} />
@@ -1383,21 +1383,21 @@ function PromptsView({ theme }: { theme: Theme }) {
           </button>
           
           <div className="flex items-center gap-2">
-            <Download className={cn("w-4 h-4", isDark ? "text-neutral-500" : "text-gray-400")} />
-            <Upload className={cn("w-4 h-4", isDark ? "text-neutral-500" : "text-gray-400")} />
+            <Download className={cn("w-4 h-4", isDark ? "text-slate-500" : "text-slate-400")} />
+            <Upload className={cn("w-4 h-4", isDark ? "text-slate-500" : "text-slate-400")} />
           </div>
         </div>
         
         {/* 标签筛选 */}
         <div className="flex items-center gap-2 mt-3">
-          <span className={cn("text-sm", isDark ? "text-neutral-500" : "text-gray-500")}>标签：</span>
+          <span className={cn("text-sm", isDark ? "text-slate-500" : "text-slate-500")}>标签：</span>
           <button
             onClick={() => setFilterTag(null)}
             className={cn(
               "px-2.5 py-1 rounded-md text-xs transition-colors",
               filterTag === null
-                ? isDark ? "bg-neutral-700 text-neutral-200" : "bg-gray-200 text-gray-700"
-                : isDark ? "text-neutral-400 hover:bg-neutral-800" : "text-gray-500 hover:bg-gray-100"
+                ? isDark ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
+                : isDark ? "text-slate-400 hover:bg-slate-800" : "text-slate-500 hover:bg-slate-100"
             )}
           >
             全部
@@ -1409,8 +1409,8 @@ function PromptsView({ theme }: { theme: Theme }) {
               className={cn(
                 "px-2.5 py-1 rounded-md text-xs transition-colors",
                 filterTag === tag
-                  ? isDark ? "bg-neutral-700 text-neutral-200" : "bg-gray-200 text-gray-700"
-                  : isDark ? "text-neutral-400 hover:bg-neutral-800" : "text-gray-500 hover:bg-gray-100"
+                  ? isDark ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
+                  : isDark ? "text-slate-400 hover:bg-slate-800" : "text-slate-500 hover:bg-slate-100"
               )}
             >
               {tag}
@@ -1429,27 +1429,27 @@ function PromptsView({ theme }: { theme: Theme }) {
                 "p-4 rounded-xl border cursor-pointer transition-all hover:shadow-md",
                 selectedPrompt?.id === prompt.id
                   ? isDark ? "border-blue-500 bg-blue-900/20" : "border-blue-400 bg-blue-50"
-                  : isDark ? "border-neutral-800 hover:border-neutral-700" : "border-gray-200 hover:border-gray-300"
+                  : isDark ? "border-slate-800 hover:border-slate-700" : "border-slate-200 hover:border-slate-300"
               )}
               onClick={() => setSelectedPrompt(prompt)}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
                   {prompt.favorite && <Star className="w-4 h-4 text-amber-500 fill-amber-500" />}
-                  <h3 className={cn("font-medium", isDark ? "text-neutral-200" : "text-gray-800")}>
+                  <h3 className={cn("font-medium", isDark ? "text-slate-200" : "text-slate-800")}>
                     {prompt.name}
                   </h3>
                 </div>
                 <code className={cn(
-                  "text-xs px-1.5 py-0.5 rounded",
-                  isDark ? "bg-neutral-800 text-neutral-400" : "bg-gray-100 text-gray-500"
+                  "text-xs px-1.5 py-0.5 rounded-md",
+                  isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"
                 )}>
                   /{prompt.shortcut}
                 </code>
               </div>
               <p className={cn(
                 "text-sm mb-3 line-clamp-2",
-                isDark ? "text-neutral-400" : "text-gray-600"
+                isDark ? "text-slate-400" : "text-slate-600"
               )}>
                 {prompt.description}
               </p>
@@ -1460,14 +1460,14 @@ function PromptsView({ theme }: { theme: Theme }) {
                       key={tag}
                       className={cn(
                         "px-2 py-0.5 rounded-full text-xs",
-                        isDark ? "bg-neutral-800 text-neutral-400" : "bg-gray-100 text-gray-500"
+                        isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"
                       )}
                     >
                       {tag}
                     </span>
                   ))}
                 </div>
-                <span className={cn("text-xs", isDark ? "text-neutral-500" : "text-gray-400")}>
+                <span className={cn("text-xs", isDark ? "text-slate-500" : "text-slate-400")}>
                   {prompt.uses} 次使用
                 </span>
               </div>
@@ -1480,16 +1480,16 @@ function PromptsView({ theme }: { theme: Theme }) {
       {selectedPrompt && (
         <div className={cn(
           "border-t p-4",
-          isDark ? "border-neutral-800 bg-neutral-900/50" : "border-gray-200 bg-gray-50"
+          isDark ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-slate-50"
         )}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h3 className={cn("font-semibold", isDark ? "text-neutral-100" : "text-gray-900")}>
+              <h3 className={cn("font-semibold", isDark ? "text-slate-100" : "text-slate-900")}>
                 {selectedPrompt.name}
               </h3>
               <code className={cn(
-                "text-xs px-1.5 py-0.5 rounded",
-                isDark ? "bg-neutral-800 text-neutral-400" : "bg-gray-200 text-gray-500"
+                "text-xs px-1.5 py-0.5 rounded-md",
+                isDark ? "bg-slate-800 text-slate-400" : "bg-slate-200 text-slate-500"
               )}>
                 /{selectedPrompt.shortcut}
               </code>
@@ -1497,7 +1497,7 @@ function PromptsView({ theme }: { theme: Theme }) {
             <div className="flex items-center gap-2">
               <button className={cn(
                 "px-3 py-1.5 rounded-lg text-sm transition-colors",
-                isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-600"
+                isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-600"
               )}>
                 <Edit3 className="w-4 h-4" />
               </button>
@@ -1511,7 +1511,7 @@ function PromptsView({ theme }: { theme: Theme }) {
           </div>
           <pre className={cn(
             "p-4 rounded-lg text-sm overflow-x-auto whitespace-pre-wrap",
-            isDark ? "bg-neutral-800 text-neutral-300" : "bg-gray-100 text-gray-700"
+            isDark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-700"
           )}>
             {selectedPrompt.content}
           </pre>
@@ -1531,23 +1531,23 @@ function PromptEditorModal({ theme, onClose }: { theme: Theme; onClose: () => vo
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className={cn(
         "relative w-full max-w-lg rounded-xl shadow-2xl",
-        isDark ? "bg-neutral-900 border border-neutral-700" : "bg-white border border-gray-200"
+        isDark ? "bg-slate-900 border border-slate-700" : "bg-white border border-slate-200"
       )}>
         <div className={cn(
           "flex items-center justify-between p-4 border-b",
-          isDark ? "border-neutral-800" : "border-gray-200"
+          isDark ? "border-slate-800" : "border-slate-200"
         )}>
-          <h3 className={cn("font-semibold", isDark ? "text-neutral-100" : "text-gray-900")}>
+          <h3 className={cn("font-semibold", isDark ? "text-slate-100" : "text-slate-900")}>
             新建提示词
           </h3>
           <button 
             onClick={onClose}
             className={cn(
-              "p-1 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+              "p-1 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
             )}
           >
             <X className="w-5 h-5" />
@@ -1556,7 +1556,7 @@ function PromptEditorModal({ theme, onClose }: { theme: Theme; onClose: () => vo
         
         <div className="p-4 space-y-4">
           <div>
-            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-neutral-300" : "text-gray-700")}>
+            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-slate-300" : "text-slate-700")}>
               名称
             </label>
             <input
@@ -1564,30 +1564,30 @@ function PromptEditorModal({ theme, onClose }: { theme: Theme; onClose: () => vo
               placeholder="提示词名称"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border outline-none text-sm",
-                isDark ? "bg-neutral-800 border-neutral-700 text-neutral-200" : "bg-gray-50 border-gray-200 text-gray-700"
+                isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"
               )}
             />
           </div>
           
           <div>
-            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-neutral-300" : "text-gray-700")}>
+            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-slate-300" : "text-slate-700")}>
               快捷指令
             </label>
             <div className="flex items-center gap-2">
-              <span className={isDark ? "text-neutral-500" : "text-gray-400"}>/</span>
+              <span className={isDark ? "text-slate-500" : "text-slate-400"}>/</span>
               <input
                 type="text"
                 placeholder="shortcut"
                 className={cn(
                   "flex-1 px-3 py-2 rounded-lg border outline-none text-sm",
-                  isDark ? "bg-neutral-800 border-neutral-700 text-neutral-200" : "bg-gray-50 border-gray-200 text-gray-700"
+                  isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"
                 )}
               />
             </div>
           </div>
           
           <div>
-            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-neutral-300" : "text-gray-700")}>
+            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-slate-300" : "text-slate-700")}>
               描述
             </label>
             <input
@@ -1595,13 +1595,13 @@ function PromptEditorModal({ theme, onClose }: { theme: Theme; onClose: () => vo
               placeholder="简短描述"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border outline-none text-sm",
-                isDark ? "bg-neutral-800 border-neutral-700 text-neutral-200" : "bg-gray-50 border-gray-200 text-gray-700"
+                isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"
               )}
             />
           </div>
           
           <div>
-            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-neutral-300" : "text-gray-700")}>
+            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-slate-300" : "text-slate-700")}>
               内容
             </label>
             <textarea
@@ -1609,13 +1609,13 @@ function PromptEditorModal({ theme, onClose }: { theme: Theme; onClose: () => vo
               placeholder="提示词内容..."
               className={cn(
                 "w-full px-3 py-2 rounded-lg border outline-none text-sm resize-none",
-                isDark ? "bg-neutral-800 border-neutral-700 text-neutral-200" : "bg-gray-50 border-gray-200 text-gray-700"
+                isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"
               )}
             />
           </div>
           
           <div>
-            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-neutral-300" : "text-gray-700")}>
+            <label className={cn("block text-sm font-medium mb-1.5", isDark ? "text-slate-300" : "text-slate-700")}>
               标签
             </label>
             <input
@@ -1623,7 +1623,7 @@ function PromptEditorModal({ theme, onClose }: { theme: Theme; onClose: () => vo
               placeholder="用逗号分隔，如：编程, 审查"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border outline-none text-sm",
-                isDark ? "bg-neutral-800 border-neutral-700 text-neutral-200" : "bg-gray-50 border-gray-200 text-gray-700"
+                isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"
               )}
             />
           </div>
@@ -1631,13 +1631,13 @@ function PromptEditorModal({ theme, onClose }: { theme: Theme; onClose: () => vo
         
         <div className={cn(
           "flex justify-end gap-2 p-4 border-t",
-          isDark ? "border-neutral-800" : "border-gray-200"
+          isDark ? "border-slate-800" : "border-slate-200"
         )}>
           <button
             onClick={onClose}
             className={cn(
               "px-4 py-2 rounded-lg text-sm transition-colors",
-              isDark ? "text-neutral-400 hover:bg-neutral-800" : "text-gray-600 hover:bg-gray-100"
+              isDark ? "text-slate-400 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100"
             )}
           >
             取消
@@ -1667,7 +1667,7 @@ export default function NotionStylePreview() {
   return (
     <div className={cn(
       "h-screen flex overflow-hidden relative",
-      isDark ? "bg-neutral-950 text-neutral-100" : "bg-white text-gray-900"
+      isDark ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"
     )}>
       {/* 侧边栏 */}
       <Sidebar
@@ -1686,15 +1686,15 @@ export default function NotionStylePreview() {
         {/* 顶部栏 */}
         <div className={cn(
           "flex items-center justify-between px-4 py-2 border-b",
-          isDark ? "border-neutral-800" : "border-gray-200"
+          isDark ? "border-slate-800" : "border-slate-200"
         )}>
           <div className="flex items-center gap-3">
             {!sidebarOpen && (
               <button
                 onClick={() => setSidebarOpen(true)}
                 className={cn(
-                  "p-1.5 rounded transition-colors",
-                  isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+                  "p-1.5 rounded-md transition-colors",
+                  isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
                 )}
               >
                 <PanelLeft className="w-4 h-4" />
@@ -1703,24 +1703,24 @@ export default function NotionStylePreview() {
             
             {currentView === 'chat' && (
               <>
-                <span className={cn("text-sm font-medium", isDark ? "text-neutral-200" : "text-gray-700")}>
+                <span className={cn("text-sm font-medium", isDark ? "text-slate-200" : "text-slate-700")}>
                   新对话 15:34
                 </span>
-                <span className={isDark ? "text-neutral-600" : "text-gray-300"}>·</span>
-                <span className={cn("text-sm", isDark ? "text-neutral-500" : "text-gray-500")}>
+                <span className={isDark ? "text-slate-600" : "text-slate-300"}>·</span>
+                <span className={cn("text-sm", isDark ? "text-slate-500" : "text-slate-500")}>
                   qwen3-vl-30b
                 </span>
               </>
             )}
             
             {currentView === 'settings' && (
-              <span className={cn("text-sm font-medium", isDark ? "text-neutral-200" : "text-gray-700")}>
+              <span className={cn("text-sm font-medium", isDark ? "text-slate-200" : "text-slate-700")}>
                 设置
               </span>
             )}
             
             {currentView === 'prompts' && (
-              <span className={cn("text-sm font-medium", isDark ? "text-neutral-200" : "text-gray-700")}>
+              <span className={cn("text-sm font-medium", isDark ? "text-slate-200" : "text-slate-700")}>
                 提示词
               </span>
             )}
@@ -1732,7 +1732,7 @@ export default function NotionStylePreview() {
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={cn(
                 "p-2 rounded-lg transition-colors",
-                isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+                isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
               )}
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -1743,7 +1743,7 @@ export default function NotionStylePreview() {
               href="/dev-tools/chat-redesign"
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors",
-                isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-200 text-gray-500"
+                isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-200 text-slate-500"
               )}
             >
               <ArrowLeft className="w-4 h-4" />

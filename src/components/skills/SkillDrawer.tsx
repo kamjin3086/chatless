@@ -164,7 +164,7 @@ export function SkillDrawer({
               <div className="flex items-center gap-2">
                 <SheetTitle className="truncate">{skill.name}</SheetTitle>
                 {skill.version && (
-                  <span className="flex-shrink-0 text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                  <span className="flex-shrink-0 text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md">
                     v{skill.version}
                   </span>
                 )}
@@ -232,12 +232,12 @@ export function SkillDrawer({
           </div>
 
           {/* 状态和启用开关 */}
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
             <SkillStatusBadge status={skill.status} />
             
             {isInstalled && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">启用</span>
+                <span className="text-xs text-slate-500">启用</span>
                 <Switch
                   checked={skill.enabled}
                   onCheckedChange={handleToggleEnabled}
@@ -252,7 +252,7 @@ export function SkillDrawer({
           {/* 文件树（默认折叠，支持预览） */}
           {isLocal && skill.path && (
             <details className="mb-6">
-              <summary className="cursor-pointer select-none text-xs font-medium text-gray-500">
+              <summary className="cursor-pointer select-none text-xs font-medium text-slate-500">
                 文件树（点击展开）
               </summary>
               <div className="mt-3">
@@ -265,13 +265,13 @@ export function SkillDrawer({
           {skill.skillMdContent ? (
             <SkillMdRenderer content={skill.skillMdContent} />
           ) : (
-            <div className="text-center py-8 text-gray-400 text-sm">
+            <div className="text-center py-8 text-slate-400 text-sm">
               暂无文档内容
             </div>
           )}
 
           {/* 小号信息：放在文档下方，避免抢占注意力 */}
-          <div className="mt-6 text-[11px] text-gray-500 space-y-1">
+          <div className="mt-6 text-[11px] text-slate-500 space-y-1">
             <div>技能 ID：{skill.id}</div>
             {skill.installedAt ? <div>安装时间：{new Date(skill.installedAt).toLocaleString()}</div> : null}
             {skill.path ? <div className="truncate" title={skill.path}>路径：{skill.path}</div> : null}

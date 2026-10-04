@@ -64,7 +64,7 @@ export function RecentKnowledgeList({ items, onUseKnowledgeBase }: RecentKnowled
                   className="flex items-center gap-3 px-2 py-2 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
                   onClick={() => handleUse(item.id)}
                 >
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 dark:bg-slate-700">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700">
                     <IconComponent className="h-4 w-4 text-slate-500" />
                   </div>
                   <div className="min-w-0 flex-1">

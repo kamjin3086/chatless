@@ -42,7 +42,7 @@ export function ChatInput({
   const canSubmit = input.trim().length > 0 && !disabled;
 
   return (
-    <div className="relative flex flex-col w-full max-w-full px-4 py-4 bg-white dark:bg-gray-900 border-t border-slate-200 dark:border-slate-700">
+    <div className="relative flex flex-col w-full max-w-full px-4 py-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
       <div className="relative flex w-full">
         <TextareaAutosize
           ref={textareaRef}
@@ -52,8 +52,8 @@ export function ChatInput({
           placeholder="输入消息..."
           className={cn(
             "w-full resize-none bg-transparent py-3 pl-12 pr-14",
-            "text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400",
-            "border-0 border-b border-gray-200 dark:border-gray-700",
+            "text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400",
+            "border-0 border-b border-slate-200 dark:border-slate-700",
             "focus:outline-none focus:border-slate-400/60 dark:focus:border-slate-500/60",
             "transition-all duration-200"
           )}
@@ -68,8 +68,8 @@ export function ChatInput({
             size="icon"
             className={cn(
               "h-9 w-9 rounded-xl cursor-pointer",
-              "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
-              "hover:bg-gray-100 dark:hover:bg-gray-800",
+              "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+              "hover:bg-slate-100 dark:hover:bg-slate-800",
               "transition-all duration-200"
             )}
             onClick={() => {/* 图片上传逻辑 */}}
@@ -82,8 +82,8 @@ export function ChatInput({
             size="icon"
             className={cn(
               "h-9 w-9 rounded-xl cursor-pointer",
-              "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
-              "hover:bg-gray-100 dark:hover:bg-gray-800",
+              "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+              "hover:bg-slate-100 dark:hover:bg-slate-800",
               "transition-all duration-200"
             )}
             onClick={() => {/* 文件上传逻辑 */}}
@@ -122,7 +122,7 @@ export function ChatInput({
               "h-9 w-9 rounded-full cursor-pointer",
               "bg-gradient-to-br from-blue-500 to-blue-600",
               "hover:from-blue-600 hover:to-blue-700",
-              "disabled:from-gray-300 disabled:to-gray-400",
+              "disabled:from-slate-300 disabled:to-slate-400",
               "transition-all duration-200",
               "shadow-sm"
             )}
@@ -134,7 +134,7 @@ export function ChatInput({
 
       {/* 底部提示 */}
       {showTip && (
-        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
           提示：按下 Enter 发送消息，Shift + Enter 换行
         </div>
       )}

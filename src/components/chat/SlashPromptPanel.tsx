@@ -203,7 +203,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
       const fallback = d1 ?? d2 ?? d3?.trim() ?? '';
       const value = values[key] ?? fallback;
       nodes.push(
-        <span key={m.index} className="px-1 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200">
+        <span key={m.index} className="px-1 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200">
           {value || `{{${key}}}`}
         </span>
       );
@@ -226,7 +226,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
           / 提示词
         </span>
         <button
-          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
           onMouseDown={(e) => { e.preventDefault(); window.location.assign('/prompts'); }}
           title="管理提示词"
         >
@@ -259,7 +259,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
                 <span className="font-medium text-sm text-slate-700 dark:text-slate-200 truncate">
                   {p.name}
                 </span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50">
+                <span className="shrink-0 px-1.5 py-0.5 rounded-md text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50">
                   /{(p as any).shortcuts?.[0] || p.name[0]?.toLowerCase() || ''}
                   </span>
                 </div>
@@ -270,7 +270,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
                     {p.tags && p.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {p.tags.slice(0, 4).map((t) => (
-                        <span key={t} className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500">
+                        <span key={t} className="px-1.5 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500">
                             {t}
                           </span>
                         ))}

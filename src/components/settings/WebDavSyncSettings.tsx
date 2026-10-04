@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 /** 连接状态圆点组件 */
 function ConnectionStatusDot({ status }: { status: ConnectionStatus }) {
   const statusConfig = {
-    unknown: { color: "bg-gray-400", text: "未检测" },
+    unknown: { color: "bg-slate-400", text: "未检测" },
     checking: { color: "bg-yellow-500 animate-pulse", text: "检测中..." },
     connected: { color: "bg-green-500", text: "已连接" },
     error: { color: "bg-red-500", text: "连接失败" },
@@ -170,7 +170,7 @@ export function WebDavSyncSettings() {
                 value={cfg.url}
                 onChange={(e) => cfg.setConfig({ url: e.target.value })}
                 placeholder="https://example.com/dav/files/user/"
-                icon={<Link2 className="w-4 h-4 text-gray-400" />}
+                icon={<Link2 className="w-4 h-4 text-slate-400" />}
                 tooltip="WebDAV 服务器地址，建议以 / 结尾"
               />
 
@@ -179,7 +179,7 @@ export function WebDavSyncSettings() {
                 value={cfg.basePath}
                 onChange={(e) => cfg.setConfig({ basePath: e.target.value })}
                 placeholder="chatless"
-                icon={<Folder className="w-4 h-4 text-gray-400" />}
+                icon={<Folder className="w-4 h-4 text-slate-400" />}
                 tooltip="数据存储的子目录名称"
               />
 
@@ -188,7 +188,7 @@ export function WebDavSyncSettings() {
                 value={cfg.username}
                 onChange={(e) => cfg.setConfig({ username: e.target.value })}
                 placeholder="username"
-                icon={<User className="w-4 h-4 text-gray-400" />}
+                icon={<User className="w-4 h-4 text-slate-400" />}
               />
 
               <InputField
@@ -197,7 +197,7 @@ export function WebDavSyncSettings() {
                 value={cfg.password}
                 onChange={(e) => cfg.setConfig({ password: e.target.value })}
                 placeholder="••••••••"
-                icon={<KeyRound className="w-4 h-4 text-gray-400" />}
+                icon={<KeyRound className="w-4 h-4 text-slate-400" />}
               />
 
               <div className="flex items-center gap-2 pt-3">

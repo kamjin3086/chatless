@@ -164,7 +164,7 @@ export function DevToolsPanel({ onClose }: DevToolsPanelProps) {
                       <CardTitle>数据管理</CardTitle>
               </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-sm text-slate-600 mb-4">
                         管理应用中的数据，包括重置数据库、清理数据等。
                       </p>
                       <div className="space-y-2">
@@ -211,7 +211,7 @@ export function DevToolsPanel({ onClose }: DevToolsPanelProps) {
                       <CardTitle>启动性能监测</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-sm text-slate-600 mb-4">
                         监测应用启动过程中各个阶段的性能表现，识别性能瓶颈。
                       </p>
                       <div className="space-y-2">

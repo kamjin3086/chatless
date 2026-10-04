@@ -134,7 +134,7 @@ export function ProviderTableRow({
         StatusIcon = KeyRound;
         badgeVariant = 'secondary';
         // 去边框，微底色
-        badgeClasses = "text-gray-700 dark:text-gray-200 bg-gray-100/60 dark:bg-gray-800/40 px-2 py-1 text-xs font-medium rounded";
+        badgeClasses = "text-slate-700 dark:text-slate-200 bg-slate-100/60 dark:bg-slate-800/40 px-2 py-1 text-xs font-medium rounded-md";
         break;
       case 'NO_FETCHER':
         statusText = '未实现检查';
@@ -175,8 +175,8 @@ export function ProviderTableRow({
       <div className={cn(
         "px-5 py-3.5 mx-3 my-2 rounded-xl border transition-all duration-200",
         isExpanded
-          ? "bg-slate-200/45 dark:bg-white/8 border-slate-300/55 dark:border-white/14"
-          : "bg-white/40 dark:bg-white/5 border-slate-200/55 dark:border-white/10 hover:bg-slate-100/50 dark:hover:bg-white/8 hover:border-slate-300/60 dark:hover:border-white/14"
+          ? "bg-slate-200/45 dark:bg-white/10 border-slate-300/55 dark:border-white/20"
+          : "bg-white/60 dark:bg-white/5 border-slate-200/55 dark:border-white/10 hover:bg-slate-100/50 dark:hover:bg-white/10 hover:border-slate-300/60 dark:hover:border-white/20"
       )}>
         <div className="grid grid-cols-12 gap-4 items-center">
           {/* 拖拽手柄 */}
@@ -218,7 +218,7 @@ export function ProviderTableRow({
                   loading="lazy"
                   decoding="async"
                   draggable={false}
-                  className="w-full h-full object-contain p-0.5 bg-white/80 dark:bg-slate-900/60"
+                  className="w-full h-full object-contain p-0.5 bg-white/90 dark:bg-slate-900/60"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.src = fallbackAvatarSrc;
@@ -271,7 +271,7 @@ export function ProviderTableRow({
                 <TooltipProvider delayDuration={100}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="text-sm text-gray-400 dark:text-gray-500"></span>
+                      <span className="text-sm text-slate-400 dark:text-slate-500"></span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" align="start">
                       <div className="text-xs max-w-xs space-y-1">
@@ -324,9 +324,9 @@ export function ProviderTableRow({
                           <p>上次结果：{lastResult === 'CONNECTED' ? '基本可用' : lastResult === 'NOT_CONNECTED' ? '无法访问' : '未知'}</p>
                         ) : null}
                         {lastMessage ? (
-                          <p className="text-gray-500">{lastMessage}</p>
+                          <p className="text-slate-500">{lastMessage}</p>
                         ) : null}
-                        <p className="text-gray-500 mt-1">点击重新检查状态</p>
+                        <p className="text-slate-500 mt-1">点击重新检查状态</p>
                       </>
                     )}
                   </div>
@@ -342,28 +342,28 @@ export function ProviderTableRow({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
 
-                <DropdownMenuItem onClick={() => setEditDialogOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
-                    <Pencil className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                <DropdownMenuItem onClick={() => setEditDialogOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-slate-300 dark:ring-slate-600 bg-transparent">
+                    <Pencil className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">修改提供商</span>
-                    <span className="text-xs text-gray-500">重命名、服务地址、策略等</span>
+                    <span className="text-xs text-slate-500">重命名、服务地址、策略等</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAdvancedOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
-                    <Sliders className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                <DropdownMenuItem onClick={() => setAdvancedOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-slate-300 dark:ring-slate-600 bg-transparent">
+                    <Sliders className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">高级设置</span>
-                    <span className="text-xs text-gray-500">网络请求方式等高级选项</span>
+                    <span className="text-xs text-slate-500">网络请求方式等高级选项</span>
                   </div>
                   {hasAdvanced && <span className="ml-auto w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500" />}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-700 dark:text-gray-300" /> : <ChevronDown className="w-4 h-4 text-gray-700 dark:text-gray-300" />}
+                <DropdownMenuItem onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-slate-300 dark:ring-slate-600 bg-transparent">
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-700 dark:text-slate-300" /> : <ChevronDown className="w-4 h-4 text-slate-700 dark:text-slate-300" />}
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{isExpanded ? '收起详情' : '展开详情'}</span>
@@ -379,19 +379,19 @@ export function ProviderTableRow({
                       toast.success('已隐藏', { description: provider.displayName || provider.name });
                     } catch (e) { console.error(e); }
                   }}
-                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md"
+                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md"
                 >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
-                    <ChevronDown className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                  <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-slate-300 dark:ring-slate-600 bg-transparent">
+                    <ChevronDown className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">隐藏提供商</span>
-                    <span className="text-xs text-gray-500">从列表中隐藏（可在管理里重新显示）</span>
+                    <span className="text-xs text-slate-500">从列表中隐藏（可在管理里重新显示）</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFetchDebuggerOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-md">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-gray-300 dark:ring-gray-600 bg-transparent">
-                      <BugPlay className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                <DropdownMenuItem onClick={() => setFetchDebuggerOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-md ring-1 ring-slate-300 dark:ring-slate-600 bg-transparent">
+                      <BugPlay className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">调试网络请求</span>
@@ -405,7 +405,7 @@ export function ProviderTableRow({
         {/* 展开的详情内容 */}
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CollapsibleContent className="mt-4 pt-4 will-change-transform">
-            <div className="space-y-5 bg-white/60 dark:bg-slate-900/30 rounded-xl p-4 sm:p-5 ring-1 ring-slate-200/60 dark:ring-slate-700/50 shadow-sm">
+            <div className="space-y-5 bg-white/70 dark:bg-slate-900/30 rounded-xl p-4 sm:p-5 ring-1 ring-slate-200/60 dark:ring-slate-700/50 shadow-sm">
               <ProviderConnectionSection
                 provider={provider}
                 localUrl={localUrl}

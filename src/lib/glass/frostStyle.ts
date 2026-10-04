@@ -36,15 +36,15 @@ html.glass-ui.dark .bg-slate-900 {
 }
 
 html.glass-ui .chat-rail .bg-white,
-html.glass-ui .chat-rail .bg-gray-50,
+html.glass-ui .chat-rail .bg-slate-50,
 html.glass-ui .history-sticky-header {
   background-color: transparent !important;
   background-image: none !important;
 }
 
+html.glass-ui [class~="bg-white/100"],
 html.glass-ui [class~="bg-white/95"],
 html.glass-ui [class~="bg-white/90"],
-html.glass-ui [class~="bg-white/80"],
 html.glass-ui [class~="bg-slate-50/80"],
 html.glass-ui [class~="bg-slate-900/95"],
 html.glass-ui [class~="bg-slate-900/90"],
@@ -303,11 +303,11 @@ html.glass-ui.dark [data-radix-alert-dialog-overlay] {
 }
 
 /* 弹窗内对比度：说明文字、分割线、选项卡、旧蓝底选中 */
-html.glass-ui [role="dialog"] [class~="text-gray-400"],
-html.glass-ui [role="dialog"] [class~="text-gray-500"],
+html.glass-ui [role="dialog"] [class~="text-slate-400"],
 html.glass-ui [role="dialog"] [class~="text-slate-500"],
-html.glass-ui [data-slot="dialog-content"] [class~="text-gray-400"],
-html.glass-ui [data-slot="dialog-content"] [class~="text-gray-500"],
+html.glass-ui [role="dialog"] [class~="text-slate-500"],
+html.glass-ui [data-slot="dialog-content"] [class~="text-slate-400"],
+html.glass-ui [data-slot="dialog-content"] [class~="text-slate-500"],
 html.glass-ui [data-slot="dialog-content"] [class~="text-slate-500"],
 html.glass-ui [data-slot="dialog-description"] {
   color: var(--glass-text-secondary) !important;
@@ -318,16 +318,16 @@ html.glass-ui [data-slot="dialog-content"] [class~="border-t"] {
   border-color: rgba(148, 163, 184, 0.28) !important;
 }
 
-html.glass-ui [role="dialog"] [class~="border-gray-200"],
-html.glass-ui [role="dialog"] [class~="border-gray-300"],
+html.glass-ui [role="dialog"] [class~="border-slate-200"],
+html.glass-ui [role="dialog"] [class~="border-slate-300"],
 html.glass-ui [role="dialog"] [class~="border-slate-300/80"],
-html.glass-ui [data-slot="dialog-content"] [class~="border-gray-200"] {
+html.glass-ui [data-slot="dialog-content"] [class~="border-slate-200"] {
   border-color: rgba(100, 116, 139, 0.4) !important;
   background-color: rgba(255, 255, 255, 0.38) !important;
 }
 
-html.glass-ui.dark [role="dialog"] [class~="border-gray-700"],
-html.glass-ui.dark [data-slot="dialog-content"] [class~="border-gray-700"] {
+html.glass-ui.dark [role="dialog"] [class~="border-slate-700"],
+html.glass-ui.dark [data-slot="dialog-content"] [class~="border-slate-700"] {
   border-color: rgba(255, 255, 255, 0.16) !important;
   background-color: rgba(255, 255, 255, 0.06) !important;
 }
@@ -447,8 +447,8 @@ html.glass-ui [class~="bg-rose-50"] {
 }
 
 html.glass-ui [class~="bg-slate-200/70"],
-html.glass-ui [class~="bg-white/80"],
-html.glass-ui [class~="bg-white/40"],
+html.glass-ui [class~="bg-white/90"],
+html.glass-ui [class~="bg-white/60"],
 html.glass-ui [class~="bg-slate-200/50"],
 html.glass-ui [class~="bg-slate-200/55"],
 html.glass-ui [class~="bg-blue-600/40"] {
@@ -495,8 +495,8 @@ html.glass-ui.dark [class~="bg-rose-50"] {
 }
 
 html.glass-ui.dark [class~="bg-slate-200/70"],
-html.glass-ui.dark [class~="bg-white/80"],
-html.glass-ui.dark [class~="bg-white/40"],
+html.glass-ui.dark [class~="bg-white/90"],
+html.glass-ui.dark [class~="bg-white/60"],
 html.glass-ui.dark [class~="bg-slate-200/50"],
 html.glass-ui.dark [class~="bg-slate-200/55"],
 html.glass-ui.dark [class~="bg-blue-600/40"] {
@@ -504,7 +504,7 @@ html.glass-ui.dark [class~="bg-blue-600/40"] {
   background-image: none !important;
 }
 
-html.glass-ui [class~="hover:bg-gray-100"]:hover,
+html.glass-ui [class~="hover:bg-slate-100"]:hover,
 html.glass-ui [class~="hover:bg-slate-100"]:hover,
 html.glass-ui [class~="hover:bg-slate-100/70"]:hover {
   background-color: rgba(255, 255, 255, 0.14) !important;
@@ -651,8 +651,8 @@ html.glass-ui [class~="hover:bg-slate-900"]:hover {
   background-color: var(--glass-accent-hover) !important;
 }
 
-html.glass-ui .bg-gray-100,
-html.glass-ui .glass-overlay .bg-gray-100 {
+html.glass-ui .bg-slate-100,
+html.glass-ui .glass-overlay .bg-slate-100 {
   background-color: rgba(255, 255, 255, 0.16) !important;
 }
 
@@ -689,14 +689,14 @@ html.glass-ui .settings-rail [class~="bg-slate-200/55"] {
   background-color: var(--glass-accent-soft) !important;
 }
 
-html.glass-ui .glass-panel[class~="bg-white/80"],
-html.glass-ui .glass-panel[class~="bg-white/40"] {
+html.glass-ui .glass-panel[class~="bg-white/90"],
+html.glass-ui .glass-panel[class~="bg-white/60"] {
   background-color: rgba(255, 255, 255, 0.22) !important;
   background-image: none !important;
 }
 
-html.glass-ui.dark .glass-panel[class~="bg-white/80"],
-html.glass-ui.dark .glass-panel[class~="bg-white/40"] {
+html.glass-ui.dark .glass-panel[class~="bg-white/90"],
+html.glass-ui.dark .glass-panel[class~="bg-white/60"] {
   background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -768,9 +768,7 @@ html.glass-ui .glass-chip-ok {
 }
 
 html.glass-ui .composer-tool,
-html.glass-ui .composer-send,
-html.glass-ui .input-area .composer-tool,
-html.glass-ui .input-area .composer-send {
+html.glass-ui .input-area .composer-tool {
   background: transparent !important;
   background-image: none !important;
   border-color: transparent !important;
@@ -778,14 +776,31 @@ html.glass-ui .input-area .composer-send {
 }
 
 html.glass-ui .composer-tool:hover,
-html.glass-ui .composer-send:hover,
-html.glass-ui .input-area .composer-tool:hover,
-html.glass-ui .input-area .composer-send:hover {
+html.glass-ui .input-area .composer-tool:hover {
   background: transparent !important;
 }
 
-html.glass-ui .composer-send {
-  color: var(--glass-accent-text) !important;
+/* The send button is the composer's single filled control: give it the glass
+   accent fill instead of stripping the background, so it reads as an action
+   rather than a faint glyph. */
+html.glass-ui .composer-send,
+html.glass-ui .input-area .composer-send {
+  background-color: var(--glass-accent) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+html.glass-ui .composer-send:hover,
+html.glass-ui .input-area .composer-send:hover {
+  background-color: var(--glass-accent-hover) !important;
+}
+
+html.glass-ui .composer-send[disabled],
+html.glass-ui .input-area .composer-send[disabled] {
+  background-color: transparent !important;
+  color: var(--glass-text-muted) !important;
 }
 
 html.glass-ui .inline-edit,
@@ -901,7 +916,7 @@ html.glass-ui [class~="bg-red-500"] {
   color: rgb(255, 255, 255) !important;
 }
 
-html.glass-ui .bg-blue-600[class*="rounded"]:not([data-slot="checkbox"]):not([role="checkbox"]):not([data-slot="checkbox-indicator"]) {
+html.glass-ui .bg-blue-600[class*="rounded-md"]:not([data-slot="checkbox"]):not([role="checkbox"]):not([data-slot="checkbox-indicator"]) {
   background-color: var(--glass-accent) !important;
   border-color: var(--glass-accent-border) !important;
 }

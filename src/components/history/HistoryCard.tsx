@@ -101,13 +101,13 @@ const HistoryCard = memo(function HistoryCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2 mb-1">
               <h4 className={cn(
-                "font-medium text-sm text-gray-900 dark:text-gray-100 cursor-pointer transition-colors duration-150 truncate hover:text-slate-700 dark:hover:text-slate-200"
+                "font-medium text-sm text-slate-900 dark:text-slate-100 cursor-pointer transition-colors duration-150 truncate hover:text-slate-700 dark:hover:text-slate-200"
               )}
                 onClick={() => onView?.(id)}
                 title={title}>
                 {title}
               </h4>
-              <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-shrink-0">
                 <Clock className="h-3 w-3" />
                 <span title={fullTimestamp} className="font-medium">
                   {formatCompactTime(timestamp)}
@@ -116,7 +116,7 @@ const HistoryCard = memo(function HistoryCard({
             </div>
             
             {/* 摘要 - 改进显示 */}
-            <p className="text-xs text-gray-600 dark:text-gray-400 text-truncate-2 mb-2 leading-relaxed" title={summary}>
+            <p className="text-xs text-slate-600 dark:text-slate-400 text-truncate-2 mb-2 leading-relaxed" title={summary}>
               {truncatedSummary}
             </p>
           </div>
@@ -127,14 +127,14 @@ const HistoryCard = memo(function HistoryCard({
           <div className="flex items-center gap-2 flex-wrap">
             {/* 模型 */}
             <span className={cn(
-              "px-1.5 py-0.5 rounded text-xs font-medium transition-all duration-150",
+              "px-1.5 py-0.5 rounded-md text-xs font-medium transition-all duration-150",
               getModelColor(model)
             )}>
               {model}
             </span>
             
             {/* 消息数 */}
-            <div className="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-0.5 text-slate-500 dark:text-slate-400">
               <Hash className="h-3 w-3" />
               <span className="font-medium">{messageCount}</span>
             </div>
@@ -150,7 +150,7 @@ const HistoryCard = memo(function HistoryCard({
               </Badge>
             ))}
             {tags.length > 2 && (
-              <span className="text-gray-400 text-xs">+{tags.length - 2}</span>
+              <span className="text-slate-400 text-xs">+{tags.length - 2}</span>
             )}
           </div>
 
@@ -161,7 +161,7 @@ const HistoryCard = memo(function HistoryCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-yellow-500 transition-all duration-150 cursor-pointer"
+                className="h-6 w-6 text-slate-400 hover:text-yellow-500 transition-all duration-150 cursor-pointer"
                 onClick={() => onToggleFavorite?.(id)}
                 title={isFavorite ? "取消收藏" : "收藏"}
               >
@@ -171,7 +171,7 @@ const HistoryCard = memo(function HistoryCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-gray-600 transition-all duration-150 cursor-pointer"
+                className="h-6 w-6 text-slate-400 hover:text-slate-600 transition-all duration-150 cursor-pointer"
                 onClick={() => onExport?.(id)}
                 title="导出"
               >
@@ -181,21 +181,21 @@ const HistoryCard = memo(function HistoryCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-gray-400 hover:text-red-500 transition-all duration-150 cursor-pointer"
+                className="h-6 w-6 text-slate-400 hover:text-red-500 transition-all duration-150 cursor-pointer"
                 onClick={() => onDelete?.(id)}
                 title="删除"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
               
-              <div className="w-px h-4 bg-gray-200 mx-1" />
+              <div className="w-px h-4 bg-slate-200 mx-1" />
             </div>
             
             {/* 主要操作按钮 - 始终可见 */}
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-gray-500 hover:text-slate-700 dark:hover:text-slate-200 transition-all duration-150 cursor-pointer"
+              className="h-6 w-6 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-all duration-150 cursor-pointer"
               onClick={() => onView?.(id)}
               title="查看"
             >

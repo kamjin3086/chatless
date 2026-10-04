@@ -42,7 +42,7 @@ export function CitationRichText({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="mx-0.5 inline-flex items-center rounded px-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                className="mx-0.5 inline-flex items-center rounded-md px-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
                 disabled={isStreaming}
               >
                 [{cite.n}]

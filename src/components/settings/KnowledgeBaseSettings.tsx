@@ -84,7 +84,7 @@ export function KnowledgeBaseSettings() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">加载配置中...</div>
+        <div className="text-slate-500">加载配置中...</div>
       </div>
     );
   }
@@ -121,7 +121,7 @@ export function KnowledgeBaseSettings() {
           />
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               支持的文件类型
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -142,7 +142,7 @@ export function KnowledgeBaseSettings() {
           </div>
 
           {/* —— 新增：文档解析/拼接策略 —— */}
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2" />
+          <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-2" />
           <SettingsSectionHeader title="文档设置" />
 
           <ToggleSwitch
@@ -237,7 +237,7 @@ export function KnowledgeBaseSettings() {
       <div className="flex justify-end pt-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <button className="h-7 px-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded">
+            <button className="h-7 px-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md">
               恢复默认
             </button>
           </AlertDialogTrigger>

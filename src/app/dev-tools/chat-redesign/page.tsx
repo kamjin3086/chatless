@@ -10,7 +10,7 @@ const designs = [
     subtitle: 'Terminal Minimal',
     description: '受终端启发的极简设计，单色调、高信息密度、零边框，适合技术用户',
     icon: Terminal,
-    color: 'from-zinc-500 to-zinc-700',
+    color: 'from-slate-500 to-slate-700',
     features: ['单色设计', '高密度布局', '零装饰元素', '等宽字体'],
   },
   {
@@ -59,7 +59,7 @@ const designsFull = [
     subtitle: 'Terminal Minimal - Full',
     description: '受终端启发的极简设计，单色调、高信息密度、零边框。现已包含完整的聊天、设置、提示词管理三大界面',
     icon: Terminal,
-    color: 'from-zinc-500 to-zinc-700',
+    color: 'from-slate-500 to-slate-700',
     features: ['完整体系', '设置界面', '提示词管理', '亮暗切换', '等宽字体', '终端风格'],
     isFull: true,
   },
@@ -69,7 +69,7 @@ const designsFull = [
     subtitle: 'Notion Style - Full',
     description: '借鉴Notion的块状结构设计，清晰的层级和可折叠区域。现已包含完整的聊天、设置、提示词管理三大界面',
     icon: Layout,
-    color: 'from-gray-600 to-gray-800',
+    color: 'from-slate-600 to-slate-800',
     features: ['完整体系', '设置界面', '提示词管理', '块状结构', '可折叠区域', '亮暗切换'],
     isFull: true,
   },
@@ -120,14 +120,14 @@ const designsV2 = [
 
 export default function ChatRedesignIndex() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-4xl font-light tracking-tight mb-3">
             聊天界面重设计
           </h1>
-          <p className="text-zinc-400 text-lg max-w-2xl">
+          <p className="text-slate-400 text-lg max-w-2xl">
             点击预览并选择最适合的风格。完整版方案包含聊天、设置、提示词管理三大界面，体系化呈现设计风格。
           </p>
         </div>
@@ -135,7 +135,7 @@ export default function ChatRedesignIndex() {
         {/* Full Design Cards - Recommended */}
         <div className="mb-12">
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-xl font-medium text-zinc-200">完整版方案</h2>
+            <h2 className="text-xl font-medium text-slate-200">完整版方案</h2>
             <span className="px-2 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded-full">推荐 · 含设置和提示词界面</span>
           </div>
           <div className="grid gap-4">
@@ -147,7 +147,7 @@ export default function ChatRedesignIndex() {
                   href={`/dev-tools/chat-redesign/${design.id}`}
                   className="group block"
                 >
-                  <div className="relative overflow-hidden rounded-2xl bg-zinc-900/50 border border-blue-500/30 p-6 transition-all duration-300 hover:bg-zinc-900/80 hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-900/20">
+                  <div className="relative overflow-hidden rounded-2xl bg-slate-900/50 border border-blue-500/30 p-6 transition-all duration-300 hover:bg-slate-900/80 hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-900/20">
                     <div className="flex items-start gap-6">
                       {/* Icon */}
                       <div className={`shrink-0 w-14 h-14 rounded-xl bg-gradient-to-br ${design.color} flex items-center justify-center shadow-lg`}>
@@ -157,16 +157,16 @@ export default function ChatRedesignIndex() {
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-3 mb-2">
-                          <span className="text-zinc-500 text-sm font-mono">★{index + 1}</span>
-                          <h2 className="text-xl font-medium text-zinc-100">
+                          <span className="text-slate-500 text-sm font-mono">★{index + 1}</span>
+                          <h2 className="text-xl font-medium text-slate-100">
                             {design.name}
                           </h2>
-                          <span className="text-zinc-500 text-sm">
+                          <span className="text-slate-500 text-sm">
                             {design.subtitle}
                           </span>
-                          <span className="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">完整</span>
+                          <span className="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded-md">完整</span>
                         </div>
-                        <p className="text-zinc-400 mb-4">
+                        <p className="text-slate-400 mb-4">
                           {design.description}
                         </p>
                         <div className="flex flex-wrap gap-2">
@@ -176,7 +176,7 @@ export default function ChatRedesignIndex() {
                               className={`px-2.5 py-1 text-xs rounded-full border ${
                                 ['完整体系', '设置界面', '提示词管理'].includes(feature)
                                   ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                                  : 'bg-zinc-800/80 text-zinc-400 border-zinc-700/50'
+                                  : 'bg-slate-800/80 text-slate-400 border-slate-700/50'
                               }`}
                             >
                               {feature}
@@ -187,7 +187,7 @@ export default function ChatRedesignIndex() {
 
                       {/* Arrow */}
                       <div className="shrink-0 self-center">
-                        <ArrowRight className="w-5 h-5 text-zinc-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all duration-200" />
+                        <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all duration-200" />
                       </div>
                     </div>
                   </div>
@@ -200,7 +200,7 @@ export default function ChatRedesignIndex() {
         {/* V2 Design Cards - New */}
         <div className="mb-12">
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-xl font-medium text-zinc-200">其他新版方案</h2>
+            <h2 className="text-xl font-medium text-slate-200">其他新版方案</h2>
             <span className="px-2 py-0.5 text-xs bg-emerald-500/20 text-emerald-400 rounded-full">聊天界面预览</span>
           </div>
           <div className="grid gap-4">
@@ -212,7 +212,7 @@ export default function ChatRedesignIndex() {
                   href={`/dev-tools/chat-redesign/${design.id}`}
                   className="group block"
                 >
-                  <div className="relative overflow-hidden rounded-2xl bg-zinc-900/50 border border-zinc-800/50 p-5 transition-all duration-300 hover:bg-zinc-900/80 hover:border-zinc-700/50">
+                  <div className="relative overflow-hidden rounded-2xl bg-slate-900/50 border border-slate-800/50 p-5 transition-all duration-300 hover:bg-slate-900/80 hover:border-slate-700/50">
                     <div className="flex items-start gap-5">
                       {/* Icon */}
                       <div className={`shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${design.color} flex items-center justify-center shadow-lg`}>
@@ -222,22 +222,22 @@ export default function ChatRedesignIndex() {
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-3 mb-1">
-                          <span className="text-zinc-600 text-sm font-mono">0{index + 3}</span>
-                          <h2 className="text-lg font-medium text-zinc-200">
+                          <span className="text-slate-600 text-sm font-mono">0{index + 3}</span>
+                          <h2 className="text-lg font-medium text-slate-200">
                             {design.name}
                           </h2>
-                          <span className="text-zinc-600 text-sm">
+                          <span className="text-slate-600 text-sm">
                             {design.subtitle}
                           </span>
                         </div>
-                        <p className="text-zinc-500 text-sm">
+                        <p className="text-slate-500 text-sm">
                           {design.description}
                         </p>
                       </div>
 
                       {/* Arrow */}
                       <div className="shrink-0 self-center">
-                        <ArrowRight className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500 group-hover:translate-x-1 transition-all duration-200" />
+                        <ArrowRight className="w-4 h-4 text-slate-700 group-hover:text-slate-500 group-hover:translate-x-1 transition-all duration-200" />
                       </div>
                     </div>
                   </div>
@@ -250,8 +250,8 @@ export default function ChatRedesignIndex() {
         {/* V1 Design Cards */}
         <div className="mb-12">
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-xl font-medium text-zinc-200">初版方案</h2>
-            <span className="px-2 py-0.5 text-xs bg-zinc-700 text-zinc-400 rounded-full">聊天界面预览</span>
+            <h2 className="text-xl font-medium text-slate-200">初版方案</h2>
+            <span className="px-2 py-0.5 text-xs bg-slate-700 text-slate-400 rounded-full">聊天界面预览</span>
           </div>
           <div className="grid gap-3 opacity-60">
             {designs.filter(d => d.id !== 'terminal-minimal').map((design) => {
@@ -262,18 +262,18 @@ export default function ChatRedesignIndex() {
                   href={`/dev-tools/chat-redesign/${design.id}`}
                   className="group block"
                 >
-                  <div className="relative overflow-hidden rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-4 transition-all duration-300 hover:bg-zinc-900/80 hover:border-zinc-700/50">
+                  <div className="relative overflow-hidden rounded-xl bg-slate-900/50 border border-slate-800/50 p-4 transition-all duration-300 hover:bg-slate-900/80 hover:border-slate-700/50">
                     <div className="flex items-center gap-4">
                       <div className={`shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br ${design.color} flex items-center justify-center shadow-lg`}>
                         <Icon className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2">
-                          <h2 className="text-sm font-medium text-zinc-300">{design.name}</h2>
-                          <span className="text-zinc-600 text-xs">{design.subtitle}</span>
+                          <h2 className="text-sm font-medium text-slate-300">{design.name}</h2>
+                          <span className="text-slate-600 text-xs">{design.subtitle}</span>
                         </div>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500 group-hover:translate-x-1 transition-all duration-200 shrink-0" />
+                      <ArrowRight className="w-4 h-4 text-slate-700 group-hover:text-slate-500 group-hover:translate-x-1 transition-all duration-200 shrink-0" />
                     </div>
                   </div>
                 </Link>
@@ -283,24 +283,24 @@ export default function ChatRedesignIndex() {
         </div>
 
         {/* Design Principles */}
-        <div className="pt-8 border-t border-zinc-800/50">
-          <h3 className="text-lg font-medium text-zinc-300 mb-6">完整版方案特性</h3>
+        <div className="pt-8 border-t border-slate-800/50">
+          <h3 className="text-lg font-medium text-slate-300 mb-6">完整版方案特性</h3>
           <div className="grid md:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-blue-900/10 border border-blue-800/30">
               <h4 className="text-blue-300 font-medium mb-2">三大界面</h4>
-              <p className="text-zinc-500 text-sm">包含聊天、设置、提示词管理界面，全面体验设计风格体系</p>
+              <p className="text-slate-500 text-sm">包含聊天、设置、提示词管理界面，全面体验设计风格体系</p>
             </div>
-            <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/30">
-              <h4 className="text-zinc-200 font-medium mb-2">完整交互</h4>
-              <p className="text-zinc-500 text-sm">菜单可点击、下拉可操作、弹窗可关闭，真实体验设计效果</p>
+            <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/30">
+              <h4 className="text-slate-200 font-medium mb-2">完整交互</h4>
+              <p className="text-slate-500 text-sm">菜单可点击、下拉可操作、弹窗可关闭，真实体验设计效果</p>
             </div>
-            <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/30">
-              <h4 className="text-zinc-200 font-medium mb-2">亮暗切换</h4>
-              <p className="text-zinc-500 text-sm">右上角主题切换按钮，预览亮色和暗色模式下的界面表现</p>
+            <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/30">
+              <h4 className="text-slate-200 font-medium mb-2">亮暗切换</h4>
+              <p className="text-slate-500 text-sm">右上角主题切换按钮，预览亮色和暗色模式下的界面表现</p>
             </div>
-            <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/30">
-              <h4 className="text-zinc-200 font-medium mb-2">功能复刻</h4>
-              <p className="text-zinc-500 text-sm">模拟现有功能的表面效果，评估不同风格的实际承载能力</p>
+            <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/30">
+              <h4 className="text-slate-200 font-medium mb-2">功能复刻</h4>
+              <p className="text-slate-500 text-sm">模拟现有功能的表面效果，评估不同风格的实际承载能力</p>
             </div>
           </div>
         </div>

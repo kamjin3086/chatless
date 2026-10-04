@@ -88,14 +88,14 @@ export function CacheStatsPanel() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{stats.totalServers}</div>
-            <div className="text-sm text-gray-500">缓存服务器</div>
+            <div className="text-sm text-slate-500">缓存服务器</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">{formatBytes(stats.cacheSize)}</div>
-            <div className="text-sm text-gray-500">缓存大小</div>
+            <div className="text-sm text-slate-500">缓存大小</div>
           </div>
           <div className="col-span-2 text-center">
-            <div className="text-sm text-gray-600">最后更新: {formatTime(stats.lastUpdate)}</div>
+            <div className="text-sm text-slate-600">最后更新: {formatTime(stats.lastUpdate)}</div>
           </div>
         </div>
 
@@ -150,7 +150,7 @@ export function CacheStatsPanel() {
         </div>
 
         {/* 帮助信息 */}
-        <div className="text-xs text-gray-500 space-y-1">
+        <div className="text-xs text-slate-500 space-y-1">
           <p>• 缓存会在24小时后自动过期</p>
           <p>• 缓存可以在服务器离线时提供工具信息</p>
           <p>• 清除缓存后下次连接会重新获取工具信息</p>

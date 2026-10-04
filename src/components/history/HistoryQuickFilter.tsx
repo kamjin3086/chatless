@@ -43,9 +43,9 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
   const getButtonClasses = (filter: FilterType) => {
     const baseClasses = "px-3 py-1.5 rounded-full text-xs transition-all duration-200 flex items-center gap-1.5 h-8 whitespace-nowrap border font-medium";
     if (activeFilter === filter) {
-      return cn(baseClasses, "glass-chip-active bg-slate-200/50 text-slate-800 border-slate-300/50 dark:bg-white/10 dark:text-slate-200 dark:border-white/15");
+      return cn(baseClasses, "glass-chip-active bg-slate-200/50 text-slate-800 border-slate-300/50 dark:bg-white/10 dark:text-slate-200 dark:border-white/20");
     }
-    return cn(baseClasses, "text-slate-600 border-slate-200/70 hover:bg-slate-100/60 dark:text-slate-300 dark:border-slate-600/50 dark:hover:bg-white/8");
+    return cn(baseClasses, "text-slate-600 border-slate-200/70 hover:bg-slate-100/60 dark:text-slate-300 dark:border-slate-600/50 dark:hover:bg-white/10");
   };
 
   return (
@@ -53,7 +53,7 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
       <div className="flex items-center gap-4 overflow-x-auto no-scrollbar">
         {/* 时间筛选组 */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 whitespace-nowrap mr-1">时间范围:</span>
+          <span className="text-xs font-medium text-slate-500 whitespace-nowrap mr-1">时间范围:</span>
           <Button 
             onClick={() => handleFilterClick('all')} 
             className={getButtonClasses('all')} 
@@ -89,11 +89,11 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
         </div>
         
         {/* 分隔线 */}
-        <div className="border-r border-gray-300 dark:border-gray-600 h-6 mx-1 self-center"></div>
+        <div className="border-r border-slate-300 dark:border-slate-600 h-6 mx-1 self-center"></div>
         
         {/* 状态筛选组 */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 whitespace-nowrap mr-1">特殊标记:</span>
+          <span className="text-xs font-medium text-slate-500 whitespace-nowrap mr-1">特殊标记:</span>
           <Button 
             onClick={() => handleFilterClick('favorite')} 
             className={getButtonClasses('favorite')} 

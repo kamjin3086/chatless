@@ -51,7 +51,7 @@ export function Sidebar() {
   
   return (
     <div
-      className="glass-nav fixed top-0 h-[calc(100vh-1rem)] bg-white/90 dark:bg-gray-900/90 flex flex-col items-center pt-2 pb-2 z-50"
+      className="glass-nav fixed top-0 h-[calc(100vh-1rem)] bg-white/95 dark:bg-slate-900/90 flex flex-col items-center pt-2 pb-2 z-50"
       style={{ width: 'var(--sidebar-width, 5rem)' }}
     >
       <DockHoverScaler

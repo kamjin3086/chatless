@@ -6,6 +6,20 @@
   /* 用于逐字动画的默认延迟（可在元素上通过 --char-delay 覆盖） */
   --char-delay: 12ms;
   --titlebar-height: 0px;
+  /*
+   * Width of the conversation column (messages + composer). It grows with the
+   * window instead of leaving a fixed 48rem column in the middle of a wide
+   * screen, but stops before the line length gets uncomfortable to read.
+   */
+  --chat-content-max: 48rem;
+}
+
+@media (min-width: 1200px) {
+  :root { --chat-content-max: 56rem; }
+}
+
+@media (min-width: 1600px) {
+  :root { --chat-content-max: 64rem; }
 }
 
 /* 逐字平滑淡入关键帧：通过为每个字符包裹 span 的方式成本太高，
@@ -576,7 +590,7 @@ body {
   border: none;
 }
 
-.scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+.scrollbar-thumb-slate-300::-webkit-scrollbar-thumb {
   background-color: rgb(209, 213, 219);
 }
 
@@ -584,7 +598,7 @@ body {
   background: transparent;
 }
 
-.hover\:scrollbar-thumb-gray-400:hover::-webkit-scrollbar-thumb {
+.hover\:scrollbar-thumb-slate-400:hover::-webkit-scrollbar-thumb {
   background-color: rgb(156, 163, 175);
 }
 
@@ -658,7 +672,7 @@ body {
   background-color: rgba(75, 85, 99, 0.5);
 }
 
-.dark .hover\:scrollbar-thumb-gray-400:hover::-webkit-scrollbar-thumb {
+.dark .hover\:scrollbar-thumb-slate-400:hover::-webkit-scrollbar-thumb {
   background-color: rgba(107, 114, 128, 0.7);
 }
 
@@ -986,15 +1000,15 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 
 /* Custom setting control styles */
 .setting-trigger {
-  @apply w-full h-9 text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white/90 dark:bg-gray-700/90 hover:border-primary focus:ring-2 focus:ring-primary transition-shadow;
+  @apply w-full h-9 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white/90 dark:bg-slate-700/90 hover:border-primary focus:ring-2 focus:ring-primary transition-shadow;
 }
 
 .setting-trigger-enhanced {
-  @apply w-full h-9 text-sm rounded-md border border-gray-200 dark:border-gray-600 bg-white/90 dark:bg-gray-700/90 hover:border-blue-400 dark:hover:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200;
+  @apply w-full h-9 text-sm rounded-md border border-slate-200 dark:border-slate-600 bg-white/90 dark:bg-slate-700/90 hover:border-blue-400 dark:hover:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200;
 }
 
 .setting-switch {
-  @apply w-10 h-5 bg-gray-300/60 dark:bg-gray-700 rounded-full relative transition-colors peer-checked:bg-primary;
+  @apply w-10 h-5 bg-slate-300/60 dark:bg-slate-700 rounded-full relative transition-colors peer-checked:bg-primary;
 }
 .setting-switch-thumb {
   @apply absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5;
@@ -1002,11 +1016,11 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 
 /* Embedding model manager cards */
 .embed-card {
-  @apply border border-gray-200 dark:border-gray-700 rounded-md bg-white/70 dark:bg-gray-800/30 p-4 space-y-3 transition-shadow hover:ring-1 hover:ring-gray-300/40 dark:hover:ring-gray-600/40 hover:bg-gray-50/30;
+  @apply border border-slate-200 dark:border-slate-700 rounded-md bg-white/70 dark:bg-slate-800/30 p-4 space-y-3 transition-shadow hover:ring-1 hover:ring-slate-300/40 dark:hover:ring-slate-600/40 hover:bg-slate-50/30;
 }
 
 .meta-label {
-  @apply text-[11px] leading-none tracking-wide text-gray-500 dark:text-gray-400;
+  @apply text-[11px] leading-none tracking-wide text-slate-500 dark:text-slate-400;
 }
 
 /* Collapsible card styles for settings sections */
@@ -1086,11 +1100,11 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 /* ------------------------------ */
 
 .glass-ui {
-  --glass-fill: rgba(255, 255, 255, 0.18);
-  --glass-fill-strong: rgba(255, 255, 255, 0.22);
-  --glass-border: rgba(148, 163, 184, 0.2);
+  --glass-fill: rgba(255, 255, 255, 0.26);
+  --glass-fill-strong: rgba(255, 255, 255, 0.34);
+  --glass-border: rgba(100, 116, 139, 0.28);
   --glass-highlight: rgba(255, 255, 255, 0.45);
-  --glass-shadow: 0 10px 36px rgba(15, 23, 42, 0.08);
+  --glass-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
   --glass-inset: inset 0 1px 0 var(--glass-highlight);
   --glass-input-border: rgba(212, 175, 110, 0.38);
   --glass-accent: rgba(14, 165, 233, 0.78);
@@ -1128,8 +1142,8 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 .glass-ui.dark {
   /* 浅色霜面叠在深色壁纸上，才能透出色相；深蓝填充会把毛玻璃糊成整块海军蓝 */
   --glass-fill: rgba(255, 255, 255, 0.06);
-  --glass-fill-strong: rgba(255, 255, 255, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.22);
+  --glass-fill-strong: rgba(255, 255, 255, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.26);
   --glass-highlight: rgba(255, 255, 255, 0.42);
   --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.46);
   --glass-inset: inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
@@ -1316,11 +1330,17 @@ html.glass-ui.simple-ui.dark .glass-surface {
   box-shadow: none !important;
 }
 
-.glass-ui .composer-tool,
-.glass-ui .composer-send {
+.glass-ui .composer-tool {
   background: transparent !important;
   background-image: none !important;
   border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* The send button is the composer's single filled control: keep its accent
+   fill on glass too, and only drop the extra chrome. */
+.glass-ui .composer-send {
+  background-image: none !important;
   box-shadow: none !important;
 }
 

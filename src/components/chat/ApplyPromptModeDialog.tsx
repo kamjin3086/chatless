@@ -61,7 +61,7 @@ export function ApplyPromptModeDialog({ open, onOpenChange, prompt, onApply }: A
               <div className="space-y-2">
                 {prompt.variables.map((v) => (
                   <div key={v.key} className="grid grid-cols-3 gap-2 items-center">
-                    <Label className="text-sm text-gray-600 dark:text-gray-300">{v.label || v.key}</Label>
+                    <Label className="text-sm text-slate-600 dark:text-slate-300">{v.label || v.key}</Label>
                     <div className="col-span-2">
                       <Input value={vars[v.key] || ''} onChange={(e) => setVars({ ...vars, [v.key]: e.target.value })} placeholder={v.defaultValue || ''} />
                     </div>

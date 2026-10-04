@@ -94,7 +94,7 @@ function DependencyItem({ dependency, onRefresh, compact }: DependencyItemProps)
               onClick={handleOpenDownload}
               disabled={isOpening}
               className={cn(
-                "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded",
+                "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md",
                 "bg-primary text-primary-foreground hover:bg-primary/90",
                 "transition-colors disabled:opacity-50"
               )}
@@ -111,7 +111,7 @@ function DependencyItem({ dependency, onRefresh, compact }: DependencyItemProps)
           {onRefresh && (
             <button
               onClick={onRefresh}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
+              className="p-1 text-muted-foreground hover:text-foreground rounded-md"
               title="重新检测"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -121,7 +121,7 @@ function DependencyItem({ dependency, onRefresh, compact }: DependencyItemProps)
           {!dependency.installed && dependency.installHint && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
+              className="p-1 text-muted-foreground hover:text-foreground rounded-md"
             >
               {isExpanded ? (
                 <ChevronUp className="w-3.5 h-3.5" />
@@ -232,7 +232,7 @@ export function DependencyInstallGuide({
           onClick={handleRefreshAll}
           disabled={isChecking}
           className={cn(
-            "flex items-center gap-1 px-2 py-1 text-xs rounded",
+            "flex items-center gap-1 px-2 py-1 text-xs rounded-md",
             "text-muted-foreground hover:text-foreground hover:bg-muted",
             "transition-colors disabled:opacity-50"
           )}
@@ -285,7 +285,7 @@ export function DependencyStatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded",
+        "inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-md",
         allInstalled
           ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
           : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",

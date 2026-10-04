@@ -110,7 +110,7 @@ export function KnowledgeBaseSelector({
         <ActionPanelList maxHeight="14rem">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
             </div>
           ) : filteredKnowledgeBases.length > 0 ? (
             filteredKnowledgeBases.map((kb) => (
@@ -163,7 +163,7 @@ function KnowledgeBaseItem({
             "w-4 h-4",
             isSelected
               ? "text-slate-600 dark:text-slate-300"
-              : "text-gray-500 dark:text-gray-400"
+              : "text-slate-500 dark:text-slate-400"
           )}
         />
       }

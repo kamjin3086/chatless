@@ -79,7 +79,7 @@ export function SkillApprovalPanel({
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handleApproveAll}
-                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 transition-colors"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 transition-colors"
                 title="全部批准"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -87,7 +87,7 @@ export function SkillApprovalPanel({
               </button>
               <button
                 onClick={handleRejectAll}
-                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 transition-colors"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 transition-colors"
                 title="全部拒绝"
               >
                 <XCircle className="w-3.5 h-3.5" />

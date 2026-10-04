@@ -263,7 +263,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         <aside
           style={{ width: isSidebarOpen ? sidebarWidth : 0 }}
           className={cn(
-            "chat-rail bg-white dark:bg-gray-900 flex flex-col min-h-0 flex-shrink-0 glass-surface",
+            "chat-rail bg-white dark:bg-slate-900 flex flex-col min-h-0 flex-shrink-0 glass-surface",
             mounted ? "transition-all duration-300" : "transition-none",
             isSidebarOpen
               ? "border-r border-slate-200/50 dark:border-slate-800/50 translate-x-0"

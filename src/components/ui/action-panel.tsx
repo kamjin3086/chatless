@@ -98,7 +98,7 @@ export function ActionPanelContent({
           // 基础样式
           "z-[9950] rounded-xl border glass-overlay glass-float-menu",
           // 背景和模糊
-          "bg-white/95 dark:bg-gray-800/95 backdrop-blur-md",
+          "bg-white/100 dark:bg-slate-800/95 backdrop-blur-md",
           // 阴影和边框
           "shadow-lg",
           // 动画
@@ -121,7 +121,7 @@ export function ActionPanelContent({
         {showClose && (
           <button
             onClick={onClose}
-            className="absolute top-2 right-2 p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            className="absolute top-2 right-2 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -161,23 +161,23 @@ export function ActionPanelHeader({
   return (
     <div
       className={cn(
-        "flex items-center justify-between px-2 pb-2 border-b border-gray-100 dark:border-gray-700/50",
+        "flex items-center justify-between px-2 pb-2 border-b border-slate-100 dark:border-slate-700/50",
         className
       )}
       {...props}
     >
       <div className="flex items-center gap-2">
         {icon && (
-          <div className="flex-shrink-0 text-gray-500 dark:text-gray-400">
+          <div className="flex-shrink-0 text-slate-500 dark:text-slate-400">
             {icon}
           </div>
         )}
         <div>
-          <h3 className="text-[13px] font-medium text-gray-700 dark:text-gray-200">
+          <h3 className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
             {title}
           </h3>
           {subtitle && (
-            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {subtitle}
             </p>
           )}
@@ -206,7 +206,7 @@ export function ActionPanelSearch({
 }: ActionPanelSearchProps) {
   return (
     <div className={cn("relative px-1 py-2", className)}>
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
       <input
         type="text"
         value={value}
@@ -214,9 +214,9 @@ export function ActionPanelSearch({
         placeholder={placeholder}
         className={cn(
           "w-full pl-8 pr-3 py-1.5 text-sm",
-          "rounded-lg border border-gray-200 dark:border-gray-600",
-          "bg-gray-50/50 dark:bg-gray-700/50",
-          "placeholder:text-gray-400 dark:placeholder:text-gray-500",
+          "rounded-lg border border-slate-200 dark:border-slate-600",
+          "bg-slate-50/50 dark:bg-slate-700/50",
+          "placeholder:text-slate-400 dark:placeholder:text-slate-500",
           "focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
           "transition-all"
         )}
@@ -225,7 +225,7 @@ export function ActionPanelSearch({
       {value && onClear && (
         <button
           onClick={onClear}
-          className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-md text-slate-400 hover:text-slate-600"
         >
           <X className="w-3 h-3" />
         </button>
@@ -299,7 +299,7 @@ export function ActionPanelItem({
         "group w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left",
         "transition-all duration-150",
         // 正常状态
-        !disabled && !selected && "hover:bg-gray-100/80 dark:hover:bg-gray-700/50",
+        !disabled && !selected && "hover:bg-slate-100/80 dark:hover:bg-slate-700/50",
         // 选中状态
         selected && "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
         // 禁用状态
@@ -313,7 +313,7 @@ export function ActionPanelItem({
         <div
           className={cn(
             "flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center",
-            "bg-gray-100 dark:bg-gray-700",
+            "bg-slate-100 dark:bg-slate-700",
             selected && "bg-blue-100 dark:bg-blue-800/50"
           )}
         >
@@ -324,21 +324,21 @@ export function ActionPanelItem({
         <p
           className={cn(
             "text-sm font-medium truncate",
-            "text-gray-800 dark:text-gray-200",
+            "text-slate-800 dark:text-slate-200",
             selected && "text-blue-700 dark:text-blue-300"
           )}
         >
           {title}
         </p>
         {description && (
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
             {description}
           </p>
         )}
       </div>
       {suffix && <div className="flex-shrink-0">{suffix}</div>}
       {showArrow && (
-        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
+        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
       )}
     </button>
   );
@@ -351,7 +351,7 @@ export function ActionPanelDivider({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "h-px bg-gray-100 dark:bg-gray-700/50 my-1 mx-2",
+        "h-px bg-slate-100 dark:bg-slate-700/50 my-1 mx-2",
         className
       )}
     />
@@ -374,7 +374,7 @@ export function ActionPanelGroup({
 }: ActionPanelGroupProps) {
   return (
     <div className={cn("py-1", className)} {...props}>
-      <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+      <div className="px-3 py-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
         {title}
       </div>
       {children}
@@ -410,11 +410,11 @@ export function ActionPanelEmpty({
       {...props}
     >
       {icon && (
-        <div className="mb-2 text-gray-300 dark:text-gray-600">{icon}</div>
+        <div className="mb-2 text-slate-300 dark:text-slate-600">{icon}</div>
       )}
-      <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>
+      <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
       {description && (
-        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
           {description}
         </p>
       )}
@@ -433,7 +433,7 @@ export function ActionPanelFooter({
   return (
     <div
       className={cn(
-        "flex items-center justify-between px-2 pt-2 mt-1 border-t border-gray-100 dark:border-gray-700/50",
+        "flex items-center justify-between px-2 pt-2 mt-1 border-t border-slate-100 dark:border-slate-700/50",
         className
       )}
       {...props}
@@ -468,7 +468,7 @@ export function ActionPanelSettingsLink({
   return (
     <button
       onClick={handleClick}
-      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
     >
       <Settings className="w-3.5 h-3.5" />
       {children}

@@ -255,12 +255,12 @@ export function CommandPalette() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden border border-gray-100 rounded-xl bg-white dark:bg-gray-900 shadow-lg">
+      <DialogContent className="max-w-lg p-0 overflow-hidden border border-slate-100 rounded-xl bg-white dark:bg-slate-900 shadow-lg">
         <DialogTitle className="sr-only">Command Palette</DialogTitle>
         <DialogDescription className="sr-only">Search and execute commands</DialogDescription>
         
         {/* 搜索输入区域 */}
-        <div className="border-b border-gray-50 dark:border-gray-800 px-4 py-3">
+        <div className="border-b border-slate-50 dark:border-slate-800 px-4 py-3">
           <Input
             ref={inputRef}
             autoFocus
@@ -299,7 +299,7 @@ export function CommandPalette() {
                 }
               }
             }}
-            className="h-9 border-0 bg-transparent px-0 py-0 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-0 focus:outline-none"
+            className="h-9 border-0 bg-transparent px-0 py-0 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0 focus:outline-none"
             onFocus={() => setHighlight(-1)}
           />
         </div>
@@ -308,7 +308,7 @@ export function CommandPalette() {
         <div className="max-h-80 overflow-y-auto scroll-smooth" role="listbox">
           {filtered.length === 0 && (
             <div className="p-6 text-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400">没有匹配项</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">没有匹配项</p>
             </div>
           )}
 
@@ -316,9 +316,9 @@ export function CommandPalette() {
             const items = filtered.filter((i) => i.section === sec);
             if (items.length === 0) return null;
             return (
-              <div key={sec} className="border-t border-gray-50 dark:border-gray-800 first:border-none">
+              <div key={sec} className="border-t border-slate-50 dark:border-slate-800 first:border-none">
                 <div className="px-4 pt-3 pb-2">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                     {sec === 'navigation' ? '导航' : sec === 'action' ? '操作' : '设置'}
                   </p>
                 </div>
@@ -379,7 +379,7 @@ export function CommandPalette() {
                         "w-full flex items-center justify-between px-4 py-2.5 text-sm focus:outline-none transition-all duration-150",
                         highlight === globalIdx 
                           ? "bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100" 
-                          : "hover:bg-gray-50 dark:hover:bg-gray-800/50 text-gray-700 dark:text-gray-300"
+                          : "hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-300"
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -388,7 +388,7 @@ export function CommandPalette() {
                             "w-4 h-4",
                             highlight === globalIdx 
                               ? "text-blue-500 dark:text-blue-400" 
-                              : "text-gray-500 dark:text-gray-400"
+                              : "text-slate-500 dark:text-slate-400"
                           )} />
                         )}
                         <span className="font-medium">{renderTitle()}</span>
@@ -398,7 +398,7 @@ export function CommandPalette() {
                           "text-xs ml-4 font-mono",
                           highlight === globalIdx 
                             ? "text-blue-600 dark:text-blue-300" 
-                            : "text-gray-400 dark:text-gray-500"
+                            : "text-slate-400 dark:text-slate-500"
                         )}>
                           {c.hint}
                         </span>

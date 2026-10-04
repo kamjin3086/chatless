@@ -22,7 +22,7 @@ export function RecentModelsList({
 }: RecentModelsListProps) {
   if (recentModelDetails.length === 0) {
     return (
-      <div className="py-6 text-center text-gray-500 dark:text-gray-400">
+      <div className="py-6 text-center text-slate-500 dark:text-slate-400">
         <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
         <p className="text-sm">暂无最近使用模型</p>
       </div>

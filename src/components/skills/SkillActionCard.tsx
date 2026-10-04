@@ -178,7 +178,7 @@ export function SkillActionCard({
       >
         {/* 类型图标 */}
         <div className={cn(
-          'flex items-center justify-center w-6 h-6 rounded',
+          'flex items-center justify-center w-6 h-6 rounded-md',
           'bg-slate-100/60 dark:bg-slate-800/60'
         )}>
           <TypeIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
@@ -197,7 +197,7 @@ export function SkillActionCard({
 
         {/* 类型标签 */}
         <span className={cn(
-          'px-1.5 py-0.5 rounded text-[10px] font-semibold',
+          'px-1.5 py-0.5 rounded-md text-[10px] font-semibold',
           'bg-slate-100/60 dark:bg-slate-800/60',
           'text-slate-600 dark:text-slate-400'
         )}>
@@ -207,7 +207,7 @@ export function SkillActionCard({
         {/* 风险等级 */}
         {riskLevel !== 'safe' && (
           <span className={cn(
-            'px-1.5 py-0.5 rounded text-[10px] font-semibold',
+            'px-1.5 py-0.5 rounded-md text-[10px] font-semibold',
             riskInfo.bgColor,
             riskInfo.color
           )}>
@@ -310,7 +310,7 @@ export function SkillActionCard({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
-                      className="px-2 py-1 text-[11px] rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+                      className="px-2 py-1 text-[11px] rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
                     >
                       取消编辑
                     </button>

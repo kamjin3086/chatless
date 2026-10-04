@@ -24,7 +24,7 @@ export function SkillCard({
       onClick={onClick}
       className={cn(
         'group relative flex flex-col text-left w-full p-3 rounded-lg border transition-colors duration-150',
-        'bg-white/40 dark:bg-slate-900/40 glass-panel',
+        'bg-white/60 dark:bg-slate-900/40 glass-panel',
         'hover:border-slate-300/80 dark:hover:border-slate-600/60',
         'focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600',
         selected
@@ -74,7 +74,7 @@ export function SkillCard({
           {skill.tags.slice(0, 3).map((tag) => (
             <span
               key={tag}
-              className="text-[10px] px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+              className="text-[10px] px-1 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
             >
               {tag}
             </span>

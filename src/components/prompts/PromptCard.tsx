@@ -54,7 +54,7 @@ export function PromptCard({
     <div 
       className={cn(
         "group flex flex-col p-3 rounded-lg border transition-colors duration-150 glass-panel",
-        "bg-white/40 dark:bg-slate-900/40",
+        "bg-white/60 dark:bg-slate-900/40",
         "border-slate-200/60 dark:border-slate-700/40",
         "hover:border-slate-300/80 dark:hover:border-slate-600/60",
         onClick && "cursor-pointer"
@@ -69,13 +69,13 @@ export function PromptCard({
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); onApply(id); }}
-            className="h-6 px-2 text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors"
+            className="h-6 px-2 text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors"
           >
             应用
           </button>
           <button 
             className={cn(
-              "w-6 h-6 rounded flex items-center justify-center transition-colors",
+              "w-6 h-6 rounded-md flex items-center justify-center transition-colors",
               isFavorite 
                 ? "text-amber-500" 
                 : "text-slate-400 hover:text-amber-500"
@@ -87,7 +87,7 @@ export function PromptCard({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button 
-                className="w-6 h-6 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 flex items-center justify-center transition-colors"
+                className="w-6 h-6 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 flex items-center justify-center transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-3 w-3" />
@@ -112,7 +112,7 @@ export function PromptCard({
       )}
 
       {/* 内容预览 */}
-      <div className="rounded bg-slate-50/80 dark:bg-slate-800/40 px-2 py-1.5 mb-2 flex-1">
+      <div className="rounded-md bg-slate-50/80 dark:bg-slate-800/40 px-2 py-1.5 mb-2 flex-1">
         <pre className="whitespace-pre-wrap break-words text-[10px] leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-3 font-mono">
           {content}
         </pre>
@@ -124,7 +124,7 @@ export function PromptCard({
           {shortcuts && shortcuts.length > 0 && shortcuts.slice(0, 1).map((s) => (
             <span
               key={s}
-              className="text-[10px] px-1 py-0.5 rounded border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono"
+              className="text-[10px] px-1 py-0.5 rounded-md border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono"
             >
               /{s}
             </span>
@@ -132,7 +132,7 @@ export function PromptCard({
           {tags.slice(0, 2).map((tag) => (
             <span
               key={tag}
-              className="text-[10px] px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+              className="text-[10px] px-1 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
             >
               {tag}
             </span>

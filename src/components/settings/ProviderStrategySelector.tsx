@@ -27,7 +27,7 @@ export function ProviderStrategySelector({
 }) {
   return (
     <div className="mb-3">
-      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">默认请求策略</label>
+      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">默认请求策略</label>
       <div className="flex items-center gap-2">
         <Select
           value={value}
@@ -72,7 +72,7 @@ export function ProviderStrategySelector({
           </SelectContent>
         </Select>
       </div>
-      <p className="mt-1 text-[10px] text-gray-400">对于 New API 等聚合服务，默认策略会应用到未单独指定策略的模型上。</p>
+      <p className="mt-1 text-[10px] text-slate-400">对于 New API 等聚合服务，默认策略会应用到未单独指定策略的模型上。</p>
     </div>
   );
 }

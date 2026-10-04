@@ -8,14 +8,14 @@ const ChatLayoutClient = dynamic<{ children: React.ReactNode }>(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full bg-gray-50 dark:bg-gray-950">
+      <div className="flex h-full bg-slate-50 dark:bg-slate-950">
         {/* 聊天界面加载占位符 */}
         <div className="flex-1 py-6 px-8">
-          <div className="h-12 w-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-6"></div>
+          <div className="h-12 w-64 bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse mb-6"></div>
           <div className="space-y-4 w-full">
-            <div className="h-16 w-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
-            <div className="h-16 w-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
-            <div className="h-16 w-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+            <div className="h-16 w-full bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"></div>
+            <div className="h-16 w-full bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"></div>
+            <div className="h-16 w-full bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"></div>
           </div>
         </div>
       </div>

@@ -136,8 +136,8 @@ export default function HistoryList() {
   // 加载状态
   if (showLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50/50">
-        <div className="flex items-center gap-3 text-gray-500">
+      <div className="flex-1 flex items-center justify-center bg-slate-50/50">
+        <div className="flex items-center gap-3 text-slate-500">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span className="text-sm">加载历史记录中...</span>
         </div>
@@ -148,21 +148,21 @@ export default function HistoryList() {
   // 空状态
   if (groupedHistory.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50/50 dark:bg-gray-800/40">
-        <div className="text-center text-gray-500 max-w-md">
+      <div className="flex-1 flex items-center justify-center bg-slate-50/50 dark:bg-slate-800/40">
+        <div className="text-center text-slate-500 max-w-md">
           {searchQuery ? (
             <>
-              <Search className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <Search className="w-12 h-12 mx-auto mb-4 text-slate-300" />
               <div className="text-lg font-medium mb-2">未找到匹配的对话</div>
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-slate-400">
                 尝试使用不同的关键词或调整筛选条件
               </div>
             </>
           ) : (
             <>
-              <Archive className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <Archive className="w-12 h-12 mx-auto mb-4 text-slate-300" />
               <div className="text-lg font-medium mb-2">暂无历史记录</div>
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-slate-400">
                 开始一个新对话来创建历史记录
               </div>
             </>
@@ -174,19 +174,19 @@ export default function HistoryList() {
 
   return (
     <>
-      <div className="flex-1 bg-white dark:bg-gray-900 flex flex-col glass-surface">
+      <div className="flex-1 bg-white dark:bg-slate-900 flex flex-col glass-surface">
         {/* 统计信息条 - 更清晰的信息显示 */}
-        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/70 border-b border-gray-100 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300 flex items-center justify-between sticky top-0 z-10">
+        <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/70 border-b border-slate-100 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-4">
             <span className="font-medium">
               共 {totalConversations} 个对话
             </span>
-            <span className="text-gray-400">
+            <span className="text-slate-400">
               {groupedHistory.length} 个分组
             </span>
           </div>
           {selectedItems.length > 0 && (
-            <span className="text-slate-700 font-medium bg-slate-200/50 px-2 py-1 rounded dark:text-slate-200 dark:bg-white/10">
+            <span className="text-slate-700 font-medium bg-slate-200/50 px-2 py-1 rounded-md dark:text-slate-200 dark:bg-white/10">
               已选择 {selectedItems.length} 个
             </span>
           )}
@@ -197,12 +197,12 @@ export default function HistoryList() {
           {groupedHistory.map((group) => (
             <div key={group.date} className="mb-1">
               {/* 分组标题 - 更清晰的设计 */}
-              <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800/60 history-sticky-header border-b border-gray-100 dark:border-gray-700">
-                <div className="text-sm font-semibold text-gray-700">
+              <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/60 history-sticky-header border-b border-slate-100 dark:border-slate-700">
+                <div className="text-sm font-semibold text-slate-700">
                   {group.displayName}
                 </div>
-                <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700/70"></div>
-                <div className="text-xs text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-800/60 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700/70"></div>
+                <div className="text-xs text-slate-500 dark:text-slate-300 bg-white dark:bg-slate-800/60 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
                   {group.items.length} 个
                 </div>
               </div>
@@ -237,7 +237,7 @@ export default function HistoryList() {
           {/* 右上角关闭按钮 */}
           <button
             onClick={() => setDeleteDialogOpen(false)}
-            className="absolute top-4 right-4 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 cursor-pointer"
+            className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
             aria-label="关闭"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

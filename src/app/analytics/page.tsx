@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
   }, [searchParams]);
 
   return (
-    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 overflow-hidden glass-surface">
+    <div className="flex flex-col h-full bg-white/100 dark:bg-slate-900/95 overflow-hidden glass-surface">
       {/* 顶部 Tab */}
       <PageTabs
         tabs={tabs}
@@ -140,7 +140,7 @@ function AnalyticsContent() {
       <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
         {/* 概览统计卡片 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-medium text-slate-500">总对话数</CardTitle>
               <MessageSquare className="h-4 w-4 text-slate-500" />
@@ -153,7 +153,7 @@ function AnalyticsContent() {
             </CardContent>
           </Card>
 
-          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-medium text-slate-500">收藏对话</CardTitle>
               <Star className="h-4 w-4 text-amber-500" />
@@ -166,7 +166,7 @@ function AnalyticsContent() {
             </CardContent>
           </Card>
 
-          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-medium text-slate-500">平均消息数</CardTitle>
               <TrendingUp className="h-4 w-4 text-emerald-500" />
@@ -183,7 +183,7 @@ function AnalyticsContent() {
         {/* 详细统计图表 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* 模型使用统计 */}
-          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-slate-500 flex items-center gap-2">
                 <Bot className="h-4 w-4" />
@@ -217,7 +217,7 @@ function AnalyticsContent() {
           </Card>
 
           {/* 标签使用统计 */}
-          <Card className="glass-panel bg-white/40 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
+          <Card className="glass-panel bg-white/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-slate-500 flex items-center gap-2">
                 <Tags className="h-4 w-4" />

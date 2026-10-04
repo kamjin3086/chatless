@@ -15,7 +15,7 @@ export function CompactToolJsonLine({ tool }: { tool: CompactToolJson }) {
         onClick={() => setExpanded((v) => !v)}
         className={cn(
           "inline-flex items-center gap-1.5 max-w-full text-left text-xs text-slate-500 dark:text-slate-400",
-          "hover:text-slate-700 dark:hover:text-slate-300 transition-colors rounded px-1 -mx-1"
+          "hover:text-slate-700 dark:hover:text-slate-300 transition-colors rounded-md px-1 -mx-1"
         )}
         aria-expanded={expanded}
       >

@@ -5,19 +5,19 @@ import { PlusCircle, Eye, Play } from 'lucide-react';
 
 export default function ButtonPreviewPage() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
           按钮样式设计对比预览
         </h1>
         
         <div className="space-y-12">
           {/* 当前设计 */}
-          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+          <section className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">
               当前设计
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
               渐变背景 + 阴影效果，视觉重量较重
             </p>
             <div className="flex flex-wrap gap-4">
@@ -37,11 +37,11 @@ export default function ButtonPreviewPage() {
           </section>
 
           {/* 方案一：简约现代风 */}
-          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+          <section className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">
               方案一：简约现代风（推荐）
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
               纯色背景，白色文字，悬浮时轻微上浮 + 柔和光晕
             </p>
             <div className="flex flex-wrap gap-4">
@@ -61,11 +61,11 @@ export default function ButtonPreviewPage() {
           </section>
 
           {/* 方案二：轻盈柔和风 */}
-          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+          <section className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">
               方案二：轻盈柔和风
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
               淡色背景，深色文字，整体感觉更加轻松友好
             </p>
             <div className="flex flex-wrap gap-4">
@@ -85,11 +85,11 @@ export default function ButtonPreviewPage() {
           </section>
 
           {/* 方案三：幽灵按钮风格 */}
-          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+          <section className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">
               方案三：幽灵按钮风格
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
               透明背景 + 彩色边框，适合次要操作，悬浮时填充背景
             </p>
             <div className="flex flex-wrap gap-4">
@@ -109,11 +109,11 @@ export default function ButtonPreviewPage() {
           </section>
 
           {/* 混合方案展示 */}
-          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+          <section className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">
               推荐组合方案
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
               主要操作使用简约现代风，次要操作使用幽灵按钮，建立清晰的视觉层级
             </p>
             <div className="flex flex-wrap gap-4">
@@ -135,11 +135,11 @@ export default function ButtonPreviewPage() {
           </section>
 
           {/* 暗色模式展示 */}
-          <section className="bg-gray-800 rounded-lg p-6 shadow-sm">
+          <section className="bg-slate-800 rounded-lg p-6 shadow-sm">
             <h2 className="text-xl font-semibold mb-4 text-white">
               暗色模式效果
             </h2>
-            <p className="text-gray-300 mb-6">
+            <p className="text-slate-300 mb-6">
               在暗色背景下的按钮效果展示
             </p>
             <div className="flex flex-wrap gap-4">

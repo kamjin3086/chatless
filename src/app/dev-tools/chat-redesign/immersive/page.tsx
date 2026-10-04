@@ -75,20 +75,20 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
         onMouseEnter={() => onHoverChange(true)}
         onMouseLeave={() => onHoverChange(false)}
       >
-        <div className="w-64 h-full bg-neutral-950/95 backdrop-blur-sm flex flex-col">
+        <div className="w-64 h-full bg-slate-950/95 backdrop-blur-sm flex flex-col">
           {/* 头部 */}
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
-              <span className="text-neutral-400 text-sm">对话</span>
-              <button className="p-1.5 hover:bg-neutral-800/50 rounded transition-colors">
-                <Plus className="w-4 h-4 text-neutral-500" />
+              <span className="text-slate-400 text-sm">对话</span>
+              <button className="p-1.5 hover:bg-slate-800/50 rounded-md transition-colors">
+                <Plus className="w-4 h-4 text-slate-500" />
               </button>
             </div>
             <div className="relative">
               <input 
                 type="text"
                 placeholder="搜索"
-                className="w-full bg-neutral-900/50 rounded-lg px-3 py-2 text-sm text-neutral-300 placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-neutral-700 transition-all"
+                className="w-full bg-slate-900/50 rounded-lg px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-700 transition-all"
               />
             </div>
           </div>
@@ -101,8 +101,8 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
                 className={cn(
                   "px-3 py-2.5 rounded-lg cursor-pointer transition-all mb-0.5 text-sm",
                   conv.isActive 
-                    ? "text-neutral-100 bg-neutral-800/30" 
-                    : "text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/30"
+                    ? "text-slate-100 bg-slate-800/30" 
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/30"
                 )}
               >
                 {conv.title}
@@ -112,7 +112,7 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
 
           {/* 底部 */}
           <div className="p-4">
-            <button className="flex items-center gap-2 text-neutral-600 hover:text-neutral-400 text-sm transition-colors">
+            <button className="flex items-center gap-2 text-slate-600 hover:text-slate-400 text-sm transition-colors">
               <Settings className="w-4 h-4" />
             </button>
           </div>
@@ -132,10 +132,10 @@ function ToolCallMinimal({ calls }: { calls: typeof mockMessages[1]['toolCalls']
     <div className="mb-2">
       <button 
         onClick={() => setExpanded(!expanded)}
-        className="inline-flex items-center gap-1 text-xs text-neutral-600 hover:text-neutral-500 transition-colors"
+        className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-500 transition-colors"
       >
         {calls.every(c => c.status === 'success') ? (
-          <Check className="w-3 h-3 text-neutral-500" />
+          <Check className="w-3 h-3 text-slate-500" />
         ) : calls.some(c => c.status === 'running') ? (
           <Loader2 className="w-3 h-3 animate-spin" />
         ) : (
@@ -146,7 +146,7 @@ function ToolCallMinimal({ calls }: { calls: typeof mockMessages[1]['toolCalls']
       </button>
       
       {expanded && (
-        <div className="mt-1.5 text-xs text-neutral-600 space-y-0.5 pl-4">
+        <div className="mt-1.5 text-xs text-slate-600 space-y-0.5 pl-4">
           {calls.map((call, i) => (
             <div key={i}>{call.name} → {call.target}</div>
           ))}
@@ -173,7 +173,7 @@ function Message({ message, isFirst }: { message: typeof mockMessages[0]; isFirs
     >
       {/* 角色标识 - 仅用户消息显示，且极其微弱 */}
       {isUser && (
-        <div className="text-[10px] text-neutral-700 uppercase tracking-widest mb-2">
+        <div className="text-[10px] text-slate-700 uppercase tracking-widest mb-2">
           你
         </div>
       )}
@@ -184,7 +184,7 @@ function Message({ message, isFirst }: { message: typeof mockMessages[0]; isFirs
       {/* 消息内容 */}
       <div className={cn(
         "text-[15px] leading-[1.8] whitespace-pre-wrap",
-        isUser ? "text-neutral-200" : "text-neutral-400"
+        isUser ? "text-slate-200" : "text-slate-400"
       )}>
         {message.content}
       </div>
@@ -195,10 +195,10 @@ function Message({ message, isFirst }: { message: typeof mockMessages[0]; isFirs
           "absolute -right-12 top-0 flex flex-col gap-1 transition-opacity duration-200",
           isHovered ? "opacity-100" : "opacity-0"
         )}>
-          <button className="p-1.5 text-neutral-700 hover:text-neutral-500 transition-colors">
+          <button className="p-1.5 text-slate-700 hover:text-slate-500 transition-colors">
             <Copy className="w-3 h-3" />
           </button>
-          <button className="p-1.5 text-neutral-700 hover:text-neutral-500 transition-colors">
+          <button className="p-1.5 text-slate-700 hover:text-slate-500 transition-colors">
             <RotateCcw className="w-3 h-3" />
           </button>
         </div>
@@ -223,13 +223,13 @@ function InputArea() {
   return (
     <div className={cn(
       "p-6 transition-all duration-300",
-      isFocused && "bg-neutral-900/30"
+      isFocused && "bg-slate-900/30"
     )}>
       <div className="max-w-2xl mx-auto">
         <div className="flex items-end gap-4">
           {/* 附件按钮 - 聚焦时显示 */}
           <button className={cn(
-            "p-2 text-neutral-700 hover:text-neutral-500 transition-all shrink-0",
+            "p-2 text-slate-700 hover:text-slate-500 transition-all shrink-0",
             isFocused ? "opacity-100" : "opacity-0"
           )}>
             <Paperclip className="w-4 h-4" />
@@ -245,13 +245,13 @@ function InputArea() {
               onBlur={() => setIsFocused(false)}
               placeholder="输入消息..."
               rows={1}
-              className="w-full bg-transparent text-neutral-200 placeholder:text-neutral-700 text-[15px] resize-none focus:outline-none leading-relaxed"
+              className="w-full bg-transparent text-slate-200 placeholder:text-slate-700 text-[15px] resize-none focus:outline-none leading-relaxed"
               style={{ minHeight: '24px', maxHeight: '200px' }}
             />
             {/* 底部线 */}
             <div className={cn(
               "absolute bottom-0 left-0 right-0 h-px transition-all duration-300",
-              isFocused ? "bg-neutral-600" : "bg-neutral-800"
+              isFocused ? "bg-slate-600" : "bg-slate-800"
             )} />
           </div>
           
@@ -259,8 +259,8 @@ function InputArea() {
           <button className={cn(
             "p-2 transition-all shrink-0",
             value.trim() 
-              ? "text-neutral-200 hover:text-white" 
-              : "text-neutral-700"
+              ? "text-slate-200 hover:text-white" 
+              : "text-slate-700"
           )}>
             <Send className="w-4 h-4" />
           </button>
@@ -268,7 +268,7 @@ function InputArea() {
         
         {/* 快捷键提示 - 聚焦时显示 */}
         <div className={cn(
-          "flex items-center gap-4 mt-3 text-[10px] text-neutral-700 transition-opacity duration-300",
+          "flex items-center gap-4 mt-3 text-[10px] text-slate-700 transition-opacity duration-300",
           isFocused ? "opacity-100" : "opacity-0"
         )}>
           <span>⌘ + Enter 发送</span>
@@ -287,17 +287,17 @@ function TopBar({ isVisible }: { isVisible: boolean }) {
       "fixed top-0 left-0 right-0 z-30 transition-all duration-300",
       isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
     )}>
-      <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-b from-neutral-950 to-transparent">
+      <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-b from-slate-950 to-transparent">
         <div className="flex items-center gap-3">
-          <button className="p-2 text-neutral-600 hover:text-neutral-400 transition-colors">
+          <button className="p-2 text-slate-600 hover:text-slate-400 transition-colors">
             <Menu className="w-4 h-4" />
           </button>
-          <span className="text-neutral-400 text-sm">新对话</span>
-          <span className="text-neutral-700 text-xs">·</span>
-          <span className="text-neutral-600 text-xs">qwen3-vl-30b</span>
+          <span className="text-slate-400 text-sm">新对话</span>
+          <span className="text-slate-700 text-xs">·</span>
+          <span className="text-slate-600 text-xs">qwen3-vl-30b</span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="px-2 py-1 text-xs text-neutral-600 hover:text-neutral-400 transition-colors">
+          <button className="px-2 py-1 text-xs text-slate-600 hover:text-slate-400 transition-colors">
             提示词
           </button>
         </div>
@@ -339,12 +339,12 @@ export default function ImmersivePreview() {
   }, []);
   
   return (
-    <div className="h-screen bg-neutral-950 text-neutral-300 flex flex-col overflow-hidden">
+    <div className="h-screen bg-slate-950 text-slate-300 flex flex-col overflow-hidden">
       {/* 返回导航 - 固定在右上角 */}
       <div className="fixed top-4 right-4 z-50">
         <Link 
           href="/dev-tools/chat-redesign"
-          className="flex items-center gap-1.5 px-3 py-2 text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-600 hover:text-slate-400 transition-colors"
         >
           <ArrowLeft className="w-3 h-3" />
           <span>返回</span>
@@ -378,8 +378,8 @@ export default function ImmersivePreview() {
       </div>
 
       {/* 设计说明 */}
-      <div className="fixed bottom-4 right-4 max-w-xs p-4 bg-neutral-900/50 backdrop-blur border border-neutral-800/30 rounded-lg text-xs text-neutral-600 z-50">
-        <div className="text-neutral-400 mb-2">Immersive</div>
+      <div className="fixed bottom-4 right-4 max-w-xs p-4 bg-slate-900/50 backdrop-blur border border-slate-800/30 rounded-lg text-xs text-slate-600 z-50">
+        <div className="text-slate-400 mb-2">Immersive</div>
         <ul className="space-y-1">
           <li>• 界面元素渐隐消失</li>
           <li>• 极致留白与呼吸感</li>

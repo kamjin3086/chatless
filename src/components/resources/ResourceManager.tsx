@@ -476,7 +476,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
   }, [documents, showIndexedOnly, sortOption]);
   
   return (
-    <div className="h-full flex flex-col bg-white/95 dark:bg-slate-900/95 glass-surface">
+    <div className="h-full flex flex-col bg-white/100 dark:bg-slate-900/95 glass-surface">
       {/* 拖放上传卡片 */}
       <div className="p-4">
         <ResourceUploader onUploadSuccess={handleUploadSuccess} displayType="dropzone" />
@@ -495,7 +495,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
         <select
           value={sortOption}
           onChange={(e) => setSortOption(e.target.value)}
-          className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
+          className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
         >
           <option value="date">日期</option>
           <option value="name">名称</option>
@@ -517,10 +517,10 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       <div className="flex-1 overflow-hidden flex flex-col px-4 pb-3 pt-3">
         <Tabs defaultValue="documents" className="w-full h-full flex flex-col" onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-4 mb-2 flex-shrink-0 bg-slate-50 dark:bg-slate-800/40 p-0.5 rounded-lg h-8">
-            <TabsTrigger value="documents" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文档</TabsTrigger>
-            <TabsTrigger value="files" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文件</TabsTrigger>
-            <TabsTrigger value="chat" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">聊天文件</TabsTrigger>
-            <TabsTrigger value="knowledge" className="text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">已入库</TabsTrigger>
+            <TabsTrigger value="documents" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文档</TabsTrigger>
+            <TabsTrigger value="files" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文件</TabsTrigger>
+            <TabsTrigger value="chat" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">聊天文件</TabsTrigger>
+            <TabsTrigger value="knowledge" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">已入库</TabsTrigger>
           </TabsList>
           
           <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
@@ -634,7 +634,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
           {/* 右上角关闭按钮 */}
           <button
             onClick={() => setDeleteDialogOpen(false)}
-            className="absolute top-4 right-4 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 cursor-pointer"
+            className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
             aria-label="关闭"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

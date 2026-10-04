@@ -551,7 +551,7 @@ export function SessionParametersDialog({
       case 'model':
         return 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-300';
       case 'default':
-        return 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+        return 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
     }
   };
 
@@ -574,7 +574,7 @@ export function SessionParametersDialog({
                 <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                   {modelLabel || modelId}
                 </span>
-                <span className={cn("text-[10px] px-1.5 py-0.5 rounded", getParameterSourceColor())}>
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded-md", getParameterSourceColor())}>
                   {getParameterSourceText()}
                 </span>
               </div>
@@ -589,8 +589,8 @@ export function SessionParametersDialog({
         <Tabs value={activeTab} onValueChange={(v)=>setActiveTab(v as any)}>
           <div className="px-5 pt-2">
             <TabsList className="h-8 p-0.5 bg-slate-100/80 dark:bg-slate-800/60 rounded-md">
-              <TabsTrigger value="prompt" className="px-4 py-1 text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm">提示词</TabsTrigger>
-              <TabsTrigger value="params" className="px-4 py-1 text-xs rounded data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm">参数</TabsTrigger>
+              <TabsTrigger value="prompt" className="px-4 py-1 text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm">提示词</TabsTrigger>
+              <TabsTrigger value="params" className="px-4 py-1 text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm">参数</TabsTrigger>
             </TabsList>
           </div>
 
@@ -607,13 +607,13 @@ export function SessionParametersDialog({
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="搜索提示词..."
-                      className="pl-8 h-7 text-xs bg-white dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/40 rounded"
+                      className="pl-8 h-7 text-xs bg-white dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/40 rounded-md"
                     />
                   </div>
                   <button
                     onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
                     className={cn(
-                      "w-full flex items-center justify-center gap-1.5 px-2 py-1 text-[11px] rounded transition-colors",
+                      "w-full flex items-center justify-center gap-1.5 px-2 py-1 text-[11px] rounded-md transition-colors",
                       showFavoritesOnly
                         ? "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400"
                         : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700/40"
@@ -716,7 +716,7 @@ export function SessionParametersDialog({
                     }}
                     placeholder="请输入提示词名称"
                     className={cn(
-                      "h-8 text-sm border-slate-200/60 dark:border-slate-700/40 rounded",
+                      "h-8 text-sm border-slate-200/60 dark:border-slate-700/40 rounded-md",
                       nameInvalid && "border-red-400 focus:border-red-400"
                     )}
                   />
@@ -809,7 +809,7 @@ export function SessionParametersDialog({
 
               <Input
                 type="number"
-                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded-md"
                 min={MODEL_PARAMETER_LIMITS.temperature.inputMin}
                 max={MODEL_PARAMETER_LIMITS.temperature.inputMax}
                 step={MODEL_PARAMETER_LIMITS.temperature.step}
@@ -871,7 +871,7 @@ export function SessionParametersDialog({
 
               <Input
                 type="number"
-                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded-md"
                 min={MODEL_PARAMETER_LIMITS.maxTokens.inputMin}
                 max={MODEL_PARAMETER_LIMITS.maxTokens.inputMax}
                 step={MODEL_PARAMETER_LIMITS.maxTokens.step}
@@ -926,7 +926,7 @@ export function SessionParametersDialog({
 
               <Input
                 type="number"
-                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded-md"
                 min={MODEL_PARAMETER_LIMITS.topP.inputMin}
                 max={MODEL_PARAMETER_LIMITS.topP.inputMax}
                 step={MODEL_PARAMETER_LIMITS.topP.step}
@@ -981,7 +981,7 @@ export function SessionParametersDialog({
 
               <Input
                 type="number"
-                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded-md"
                 min={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMin}
                 max={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMax}
                 step={MODEL_PARAMETER_LIMITS.frequencyPenalty.step}
@@ -1036,7 +1036,7 @@ export function SessionParametersDialog({
 
               <Input
                 type="number"
-                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded"
+                className="w-16 h-6 text-xs text-center border-slate-200/60 dark:border-slate-700/40 rounded-md"
                 min={MODEL_PARAMETER_LIMITS.presencePenalty.inputMin}
                 max={MODEL_PARAMETER_LIMITS.presencePenalty.inputMax}
                 step={MODEL_PARAMETER_LIMITS.presencePenalty.step}
@@ -1055,12 +1055,12 @@ export function SessionParametersDialog({
               />
               
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableTopK === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+                <Label className={cn("text-sm font-medium", parameters.enableTopK === false ? "text-slate-400" : "text-slate-700 dark:text-slate-300")}>
                   Top K
               </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-4 h-4 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-xs">从概率最高的 K 个候选词中选择。值越小越保守。</p>
@@ -1077,7 +1077,7 @@ export function SessionParametersDialog({
                   "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white",
                   "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500",
                   "[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-all",
-                  "disabled:[&::-webkit-slider-thumb]:bg-gray-300 disabled:[&::-webkit-slider-thumb]:border-gray-400"
+                  "disabled:[&::-webkit-slider-thumb]:bg-slate-300 disabled:[&::-webkit-slider-thumb]:border-slate-400"
                 )}
                 min={MODEL_PARAMETER_LIMITS.topK.min}
                 max={MODEL_PARAMETER_LIMITS.topK.max}
@@ -1114,12 +1114,12 @@ export function SessionParametersDialog({
               />
               
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableMinP === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+                <Label className={cn("text-sm font-medium", parameters.enableMinP === false ? "text-slate-400" : "text-slate-700 dark:text-slate-300")}>
                   Min P
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-4 h-4 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-xs">最小概率阈值，过滤掉概率过低的候选词。</p>
@@ -1136,7 +1136,7 @@ export function SessionParametersDialog({
                   "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white",
                   "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-blue-500",
                   "[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-all",
-                  "disabled:[&::-webkit-slider-thumb]:bg-gray-300 disabled:[&::-webkit-slider-thumb]:border-gray-400"
+                  "disabled:[&::-webkit-slider-thumb]:bg-slate-300 disabled:[&::-webkit-slider-thumb]:border-slate-400"
                 )}
                 min={MODEL_PARAMETER_LIMITS.minP.min}
                 max={MODEL_PARAMETER_LIMITS.minP.max}
@@ -1199,7 +1199,7 @@ export function SessionParametersDialog({
                   }}
                   disabled={parameters.enableThinking === false}
                   className={cn(
-                    "px-2.5 py-1 text-[11px] rounded transition-colors",
+                    "px-2.5 py-1 text-[11px] rounded-md transition-colors",
                     parameters.thinking 
                       ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400" 
                       : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
@@ -1246,7 +1246,7 @@ export function SessionParametersDialog({
                   }}
                   disabled={parameters.enableStreaming === false}
                   className={cn(
-                    "px-2.5 py-1 text-[11px] rounded transition-colors",
+                    "px-2.5 py-1 text-[11px] rounded-md transition-colors",
                     parameters.streaming 
                       ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" 
                       : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
@@ -1267,12 +1267,12 @@ export function SessionParametersDialog({
               />
               
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Label className={cn("text-sm font-medium", parameters.enableFormat === false ? "text-gray-400" : "text-gray-700 dark:text-gray-300")}>
+                <Label className={cn("text-sm font-medium", parameters.enableFormat === false ? "text-slate-400" : "text-slate-700 dark:text-slate-300")}>
                   输出格式
                 </Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                    <HelpCircle className="w-4 h-4 text-slate-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-xs">指定模型输出格式。选择"json"可强制模型返回JSON格式的内容。</p>
@@ -1292,8 +1292,8 @@ export function SessionParametersDialog({
                   className={cn(
                     "ml-auto px-3 py-1.5 text-sm border rounded-md w-full",
                     parameters.enableFormat === false 
-                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:border-gray-700"
-                      : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                      ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed dark:bg-slate-800 dark:border-slate-700"
+                      : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600"
                   )}
                 >
                   <option value="none">无限制</option>
@@ -1310,7 +1310,7 @@ export function SessionParametersDialog({
                 <button 
                   type="button" 
                   onClick={addCustomParameter}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   <Plus className="w-3 h-3" />
                   添加参数
@@ -1318,18 +1318,18 @@ export function SessionParametersDialog({
               </div>
               
               {customParameters.map((param, index) => (
-                <div key={index} className="flex items-center gap-2 p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded">
+                <div key={index} className="flex items-center gap-2 p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded-md">
                   <Input
                     placeholder="参数名"
                     value={param.key}
                     onChange={(e) => updateCustomParameter(index, 'key', e.target.value)}
-                    className="w-28 h-6 text-xs border-slate-200/60 dark:border-slate-700/40 rounded"
+                    className="w-28 h-6 text-xs border-slate-200/60 dark:border-slate-700/40 rounded-md"
                   />
                   <Input
                     placeholder="参数值"
                     value={param.value}
                     onChange={(e) => updateCustomParameter(index, 'value', e.target.value)}
-                    className="flex-1 h-6 text-xs border-slate-200/60 dark:border-slate-700/40 rounded"
+                    className="flex-1 h-6 text-xs border-slate-200/60 dark:border-slate-700/40 rounded-md"
                   />
                   <div className="flex items-center gap-1.5">
                     <Checkbox
@@ -1354,7 +1354,7 @@ export function SessionParametersDialog({
                   <span className="text-[10px] text-slate-400">继承自模型（未覆盖）</span>
                   <div className="mt-1 space-y-1">
                     {modelInheritedParameters.map((p) => (
-                      <div key={p.key} className="flex items-center justify-between text-[11px] px-2 py-1.5 bg-slate-50/50 dark:bg-slate-800/20 rounded">
+                      <div key={p.key} className="flex items-center justify-between text-[11px] px-2 py-1.5 bg-slate-50/50 dark:bg-slate-800/20 rounded-md">
                         <div className="truncate">
                           <span className="font-medium text-slate-600 dark:text-slate-300 mr-1.5">{p.key}</span>
                           <span className="text-slate-500 dark:text-slate-400">{p.value}</span>
@@ -1375,7 +1375,7 @@ export function SessionParametersDialog({
             {/* 预览JSON */}
             <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-1.5">
               <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">参数预览</Label>
-              <div className="p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded">
+              <div className="p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded-md">
                 <pre className="text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap overflow-auto max-h-32 font-mono">
                   {previewJson}
                 </pre>
@@ -1397,14 +1397,14 @@ export function SessionParametersDialog({
               <>
                 <button 
                   onClick={handleResetToModelDefault}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
                   重置为模型默认
                 </button>
                 <button 
                   onClick={handleResetToSystemDefault}
-                  className="px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   重置为系统默认
                 </button>
@@ -1413,14 +1413,14 @@ export function SessionParametersDialog({
               <>
                 <button 
                   onClick={()=>setSystemPromptText('')}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
                   重置提示词
                 </button>
                 <button 
                   onClick={()=>{ window.open('/prompts','_blank'); }}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   <Settings className="w-3 h-3" />
                   管理已保存提示词

@@ -93,7 +93,7 @@ export function AttachedDocumentView({ document, onRemove, className, onIndexed 
             void handleQuickIndex();
           }}
           disabled={indexing}
-          className="shrink-0 px-2 py-1 rounded text-[11px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+          className="shrink-0 px-2 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
           title="文档较大，建议索引到知识库"
         >
           {indexing ? (
@@ -112,7 +112,7 @@ export function AttachedDocumentView({ document, onRemove, className, onIndexed 
             e.stopPropagation();
             onRemove();
           }}
-        className="shrink-0 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+        className="shrink-0 p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
         title="移除"
         >
           <X className="w-3.5 h-3.5" />

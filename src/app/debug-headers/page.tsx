@@ -105,7 +105,7 @@ export default function DebugHeadersPage() {
           {result && (
             <div className="mt-4">
               <h3 className="text-lg font-semibold mb-2">结果:</h3>
-              <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-96">
+              <pre className="bg-slate-100 p-4 rounded-md text-sm overflow-auto max-h-96">
                 {result}
               </pre>
             </div>

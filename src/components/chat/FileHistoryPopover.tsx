@@ -73,7 +73,7 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
           disabled={disabled}
           title="历史版本"
           aria-label="历史版本"
-          className="inline-flex items-center rounded px-1 py-0.5 text-slate-400 hover:text-slate-600
+          className="inline-flex items-center rounded-md px-1 py-0.5 text-slate-400 hover:text-slate-600
             dark:hover:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Clock className="w-3 h-3" />
@@ -89,7 +89,7 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
         {!loading && !!versions?.length && (
           <div className="max-h-56 overflow-y-auto">
             {versions.map((version) => (
-              <div key={version.id} className="flex items-center justify-between gap-2 rounded px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+              <div key={version.id} className="flex items-center justify-between gap-2 rounded-md px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/60">
                 <div className="min-w-0">
                   <div className="truncate text-[11px] text-slate-600 dark:text-slate-200">
                     {new Date(version.createdAt).toLocaleString()}
@@ -102,7 +102,7 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
                   type="button"
                   disabled={restoring === version.id}
                   onClick={() => void restore(version)}
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]
                     text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700
                     disabled:opacity-40"
                 >

@@ -32,11 +32,11 @@ export function SectionIcon({ icon: Icon, preset = "brand", className = "", size
         return "bg-gradient-to-br from-indigo-500/15 to-purple-600/15 dark:from-indigo-400/15 dark:to-purple-400/15 ring-1 ring-indigo-300/40 dark:ring-indigo-700/40";
       case "gray":
         // 改为无底色细描边，避免大片灰底影响观感
-        return "bg-transparent ring-1 ring-gray-300 dark:ring-gray-600";
+        return "bg-transparent ring-1 ring-slate-300 dark:ring-slate-600";
       case "glass":
-        return "bg-white/60 dark:bg-gray-800/40 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm ring-1 ring-white/60 dark:ring-gray-700/60";
+        return "bg-white/70 dark:bg-slate-800/40 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm ring-1 ring-white/70 dark:ring-slate-700/60";
       case "outline":
-        return "bg-transparent ring-1 ring-gray-300 dark:ring-gray-600";
+        return "bg-transparent ring-1 ring-slate-300 dark:ring-slate-600";
       case "brand":
       default:
         return "bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-800 dark:to-brand-900 ring-1 ring-brand-200/50 dark:ring-brand-800/40";
@@ -50,11 +50,11 @@ export function SectionIcon({ icon: Icon, preset = "brand", className = "", size
       case "indigo":
         return "text-indigo-600 dark:text-indigo-400";
       case "gray":
-        return "text-gray-600 dark:text-gray-300";
+        return "text-slate-600 dark:text-slate-300";
       case "glass":
-        return "text-gray-700 dark:text-gray-200";
+        return "text-slate-700 dark:text-slate-200";
       case "outline":
-        return "text-gray-600 dark:text-gray-300";
+        return "text-slate-600 dark:text-slate-300";
       case "brand":
       default:
         return "text-brand-600 dark:text-brand-400";

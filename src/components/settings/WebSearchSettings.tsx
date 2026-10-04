@@ -10,7 +10,7 @@ import { useWebSearchStore, type SearchProvider } from "@/store/webSearchStore";
 import { linkOpener } from "@/lib/utils/linkOpener";
 import { providerOptions } from "@/lib/websearch/registry";
 
-const inputClass = "w-full h-8 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none";
+const inputClass = "w-full h-8 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none";
 
 function Field({ label, value, type = "text", placeholder, onChange }: {
   label: string; value: string | number; type?: string; placeholder?: string;

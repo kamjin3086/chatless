@@ -414,7 +414,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
       <div className="flex items-center justify-center w-full h-full p-12">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-          <p className="text-sm text-gray-500">正在加载知识库...</p>
+          <p className="text-sm text-slate-500">正在加载知识库...</p>
         </div>
       </div>
     );
@@ -425,7 +425,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
     return (
       <div className="flex items-center justify-center w-full h-full p-12">
         <div className="text-center">
-          <p className="text-lg text-gray-500 mb-2">无法加载知识库</p>
+          <p className="text-lg text-slate-500 mb-2">无法加载知识库</p>
           <Button onClick={handleBack} variant="outline">返回</Button>
         </div>
       </div>
@@ -434,14 +434,14 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg h-full flex flex-col glass-panel">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden shadow-lg h-full flex flex-col glass-panel">
         {/* 头部 */}
         <div className="app-topbar flex h-12 shrink-0 items-center justify-between border-b border-slate-200/70 px-4 sm:px-5 dark:border-slate-700/60">
           <div className="flex items-center gap-2 sm:gap-3">
             <TooltipProvider delayDuration={100}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={handleBack} className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary cursor-pointer">
+                  <Button variant="ghost" size="icon" onClick={handleBack} className="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary cursor-pointer">
                     <ArrowLeft className="h-5 w-5" />
                   </Button>
                 </TooltipTrigger>
@@ -451,7 +451,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
               </Tooltip>
             </TooltipProvider>
             <div className="flex flex-col">
-              <h2 className="text-base font-semibold leading-tight text-gray-800 dark:text-gray-100">{knowledgeBase.name}</h2>
+              <h2 className="text-base font-semibold leading-tight text-slate-800 dark:text-slate-100">{knowledgeBase.name}</h2>
             </div>
           </div>
           <TooltipProvider delayDuration={100}>
@@ -471,7 +471,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary focus:outline-none focus:ring-0 focus:ring-offset-0"
+                        className="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary focus:outline-none focus:ring-0 focus:ring-offset-0"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -522,7 +522,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
         <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
           {/* 知识库信息 */}
           <div className="mb-8">
-            <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300">知识库信息</h2>
+            <h2 className="text-base font-semibold mb-3 text-slate-700 dark:text-slate-300">知识库信息</h2>
             <ContextMenu
               menuItems={createKnowledgeMenuItems(knowledgeBase, { onRename: () => setEditDialogOpen(true), onDelete: handleDelete })}
             >
@@ -533,7 +533,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
           {/* 文档列表 */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">包含的文档</h2>
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">包含的文档</h2>
               <div className="flex items-center gap-2">
                 <IconButton icon={FilePlus2} onClick={handleAddDocument} title="添加文档" />
                 <IconButton icon={RotateCcw} onClick={() => setRebuildDialogOpen(true)} title="重建索引" />
@@ -634,13 +634,13 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
             ) : (
               <div className="space-y-2">
                 <p>{rebuildMessage}</p>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                   <div
                     className="bg-blue-600 h-2 rounded-full transition-all duration-200"
                     style={{ width: `${rebuildProgress}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-500">{rebuildProgress}%</p>
+                <p className="text-xs text-slate-500">{rebuildProgress}%</p>
               </div>
             )}
           </AlertDialogDescription>
@@ -664,7 +664,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
           {/* 右上角关闭按钮 */}
           <button
             onClick={() => setDeleteDialogOpen(false)}
-            className="absolute top-4 right-4 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 cursor-pointer"
+            className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
             aria-label="关闭"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

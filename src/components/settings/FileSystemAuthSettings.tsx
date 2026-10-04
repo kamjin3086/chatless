@@ -202,7 +202,7 @@ export function FileSystemAuthSettings() {
                         {getDisplayName(d.path, d.alias)}
                       </span>
                       {getSourceLabel(d.source) && (
-                        <span className="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                        <span className="text-[9px] px-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-400">
                           {getSourceLabel(d.source)}
                         </span>
                       )}
@@ -237,7 +237,7 @@ export function FileSystemAuthSettings() {
                         await updateDirectory(d.id, { alias: raw.trim() ? normalizeAlias(raw) : "" });
                         await syncToBackend();
                       }}
-                      className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
+                      className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
                       title="编辑别名"
                     >
                       <Edit2 className="h-3 w-3" />
@@ -250,7 +250,7 @@ export function FileSystemAuthSettings() {
                         await syncToBackend();
                       }}
                       className={cn(
-                        "h-6 px-1 text-[10px] rounded transition-colors",
+                        "h-6 px-1 text-[10px] rounded-md transition-colors",
                         d.permissions.write 
                           ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20" 
                           : "text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
@@ -267,7 +267,7 @@ export function FileSystemAuthSettings() {
                         await syncToBackend();
                       }}
                       className={cn(
-                        "h-6 px-1 text-[10px] rounded transition-colors",
+                        "h-6 px-1 text-[10px] rounded-md transition-colors",
                         d.permissions.delete 
                           ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" 
                           : "text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
@@ -281,7 +281,7 @@ export function FileSystemAuthSettings() {
                         await removeDirectory(d.id);
                         await syncToBackend();
                       }}
-                      className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                       title="移除"
                     >
                       <Trash2 className="h-3 w-3" />

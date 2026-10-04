@@ -158,7 +158,7 @@ export function AboutSupportSettings() {
           {/* 左侧：Logo和艺术字 */}
           <div className="flex flex-col items-center text-center md:text-left md:items-start">
             {/* 应用Logo */}
-            <div className="w-14 h-14 rounded-xl border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center mb-3 bg-white/40 dark:bg-white/5">
+            <div className="w-14 h-14 rounded-xl border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center mb-3 bg-white/60 dark:bg-white/5">
               <img className="p-1.5" src="/logo.svg" alt="logo" width={56} height={56} />
             </div>
             
@@ -176,20 +176,20 @@ export function AboutSupportSettings() {
           
           {/* 右侧：应用信息 */}
           <div className="flex-1 text-center md:text-left">
-            <h2 className="italic text-lg text-gray-900 dark:text-gray-100 mb-1">
+            <h2 className="italic text-lg text-slate-900 dark:text-slate-100 mb-1">
               {APP_INFO.name}
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
               v{versionInfo.version} · Build {versionInfo.build}
               {notLatest && (
                 <span className="ml-2 inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
                   当前不是最新版本（可用：{notLatest.version}）
-                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded bg-slate-200/70 text-slate-600 dark:bg-white/10 dark:text-slate-300 text-[10px] font-semibold align-middle">NEW</span>
+                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-200/70 text-slate-600 dark:bg-white/10 dark:text-slate-300 text-[10px] font-semibold align-middle">NEW</span>
                 </span>
               )}
             </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
               {APP_INFO.description}
             </p>
             {/* 操作区：按钮 + 勾选框 */}
@@ -198,12 +198,12 @@ export function AboutSupportSettings() {
                 onClick={handleCheckUpdate}
                 variant="outline"
                 size="sm"
-                className="bg-white/50 dark:bg-white/5 border-slate-300/70 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-white/10"
+                className="bg-white/60 dark:bg-white/5 border-slate-300/70 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-white/10"
               >
                 检查更新
               </Button>
 
-              <Label htmlFor="only-check-update" className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 select-none cursor-pointer">
+              <Label htmlFor="only-check-update" className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-500 select-none cursor-pointer">
                 <Checkbox
                   id="only-check-update"
                   checked={onlyCheckDev}
@@ -229,7 +229,7 @@ export function AboutSupportSettings() {
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 帮助中心 */}
-          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
             <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">帮助中心</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               查找使用教程和常见问题
@@ -243,7 +243,7 @@ export function AboutSupportSettings() {
           </div>
 
           {/* 提交反馈 */}
-          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
             <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">意见反馈</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               分享使用体验，报告问题或提出建议
@@ -257,7 +257,7 @@ export function AboutSupportSettings() {
           </div>
 
           {/* 官方网站 */}
-          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
             <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">官方网站</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               了解更多产品信息和最新动态
@@ -271,7 +271,7 @@ export function AboutSupportSettings() {
           </div>
 
           {/* 加入社区 */}
-          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/25 dark:hover:bg-white/[0.07] transition-colors")}>
+          <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
             <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">用户社区</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
               与其他用户交流使用心得和技巧
@@ -287,18 +287,18 @@ export function AboutSupportSettings() {
       </section>
 
       {/* 法律信息 */}
-      <footer className="pt-4 mt-20 text-center text-xs text-gray-400 dark:text-gray-500">
+      <footer className="pt-4 mt-20 text-center text-xs text-slate-400 dark:text-slate-500">
         <div className="space-x-3">
           <button
             onClick={() => handleOpenLink(APP_INFO.terms)}
-            className="hover:text-gray-600 dark:hover:text-gray-300 hover:underline"
+            className="hover:text-slate-600 dark:hover:text-slate-300 hover:underline"
           >
             服务条款
           </button>
           <span>&middot;</span>
           <button
             onClick={() => handleOpenLink(APP_INFO.privacy)}
-            className="hover:text-gray-600 dark:hover:text-gray-300 hover:underline"
+            className="hover:text-slate-600 dark:hover:text-slate-300 hover:underline"
           >
             隐私政策
           </button>
