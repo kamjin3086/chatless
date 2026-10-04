@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
@@ -114,6 +114,13 @@ export default function ChatPage() {
   const [editingMessage, setEditingMessage] = useState<EditingMessageData | null>(null);
   
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  // 滚动容器元素本身：Virtuoso 的 customScrollParent 必须在挂载时确定，
+  // 所以用 state 拿到元素后再渲染消息列表（ref 首次渲染时还是 null）。
+  const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
+  const attachScrollContainer = useCallback((el: HTMLDivElement | null) => {
+    scrollContainerRef.current = el;
+    setScrollParent(el);
+  }, []);
 
   const {
     messageRefs,
@@ -327,11 +334,12 @@ export default function ChatPage() {
           <div className="relative flex-1 min-h-0">
           <div
             className="absolute inset-0 custom-scrollbar"
-            ref={scrollContainerRef}
+            ref={attachScrollContainer}
             onMouseEnter={() => { if (scrollContainerRef.current) scrollContainerRef.current.style.overflowY = 'auto'; }}
             onMouseLeave={() => { if (scrollContainerRef.current) scrollContainerRef.current.style.overflowY = 'hidden'; }}
             style={{ overflowY: 'hidden', scrollbarGutter: 'stable' }}
           >
+            {scrollParent && (
             <ChatMessageList
               chatId={currentConversationId}
               messages={liveMessages}
@@ -342,7 +350,7 @@ export default function ChatPage() {
               onSaveThinkingDuration={handleSaveThinkingDuration}
               messageRefs={messageRefs}
               messagesEndRef={managedEndRef}
-              scrollParentRef={scrollContainerRef}
+              scrollParent={scrollParent}
               onRegisterScrollToMessage={registerScrollToMessage}
               shouldFollowOutput={shouldFollowOutput}
               onPromptClick={handleEmptyStatePromptClick}
@@ -353,6 +361,7 @@ export default function ChatPage() {
               return idx >= 0 ? idx : undefined as any;
             })()}
             />
+            )}
             {/* managedEndRef 已由组件内部渲染，无需此处额外 div */}
           </div>
           {/* 新消息指示器 - 用户查看历史消息时有新消息到达 */}
