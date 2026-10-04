@@ -36,15 +36,11 @@ pub const CORNER_RADIUS: f64 = 10.0;
 /// in `setup`).
 pub trait NativeWindow {
   fn ns_handle(&self) -> tauri::Result<*mut c_void>;
-  fn fills_screen(&self) -> bool;
 }
 
 impl<R: Runtime> NativeWindow for Window<R> {
   fn ns_handle(&self) -> tauri::Result<*mut c_void> {
     self.ns_window()
-  }
-  fn fills_screen(&self) -> bool {
-    self.is_maximized().unwrap_or(false) || self.is_fullscreen().unwrap_or(false)
   }
 }
 
@@ -52,9 +48,21 @@ impl<R: Runtime> NativeWindow for tauri::WebviewWindow<R> {
   fn ns_handle(&self) -> tauri::Result<*mut c_void> {
     self.ns_window()
   }
-  fn fills_screen(&self) -> bool {
-    self.is_maximized().unwrap_or(false) || self.is_fullscreen().unwrap_or(false)
-  }
+}
+
+/// NSWindowStyleMaskFullScreen.
+const NS_WINDOW_STYLE_MASK_FULL_SCREEN: usize = 1 << 14;
+
+/// Whether the window fills the screen, read straight from AppKit.
+///
+/// This runs from `on_window_event`, i.e. while Tauri is already inside its
+/// event loop, so it must not call back into Tauri: `is_maximized` /
+/// `is_fullscreen` post a message to that same loop and wait for the reply,
+/// which the loop cannot deliver while it is still running this callback.
+unsafe fn fills_screen(ns_window: *mut Object) -> bool {
+  let zoomed: bool = msg_send![ns_window, isZoomed];
+  let mask: usize = msg_send![ns_window, styleMask];
+  zoomed || (mask & NS_WINDOW_STYLE_MASK_FULL_SCREEN) != 0
 }
 
 /// Raw `NSWindow`, or `None` when it is not available (yet).
@@ -137,10 +145,10 @@ fn apply_raw(ns_window: Option<*mut Object>) {
 /// fullscreen), where a radius would only cut slivers out of the display edges.
 /// Cheap and idempotent; safe to call on every resize.
 pub fn sync_corner_radius<W: NativeWindow>(window: &W) {
-  let filling = window.fills_screen();
   let Some(ns_window) = to_ptr(window.ns_handle()) else {
     return;
   };
+  let filling = unsafe { fills_screen(ns_window) };
 
   let radius = if filling { 0.0 } else { CORNER_RADIUS };
 
