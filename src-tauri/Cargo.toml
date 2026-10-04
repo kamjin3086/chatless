@@ -96,6 +96,10 @@ tauri-plugin-shell = "2"
 # scoped to the macOS target.
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri = { version = "2", features = ["macos-private-api"] }
+# Needed to touch NSWindow/NSView/CALayer directly for the window corners; see
+# src/macos_window.rs.
+objc = "0.2"
+
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # 锁定windows版本以解决冲突
