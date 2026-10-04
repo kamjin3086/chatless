@@ -395,6 +395,17 @@ jobs:
           TAURI_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
          
+      - name: Verify macOS application signature
+        if: ${{ matrix.platform == 'macos' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/release/bundle/macos/Chatless.app"
+          test -d "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --display --verbose=2 "$app"
+          echo "::notice::The application is ad-hoc signed, not Apple notarized. Gatekeeper may still require user approval."
+
       - name: List generated bundles (macOS only)
         if: ${{ matrix.platform == 'macos' }}
         run: |
@@ -446,6 +457,13 @@ jobs:
           echo "Test artifacts cleaned"
         shell: bash
       
+      - name: Package Windows no-install ZIP
+        if: ${{ matrix.os == 'windows-2022' }}
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: ./scripts/package-windows-portable.ps1 -Version $env:RELEASE_VERSION
+
       - name: Upload artifacts (filtered bundles only)
         uses: actions/upload-artifact@v4
         with:
@@ -470,6 +488,7 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/msi/*.msi.sig
+            src-tauri/target/release/bundle/portable/*_portable.zip
             src-tauri/target/release/bundle/**/*.sha256*
           retention-days: 7
 
@@ -820,6 +839,7 @@ jobs:
             artifacts/**/*.msi.sig
             artifacts/**/*.nsis.zip
             artifacts/**/*.nsis.zip.sig
+            artifacts/**/*_portable.zip
             artifacts/**/*.sha256*
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
@@ -1032,6 +1052,7 @@ jobs:
             "*.msi.sig"
             "*.nsis.zip"
             "*.nsis.zip.sig"
+            "*_portable.zip"
             "*.sha256*"
             "update.json"
             "update-proxy.json"

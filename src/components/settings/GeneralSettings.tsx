@@ -146,6 +146,11 @@ export function GeneralSettings() {
             onChange={(v) => ui.setShowCloseConfirmation(v)}
           />
           <ToggleSwitch
+            label={t('settings.general.closeToTray')}
+            checked={ui.closeToTray}
+            onChange={ui.setCloseToTray}
+          />
+          <ToggleSwitch
             label="启用快捷指令面板"
             checked={ui.cmdPaletteEnabled}
             onChange={(v) => ui.setCmdPaletteEnabled(v)}

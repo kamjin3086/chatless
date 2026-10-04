@@ -14,6 +14,10 @@ class SystemTrayManager {
   private tray: TrayIcon | null = null;
   private isInitialized = false;
 
+  isReady(): boolean {
+    return this.isInitialized && this.tray !== null;
+  }
+
   // 初始化系统托盘
   async initialize() {
     if (this.isInitialized) return;

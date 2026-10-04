@@ -14,6 +14,7 @@ const zhCN: TranslationDict = {
   'settings.general.theme': '主题模式',
   'settings.general.nightBrightness': '夜间亮度',
   'settings.general.minimizeToTray': '点击最小化时隐藏到系统托盘',
+  'settings.general.closeToTray': '关闭窗口时隐藏到系统托盘（从托盘菜单退出）',
   'settings.general.closeConfirm': '关闭时显示确认',
   'tray.newChat': '新建聊天',
   'tray.minimize': '最小化到托盘',

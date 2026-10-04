@@ -97,6 +97,20 @@ export class AppCleanupService {
         const { useLocaleStore } = await import('@/store/localeStore');
         const uiPreferences = useUiPreferences.getState();
         const t = useLocaleStore.getState().t;
+
+        if (uiPreferences.closeToTray) {
+          const { trayManager } = await import('@/lib/tray');
+          // Never hide the only window if the tray failed to initialize.
+          if (trayManager.isReady()) {
+            event.preventDefault();
+            try {
+              await currentWindow.hide();
+            } catch (error) {
+              console.warn('隐藏窗口到托盘失败:', error);
+            }
+            return;
+          }
+        }
         
         if (uiPreferences.showCloseConfirmation) {
           const confirmed = await confirm(t('dialog.closeApp.message'), {

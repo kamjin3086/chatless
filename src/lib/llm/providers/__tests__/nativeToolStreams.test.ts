@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeepSeekProvider } from '../DeepSeekProvider';
 import { OpenAICompatibleProvider } from '../OpenAICompatibleProvider';
 
@@ -14,6 +14,7 @@ vi.mock('../thinking', () => ({ ThinkingStrategyFactory: {
 } }));
 
 beforeEach(() => vi.resetAllMocks());
+afterEach(() => vi.unstubAllGlobals());
 const delta = (value: unknown, finish_reason: string | null = null) => JSON.stringify({ choices: [{ delta: value, finish_reason }] });
 const call = { tool_calls: [{ index: 0, id: 'a', function: { name: 'fs__write', arguments: '{"path":"a"}' } }] };
 
@@ -87,6 +88,7 @@ describe('native provider stream contracts', () => {
     // Regression: the transport close produced a second, vaguer error that
     // replaced the server's real message in the UI.
     mock.fetch.mockRejectedValue(new Error('no tauri transport'));
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('no browser transport')));
     mock.connect.mockImplementation(async (_config, cb) => {
       cb.onError(new Error('HTTP 400 Bad Request: {"error":{"message":"context length exceeded"}}'));
       cb.onClose();

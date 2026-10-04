@@ -15,6 +15,7 @@ export type TranslationKey =
   | 'settings.general.nightBrightness'
   | 'settings.general.minimizeToTray'
   | 'settings.general.closeConfirm'
+  | 'settings.general.closeToTray'
   | 'tray.newChat'
   | 'tray.minimize'
   | 'tray.settings'
