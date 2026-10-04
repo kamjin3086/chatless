@@ -1624,6 +1624,27 @@ html.dark:not(.glass-ui) body {
   opacity: var(--night-overlay, 0);
 }
 
+/*
+ * Window corners. With `decorations: false` macOS hands us a borderless, square
+ * window, so the shape has to come from what we paint: the window itself is
+ * transparent (see `transparent` in tauri.conf.json) and every layer that
+ * reaches the window edge is rounded here. 10px reads like a native window
+ * without looking over-rounded; change --window-radius to taste.
+ *
+ * Gated on `custom-titlebar-left`, i.e. the custom title bar on macOS, so the
+ * Windows/Linux window shape stays exactly as it was.
+ */
+html.custom-titlebar-left {
+  --window-radius: 10px;
+}
+
+html.custom-titlebar-left,
+html.custom-titlebar-left body,
+html.custom-titlebar-left .glass-wallpaper,
+html.custom-titlebar-left .night-overlay {
+  border-radius: var(--window-radius);
+}
+
 html.custom-titlebar {
   --titlebar-height: 32px;
   --titlebar-slot: 7.75rem;

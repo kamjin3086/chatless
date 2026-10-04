@@ -20,7 +20,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = [ "macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio-rustls"] }
@@ -90,6 +90,13 @@ kuchiki = "0.8"
 tauri-plugin-shell = "2"
 
 # 仅在Windows平台添加windows依赖
+# The window is transparent so the macOS corners can be rounded in CSS (a
+# borderless window is square). That needs Tauri's private-API feature, which
+# would otherwise change what the Windows/Linux builds compile in, so it is
+# scoped to the macOS target.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 # 锁定windows版本以解决冲突
 windows = { version = "=0.61.1", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_ProcessStatus"] }
