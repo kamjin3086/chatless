@@ -23,7 +23,8 @@
         "closable": true,
         "decorations": false,
         "shadow": true,
-        "backgroundColor": "#0f172a"
+        "backgroundColor": "#0f172a",
+        "transparent": true
       }
     ],
     "security": {
@@ -31,7 +32,8 @@
       "capabilities": [
         "main-capability"
       ]
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "createUpdaterArtifacts": true

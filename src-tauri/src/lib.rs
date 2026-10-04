@@ -1,4 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+#[cfg(target_os = "macos")]
+mod macos_window;
+
 use anyhow::Result;
 use log::LevelFilter;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -127,6 +130,16 @@ pub fn run() {
           use tauri_plugin_window_state::WindowExt;
           let _ = win.restore_state(flags);
           let _ = win.set_decorations(false);
+
+          // Borderless windows get no corners from macOS, and the configured
+          // window background colour would hide them even if they did. See
+          // src/macos_window.rs.
+          #[cfg(target_os = "macos")]
+          {
+            macos_window::apply(&win);
+            // The restored window state may already be maximized.
+            macos_window::sync_corner_radius(&win);
+          }
         }
       }
       // 尝试在后台线程初始化 ONNX Runtime，避免阻塞启动
@@ -167,6 +180,18 @@ pub fn run() {
       // 托盘图标统一由前端控制，避免与后端重复创建导致出现多个托盘图标
 
       Ok(())
+    })
+    .on_window_event(|window, event| {
+      #[cfg(target_os = "macos")]
+      {
+        if matches!(event, tauri::WindowEvent::Resized(_)) {
+          macos_window::sync_corner_radius(window);
+        }
+      }
+      #[cfg(not(target_os = "macos"))]
+      {
+        let _ = (window, event);
+      }
     })
     // 启用 Tauri Updater 插件（仅桌面平台有效）
     .plugin(tauri_plugin_updater::Builder::new().build())
