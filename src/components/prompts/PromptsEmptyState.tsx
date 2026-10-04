@@ -27,7 +27,7 @@ export function PromptsEmptyState() {
           {ui?.searchQuery ? '尝试调整关键词或筛选条件' : '创建或导入提示词，快速在聊天中复用'}
         </div>
         <div className="flex items-center justify-center gap-2 mt-4">
-          <Button variant="soft" size="sm" className="h-8" onClick={() => setOpen(true)}>新建提示词</Button>
+          <Button size="sm" className="h-8 bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={() => setOpen(true)}>新建提示词</Button>
           <PromptImportExport />
         </div>
       </div>

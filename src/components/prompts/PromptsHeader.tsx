@@ -72,7 +72,7 @@ export function PromptsHeader() {
                 "h-7 px-2 text-xs rounded-md flex items-center gap-1 transition-colors",
                 ui?.favoriteOnly 
                   ? "glass-chip-active bg-slate-200/50 text-slate-700 border border-slate-300/50 dark:bg-white/10 dark:text-slate-200 dark:border-white/20"
-                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
+                  : "border border-slate-200/60 dark:border-slate-700/40 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/40"
               )}
             >
               <Star className={cn("w-3 h-3", ui?.favoriteOnly && "fill-current")} />
@@ -97,7 +97,7 @@ export function PromptsHeader() {
             <PromptImportExport />
             <button
               onClick={() => setOpen(true)}
-              className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1"
+              className="h-7 px-2.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400 rounded-md transition-colors flex items-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" />
               新建

@@ -1058,7 +1058,7 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={disabled ? "请先选择模型" : "发送消息"}
           className={cn(
-            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 py-[10px] pb-10 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[66px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
+            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
             (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-slate-900 dark:caret-slate-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-slate-900 dark:text-slate-100 tabular-nums"
           )}
           style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }}
