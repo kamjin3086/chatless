@@ -23,8 +23,18 @@
 use objc::runtime::Object;
 use objc::{class, msg_send, sel, sel_impl};
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tauri::{Runtime, Window};
+
+/// The window, captured once in `setup`.
+///
+/// Deliberately *not* looked up again later: every Tauri window accessor posts a
+/// message to the event loop and waits for the reply, and `sync_corner_radius`
+/// runs *from* that loop, where the reply can never arrive - an endless
+/// user-message loop that pins a core and starves the window (and the frontend's
+/// IPC) until nothing responds. Holding the pointer keeps that path call-free.
+static NS_WINDOW: AtomicUsize = AtomicUsize::new(0);
 
 /// Corner radius in points, matching `--window-radius` in
 /// `src/styles/globals.css` (keep the two in sync). Close to a native macOS
@@ -32,8 +42,8 @@ use tauri::{Runtime, Window};
 pub const CORNER_RADIUS: f64 = 10.0;
 
 /// The pieces of a Tauri window handle this module needs, implemented for both
-/// handle types Tauri hands out (`Window` in the event callback, `WebviewWindow`
-/// in `setup`).
+/// handle types Tauri hands out. Only ever used from `setup`, where asking Tauri
+/// for the window is safe.
 pub trait NativeWindow {
   fn ns_handle(&self) -> tauri::Result<*mut c_void>;
 }
@@ -114,7 +124,9 @@ unsafe fn round_content_view(ns_window: *mut Object, radius: f64) -> (f64, bool)
 /// Make the window see-through and round its corners. Called once, after the
 /// window exists (see `setup` in lib.rs).
 pub fn apply<W: NativeWindow>(window: &W) {
-  apply_raw(to_ptr(window.ns_handle()));
+  let handle = to_ptr(window.ns_handle());
+  NS_WINDOW.store(handle.unwrap_or(std::ptr::null_mut()) as usize, Ordering::Release);
+  apply_raw(handle);
 }
 
 fn apply_raw(ns_window: Option<*mut Object>) {
@@ -143,12 +155,18 @@ fn apply_raw(ns_window: Option<*mut Object>) {
 
 /// Keep the corners square while the window fills the screen (maximized or
 /// fullscreen), where a radius would only cut slivers out of the display edges.
-/// Cheap and idempotent; safe to call on every resize.
-pub fn sync_corner_radius<W: NativeWindow>(window: &W) {
-  let Some(ns_window) = to_ptr(window.ns_handle()) else {
+///
+/// Takes no window handle on purpose: this runs on every resize, i.e. from
+/// inside a window event callback, and must not touch Tauri (see `NS_WINDOW`).
+/// Cheap and idempotent.
+pub fn sync_corner_radius() {
+  let cached = NS_WINDOW.load(Ordering::Acquire);
+  if cached == 0 {
     return;
-  };
+  }
+  let ns_window = cached as *mut Object;
   let filling = unsafe { fills_screen(ns_window) };
+  log::debug!("[window] resize event (filling={filling})");
 
   let radius = if filling { 0.0 } else { CORNER_RADIUS };
 
@@ -167,6 +185,6 @@ pub fn sync_corner_radius<W: NativeWindow>(window: &W) {
       return;
     }
     let _: () = msg_send![layer, setCornerRadius: radius];
-    log::debug!("[window] macOS corner radius -> {radius} (filling screen: {filling})");
+    log::info!("[window] macOS corner radius -> {radius} (filling screen: {filling})");
   }
 }
