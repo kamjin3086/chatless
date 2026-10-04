@@ -70,7 +70,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
       <div className="flex flex-row items-center justify-start flex-auto min-w-0 pr-1 gap-1.5 text-sm">
         <button
           type="button"
-          className="text-left text-sm font-medium text-slate-700 dark:text-slate-300 truncate hover:text-slate-900 dark:hover:text-slate-100 rounded px-0.5"
+          className="text-left text-sm font-medium text-slate-700 dark:text-slate-300 truncate hover:text-slate-900 dark:hover:text-slate-100 rounded-md px-0.5"
           title={model.name}
           onClick={async()=>{ 
             try { 
@@ -91,7 +91,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
             { ok: !!caps.supportsVision, Icon: Camera, title: '支持视觉' },
           ];
           return (
-            <span className="inline-flex items-center gap-0.5 text-gray-400">
+            <span className="inline-flex items-center gap-0.5 text-slate-400">
               {items.filter(i=>i.ok).map((i, idx) => (
                 <i.Icon key={idx} className="w-3.5 h-3.5" title={i.title} />
               ))}
@@ -100,7 +100,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
         })()}
         {/* 策略小徽标（仅批量模式展示） */}
         {showStrategyBadge && (
-          <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] border ${strategy? 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-300' : 'border-gray-300 text-gray-400 dark:border-gray-700 dark:text-gray-400'}`}
+          <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[10px] border ${strategy? 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-300' : 'border-slate-300 text-slate-400 dark:border-slate-700 dark:text-slate-400'}`}
             title={strategy ? `当前覆盖策略：${strategy}` : '使用 Provider 默认策略'}>
             {strategy || '默认'}
           </span>
@@ -170,7 +170,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    className="cursor-pointer h-5 w-5 flex items-center justify-center rounded  dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 opacity-0 pointer-events-none group-hover/item:opacity-100 group-hover/item:pointer-events-auto focus:opacity-100 focus:pointer-events-auto transition-opacity"
+                    className="cursor-pointer h-5 w-5 flex items-center justify-center rounded-md  dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 opacity-0 pointer-events-none group-hover/item:opacity-100 group-hover/item:pointer-events-auto focus:opacity-100 focus:pointer-events-auto transition-opacity"
                     onClick={(e)=>{ e.preventDefault(); runHealthCheck(); }}
                     title=""
                   >
@@ -190,7 +190,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                       <div className="text-xs">结果：{last.ok ? '可用' : '不可用'}</div>
                       <div className="text-xs">耗时：{last.durationMs}ms{typeof last.tokenEstimate==='number' ? ` · Tokens≈${last.tokenEstimate}` : ''}</div>
                       {last.message ? <div className="text-xs text-red-500">{last.message}</div> : null}
-                      <div className="text-xs text-gray-500">点击重新检查</div>
+                      <div className="text-xs text-slate-500">点击重新检查</div>
                     </div>
                   ) : (
                     <div className="text-xs">快速健康检查 · 预计消耗 ≤ {inputTokenEst + maxOut} tokens</div>
@@ -204,7 +204,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
         {/* 先放菜单按钮 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="h-4 w-4 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-400 dark:text-gray-500">
+            <button className="h-4 w-4 flex items-center justify-center rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-400 dark:text-slate-500">
               <MoreHorizontal className="w-3 h-3" />
             </button>
           </DropdownMenuTrigger>
@@ -347,7 +347,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
             {!editingModelKey ? (
               <button
                 type="button"
-                className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+                className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400"
                 title={apiKeyValue ? '已设置模型密钥（点击修改）' : '设置模型密钥'}
                 onClick={()=>setEditingModelKey(true)}
               >
@@ -364,7 +364,7 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                 placeholder="模型 API Key (可选)"
                 className="h-7 text-xs w-40"
                 wrapperClassName="mb-0 flex-shrink-0"
-                icon={<KeyRound className="w-3 h-3 text-gray-400" />}
+                icon={<KeyRound className="w-3 h-3 text-slate-400" />}
               />
             )}
           </div>

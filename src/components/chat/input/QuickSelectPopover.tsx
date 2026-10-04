@@ -129,7 +129,7 @@ export function QuickSelectPopover({
       }}
       className={cn(
         "rounded-xl border overflow-hidden glass-overlay",
-        "bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm",
+        "bg-white/100 dark:bg-slate-900/95 backdrop-blur-sm",
         "border-slate-200 dark:border-slate-700",
         "shadow-xl shadow-slate-200/50 dark:shadow-black/30",
         "animate-in fade-in-0 slide-in-from-bottom-2 duration-150"

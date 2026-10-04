@@ -103,7 +103,7 @@ function IconButton({
       type="button"
       title={title}
       onClick={onClick}
-      className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 dark:hover:text-slate-300 dark:hover:bg-white/8 transition-colors"
+      className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 dark:hover:text-slate-300 dark:hover:bg-white/10 transition-colors"
     >
       {children}
     </button>
@@ -177,14 +177,14 @@ function InlineEditableValue({
             }
           }}
           className={cn(
-            "w-full h-8 px-2.5 pr-8 rounded-md border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-slate-800/60 text-[13px] text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-400/50",
+            "w-full h-8 px-2.5 pr-8 rounded-md border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-slate-800/60 text-[13px] text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-400/50",
             mono && "font-mono"
           )}
         />
         {secret && (
           <button
             type="button"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-600 rounded"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-md"
             title={reveal ? "隐藏" : "显示"}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setReveal((v) => !v)}
@@ -320,7 +320,7 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 dark:hover:text-slate-300 dark:hover:bg-white/8"
+                    className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 dark:hover:text-slate-300 dark:hover:bg-white/10"
                     title="实际请求地址"
                   >
                     <Eye className="w-3.5 h-3.5" />

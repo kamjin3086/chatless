@@ -97,7 +97,7 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
               <input 
                 type="text"
                 placeholder="搜索对话..."
-                className="w-full bg-white/5 rounded-xl px-3 py-2.5 pl-10 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:bg-white/8 focus:ring-1 focus:ring-violet-500/30 transition-all"
+                className="w-full bg-white/5 rounded-xl px-3 py-2.5 pl-10 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:bg-white/10 focus:ring-1 focus:ring-violet-500/30 transition-all"
               />
             </div>
           </div>

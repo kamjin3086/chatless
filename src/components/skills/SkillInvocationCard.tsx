@@ -75,8 +75,8 @@ const STATUS_CONFIG: Record<SkillExecutionStatus, {
   idle: {
     icon: Clock,
     label: '等待中',
-    color: 'text-gray-500',
-    bgColor: 'bg-gray-100 dark:bg-gray-800',
+    color: 'text-slate-500',
+    bgColor: 'bg-slate-100 dark:bg-slate-800',
   },
   pre_execute: {
     icon: Loader2,
@@ -121,8 +121,8 @@ const STATUS_CONFIG: Record<SkillExecutionStatus, {
   cancelled: {
     icon: AlertTriangle,
     label: '已取消',
-    color: 'text-gray-500',
-    bgColor: 'bg-gray-100 dark:bg-gray-800',
+    color: 'text-slate-500',
+    bgColor: 'bg-slate-100 dark:bg-slate-800',
   },
 };
 
@@ -171,7 +171,7 @@ export const SkillInvocationCard: React.FC<SkillInvocationCardProps> = ({
         isRunning && "border-purple-300 dark:border-purple-700",
         isCompleted && "border-green-300 dark:border-green-700",
         isFailed && "border-red-300 dark:border-red-700",
-        !isRunning && !isCompleted && !isFailed && "border-gray-200 dark:border-gray-700",
+        !isRunning && !isCompleted && !isFailed && "border-slate-200 dark:border-slate-700",
         className
       )}
     >
@@ -193,7 +193,7 @@ export const SkillInvocationCard: React.FC<SkillInvocationCardProps> = ({
           {/* 技能信息 */}
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+              <span className="font-medium text-sm text-slate-900 dark:text-slate-100">
                 {skillName}
               </span>
               <Badge variant="outline" className="text-xs">
@@ -216,15 +216,15 @@ export const SkillInvocationCard: React.FC<SkillInvocationCardProps> = ({
               
               {duration && (
                 <>
-                  <span className="text-gray-300 dark:text-gray-600">•</span>
-                  <span className="text-xs text-gray-500">{duration}</span>
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span className="text-xs text-slate-500">{duration}</span>
                 </>
               )}
               
               {attempts && maxAttempts && attempts > 1 && (
                 <>
-                  <span className="text-gray-300 dark:text-gray-600">•</span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span className="text-xs text-slate-500">
                     尝试 {attempts}/{maxAttempts}
                   </span>
                 </>
@@ -260,9 +260,9 @@ export const SkillInvocationCard: React.FC<SkillInvocationCardProps> = ({
           
           {onToggleExpand && (
             isExpanded ? (
-              <ChevronUp className="w-4 h-4 text-gray-400" />
+              <ChevronUp className="w-4 h-4 text-slate-400" />
             ) : (
-              <ChevronDown className="w-4 h-4 text-gray-400" />
+              <ChevronDown className="w-4 h-4 text-slate-400" />
             )
           )}
         </div>
@@ -270,24 +270,24 @@ export const SkillInvocationCard: React.FC<SkillInvocationCardProps> = ({
       
       {/* 展开的详情 */}
       {isExpanded && (
-        <div className="px-3 pb-3 pt-0 border-t border-gray-200/50 dark:border-gray-700/50">
+        <div className="px-3 pb-3 pt-0 border-t border-slate-200/50 dark:border-slate-700/50">
           {/* 错误信息 */}
           {errorMessage && (
-            <div className="mt-2 p-2 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs">
+            <div className="mt-2 p-2 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs">
               <strong>错误:</strong> {errorMessage}
             </div>
           )}
           
           {/* 结果预览 */}
           {resultPreview && (
-            <div className="mt-2 p-2 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-mono overflow-x-auto">
+            <div className="mt-2 p-2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-mono overflow-x-auto">
               {resultPreview}
             </div>
           )}
           
           {/* 无内容时显示占位 */}
           {!errorMessage && !resultPreview && (
-            <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+            <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
               {isRunning ? '执行中...' : '无详细信息'}
             </div>
           )}
@@ -304,16 +304,16 @@ export const SkillInvocationCardSkeleton: React.FC<{ className?: string }> = ({ 
   return (
     <div 
       className={cn(
-        "rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3",
+        "rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3",
         "animate-pulse",
         className
       )}
     >
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-gray-300 dark:bg-gray-600" />
+        <div className="w-8 h-8 rounded-lg bg-slate-300 dark:bg-slate-600" />
         <div className="flex flex-col gap-1.5">
-          <div className="h-4 w-32 bg-gray-300 dark:bg-gray-600 rounded" />
-          <div className="h-3 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+          <div className="h-4 w-32 bg-slate-300 dark:bg-slate-600 rounded-md" />
+          <div className="h-3 w-20 bg-slate-200 dark:bg-slate-700 rounded-md" />
         </div>
       </div>
     </div>

@@ -36,7 +36,7 @@ function AlertDialogOverlay({
     <AlertDialogPrimitive.Overlay
       data-slot="alert-dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 glass-scrim bg-black/40 dark:bg-black/60",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 glass-scrim bg-black/60 dark:bg-black/70",
         className
       )}
       {...props}
@@ -54,7 +54,7 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         className={cn(
-          "glass-overlay bg-white dark:bg-gray-900 dark:text-gray-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl border border-gray-200/80 dark:border-gray-700/70 p-6 shadow-xl duration-200 sm:max-w-md",
+          "glass-overlay bg-white dark:bg-slate-900 dark:text-slate-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/70 p-6 shadow-xl duration-200 sm:max-w-md",
           className
         )}
         {...props}
@@ -99,7 +99,7 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn("text-xl font-semibold text-gray-900 dark:text-gray-100", className)}
+      className={cn("text-xl font-semibold text-slate-900 dark:text-slate-100", className)}
       {...props}
     />
   )
@@ -114,7 +114,7 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn("text-sm text-gray-600 dark:text-gray-400 leading-relaxed", className)}
+      className={cn("text-sm text-slate-600 dark:text-slate-400 leading-relaxed", className)}
       asChild={asChild}
       {...props}
     />
@@ -139,7 +139,7 @@ function AlertDialogCancel({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Cancel>) {
   return (
     <AlertDialogPrimitive.Cancel
-      className={cn(buttonVariants({ variant: "outline" }), "border-gray-200/70 dark:border-gray-700/60 hover:bg-gray-50/70 dark:hover:bg-gray-800/60 text-gray-700 dark:text-gray-200 transition-all duration-200 cursor-pointer", className)}
+      className={cn(buttonVariants({ variant: "outline" }), "border-slate-200/70 dark:border-slate-700/60 hover:bg-slate-50/70 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-200 transition-all duration-200 cursor-pointer", className)}
       {...props}
     />
   )

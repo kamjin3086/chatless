@@ -193,7 +193,7 @@ export function SkillParameterForm({
               className={cn(error && 'border-red-500')}
             />
             {param.description && (
-              <p className="text-xs text-gray-500">{param.description}</p>
+              <p className="text-xs text-slate-500">{param.description}</p>
             )}
             {error && (
               <p className="text-xs text-red-500 flex items-center gap-1">
@@ -220,7 +220,7 @@ export function SkillParameterForm({
               className={cn(error && 'border-red-500')}
             />
             {param.description && (
-              <p className="text-xs text-gray-500">{param.description}</p>
+              <p className="text-xs text-slate-500">{param.description}</p>
             )}
             {error && (
               <p className="text-xs text-red-500 flex items-center gap-1">
@@ -249,7 +249,7 @@ export function SkillParameterForm({
               className={cn(error && 'border-red-500')}
             />
             {param.description && (
-              <p className="text-xs text-gray-500">{param.description}</p>
+              <p className="text-xs text-slate-500">{param.description}</p>
             )}
             {error && (
               <p className="text-xs text-red-500 flex items-center gap-1">
@@ -269,7 +269,7 @@ export function SkillParameterForm({
                 {param.required && <span className="text-red-500">*</span>}
               </Label>
               {param.description && (
-                <p className="text-xs text-gray-500">{param.description}</p>
+                <p className="text-xs text-slate-500">{param.description}</p>
               )}
             </div>
             <Switch
@@ -321,7 +321,7 @@ export function SkillParameterForm({
               </Select>
             )}
             {param.description && (
-              <p className="text-xs text-gray-500">{param.description}</p>
+              <p className="text-xs text-slate-500">{param.description}</p>
             )}
             {error && (
               <p className="text-xs text-red-500 flex items-center gap-1">
@@ -360,7 +360,7 @@ export function SkillParameterForm({
               ))}
             </div>
             {param.description && (
-              <p className="text-xs text-gray-500">{param.description}</p>
+              <p className="text-xs text-slate-500">{param.description}</p>
             )}
             {error && (
               <p className="text-xs text-red-500 flex items-center gap-1">
@@ -403,11 +403,11 @@ export function SkillParameterForm({
           
           {/* 高级参数（可折叠） */}
           {advancedParams.length > 0 && (
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               >
                 {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 高级选项

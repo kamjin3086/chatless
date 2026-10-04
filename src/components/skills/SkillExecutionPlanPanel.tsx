@@ -31,7 +31,7 @@ function StatusBadge({ status }: { status: SkillExecutionPlanDraft['status'] }) 
   })();
 
   return (
-    <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-semibold', cfg.cls)}>
+    <span className={cn('px-1.5 py-0.5 rounded-md text-[10px] font-semibold', cfg.cls)}>
       {cfg.label}
     </span>
   );
@@ -68,7 +68,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
     <div
       className={cn(
         'rounded-lg border border-slate-200/60 dark:border-slate-800/50',
-        'bg-white/70 dark:bg-slate-950/30',
+        'bg-white/80 dark:bg-slate-950/30',
         'overflow-hidden',
         floating && 'fixed bottom-4 left-4 w-[420px] max-h-[80vh] shadow-lg z-50',
         className
@@ -102,7 +102,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
           return (
             <div
               key={p.id}
-              className="rounded-lg border border-slate-200/60 dark:border-slate-800/50 bg-white/60 dark:bg-slate-900/10 overflow-hidden"
+              className="rounded-lg border border-slate-200/60 dark:border-slate-800/50 bg-white/70 dark:bg-slate-900/10 overflow-hidden"
             >
               <div
                 className="px-3 py-2.5 flex items-center gap-2 cursor-pointer"
@@ -135,7 +135,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
               {expanded ? (
                 <div className="px-3 pb-3 space-y-2">
                   {p.errorMessage ? (
-                    <div className="text-[12px] text-red-700 dark:text-red-300 bg-red-50/60 dark:bg-red-950/20 border border-red-200/60 dark:border-red-900/40 rounded p-2">
+                    <div className="text-[12px] text-red-700 dark:text-red-300 bg-red-50/60 dark:bg-red-950/20 border border-red-200/60 dark:border-red-900/40 rounded-md p-2">
                       {p.errorMessage}
                     </div>
                   ) : null}
@@ -144,7 +144,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                     最近更新时间：{new Date(p.createdAt).toLocaleString()}
                   </div>
 
-                  <div className="rounded border border-slate-200/60 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-950/20 p-2">
+                  <div className="rounded-md border border-slate-200/60 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-950/20 p-2">
                     <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 mb-1">步骤预览</div>
                     <ul className="text-[12px] text-slate-700 dark:text-slate-300 space-y-1">
                       {p.steps.slice(0, 6).map((s, idx) => (
@@ -166,7 +166,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <button
                       onClick={() => removePlan(p.id)}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
                       title="删除计划"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -177,7 +177,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                       onClick={() => void handleRun(p.id)}
                       disabled={!canRun}
                       className={cn(
-                        'flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold transition-colors',
+                        'flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors',
                         canRun
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
                           : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed'

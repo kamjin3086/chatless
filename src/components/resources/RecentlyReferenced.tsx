@@ -53,10 +53,10 @@ export function RecentlyReferenced({ references, onNavigate }: RecentlyReference
             {visibleRefs.map(ref => (
               <div
                 key={ref.id}
-                className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
                 onClick={() => onNavigate && (onNavigate as any)(ref.conversationId)}
               >
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-slate-100 dark:bg-slate-800">
+                <div className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
                   {getIcon(ref.type)}
                 </div>
                 <div className="min-w-0 flex-1">

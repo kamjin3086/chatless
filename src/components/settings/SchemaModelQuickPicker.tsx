@@ -36,12 +36,12 @@ export default function SchemaModelQuickPicker({ className }: SchemaModelQuickPi
 
   return (
     <div className={className}>
-      <div className="text-xs text-gray-500 mb-1">AI 解析模型（从全部 Provider 选择）</div>
+      <div className="text-xs text-slate-500 mb-1">AI 解析模型（从全部 Provider 选择）</div>
       <div className="flex gap-2 items-center">
         <select
           value={selectedProvider || ''}
           onChange={(e) => setSelection(e.target.value, '')}
-          className="h-8 border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+          className="h-8 border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
         >
           <option value="" disabled>选择提供商</option>
           {providers.map((p:any)=> (
@@ -53,7 +53,7 @@ export default function SchemaModelQuickPicker({ className }: SchemaModelQuickPi
           value={selectedModelId || ''}
           onChange={(e) => setSelection(selectedProvider || '', e.target.value)}
           disabled={!selectedProvider}
-          className="w-40 h-8 border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+          className="w-40 h-8 border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
         >
           <option value="" disabled>{selectedProvider ? '选择模型' : '先选择提供商'}</option>
           {(providers.find((pp:any)=>pp.name===selectedProvider)?.models || []).map((m:any)=> (

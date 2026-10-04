@@ -66,9 +66,9 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
     }
   }, [activeTab]);
   return (
-    <div className="settings-rail w-44 shrink-0 border-r border-gray-200/40 dark:border-gray-800/40 overflow-y-auto custom-scrollbar flex flex-col h-full select-none">
+    <div className="settings-rail w-44 shrink-0 border-r border-slate-200/40 dark:border-slate-800/40 overflow-y-auto custom-scrollbar flex flex-col h-full select-none">
       <div className="px-3 pt-3 pb-1.5 flex items-center justify-between flex-shrink-0" data-tauri-drag-region>
-        <h3 className="font-medium text-gray-800 dark:text-gray-200 text-sm">设置</h3>
+        <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">设置</h3>
       </div>
       
       {/* Settings Tabs */}
@@ -86,18 +86,18 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
                 "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors duration-150",
                 isActive 
                   ? "bg-slate-200/55 dark:bg-white/10 text-slate-800 dark:text-slate-100 font-medium" 
-                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 hover:text-gray-900 dark:hover:text-gray-200"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 hover:text-slate-900 dark:hover:text-slate-200"
               )}
             >
               <Icon className={cn(
                 "w-4 h-4 flex-shrink-0",
-                isActive ? "text-slate-700 dark:text-slate-200" : "text-gray-500 dark:text-gray-400"
+                isActive ? "text-slate-700 dark:text-slate-200" : "text-slate-500 dark:text-slate-400"
               )} />
               <span className="truncate flex items-center gap-2 flex-1">
                 {tab.name}
                 {isAbout && showAboutDot && !isActive && (
                   <span
-                    className="ml-auto inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium leading-tight text-slate-600 bg-slate-200/70 dark:text-slate-300 dark:bg-white/10"
+                    className="ml-auto inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-medium leading-tight text-slate-600 bg-slate-200/70 dark:text-slate-300 dark:bg-white/10"
                   >
                     NEW
                   </span>

@@ -107,7 +107,7 @@ function ActivityBar({ theme, activeView, onViewChange }: {
   return (
     <div className={cn(
       "w-12 flex flex-col items-center py-2 border-r",
-      isDark ? "bg-[#181818] border-[#2d2d2d]" : "bg-gray-100 border-gray-200"
+      isDark ? "bg-[#181818] border-[#2d2d2d]" : "bg-slate-100 border-slate-200"
     )}>
       {views.map((view) => (
         <button
@@ -116,15 +116,15 @@ function ActivityBar({ theme, activeView, onViewChange }: {
           className={cn(
             "w-12 h-12 flex items-center justify-center transition-colors relative",
             activeView === view.id
-              ? isDark ? "text-white" : "text-gray-900"
-              : isDark ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"
+              ? isDark ? "text-white" : "text-slate-900"
+              : isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600"
           )}
           title={view.label}
         >
           {activeView === view.id && (
             <div className={cn(
               "absolute left-0 w-0.5 h-6 rounded-r",
-              isDark ? "bg-white" : "bg-gray-900"
+              isDark ? "bg-white" : "bg-slate-900"
             )} />
           )}
           <view.icon className="w-6 h-6" />
@@ -135,7 +135,7 @@ function ActivityBar({ theme, activeView, onViewChange }: {
       
       <button className={cn(
         "w-12 h-12 flex items-center justify-center transition-colors",
-        isDark ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"
+        isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600"
       )}>
         <Settings className="w-5 h-5" />
       </button>
@@ -160,24 +160,24 @@ function Sidebar({
   
   const statusColors = {
     running: 'bg-blue-500',
-    idle: 'bg-gray-400',
+    idle: 'bg-slate-400',
     error: 'bg-red-500',
   };
   
   return (
     <div className={cn(
       "w-60 flex flex-col border-r",
-      isDark ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-50 border-gray-200"
+      isDark ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-50 border-slate-200"
     )}>
       {/* 标题 */}
       <div className={cn(
         "px-4 py-2 text-[11px] font-semibold uppercase tracking-wider flex items-center justify-between",
-        isDark ? "text-gray-400" : "text-gray-500"
+        isDark ? "text-slate-400" : "text-slate-500"
       )}>
         <span>对话</span>
         <button className={cn(
-          "p-1 rounded transition-colors",
-          isDark ? "hover:bg-white/10" : "hover:bg-gray-200"
+          "p-1 rounded-md transition-colors",
+          isDark ? "hover:bg-white/10" : "hover:bg-slate-200"
         )}>
           <Plus className="w-4 h-4" />
         </button>
@@ -193,7 +193,7 @@ function Sidebar({
               "w-full flex items-center gap-2 px-4 py-1.5 text-sm transition-colors",
               activeId === conv.id
                 ? isDark ? "bg-[#37373d]" : "bg-blue-50"
-                : isDark ? "hover:bg-[#2a2a2a]" : "hover:bg-gray-100"
+                : isDark ? "hover:bg-[#2a2a2a]" : "hover:bg-slate-100"
             )}
           >
             <div className={cn(
@@ -202,13 +202,13 @@ function Sidebar({
             )} />
             <MessageSquare className={cn(
               "w-4 h-4 shrink-0",
-              isDark ? "text-gray-400" : "text-gray-500"
+              isDark ? "text-slate-400" : "text-slate-500"
             )} />
             <span className={cn(
               "flex-1 text-left truncate",
               activeId === conv.id
-                ? isDark ? "text-white" : "text-gray-900"
-                : isDark ? "text-gray-300" : "text-gray-700"
+                ? isDark ? "text-white" : "text-slate-900"
+                : isDark ? "text-slate-300" : "text-slate-700"
             )}>
               {conv.title}
             </span>
@@ -231,7 +231,7 @@ function EditorTabs({ theme, activeId }: { theme: Theme; activeId: string }) {
   return (
     <div className={cn(
       "flex items-center border-b",
-      isDark ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-100 border-gray-200"
+      isDark ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200"
     )}>
       {tabs.map((tab) => (
         <div
@@ -239,16 +239,16 @@ function EditorTabs({ theme, activeId }: { theme: Theme; activeId: string }) {
           className={cn(
             "flex items-center gap-2 px-3 py-2 text-sm border-r cursor-pointer group",
             tab.isActive
-              ? isDark ? "bg-[#1e1e1e] text-white border-t-2 border-t-blue-500" : "bg-white text-gray-900 border-t-2 border-t-blue-500"
-              : isDark ? "bg-[#2d2d2d] text-gray-400 hover:bg-[#37373d]" : "bg-gray-200 text-gray-600 hover:bg-gray-300",
-            isDark ? "border-[#2d2d2d]" : "border-gray-200"
+              ? isDark ? "bg-[#1e1e1e] text-white border-t-2 border-t-blue-500" : "bg-white text-slate-900 border-t-2 border-t-blue-500"
+              : isDark ? "bg-[#2d2d2d] text-slate-400 hover:bg-[#37373d]" : "bg-slate-200 text-slate-600 hover:bg-slate-300",
+            isDark ? "border-[#2d2d2d]" : "border-slate-200"
           )}
         >
           <MessageSquare className="w-4 h-4" />
           <span>{tab.title}</span>
           <button className={cn(
-            "p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity",
-            isDark ? "hover:bg-white/10" : "hover:bg-gray-300"
+            "p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity",
+            isDark ? "hover:bg-white/10" : "hover:bg-slate-300"
           )}>
             <X className="w-3 h-3" />
           </button>
@@ -259,14 +259,14 @@ function EditorTabs({ theme, activeId }: { theme: Theme; activeId: string }) {
       
       <div className="flex items-center gap-1 px-2">
         <button className={cn(
-          "p-1.5 rounded transition-colors",
-          isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-200 text-gray-500"
+          "p-1.5 rounded-md transition-colors",
+          isDark ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-200 text-slate-500"
         )}>
           <SplitSquareHorizontal className="w-4 h-4" />
         </button>
         <button className={cn(
-          "p-1.5 rounded transition-colors",
-          isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-200 text-gray-500"
+          "p-1.5 rounded-md transition-colors",
+          isDark ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-200 text-slate-500"
         )}>
           <MoreHorizontal className="w-4 h-4" />
         </button>
@@ -283,8 +283,8 @@ function ToolCallOutput({ calls, theme }: { calls: typeof mockMessages[1]['toolC
   
   return (
     <div className={cn(
-      "font-mono text-xs mb-3 rounded overflow-hidden",
-      isDark ? "bg-[#1e1e1e]" : "bg-gray-100"
+      "font-mono text-xs mb-3 rounded-md overflow-hidden",
+      isDark ? "bg-[#1e1e1e]" : "bg-slate-100"
     )}>
       {calls.map((call, i) => (
         <div 
@@ -302,10 +302,10 @@ function ToolCallOutput({ calls, theme }: { calls: typeof mockMessages[1]['toolC
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className={cn("text-blue-400")}>{call.name}</span>
-              <span className={isDark ? "text-gray-600" : "text-gray-400"}>→</span>
-              <span className={isDark ? "text-gray-400" : "text-gray-600"}>{call.path}</span>
+              <span className={isDark ? "text-slate-600" : "text-slate-400"}>→</span>
+              <span className={isDark ? "text-slate-400" : "text-slate-600"}>{call.path}</span>
             </div>
-            <div className={isDark ? "text-gray-500" : "text-gray-500"}>
+            <div className={isDark ? "text-slate-500" : "text-slate-500"}>
               {call.output}
             </div>
           </div>
@@ -325,7 +325,7 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
       <div className="flex items-center gap-2 mb-1">
         <span className={cn(
           "text-xs font-mono",
-          isDark ? "text-gray-500" : "text-gray-400"
+          isDark ? "text-slate-500" : "text-slate-400"
         )}>
           [{message.time}]
         </span>
@@ -343,7 +343,7 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
       
       <div className={cn(
         "text-sm leading-relaxed whitespace-pre-wrap",
-        isDark ? "text-gray-200" : "text-gray-800"
+        isDark ? "text-slate-200" : "text-slate-800"
       )}>
         {message.content}
       </div>
@@ -369,13 +369,13 @@ function BottomPanel({ theme, activeTab, onTabChange }: {
   return (
     <div className={cn(
       "flex flex-col border-t",
-      isDark ? "border-[#2d2d2d]" : "border-gray-200",
+      isDark ? "border-[#2d2d2d]" : "border-slate-200",
       isExpanded ? "h-48" : "h-8"
     )}>
       {/* 面板标签栏 */}
       <div className={cn(
         "flex items-center px-2 border-b",
-        isDark ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-gray-100 border-gray-200"
+        isDark ? "bg-[#1e1e1e] border-[#2d2d2d]" : "bg-slate-100 border-slate-200"
       )}>
         {tabs.map((tab) => (
           <button
@@ -384,8 +384,8 @@ function BottomPanel({ theme, activeTab, onTabChange }: {
             className={cn(
               "flex items-center gap-1.5 px-3 py-1 text-xs transition-colors",
               activeTab === tab.id
-                ? isDark ? "text-white border-b border-white" : "text-gray-900 border-b border-gray-900"
-                : isDark ? "text-gray-500 hover:text-gray-300" : "text-gray-500 hover:text-gray-700"
+                ? isDark ? "text-white border-b border-white" : "text-slate-900 border-b border-slate-900"
+                : isDark ? "text-slate-500 hover:text-slate-300" : "text-slate-500 hover:text-slate-700"
             )}
           >
             <span>{tab.label}</span>
@@ -405,15 +405,15 @@ function BottomPanel({ theme, activeTab, onTabChange }: {
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
-            "p-1 rounded transition-colors",
-            isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-200 text-gray-500"
+            "p-1 rounded-md transition-colors",
+            isDark ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-200 text-slate-500"
           )}
         >
           {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
         </button>
         <button className={cn(
-          "p-1 rounded transition-colors",
-          isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-200 text-gray-500"
+          "p-1 rounded-md transition-colors",
+          isDark ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-200 text-slate-500"
         )}>
           <X className="w-4 h-4" />
         </button>
@@ -428,20 +428,20 @@ function BottomPanel({ theme, activeTab, onTabChange }: {
           {activeTab === 'problems' && (
             <div className="space-y-1">
               {mockProblems.map((problem, i) => (
-                <div key={i} className="flex items-start gap-2 px-2 py-1 rounded hover:bg-black/5">
+                <div key={i} className="flex items-start gap-2 px-2 py-1 rounded-md hover:bg-black/5">
                   {problem.type === 'error' ? (
                     <XCircle className="w-4 h-4 text-red-500 shrink-0" />
                   ) : (
                     <AlertCircle className="w-4 h-4 text-yellow-500 shrink-0" />
                   )}
-                  <span className={isDark ? "text-gray-300" : "text-gray-700"}>{problem.message}</span>
-                  <span className={isDark ? "text-gray-500" : "text-gray-400"}>[{problem.source}]</span>
+                  <span className={isDark ? "text-slate-300" : "text-slate-700"}>{problem.message}</span>
+                  <span className={isDark ? "text-slate-500" : "text-slate-400"}>[{problem.source}]</span>
                 </div>
               ))}
             </div>
           )}
           {activeTab === 'output' && (
-            <div className={isDark ? "text-gray-400" : "text-gray-600"}>
+            <div className={isDark ? "text-slate-400" : "text-slate-600"}>
               {mockOutput.map((line, i) => (
                 <div key={i}>{line}</div>
               ))}
@@ -492,15 +492,15 @@ function InputArea({ theme }: { theme: Theme }) {
   return (
     <div className={cn(
       "border-t p-3",
-      isDark ? "border-[#2d2d2d]" : "border-gray-200"
+      isDark ? "border-[#2d2d2d]" : "border-slate-200"
     )}>
       <div className={cn(
-        "flex items-end gap-2 p-2 rounded border",
-        isDark ? "bg-[#1e1e1e] border-[#3c3c3c]" : "bg-white border-gray-300"
+        "flex items-end gap-2 p-2 rounded-md border",
+        isDark ? "bg-[#1e1e1e] border-[#3c3c3c]" : "bg-white border-slate-300"
       )}>
         <button className={cn(
-          "p-1.5 rounded transition-colors shrink-0",
-          isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-100 text-gray-500"
+          "p-1.5 rounded-md transition-colors shrink-0",
+          isDark ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-100 text-slate-500"
         )}>
           <Paperclip className="w-4 h-4" />
         </button>
@@ -511,14 +511,14 @@ function InputArea({ theme }: { theme: Theme }) {
           rows={1}
           className={cn(
             "flex-1 resize-none outline-none text-sm",
-            isDark ? "bg-transparent text-gray-200 placeholder:text-gray-500" : "bg-transparent text-gray-800 placeholder:text-gray-400"
+            isDark ? "bg-transparent text-slate-200 placeholder:text-slate-500" : "bg-transparent text-slate-800 placeholder:text-slate-400"
           )}
         />
         <button className={cn(
-          "p-1.5 rounded transition-colors shrink-0",
+          "p-1.5 rounded-md transition-colors shrink-0",
           value.trim()
             ? "bg-blue-600 text-white hover:bg-blue-500"
-            : isDark ? "bg-white/5 text-gray-500" : "bg-gray-100 text-gray-400"
+            : isDark ? "bg-white/5 text-slate-500" : "bg-slate-100 text-slate-400"
         )}>
           <Send className="w-4 h-4" />
         </button>
@@ -559,13 +559,13 @@ export default function VSCodePanelPreview() {
           {/* 顶部工具栏 */}
           <div className={cn(
             "flex items-center justify-end gap-1 px-2 py-1 border-b",
-            isDark ? "border-[#2d2d2d]" : "border-gray-200"
+            isDark ? "border-[#2d2d2d]" : "border-slate-200"
           )}>
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={cn(
-                "p-1.5 rounded transition-colors",
-                isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-200 text-gray-500"
+                "p-1.5 rounded-md transition-colors",
+                isDark ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-200 text-slate-500"
               )}
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -573,8 +573,8 @@ export default function VSCodePanelPreview() {
             <Link 
               href="/dev-tools/chat-redesign"
               className={cn(
-                "flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors",
-                isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-200 text-gray-500"
+                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
+                isDark ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-200 text-slate-500"
               )}
             >
               <ArrowLeft className="w-3 h-3" />

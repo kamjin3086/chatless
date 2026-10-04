@@ -666,7 +666,7 @@ export function ModelParametersDialog({
                 <Badge
                   key={index}
                   variant="secondary"
-                  className="flex items-center gap-1 bg-slate-100/80 text-slate-600 dark:bg-white/8 dark:text-slate-300"
+                  className="flex items-center gap-1 bg-slate-100/80 text-slate-600 dark:bg-white/10 dark:text-slate-300"
                 >
                   <span className="text-xs">{sequence}</span>
                   <button

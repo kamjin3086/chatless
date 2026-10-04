@@ -138,8 +138,8 @@ export function AddToKnowledgeBase({
 
         <div className="py-4">
           {!adding ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 break-words">
-              将文档 <span className="font-medium text-gray-700 dark:text-gray-300" title={documentTitle}>"{truncateDisplayName(documentTitle, 56)}"</span> 添加到以下知识库:
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 break-words">
+              将文档 <span className="font-medium text-slate-700 dark:text-slate-300" title={documentTitle}>"{truncateDisplayName(documentTitle, 56)}"</span> 添加到以下知识库:
             </p>
           ) : (
             <div className="mb-4">
@@ -150,10 +150,10 @@ export function AddToKnowledgeBase({
                   {progress >= 90 && <Database className="h-4 w-4 text-green-500" />}
                   <span className="text-sm font-medium">正在索引文档...</span>
                 </div>
-                <span className="text-xs text-gray-500">{Math.round(progress)}%</span>
+                <span className="text-xs text-slate-500">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="mb-2" />
-              <p className="text-xs text-gray-500 dark:text-gray-400">{progressMessage}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{progressMessage}</p>
             </div>
           )}
 
@@ -168,10 +168,10 @@ export function AddToKnowledgeBase({
             </div>
           ) : !adding && knowledgeBases.length === 0 ? (
             <div className="text-center py-8">
-              <div className="w-12 h-12 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-xl flex items-center justify-center">
-                <Database className="w-6 h-6 text-gray-400 dark:text-gray-500" strokeWidth={1.5} />
+              <div className="w-12 h-12 mx-auto mb-4 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center">
+                <Database className="w-6 h-6 text-slate-400 dark:text-slate-500" strokeWidth={1.5} />
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">暂无知识库，请先创建知识库</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">暂无知识库，请先创建知识库</p>
               <Button 
                 onClick={() => {
                   onOpenChange(false);
@@ -191,7 +191,7 @@ export function AddToKnowledgeBase({
                   className={`p-3 rounded-md border cursor-pointer transition-colors ${
                     selectedKnowledgeBaseId === kb.id
                       ? 'border-blue-400 bg-blue-50 dark:bg-blue-500/10'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/40'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/40'
                   }`}
                   onClick={() => handleSelect(kb.id)}
                 >
@@ -199,7 +199,7 @@ export function AddToKnowledgeBase({
                     <div>
                       <h3 className="font-medium">{kb.name}</h3>
                       {kb.description && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-1 mt-1">
                           {kb.description}
                         </p>
                       )}

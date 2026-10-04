@@ -130,7 +130,7 @@ describe('glass frost runtime css', () => {
     expect(GLASS_FROST_CSS).toContain('[class~="text-orange-500"]');
     expect(GLASS_FROST_CSS).toContain('.history-tag');
     expect(GLASS_FROST_CSS).toContain('[class~="glass-chip-active"]');
-    expect(GLASS_FROST_CSS).toContain('[class~="bg-white/80"]');
+    expect(GLASS_FROST_CSS).toContain('[class~="bg-white/90"]');
     expect(GLASS_FROST_CSS).toContain('.glass-empty-glow');
     expect(GLASS_FROST_CSS).toContain('.glass-nav [class~="text-orange-500"]');
     expect(GLASS_FROST_CSS).toContain('.glass-field');

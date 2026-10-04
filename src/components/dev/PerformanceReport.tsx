@@ -100,19 +100,19 @@ export function PerformanceReport() {
       <div className="space-y-2">
         <h4 className="font-medium text-sm">事件驱动模式 (onEvent)</h4>
         <div className="grid grid-cols-4 gap-3 text-sm">
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">事件数</div>
             <div className="font-mono font-semibold">{report.eventDriven.totalEvents}</div>
           </div>
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">平均耗时</div>
             <div className="font-mono font-semibold">{report.eventDriven.averageDuration.toFixed(3)}ms</div>
           </div>
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">最小</div>
             <div className="font-mono">{report.eventDriven.minDuration.toFixed(3)}ms</div>
           </div>
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">最大</div>
             <div className="font-mono">{report.eventDriven.maxDuration.toFixed(3)}ms</div>
           </div>
@@ -123,19 +123,19 @@ export function PerformanceReport() {
       <div className="space-y-2">
         <h4 className="font-medium text-sm">传统模式 (onToken)</h4>
         <div className="grid grid-cols-4 gap-3 text-sm">
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">Token数</div>
             <div className="font-mono font-semibold">{report.legacyToken.totalEvents}</div>
           </div>
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">平均耗时</div>
             <div className="font-mono font-semibold">{report.legacyToken.averageDuration.toFixed(3)}ms</div>
           </div>
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">最小</div>
             <div className="font-mono">{report.legacyToken.minDuration.toFixed(3)}ms</div>
           </div>
-          <div className="p-2 bg-muted rounded">
+          <div className="p-2 bg-muted rounded-md">
             <div className="text-muted-foreground text-xs">最大</div>
             <div className="font-mono">{report.legacyToken.maxDuration.toFixed(3)}ms</div>
           </div>
@@ -150,7 +150,7 @@ export function PerformanceReport() {
             .sort((a, b) => b.startTime - a.startTime)
             .slice(0, 50)
             .map((metric: any, idx: number) => (
-              <div key={idx} className="text-xs font-mono p-1 bg-muted/50 rounded flex justify-between">
+              <div key={idx} className="text-xs font-mono p-1 bg-muted/50 rounded-md flex justify-between">
                 <span className="truncate">{metric.name}</span>
                 <span>{metric.duration?.toFixed(3)}ms</span>
               </div>

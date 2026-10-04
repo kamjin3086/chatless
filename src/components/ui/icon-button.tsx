@@ -9,7 +9,7 @@ const iconButtonVariants = cva(
       variant: {
         primary: "bg-blue-600 text-white hover:bg-blue-700",
         secondary:
-          "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800",
+          "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800",
       },
       size: {
         default: "h-8 w-8",

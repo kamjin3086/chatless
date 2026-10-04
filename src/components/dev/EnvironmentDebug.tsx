@@ -113,7 +113,7 @@ export function EnvironmentDebug() {
           {/* 基础信息 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 基础检测
               </div>
               <div className="space-y-1 text-xs">
@@ -145,7 +145,7 @@ export function EnvironmentDebug() {
             </div>
 
             <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 系统信息
               </div>
               <div className="space-y-1 text-xs">
@@ -157,7 +157,7 @@ export function EnvironmentDebug() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <span>User Agent:</span>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 break-all bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                  <div className="text-xs text-slate-600 dark:text-slate-400 break-all bg-slate-50 dark:bg-slate-800 p-2 rounded-md">
                     {envDetails.userAgent}
                   </div>
                 </div>
@@ -168,10 +168,10 @@ export function EnvironmentDebug() {
           {/* API 测试结果 */}
           {envDetails.testResult && (
             <div className="border-t pt-4">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 API 测试结果
               </div>
-              <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg space-y-2">
+              <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg space-y-2">
                 <div className="flex items-center gap-2">
                   {getTestResultIcon()}
                   <span className="text-sm font-medium">
@@ -184,8 +184,8 @@ export function EnvironmentDebug() {
                 
                 {envDetails.testResult.success && envDetails.testResult.result && (
                   <div className="text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">返回结果:</span>
-                    <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded mt-1 font-mono">
+                    <span className="text-slate-600 dark:text-slate-400">返回结果:</span>
+                    <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded-md mt-1 font-mono">
                       {JSON.stringify(envDetails.testResult.result, null, 2)}
                     </div>
                   </div>
@@ -193,8 +193,8 @@ export function EnvironmentDebug() {
                 
                 {!envDetails.testResult.success && envDetails.testResult.error && (
                   <div className="text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">错误信息:</span>
-                    <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded mt-1 text-red-700 dark:text-red-300 font-mono">
+                    <span className="text-slate-600 dark:text-slate-400">错误信息:</span>
+                    <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded-md mt-1 text-red-700 dark:text-red-300 font-mono">
                       {envDetails.testResult.error}
                     </div>
                   </div>
@@ -205,7 +205,7 @@ export function EnvironmentDebug() {
 
           {/* 结论和建议 */}
           <div className="border-t pt-4">
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               检测结论
             </div>
             {envDetails.isTauri ? (

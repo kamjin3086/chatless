@@ -20,7 +20,7 @@ export function NetworkSettings() {
             value={proxyUrl}
             onChange={(e) => setProxyUrl(e.target.value)}
             placeholder="http://127.0.0.1:7890"
-            className="flex-1 max-w-xs h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-300"
+            className="flex-1 max-w-xs h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-300"
           />
         </div>
         <ToggleSwitch

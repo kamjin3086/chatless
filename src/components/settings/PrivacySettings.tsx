@@ -278,12 +278,12 @@ export function PrivacySettings() {
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-2 text-sm text-red-600 font-semibold">将执行以下操作并<strong>无法撤销</strong>：</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
                   <li>删除所有会话（Conversation）记录</li>
                   <li>删除每条聊天消息内容</li>
                   <li>重置最近聊天模型统计</li>
                 </ul>
-                <p className="mt-3">请输入 <span className="font-mono bg-gray-100 px-1 py-0.5 rounded">DELETE</span> 以继续。</p>
+                <p className="mt-3">请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">DELETE</span> 以继续。</p>
               </div>
             </AlertDialogDescription>
             <input
@@ -291,7 +291,7 @@ export function PrivacySettings() {
               value={confirmInput}
               onChange={(e) => setConfirmInput(e.target.value)}
               placeholder="请输入 DELETE 以确认"
-              className="w-full mt-3 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-gray-800 dark:border-gray-700"
+              className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
@@ -324,12 +324,12 @@ export function PrivacySettings() {
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-2 text-sm text-red-600 font-semibold">此操作将删除以下内容并<strong>无法恢复</strong>：</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
                   <li>已上传 / 抓取的文档文件</li>
                   <li>删除知识库索引和缓存</li>
                   <li>知识库配置项</li>
                 </ul>
-                <p className="mt-3">若确认，请输入 <span className="font-mono bg-gray-100 px-1 py-0.5 rounded">CLEAR KB</span> 继续。</p>
+                <p className="mt-3">若确认，请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">CLEAR KB</span> 继续。</p>
               </div>
             </AlertDialogDescription>
             <input
@@ -337,7 +337,7 @@ export function PrivacySettings() {
               value={confirmKbInput}
               onChange={(e) => setConfirmKbInput(e.target.value)}
               placeholder="请输入 CLEAR KB 以确认"
-              className="w-full mt-3 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-gray-800 dark:border-gray-700"
+              className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
@@ -366,11 +366,11 @@ export function PrivacySettings() {
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-2 text-sm text-red-600 font-semibold">将删除以下内容：</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
                   <li>通过应用下载的模型文件</li>
                   <li>模型下载进度与缓存记录</li>
                 </ul>
-                <p className="mt-3">不会影响你手动放置的模型文件。请输入 <span className="font-mono bg-gray-100 px-1 py-0.5 rounded">CLEAR MODEL</span> 继续。</p>
+                <p className="mt-3">不会影响你手动放置的模型文件。请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">CLEAR MODEL</span> 继续。</p>
               </div>
             </AlertDialogDescription>
             <input
@@ -378,7 +378,7 @@ export function PrivacySettings() {
               value={confirmModelInput}
               onChange={(e) => setConfirmModelInput(e.target.value)}
               placeholder="请输入 CLEAR MODEL"
-              className="w-full mt-3 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-gray-800 dark:border-gray-700"
+              className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
@@ -407,7 +407,7 @@ export function PrivacySettings() {
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-2 text-sm text-red-600 font-semibold">此操作极其危险，将执行以下步骤并<strong>无法撤销</strong>：</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
                   <li>删除 <b className="text-red-500">全部聊天记录</b></li>
                   <li>删除 <b className="text-red-500">全部知识库文档与索引</b></li>
                   <li>删除 <b className="text-red-500">本地模型缓存</b></li>
@@ -415,7 +415,7 @@ export function PrivacySettings() {
                   <li>清空 所有应用缓存文件</li>
                   <li>应用随后自动重启为初始状态</li>
                 </ul>
-                <p className="mt-3">若确认无误，请输入 <span className="font-mono bg-gray-100 px-1 py-0.5 rounded">RESET APP</span> 继续。</p>
+                <p className="mt-3">若确认无误，请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">RESET APP</span> 继续。</p>
               </div>
             </AlertDialogDescription>
             <input
@@ -423,7 +423,7 @@ export function PrivacySettings() {
               value={confirmResetInput}
               onChange={(e) => setConfirmResetInput(e.target.value)}
               placeholder="请输入 RESET APP"
-              className="w-full mt-3 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-gray-800 dark:border-gray-700"
+              className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>

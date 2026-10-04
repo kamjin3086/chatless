@@ -357,7 +357,7 @@ function ChatMessageComponent({
                   <button
                     onClick={onRetry}
                     className={cn(
-                      "p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
+                      "p-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
                       isError
                         ? "text-red-500 hover:text-red-600 dark:text-red-400"
                         : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
@@ -371,7 +371,7 @@ function ChatMessageComponent({
                 <button
                   onClick={() => handleCopy(copyVisibleText)}
                   className={cn(
-                    "p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
+                    "p-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
                     isCopied
                       ? "text-emerald-500"
                       : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
@@ -383,7 +383,7 @@ function ChatMessageComponent({
                 </button>
                 <button
                   onClick={() => setConfirmOpen(true)}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
                   title="删除"
                   aria-label="删除消息"
                 >
@@ -392,7 +392,7 @@ function ChatMessageComponent({
                 {onStar && (
                   <button
                     onClick={() => onStar(id)}
-                    className="p-1 text-slate-400 hover:text-amber-500 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                    className="p-1 text-slate-400 hover:text-amber-500 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
                     title="收藏"
                     aria-label="收藏消息"
                   >

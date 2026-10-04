@@ -134,7 +134,7 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
             <GripVertical className="w-3 h-3" />
           </span>
 
-          <div className={cn("w-5 h-5 rounded-[5px] overflow-hidden flex-shrink-0", needsKey && !isSelected && "opacity-60")}>
+          <div className={cn("w-5 h-5 rounded-sm overflow-hidden flex-shrink-0", needsKey && !isSelected && "opacity-60")}>
             <Image
               src={iconSrc}
               alt={provider.displayName || provider.name}

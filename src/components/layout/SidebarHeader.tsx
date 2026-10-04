@@ -18,7 +18,7 @@ export function SidebarHeader({
 }: SidebarHeaderProps) {
   return (
     <div className={cn(
-      "p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between",
+      "p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between",
       className
     )}>
       <div className="flex items-center gap-3">
@@ -26,10 +26,10 @@ export function SidebarHeader({
         <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-secondary text-white flex items-center justify-center font-semibold shadow-md">
           {userName.charAt(0).toUpperCase()}
         </div>
-        <div className="font-medium text-gray-800 dark:text-gray-200">{userName}</div>
+        <div className="font-medium text-slate-800 dark:text-slate-200">{userName}</div>
       </div>
       <button 
-        className="text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1.5 rounded transition-all duration-200 icon-shadow" 
+        className="text-slate-600 dark:text-slate-400 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 p-1.5 rounded-md transition-all duration-200 icon-shadow" 
         title="设置"
         onClick={onSettingsClick}
       >

@@ -259,7 +259,7 @@ export function SkillDetailDialog({
               {/* 复制 ID */}
               <button
                 onClick={handleCopyId}
-                className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded flex items-center gap-1.5 transition-colors"
+                className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md flex items-center gap-1.5 transition-colors"
                 title="复制 ID"
               >
                 <Copy className="w-3.5 h-3.5" />
@@ -269,7 +269,7 @@ export function SkillDetailDialog({
               {isLocal && skill.path && (
                 <button
                   onClick={handleOpenFolder}
-                  className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded flex items-center gap-1.5 transition-colors"
+                  className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md flex items-center gap-1.5 transition-colors"
                   title="打开文件夹"
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
@@ -280,7 +280,7 @@ export function SkillDetailDialog({
               {skill.repoUrl && (
                 <button
                   onClick={handleOpenRepo}
-                  className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded flex items-center gap-1.5 transition-colors"
+                  className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md flex items-center gap-1.5 transition-colors"
                   title="查看仓库"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -292,7 +292,7 @@ export function SkillDetailDialog({
                 <button
                   onClick={isGitRepo ? handleCheckUpdate : handleReinstallFromZip}
                   disabled={isUpdating}
-                  className="h-7 px-2.5 text-xs border border-slate-200/70 bg-slate-100/50 dark:border-slate-600/50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/50 rounded flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  className="h-7 px-2.5 text-xs border border-slate-200/70 bg-slate-100/50 dark:border-slate-600/50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/50 rounded-md flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   <RefreshCw className={cn("w-3.5 h-3.5", isUpdating && "animate-spin")} />
                   <span>{isGitRepo ? '更新' : '重新导入'}</span>
@@ -303,7 +303,7 @@ export function SkillDetailDialog({
               {isInstalled && (
                 <button
                   onClick={handleUninstall}
-                  className="h-7 px-2.5 text-xs text-red-600 border border-red-200/60 hover:bg-red-50/60 dark:border-red-800/40 dark:hover:bg-red-900/20 rounded flex items-center gap-1.5 transition-colors"
+                  className="h-7 px-2.5 text-xs text-red-600 border border-red-200/60 hover:bg-red-50/60 dark:border-red-800/40 dark:hover:bg-red-900/20 rounded-md flex items-center gap-1.5 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>卸载</span>

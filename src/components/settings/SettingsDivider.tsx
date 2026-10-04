@@ -1,3 +1,3 @@
 export function SettingsDivider() {
-  return <hr className="my-8 border-t border-gray-200 dark:border-gray-700" />;
+  return <hr className="my-8 border-t border-slate-200 dark:border-slate-700" />;
 } 

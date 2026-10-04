@@ -143,7 +143,7 @@ export const UserMessageBlock = ({
               // 将纯base64数据转换为Data URL格式
               const imageSrc = src.startsWith('data:') ? src : `data:${detectImageFormat(src)};base64,${src}`;
               return (
-                <img key={idx} src={imageSrc} alt="img" className="w-24 h-24 object-cover rounded" />
+                <img key={idx} src={imageSrc} alt="img" className="w-24 h-24 object-cover rounded-md" />
               );
             })}
           </div>
@@ -167,7 +167,7 @@ export const UserMessageBlock = ({
         {onEdit && id && (
           <button
             onClick={() => onEdit(id)}
-            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
             title="编辑"
           >
             <Pencil className="w-3 h-3" />
@@ -177,7 +177,7 @@ export const UserMessageBlock = ({
           <button
             onClick={() => handleCopy(content)}
             className={cn(
-              "p-1 rounded transition-colors",
+              "p-1 rounded-md transition-colors",
               isCopied
                 ? "text-emerald-500"
                 : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
@@ -190,7 +190,7 @@ export const UserMessageBlock = ({
         {onDelete && (
           <button
             onClick={() => onDelete()}
-            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
             title="删除"
           >
             <Trash2 className="w-3 h-3" />

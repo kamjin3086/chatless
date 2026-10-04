@@ -23,8 +23,8 @@ export function ProviderRenameModelDialog({ providerName, modelName, currentLabe
           <DialogTitle className="text-[16px] font-semibold">重命名模型</DialogTitle>
         </DialogHeader>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">新名称</label>
-          <input className="w-full h-9 px-3 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" value={value} onChange={e=>setValue(e.target.value)} placeholder="输入新的显示名" />
+          <label className="block text-xs text-slate-500 mb-1">新名称</label>
+          <input className="w-full h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm" value={value} onChange={e=>setValue(e.target.value)} placeholder="输入新的显示名" />
         </div>
         <DialogFooter>
           <Button variant="secondary" onClick={()=>setOpen(false)}>取消</Button>

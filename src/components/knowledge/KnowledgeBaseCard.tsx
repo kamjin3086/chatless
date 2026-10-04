@@ -44,7 +44,7 @@ export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc,
           onClick={handleCardClick}
           className={cn(
             "flex flex-col text-left w-full p-3 min-h-28 rounded-lg border transition-colors duration-150 glass-panel",
-            "bg-white/40 dark:bg-slate-900/40",
+            "bg-white/60 dark:bg-slate-900/40",
             "border-slate-200/60 dark:border-slate-700/40",
             "hover:border-slate-300/80 dark:hover:border-slate-600/60",
             "focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600"
@@ -74,7 +74,7 @@ export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc,
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="absolute top-2 right-2 w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
+              className="absolute top-2 right-2 w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="w-3.5 h-3.5" />

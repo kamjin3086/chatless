@@ -25,10 +25,10 @@ export default function ThinkBarPreviewsPage() {
           点击"开始思考"按钮查看流式思考效果，10秒后自动切换到完成状态。共 <strong>21 种样式</strong>，专注思考感，避免焦虑。
         </p>
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-blue-700 dark:text-blue-300">流式文案</span>
-          <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900 rounded text-purple-700 dark:text-purple-300">温和舒适</span>
-          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-slate-700 dark:text-slate-300">思考专注</span>
-          <span className="px-2 py-1 bg-green-100 dark:bg-green-900 rounded text-green-700 dark:text-green-300">个性表达</span>
+          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded-md text-blue-700 dark:text-blue-300">流式文案</span>
+          <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900 rounded-md text-purple-700 dark:text-purple-300">温和舒适</span>
+          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-md text-slate-700 dark:text-slate-300">思考专注</span>
+          <span className="px-2 py-1 bg-green-100 dark:bg-green-900 rounded-md text-green-700 dark:text-green-300">个性表达</span>
         </div>
       </div>
 
@@ -261,7 +261,7 @@ function ThinkBar3({ isThinking }: { isThinking: boolean }) {
             {isThinking ? '思维流程' : '思考流程完成'}
           </div>
           
-          <div className="text-sm font-mono bg-black/5 dark:bg-white/5 rounded p-2">
+          <div className="text-sm font-mono bg-black/5 dark:bg-white/5 rounded-md p-2">
             {text}
             {isThinking && <span className="animate-pulse">|</span>}
           </div>
@@ -415,7 +415,7 @@ function ThinkBar15({ isThinking }: { isThinking: boolean }) {
           `}>
             {isThinking ? 'THINKING...' : 'COMPLETE'}
           </div>
-          <div className="font-mono text-xs text-white/60 mt-1">
+          <div className="font-mono text-xs text-white/70 mt-1">
             {isThinking ? '分析中...' : '准备就绪'}
           </div>
         </div>
@@ -981,14 +981,14 @@ function ThinkBar41({ isThinking }: { isThinking: boolean }) {
     <div className={`
       rounded-lg p-4 border transition-all duration-300 font-mono
       ${isThinking 
-        ? 'bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700' 
+        ? 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-700' 
         : 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700'
       }
     `}>
       <div className="space-y-1">
         {isThinking && logs.map((log, i) => (
-          <div key={i} className="text-xs text-gray-700 dark:text-gray-300 animate-gentle-fade-in">
-            <span className="text-gray-500 dark:text-gray-500">[{log.time}]</span> {log.text}
+          <div key={i} className="text-xs text-slate-700 dark:text-slate-300 animate-gentle-fade-in">
+            <span className="text-slate-500 dark:text-slate-500">[{log.time}]</span> {log.text}
           </div>
         ))}
         

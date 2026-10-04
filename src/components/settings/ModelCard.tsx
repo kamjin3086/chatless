@@ -22,17 +22,17 @@ export function ModelCard({
   iconBgGradient = "from-indigo-100 to-purple-100"
 }: ModelCardProps) {
   return (
-    <div className="border border-gray-100 dark:border-gray-700/60 rounded-lg p-4 mb-5 bg-white dark:bg-gray-800 transition-colors">
+    <div className="border border-slate-100 dark:border-slate-700/60 rounded-lg p-4 mb-5 bg-white dark:bg-slate-800 transition-colors">
       <div className="flex gap-4">
         <div className={cn(
           "flex items-center justify-center w-10 h-10 rounded-md text-xl shadow-sm flex-shrink-0",
-          `bg-gradient-to-br ${iconBgGradient} dark:from-gray-100 dark:to-gray-200`
+          `bg-gradient-to-br ${iconBgGradient} dark:from-slate-100 dark:to-slate-200`
         )}>
           {typeof icon === 'string' ? icon : icon}
         </div>
         <div className="flex-1 min-w-0"> {/* Added min-w-0 for flex truncation */} 
           <div className="flex justify-between items-center mb-3 flex-wrap gap-2"> {/* Added flex-wrap */} 
-            <div className="font-medium text-base text-gray-800 dark:text-gray-200 truncate">{name}</div>
+            <div className="font-medium text-base text-slate-800 dark:text-slate-200 truncate">{name}</div>
             <div className={cn(
               "flex items-center gap-2 text-sm px-3 py-1 rounded-full flex-shrink-0",
               isConnected

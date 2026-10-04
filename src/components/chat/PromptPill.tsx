@@ -42,7 +42,7 @@ export function PromptPill() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80 max-w-[28rem]">
         <div className="px-3 py-2">
-          <div className="max-h-60 overflow-auto rounded border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40 p-2 text-xs leading-5 whitespace-pre-wrap">
+          <div className="max-h-60 overflow-auto rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-2 text-xs leading-5 whitespace-pre-wrap">
             {rendered}
           </div>
         </div>

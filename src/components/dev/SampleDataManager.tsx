@@ -205,7 +205,7 @@ export default function SampleDataManager() {
     <div className="space-y-6">
       {/* 确认对话框 */}
       {showResetConfirm && (
-        <div className="fixed inset-0 glass-scrim bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 glass-scrim bg-black/60 flex items-center justify-center z-50">
           <Card className="w-full max-w-md mx-4">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
@@ -296,7 +296,7 @@ export default function SampleDataManager() {
                 )
               ) : (
                 <>
-                  <AlertCircle className="h-5 w-5 text-gray-500" />
+                  <AlertCircle className="h-5 w-5 text-slate-500" />
                   <div>
                     <div className="font-medium">示例数据未初始化</div>
                     <div className="text-sm text-muted-foreground">

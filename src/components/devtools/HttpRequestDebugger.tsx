@@ -423,7 +423,7 @@ export default function HttpRequestDebugger() {
   return (
     <div className="flex h-full">
       {/* 侧边栏 */}
-      <div className={`bg-gray-50 dark:bg-slate-800 border-r transition-all duration-300 ${
+      <div className={`bg-slate-50 dark:bg-slate-800 border-r transition-all duration-300 ${
         isSidebarOpen ? 'w-80' : 'w-0'
       } overflow-hidden`}>
         <div className="p-4 h-full flex flex-col">
@@ -445,29 +445,29 @@ export default function HttpRequestDebugger() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="搜索请求..."
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:border-gray-600"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:border-slate-600"
             />
           </div>
           
           <div className="flex-1 overflow-auto space-y-2">
             {savedRequests.length === 0 ? (
-              <div className="text-gray-500 text-sm text-center py-8">
+              <div className="text-slate-500 text-sm text-center py-8">
                 暂无保存的请求
               </div>
             ) : filteredRequests.length === 0 ? (
-              <div className="text-gray-500 text-sm text-center py-8">
+              <div className="text-slate-500 text-sm text-center py-8">
                 没有匹配的请求
               </div>
             ) : (
               filteredRequests.map((request) => (
-                <div key={request.id} className="border rounded p-3 bg-white dark:bg-slate-700">
+                <div key={request.id} className="border rounded-md p-3 bg-white dark:bg-slate-700">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{request.name}</div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-slate-500 mt-1">
                         {request.method} {request.url}
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-slate-400 mt-1">
                         {new Date(request.savedAt).toLocaleString()}
                       </div>
                     </div>
@@ -521,7 +521,7 @@ export default function HttpRequestDebugger() {
               保存请求
             </Button>
             {clientInfo && (
-              <div className="text-xs text-gray-500 border rounded p-2 bg-gray-50 dark:bg-slate-800">
+              <div className="text-xs text-slate-500 border rounded-md p-2 bg-slate-50 dark:bg-slate-800">
                 <div>TLS Backend: {clientInfo.tls_backend}</div>
                 <div>Available Clients: {clientInfo.available_clients?.join(", ")}</div>
               </div>
@@ -531,20 +531,20 @@ export default function HttpRequestDebugger() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
         <div className="md:col-span-4">
-          <label className="block text-xs text-gray-500 mb-1">请求地址</label>
+          <label className="block text-xs text-slate-500 mb-1">请求地址</label>
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com/api"
-            className="h-9 w-full border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+            className="h-9 w-full border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">方法</label>
+          <label className="block text-xs text-slate-500 mb-1">方法</label>
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value as HttpMethod)}
-            className="h-9 w-full border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+            className="h-9 w-full border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
           >
             {(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as HttpMethod[]).map((m) => (
               <option key={m} value={m}>{m}</option>
@@ -552,11 +552,11 @@ export default function HttpRequestDebugger() {
           </select>
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">模式</label>
+          <label className="block text-xs text-slate-500 mb-1">模式</label>
           <select
             value={requestMode}
             onChange={(e) => setRequestMode(e.target.value as RequestMode)}
-            className="h-9 w-full border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+            className="h-9 w-full border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
           >
             <option value="tauri">Tauri HTTP</option>
             <option value="browser">浏览器 fetch</option>
@@ -564,11 +564,11 @@ export default function HttpRequestDebugger() {
         </div>
         {requestMode === "tauri" && (
           <div>
-            <label className="block text-xs text-gray-500 mb-1">客户端类型</label>
+            <label className="block text-xs text-slate-500 mb-1">客户端类型</label>
             <select
               value={tauriClientType}
               onChange={(e) => setTauriClientType(e.target.value as TauriClientType)}
-              className="h-9 w-full border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+              className="h-9 w-full border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
             >
               <option value="stealth">🥷 隐秘模式（反检测）</option>
               <option value="minimal">⚡ 最小化客户端</option>
@@ -579,11 +579,11 @@ export default function HttpRequestDebugger() {
           </div>
         )}
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Body 类型</label>
+          <label className="block text-xs text-slate-500 mb-1">Body 类型</label>
           <select
             value={bodyMode}
             onChange={(e) => setBodyMode(e.target.value as BodyMode)}
-            className="h-9 w-full border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+            className="h-9 w-full border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
           >
             <option value="none">无</option>
             <option value="json">JSON</option>
@@ -618,7 +618,7 @@ export default function HttpRequestDebugger() {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs text-gray-500">Headers</label>
+          <label className="text-xs text-slate-500">Headers</label>
           <button className="text-xs text-blue-600 hover:underline" onClick={addHeader}>添加一行</button>
         </div>
         <div className="space-y-2">
@@ -628,13 +628,13 @@ export default function HttpRequestDebugger() {
                 value={h.key}
                 onChange={(e) => updateHeader(h.id, { key: e.target.value })}
                 placeholder="Header Key"
-                className="col-span-5 h-8 border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+                className="col-span-5 h-8 border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
               />
               <input
                 value={h.value}
                 onChange={(e) => updateHeader(h.id, { value: e.target.value })}
                 placeholder="Header Value"
-                className="col-span-6 h-8 border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+                className="col-span-6 h-8 border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
               />
               <div className="col-span-1 flex items-center justify-end">
                 <button className="text-xs text-red-600 hover:underline" onClick={() => removeHeader(h.id)}>删除</button>
@@ -646,11 +646,11 @@ export default function HttpRequestDebugger() {
 
       {bodyMode === "json" && (
         <div>
-          <label className="block text-xs text-gray-500 mb-1">JSON Body</label>
+          <label className="block text-xs text-slate-500 mb-1">JSON Body</label>
           <textarea
             value={jsonBody}
             onChange={(e) => setJsonBody(e.target.value)}
-            className="min-h-[160px] w-full border border-gray-300 rounded px-2 py-1 font-mono text-[12px] bg-white dark:bg-slate-800 dark:border-gray-600"
+            className="min-h-[160px] w-full border border-slate-300 rounded-md px-2 py-1 font-mono text-[12px] bg-white dark:bg-slate-800 dark:border-slate-600"
           />
         </div>
       )}
@@ -658,7 +658,7 @@ export default function HttpRequestDebugger() {
       {bodyMode === "form" && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs text-gray-500">表单参数</label>
+            <label className="text-xs text-slate-500">表单参数</label>
             <button className="text-xs text-blue-600 hover:underline" onClick={addForm}>添加一行</button>
           </div>
           {formBody.map((f) => (
@@ -667,13 +667,13 @@ export default function HttpRequestDebugger() {
                 value={f.key}
                 onChange={(e) => updateForm(f.id, { key: e.target.value })}
                 placeholder="字段名"
-                className="col-span-5 h-8 border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+                className="col-span-5 h-8 border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
               />
               <input
                 value={f.value}
                 onChange={(e) => updateForm(f.id, { value: e.target.value })}
                 placeholder="字段值"
-                className="col-span-6 h-8 border border-gray-300 rounded px-2 text-sm bg-white dark:bg-slate-800 dark:border-gray-600"
+                className="col-span-6 h-8 border border-slate-300 rounded-md px-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-600"
               />
               <div className="col-span-1 flex items-center justify-end">
                 <button className="text-xs text-red-600 hover:underline" onClick={() => removeForm(f.id)}>删除</button>
@@ -684,7 +684,7 @@ export default function HttpRequestDebugger() {
       )}
 
       <div className="space-y-2">
-        <label className="text-xs text-gray-500">请求与响应日志</label>
+        <label className="text-xs text-slate-500">请求与响应日志</label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <textarea
             readOnly
@@ -713,7 +713,7 @@ export default function HttpRequestDebugger() {
               }
               return lines.join("\n");
             })()}
-            className="min-h-[240px] w-full border border-gray-300 rounded px-2 py-1 font-mono text-[12px] bg-gray-50 dark:bg-slate-800 dark:border-gray-600"
+            className="min-h-[240px] w-full border border-slate-300 rounded-md px-2 py-1 font-mono text-[12px] bg-slate-50 dark:bg-slate-800 dark:border-slate-600"
           />
           <textarea
             readOnly
@@ -740,7 +740,7 @@ export default function HttpRequestDebugger() {
               }
               return lines.join("\n");
             })()}
-            className="min-h-[240px] w-full border border-gray-300 rounded px-2 py-1 font-mono text-[12px] bg-gray-50 dark:bg-slate-800 dark:border-gray-600"
+            className="min-h-[240px] w-full border border-slate-300 rounded-md px-2 py-1 font-mono text-[12px] bg-slate-50 dark:bg-slate-800 dark:border-slate-600"
           />
         </div>
       </div>
@@ -767,11 +767,11 @@ export default function HttpRequestDebugger() {
                     }
                   }}
                   placeholder="输入请求名称..."
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:border-gray-600"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:border-slate-600"
                   autoFocus
                 />
               </div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-slate-500">
                 <div>方法: {method}</div>
                 <div>URL: {url}</div>
                 <div>模式: {requestMode === "tauri" ? `Tauri (${tauriClientType})` : "浏览器"}</div>

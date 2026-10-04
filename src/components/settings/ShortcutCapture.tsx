@@ -100,7 +100,7 @@ export function ShortcutCapture({ value, onChange }: ShortcutCaptureProps) {
         value={formatDisplay(value)}
         onKeyDown={handleKeyDown}
         placeholder="按下组合键..."
-        className="w-full px-3 py-2.5 border border-gray-100 rounded-lg focus:ring-1 focus:ring-blue-500/30 focus:border-blue-200 transition-all duration-150 bg-white dark:bg-gray-800/30 dark:border-gray-700/30 hover:border-gray-200 dark:hover:border-gray-600/50 cursor-pointer text-center font-mono tracking-wide text-sm"
+        className="w-full px-3 py-2.5 border border-slate-100 rounded-lg focus:ring-1 focus:ring-blue-500/30 focus:border-blue-200 transition-all duration-150 bg-white dark:bg-slate-800/30 dark:border-slate-700/30 hover:border-slate-200 dark:hover:border-slate-600/50 cursor-pointer text-center font-mono tracking-wide text-sm"
       />
       {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
     </div>

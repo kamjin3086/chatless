@@ -31,7 +31,7 @@ export function KnowledgeCard({
   id,
   name,
   icon,
-  iconBg = 'from-gray-400 to-gray-600',
+  iconBg = 'from-slate-400 to-slate-600',
   source,
   docCount,
   description,
@@ -43,18 +43,18 @@ export function KnowledgeCard({
   const IconComponent = getIconComponent(icon);
 
   return (
-    <div className="knowledge-card bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden fade-in flex flex-col h-full">
+    <div className="knowledge-card bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden fade-in flex flex-col h-full">
       <div className="flex p-4 flex-grow">
         <div className={cn(
           "icon-container w-12 h-12 rounded-lg text-white flex items-center justify-center text-xl mr-4 shadow-md flex-shrink-0",
-          `bg-gradient-to-br ${iconBg} dark:from-gray-600 dark:to-gray-700` 
+          `bg-gradient-to-br ${iconBg} dark:from-slate-600 dark:to-slate-700` 
         )}>
           <IconComponent className="w-6 h-6" />
         </div>
         <div className="flex-1 flex flex-col min-w-0"> 
-          <h3 className="font-semibold text-lg mb-2 text-gray-800 dark:text-gray-200 truncate">{name}</h3>
+          <h3 className="font-semibold text-lg mb-2 text-slate-800 dark:text-slate-200 truncate">{name}</h3>
           <div className="flex items-center gap-3 text-sm mb-3 flex-wrap">
-            <span className="tag px-2.5 py-1 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-100 dark:to-gray-200 rounded-full text-gray-700 dark:text-gray-300">
+            <span className="tag px-2.5 py-1 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-100 dark:to-slate-200 rounded-full text-slate-700 dark:text-slate-300">
               {source}
             </span>
             {isEncrypted && (
@@ -63,20 +63,20 @@ export function KnowledgeCard({
                 加密
               </span>
             )}
-            <span className="text-gray-500 dark:text-gray-400">{docCount}个文档</span>
+            <span className="text-slate-500 dark:text-slate-400">{docCount}个文档</span>
           </div>
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2 flex-grow">
+          <p className="text-slate-600 dark:text-slate-400 text-sm mb-4 line-clamp-2 flex-grow">
             {description}
           </p>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-auto pt-2">
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-auto pt-2">
             最近更新: {lastUpdated}
           </div>
         </div>
       </div>
       {/* Footer with Actions */}
-      <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-end gap-2">
+      <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-2">
         <button 
-          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 btn-click-effect"
+          className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-200 btn-click-effect"
           onClick={() => onView(id)}
         >
           查看

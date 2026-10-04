@@ -15,7 +15,7 @@ export function SettingsCard({ children, className, noPadding }: SettingsCardPro
   return (
     <div className={cn(
       "settings-card glass-panel rounded-lg border border-slate-200/60 dark:border-slate-700/40",
-      "bg-white/40 dark:bg-slate-900/40",
+      "bg-white/60 dark:bg-slate-900/40",
       !noPadding && "p-4",
       "mb-4",
       className

@@ -135,7 +135,7 @@ export function PromptImportExport() {
           <TooltipTrigger asChild>
             <button 
               onClick={handleImportClick}
-              className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1"
+              className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1"
             >
               <Upload className="w-3.5 h-3.5" />
               导入
@@ -153,7 +153,7 @@ export function PromptImportExport() {
           <TooltipTrigger asChild>
             <button 
               onClick={handleExport}
-              className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1"
+              className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1"
             >
               <Download className="w-3.5 h-3.5" />
               导出

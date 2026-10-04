@@ -90,7 +90,7 @@ export function ModelList({
           <SelectGroup key={provider.name}>
             <button
               type="button"
-              className="flex w-full items-center gap-2 h-8 px-2 rounded-md hover:bg-slate-100/80 dark:hover:bg-white/6 cursor-pointer"
+              className="flex w-full items-center gap-2 h-8 px-2 rounded-md hover:bg-slate-100/80 dark:hover:bg-white/5 cursor-pointer"
               onClick={() => toggleProvider(provider.name)}
             >
               <ProviderGlyph provider={provider} size={16} />

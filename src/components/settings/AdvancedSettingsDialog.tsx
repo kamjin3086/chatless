@@ -209,7 +209,7 @@ export function AdvancedSettingsDialog({
                       'flex flex-col items-center p-2 rounded-lg border text-center transition-all',
                       effectiveStrategy === option.value
                         ? 'glass-chip-active border-sky-400/60 bg-sky-50 dark:bg-sky-900/20'
-                        : 'border-slate-300/80 dark:border-slate-600/60 bg-white/40 dark:bg-white/5 hover:border-slate-400/80 dark:hover:border-slate-500'
+                        : 'border-slate-300/80 dark:border-slate-600/60 bg-white/60 dark:bg-white/5 hover:border-slate-400/80 dark:hover:border-slate-500'
                     )}
                   >
                     <span

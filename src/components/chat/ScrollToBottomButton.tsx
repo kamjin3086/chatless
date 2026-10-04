@@ -33,8 +33,8 @@ export function ScrollToBottomButton({ show, onClick, className }: ScrollToBotto
             // 位置交给外层的导航条容器（锚定在聊天面板内），组件本身不再 fixed 到窗口。
             "flex items-center justify-center",
             "w-12 h-12 rounded-full",
-            "bg-white dark:bg-gray-800",
-            "border-2 border-gray-200 dark:border-gray-700",
+            "bg-white dark:bg-slate-800",
+            "border-2 border-slate-200 dark:border-slate-700",
             "shadow-lg hover:shadow-xl",
             "transition-all duration-200",
             "hover:scale-110 active:scale-95",
@@ -47,7 +47,7 @@ export function ScrollToBottomButton({ show, onClick, className }: ScrollToBotto
           <ArrowDown 
             className={cn(
               "w-5 h-5",
-              "text-gray-600 dark:text-gray-300",
+              "text-slate-600 dark:text-slate-300",
               "group-hover:text-blue-600 dark:group-hover:text-blue-400",
               "transition-colors duration-200"
             )}

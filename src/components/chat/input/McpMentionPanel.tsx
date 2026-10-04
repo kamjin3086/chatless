@@ -168,7 +168,7 @@ export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuer
           @ MCP 服务器
         </span>
         <button 
-          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
           onMouseDown={(e) => { e.preventDefault(); window.location.assign('/settings?tab=mcpServers'); }}
           title="管理 MCP"
         >
@@ -219,7 +219,7 @@ export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuer
                 {toolsPreview[it.name].map((tool, i) => (
                   <span 
                     key={i} 
-                    className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono"
+                    className="px-1.5 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono"
                   >
                     {tool}
                   </span>

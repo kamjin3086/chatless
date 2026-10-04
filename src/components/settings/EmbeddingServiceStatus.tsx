@@ -413,7 +413,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
           </div>
 
           {status.error && (
-            <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">
+            <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">
               <div className="flex items-start space-x-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>{status.error}</span>
@@ -425,7 +425,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
 
       {/* 简洁的策略选择 */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
           嵌入服务类型
         </label>
         {/* 使用项目标准Button组件 */}
@@ -478,7 +478,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         </Button>
 
         {testResult && !testResult.success && (
-          <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">
+          <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">
             {testResult.error}
           </div>
         )}

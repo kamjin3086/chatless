@@ -936,7 +936,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
           </Button>
         </div>
 
-        <p className="text-xs text-gray-600 dark:text-gray-400">
+        <p className="text-xs text-slate-600 dark:text-slate-400">
           {getStrategyDescription(selectedStrategy)}
         </p>
       </div>
@@ -949,8 +949,8 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
               key={model.id}
               className={`p-4 border rounded-lg transition-all ${
                 model.selected
-                  ? 'border-slate-400/70 bg-slate-100/60 dark:border-white/20 dark:bg-white/8'
-                  : 'border-slate-200/70 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/16'
+                  ? 'border-slate-400/70 bg-slate-100/60 dark:border-white/20 dark:bg-white/10'
+                  : 'border-slate-200/70 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
               }`}
             >
               <div className="flex items-start justify-between">
@@ -985,10 +985,10 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                       )}
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
                     {model.description}
                   </p>
-                  <div className="flex items-center space-x-4 text-xs text-gray-500">
+                  <div className="flex items-center space-x-4 text-xs text-slate-500">
                     <span>{model.size}</span>
                     {model.category && (
                       <span>{model.category}</span>
@@ -1041,7 +1041,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleDeleteModel(model)}
-                      className="flex items-center space-x-1 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      className="flex items-center space-x-1 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                       disabled={model.selected}
                       title={model.selected ? "无法删除正在使用的模型" : "删除模型"}
                     >
@@ -1054,14 +1054,14 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                 {model.status === 'downloading' && (
                   <div className="flex-1 space-y-2">
                     {/* 进度条 */}
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                       <div 
                         className="bg-slate-600 dark:bg-slate-300 h-2 rounded-full transition-all duration-300 ease-out"
                         style={{ width: `${model.downloadProgress || 0}%` }}
                       />
                     </div>
                     {/* 进度文字 */}
-                    <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                       <span className="flex items-center space-x-1">
                         <Clock className="w-3 h-3 animate-spin" />
                         <span>{model.downloadHint || '下载中...'}</span>
@@ -1092,7 +1092,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
 
       {/* 提示信息 */}
       {selectedStrategy === 'ollama' ? (
-        <div className="bg-slate-100/55 dark:bg-white/6 border border-slate-200/60 dark:border-white/10 rounded-lg p-3">
+        <div className="bg-slate-100/55 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 rounded-lg p-3">
           <div className="flex items-start space-x-2">
             <Globe className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-slate-600 dark:text-slate-300">
@@ -1106,7 +1106,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
           </div>
         </div>
       ) : (
-        <div className="bg-slate-100/55 dark:bg-white/6 border border-slate-200/60 dark:border-white/10 rounded-lg p-3">
+        <div className="bg-slate-100/55 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 rounded-lg p-3">
           <div className="flex items-start space-x-2">
             <HardDrive className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-slate-600 dark:text-slate-300">

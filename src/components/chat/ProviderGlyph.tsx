@@ -44,7 +44,7 @@ export function ProviderGlyph({
       alt=""
       width={size}
       height={size}
-      className={cn("shrink-0 rounded-[3px] object-contain", className)}
+      className={cn("shrink-0 rounded-sm object-contain", className)}
       onError={() => {
         if (src !== fallback) setSrc(fallback);
       }}

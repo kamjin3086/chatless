@@ -49,14 +49,14 @@ export function ProviderRenameDialog({ open, onOpenChange, providerName, initial
         </DialogHeader>
         <div className="grid gap-3 py-2">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">显示名称（最长20个字符，不含特殊符号）</label>
+            <label className="block text-xs text-slate-500 mb-1">显示名称（最长20个字符，不含特殊符号）</label>
             <Input
               value={value}
               maxLength={20}
               onChange={(e)=> setValue(e.target.value)}
               placeholder="新的显示名称"
             />
-            <div className="mt-1 text-[10px] text-gray-400">名称仅用于展示，唯一标识仍为 {providerName}</div>
+            <div className="mt-1 text-[10px] text-slate-400">名称仅用于展示，唯一标识仍为 {providerName}</div>
           </div>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="dialogSecondary" onClick={()=>onOpenChange(false)} disabled={saving}>取消</Button>

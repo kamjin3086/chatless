@@ -329,7 +329,7 @@ export function ModelSelector({
         <SelectTrigger
           variant="ghost"
           title={triggerTitle}
-          className="h-7 max-w-[50vw] min-w-0 overflow-hidden text-xs font-medium text-slate-600 dark:text-slate-300"
+          className="h-7 max-w-[50vw] min-w-0 overflow-hidden rounded-lg border border-slate-200/70 bg-white/60 px-2 text-xs font-medium text-slate-600 shadow-none hover:border-slate-300/80 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10"
         >
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             {currentProvider && currentModelId ? (

@@ -132,8 +132,8 @@ export function ModelFetchDebugger({ open, onOpenChange, provider, baseUrl }: Mo
         
         <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="md:col-span-2">
-              <label className="block text-xs text-gray-500 mb-1">粘贴模型列表 Schema（可选）</label>
-              <textarea value={schemaText} onChange={(e)=>setSchemaText(e.target.value)} placeholder="粘贴 OpenAPI/JSON 示例返回或文档片段，AI 将尝试解析出列表路径/ID/名称路径" className="min-h-[90px] w-full border border-gray-300 rounded px-2 py-1 font-mono text-[12px] bg-white dark:bg-slate-800 dark:border-gray-600" />
+              <label className="block text-xs text-slate-500 mb-1">粘贴模型列表 Schema（可选）</label>
+              <textarea value={schemaText} onChange={(e)=>setSchemaText(e.target.value)} placeholder="粘贴 OpenAPI/JSON 示例返回或文档片段，AI 将尝试解析出列表路径/ID/名称路径" className="min-h-[90px] w-full border border-slate-300 rounded-md px-2 py-1 font-mono text-[12px] bg-white dark:bg-slate-800 dark:border-slate-600" />
               <div className="mt-2 flex gap-2">
                 <Button size="sm" variant="dialogPrimary" disabled={!schemaText || parsing} onClick={async()=>{
                   setParsing(true);
@@ -170,36 +170,36 @@ export function ModelFetchDebugger({ open, onOpenChange, provider, baseUrl }: Mo
         <div className="space-y-3 text-sm max-h-[70vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-start">
             <div className="md:col-span-2">
-              <label className="block text-xs text-gray-500 mb-1">主路径</label>
-              <div className="px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-300 break-all select-text text-xs">{(baseUrl || '').replace(/\/$/, '')}</div>
+              <label className="block text-xs text-slate-500 mb-1">主路径</label>
+              <div className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 break-all select-text text-xs">{(baseUrl || '').replace(/\/$/, '')}</div>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">是否带 v1</label>
+              <label className="block text-xs text-slate-500 mb-1">是否带 v1</label>
               <div className="h-7 flex items-center gap-2">
                 <input type="checkbox" checked={!!rule.useV1} onChange={(e)=>setRule(r=>({...r, useV1: e.target.checked}))} />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">路径补充</label>
-              <input value={rule.endpointSuffix || ''} onChange={(e)=>setRule(r=>({...r, endpointSuffix: e.target.value}))} placeholder="/models 或 /v1/models" className="h-7 w-64 border border-gray-300 rounded px-2 text-xs bg-white dark:bg-slate-800 dark:border-gray-600" />
+              <label className="block text-xs text-slate-500 mb-1">路径补充</label>
+              <input value={rule.endpointSuffix || ''} onChange={(e)=>setRule(r=>({...r, endpointSuffix: e.target.value}))} placeholder="/models 或 /v1/models" className="h-7 w-64 border border-slate-300 rounded-md px-2 text-xs bg-white dark:bg-slate-800 dark:border-slate-600" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">列表路径</label>
-              <input value={rule.modelsArrayPath || ''} onChange={(e)=>setRule(r=>({...r, modelsArrayPath: e.target.value}))} placeholder="例如 data 或 result.items" className="h-7 w-64 border border-gray-300 rounded px-2 text-xs bg-white dark:bg-slate-800 dark:border-gray-600" />
+              <label className="block text-xs text-slate-500 mb-1">列表路径</label>
+              <input value={rule.modelsArrayPath || ''} onChange={(e)=>setRule(r=>({...r, modelsArrayPath: e.target.value}))} placeholder="例如 data 或 result.items" className="h-7 w-64 border border-slate-300 rounded-md px-2 text-xs bg-white dark:bg-slate-800 dark:border-slate-600" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">模型ID路径</label>
-              <input value={rule.idPath || ''} onChange={(e)=>setRule(r=>({...r, idPath: e.target.value}))} placeholder="例如 id 或 model" className="h-7 w-64 border border-gray-300 rounded px-2 text-xs bg-white dark:bg-slate-800 dark:border-gray-600" />
+              <label className="block text-xs text-slate-500 mb-1">模型ID路径</label>
+              <input value={rule.idPath || ''} onChange={(e)=>setRule(r=>({...r, idPath: e.target.value}))} placeholder="例如 id 或 model" className="h-7 w-64 border border-slate-300 rounded-md px-2 text-xs bg-white dark:bg-slate-800 dark:border-slate-600" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">模型名称路径</label>
-              <input value={rule.labelPath || ''} onChange={(e)=>setRule(r=>({...r, labelPath: e.target.value}))} placeholder="可选 例如 name 或 label" className="h-7 w-64 border border-gray-300 rounded px-2 text-xs bg-white dark:bg-slate-800 dark:border-gray-600" />
+              <label className="block text-xs text-slate-500 mb-1">模型名称路径</label>
+              <input value={rule.labelPath || ''} onChange={(e)=>setRule(r=>({...r, labelPath: e.target.value}))} placeholder="可选 例如 name 或 label" className="h-7 w-64 border border-slate-300 rounded-md px-2 text-xs bg-white dark:bg-slate-800 dark:border-slate-600" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">名称为空时自动生成</label>
+              <label className="block text-xs text-slate-500 mb-1">名称为空时自动生成</label>
               <div className="h-7 flex items-center gap-2">
                 <input type="checkbox" checked={!!rule.autoLabelFromId} onChange={(e)=>setRule(r=>({...r, autoLabelFromId: e.target.checked}))} />
-                <span className="text-[11px] text-gray-500">将 id 转为“空格分词+每词首字母大写”，如 deepseek-chat → Deepseek Chat</span>
+                <span className="text-[11px] text-slate-500">将 id 转为“空格分词+每词首字母大写”，如 deepseek-chat → Deepseek Chat</span>
               </div>
             </div>
           </div>
@@ -218,21 +218,21 @@ export function ModelFetchDebugger({ open, onOpenChange, provider, baseUrl }: Mo
                 <Badge variant="outline">ID: {debugStats.idMatched ?? 0}</Badge>
                 <Badge variant="outline">名称: {debugStats.labelMatched ?? 0}</Badge>
                 {debugStats.firstExtracted && (
-                  <span className="text-gray-600 dark:text-gray-300 ml-1">提取(ID: {debugStats.firstExtracted.id}, 名称: {debugStats.firstExtracted.label})</span>
+                  <span className="text-slate-600 dark:text-slate-300 ml-1">提取(ID: {debugStats.firstExtracted.id}, 名称: {debugStats.firstExtracted.label})</span>
                 )}
                 <button className="ml-auto text-[11px] text-blue-600 hover:underline" onClick={() => setShowFirstRaw(v => !v)}>{showFirstRaw ? '隐藏原始项' : '查看原始项'}</button>
               </div>
               {showFirstRaw && (
                 <div className="mt-2">
-                  <textarea readOnly value={debugStats.firstRaw ? JSON.stringify(debugStats.firstRaw, null, 2) : ''} className="min-h-[90px] w-full border border-gray-300 rounded px-2 py-1 font-mono text-[11px] bg-gray-50 dark:bg-slate-800 dark:border-gray-600" />
+                  <textarea readOnly value={debugStats.firstRaw ? JSON.stringify(debugStats.firstRaw, null, 2) : ''} className="min-h-[90px] w-full border border-slate-300 rounded-md px-2 py-1 font-mono text-[11px] bg-slate-50 dark:bg-slate-800 dark:border-slate-600" />
                 </div>
               )}
             </>
           )}
 
           <div className="mt-3">
-            <label className="text-xs text-gray-500">获取结果</label>
-            <textarea value={debugResult} onChange={(e)=>setDebugResult(e.target.value)} className="min-h-[160px] w-full border border-gray-300 rounded px-2 py-1 font-mono text-[12px] bg-gray-50 dark:bg-slate-800 dark:border-gray-600" />
+            <label className="text-xs text-slate-500">获取结果</label>
+            <textarea value={debugResult} onChange={(e)=>setDebugResult(e.target.value)} className="min-h-[160px] w-full border border-slate-300 rounded-md px-2 py-1 font-mono text-[12px] bg-slate-50 dark:bg-slate-800 dark:border-slate-600" />
           </div>
         </div>
       </DialogContent>

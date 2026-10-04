@@ -12,20 +12,20 @@ const buttonVariants = cva(
         default:
           "bg-slate-800 text-white hover:bg-slate-900 active:bg-slate-950 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white dark:active:bg-slate-100",
         soft:
-          "bg-slate-100/90 text-slate-700 hover:bg-slate-200/90 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/16",
+          "bg-slate-100/90 text-slate-700 hover:bg-slate-200/90 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20",
         destructive:
           "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
         outline:
-          "border border-slate-200/80 bg-white/50 hover:bg-slate-50 hover:border-slate-300/80 dark:bg-white/5 dark:border-white/12 dark:hover:bg-white/10 dark:hover:border-white/18",
+          "border border-slate-200/80 bg-white/60 hover:bg-slate-50 hover:border-slate-300/80 dark:bg-white/5 dark:border-white/10 dark:hover:bg-white/10 dark:hover:border-white/20",
         secondary:
-          "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/16",
+          "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20",
         ghost:
           "hover:bg-slate-100/80 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-slate-100",
         link: "text-slate-600 underline-offset-4 hover:underline dark:text-slate-300",
         dialogPrimary:
           "bg-slate-800 text-white hover:bg-slate-900 active:bg-slate-950 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white",
         dialogSecondary:
-          "bg-white/70 text-slate-700 border border-slate-200/80 hover:bg-slate-50 hover:border-slate-300/80 dark:bg-white/8 dark:text-slate-200 dark:border-white/12 dark:hover:bg-white/12",
+          "bg-white/80 text-slate-700 border border-slate-200/80 hover:bg-slate-50 hover:border-slate-300/80 dark:bg-white/10 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

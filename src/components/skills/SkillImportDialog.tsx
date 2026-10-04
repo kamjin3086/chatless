@@ -213,24 +213,24 @@ export function SkillImportDialog({
                 "flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
                 selectedFile
                   ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20"
-                  : "border-gray-300 hover:border-gray-400 dark:border-gray-700 dark:hover:border-gray-600"
+                  : "border-slate-300 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600"
               )}
             >
               {selectedFile ? (
                 <>
                   <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     {fileName}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">点击更换文件</p>
+                  <p className="text-xs text-slate-500 mt-1">点击更换文件</p>
                 </>
               ) : (
                 <>
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
                     点击选择 ZIP 文件
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     支持包含 SKILL.md 的技能压缩包
                   </p>
                 </>
@@ -290,11 +290,11 @@ export function SkillImportDialog({
                 }}
                 disabled={isLoading || (gitStatus?.reason === 'shell_plugin_missing')}
               />
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-slate-500">
                 支持 GitHub、GitLab、Gitee 等 Git 仓库
               </p>
               {gitStatus?.ok && gitStatus.versionText && (
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-slate-400">
                   检测到：{gitStatus.versionText}
                 </p>
               )}

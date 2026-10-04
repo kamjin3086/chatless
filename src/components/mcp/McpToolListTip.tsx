@@ -29,22 +29,22 @@ export function McpToolListTip({ toolCount, tools, className, children }: McpToo
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8} className={`max-w-md p-3 z-[9999] ${className || ''}`}>
         <div className="space-y-2">
-          <div className="font-medium text-sm text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-1">
+          <div className="font-medium text-sm text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 pb-1">
             可用工具列表 ({toolCount})
           </div>
           <div className="space-y-1.5 max-h-40 overflow-y-auto">
             {list.map((tool, index) => (
-              <div key={`${tool.name}-${index}`} className="text-xs p-1.5 rounded bg-gray-50 dark:bg-gray-800">
+              <div key={`${tool.name}-${index}`} className="text-xs p-1.5 rounded-md bg-slate-50 dark:bg-slate-800">
                 <div className="font-mono text-blue-600 font-medium break-all">{tool.name}</div>
                 {tool.description && (
-                  <div className="text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed break-words">
+                  <div className="text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed break-words">
                     {tool.description}
                   </div>
                 )}
               </div>
             ))}
             {list.length === 0 && (
-              <div className="text-xs text-gray-500">无可用工具</div>
+              <div className="text-xs text-slate-500">无可用工具</div>
             )}
           </div>
         </div>

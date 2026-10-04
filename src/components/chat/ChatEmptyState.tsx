@@ -2,7 +2,6 @@
 
 import { Bot, Mail, BrainCircuit, HeartPulse, FileCode, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
 
 export type ChatSetupState = "initializing" | "no_provider" | "no_model" | "ready";
 
@@ -12,10 +11,10 @@ interface ChatEmptyStateProps {
 }
 
 const examplePrompts = [
-  { icon: Mail, text: "帮我写一封关于产品发布的邮件", iconClass: "text-sky-500 dark:text-sky-400" },
-  { icon: BrainCircuit, text: "用简单的语言解释什么是黑洞", iconClass: "text-blue-500 dark:text-blue-400" },
-  { icon: HeartPulse, text: "给我一些关于健康饮食的建议", iconClass: "text-emerald-500 dark:text-emerald-400" },
-  { icon: FileCode, text: "写一个Python脚本来重命名文件", iconClass: "text-indigo-500 dark:text-indigo-400" },
+  { icon: Mail, text: "帮我写一封关于产品发布的邮件" },
+  { icon: BrainCircuit, text: "用简单的语言解释什么是黑洞" },
+  { icon: HeartPulse, text: "给我一些关于健康饮食的建议" },
+  { icon: FileCode, text: "写一个Python脚本来重命名文件" },
 ];
 
 function subtitleFor(setupState: ChatSetupState): string {
@@ -65,7 +64,7 @@ export function ChatEmptyState({ onPromptClick, setupState = "ready" }: ChatEmpt
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 w-full">
         {examplePrompts.map((prompt, index) => {
           const Icon = prompt.icon;
           return (
@@ -75,10 +74,10 @@ export function ChatEmptyState({ onPromptClick, setupState = "ready" }: ChatEmpt
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18, delay: 0.16 + index * 0.04 }}
               onClick={() => onPromptClick(prompt.text)}
-              className="flex items-center gap-2 py-1.5 px-0.5 text-left bg-transparent hover:bg-transparent rounded-none border-0 shadow-none appearance-none cursor-pointer group"
+              className="prompt-chip group flex w-full items-center gap-2.5 rounded-lg border border-slate-200/70 bg-white/70 px-3 py-2.5 text-left transition-colors hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20 dark:hover:bg-white/10"
             >
-              <Icon className={cn("w-3.5 h-3.5 shrink-0 transition-colors", prompt.iconClass)} />
-              <span className="text-sm text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors">
+              <Icon className="w-4 h-4 shrink-0 text-sky-500 transition-colors dark:text-sky-400" strokeWidth={1.75} />
+              <span className="text-sm text-slate-600 transition-colors group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100">
                 {prompt.text}
               </span>
             </motion.button>

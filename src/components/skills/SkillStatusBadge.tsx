@@ -71,7 +71,7 @@ export function SkillStatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium',
+        'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium',
         safeConfig.className,
         className
       )}

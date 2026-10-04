@@ -110,7 +110,7 @@ function Sidebar({
       {/* 工作区头部 */}
       <div className={cn(
         "px-4 py-3 flex items-center justify-between border-b",
-        isDark ? "border-neutral-800" : "border-[#522653]"
+        isDark ? "border-slate-800" : "border-[#522653]"
       )}>
         <div className="flex items-center gap-2">
           <span className={cn(
@@ -119,11 +119,11 @@ function Sidebar({
           )}>
             Chatless
           </span>
-          <ChevronDown className="w-4 h-4 text-white/60" />
+          <ChevronDown className="w-4 h-4 text-white/70" />
         </div>
         <button className={cn(
           "p-1.5 rounded-lg",
-          isDark ? "hover:bg-neutral-700 text-neutral-400" : "hover:bg-white/10 text-white/60"
+          isDark ? "hover:bg-slate-700 text-slate-400" : "hover:bg-white/10 text-white/70"
         )}>
           <Edit2 className="w-4 h-4" />
         </button>
@@ -136,7 +136,7 @@ function Sidebar({
             key={item.id}
             className={cn(
               "w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-white/10 text-white/80"
+              isDark ? "hover:bg-slate-800 text-slate-300" : "hover:bg-white/10 text-white/90"
             )}
           >
             <item.icon className="w-4 h-4" />
@@ -146,7 +146,7 @@ function Sidebar({
       </div>
       
       {/* 分隔线 */}
-      <div className={cn("mx-4 border-t", isDark ? "border-neutral-800" : "border-[#522653]")} />
+      <div className={cn("mx-4 border-t", isDark ? "border-slate-800" : "border-[#522653]")} />
       
       {/* 对话列表 */}
       <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -155,7 +155,7 @@ function Sidebar({
           onClick={() => toggleSection('channels')}
           className={cn(
             "w-full flex items-center gap-1 px-2 py-1 text-sm transition-colors",
-            isDark ? "text-neutral-400 hover:text-neutral-200" : "text-white/60 hover:text-white"
+            isDark ? "text-slate-400 hover:text-slate-200" : "text-white/70 hover:text-white"
           )}
         >
           <ChevronRight className={cn("w-3 h-3 transition-transform", expandedSections.channels && "rotate-90")} />
@@ -172,7 +172,7 @@ function Sidebar({
                   "w-full flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors",
                   conv.isActive
                     ? isDark ? "bg-[#1164a3] text-white" : "bg-[#1164a3] text-white"
-                    : isDark ? "hover:bg-neutral-800 text-neutral-300" : "hover:bg-white/10 text-white/80"
+                    : isDark ? "hover:bg-slate-800 text-slate-300" : "hover:bg-white/10 text-white/90"
                 )}
               >
                 <MessageCircle className="w-4 h-4" />
@@ -190,7 +190,7 @@ function Sidebar({
             
             <button className={cn(
               "w-full flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors mt-1",
-              isDark ? "text-neutral-500 hover:text-neutral-300" : "text-white/40 hover:text-white/80"
+              isDark ? "text-slate-500 hover:text-slate-300" : "text-white/60 hover:text-white/90"
             )}>
               <Plus className="w-4 h-4" />
               <span>新建对话</span>
@@ -202,7 +202,7 @@ function Sidebar({
       {/* 底部用户信息 */}
       <div className={cn(
         "px-3 py-2 border-t flex items-center gap-2",
-        isDark ? "border-neutral-800" : "border-[#522653]"
+        isDark ? "border-slate-800" : "border-[#522653]"
       )}>
         <div className="relative">
           <div className={cn(
@@ -217,7 +217,7 @@ function Sidebar({
           <div className={cn("text-sm font-medium truncate", isDark ? "text-white" : "text-white")}>
             用户
           </div>
-          <div className={cn("text-xs truncate", isDark ? "text-neutral-400" : "text-white/60")}>
+          <div className={cn("text-xs truncate", isDark ? "text-slate-400" : "text-white/70")}>
             在线
           </div>
         </div>
@@ -235,11 +235,11 @@ function ToolCallStatus({ calls, theme }: { calls: typeof mockMessages[1]['toolC
   
   return (
     <div className={cn(
-      "inline-flex items-center gap-1 px-2 py-1 rounded text-xs mb-2",
-      isDark ? "bg-neutral-800" : "bg-gray-100"
+      "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs mb-2",
+      isDark ? "bg-slate-800" : "bg-slate-100"
     )}>
       <Check className="w-3 h-3 text-green-500" />
-      <span className={isDark ? "text-neutral-400" : "text-gray-600"}>
+      <span className={isDark ? "text-slate-400" : "text-slate-600"}>
         {calls.length}个工具调用完成
       </span>
       <button
@@ -252,12 +252,12 @@ function ToolCallStatus({ calls, theme }: { calls: typeof mockMessages[1]['toolC
       {expanded && (
         <div className={cn(
           "absolute left-0 top-full mt-1 p-2 rounded-lg shadow-lg border z-10 w-64",
-          isDark ? "bg-neutral-900 border-neutral-700" : "bg-white border-gray-200"
+          isDark ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
         )}>
           {calls.map(call => (
             <div key={call.id} className="flex items-center gap-2 py-1 text-xs">
               <Check className="w-3 h-3 text-green-500" />
-              <code className={isDark ? "text-neutral-300" : "text-gray-700"}>{call.name}</code>
+              <code className={isDark ? "text-slate-300" : "text-slate-700"}>{call.name}</code>
             </div>
           ))}
         </div>
@@ -281,15 +281,15 @@ function MessageActions({ theme, onReply }: { theme: Theme; onReply: () => void 
   return (
     <div className={cn(
       "absolute -top-4 right-0 flex items-center gap-0.5 px-1 py-0.5 rounded-lg shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity",
-      isDark ? "bg-neutral-800 border-neutral-700" : "bg-white border-gray-200"
+      isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"
     )}>
       {actions.map((action, i) => (
         <button
           key={i}
           onClick={action.onClick}
           className={cn(
-            "p-1.5 rounded transition-colors",
-            isDark ? "hover:bg-neutral-700 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+            "p-1.5 rounded-md transition-colors",
+            isDark ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-100 text-slate-500"
           )}
           title={action.label}
         >
@@ -314,17 +314,17 @@ function Reactions({ reactions, theme }: { reactions?: { emoji: string; count: n
           className={cn(
             "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors",
             isDark 
-              ? "bg-neutral-800 border-neutral-700 hover:border-neutral-600" 
-              : "bg-gray-100 border-gray-200 hover:border-gray-300"
+              ? "bg-slate-800 border-slate-700 hover:border-slate-600" 
+              : "bg-slate-100 border-slate-200 hover:border-slate-300"
           )}
         >
           <span>{reaction.emoji}</span>
-          <span className={isDark ? "text-neutral-400" : "text-gray-600"}>{reaction.count}</span>
+          <span className={isDark ? "text-slate-400" : "text-slate-600"}>{reaction.count}</span>
         </button>
       ))}
       <button className={cn(
         "p-1 rounded-full transition-colors",
-        isDark ? "hover:bg-neutral-800 text-neutral-500" : "hover:bg-gray-100 text-gray-400"
+        isDark ? "hover:bg-slate-800 text-slate-500" : "hover:bg-slate-100 text-slate-400"
       )}>
         <Smile className="w-3.5 h-3.5" />
       </button>
@@ -358,11 +358,11 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
           <div className="flex items-baseline gap-2">
             <span className={cn(
               "font-bold text-sm",
-              isDark ? "text-neutral-100" : "text-gray-900"
+              isDark ? "text-slate-100" : "text-slate-900"
             )}>
               {isUser ? '你' : 'Assistant'}
             </span>
-            <span className={cn("text-xs", isDark ? "text-neutral-500" : "text-gray-500")}>
+            <span className={cn("text-xs", isDark ? "text-slate-500" : "text-slate-500")}>
               {message.time}
             </span>
           </div>
@@ -377,7 +377,7 @@ function Message({ message, theme }: { message: typeof mockMessages[0]; theme: T
           {/* 消息文本 */}
           <div className={cn(
             "text-[15px] leading-relaxed whitespace-pre-wrap",
-            isDark ? "text-neutral-200" : "text-gray-800"
+            isDark ? "text-slate-200" : "text-slate-800"
           )}>
             {message.content}
           </div>
@@ -396,14 +396,14 @@ function TimeDivider({ time, theme }: { time: string; theme: Theme }) {
   
   return (
     <div className="flex items-center gap-4 px-5 py-2">
-      <div className={cn("flex-1 h-px", isDark ? "bg-neutral-800" : "bg-gray-200")} />
+      <div className={cn("flex-1 h-px", isDark ? "bg-slate-800" : "bg-slate-200")} />
       <span className={cn(
         "text-xs font-medium px-3 py-1 rounded-full border",
-        isDark ? "bg-neutral-900 border-neutral-800 text-neutral-400" : "bg-white border-gray-200 text-gray-500"
+        isDark ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-white border-slate-200 text-slate-500"
       )}>
         {time}
       </span>
-      <div className={cn("flex-1 h-px", isDark ? "bg-neutral-800" : "bg-gray-200")} />
+      <div className={cn("flex-1 h-px", isDark ? "bg-slate-800" : "bg-slate-200")} />
     </div>
   );
 }
@@ -425,7 +425,7 @@ function InputArea({ theme }: { theme: Theme }) {
     <div className="px-5 pb-4">
       <div className={cn(
         "rounded-lg border overflow-hidden",
-        isDark ? "bg-neutral-900 border-neutral-700" : "bg-white border-gray-300"
+        isDark ? "bg-slate-900 border-slate-700" : "bg-white border-slate-300"
       )}>
         {/* 输入区 */}
         <div className="p-3">
@@ -436,7 +436,7 @@ function InputArea({ theme }: { theme: Theme }) {
             rows={2}
             className={cn(
               "w-full resize-none outline-none text-[15px]",
-              isDark ? "bg-transparent text-neutral-100 placeholder:text-neutral-500" : "bg-transparent text-gray-800 placeholder:text-gray-400"
+              isDark ? "bg-transparent text-slate-100 placeholder:text-slate-500" : "bg-transparent text-slate-800 placeholder:text-slate-400"
             )}
           />
         </div>
@@ -444,24 +444,24 @@ function InputArea({ theme }: { theme: Theme }) {
         {/* 工具栏 */}
         <div className={cn(
           "flex items-center justify-between px-3 py-2 border-t",
-          isDark ? "border-neutral-800" : "border-gray-200"
+          isDark ? "border-slate-800" : "border-slate-200"
         )}>
           <div className="flex items-center gap-1">
             <button className={cn(
-              "p-1.5 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+              "p-1.5 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
             )}>
               <Plus className="w-4 h-4" />
             </button>
             
-            <div className={cn("w-px h-5 mx-1", isDark ? "bg-neutral-800" : "bg-gray-200")} />
+            <div className={cn("w-px h-5 mx-1", isDark ? "bg-slate-800" : "bg-slate-200")} />
             
             {formatButtons.map((btn, i) => (
               <button
                 key={i}
                 className={cn(
-                  "p-1.5 rounded transition-colors",
-                  isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+                  "p-1.5 rounded-md transition-colors",
+                  isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
                 )}
                 title={btn.label}
               >
@@ -469,23 +469,23 @@ function InputArea({ theme }: { theme: Theme }) {
               </button>
             ))}
             
-            <div className={cn("w-px h-5 mx-1", isDark ? "bg-neutral-800" : "bg-gray-200")} />
+            <div className={cn("w-px h-5 mx-1", isDark ? "bg-slate-800" : "bg-slate-200")} />
             
             <button className={cn(
-              "p-1.5 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+              "p-1.5 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
             )}>
               <AtSign className="w-4 h-4" />
             </button>
             <button className={cn(
-              "p-1.5 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+              "p-1.5 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
             )}>
               <Smile className="w-4 h-4" />
             </button>
             <button className={cn(
-              "p-1.5 rounded transition-colors",
-              isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+              "p-1.5 rounded-md transition-colors",
+              isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
             )}>
               <Paperclip className="w-4 h-4" />
             </button>
@@ -495,7 +495,7 @@ function InputArea({ theme }: { theme: Theme }) {
             "p-2 rounded-lg transition-colors",
             value.trim()
               ? "bg-green-600 text-white hover:bg-green-500"
-              : isDark ? "bg-neutral-800 text-neutral-500" : "bg-gray-200 text-gray-400"
+              : isDark ? "bg-slate-800 text-slate-500" : "bg-slate-200 text-slate-400"
           )}>
             <Send className="w-4 h-4" />
           </button>
@@ -531,23 +531,23 @@ export default function SlackInspiredPreview() {
         {/* 顶部栏 */}
         <div className={cn(
           "flex items-center justify-between px-4 py-2 border-b",
-          isDark ? "border-neutral-800" : "border-gray-200"
+          isDark ? "border-slate-800" : "border-slate-200"
         )}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className={cn(
-                "p-1.5 rounded transition-colors",
-                isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+                "p-1.5 rounded-md transition-colors",
+                isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
               )}
             >
               <Hash className="w-4 h-4" />
             </button>
             <div>
-              <h1 className={cn("font-bold", isDark ? "text-white" : "text-gray-900")}>
+              <h1 className={cn("font-bold", isDark ? "text-white" : "text-slate-900")}>
                 新对话 15:34
               </h1>
-              <div className={cn("text-xs flex items-center gap-2", isDark ? "text-neutral-400" : "text-gray-500")}>
+              <div className={cn("text-xs flex items-center gap-2", isDark ? "text-slate-400" : "text-slate-500")}>
                 <span>qwen3-vl-30b</span>
                 <span>·</span>
                 <span className="flex items-center gap-1">
@@ -563,7 +563,7 @@ export default function SlackInspiredPreview() {
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={cn(
                 "p-2 rounded-lg transition-colors",
-                isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+                isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
               )}
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -573,7 +573,7 @@ export default function SlackInspiredPreview() {
               href="/dev-tools/chat-redesign"
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors",
-                isDark ? "hover:bg-neutral-800 text-neutral-400" : "hover:bg-gray-100 text-gray-500"
+                isDark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500"
               )}
             >
               <ArrowLeft className="w-3 h-3" />

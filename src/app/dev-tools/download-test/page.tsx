@@ -164,7 +164,7 @@ if (success) {
       <div className="space-y-4">
         <div className="p-4 border rounded-lg">
           <h2 className="text-lg font-semibold mb-2">环境信息</h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-slate-600 mb-4">
             当前运行环境: <span className="font-medium">{environment}</span>
           </p>
           
@@ -179,7 +179,7 @@ if (success) {
 
         <div className="p-4 border rounded-lg">
           <h2 className="text-lg font-semibold mb-2">测试说明</h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-slate-600 mb-4">
             这个页面用于测试统一的下载服务。下载服务会优先尝试浏览器下载，
             如果失败则回退到Tauri的保存对话框。
           </p>

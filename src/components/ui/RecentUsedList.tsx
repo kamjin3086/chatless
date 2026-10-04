@@ -100,10 +100,10 @@ export function RecentUsedList({
             {visibleItems.map(item => (
               <div
                 key={item.id}
-                className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
                 onClick={() => onItemClick?.(item.id)}
               >
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+                <div className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 flex-shrink-0">
                   {item.customIcon || getIcon(item.iconType)}
                 </div>
                 <div className="min-w-0 flex-1">

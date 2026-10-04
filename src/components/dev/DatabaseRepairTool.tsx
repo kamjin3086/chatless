@@ -458,7 +458,7 @@ export function DatabaseRepairTool() {
                       </div>
                       {(lastRepairResult.error.includes('connection on a closed pool') || 
                         lastRepairResult.error.includes('database connection')) && (
-                        <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+                        <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded-md">
                           <p className="font-medium">💡 解决建议:</p>
                           <ul className="list-disc list-inside ml-2 mt-1">
                             <li>点击"重置连接"按钮重新初始化数据库连接</li>

@@ -320,7 +320,7 @@ export function WorkspaceSettings() {
               <button
                 type="button"
                 onClick={onRetryWorkspace}
-                className="shrink-0 rounded px-1.5 py-0.5 text-[11px] underline hover:no-underline"
+                className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] underline hover:no-underline"
               >
                 重试
               </button>
@@ -335,7 +335,7 @@ export function WorkspaceSettings() {
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="h-7 px-2 text-xs rounded border border-slate-200/60 dark:border-slate-700/40 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+              className="h-7 px-2 text-xs rounded-md border border-slate-200/60 dark:border-slate-700/40 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
             >
               选择会话
               <ChevronDown className={cn("h-3 w-3 transition-transform", showDropdown && "rotate-180")} />
@@ -346,7 +346,7 @@ export function WorkspaceSettings() {
                 <div className="p-1.5 border-b border-slate-100 dark:border-slate-700">
                   <button
                     onClick={toggleSelectAll}
-                    className="w-full text-left px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded transition-colors"
+                    className="w-full text-left px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-md transition-colors"
                   >
                     {selectedIds.size === conversations.length ? '取消全选' : '全选'}
                   </button>
@@ -357,10 +357,10 @@ export function WorkspaceSettings() {
                       <button
                         key={conv.id}
                         onClick={() => toggleSelect(conv.id)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700 rounded transition-colors"
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700 rounded-md transition-colors"
                       >
                         <div className={cn(
-                          "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
+                          "w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0",
                           selectedIds.has(conv.id)
                             ? "bg-slate-800 border-slate-800 dark:bg-slate-200 dark:border-slate-200"
                             : "border-slate-300 dark:border-slate-600"

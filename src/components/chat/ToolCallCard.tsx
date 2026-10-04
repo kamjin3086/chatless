@@ -147,7 +147,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         className={cn(
           // 允许换行：审批按钮在窄窗口下会掉到下一行右侧，而不是把整行撑出消息列
           // （撑出去的部分此前会被右下角的悬浮控件压住）。
-          "flex flex-wrap items-center gap-x-1.5 gap-y-1 py-0.5 rounded transition-colors",
+          "flex flex-wrap items-center gap-x-1.5 gap-y-1 py-0.5 rounded-md transition-colors",
           hasDetails && "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30"
         )}
         onClick={() => hasDetails && setExpanded(!expanded)}
@@ -204,21 +204,21 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
               <>
                 <button
                   onClick={handleApprove}
-                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
                   title={`只运行这一次：${shellScope.command || ''}`}
                 >
                   仅本次
                 </button>
                 <button
                   onClick={() => handleApproveWith('unrestricted')}
-                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-md transition-colors"
                   title="本会话内所有命令都不再询问，可在设置里改回"
                 >
                   本会话不再询问
                 </button>
                 <button
                   onClick={() => handleApproveWith('always')}
-                  className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                   title="以后所有命令都不再询问，可在设置里改回"
                 >
                   始终不再询问
@@ -228,7 +228,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
               <>
                 <button
                   onClick={handleApprove}
-                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
                   title={`只允许这一次：${filesystemScope.path}`}
                 >
                   仅本次
@@ -236,7 +236,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
                 {directoryScope && (
                   <button
                     onClick={() => handleApproveWith('always')}
-                    className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition-colors"
+                    className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-md transition-colors"
                     title={`把该文件夹加入白名单，长期允许读写（删除仍需确认）：${directoryScope.directory}`}
                   >
                     以后都允许
@@ -244,7 +244,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
                 )}
                 <button
                   onClick={() => handleApproveWith('unrestricted')}
-                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded transition-colors"
+                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-md transition-colors"
                   title="本会话内所有文件操作（含删除）都不再询问，可在设置里改回"
                 >
                   本会话不再询问
@@ -253,7 +253,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
             ) : (
               <button
                 onClick={handleApprove}
-                className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
                 title={rememberHint || '确认'}
               >
                 确认
@@ -261,7 +261,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
             )}
             <button
               onClick={handleReject}
-              className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
+              className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               {approvalScope ? '拒绝' : '取消'}
             </button>
@@ -282,7 +282,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {args && Object.keys(args).length > 0 && (
             <div>
               <div className="text-slate-400 dark:text-slate-500 mb-0.5">参数</div>
-              <pre className="text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/30 rounded p-1.5 overflow-auto max-h-28 whitespace-pre-wrap break-all font-mono text-[10px]">
+              <pre className="text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/30 rounded-md p-1.5 overflow-auto max-h-28 whitespace-pre-wrap break-all font-mono text-[10px]">
                 {JSON.stringify(args, null, 2)}
               </pre>
             </div>
@@ -292,7 +292,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {status === 'success' && resultPreview && (
             <div>
               <div className="text-emerald-500/80 mb-0.5">结果</div>
-              <pre className="text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/30 rounded p-1.5 overflow-auto max-h-36 whitespace-pre-wrap break-all font-mono text-[10px]">
+              <pre className="text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/30 rounded-md p-1.5 overflow-auto max-h-36 whitespace-pre-wrap break-all font-mono text-[10px]">
                 {resultPreview}
               </pre>
             </div>
@@ -302,12 +302,12 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {status === 'error' && (
             <div>
               {resultUnknown && (
-                <div className="text-amber-600 dark:text-amber-400 bg-amber-50/70 dark:bg-amber-900/20 rounded p-1.5 mb-1 text-[10px]">
+                <div className="text-amber-600 dark:text-amber-400 bg-amber-50/70 dark:bg-amber-900/20 rounded-md p-1.5 mb-1 text-[10px]">
                   执行结果未知。系统不会自动重试，请通过“继续”重新核对后再决定。
                 </div>
               )}
               <div className="text-red-500/80 mb-0.5">错误</div>
-              <div className="text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-900/10 rounded p-1.5 whitespace-pre-wrap break-all text-[10px]">
+              <div className="text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-900/10 rounded-md p-1.5 whitespace-pre-wrap break-all text-[10px]">
                 {errorMessage || '未知错误'}
               </div>
               {schemaHint && (

@@ -172,7 +172,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
             placeholder="搜索技能..."
             value={filterOptions.search || ''}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="glass-field w-full h-7 pl-7 pr-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
+            className="glass-field w-full h-7 pl-7 pr-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           />
         </div>
         
@@ -182,7 +182,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           <select
             value={filterOptions.source || 'all'}
             onChange={(e) => handleSourceChange(e.target.value)}
-            className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
+            className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           >
             <option value="all">全部来源</option>
             <option value="local">本地</option>
@@ -192,7 +192,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           <select
             value={(filterOptions.status as string) || 'all'}
             onChange={(e) => handleStatusChange(e.target.value)}
-            className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
+            className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           >
             <option value="all">全部状态</option>
             <option value="installed">已安装</option>
@@ -215,7 +215,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           {/* 打开文件夹 */}
           <button
             onClick={handleOpenSkillsFolder}
-            className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1"
+            className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1"
             title="打开技能文件夹"
           >
             <FolderOpen className="w-3.5 h-3.5" />
@@ -224,7 +224,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           {/* 导入 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1">
+              <button className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1">
                 <Plus className="w-3.5 h-3.5" />
                 <span>导入</span>
                 <ChevronDown className="w-3 h-3" />
@@ -244,7 +244,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing || isLoading}
-            className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+            className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1 disabled:opacity-50"
             title="刷新"
           >
             <RefreshCw className={cn('w-3.5 h-3.5', isRefreshing && 'animate-spin')} />

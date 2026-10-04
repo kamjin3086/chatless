@@ -80,47 +80,47 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
         onMouseEnter={() => onHoverChange(true)}
         onMouseLeave={() => onHoverChange(false)}
       >
-        <div className="w-80 h-full bg-stone-950 flex flex-col border-r border-stone-800/50">
+        <div className="w-80 h-full bg-slate-950 flex flex-col border-r border-slate-800/50">
           {/* 头部 - 杂志风格标题 */}
           <div className="p-6 pb-4">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="font-serif text-xl text-stone-200 tracking-tight">对话</h2>
-              <button className="p-2 hover:bg-stone-800/50 rounded-lg transition-colors">
-                <Plus className="w-4 h-4 text-stone-500" />
+              <h2 className="font-serif text-xl text-slate-200 tracking-tight">对话</h2>
+              <button className="p-2 hover:bg-slate-800/50 rounded-lg transition-colors">
+                <Plus className="w-4 h-4 text-slate-500" />
               </button>
             </div>
             <div className="relative">
-              <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600" />
+              <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
               <input 
                 type="text"
                 placeholder="搜索..."
-                className="w-full bg-transparent border-b border-stone-800 px-0 py-2 pl-6 text-sm text-stone-300 placeholder:text-stone-600 focus:outline-none focus:border-stone-600 transition-colors"
+                className="w-full bg-transparent border-b border-slate-800 px-0 py-2 pl-6 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors"
               />
             </div>
           </div>
 
           {/* 会话列表 */}
           <div className="flex-1 overflow-y-auto px-4">
-            <div className="text-[10px] uppercase tracking-widest text-stone-600 mb-3 px-2">今天</div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-600 mb-3 px-2">今天</div>
             {mockConversations.slice(0, 3).map((conv) => (
               <div
                 key={conv.id}
                 className={cn(
                   "px-3 py-3 rounded-lg cursor-pointer transition-all duration-150 mb-1 group",
                   conv.isActive 
-                    ? "bg-stone-800/50" 
-                    : "hover:bg-stone-900/50"
+                    ? "bg-slate-800/50" 
+                    : "hover:bg-slate-900/50"
                 )}
               >
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <div className={cn(
                       "text-sm truncate",
-                      conv.isActive ? "text-stone-100 font-medium" : "text-stone-400"
+                      conv.isActive ? "text-slate-100 font-medium" : "text-slate-400"
                     )}>
                       {conv.title}
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-stone-600">
+                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-600">
                       <Clock className="w-3 h-3" />
                       <span>{conv.time}</span>
                     </div>
@@ -132,16 +132,16 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
               </div>
             ))}
             
-            <div className="text-[10px] uppercase tracking-widest text-stone-600 mb-3 mt-6 px-2">更早</div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-600 mb-3 mt-6 px-2">更早</div>
             {mockConversations.slice(3).map((conv) => (
               <div
                 key={conv.id}
-                className="px-3 py-3 rounded-lg cursor-pointer hover:bg-stone-900/50 transition-all duration-150 mb-1"
+                className="px-3 py-3 rounded-lg cursor-pointer hover:bg-slate-900/50 transition-all duration-150 mb-1"
               >
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-stone-400 truncate">{conv.title}</div>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-stone-600">
+                    <div className="text-sm text-slate-400 truncate">{conv.title}</div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-600">
                       <Clock className="w-3 h-3" />
                       <span>{conv.time}</span>
                     </div>
@@ -155,8 +155,8 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
           </div>
 
           {/* 底部 */}
-          <div className="p-4 border-t border-stone-800/50">
-            <button className="flex items-center gap-3 text-stone-500 hover:text-stone-300 text-sm transition-colors w-full px-2 py-2">
+          <div className="p-4 border-t border-slate-800/50">
+            <button className="flex items-center gap-3 text-slate-500 hover:text-slate-300 text-sm transition-colors w-full px-2 py-2">
               <Settings className="w-4 h-4" />
               <span>设置</span>
             </button>
@@ -172,17 +172,17 @@ function ToolCallNote({ calls }: { calls: typeof mockMessages[1]['toolCalls'] })
   if (!calls || calls.length === 0) return null;
   
   return (
-    <div className="text-xs text-stone-500 mb-4 pl-4 border-l-2 border-stone-800">
-      <span className="text-stone-600 uppercase tracking-wider text-[10px]">执行</span>
+    <div className="text-xs text-slate-500 mb-4 pl-4 border-l-2 border-slate-800">
+      <span className="text-slate-600 uppercase tracking-wider text-[10px]">执行</span>
       <div className="mt-1 space-y-0.5">
         {calls.map((call, i) => (
           <div key={i} className="flex items-center gap-1.5">
             {call.status === 'success' && <Check className="w-3 h-3 text-emerald-500/70" />}
             {call.status === 'error' && <X className="w-3 h-3 text-red-500/70" />}
-            {call.status === 'running' && <Loader2 className="w-3 h-3 text-stone-400 animate-spin" />}
+            {call.status === 'running' && <Loader2 className="w-3 h-3 text-slate-400 animate-spin" />}
             <span>{call.name}</span>
-            <span className="text-stone-600">→</span>
-            <span className="font-mono text-stone-400">{call.target}</span>
+            <span className="text-slate-600">→</span>
+            <span className="font-mono text-slate-400">{call.target}</span>
           </div>
         ))}
       </div>
@@ -197,14 +197,14 @@ function Message({ message }: { message: typeof mockMessages[0] }) {
   return (
     <article className={cn(
       "py-6",
-      !isUser && "border-b border-stone-800/30"
+      !isUser && "border-b border-slate-800/30"
     )}>
       {/* 消息头 - 杂志风格 */}
       <header className="flex items-center gap-3 mb-4">
         <div className={cn(
           "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium",
           isUser 
-            ? "bg-stone-800 text-stone-300" 
+            ? "bg-slate-800 text-slate-300" 
             : "bg-gradient-to-br from-amber-800/30 to-orange-800/30 text-amber-200/80"
         )}>
           {isUser ? 'U' : 'AI'}
@@ -212,11 +212,11 @@ function Message({ message }: { message: typeof mockMessages[0] }) {
         <div>
           <div className={cn(
             "text-sm font-medium",
-            isUser ? "text-stone-300" : "text-stone-200"
+            isUser ? "text-slate-300" : "text-slate-200"
           )}>
             {isUser ? '您' : '助手'}
           </div>
-          <div className="text-xs text-stone-600">{message.time}</div>
+          <div className="text-xs text-slate-600">{message.time}</div>
         </div>
       </header>
       
@@ -227,24 +227,24 @@ function Message({ message }: { message: typeof mockMessages[0] }) {
       <div className={cn(
         "leading-[1.8] whitespace-pre-wrap",
         isUser 
-          ? "text-stone-300 text-[15px]" 
-          : "text-stone-300/90 text-[15px] font-serif"
+          ? "text-slate-300 text-[15px]" 
+          : "text-slate-300/90 text-[15px] font-serif"
       )}>
         {message.content}
       </div>
       
       {/* AI消息操作 - 边注风格 */}
       {!isUser && (
-        <footer className="flex items-center gap-3 mt-6 pt-4 border-t border-stone-800/20">
-          <button className="flex items-center gap-1.5 text-xs text-stone-600 hover:text-stone-400 transition-colors">
+        <footer className="flex items-center gap-3 mt-6 pt-4 border-t border-slate-800/20">
+          <button className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 transition-colors">
             <Copy className="w-3 h-3" />
             <span>复制</span>
           </button>
-          <button className="flex items-center gap-1.5 text-xs text-stone-600 hover:text-stone-400 transition-colors">
+          <button className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 transition-colors">
             <RotateCcw className="w-3 h-3" />
             <span>重试</span>
           </button>
-          <button className="flex items-center gap-1.5 text-xs text-stone-600 hover:text-stone-400 transition-colors">
+          <button className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 transition-colors">
             <Star className="w-3 h-3" />
             <span>收藏</span>
           </button>
@@ -267,10 +267,10 @@ function InputArea() {
   }, [value]);
   
   return (
-    <div className="border-t border-stone-800/50 p-6">
+    <div className="border-t border-slate-800/50 p-6">
       <div className="max-w-2xl mx-auto">
         {/* 输入提示 */}
-        <div className="text-xs text-stone-600 mb-3 uppercase tracking-wider">新消息</div>
+        <div className="text-xs text-slate-600 mb-3 uppercase tracking-wider">新消息</div>
         
         <div className="flex items-end gap-4">
           {/* 输入框 */}
@@ -281,17 +281,17 @@ function InputArea() {
               onChange={(e) => setValue(e.target.value)}
               placeholder="写点什么..."
               rows={1}
-              className="w-full bg-transparent text-stone-200 placeholder:text-stone-600 text-[15px] resize-none focus:outline-none leading-relaxed font-serif border-b border-stone-800 pb-2 focus:border-stone-600 transition-colors"
+              className="w-full bg-transparent text-slate-200 placeholder:text-slate-600 text-[15px] resize-none focus:outline-none leading-relaxed font-serif border-b border-slate-800 pb-2 focus:border-slate-600 transition-colors"
               style={{ minHeight: '28px', maxHeight: '200px' }}
             />
             
             {/* 工具按钮 */}
             <div className="flex items-center gap-4 mt-3">
-              <button className="text-xs text-stone-600 hover:text-stone-400 transition-colors">
+              <button className="text-xs text-slate-600 hover:text-slate-400 transition-colors">
                 <Paperclip className="w-4 h-4" />
               </button>
-              <button className="text-xs text-stone-600 hover:text-stone-400 transition-colors">@ MCP</button>
-              <button className="text-xs text-stone-600 hover:text-stone-400 transition-colors"># 技能</button>
+              <button className="text-xs text-slate-600 hover:text-slate-400 transition-colors">@ MCP</button>
+              <button className="text-xs text-slate-600 hover:text-slate-400 transition-colors"># 技能</button>
             </div>
           </div>
           
@@ -299,8 +299,8 @@ function InputArea() {
           <button className={cn(
             "p-3 rounded-full transition-all shrink-0 mb-1",
             value.trim() 
-              ? "bg-stone-200 text-stone-900 hover:bg-white" 
-              : "bg-stone-800 text-stone-500"
+              ? "bg-slate-200 text-slate-900 hover:bg-white" 
+              : "bg-slate-800 text-slate-500"
           )}>
             <Send className="w-4 h-4" />
           </button>
@@ -314,12 +314,12 @@ export default function EditorialPreview() {
   const [sidebarHovered, setSidebarHovered] = useState(false);
   
   return (
-    <div className="h-screen bg-stone-950 text-stone-300 flex flex-col overflow-hidden">
+    <div className="h-screen bg-slate-950 text-slate-300 flex flex-col overflow-hidden">
       {/* 返回导航 */}
       <div className="fixed top-4 right-4 z-50">
         <Link 
           href="/dev-tools/chat-redesign"
-          className="flex items-center gap-1.5 px-3 py-2 text-xs text-stone-500 hover:text-stone-300 bg-stone-900 rounded-lg border border-stone-800 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-500 hover:text-slate-300 bg-slate-900 rounded-lg border border-slate-800 transition-colors"
         >
           <ArrowLeft className="w-3 h-3" />
           <span>返回</span>
@@ -332,19 +332,19 @@ export default function EditorialPreview() {
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col">
         {/* 顶部栏 - 杂志标题风格 */}
-        <header className="flex items-center justify-between px-8 py-5 border-b border-stone-800/30">
+        <header className="flex items-center justify-between px-8 py-5 border-b border-slate-800/30">
           <div className="flex items-center gap-4">
-            <BookOpen className="w-5 h-5 text-stone-600" />
+            <BookOpen className="w-5 h-5 text-slate-600" />
             <div>
-              <h1 className="font-serif text-lg text-stone-100">新对话 15:34</h1>
-              <div className="text-xs text-stone-600 mt-0.5">qwen3-vl-30b-a3b-instruct · LM Studio</div>
+              <h1 className="font-serif text-lg text-slate-100">新对话 15:34</h1>
+              <div className="text-xs text-slate-600 mt-0.5">qwen3-vl-30b-a3b-instruct · LM Studio</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-3 py-1.5 text-xs text-stone-500 hover:text-stone-300 transition-colors">
+            <button className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
               提示词
             </button>
-            <button className="p-2 text-stone-500 hover:text-stone-300 transition-colors">
+            <button className="p-2 text-slate-500 hover:text-slate-300 transition-colors">
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
@@ -364,8 +364,8 @@ export default function EditorialPreview() {
       </div>
 
       {/* 设计说明 */}
-      <div className="fixed bottom-4 right-4 max-w-xs p-4 bg-stone-900 border border-stone-800 rounded-lg text-xs text-stone-500 z-50">
-        <div className="font-serif text-stone-300 mb-2">Editorial</div>
+      <div className="fixed bottom-4 right-4 max-w-xs p-4 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-500 z-50">
+        <div className="font-serif text-slate-300 mb-2">Editorial</div>
         <ul className="space-y-1">
           <li>• 衬线字体提升阅读体验</li>
           <li>• 杂志风格的版式布局</li>

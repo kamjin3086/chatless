@@ -180,7 +180,7 @@ export function SkillFileTree({ rootPath }: SkillFileTreeProps) {
             if (isDir) toggle(node.path);
           }}
           className={cn(
-            'w-full flex items-center gap-1.5 rounded px-1.5 py-1 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800/50',
+            'w-full flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800/50',
             isDir && 'cursor-pointer',
             !isDir && 'cursor-default'
           )}
@@ -217,7 +217,7 @@ export function SkillFileTree({ rootPath }: SkillFileTreeProps) {
         <button
           onClick={handleRefresh}
           disabled={loading}
-          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
+          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
           title="刷新"
         >
           <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />

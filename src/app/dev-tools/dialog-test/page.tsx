@@ -14,7 +14,7 @@ export default function DialogTestPage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold">对话框测试页面</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-slate-600 dark:text-slate-400">
           测试优化后的模型参数设置对话框
         </p>
       </div>
@@ -31,7 +31,7 @@ export default function DialogTestPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <h4 className="font-medium">功能特性：</h4>
-              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
                 <li>• 轻盈精致的界面设计</li>
                 <li>• 优化的滑块交互体验</li>
                 <li>• 清晰的信息层次结构</li>
@@ -59,7 +59,7 @@ export default function DialogTestPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <h4 className="font-medium">功能特性：</h4>
-              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
                 <li>• 会话级别参数管理</li>
                 <li>• 参数优先级显示</li>
                 <li>• 实时参数变更检测</li>

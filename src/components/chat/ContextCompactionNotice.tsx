@@ -20,7 +20,7 @@ export function ContextCompactionNotice({ messageId }: { messageId: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-slate-600 dark:hover:text-slate-300"
+        className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:text-slate-600 dark:hover:text-slate-300"
         title="较早的历史已被摘要，模型看到的是摘要 + 最近几轮完整对话"
       >
         <Layers className="h-3 w-3" />

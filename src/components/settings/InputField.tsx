@@ -38,7 +38,7 @@ export function InputField({
         <label
           htmlFor={id}
           className={cn(
-            "text-sm font-medium text-gray-700 dark:text-gray-300",
+            "text-sm font-medium text-slate-700 dark:text-slate-300",
             inline ? cn(labelWidthClassName ?? "w-28", "mb-0") : ""
           )}
         >
@@ -47,7 +47,7 @@ export function InputField({
         {tooltip && (
           <div className="group/tooltip relative">
             <HelpCircle className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-help" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-800 text-white text-[10px] rounded shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 max-w-xs">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-800 text-white text-[10px] rounded-md shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 max-w-xs">
               {tooltip}
             </div>
           </div>
@@ -65,7 +65,7 @@ export function InputField({
           type={currentType}
           className={cn(
             // 尺寸与层次：更柔和的边框与更统一的高度/圆角/字号
-            "w-full h-9 px-3 bg-white/90 dark:bg-slate-800/60",
+            "w-full h-9 px-3 bg-white/95 dark:bg-slate-800/60",
             "border border-slate-300/60 dark:border-slate-600/60 rounded-lg text-sm",
             "placeholder:text-slate-400 dark:placeholder:text-slate-500",
             "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400/40",
@@ -79,7 +79,7 @@ export function InputField({
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+            className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none"
             aria-label={showPassword ? "隐藏密码" : "显示密码"}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -87,7 +87,7 @@ export function InputField({
         )}
       </div>
       {description && (
-        <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
           {description}
         </p>
       )}

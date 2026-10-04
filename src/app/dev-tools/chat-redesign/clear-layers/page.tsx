@@ -89,33 +89,33 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
         onMouseLeave={() => onHoverChange(false)}
       >
         {/* 卡片容器 - 有阴影和圆角 */}
-        <div className="w-72 h-[calc(100%-32px)] m-4 bg-zinc-900 rounded-2xl shadow-2xl shadow-black/30 flex flex-col overflow-hidden">
+        <div className="w-72 h-[calc(100%-32px)] m-4 bg-slate-900 rounded-2xl shadow-2xl shadow-black/30 flex flex-col overflow-hidden">
           {/* 头部 */}
           <div className="p-4 pb-3">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-zinc-400" />
-                <span className="text-zinc-200 font-medium">对话</span>
+                <MessageSquare className="w-5 h-5 text-slate-400" />
+                <span className="text-slate-200 font-medium">对话</span>
               </div>
-              <button className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors">
-                <Plus className="w-4 h-4 text-zinc-400" />
+              <button className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors">
+                <Plus className="w-4 h-4 text-slate-400" />
               </button>
             </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input 
                 type="text"
                 placeholder="搜索对话..."
-                className="w-full bg-zinc-800/80 rounded-xl px-3 py-2.5 pl-10 text-sm text-zinc-300 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-700 transition-all"
+                className="w-full bg-slate-800/80 rounded-xl px-3 py-2.5 pl-10 text-sm text-slate-300 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-700 transition-all"
               />
             </div>
           </div>
 
           {/* 分组标签 */}
           <div className="px-4 py-2 flex items-center gap-2">
-            <button className="px-3 py-1.5 bg-zinc-800 rounded-lg text-xs text-zinc-300 font-medium">最近</button>
-            <button className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">收藏</button>
-            <button className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">重要</button>
+            <button className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs text-slate-300 font-medium">最近</button>
+            <button className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">收藏</button>
+            <button className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">重要</button>
           </div>
 
           {/* 会话列表 */}
@@ -126,14 +126,14 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
                 className={cn(
                   "px-3 py-3 rounded-xl cursor-pointer transition-all duration-150 mb-1",
                   conv.isActive 
-                    ? "bg-zinc-800 shadow-md" 
-                    : "hover:bg-zinc-800/50"
+                    ? "bg-slate-800 shadow-md" 
+                    : "hover:bg-slate-800/50"
                 )}
               >
                 <div className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-zinc-200 font-medium truncate">{conv.title}</div>
-                    <div className="text-xs text-zinc-500 mt-0.5">{conv.time}</div>
+                    <div className="text-sm text-slate-200 font-medium truncate">{conv.title}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{conv.time}</div>
                   </div>
                   {conv.hasUnread && (
                     <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
@@ -144,8 +144,8 @@ function FloatingSidebar({ isHovered, onHoverChange }: {
           </div>
 
           {/* 底部 */}
-          <div className="p-3 border-t border-zinc-800">
-            <button className="flex items-center gap-2 text-zinc-500 hover:text-zinc-300 text-sm transition-colors w-full px-3 py-2 rounded-xl hover:bg-zinc-800">
+          <div className="p-3 border-t border-slate-800">
+            <button className="flex items-center gap-2 text-slate-500 hover:text-slate-300 text-sm transition-colors w-full px-3 py-2 rounded-xl hover:bg-slate-800">
               <Settings className="w-4 h-4" />
               <span>设置</span>
             </button>
@@ -171,7 +171,7 @@ function ToolCallGroup({ calls }: { calls: typeof mockMessages[1]['toolCalls'] }
         onClick={() => setExpanded(!expanded)}
         className={cn(
           "w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs transition-all",
-          "bg-zinc-800/50 hover:bg-zinc-800/80"
+          "bg-slate-800/50 hover:bg-slate-800/80"
         )}
       >
         <div className="flex items-center gap-1.5">
@@ -182,26 +182,26 @@ function ToolCallGroup({ calls }: { calls: typeof mockMessages[1]['toolCalls'] }
           ) : (
             <X className="w-3.5 h-3.5 text-red-400" />
           )}
-          <span className="text-zinc-400">
+          <span className="text-slate-400">
             {calls.length}个操作{allSuccess ? '已完成' : hasRunning ? '执行中' : '有错误'}
           </span>
         </div>
         <ChevronDown className={cn(
-          "w-3.5 h-3.5 text-zinc-500 ml-auto transition-transform",
+          "w-3.5 h-3.5 text-slate-500 ml-auto transition-transform",
           expanded && "rotate-180"
         )} />
       </button>
       
       {expanded && (
-        <div className="mt-1 bg-zinc-800/30 rounded-xl p-2 space-y-1">
+        <div className="mt-1 bg-slate-800/30 rounded-xl p-2 space-y-1">
           {calls.map((call, i) => (
-            <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors">
+            <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800/50 transition-colors">
               {call.status === 'success' && <Check className="w-3 h-3 text-emerald-400" />}
               {call.status === 'error' && <X className="w-3 h-3 text-red-400" />}
               {call.status === 'running' && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
-              <span className="text-xs text-zinc-400">{call.name}</span>
-              <span className="text-xs text-zinc-600">·</span>
-              <span className="text-xs text-zinc-500 font-mono truncate">{call.target}</span>
+              <span className="text-xs text-slate-400">{call.name}</span>
+              <span className="text-xs text-slate-600">·</span>
+              <span className="text-xs text-slate-500 font-mono truncate">{call.target}</span>
             </div>
           ))}
         </div>
@@ -221,13 +221,13 @@ function Message({ message, isLast }: { message: typeof mockMessages[0]; isLast?
     )}>
       {/* 连接线 - 非最后一条且是AI消息时显示 */}
       {!isUser && !isLast && (
-        <div className="absolute left-4 top-full w-px h-4 bg-gradient-to-b from-zinc-700/50 to-transparent" />
+        <div className="absolute left-4 top-full w-px h-4 bg-gradient-to-b from-slate-700/50 to-transparent" />
       )}
       
       <div className={cn(
         "relative rounded-2xl p-4 transition-all",
         isUser 
-          ? "bg-zinc-800 ml-12" 
+          ? "bg-slate-800 ml-12" 
           : "bg-transparent"
       )}>
         {/* 用户标识 */}
@@ -243,9 +243,9 @@ function Message({ message, isLast }: { message: typeof mockMessages[0]; isLast?
             <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center">
               <Zap className="w-3 h-3 text-emerald-400" />
             </div>
-            <span className="text-xs text-zinc-500">AI</span>
-            <span className="text-xs text-zinc-600">·</span>
-            <span className="text-xs text-zinc-600">{message.time}</span>
+            <span className="text-xs text-slate-500">AI</span>
+            <span className="text-xs text-slate-600">·</span>
+            <span className="text-xs text-slate-600">{message.time}</span>
           </div>
         )}
         
@@ -255,23 +255,23 @@ function Message({ message, isLast }: { message: typeof mockMessages[0]; isLast?
         {/* 消息内容 */}
         <div className={cn(
           "text-sm leading-relaxed whitespace-pre-wrap",
-          isUser ? "text-zinc-200" : "text-zinc-300"
+          isUser ? "text-slate-200" : "text-slate-300"
         )}>
           {message.content}
         </div>
         
         {/* 用户消息时间 */}
         {isUser && (
-          <div className="text-xs text-zinc-600 mt-2 text-right">{message.time}</div>
+          <div className="text-xs text-slate-600 mt-2 text-right">{message.time}</div>
         )}
         
         {/* AI消息操作 */}
         {!isUser && (
           <div className="flex items-center gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button className="p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800 rounded-lg transition-all">
+            <button className="p-1.5 text-slate-600 hover:text-slate-400 hover:bg-slate-800 rounded-lg transition-all">
               <Copy className="w-3.5 h-3.5" />
             </button>
-            <button className="p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800 rounded-lg transition-all">
+            <button className="p-1.5 text-slate-600 hover:text-slate-400 hover:bg-slate-800 rounded-lg transition-all">
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -297,7 +297,7 @@ function InputArea() {
     <div className="p-4">
       <div className="max-w-3xl mx-auto">
         {/* 提升的输入卡片 */}
-        <div className="bg-zinc-800 rounded-2xl shadow-xl shadow-black/20 overflow-hidden">
+        <div className="bg-slate-800 rounded-2xl shadow-xl shadow-black/20 overflow-hidden">
           {/* 输入区 */}
           <div className="p-4">
             <textarea
@@ -306,21 +306,21 @@ function InputArea() {
               onChange={(e) => setValue(e.target.value)}
               placeholder="输入消息..."
               rows={1}
-              className="w-full bg-transparent text-zinc-200 placeholder:text-zinc-500 text-sm resize-none focus:outline-none leading-relaxed"
+              className="w-full bg-transparent text-slate-200 placeholder:text-slate-500 text-sm resize-none focus:outline-none leading-relaxed"
               style={{ minHeight: '24px', maxHeight: '200px' }}
             />
           </div>
           
           {/* 底部工具栏 */}
-          <div className="flex items-center justify-between px-3 py-2 bg-zinc-850 border-t border-zinc-700/50">
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-850 border-t border-slate-700/50">
             <div className="flex items-center gap-1">
-              <button className="p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 rounded-lg transition-all">
+              <button className="p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 rounded-lg transition-all">
                 <Paperclip className="w-4 h-4" />
               </button>
-              <button className="px-2.5 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 rounded-lg transition-all">
+              <button className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 rounded-lg transition-all">
                 @ MCP
               </button>
-              <button className="px-2.5 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 rounded-lg transition-all">
+              <button className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 rounded-lg transition-all">
                 # 技能
               </button>
             </div>
@@ -328,7 +328,7 @@ function InputArea() {
               "p-2.5 rounded-xl transition-all",
               value.trim() 
                 ? "bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20" 
-                : "bg-zinc-700 text-zinc-500"
+                : "bg-slate-700 text-slate-500"
             )}>
               <Send className="w-4 h-4" />
             </button>
@@ -343,12 +343,12 @@ export default function ClearLayersPreview() {
   const [sidebarHovered, setSidebarHovered] = useState(false);
   
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-300 flex flex-col overflow-hidden">
+    <div className="h-screen bg-slate-950 text-slate-300 flex flex-col overflow-hidden">
       {/* 返回导航 */}
       <div className="fixed top-4 right-4 z-50">
         <Link 
           href="/dev-tools/chat-redesign"
-          className="flex items-center gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 rounded-xl shadow-lg transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 bg-slate-800 rounded-xl shadow-lg transition-colors"
         >
           <ArrowLeft className="w-3 h-3" />
           <span>返回</span>
@@ -361,18 +361,18 @@ export default function ClearLayersPreview() {
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col">
         {/* 顶部栏 - 提升层级 */}
-        <div className="flex items-center justify-between px-6 py-4 bg-zinc-900/50 backdrop-blur-sm">
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="flex items-center gap-3">
-            <h1 className="text-zinc-100 font-medium">新对话 15:34</h1>
-            <div className="px-2.5 py-1 rounded-lg bg-zinc-800 text-xs text-zinc-400">
+            <h1 className="text-slate-100 font-medium">新对话 15:34</h1>
+            <div className="px-2.5 py-1 rounded-lg bg-slate-800 text-xs text-slate-400">
               qwen3-vl-30b
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors">
+            <button className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
               提示词
             </button>
-            <button className="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors">
+            <button className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors">
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
@@ -392,8 +392,8 @@ export default function ClearLayersPreview() {
       </div>
 
       {/* 设计说明 */}
-      <div className="fixed bottom-4 right-4 max-w-xs p-4 bg-zinc-800 rounded-2xl shadow-xl text-xs text-zinc-500 z-50">
-        <div className="font-semibold text-zinc-300 mb-2">Clear Layers</div>
+      <div className="fixed bottom-4 right-4 max-w-xs p-4 bg-slate-800 rounded-2xl shadow-xl text-xs text-slate-500 z-50">
+        <div className="font-semibold text-slate-300 mb-2">Clear Layers</div>
         <ul className="space-y-1">
           <li>• 层级阴影区分内容</li>
           <li>• 圆角卡片悬浮侧边栏</li>

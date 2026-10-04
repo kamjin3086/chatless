@@ -414,7 +414,7 @@ export default function DevToolsPage() {
               <p className="text-yellow-700 dark:text-yellow-300 mb-3">
                 开发工具需要在Tauri应用的开发环境中运行。
               </p>
-              <div className="bg-yellow-100 dark:bg-yellow-900/40 rounded p-3 mb-3">
+              <div className="bg-yellow-100 dark:bg-yellow-900/40 rounded-md p-3 mb-3">
                 <div className="text-sm space-y-1">
                   <div><strong>开发环境:</strong> {status?.isDevEnv ? '是' : '否'}</div>
                   <div><strong>Tauri应用:</strong> {status?.isTauriApp ? '是' : '否'}</div>
@@ -425,7 +425,7 @@ export default function DevToolsPage() {
               <div className="space-y-2 text-sm">
                 <p className="font-medium">要使用开发工具，请确保：</p>
                 <ol className="list-decimal list-inside space-y-1 text-yellow-700 dark:text-yellow-300">
-                  <li>应用在开发模式下运行：<code className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">pnpm tauri dev</code></li>
+                  <li>应用在开发模式下运行：<code className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded-md">pnpm tauri dev</code></li>
                   <li>在Tauri应用中访问（而非独立浏览器）</li>
                   <li>或者使用终端命令进行数据库操作（见下方）</li>
                 </ol>
@@ -439,14 +439,14 @@ export default function DevToolsPage() {
           <p className="text-sm text-muted-foreground mb-2">
             你可以在终端中使用以下命令进行数据库操作：
           </p>
-          <div className="space-y-1 font-mono text-sm bg-black text-green-400 p-3 rounded">
-            <div><span className="text-gray-400">#</span> 完全重置数据库</div>
+          <div className="space-y-1 font-mono text-sm bg-black text-green-400 p-3 rounded-md">
+            <div><span className="text-slate-400">#</span> 完全重置数据库</div>
             <div>pnpm dev:db:reset</div>
-            <div className="mt-2"><span className="text-gray-400">#</span> 重置并添加测试数据</div>
+            <div className="mt-2"><span className="text-slate-400">#</span> 重置并添加测试数据</div>
             <div>pnpm dev:db:reset-test</div>
-            <div className="mt-2"><span className="text-gray-400">#</span> 清理数据（保留表结构）</div>
+            <div className="mt-2"><span className="text-slate-400">#</span> 清理数据（保留表结构）</div>
             <div>pnpm dev:db:clear</div>
-            <div className="mt-2"><span className="text-gray-400">#</span> 显示开发工具菜单</div>
+            <div className="mt-2"><span className="text-slate-400">#</span> 显示开发工具菜单</div>
             <div>pnpm dev:db:menu</div>
           </div>
         </div>
@@ -475,7 +475,7 @@ export default function DevToolsPage() {
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <input
-              className="border px-2 py-1 rounded w-full"
+              className="border px-2 py-1 rounded-md w-full"
               placeholder="/dev-tools/mcp-test"
               value={jumpPath}
               onChange={(e)=>setJumpPath(e.target.value)}
@@ -620,7 +620,7 @@ export default function DevToolsPage() {
                     </p>
                     
                     {lockStatus && (
-                      <div className="bg-muted p-3 rounded text-sm">
+                      <div className="bg-muted p-3 rounded-md text-sm">
                         <div><strong>锁状态:</strong> {lockStatus.hasLock ? '已锁定' : '未锁定'}</div>
                         {lockStatus.hasLock && (
                           <>
@@ -706,7 +706,7 @@ export default function DevToolsPage() {
                     </p>
                     
                     {vectorStats && (
-                      <div className="bg-muted p-3 rounded text-sm space-y-1">
+                      <div className="bg-muted p-3 rounded-md text-sm space-y-1">
                         <div><strong>总向量数:</strong> {vectorStats.totalVectors}</div>
                         <div><strong>活跃向量:</strong> {vectorStats.activeVectors}</div>
                         <div><strong>已删除:</strong> {vectorStats.deletedVectors}</div>
@@ -717,7 +717,7 @@ export default function DevToolsPage() {
                     )}
                     
                     {vectorMessage && (
-                      <div className="bg-muted p-2 rounded text-sm">
+                      <div className="bg-muted p-2 rounded-md text-sm">
                         {vectorMessage}
                       </div>
                     )}
@@ -773,7 +773,7 @@ export default function DevToolsPage() {
                     </p>
                     
                     {configInfo && (
-                      <div className="bg-muted p-3 rounded text-sm space-y-2">
+                      <div className="bg-muted p-3 rounded-md text-sm space-y-2">
                         <div>
                           <strong>当前嵌入配置:</strong>
                           <div className="ml-4 mt-1 space-y-1">
@@ -804,7 +804,7 @@ export default function DevToolsPage() {
                     )}
                     
                     {configMessage && (
-                      <div className="bg-muted p-2 rounded text-sm whitespace-pre-line">
+                      <div className="bg-muted p-2 rounded-md text-sm whitespace-pre-line">
                         {configMessage}
                       </div>
                     )}
@@ -874,7 +874,7 @@ export default function DevToolsPage() {
                     </Button>
                     
                     {googleTestResult && (
-                      <div className="bg-muted p-3 rounded text-sm max-h-32 overflow-y-auto">
+                      <div className="bg-muted p-3 rounded-md text-sm max-h-32 overflow-y-auto">
                         <div className="whitespace-pre-wrap">{googleTestResult}</div>
                       </div>
                     )}
