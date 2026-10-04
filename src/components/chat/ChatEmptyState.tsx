@@ -34,7 +34,7 @@ export function ChatEmptyState({ onPromptClick, setupState = "ready" }: ChatEmpt
   }
 
   return (
-    <div className="flex flex-col items-center justify-center text-center space-y-4 px-4 py-8 w-full max-w-xl mx-auto min-h-0">
+    <div className="mx-auto flex w-full max-w-[var(--chat-content-max)] flex-col items-center justify-center space-y-4 px-6 py-8 text-center min-h-0">
       <motion.div
         initial={{ opacity: 0, scale: 0.92 }}
         animate={{ opacity: 1, scale: 1 }}

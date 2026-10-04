@@ -819,7 +819,7 @@ export function ChatInput({
 
   return (
     <div className={cn(
-      "input-area w-full max-w-3xl mx-auto mb-2",
+      "input-area w-full max-w-[var(--chat-content-max)] mx-auto mb-2",
       disabled && "opacity-45 pointer-events-none"
     )}>
       {/* 编辑模式提示栏 */}

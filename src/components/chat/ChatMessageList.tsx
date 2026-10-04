@@ -106,7 +106,7 @@ export function ChatMessageList({
 
   return (
     <div className="flex-1 custom-scrollbar" style={{ overscrollBehavior: 'contain' }}>
-      <div className="max-w-[48rem] mx-auto w-full">
+      <div className="mx-auto w-full max-w-[var(--chat-content-max)]">
       <Virtuoso
         totalCount={renderItems.length}
         data={renderItems}

@@ -6,6 +6,20 @@
   /* 用于逐字动画的默认延迟（可在元素上通过 --char-delay 覆盖） */
   --char-delay: 12ms;
   --titlebar-height: 0px;
+  /*
+   * Width of the conversation column (messages + composer). It grows with the
+   * window instead of leaving a fixed 48rem column in the middle of a wide
+   * screen, but stops before the line length gets uncomfortable to read.
+   */
+  --chat-content-max: 48rem;
+}
+
+@media (min-width: 1200px) {
+  :root { --chat-content-max: 56rem; }
+}
+
+@media (min-width: 1600px) {
+  :root { --chat-content-max: 64rem; }
 }
 
 /* 逐字平滑淡入关键帧：通过为每个字符包裹 span 的方式成本太高，
