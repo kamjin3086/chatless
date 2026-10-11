@@ -1,5 +1,5 @@
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
-import { useAuthorizationStore, type ApprovalDecision } from '@/store/authorizationStore';
+import { useAuthorizationStore, type ApprovalDecision, type PendingApprovalScope } from '@/store/authorizationStore';
 import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permissions';
 import { resolveAccess, setConversationAccess } from '@/lib/mcp/accessPolicy';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
@@ -373,67 +373,24 @@ export class ToolExecutionPipeline {
           let decision: ApprovalDecision = 'once';
 
           if (policy.kind === 'ask') {
-            markPendingAuth({ assistantMessageId, server, tool, cardId });
             // "以后都允许" is only meaningful for a folder we can grant, so a
             // delete reports its parent but never offers that choice.
             const approvableDirectory = policy.approvableDirectory;
-            const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
-              runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
-              args: args || {},
+            const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnameOf(primaryAbsolutePath);
+            const approval = await this.requestApproval({
+              assistantMessageId, conversationId: invocation.conversationId,
+              server, tool, cardId, callKey, callId,
+              args: (args || {}) as Record<string, unknown>,
               scope: { operation: op, path: primaryAbsolutePath, directory: approvableDirectory || undefined },
               approvalScope: approvableDirectory
                 ? { kind: 'filesystem', op, path: primaryAbsolutePath, directory: approvableDirectory }
-                : undefined });
-            const authorized = approval.approved;
-            approved = authorized;
-            decision = approval.decision;
-
-            if (this.coordinator.isMessageCancelled(assistantMessageId)) {
-              this.coordinator.markToolCallComplete(callKey, 'failed');
-              return { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId };
-            }
-            if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
-              this.coordinator.markToolCallComplete(callKey, 'failed');
-              return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
-            }
-            if (!authorized) {
-              const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnameOf(primaryAbsolutePath);
-              markError(
-                { assistantMessageId, server, tool, cardId },
-                `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`
-              );
-              this.coordinator.markToolCallComplete(callKey, 'failed');
-              const denied = buildAuthDeniedResult({
-                server,
-                tool,
-                message: 'User denied authorization',
-                conversationId: invocation.conversationId,
-                assistantMessageId,
-                cardId,
-                args: args || {},
-                fs: {
-                  op,
-                  inputPath: resolution.requestedPath,
-                  resolvedPath: primaryAbsolutePath,
-                  suggestDir,
-                },
-              });
-              try {
-                await appendWorkspaceToolStep({
-                  conversationId: invocation.conversationId,
-                  assistantMessageId,
-                  cardId,
-                  callId,
-                  server,
-                  tool,
-                  args: args || {},
-                  result: denied,
-                });
-              } catch {
-                // ignore
-              }
-              return denied;
-            }
+                : undefined,
+              denyMessage: `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`,
+              denyFs: { op, inputPath: resolution.requestedPath, resolvedPath: primaryAbsolutePath, suggestDir },
+            });
+            if (approval.kind === 'halted') return approval.result;
+            approved = true;
+            decision = approval.answer;
 
             // Turn the user's choice into trust that lasts as long as they asked
             // for: "always" joins the persistent allowlist (never with delete),
@@ -522,55 +479,21 @@ export class ToolExecutionPipeline {
         : await shouldAutoAuthorize(server);
       const effectiveArgs = (execInvocation.args || args || {}) as any;
       if (decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
-        markPendingAuth({ assistantMessageId, server, tool, cardId });
-        const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
-          runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
-          args: effectiveArgs || {},
+        const approval = await this.requestApproval({
+          assistantMessageId, conversationId: invocation.conversationId,
+          server, tool, cardId, callKey, callId,
+          args: (effectiveArgs || {}) as Record<string, unknown>,
           approvalScope: isShell
             ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
-            : undefined });
-        const authorized = approval.approved;
-        if (this.coordinator.isMessageCancelled(assistantMessageId)) {
-          this.coordinator.markToolCallComplete(callKey, 'failed');
-          return { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId };
-        }
-        if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
-          this.coordinator.markToolCallComplete(callKey, 'failed');
-          return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
-        }
-        if (!authorized) {
-          markError({ assistantMessageId, server, tool, cardId }, '用户拒绝授权此工具调用');
-          this.coordinator.markToolCallComplete(callKey, 'failed');
-          const denied = buildAuthDeniedResult({
-            server,
-            tool,
-            message: 'User denied authorization',
-            conversationId: invocation.conversationId,
-            assistantMessageId,
-            cardId,
-            args: effectiveArgs || {},
-          });
-          try {
-            await appendWorkspaceToolStep({
-              conversationId: invocation.conversationId,
-              assistantMessageId,
-              cardId,
-              callId,
-              server,
-              tool,
-              args: effectiveArgs || {},
-              result: denied,
-            });
-          } catch {
-            // ignore
-          }
-          return denied;
-        }
+            : undefined,
+          denyMessage: '用户拒绝授权此工具调用',
+        });
+        if (approval.kind === 'halted') return approval.result;
 
         // A shell approval can end the questions for this session or for good;
         // the next command re-checks the policy, so nothing is bypassed.
         if (isShell) {
-          const promotion = planShellPromotion({ answer: approval.decision });
+          const promotion = planShellPromotion({ answer: approval.answer });
           if (promotion.conversationUnrestricted) {
             setConversationAccess('shell', invocation.conversationId, 'unrestricted');
           }
@@ -829,6 +752,80 @@ export class ToolExecutionPipeline {
    * `@WorkDir` folder, so this returns a structured result the model can act on
    * and never dispatches to an adapter.
    */
+  /**
+   * One approval round-trip. Marks the card pending, waits for the answer, then
+   * hands back either the answer or the result the caller must return: the
+   * cancellation checks, the denial card and its workspace step used to be
+   * written twice, once per branch, which is how they started to drift.
+   */
+  private async requestApproval(params: {
+    assistantMessageId: string
+    conversationId: string
+    server: string
+    tool: string
+    cardId: string
+    callKey: string
+    callId?: string
+    args: Record<string, unknown>
+    scope?: Record<string, unknown>
+    approvalScope?: PendingApprovalScope
+    denyMessage: string
+    denyFs?: { op?: string; inputPath?: string; resolvedPath?: string; suggestDir?: string }
+  }): Promise<{ kind: 'approved'; answer: ApprovalDecision } | { kind: 'halted'; result: unknown }> {
+    const { assistantMessageId, conversationId, server, tool, cardId, callKey, callId } = params;
+    markPendingAuth({ assistantMessageId, server, tool, cardId });
+    const approval = await waitForCallApproval({
+      id: `${assistantMessageId}:${cardId}`,
+      runId: assistantMessageId,
+      conversationId,
+      callId,
+      server,
+      tool,
+      args: params.args,
+      scope: params.scope,
+      approvalScope: params.approvalScope,
+    });
+
+    if (this.coordinator.isMessageCancelled(assistantMessageId)) {
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      return { kind: 'halted', result: { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId } };
+    }
+    if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      return { kind: 'halted', result: { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId } };
+    }
+    if (!approval.approved) {
+      markError({ assistantMessageId, server, tool, cardId }, params.denyMessage);
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      const denied = buildAuthDeniedResult({
+        server,
+        tool,
+        message: 'User denied authorization',
+        conversationId,
+        assistantMessageId,
+        cardId,
+        args: params.args,
+        fs: params.denyFs,
+      });
+      try {
+        await appendWorkspaceToolStep({
+          conversationId,
+          assistantMessageId,
+          cardId,
+          callId,
+          server,
+          tool,
+          args: params.args,
+          result: denied,
+        });
+      } catch {
+        // ignore
+      }
+      return { kind: 'halted', result: denied };
+    }
+    return { kind: 'approved', answer: approval.decision };
+  }
+
   private async rejectUnresolvedAlias(params: {
     assistantMessageId: string;
     conversationId: string;
