@@ -44,7 +44,7 @@ describe('decideFilesystemCall', () => {
   });
 });
 
-describe('promotion grid: three answers, two scopes, nine cells, no default', () => {
+describe('promotion grid: three answers, two scopes, six cells, no default', () => {
   it('fs: once changes nothing, always remembers, unrestricted is per-conversation', () => {
     expect(planFilesystemPromotion({ answer: 'once', approvableDirectory: 'C:/w', isDelete: false }))
       .toEqual({ rememberDirectory: undefined, conversationUnrestricted: false, globalUnrestricted: false });
