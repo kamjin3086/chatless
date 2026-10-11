@@ -1,5 +1,5 @@
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
-import { useAuthorizationStore, type ApprovalDecision, type PendingApprovalScope } from '@/store/authorizationStore';
+import { type ApprovalDecision, type PendingApprovalScope } from '@/store/authorizationStore';
 import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permissions';
 import { resolveAccess, setConversationAccess } from '@/lib/mcp/accessPolicy';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
@@ -20,9 +20,9 @@ import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalize
 import { filesystemOp, isPlanOnlyAllowed, isReplayableRead } from './policy/toolRisk';
 import { dirnameOf, hasFilesystemPaths, resolveFilesystemCall } from './policy/resolveCall';
 import { buildAuthDeniedResult } from './present';
+import { waitForCallApproval } from './approvalWait';
 import { decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from './policy/policy';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
-import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
 function normalizeSlashPath(p: unknown): string {
   if (typeof p === 'string') return p.trim().replace(/\\/g, '/');
@@ -36,55 +36,6 @@ export type ToolExecutionPipelineDeps = {
 
 function isDirectoryScopedFilesystemTool(tool: string): boolean {
   return isDirectorySemanticFsTool(tool);
-}
-
-async function waitForCallApproval(params: {
-  id: string; runId: string; conversationId: string; callId?: string; server: string; tool: string;
-  args: Record<string, unknown>; scope?: Record<string, unknown>;
-  approvalScope?: import('@/store/authorizationStore').PendingApprovalScope;
-}): Promise<{ approved: boolean; decision: ApprovalDecision }> {
-  const db = DatabaseService.getInstance().getDbManager();
-  const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-  if (tauri) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('agent_request_approval', { db: db.getConnectionUrl(), approvalId: params.id,
-      runId: params.runId, conversationId: params.conversationId, callId: params.callId,
-      server: params.server, tool: params.tool, normalizedArgs: JSON.stringify(params.args),
-      scope: JSON.stringify(params.scope || {}), createdAt: Date.now() });
-  } else {
-    await db.executeTransaction(async (tx) => {
-      await tx.execute(`INSERT OR REPLACE INTO agent_approvals
-        (id, run_id, conversation_id, call_id, server, tool, normalized_args, scope, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`, [params.id, params.runId, params.conversationId,
-        params.callId || null, params.server, params.tool, JSON.stringify(params.args), JSON.stringify(params.scope || {}), Date.now()]);
-      await tx.execute("UPDATE agent_runs SET status = 'waiting_approval', ended_at = NULL WHERE id = ?", [params.runId]);
-    });
-  }
-  return new Promise<{ approved: boolean; decision: ApprovalDecision }>((resolve) => {
-    const decide = (approved: boolean, decision: ApprovalDecision = 'once') => {
-      void (async () => {
-        if (tauri) {
-          const { invoke } = await import('@tauri-apps/api/core');
-          return invoke<boolean>('agent_decide_approval', { db: db.getConnectionUrl(), approvalId: params.id,
-            status: approved ? 'approved' : 'rejected', decidedAt: Date.now() });
-        }
-        return db.executeTransaction(async (tx) => {
-          await tx.execute("UPDATE agent_approvals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
-            [approved ? 'approved' : 'rejected', Date.now(), params.id]);
-          await tx.execute("UPDATE agent_runs SET status = 'running' WHERE id = ? AND status = 'waiting_approval'", [params.runId]);
-          return true;
-        });
-      })().then((changed) => resolve({
-        approved: Boolean(changed) && approved,
-        decision: approved ? decision : 'once',
-      })).catch(() => resolve({ approved: false, decision: 'once' }));
-    };
-    useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
-      conversationId: params.conversationId,
-      server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
-      scope: params.approvalScope,
-      onApprove: (decision) => decide(true, decision), onReject: () => decide(false) });
-  });
 }
 
 /**
