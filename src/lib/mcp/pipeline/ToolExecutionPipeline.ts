@@ -132,42 +132,8 @@ export class ToolExecutionPipeline {
       if (gate.sessionWorkDir) sessionWorkDir = gate.sessionWorkDir;
       callGrants.push(...gate.grants);
     } else {
-      const isShell = isShellServer(server);
-      // Shell trust comes from the access policy: the persisted switch or the
-      // choice this conversation's user already made on an approval card.
-      const autoAuth = isShell
-        ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
-        : await shouldAutoAuthorize(server);
-      const effectiveArgs = (execInvocation.args || args || {}) as any;
-      if (decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
-        const approval = await this.requestApproval({
-          assistantMessageId, conversationId: invocation.conversationId,
-          server, tool, cardId, callKey, callId,
-          args: (effectiveArgs || {}) as Record<string, unknown>,
-          approvalScope: isShell
-            ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
-            : undefined,
-          denyMessage: '用户拒绝授权此工具调用',
-        });
-        if (approval.kind === 'halted') return approval.result;
-
-        // A shell approval can end the questions for this session or for good;
-        // the next command re-checks the policy, so nothing is bypassed.
-        if (isShell) {
-          const promotion = planShellPromotion({ answer: approval.answer });
-          if (promotion.conversationUnrestricted) {
-            setConversationAccess('shell', invocation.conversationId, 'unrestricted');
-          }
-          if (promotion.globalUnrestricted) {
-            try {
-              const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
-              await setGlobalAccess('shell', 'unrestricted');
-            } catch (error) {
-              console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
-            }
-          }
-        }
-      }
+      const gate = await this.serverGate({ invocation, execInvocation, server, tool, cardId, callKey, callId, assistantMessageId });
+      if (gate.kind === 'halted') return gate.result;
     }
 
     // Register the grants for this call right before it can touch disk. They
@@ -499,6 +465,65 @@ export class ToolExecutionPipeline {
    * 等用户、落盘这些副作用。解析或授予失败统一回 FILESYSTEM_GATE_FAILED，与原实现一致：
    * 不把异常吞成"没这回事"。
    */
+  /**
+   * 非文件系统调用的门：shell 的信任来自访问策略（持久开关，或本会话此前在卡片上做的
+   * 选择），其余服务器看全局自动授权。要问就把卡片发出去；答完之后 shell 的"以后都不问"
+   * 与"本会话不再问"各自落到该落的地方，下一条命令会重新走一遍策略。
+   */
+  private async serverGate(params: {
+    invocation: ToolInvocation
+    execInvocation: ToolInvocation
+    server: string
+    tool: string
+    cardId: string
+    callKey: string
+    callId?: string
+    assistantMessageId: string
+  }): Promise<{ kind: 'ready' } | { kind: 'halted'; result: unknown }> {
+    const { invocation, execInvocation, server, tool, cardId, callKey, callId, assistantMessageId } = params;
+    const args = invocation.args as Record<string, unknown> | undefined;
+    const halt = (result: unknown) => ({ kind: 'halted' as const, result });
+
+    const isShell = isShellServer(server);
+    // Shell trust comes from the access policy: the persisted switch or the
+    // choice this conversation's user already made on an approval card.
+    const autoAuth = isShell
+      ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
+      : await shouldAutoAuthorize(server);
+    const effectiveArgs = (execInvocation.args || args || {}) as any;
+    if (decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
+      const approval = await this.requestApproval({
+        assistantMessageId, conversationId: invocation.conversationId,
+        server, tool, cardId, callKey, callId,
+        args: (effectiveArgs || {}) as Record<string, unknown>,
+        approvalScope: isShell
+          ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
+          : undefined,
+        denyMessage: '用户拒绝授权此工具调用',
+      });
+      if (approval.kind === 'halted') return halt(approval.result);
+
+      // A shell approval can end the questions for this session or for good;
+      // the next command re-checks the policy, so nothing is bypassed.
+      if (isShell) {
+        const promotion = planShellPromotion({ answer: approval.answer });
+        if (promotion.conversationUnrestricted) {
+          setConversationAccess('shell', invocation.conversationId, 'unrestricted');
+        }
+        if (promotion.globalUnrestricted) {
+          try {
+            const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
+            await setGlobalAccess('shell', 'unrestricted');
+          } catch (error) {
+            console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
+          }
+        }
+      }
+    }
+
+    return { kind: 'ready' };
+  }
+
   private async filesystemGate(params: {
     invocation: ToolInvocation
     server: string
