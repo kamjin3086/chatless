@@ -4,7 +4,7 @@ import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permis
 import { resolveAccess, setConversationAccess } from '@/lib/mcp/accessPolicy';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
-import { findUnresolvedAlias, findUnresolvedAliasInValues, isPathWithinDirectory, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
+import { findUnresolvedAliasInValues, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
 import {
   grantCallScopedPaths,
@@ -18,6 +18,8 @@ import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
 import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult, markKnownFailure } from './toolResultDiagnostics';
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 import { filesystemOp, isPlanOnlyAllowed, isReplayableRead } from './policy/toolRisk';
+import { hasFilesystemPaths, resolveFilesystemCall } from './policy/resolveCall';
+import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
 function normalizeSlashPath(p: unknown): string {
@@ -353,25 +355,10 @@ export class ToolExecutionPipeline {
     }
 
     if (isFilesystemServer(srvLower)) {
-      // 提取所有可能的路径参数
-      const rawPath = typeof (args as any)?.path === 'string' ? String((args as any).path) : '';
-      const rawDir = typeof (args as any)?.dir === 'string' ? String((args as any).dir) : '';
-      const rawOldPath = typeof (args as any)?.oldPath === 'string' ? String((args as any).oldPath) : '';
-      const rawNewPath = typeof (args as any)?.newPath === 'string' ? String((args as any).newPath) : '';
-      // fs__search takes a root directory instead of a path/dir.
-      const rawRoot = typeof (args as any)?.root === 'string' ? String((args as any).root) : '';
-      const rawPaths = Array.isArray((args as any)?.paths)
-        ? ((args as any).paths as unknown[]).map((p) => String(p ?? '').trim()).filter(Boolean)
-        : [];
-      
-      // 主路径用于权限检查
-      const inputPath = rawPath || rawDir || rawRoot || rawOldPath || '';
       const op = filesystemOp(tool);
-      
-      // 判断是否有任何需要解析的路径
-      const hasPathsToResolve = inputPath || rawNewPath || rawPaths.length > 0;
 
-      if (hasPathsToResolve) {
+      // 不带任何路径参数的文件系统调用不走解析、不读 allowlist、也不进审批——与原行为一致。
+      if (hasFilesystemPaths(args)) {
         try {
           const allowlist = useFilesystemAllowlistStore.getState();
           await allowlist.load();
@@ -407,83 +394,29 @@ export class ToolExecutionPipeline {
             // ignore: best-effort sync
           }
 
-          // 路径解析辅助函数：支持相对路径、别名路径、绝对路径
-          let resolveError: string | undefined;
-          const resolvePath = (p: string) => {
-            if (!p.trim()) return '';
-            try {
-              return resolveAllowlistPath({ inputPath: p, directories: dirsForResolve as any, workingDir }).absolutePath;
-            } catch (error) {
-              resolveError ||= error instanceof Error ? error.message : String(error);
-              return p;
-            }
-          };
+          const resolution = resolveFilesystemCall({
+            invocation, cardId, directories: dirsForResolve as AllowlistDirectory[], workingDir,
+          });
 
-          // 解析主路径用于权限检查
-          let resolved: ReturnType<typeof resolveAllowlistPath> | null = null;
-          if (inputPath) {
-            try {
-              resolved = resolveAllowlistPath({ inputPath, directories: dirsForResolve as any, workingDir });
-            } catch (error) {
-              resolveError ||= error instanceof Error ? error.message : String(error);
-            }
-          }
-
-          // 构建执行参数，解析所有路径
-          const execArgs: Record<string, unknown> = { ...(args || {}) };
-          
-          // 解析 path/dir 参数
-          if (resolved) {
-            if (rawPath) execArgs.path = resolved.absolutePath;
-            if (rawDir) execArgs.dir = resolved.absolutePath;
-            if (rawRoot) execArgs.root = resolved.absolutePath;
-          }
-          
-          // 解析 rename/move 的 oldPath 和 newPath
-          if (rawOldPath) execArgs.oldPath = resolvePath(rawOldPath);
-          if (rawNewPath) execArgs.newPath = resolvePath(rawNewPath);
-          
-          // 解析 paths 数组（用于 delete_many 等）
-          if (rawPaths.length > 0) {
-            execArgs.paths = rawPaths.map(resolvePath).filter(Boolean);
-          }
-
-          // 别名没解析出来（未授权/拼错）或路径无法解析：直接给出结构化错误，
+          // 别名没解析出来（未授权/拼错）或路径解析不了：直接给出结构化错误，
           // 不把原始字符串交给后端——那正是字面量 "@WorkDir" 目录的由来。
-          const leftoverAlias = findUnresolvedAliasInValues([
-            execArgs.path, execArgs.dir, execArgs.root, execArgs.oldPath, execArgs.newPath,
-            ...(Array.isArray(execArgs.paths) ? execArgs.paths : []),
-          ]);
-          if (leftoverAlias || resolveError) {
+          if (resolution.kind === 'reject') {
             return this.rejectUnresolvedAlias({
               assistantMessageId, conversationId: invocation.conversationId, server, tool, cardId, callKey, callId,
               args: (args || {}) as any,
-              alias: leftoverAlias || findUnresolvedAlias(inputPath) || '',
-              reason: resolveError,
+              alias: resolution.alias,
+              reason: resolution.reason,
             });
           }
 
-          execInvocation = new ToolInvocation({
-            assistantMessageId: invocation.assistantMessageId,
-            conversationId: invocation.conversationId,
-            server: invocation.server,
-            tool: invocation.tool,
-            args: execArgs,
-            provider: invocation.provider,
-            model: invocation.model,
-            historyForLlm: invocation.historyForLlm,
-            originalUserContent: invocation.originalUserContent,
-            callId: invocation.callId,
-            cardId,
-            lockKey: invocation.lockKey,
-          });
+          execInvocation = resolution.invocation;
 
-          // 获取主路径的绝对路径（用于权限检查和授权）
-          const primaryAbsolutePath = resolved?.absolutePath || '';
+          // 主路径与其命中的目录：权限检查与授权卡片都从这里取。
+          const primaryAbsolutePath = resolution.primaryPath;
 
           const forceApproval = op === 'delete';
-          const hasDir = !!resolved?.directory;
-          const hasPerm = hasDir ? !!resolved?.directory?.permissions?.[op] : false;
+          const hasDir = !!resolution.directory;
+          const hasPerm = hasDir ? !!resolution.directory?.permissions?.[op] : false;
           // The user's chosen trust level decides whether this call may ask.
           // "unrestricted" skips the prompt; the backend still validates every
           // path it receives.
@@ -498,7 +431,7 @@ export class ToolExecutionPipeline {
             markPendingAuth({ assistantMessageId, server, tool, cardId });
             // "以后都允许" is only meaningful for a folder we can grant, so a
             // delete reports its parent but never offers that choice.
-            const approvableDirectory = resolved?.directory?.path
+            const approvableDirectory = resolution.directory?.path
               || dirnamePath(primaryAbsolutePath);
             const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
               runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
@@ -520,7 +453,7 @@ export class ToolExecutionPipeline {
               return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
             }
             if (!authorized) {
-              const suggestDir = normalizeSlashPath(resolved?.directory?.path) || dirnamePath(primaryAbsolutePath);
+              const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnamePath(primaryAbsolutePath);
               markError(
                 { assistantMessageId, server, tool, cardId },
                 `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`
@@ -536,7 +469,7 @@ export class ToolExecutionPipeline {
                 args: args || {},
                 fs: {
                   op,
-                  inputPath,
+                  inputPath: resolution.requestedPath,
                   resolvedPath: primaryAbsolutePath,
                   suggestDir,
                 },
