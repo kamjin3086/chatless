@@ -4,8 +4,9 @@ import { dirnameOf } from './resolveCall';
 import { isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 
 /**
- * 决定一次调用能不能跑：`decide` 回答放行 / 要问，`planPromotion` 把一个审批回答
- * 翻译成状态增量。两者都是纯函数——读 store、等用户、落盘都留在调用方。
+ * 决定一次调用能不能跑：`decideFilesystemCall` / `decideServerCall` 回答放行或要问，
+ * `planFilesystemPromotion` / `planShellPromotion` 把一个审批回答翻译成状态增量。
+ * 两者都是纯函数——读 store、等用户、落盘都留在调用方。
  *
  * 之所以拆成两半：审批要等人，而等之前算出的判定和等之后产生的信任，是同一套规则的
  * 前后两段。放一个模块里是为了让"问不问"和"答完变成什么"能被同一张表穷举测试。
@@ -101,7 +102,7 @@ export function decideServerCall(params: {
   autoAuthorize: boolean;
 }): 'allow' | 'ask' {
   // 先归一：main 上的原实现就是拿 normalizeServerName 做比对的，
-  // 不归一则 'System' / 'User_FS' 这类写法会落到兵头分枝，把原本不问的变成问。
+  // 不归一则 'System' / 'User_FS' 这类写法会落到兜底分支，把原本不问的变成问。
   const srv = normalizeServerName(params.server);
   const tl = String(params.tool || '').toLowerCase();
 

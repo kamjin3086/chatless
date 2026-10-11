@@ -746,13 +746,6 @@ export class ToolExecutionPipeline {
   }
 
   /**
-   * Refuses a call whose path or command still carries an unresolved `@Alias`.
-   *
-   * Passing it on is how a command like `cd @WorkDir` created a literal
-   * `@WorkDir` folder, so this returns a structured result the model can act on
-   * and never dispatches to an adapter.
-   */
-  /**
    * One approval round-trip. Marks the card pending, waits for the answer, then
    * hands back either the answer or the result the caller must return: the
    * cancellation checks, the denial card and its workspace step used to be
@@ -826,6 +819,13 @@ export class ToolExecutionPipeline {
     return { kind: 'approved', answer: approval.decision };
   }
 
+  /**
+   * Refuses a call whose path or command still carries an unresolved `@Alias`.
+   *
+   * Passing it on is how a command like `cd @WorkDir` created a literal
+   * `@WorkDir` folder, so this returns a structured result the model can act on
+   * and never dispatches to an adapter.
+   */
   private async rejectUnresolvedAlias(params: {
     assistantMessageId: string;
     conversationId: string;
