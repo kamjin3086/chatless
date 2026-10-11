@@ -126,179 +126,11 @@ export class ToolExecutionPipeline {
 
 
     if (isFilesystemServer(srvLower)) {
-      const op = filesystemOp(tool);
-
-      // 不带任何路径参数的文件系统调用不走解析、不读 allowlist、也不进审批——与原行为一致。
-      if (hasFilesystemPaths(args)) {
-        try {
-          const allowlist = useFilesystemAllowlistStore.getState();
-          await allowlist.load();
-          // 会话级别名：@WorkDir（来自附件菜单）
-          const dirsForResolve = [...allowlist.directories];
-          let workingDir: string | undefined;
-          try {
-            const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-            const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
-            if (wd) {
-              workingDir = String(wd).replace(/\\/g, '/');
-              sessionWorkDir = workingDir;
-              dirsForResolve.unshift({
-                id: `session:${invocation.conversationId}:workdir`,
-                path: workingDir,
-                alias: 'WorkDir',
-                permissions: { read: true, write: true, create: true, delete: false },
-                source: 'workdir',
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-              } as any);
-            }
-          } catch {
-            // ignore
-          }
-
-          // Keep the backend in step with the user's persistent settings only.
-          // The session working directory travels as a call-scoped grant below,
-          // so it never becomes a lasting backend authorization.
-          try {
-            await syncFilesystemAllowlistToBackend(allowlist.directories as any);
-          } catch {
-            // ignore: best-effort sync
-          }
-
-          const resolution = resolveFilesystemCall({
-            invocation, cardId, directories: dirsForResolve as AllowlistDirectory[], workingDir,
-          });
-
-          // 别名没解析出来（未授权/拼错）或路径解析不了：直接给出结构化错误，
-          // 不把原始字符串交给后端——那正是字面量 "@WorkDir" 目录的由来。
-          if (resolution.kind === 'reject') {
-            return this.rejectUnresolvedAlias({
-              assistantMessageId, conversationId: invocation.conversationId, server, tool, cardId, callKey, callId,
-              args: (args || {}) as any,
-              alias: resolution.alias,
-              reason: resolution.reason,
-            });
-          }
-
-          execInvocation = resolution.invocation;
-
-          // 主路径与其命中的目录：权限检查与授权卡片都从这里取。
-          const primaryAbsolutePath = resolution.primaryPath;
-
-          const forceApproval = op === 'delete';
-          // The user's chosen trust level decides whether this call may ask.
-          // "unrestricted" skips the prompt; the backend still validates every
-          // path it receives.
-          const accessLevel = await resolveAccess('fs', invocation.conversationId);
-          const unrestricted = accessLevel === 'unrestricted';
-          const policy = decideFilesystemCall({
-            op, primaryPath: primaryAbsolutePath, directory: resolution.directory, unrestricted,
-          });
-          const needsCallGrant = policy.needsCallGrant;
-          let approved = false;
-          let decision: ApprovalDecision = 'once';
-
-          if (policy.kind === 'ask') {
-            // "以后都允许" is only meaningful for a folder we can grant, so a
-            // delete reports its parent but never offers that choice.
-            const approvableDirectory = policy.approvableDirectory;
-            // 看着和策略里的 approvableDirectory 是同一个表达式，但它多一层归一，且只喂给
-            // 模型可见的拒绍文案。复用策略那份要么改动授权路径（安全相关），要么改动模型
-            // 文案（契约禁止），都比容忍这点重复更贵，所以两边各算各的。
-            const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnameOf(primaryAbsolutePath);
-            const approval = await this.requestApproval({
-              assistantMessageId, conversationId: invocation.conversationId,
-              server, tool, cardId, callKey, callId,
-              args: (args || {}) as Record<string, unknown>,
-              scope: { operation: op, path: primaryAbsolutePath, directory: approvableDirectory || undefined },
-              approvalScope: approvableDirectory
-                ? { kind: 'filesystem', op, path: primaryAbsolutePath, directory: approvableDirectory }
-                : undefined,
-              denyMessage: `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`,
-              denyFs: { op, inputPath: resolution.requestedPath, resolvedPath: primaryAbsolutePath, suggestDir },
-            });
-            if (approval.kind === 'halted') return approval.result;
-            approved = true;
-            decision = approval.answer;
-
-            // Turn the user's choice into trust that lasts as long as they asked
-            // for: "always" joins the persistent allowlist (never with delete),
-            // "unrestricted" stops the questions for the rest of the session.
-            const promotion = planFilesystemPromotion({
-              answer: decision, approvableDirectory, isDelete: forceApproval,
-            });
-            if (promotion.rememberDirectory) {
-              try {
-                const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
-                await ensureAllowlistedDirectory({
-                  path: promotion.rememberDirectory,
-                  source: 'manual',
-                  permissions: EVERYDAY_DIRECTORY_PERMISSIONS,
-                });
-              } catch (error) {
-                console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
-              }
-            }
-            if (promotion.conversationUnrestricted) {
-              setConversationAccess('fs', invocation.conversationId, 'unrestricted');
-            }
-          }
-
-          // Anything the persistent allowlist does not cover needs a grant for
-          // this call, whether the user approved one call or turned prompts off.
-          if (needsCallGrant && (approved || unrestricted)) {
-            try {
-              const hasDirArg = typeof (args as any)?.dir === 'string';
-              const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
-              // A delete is bound to the exact target. Writes and creates need
-              // the containing directory because the file may not exist yet.
-              const grantPath = hasDirArg || dirScopedByTool || op === 'delete'
-                ? primaryAbsolutePath
-                : dirnameOf(primaryAbsolutePath);
-              callGrants.push({
-                path: grantPath,
-                permissions: {
-                  read: op === 'read' || op === 'delete',
-                  write: op === 'write',
-                  create: op === 'create',
-                  delete: op === 'delete',
-                },
-              });
-            } catch {
-              // ignore: best-effort
-            }
-          }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          markError({ assistantMessageId, server, tool, cardId }, msg);
-          this.coordinator.markToolCallComplete(callKey, 'failed');
-          const gateFailed = {
-            ok: false,
-            error: {
-              code: 'FILESYSTEM_GATE_FAILED',
-              message: msg,
-              server,
-              tool,
-              args: args || {},
-            },
-          };
-          try {
-            await appendWorkspaceToolStep({
-              conversationId: invocation.conversationId,
-              assistantMessageId,
-              cardId,
-              callId,
-              server,
-              tool,
-              args: args || {},
-              result: gateFailed,
-            });
-          } catch {
-            // ignore
-          }
-          return gateFailed;
-        }
-      }
+      const gate = await this.filesystemGate({ invocation, server, tool, cardId, callKey, callId, assistantMessageId });
+      if (gate.kind === 'halted') return gate.result;
+      execInvocation = gate.invocation;
+      if (gate.sessionWorkDir) sessionWorkDir = gate.sessionWorkDir;
+      callGrants.push(...gate.grants);
     } else {
       const isShell = isShellServer(server);
       // Shell trust comes from the access policy: the persisted switch or the
@@ -661,6 +493,208 @@ export class ToolExecutionPipeline {
    * 交给后面的校验与授权处理；但替换后仍残留的别名既不是路径也不是命令，必须在这里挡掉，
    * 否则 `cd @WorkDir` 会创建出一个字面量目录。
    */
+  /**
+   * 文件系统门：把路径解析成真实目标、按 allowlist 与免问状态决定放行还是发审批卡片，
+   * 再把用户的回答换成这一次调用真正需要的授予。判定本身在 policy/，这里只做读 store、
+   * 等用户、落盘这些副作用。解析或授予失败统一回 FILESYSTEM_GATE_FAILED，与原实现一致：
+   * 不把异常吞成"没这回事"。
+   */
+  private async filesystemGate(params: {
+    invocation: ToolInvocation
+    server: string
+    tool: string
+    cardId: string
+    callKey: string
+    callId?: string
+    assistantMessageId: string
+  }): Promise<
+    | { kind: 'ready'; invocation: ToolInvocation; sessionWorkDir?: string; grants: CallScopedGrant[] }
+    | { kind: 'halted'; result: unknown }
+  > {
+    const { invocation, server, tool, cardId, callKey, callId, assistantMessageId } = params;
+    const args = invocation.args as Record<string, unknown> | undefined;
+    let nextInvocation = invocation;
+    let sessionWorkDir: string | undefined;
+    const grants: CallScopedGrant[] = [];
+    const halt = (result: unknown) => ({ kind: 'halted' as const, result });
+
+    const op = filesystemOp(tool);
+
+    // 不带任何路径参数的文件系统调用不走解析、不读 allowlist、也不进审批——与原行为一致。
+    if (hasFilesystemPaths(args)) {
+      try {
+        const allowlist = useFilesystemAllowlistStore.getState();
+        await allowlist.load();
+        // 会话级别名：@WorkDir（来自附件菜单）
+        const dirsForResolve = [...allowlist.directories];
+        let workingDir: string | undefined;
+        try {
+          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+          const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
+          if (wd) {
+            workingDir = String(wd).replace(/\\/g, '/');
+            sessionWorkDir = workingDir;
+            dirsForResolve.unshift({
+              id: `session:${invocation.conversationId}:workdir`,
+              path: workingDir,
+              alias: 'WorkDir',
+              permissions: { read: true, write: true, create: true, delete: false },
+              source: 'workdir',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            } as any);
+          }
+        } catch {
+          // ignore
+        }
+
+        // Keep the backend in step with the user's persistent settings only.
+        // The session working directory travels as a call-scoped grant below,
+        // so it never becomes a lasting backend authorization.
+        try {
+          await syncFilesystemAllowlistToBackend(allowlist.directories as any);
+        } catch {
+          // ignore: best-effort sync
+        }
+
+        const resolution = resolveFilesystemCall({
+          invocation, cardId, directories: dirsForResolve as AllowlistDirectory[], workingDir,
+        });
+
+        // 别名没解析出来（未授权/拼错）或路径解析不了：直接给出结构化错误，
+        // 不把原始字符串交给后端——那正是字面量 "@WorkDir" 目录的由来。
+        if (resolution.kind === 'reject') {
+          return halt(await this.rejectUnresolvedAlias({
+            assistantMessageId, conversationId: invocation.conversationId, server, tool, cardId, callKey, callId,
+            args: (args || {}) as any,
+            alias: resolution.alias,
+            reason: resolution.reason,
+          }));
+        }
+
+        nextInvocation = resolution.invocation;
+
+        // 主路径与其命中的目录：权限检查与授权卡片都从这里取。
+        const primaryAbsolutePath = resolution.primaryPath;
+
+        const forceApproval = op === 'delete';
+        // The user's chosen trust level decides whether this call may ask.
+        // "unrestricted" skips the prompt; the backend still validates every
+        // path it receives.
+        const accessLevel = await resolveAccess('fs', invocation.conversationId);
+        const unrestricted = accessLevel === 'unrestricted';
+        const policy = decideFilesystemCall({
+          op, primaryPath: primaryAbsolutePath, directory: resolution.directory, unrestricted,
+        });
+        const needsCallGrant = policy.needsCallGrant;
+        let approved = false;
+        let decision: ApprovalDecision = 'once';
+
+        if (policy.kind === 'ask') {
+          // "以后都允许" is only meaningful for a folder we can grant, so a
+          // delete reports its parent but never offers that choice.
+          const approvableDirectory = policy.approvableDirectory;
+          // 看着和策略里的 approvableDirectory 是同一个表达式，但它多一层归一，且只喂给
+          // 模型可见的拒绍文案。复用策略那份要么改动授权路径（安全相关），要么改动模型
+          // 文案（契约禁止），都比容忍这点重复更贵，所以两边各算各的。
+          const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnameOf(primaryAbsolutePath);
+          const approval = await this.requestApproval({
+            assistantMessageId, conversationId: invocation.conversationId,
+            server, tool, cardId, callKey, callId,
+            args: (args || {}) as Record<string, unknown>,
+            scope: { operation: op, path: primaryAbsolutePath, directory: approvableDirectory || undefined },
+            approvalScope: approvableDirectory
+              ? { kind: 'filesystem', op, path: primaryAbsolutePath, directory: approvableDirectory }
+              : undefined,
+            denyMessage: `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`,
+            denyFs: { op, inputPath: resolution.requestedPath, resolvedPath: primaryAbsolutePath, suggestDir },
+          });
+          if (approval.kind === 'halted') return halt(approval.result);
+          approved = true;
+          decision = approval.answer;
+
+          // Turn the user's choice into trust that lasts as long as they asked
+          // for: "always" joins the persistent allowlist (never with delete),
+          // "unrestricted" stops the questions for the rest of the session.
+          const promotion = planFilesystemPromotion({
+            answer: decision, approvableDirectory, isDelete: forceApproval,
+          });
+          if (promotion.rememberDirectory) {
+            try {
+              const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
+              await ensureAllowlistedDirectory({
+                path: promotion.rememberDirectory,
+                source: 'manual',
+                permissions: EVERYDAY_DIRECTORY_PERMISSIONS,
+              });
+            } catch (error) {
+              console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
+            }
+          }
+          if (promotion.conversationUnrestricted) {
+            setConversationAccess('fs', invocation.conversationId, 'unrestricted');
+          }
+        }
+
+        // Anything the persistent allowlist does not cover needs a grant for
+        // this call, whether the user approved one call or turned prompts off.
+        if (needsCallGrant && (approved || unrestricted)) {
+          try {
+            const hasDirArg = typeof (args as any)?.dir === 'string';
+            const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
+            // A delete is bound to the exact target. Writes and creates need
+            // the containing directory because the file may not exist yet.
+            const grantPath = hasDirArg || dirScopedByTool || op === 'delete'
+              ? primaryAbsolutePath
+              : dirnameOf(primaryAbsolutePath);
+            grants.push({
+              path: grantPath,
+              permissions: {
+                read: op === 'read' || op === 'delete',
+                write: op === 'write',
+                create: op === 'create',
+                delete: op === 'delete',
+              },
+            });
+          } catch {
+            // ignore: best-effort
+          }
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        markError({ assistantMessageId, server, tool, cardId }, msg);
+        this.coordinator.markToolCallComplete(callKey, 'failed');
+        const gateFailed = {
+          ok: false,
+          error: {
+            code: 'FILESYSTEM_GATE_FAILED',
+            message: msg,
+            server,
+            tool,
+            args: args || {},
+          },
+        };
+        try {
+          await appendWorkspaceToolStep({
+            conversationId: invocation.conversationId,
+            assistantMessageId,
+            cardId,
+            callId,
+            server,
+            tool,
+            args: args || {},
+            result: gateFailed,
+          });
+        } catch {
+          // ignore
+        }
+        return halt(gateFailed);
+      }
+    }
+
+    return { kind: 'ready', invocation: nextInvocation, sessionWorkDir, grants };
+  }
+
   private async prepareShellCall(params: {
     invocation: ToolInvocation
     server: string
