@@ -19,6 +19,7 @@ import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isN
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 import { filesystemOp, isPlanOnlyAllowed, isReplayableRead } from './policy/toolRisk';
 import { dirnameOf, hasFilesystemPaths, resolveFilesystemCall } from './policy/resolveCall';
+import { buildAuthDeniedResult } from './present';
 import { decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from './policy/policy';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
@@ -27,43 +28,6 @@ function normalizeSlashPath(p: unknown): string {
   if (typeof p === 'string') return p.trim().replace(/\\/g, '/');
   if (typeof p === 'number' || typeof p === 'boolean' || typeof p === 'bigint') return String(p).trim();
   return '';
-}
-
-function buildAuthDeniedResult(params: {
-  server: string;
-  tool: string;
-  message: string;
-  conversationId?: string;
-  assistantMessageId?: string;
-  cardId?: string;
-  args?: Record<string, unknown>;
-  fs?: { op?: string; inputPath?: string; resolvedPath?: string; suggestDir?: string };
-}) {
-  return {
-    ok: false,
-    error: {
-      code: 'AUTH_DENIED',
-      message: params.message,
-      server: params.server,
-      tool: params.tool,
-      conversationId: params.conversationId,
-      assistantMessageId: params.assistantMessageId,
-      cardId: params.cardId,
-      args: params.args || {},
-      fs: params.fs,
-      suggestion:
-        params.server === 'filesystem' || params.server === 'fs'
-          ? {
-              action: 'REQUEST_DIRECTORY_AUTH',
-              directory: params.fs?.suggestDir,
-              note: '需要用户授权该目录（加入 allowlist）后才能继续执行 filesystem 操作。',
-            }
-          : {
-              action: 'REQUEST_TOOL_APPROVAL',
-              note: '需要用户批准该工具调用后才能继续执行。',
-            },
-    },
-  };
 }
 
 export type ToolExecutionPipelineDeps = {
@@ -376,6 +340,9 @@ export class ToolExecutionPipeline {
             // "以后都允许" is only meaningful for a folder we can grant, so a
             // delete reports its parent but never offers that choice.
             const approvableDirectory = policy.approvableDirectory;
+            // 看着和策略里的 approvableDirectory 是同一个表达式，但它多一层归一，且只喂给
+            // 模型可见的拒绍文案。复用策略那份要么改动授权路径（安全相关），要么改动模型
+            // 文案（契约禁止），都比容忍这点重复更贵，所以两边各算各的。
             const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnameOf(primaryAbsolutePath);
             const approval = await this.requestApproval({
               assistantMessageId, conversationId: invocation.conversationId,
