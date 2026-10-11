@@ -178,9 +178,6 @@ export class DatabaseService {
   }
 
   /**
-   * 更新对话标题
-   */
-  /**
    * 删除对话
    */
   public async deleteConversation(conversationId: string): Promise<boolean> {

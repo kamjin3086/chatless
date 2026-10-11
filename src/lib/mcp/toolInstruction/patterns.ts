@@ -197,8 +197,8 @@ export const INCOMPLETE_TAG_PREFIXES = [
 export const MIN_INCOMPLETE_PREFIX_LENGTH = 4;
 
 /**
- * 抑制器触发模式
- * 用于 ToolInstructionSuppressor 判断进入抑制状态
+ * 抑制态触发模式
+ * provider 层的工具调用通道用它判断是否进入抑制状态
  */
 export type SuppressionMode = 'xml_use_mcp_tool' | 'xml_tool_call' | 'json_like';
 

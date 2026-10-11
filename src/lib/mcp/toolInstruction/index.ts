@@ -22,8 +22,7 @@
  * ```typescript
  * import { 
  *   filterForDisplay, 
- *   detectToolInstruction,
- *   createToolInstructionSuppressor 
+ *   detectToolInstruction
  * } from '@/lib/mcp/toolInstruction';
  * 
  * // 过滤显示内容
@@ -34,10 +33,6 @@
  * if (result.detected) {
  *   console.log(`检测到工具调用: ${result.server}.${result.tool}`);
  * }
- * 
- * // 流式抑制
- * const suppressor = createToolInstructionSuppressor();
- * const update = suppressor.push(chunk);
  * ```
  */
 
