@@ -117,102 +117,13 @@ export class ToolExecutionPipeline {
     let sessionWorkDir: string | undefined;
     const srvLower = normalizeServerName(server);
 
-    // 预处理：shell_executor 的 workingDir 和 command 支持 @WorkDir / @Alias / 相对路径
     if (isShellServer(srvLower)) {
-      try {
-        const allowlist = useFilesystemAllowlistStore.getState();
-        await allowlist.load();
-        const dirsForResolve = [...allowlist.directories];
-        let shellWorkDir: string | undefined;
-        try {
-          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-          const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
-          if (wd) {
-            shellWorkDir = String(wd).replace(/\\/g, '/');
-            sessionWorkDir = shellWorkDir;
-            dirsForResolve.unshift({
-              id: `session:${invocation.conversationId}:workdir`,
-              path: shellWorkDir,
-              alias: 'WorkDir',
-              permissions: { read: true, write: true, create: true, delete: false },
-              source: 'workdir',
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            } as any);
-          }
-        } catch {
-          // ignore
-        }
-
-        const execArgs: Record<string, unknown> = { ...(args || {}) };
-
-        // 解析 workingDir 参数中的别名
-        const workingDirInput = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
-        if (workingDirInput) {
-          const shellResolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any, workingDir: shellWorkDir });
-          execArgs.workingDir = shellResolved.absolutePath;
-        } else if (shellWorkDir) {
-          // The tool description promises @WorkDir as the default. Resolving it
-          // here, before the approval gate, means the card and the backend see
-          // the same directory instead of the backend falling back silently.
-          execArgs.workingDir = shellWorkDir;
-        }
-
-        // 解析 command 参数中的 @WorkDir / @Alias 别名
-        const commandInput = typeof (args as any)?.command === 'string' ? String((args as any).command) : '';
-        if (commandInput && commandInput.includes('@')) {
-          let resolvedCommand = commandInput;
-          // 替换 @WorkDir 别名（支持 @WorkDir、@WorkDir/、@WorkDir\）
-          if (shellWorkDir) {
-            // 使用全局替换，支持多种后缀形式
-            resolvedCommand = resolvedCommand.replace(/@WorkDir(?=[\/\\]|$|\s|"|')/g, shellWorkDir);
-          }
-          // 替换其他 @Alias 别名（格式：@AliasName 或 @AliasName/path）
-          for (const dir of dirsForResolve) {
-            if (dir.alias && dir.path) {
-              const aliasName = String(dir.alias);
-              // 使用动态正则，匹配 @AliasName 后跟路径分隔符、空白、引号或字符串结尾
-              const pattern = new RegExp(`@${aliasName}(?=[/\\\\]|$|\\s|"|')`, 'g'); // eslint-disable-line no-useless-escape
-              resolvedCommand = resolvedCommand.replace(pattern, String(dir.path).replace(/\\/g, '/'));
-            }
-          }
-          if (resolvedCommand !== commandInput) {
-            execArgs.command = resolvedCommand;
-          }
-        }
-
-        // An alias that survived substitution is not a path and not a command:
-        // refuse it here so nothing creates a literal "@WorkDir" folder.
-        const unresolved = findUnresolvedAliasInValues([
-          execArgs.workingDir,
-          typeof execArgs.command === 'string' ? execArgs.command : '',
-        ]);
-        if (unresolved) {
-          return this.rejectUnresolvedAlias({ assistantMessageId, conversationId: invocation.conversationId,
-            server, tool, cardId, callKey, callId, args: (args || {}) as any, alias: unresolved,
-            sessionWorkDir: shellWorkDir });
-        }
-
-        execInvocation = new ToolInvocation({
-          assistantMessageId: invocation.assistantMessageId,
-          conversationId: invocation.conversationId,
-          server: invocation.server,
-          tool: invocation.tool,
-          args: execArgs,
-          provider: invocation.provider,
-          model: invocation.model,
-          historyForLlm: invocation.historyForLlm,
-          originalUserContent: invocation.originalUserContent,
-          callId: invocation.callId,
-          cardId,
-          lockKey: invocation.lockKey,
-          providerData: invocation.providerData,
-          planOnly: invocation.planOnly,
-        });
-      } catch {
-        // ignore: best-effort（解析失败则保持原参数，让后续校验/授权处理）
-      }
+      const prepared = await this.prepareShellCall({ invocation, server, tool, cardId, callKey, callId, assistantMessageId });
+      if (prepared.kind === 'halted') return prepared.result;
+      execInvocation = prepared.invocation;
+      sessionWorkDir = prepared.sessionWorkDir;
     }
+
 
     if (isFilesystemServer(srvLower)) {
       const op = filesystemOp(tool);
@@ -744,6 +655,124 @@ export class ToolExecutionPipeline {
    * `@WorkDir` folder, so this returns a structured result the model can act on
    * and never dispatches to an adapter.
    */
+  /**
+   * shell_executor 的前置解析：workingDir 与 command 里的 @WorkDir / @Alias 换成真实
+   * 路径，好让审批卡片和后端看到同一个目录。解析本身是 best-effort，失败就保持原参数，
+   * 交给后面的校验与授权处理；但替换后仍残留的别名既不是路径也不是命令，必须在这里挡掉，
+   * 否则 `cd @WorkDir` 会创建出一个字面量目录。
+   */
+  private async prepareShellCall(params: {
+    invocation: ToolInvocation
+    server: string
+    tool: string
+    cardId: string
+    callKey: string
+    callId?: string
+    assistantMessageId: string
+  }): Promise<{ kind: 'ready'; invocation: ToolInvocation; sessionWorkDir?: string } | { kind: 'halted'; result: unknown }> {
+    const { invocation, server, tool, cardId, callKey, callId, assistantMessageId } = params;
+    const args = invocation.args as Record<string, unknown> | undefined;
+    let nextInvocation = invocation;
+    let sessionWorkDir: string | undefined;
+
+    try {
+      const allowlist = useFilesystemAllowlistStore.getState();
+      await allowlist.load();
+      const dirsForResolve = [...allowlist.directories];
+      let shellWorkDir: string | undefined;
+      try {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
+        if (wd) {
+          shellWorkDir = String(wd).replace(/\\/g, '/');
+          sessionWorkDir = shellWorkDir;
+          dirsForResolve.unshift({
+            id: `session:${invocation.conversationId}:workdir`,
+            path: shellWorkDir,
+            alias: 'WorkDir',
+            permissions: { read: true, write: true, create: true, delete: false },
+            source: 'workdir',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          } as any);
+        }
+      } catch {
+        // ignore
+      }
+
+      const execArgs: Record<string, unknown> = { ...(args || {}) };
+
+      // 解析 workingDir 参数中的别名
+      const workingDirInput = typeof (args as any)?.workingDir === 'string' ? String((args as any).workingDir) : '';
+      if (workingDirInput) {
+        const shellResolved = resolveAllowlistPath({ inputPath: workingDirInput, directories: dirsForResolve as any, workingDir: shellWorkDir });
+        execArgs.workingDir = shellResolved.absolutePath;
+      } else if (shellWorkDir) {
+        // The tool description promises @WorkDir as the default. Resolving it
+        // here, before the approval gate, means the card and the backend see
+        // the same directory instead of the backend falling back silently.
+        execArgs.workingDir = shellWorkDir;
+      }
+
+      // 解析 command 参数中的 @WorkDir / @Alias 别名
+      const commandInput = typeof (args as any)?.command === 'string' ? String((args as any).command) : '';
+      if (commandInput && commandInput.includes('@')) {
+        let resolvedCommand = commandInput;
+        // 替换 @WorkDir 别名（支持 @WorkDir、@WorkDir/、@WorkDir\）
+        if (shellWorkDir) {
+          // 使用全局替换，支持多种后缀形式
+          resolvedCommand = resolvedCommand.replace(/@WorkDir(?=[\/\\]|$|\s|"|')/g, shellWorkDir);
+        }
+        // 替换其他 @Alias 别名（格式：@AliasName 或 @AliasName/path）
+        for (const dir of dirsForResolve) {
+          if (dir.alias && dir.path) {
+            const aliasName = String(dir.alias);
+            // 使用动态正则，匹配 @AliasName 后跟路径分隔符、空白、引号或字符串结尾
+            const pattern = new RegExp(`@${aliasName}(?=[/\\\\]|$|\\s|"|')`, 'g'); // eslint-disable-line no-useless-escape
+            resolvedCommand = resolvedCommand.replace(pattern, String(dir.path).replace(/\\/g, '/'));
+          }
+        }
+        if (resolvedCommand !== commandInput) {
+          execArgs.command = resolvedCommand;
+        }
+      }
+
+      // An alias that survived substitution is not a path and not a command:
+      // refuse it here so nothing creates a literal "@WorkDir" folder.
+      const unresolved = findUnresolvedAliasInValues([
+        execArgs.workingDir,
+        typeof execArgs.command === 'string' ? execArgs.command : '',
+      ]);
+      if (unresolved) {
+        return { kind: 'halted', result: await this.rejectUnresolvedAlias({
+          assistantMessageId, conversationId: invocation.conversationId,
+          server, tool, cardId, callKey, callId, args: (args || {}) as any, alias: unresolved,
+          sessionWorkDir: shellWorkDir }) };
+      }
+
+      nextInvocation = new ToolInvocation({
+        assistantMessageId: invocation.assistantMessageId,
+        conversationId: invocation.conversationId,
+        server: invocation.server,
+        tool: invocation.tool,
+        args: execArgs,
+        provider: invocation.provider,
+        model: invocation.model,
+        historyForLlm: invocation.historyForLlm,
+        originalUserContent: invocation.originalUserContent,
+        callId: invocation.callId,
+        cardId,
+        lockKey: invocation.lockKey,
+        providerData: invocation.providerData,
+        planOnly: invocation.planOnly,
+      });
+    } catch {
+      // ignore: best-effort（解析失败则保持原参数，让后续校验/授权处理）
+    }
+
+    return { kind: 'ready', invocation: nextInvocation, sessionWorkDir };
+  }
+
   private async rejectUnresolvedAlias(params: {
     assistantMessageId: string;
     conversationId: string;
