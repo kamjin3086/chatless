@@ -19,6 +19,7 @@ import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isN
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 import { filesystemOp, isPlanOnlyAllowed, isReplayableRead } from './policy/toolRisk';
 import { hasFilesystemPaths, resolveFilesystemCall } from './policy/resolveCall';
+import { decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from './policy/policy';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
@@ -78,52 +79,6 @@ function buildAuthDeniedResult(params: {
 export type ToolExecutionPipelineDeps = {
   adapters: ToolAdapter[];
 };
-
-function needsAuthorization(server: string, tool: string, autoAuth: boolean, args?: Record<string, unknown>): boolean {
-  const srv = normalizeServerName(server);
-  const tl = String(tool || '').toLowerCase();
-
-  // shell：由调用方按“访问策略”决定 autoAuth（含会话级免问），
-  // 不再维护“低风险命令白名单”和按工作目录的记忆。
-  if (isShellServer(srv)) {
-    // Reading the output of a process the agent started, listing them, or
-    // stopping one it started are not new side effects: never prompt for them.
-    if (/^(logs|list|stop)$/.test(tl)) return false;
-    return !autoAuth;
-  }
-
-  // user_fs：保持现有行为——仅写入需要确认（读/list 属于“在已授权目录内的低风险操作”）
-  if (srv === 'user_fs') {
-    return tl === 'write_user_file' && !autoAuth;
-  }
-
-  // Skill installation and modification change the local execution
-  // environment.  Only inspection remains approval-free.
-  if (srv === 'skills_fs') {
-    return !/^(read_skill_resource|list_skill_resources|list_files)$/.test(tl);
-  }
-  if (srv === 'skills' || srv === 'skill') {
-    return !/^(list|guide|read_file|list_files|check_deps|use)$/.test(tl);
-  }
-
-  // tools: auto-approve
-  if (srv === 'tools') {
-    return false;
-  }
-
-  // System reads are safe; prompt and skill administration is not.
-  if (srv === 'system') {
-    return !/^(list_prompts|get_prompt|list_skills)$/.test(tl);
-  }
-
-  // filesystem：授权由 allowlist gate 统一管理，这里不参与（返回 false 以避免“全局 autoAuth”影响文件系统安全边界）
-  if (isFilesystemServer(srv)) {
-    return false;
-  }
-
-  // 其余：按 server 粒度控制
-  return !autoAuth;
-}
 
 function isDirectoryScopedFilesystemTool(tool: string): boolean {
   return isDirectorySemanticFsTool(tool);
@@ -415,24 +370,23 @@ export class ToolExecutionPipeline {
           const primaryAbsolutePath = resolution.primaryPath;
 
           const forceApproval = op === 'delete';
-          const hasDir = !!resolution.directory;
-          const hasPerm = hasDir ? !!resolution.directory?.permissions?.[op] : false;
           // The user's chosen trust level decides whether this call may ask.
           // "unrestricted" skips the prompt; the backend still validates every
           // path it receives.
           const accessLevel = await resolveAccess('fs', invocation.conversationId);
           const unrestricted = accessLevel === 'unrestricted';
-          const needAuth = !unrestricted && primaryAbsolutePath && (forceApproval || !hasDir || !hasPerm);
-          const needsCallGrant = !hasPerm || forceApproval;
+          const policy = decideFilesystemCall({
+            op, primaryPath: primaryAbsolutePath, directory: resolution.directory, unrestricted,
+          });
+          const needsCallGrant = policy.needsCallGrant;
           let approved = false;
           let decision: ApprovalDecision = 'once';
 
-          if (needAuth) {
+          if (policy.kind === 'ask') {
             markPendingAuth({ assistantMessageId, server, tool, cardId });
             // "以后都允许" is only meaningful for a folder we can grant, so a
             // delete reports its parent but never offers that choice.
-            const approvableDirectory = resolution.directory?.path
-              || dirnamePath(primaryAbsolutePath);
+            const approvableDirectory = policy.approvableDirectory;
             const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
               runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
               args: args || {},
@@ -494,11 +448,14 @@ export class ToolExecutionPipeline {
             // Turn the user's choice into trust that lasts as long as they asked
             // for: "always" joins the persistent allowlist (never with delete),
             // "unrestricted" stops the questions for the rest of the session.
-            if (approvableDirectory && decision === 'always' && !forceApproval) {
+            const promotion = planFilesystemPromotion({
+              answer: decision, approvableDirectory, isDelete: forceApproval,
+            });
+            if (promotion.rememberDirectory) {
               try {
                 const { ensureAllowlistedDirectory } = await import('@/lib/filesystemAllowlist/autoAuthorize');
                 await ensureAllowlistedDirectory({
-                  path: approvableDirectory,
+                  path: promotion.rememberDirectory,
                   source: 'manual',
                   permissions: EVERYDAY_DIRECTORY_PERMISSIONS,
                 });
@@ -506,7 +463,7 @@ export class ToolExecutionPipeline {
                 console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
               }
             }
-            if (decision === 'unrestricted') {
+            if (promotion.conversationUnrestricted) {
               setConversationAccess('fs', invocation.conversationId, 'unrestricted');
             }
           }
@@ -574,7 +531,7 @@ export class ToolExecutionPipeline {
         ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
         : await shouldAutoAuthorize(server);
       const effectiveArgs = (execInvocation.args || args || {}) as any;
-      if (needsAuthorization(server, tool, autoAuth, effectiveArgs || {})) {
+      if (decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
         markPendingAuth({ assistantMessageId, server, tool, cardId });
         const approval = await waitForCallApproval({ id: `${assistantMessageId}:${cardId}`,
           runId: assistantMessageId, conversationId: invocation.conversationId, callId, server, tool,
@@ -622,15 +579,18 @@ export class ToolExecutionPipeline {
 
         // A shell approval can end the questions for this session or for good;
         // the next command re-checks the policy, so nothing is bypassed.
-        if (isShell && approval.decision === 'unrestricted') {
-          setConversationAccess('shell', invocation.conversationId, 'unrestricted');
-        }
-        if (isShell && approval.decision === 'always') {
-          try {
-            const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
-            await setGlobalAccess('shell', 'unrestricted');
-          } catch (error) {
-            console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
+        if (isShell) {
+          const promotion = planShellPromotion({ answer: approval.decision });
+          if (promotion.conversationUnrestricted) {
+            setConversationAccess('shell', invocation.conversationId, 'unrestricted');
+          }
+          if (promotion.globalUnrestricted) {
+            try {
+              const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
+              await setGlobalAccess('shell', 'unrestricted');
+            } catch (error) {
+              console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
+            }
           }
         }
       }
