@@ -45,7 +45,6 @@
 export { 
   type ToolInstructionFormat,
   type PatternDefinition,
-  type SuppressionMode,
   type SuppressionTrigger,
   TOOL_INSTRUCTION_PATTERNS,
   INCOMPLETE_TAG_PREFIXES,
@@ -68,14 +67,6 @@ export {
   type DetectionResult,
   detectToolInstruction
 } from './detector';
-
-// 抑制器
-export {
-  type SuppressorOptions,
-  type SuppressorUpdate,
-  type ToolInstructionSuppressor,
-  createToolInstructionSuppressor
-} from './suppressor';
 
 // 标记工具
 export {

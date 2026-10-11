@@ -43,19 +43,6 @@ export interface StreamContext {
   fsmState: 'RENDERING_BODY' | 'RENDERING_THINK' | 'TOOL_RUNNING' | 'TOOL_DONE';
   /** 是否已从 provider 事件流中接收过 thinking_* 事件（用于避免对 content_token 再做一次 <think> 解析导致重复） */
   hasProviderThinking?: boolean;
-  /** 指令抑制阀（早阻断） */
-  suppression?: {
-    /** 为了早发现指令而保留的尾部缓冲（不会直接输出到UI） */
-    buffer: string;
-    /** 当前是否处于“指令抑制”状态 */
-    active: boolean;
-    /** JSON 大括号深度（用于检测 { ... } 是否闭合） */
-    braceDepth: number;
-    /** 是否已经在指令段中见到过 { */
-    seenJsonStart: boolean;
-    /** 抑制阈值：为了降低误判而保留的尾部窗口大小（默认 64） */
-    guardWindow: number;
-  };
   /** 元数据 */
   metadata: {
     provider: string;
