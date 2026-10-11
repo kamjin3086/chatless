@@ -171,6 +171,183 @@ export class ToolExecutionPipeline {
     }
 
     try {
+      return await this.executeAndReport({ invocation, execInvocation, adapter, server, tool, cardId, callKey, callId, assistantMessageId });
+    } finally {
+      await revokeCallGrants?.().catch(() => {});
+    }
+  }
+
+  /**
+   * One approval round-trip. Marks the card pending, waits for the answer, then
+   * hands back either the answer or the result the caller must return: the
+   * cancellation checks, the denial card and its workspace step used to be
+   * written twice, once per branch, which is how they started to drift.
+   */
+  private async requestApproval(params: {
+    assistantMessageId: string
+    conversationId: string
+    server: string
+    tool: string
+    cardId: string
+    callKey: string
+    callId?: string
+    args: Record<string, unknown>
+    scope?: Record<string, unknown>
+    approvalScope?: PendingApprovalScope
+    denyMessage: string
+    denyFs?: { op?: string; inputPath?: string; resolvedPath?: string; suggestDir?: string }
+  }): Promise<{ kind: 'approved'; answer: ApprovalDecision } | { kind: 'halted'; result: unknown }> {
+    const { assistantMessageId, conversationId, server, tool, cardId, callKey, callId } = params;
+    markPendingAuth({ assistantMessageId, server, tool, cardId });
+    const approval = await waitForCallApproval({
+      id: `${assistantMessageId}:${cardId}`,
+      runId: assistantMessageId,
+      conversationId,
+      callId,
+      server,
+      tool,
+      args: params.args,
+      scope: params.scope,
+      approvalScope: params.approvalScope,
+    });
+
+    if (this.coordinator.isMessageCancelled(assistantMessageId)) {
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      return { kind: 'halted', result: { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId } };
+    }
+    if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      return { kind: 'halted', result: { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId } };
+    }
+    if (!approval.approved) {
+      markError({ assistantMessageId, server, tool, cardId }, params.denyMessage);
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      const denied = buildAuthDeniedResult({
+        server,
+        tool,
+        message: 'User denied authorization',
+        conversationId,
+        assistantMessageId,
+        cardId,
+        args: params.args,
+        fs: params.denyFs,
+      });
+      try {
+        await appendWorkspaceToolStep({
+          conversationId,
+          assistantMessageId,
+          cardId,
+          callId,
+          server,
+          tool,
+          args: params.args,
+          result: denied,
+        });
+      } catch {
+        // ignore
+      }
+      return { kind: 'halted', result: denied };
+    }
+    return { kind: 'approved', answer: approval.decision };
+  }
+
+  /**
+   * Refuses a call whose path or command still carries an unresolved `@Alias`.
+   *
+   * Passing it on is how a command like `cd @WorkDir` created a literal
+   * `@WorkDir` folder, so this returns a structured result the model can act on
+   * and never dispatches to an adapter.
+   */
+  /**
+   * shell_executor 的前置解析：workingDir 与 command 里的 @WorkDir / @Alias 换成真实
+   * 路径，好让审批卡片和后端看到同一个目录。解析本身是 best-effort，失败就保持原参数，
+   * 交给后面的校验与授权处理；但替换后仍残留的别名既不是路径也不是命令，必须在这里挡掉，
+   * 否则 `cd @WorkDir` 会创建出一个字面量目录。
+   */
+  /**
+   * 文件系统门：把路径解析成真实目标、按 allowlist 与免问状态决定放行还是发审批卡片，
+   * 再把用户的回答换成这一次调用真正需要的授予。判定本身在 policy/，这里只做读 store、
+   * 等用户、落盘这些副作用。解析或授予失败统一回 FILESYSTEM_GATE_FAILED，与原实现一致：
+   * 不把异常吞成"没这回事"。
+   */
+  /**
+   * 非文件系统调用的门：shell 的信任来自访问策略（持久开关，或本会话此前在卡片上做的
+   * 选择），其余服务器看全局自动授权。要问就把卡片发出去；答完之后 shell 的"以后都不问"
+   * 与"本会话不再问"各自落到该落的地方，下一条命令会重新走一遍策略。
+   */
+  private async serverGate(params: {
+    invocation: ToolInvocation
+    execInvocation: ToolInvocation
+    server: string
+    tool: string
+    cardId: string
+    callKey: string
+    callId?: string
+    assistantMessageId: string
+  }): Promise<{ kind: 'ready' } | { kind: 'halted'; result: unknown }> {
+    const { invocation, execInvocation, server, tool, cardId, callKey, callId, assistantMessageId } = params;
+    const args = invocation.args as Record<string, unknown> | undefined;
+    const halt = (result: unknown) => ({ kind: 'halted' as const, result });
+
+    const isShell = isShellServer(server);
+    // Shell trust comes from the access policy: the persisted switch or the
+    // choice this conversation's user already made on an approval card.
+    const autoAuth = isShell
+      ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
+      : await shouldAutoAuthorize(server);
+    const effectiveArgs = (execInvocation.args || args || {}) as any;
+    if (decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
+      const approval = await this.requestApproval({
+        assistantMessageId, conversationId: invocation.conversationId,
+        server, tool, cardId, callKey, callId,
+        args: (effectiveArgs || {}) as Record<string, unknown>,
+        approvalScope: isShell
+          ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
+          : undefined,
+        denyMessage: '用户拒绝授权此工具调用',
+      });
+      if (approval.kind === 'halted') return halt(approval.result);
+
+      // A shell approval can end the questions for this session or for good;
+      // the next command re-checks the policy, so nothing is bypassed.
+      if (isShell) {
+        const promotion = planShellPromotion({ answer: approval.answer });
+        if (promotion.conversationUnrestricted) {
+          setConversationAccess('shell', invocation.conversationId, 'unrestricted');
+        }
+        if (promotion.globalUnrestricted) {
+          try {
+            const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
+            await setGlobalAccess('shell', 'unrestricted');
+          } catch (error) {
+            console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
+          }
+        }
+      }
+    }
+
+    return { kind: 'ready' };
+  }
+
+  /**
+   * 执行并记账：按"只有读操作可重放"的规则重试、更新工具卡片、把失败收拢成模型用得上
+   * 的回执。这里的返回值就是 run() 的返回值；包裹调用方的 try/finally 负责回收这一次
+   * 调用被授予的权限，所以审批不会活到下一次调用。
+   */
+  private async executeAndReport(params: {
+    invocation: ToolInvocation
+    execInvocation: ToolInvocation
+    adapter: ToolAdapter
+    server: string
+    tool: string
+    cardId: string
+    callKey: string
+    callId?: string
+    assistantMessageId: string
+  }): Promise<unknown> {
+    const { invocation, execInvocation, adapter, server, tool, cardId, callKey, callId, assistantMessageId } = params;
+    const args = invocation.args as Record<string, unknown> | undefined;
+
     const cfg = await getAgentExperienceConfig();
     // Only reads are replayable: a timeout after a write, shell command, or
     // unknown MCP operation does not tell us whether the side effect happened.
@@ -367,161 +544,6 @@ export class ToolExecutionPipeline {
     markError({ assistantMessageId, server, tool, cardId }, summary.message);
     this.coordinator.markToolCallComplete(callKey, 'failed');
     return summary;
-    } finally {
-      await revokeCallGrants?.().catch(() => {});
-    }
-  }
-
-  /**
-   * One approval round-trip. Marks the card pending, waits for the answer, then
-   * hands back either the answer or the result the caller must return: the
-   * cancellation checks, the denial card and its workspace step used to be
-   * written twice, once per branch, which is how they started to drift.
-   */
-  private async requestApproval(params: {
-    assistantMessageId: string
-    conversationId: string
-    server: string
-    tool: string
-    cardId: string
-    callKey: string
-    callId?: string
-    args: Record<string, unknown>
-    scope?: Record<string, unknown>
-    approvalScope?: PendingApprovalScope
-    denyMessage: string
-    denyFs?: { op?: string; inputPath?: string; resolvedPath?: string; suggestDir?: string }
-  }): Promise<{ kind: 'approved'; answer: ApprovalDecision } | { kind: 'halted'; result: unknown }> {
-    const { assistantMessageId, conversationId, server, tool, cardId, callKey, callId } = params;
-    markPendingAuth({ assistantMessageId, server, tool, cardId });
-    const approval = await waitForCallApproval({
-      id: `${assistantMessageId}:${cardId}`,
-      runId: assistantMessageId,
-      conversationId,
-      callId,
-      server,
-      tool,
-      args: params.args,
-      scope: params.scope,
-      approvalScope: params.approvalScope,
-    });
-
-    if (this.coordinator.isMessageCancelled(assistantMessageId)) {
-      this.coordinator.markToolCallComplete(callKey, 'failed');
-      return { kind: 'halted', result: { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId } };
-    }
-    if (this.coordinator.isToolCardCancelled(assistantMessageId, cardId)) {
-      this.coordinator.markToolCallComplete(callKey, 'failed');
-      return { kind: 'halted', result: { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId } };
-    }
-    if (!approval.approved) {
-      markError({ assistantMessageId, server, tool, cardId }, params.denyMessage);
-      this.coordinator.markToolCallComplete(callKey, 'failed');
-      const denied = buildAuthDeniedResult({
-        server,
-        tool,
-        message: 'User denied authorization',
-        conversationId,
-        assistantMessageId,
-        cardId,
-        args: params.args,
-        fs: params.denyFs,
-      });
-      try {
-        await appendWorkspaceToolStep({
-          conversationId,
-          assistantMessageId,
-          cardId,
-          callId,
-          server,
-          tool,
-          args: params.args,
-          result: denied,
-        });
-      } catch {
-        // ignore
-      }
-      return { kind: 'halted', result: denied };
-    }
-    return { kind: 'approved', answer: approval.decision };
-  }
-
-  /**
-   * Refuses a call whose path or command still carries an unresolved `@Alias`.
-   *
-   * Passing it on is how a command like `cd @WorkDir` created a literal
-   * `@WorkDir` folder, so this returns a structured result the model can act on
-   * and never dispatches to an adapter.
-   */
-  /**
-   * shell_executor 的前置解析：workingDir 与 command 里的 @WorkDir / @Alias 换成真实
-   * 路径，好让审批卡片和后端看到同一个目录。解析本身是 best-effort，失败就保持原参数，
-   * 交给后面的校验与授权处理；但替换后仍残留的别名既不是路径也不是命令，必须在这里挡掉，
-   * 否则 `cd @WorkDir` 会创建出一个字面量目录。
-   */
-  /**
-   * 文件系统门：把路径解析成真实目标、按 allowlist 与免问状态决定放行还是发审批卡片，
-   * 再把用户的回答换成这一次调用真正需要的授予。判定本身在 policy/，这里只做读 store、
-   * 等用户、落盘这些副作用。解析或授予失败统一回 FILESYSTEM_GATE_FAILED，与原实现一致：
-   * 不把异常吞成"没这回事"。
-   */
-  /**
-   * 非文件系统调用的门：shell 的信任来自访问策略（持久开关，或本会话此前在卡片上做的
-   * 选择），其余服务器看全局自动授权。要问就把卡片发出去；答完之后 shell 的"以后都不问"
-   * 与"本会话不再问"各自落到该落的地方，下一条命令会重新走一遍策略。
-   */
-  private async serverGate(params: {
-    invocation: ToolInvocation
-    execInvocation: ToolInvocation
-    server: string
-    tool: string
-    cardId: string
-    callKey: string
-    callId?: string
-    assistantMessageId: string
-  }): Promise<{ kind: 'ready' } | { kind: 'halted'; result: unknown }> {
-    const { invocation, execInvocation, server, tool, cardId, callKey, callId, assistantMessageId } = params;
-    const args = invocation.args as Record<string, unknown> | undefined;
-    const halt = (result: unknown) => ({ kind: 'halted' as const, result });
-
-    const isShell = isShellServer(server);
-    // Shell trust comes from the access policy: the persisted switch or the
-    // choice this conversation's user already made on an approval card.
-    const autoAuth = isShell
-      ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
-      : await shouldAutoAuthorize(server);
-    const effectiveArgs = (execInvocation.args || args || {}) as any;
-    if (decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
-      const approval = await this.requestApproval({
-        assistantMessageId, conversationId: invocation.conversationId,
-        server, tool, cardId, callKey, callId,
-        args: (effectiveArgs || {}) as Record<string, unknown>,
-        approvalScope: isShell
-          ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
-          : undefined,
-        denyMessage: '用户拒绝授权此工具调用',
-      });
-      if (approval.kind === 'halted') return halt(approval.result);
-
-      // A shell approval can end the questions for this session or for good;
-      // the next command re-checks the policy, so nothing is bypassed.
-      if (isShell) {
-        const promotion = planShellPromotion({ answer: approval.answer });
-        if (promotion.conversationUnrestricted) {
-          setConversationAccess('shell', invocation.conversationId, 'unrestricted');
-        }
-        if (promotion.globalUnrestricted) {
-          try {
-            const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
-            await setGlobalAccess('shell', 'unrestricted');
-          } catch (error) {
-            console.warn('[ToolExecutionPipeline] persisting shell trust failed:', error);
-          }
-        }
-      }
-    }
-
-    return { kind: 'ready' };
   }
 
   private async filesystemGate(params: {
