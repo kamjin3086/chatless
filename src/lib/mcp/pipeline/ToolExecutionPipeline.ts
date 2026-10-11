@@ -17,6 +17,7 @@ import { ToolInvocation } from './ToolInvocation';
 import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
 import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult, markKnownFailure } from './toolResultDiagnostics';
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
+import { filesystemOp, isPlanOnlyAllowed, isReplayableRead } from './policy/toolRisk';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 
 function normalizeSlashPath(p: unknown): string {
@@ -120,34 +121,6 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
 
   // 其余：按 server 粒度控制
   return !autoAuth;
-}
-
-function isPlanOnlyAllowed(server: string, tool: string): boolean {
-  const srv = normalizeServerName(server).toLowerCase();
-  const tl = String(tool || '').toLowerCase();
-  if (isFilesystemServer(srv)) return /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(tl);
-  if (srv === 'knowledge') return /^(list|search|read)$/.test(tl);
-  if (srv === 'tool_result') return tl === 'read';
-  if (srv === 'web_search' || srv === 'web') return /^(search|fetch)$/.test(tl);
-  if (srv === 'tools') return tl === 'search';
-  if (srv === 'skill') return /^(list|guide|use|read_file|list_files|check_deps)$/.test(tl);
-  if (srv === 'system') return /^(list_prompts|get_prompt)$/.test(tl);
-  return false;
-}
-
-function getFilesystemOp(tool: string): 'read' | 'write' | 'create' | 'delete' {
-  const tl = String(tool || '').toLowerCase();
-  if (tl === 'delete_file' || tl === 'delete' || tl === 'rm') return 'delete';
-  // MCP filesystem 常见工具名：read_file / list_directory / write_file
-  if (tl === 'read_file' || tl === 'read' || tl === 'list_directory' || tl === 'list' || tl === 'dir' || tl === 'ls') return 'read';
-  // rename/move 视为写入类操作
-  if (tl === 'rename_file' || tl === 'rename' || tl === 'move_file' || tl === 'move' || tl === 'mv') return 'write';
-  if (tl === 'write_file' || tl === 'write') return 'write';
-  // Precise editing writes to the file just like a full write.
-  if (tl === 'edit' || tl === 'edit_file') return 'write';
-  if (tl === 'search' || tl === 'search_files') return 'read';
-  if (tl === 'mkdir' || tl === 'create_directory' || tl === 'create') return 'create';
-  return 'read';
 }
 
 function isDirectoryScopedFilesystemTool(tool: string): boolean {
@@ -393,7 +366,7 @@ export class ToolExecutionPipeline {
       
       // 主路径用于权限检查
       const inputPath = rawPath || rawDir || rawRoot || rawOldPath || '';
-      const op = getFilesystemOp(tool);
+      const op = filesystemOp(tool);
       
       // 判断是否有任何需要解析的路径
       const hasPathsToResolve = inputPath || rawNewPath || rawPaths.length > 0;
@@ -766,16 +739,10 @@ export class ToolExecutionPipeline {
 
     try {
     const cfg = await getAgentExperienceConfig();
-    const srvForRetry = normalizeServerName(server).toLowerCase();
-    const toolForRetry = String(tool || '').toLowerCase();
-    const isReadOnlyRetry =
-      (isFilesystemServer(srvForRetry) && /^(read|read_file|list|list_directory|ls|dir|stat|exists|search)$/.test(toolForRetry)) ||
-      (srvForRetry === 'knowledge' && /^(list|search|read)$/.test(toolForRetry)) ||
-      (srvForRetry === 'web_search' && /^(search|fetch)$/.test(toolForRetry)) ||
-      (srvForRetry === 'tools' && toolForRetry === 'search');
-    // A timeout after a write, shell command, or unknown MCP operation does not
-    // tell us whether the side effect happened. Never replay those calls.
-    const maxRetries = isReadOnlyRetry && typeof cfg.maxToolRetries === 'number'
+    // Only reads are replayable: a timeout after a write, shell command, or
+    // unknown MCP operation does not tell us whether the side effect happened.
+    const readOnlyRetry = isReplayableRead(server, tool);
+    const maxRetries = readOnlyRetry && typeof cfg.maxToolRetries === 'number'
       ? Math.max(0, Math.min(5, cfg.maxToolRetries))
       : 0;
 
@@ -915,7 +882,7 @@ export class ToolExecutionPipeline {
           hints,
           // 新增：结构化错误（便于 UI/模型直接读懂）
           errorDetails: {
-            code: isReadOnlyRetry ? 'TOOL_EXEC_FAILED' : 'TOOL_RESULT_UNKNOWN',
+            code: readOnlyRetry ? 'TOOL_EXEC_FAILED' : 'TOOL_RESULT_UNKNOWN',
             message: lastErr,
             hints,
             attempts: attempt + 1,
@@ -923,7 +890,7 @@ export class ToolExecutionPipeline {
             server,
             tool,
           },
-          resultStatus: isReadOnlyRetry ? 'failed' : 'unknown',
+          resultStatus: readOnlyRetry ? 'failed' : 'unknown',
         };
         markError({ assistantMessageId, server, tool, cardId }, lastErr);
         try {
