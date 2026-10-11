@@ -180,17 +180,6 @@ export class DatabaseService {
   /**
    * 更新对话标题
    */
-  public async updateConversationTitle(conversationId: string, title: string): Promise<Conversation> {
-    return this.getConversationRepository().updateTitle(conversationId, title);
-  }
-
-  /**
-   * 切换收藏标记
-   */
-  public async toggleConversationFavorite(conversationId: string): Promise<Conversation> {
-    return this.getConversationRepository().toggleFavorite(conversationId);
-  }
-
   /**
    * 删除对话
    */
