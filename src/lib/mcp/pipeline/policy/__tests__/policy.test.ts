@@ -103,11 +103,14 @@ function oldNeedsAuthorization(server: string, tool: string, autoAuth: boolean):
 }
 
 describe('decideServerCall reproduces needsAuthorization', () => {
-  const SERVERS = ['shell', 'shell_executor', 'fs', 'filesystem', 'user_fs', 'skills', 'skill',
-    'skills_fs', 'tools', 'system', 'web_search', 'some_mcp_server', ''];
-  const TOOLS = ['run', 'logs', 'list', 'stop', 'write_user_file', 'read_user_file', 'list',
-    'read_skill_resource', 'list_skill_resources', 'list_files', 'guide', 'use', 'check_deps',
-    'read_file', 'search', 'write_file', 'list_prompts', 'get_prompt', 'list_skills', 'read', ''];
+  const SERVERS = ['shell', 'shell_executor', 'SHELL', 'Shell_Executor', 'fs', 'filesystem', 'FileSystem',
+    'user_fs', 'User_FS', 'USER_FS', 'skills', 'Skills', 'SKILL', 'skill',
+    'skills_fs', 'Skills_FS', 'tools', 'Tools', 'TOOLS', 'system', 'System', 'SYSTEM',
+    'web_search', 'web', 'some_mcp_server', ' Some_MCP ', ''];
+  const TOOLS = ['run', 'logs', 'list', 'stop', 'write_user_file', 'WRITE_USER_FILE', 'Read_User_File', 'list',
+    'read_skill_resource', 'Read_Skill_Resource', 'list_skill_resources', 'list_files', 'guide', 'use',
+    'check_deps', 'read_file', 'search', 'write_file', 'list_prompts', 'LIST_PROMPTS', 'get_prompt',
+    'list_skills', 'read', ' Search ', ''];
 
   it('agrees on every server x tool x autoAuthorize combination', () => {
     for (const server of SERVERS) {

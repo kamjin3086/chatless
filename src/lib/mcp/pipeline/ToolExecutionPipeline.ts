@@ -18,7 +18,7 @@ import { appendWorkspaceToolStep } from '@/lib/agentWorkspace/manifestService';
 import { buildFatalErrorHints, buildHelpfulNonOkMessage, detectFatalFailure, isNonFatalNonOkResult, markKnownFailure } from './toolResultDiagnostics';
 import { isDirectorySemanticFsTool, isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 import { filesystemOp, isPlanOnlyAllowed, isReplayableRead } from './policy/toolRisk';
-import { hasFilesystemPaths, resolveFilesystemCall } from './policy/resolveCall';
+import { dirnameOf, hasFilesystemPaths, resolveFilesystemCall } from './policy/resolveCall';
 import { decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from './policy/policy';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
@@ -27,16 +27,6 @@ function normalizeSlashPath(p: unknown): string {
   if (typeof p === 'string') return p.trim().replace(/\\/g, '/');
   if (typeof p === 'number' || typeof p === 'boolean' || typeof p === 'bigint') return String(p).trim();
   return '';
-}
-
-function dirnamePath(p: string): string {
-  const s = normalizeSlashPath(p);
-  if (!s) return '';
-  // keep drive root like C:/ intact
-  if (/^[A-Za-z]:\/$/.test(s)) return s;
-  const i = s.lastIndexOf('/');
-  if (i <= 0) return s;
-  return s.slice(0, i);
 }
 
 function buildAuthDeniedResult(params: {
@@ -407,7 +397,7 @@ export class ToolExecutionPipeline {
               return { skipped: true, reason: 'CARD_CANCELLED', messageId: assistantMessageId, cardId };
             }
             if (!authorized) {
-              const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnamePath(primaryAbsolutePath);
+              const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnameOf(primaryAbsolutePath);
               markError(
                 { assistantMessageId, server, tool, cardId },
                 `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`
@@ -478,7 +468,7 @@ export class ToolExecutionPipeline {
               // the containing directory because the file may not exist yet.
               const grantPath = hasDirArg || dirScopedByTool || op === 'delete'
                 ? primaryAbsolutePath
-                : dirnamePath(primaryAbsolutePath);
+                : dirnameOf(primaryAbsolutePath);
               callGrants.push({
                 path: grantPath,
                 permissions: {

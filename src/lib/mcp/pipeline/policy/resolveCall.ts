@@ -38,6 +38,15 @@ export type CallResolutionResolved = {
 
 export type FilesystemCallResolution = CallResolutionRejected | CallResolutionResolved;
 
+/** 取父目录；盘符根（C:/）保持自身。解析与审批两侧共用这一份。 */
+export function dirnameOf(path: string): string {
+  const s = String(path ?? '').replace(/\\/g, '/').trim();
+  if (!s) return '';
+  if (/^[A-Za-z]:\/$/.test(s)) return s;
+  const i = s.lastIndexOf('/');
+  return i <= 0 ? s : s.slice(0, i);
+}
+
 function str(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }

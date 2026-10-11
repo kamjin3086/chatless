@@ -1,6 +1,7 @@
 import type { ApprovalDecision } from '@/store/authorizationStore';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
-import { isFilesystemServer, isShellServer } from '@/lib/mcp/toolNaming';
+import { dirnameOf } from './resolveCall';
+import { isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 
 /**
  * 决定一次调用能不能跑：`decide` 回答放行 / 要问，`planPromotion` 把一个审批回答
@@ -9,14 +10,6 @@ import { isFilesystemServer, isShellServer } from '@/lib/mcp/toolNaming';
  * 之所以拆成两半：审批要等人，而等之前算出的判定和等之后产生的信任，是同一套规则的
  * 前后两段。放一个模块里是为了让"问不问"和"答完变成什么"能被同一张表穷举测试。
  */
-
-/** 策略快照：调用方一次读齐后传进来，判定本身不回头取 store。 */
-export type PolicyContext = {
-  /** 文件系统作用域是否已免问（本会话或持久开关）。 */
-  fsUnrestricted: boolean;
-  /** shell 及其它 server 的自动授权判定，由调用方按原有规则算好。 */
-  autoAuthorize: boolean;
-};
 
 export type FilesystemDecision =
   /** 允许名单已经覆盖这次操作，或者该作用域已免问。 */
@@ -29,14 +22,6 @@ export type FilesystemDecision =
       /** 可以用来"记住"的目录；删除没有可记住的目录。 */
       approvableDirectory?: string;
     };
-
-function dirnameOf(p: string): string {
-  const s = String(p || '').replace(/\\/g, '/').trim();
-  if (!s) return '';
-  if (/^[A-Za-z]:\/$/.test(s)) return s;
-  const i = s.lastIndexOf('/');
-  return i <= 0 ? s : s.slice(0, i);
-}
 
 /**
  * 文件系统调用要不要问。
@@ -115,7 +100,9 @@ export function decideServerCall(params: {
   tool: string;
   autoAuthorize: boolean;
 }): 'allow' | 'ask' {
-  const srv = String(params.server || '');
+  // 先归一：main 上的原实现就是拿 normalizeServerName 做比对的，
+  // 不归一则 'System' / 'User_FS' 这类写法会落到兵头分枝，把原本不问的变成问。
+  const srv = normalizeServerName(params.server);
   const tl = String(params.tool || '').toLowerCase();
 
   if (isShellServer(srv)) {
