@@ -22,7 +22,7 @@ _Avoid_: 永久授权
 `unrestricted` 的效果——只在本会话内不再询问该作用域，进程结束即失效。文件系统和 shell 各自独立持有。
 _Avoid_: 临时授权、会话信任
 
-**调用级授予 (CallGrant)**:
+**调用级授予 (CallScopedGrant)**:
 允许名单没覆盖、但用户刚批准了的那次调用所需的**一次性**路径权限。调用结束即回收，不会让一次批准活到下一次调用。
 _Avoid_: 临时权限、路径授权
 
@@ -54,7 +54,7 @@ _Avoid_: 无效路径
 模型请求的一次工具执行：哪个 server、哪个 tool、什么参数。
 _Avoid_: 请求、任务
 
-**解析后的调用 (CallResolution)**:
+**解析后的调用 (FilesystemCallResolution)**:
 把别名落成真实路径之后的调用，附带关于它的 facts：主路径、命中的目录、文件操作种类、有没有未解析别名。能被 adapter 执行的那份调用从这里取。
 _Avoid_: ResolvedInvocation（与 ToolInvocation 太近）
 
@@ -67,11 +67,11 @@ _Avoid_: 只读工具列表、危险工具
 _Avoid_: 幂等重试
 
 **工具策略 (ToolPolicy)**:
-决定一次调用能不能跑的模块：`decide` 回答放行 / 拒绝 / 要问，`promote` 把一个审批回答翻译成状态增量。
+决定一次调用能不能跑的模块。`decideFilesystemCall` / `decideServerCall` 回答放行或要问，`planFilesystemPromotion` / `planShellPromotion` 把一个审批回答翻译成状态增量；按作用域分开命名，因为同一个回答在文件系统与 shell 下含义不同。
 _Avoid_: 权限检查、鉴权层
 
 **决策 (Decision)**:
-`decide` 的产出：放行、拒绝（带机器可读原因），或者要问（带审批要转出去的载荷和批准后该授予的调用级授予）。
+`decide*` 的产出：放行、拒绝（带机器可读原因），或者要问（带审批要转出去的载荷和批准后该授予的调用级授予）。
 _Avoid_: 授权结果
 
 **提权 (Promotion)**:
