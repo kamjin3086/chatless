@@ -159,23 +159,6 @@ export class ToolCallPipeline {
   }
 
   /**
-   * 清理不完整的片段（用于流式场景）
-   */
-  cleanIncomplete(text: string): string {
-    if (!text) return '';
-    
-    let currentText = text;
-    
-    for (const handler of this.getSortedHandlers()) {
-      if (handler.cleanIncomplete && handler.mightContain(currentText)) {
-        currentText = handler.cleanIncomplete(currentText);
-      }
-    }
-    
-    return currentText;
-  }
-
-  /**
    * 获取所有已注册的处理器信息
    */
   getRegisteredFormats(): Array<{ id: string; description: string; priority: number }> {

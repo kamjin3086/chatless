@@ -469,45 +469,4 @@ export class GptOssHandler implements FormatHandler {
     };
   }
 
-  cleanIncomplete(text: string): string {
-    let result = text;
-
-    // 移除不完整的通道工具调用
-    // 例如: <|channel|>commentary to=web_search...
-    result = result.replace(
-      /<\|channel\|>\s*commentary\s+to=[^\s<]+[\s\S]*?(?:<\|(?:message|constrain)\|>[\s\S]*?)?$/gi,
-      ''
-    );
-
-    // 移除不完整的模板标签
-    // 例如: <|chann 或 <|
-    for (const tag of this.allTags) {
-      const fullTag = `<|${tag}|>`;
-      for (let len = fullTag.length - 1; len >= 2; len--) {
-        const partial = fullTag.substring(0, len);
-        if (result.endsWith(partial)) {
-          result = result.slice(0, -partial.length);
-          break;
-        }
-      }
-    }
-
-    // 移除孤立的 <|
-    if (result.endsWith('<|')) {
-      result = result.slice(0, -2);
-    } else if (result.endsWith('<')) {
-      // 只有当前面没有 < 时才移除，避免误删 HTML
-      const lastLt = result.lastIndexOf('<');
-      if (lastLt === result.length - 1) {
-        // 检查是否可能是 GPT-OSS 标签的开始
-        const before = result.slice(Math.max(0, lastLt - 10), lastLt);
-        // 如果前面没有其他 < 或者看起来不像 HTML，才移除
-        if (!before.includes('<')) {
-          result = result.slice(0, -1);
-        }
-      }
-    }
-
-    return result;
-  }
 }

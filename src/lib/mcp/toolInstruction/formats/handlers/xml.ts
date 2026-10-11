@@ -277,38 +277,5 @@ export class XMLHandler implements FormatHandler {
     };
   }
 
-  cleanIncomplete(text: string): string {
-    let result = text;
-
-    // 移除不完整的标签
-    if (this.incompleteUseMcpTool.test(result)) {
-      result = result.replace(this.incompleteUseMcpTool, '');
-    }
-    if (this.incompleteToolCall.test(result)) {
-      result = result.replace(this.incompleteToolCall, '');
-    }
-    if (this.incompleteFunction.test(result)) {
-      result = result.replace(this.incompleteFunction, '');
-    }
-
-    // 移除不完整的标签前缀
-    const incompletePrefixes = [
-      '<use_mcp_tool', '</use_mcp_tool',
-      '<tool_call', '</tool_call',
-      '<function='
-    ];
-
-    for (const prefix of incompletePrefixes) {
-      for (let len = prefix.length; len >= 4; len--) {
-        const partial = prefix.substring(0, len);
-        if (result.endsWith(partial)) {
-          result = result.slice(0, -partial.length);
-          break;
-        }
-      }
-    }
-
-    return result;
-  }
 }
 

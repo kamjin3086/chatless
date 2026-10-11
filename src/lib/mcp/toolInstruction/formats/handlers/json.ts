@@ -245,59 +245,5 @@ export class JsonHandler implements FormatHandler {
     };
   }
 
-  cleanIncomplete(text: string): string {
-    // 移除不完整的 JSON 对象
-    // 检测末尾是否有未闭合的 {
-    let result = text;
-    
-    // 查找最后一个未闭合的 {
-    let depth = 0;
-    let lastOpenBrace = -1;
-    let inString = false;
-    let escape = false;
-    
-    for (let i = 0; i < result.length; i++) {
-      const char = result[i];
-      
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      
-      if (char === '\\' && inString) {
-        escape = true;
-        continue;
-      }
-      
-      if (char === '"' && !escape) {
-        inString = !inString;
-        continue;
-      }
-      
-      if (inString) continue;
-      
-      if (char === '{') {
-        if (depth === 0) {
-          lastOpenBrace = i;
-        }
-        depth++;
-      } else if (char === '}') {
-        depth--;
-        if (depth === 0) {
-          lastOpenBrace = -1;
-        }
-      }
-    }
-    
-    // 如果有未闭合的 {，检查是否可能是工具调用
-    if (lastOpenBrace !== -1 && depth > 0) {
-      const fragment = result.slice(lastOpenBrace);
-      if (this.mightBeToolCall(fragment)) {
-        result = result.slice(0, lastOpenBrace);
-      }
-    }
-    
-    return result;
-  }
 }
 

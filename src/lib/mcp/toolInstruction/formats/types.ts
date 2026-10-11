@@ -75,11 +75,6 @@ export interface FormatHandler {
    * 返回清理后的文本和相关信息
    */
   clean(text: string, options?: CleanOptions): ProcessResult;
-  
-  /**
-   * 清理不完整的片段（用于流式场景）
-   */
-  cleanIncomplete?(text: string): string;
 }
 
 /**
