@@ -29,6 +29,7 @@
     "version:set": "node scripts/set-version.mjs",
     "tag:repush": "node scripts/repushtag.mjs",
     "release": "pnpm typecheck && node scripts/release.mjs",
+    "check:pr-title": "node scripts/check-pr-title.mjs",
     "export:model-rules": "node scripts/export-model-fetch-rules.mjs"
   },
   "dependencies": {

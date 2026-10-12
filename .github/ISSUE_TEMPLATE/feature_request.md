@@ -1,38 +1,44 @@
 ---
-name: 功能请求
-about: 为 Chatless 桌面应用提出一个想法或功能建议
+name: Feature request
+about: Suggest an idea or feature for the Chatless desktop app
 title: '[FEATURE] '
 labels: ['enhancement', 'desktop-app']
 assignees: ''
 ---
 
-## 🚀 功能描述
+<!--
+请用你能写准确的任何语言填写，中文完全可以。维护者会在分诊时把标题、
+复现步骤与结论改写成英文，并保留你的原文（docs/agents/language.md）。
+Write in whichever language you can be precise in; maintainers normalize the record to English.
+-->
 
-请简要描述您想要的功能。
+## 🚀 Feature description
 
-## 💡 问题描述
+Please describe the feature you would like briefly.
 
-请描述您遇到的问题或使用场景。
+## 💡 Problem statement
 
-## 🎯 解决方案描述
+Please describe the problem or the use case this addresses.
 
-请描述您想要的解决方案。
+## 🎯 Proposed solution
 
-## 📱 平台兼容性
+Please describe the solution you have in mind.
 
-**目标平台：**
+## 📱 Platform coverage
+
+**Target platforms:**
 - [ ] Windows
-- [ ] macOS  
+- [ ] macOS
 - [ ] Linux
-- [ ] 所有平台
+- [ ] All platforms
 
-## 📊 优先级
+## 📊 Priority
 
-请选择此功能的优先级：
-- [ ] 低 - 锦上添花的功能
-- [ ] 中 - 有用的改进
-- [ ] 高 - 重要的功能
+Please pick the priority for this feature:
+- [ ] Low - nice to have
+- [ ] Medium - useful improvement
+- [ ] High - important feature
 
-## 📸 截图/原型（可选）
+## 📸 Screenshots / prototypes (optional)
 
-如果适用，添加截图或原型图以帮助解释您的功能请求。 
+If applicable, add screenshots or mockups to help explain the request.
