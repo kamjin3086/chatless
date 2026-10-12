@@ -65,6 +65,13 @@ not mention.
 
 ## Verification matrix
 
+`pnpm install` wires a pre-commit hook (`core.hooksPath=.githooks`, stored in the
+clone's own `.git/config`): conflict markers, `biome format` on the staged files
+only, and `pnpm typecheck` - about 7 seconds. It is a seatbelt, not the bar:
+`pnpm verify` before pushing is still what keeps CI green, and
+`git commit --no-verify` exists for the rare commit where the hook is the wrong
+one to run.
+
 | Change | Run |
 |--------|-----|
 | Any TypeScript | `pnpm test` and `pnpm typecheck` |

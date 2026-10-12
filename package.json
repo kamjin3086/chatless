@@ -14,6 +14,8 @@
     "verify": "pnpm lint:ci && pnpm typecheck && pnpm build",
     "format": "biome format src --write && biome organize-imports src --write",
     "test": "vitest run",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks || true",
     "tauri": "tauri",
     "generate:settings-index": "node scripts/generate-settings-index.cjs",
     "update:app-info": "node scripts/update-app-info.js",
