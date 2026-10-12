@@ -30,6 +30,10 @@ function normalizeSlashPath(p: unknown): string {
   return '';
 }
 
+// 门用 ready / halted 记录告诉 run() 是继续还是原样返回这个结果；模块级一份，
+// 免得每扇门自己发明一种"提前结束"的写法。
+const halt = (result: unknown) => ({ kind: 'halted' as const, result });
+
 export type ToolExecutionPipelineDeps = {
   adapters: ToolAdapter[];
 };
@@ -268,7 +272,6 @@ export class ToolExecutionPipeline {
   }): Promise<{ kind: 'ready' } | { kind: 'halted'; result: unknown }> {
     const { invocation, execInvocation, server, tool, cardId, callKey, callId, assistantMessageId } = params;
     const args = invocation.args as Record<string, unknown> | undefined;
-    const halt = (result: unknown) => ({ kind: 'halted' as const, result });
 
     const isShell = isShellServer(server);
     // Shell trust comes from the access policy: the persisted switch or the
@@ -533,6 +536,41 @@ export class ToolExecutionPipeline {
    * 等用户、落盘这些副作用。解析或授予失败统一回 FILESYSTEM_GATE_FAILED，与原实现一致：
    * 不把异常吞成"没这回事"。
    */
+  /**
+   * 解析用的目录集合：持久 allowlist，加上会话附件目录作为 @WorkDir 插在队首。
+   * 会话目录只在这一次调用里当作目录别名，绝不写进持久 allowlist；读附件失败
+   * 也不牵动持久目录（best-effort）。两个门共用这一份，避免别名注入各写各的。
+   */
+  private async resolveResolveDirs(invocation: ToolInvocation): Promise<{
+    directories: AllowlistDirectory[]
+    dirs: AllowlistDirectory[]
+    sessionWorkDir?: string
+  }> {
+    const allowlist = useFilesystemAllowlistStore.getState();
+    await allowlist.load();
+    const dirsForResolve = [...allowlist.directories] as AllowlistDirectory[];
+    let sessionWorkDir: string | undefined;
+    try {
+      const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+      const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
+      if (wd) {
+        sessionWorkDir = String(wd).replace(/\\/g, '/');
+        dirsForResolve.unshift({
+          id: `session:${invocation.conversationId}:workdir`,
+          path: sessionWorkDir,
+          alias: 'WorkDir',
+          permissions: { read: true, write: true, create: true, delete: false },
+          source: 'workdir',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as AllowlistDirectory);
+      }
+    } catch {
+      // ignore
+    }
+    return { directories: allowlist.directories as unknown as AllowlistDirectory[], dirs: dirsForResolve, sessionWorkDir };
+  }
+
   private async filesystemGate(params: {
     invocation: ToolInvocation
     server: string
@@ -550,43 +588,22 @@ export class ToolExecutionPipeline {
     let nextInvocation = invocation;
     let sessionWorkDir: string | undefined;
     const grants: CallScopedGrant[] = [];
-    const halt = (result: unknown) => ({ kind: 'halted' as const, result });
 
     const op = filesystemOp(tool);
 
     // 不带任何路径参数的文件系统调用不走解析、不读 allowlist、也不进审批——与原行为一致。
     if (hasFilesystemPaths(args)) {
       try {
-        const allowlist = useFilesystemAllowlistStore.getState();
-        await allowlist.load();
-        // 会话级别名：@WorkDir（来自附件菜单）
-        const dirsForResolve = [...allowlist.directories];
-        let workingDir: string | undefined;
-        try {
-          const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-          const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
-          if (wd) {
-            workingDir = String(wd).replace(/\\/g, '/');
-            sessionWorkDir = workingDir;
-            dirsForResolve.unshift({
-              id: `session:${invocation.conversationId}:workdir`,
-              path: workingDir,
-              alias: 'WorkDir',
-              permissions: { read: true, write: true, create: true, delete: false },
-              source: 'workdir',
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            } as any);
-          }
-        } catch {
-          // ignore
-        }
+        const resolvedDirs = await this.resolveResolveDirs(invocation);
+        const dirsForResolve = resolvedDirs.dirs;
+        const workingDir = resolvedDirs.sessionWorkDir;
+        sessionWorkDir = workingDir;
 
         // Keep the backend in step with the user's persistent settings only.
         // The session working directory travels as a call-scoped grant below,
         // so it never becomes a lasting backend authorization.
         try {
-          await syncFilesystemAllowlistToBackend(allowlist.directories as any);
+          await syncFilesystemAllowlistToBackend(resolvedDirs.directories as any);
         } catch {
           // ignore: best-effort sync
         }
@@ -750,29 +767,10 @@ export class ToolExecutionPipeline {
     let sessionWorkDir: string | undefined;
 
     try {
-      const allowlist = useFilesystemAllowlistStore.getState();
-      await allowlist.load();
-      const dirsForResolve = [...allowlist.directories];
-      let shellWorkDir: string | undefined;
-      try {
-        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-        const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
-        if (wd) {
-          shellWorkDir = String(wd).replace(/\\/g, '/');
-          sessionWorkDir = shellWorkDir;
-          dirsForResolve.unshift({
-            id: `session:${invocation.conversationId}:workdir`,
-            path: shellWorkDir,
-            alias: 'WorkDir',
-            permissions: { read: true, write: true, create: true, delete: false },
-            source: 'workdir',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          } as any);
-        }
-      } catch {
-        // ignore
-      }
+      const resolvedDirs = await this.resolveResolveDirs(invocation);
+      const dirsForResolve = resolvedDirs.dirs;
+      const shellWorkDir = resolvedDirs.sessionWorkDir;
+      sessionWorkDir = shellWorkDir;
 
       const execArgs: Record<string, unknown> = { ...(args || {}) };
 
