@@ -73,7 +73,7 @@ not mention.
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
 | Start-up, window, tray, macOS visuals | `scripts/verify-app-startup.sh src-tauri/target/release/chatless` - macOS only (hard-coded log path), needs a release build |
-| Search / knowledge / budget work | the `docs/acceptance/*.audit.test.ts` that are wired in - see the note below |
+| Search / knowledge / budget work | the wired audits in `pnpm test`, plus `pnpm exec vitest run --config docs/acceptance/vitest.config.ts` - see the note below |
 
 Pick the check that would have caught the bug. "The process is alive" passed on
 0.7.0 while the app was pegging a core and never finished initialising; that is
@@ -82,13 +82,14 @@ still works (`docs/tauri-window-pitfalls.md`).
 
 ## Repo reality an agent needs to know
 
-- **Not everything in `docs/acceptance/` runs.** `vitest.config.ts` collects
-  `workspace-budget`, `dense-fusion` and `final-plan`. The other two cannot be
-  collected by path either (`include` filters them out): `retrieval-eval` needs a
-  generated fixture (`python docs/acceptance/build-eval-db.py`), and
-  `qwen-acceptance` is stale against the current prompt API
-  (`resolvePromptLocale is not a function`) - it is a deletion candidate, not a
-  gate. Say which acceptance runs you actually made.
+- **Two vitest configs, and CI runs only one of them.** `pnpm test` (root
+  `vitest.config.ts`) collects `workspace-budget`, `dense-fusion` and
+  `final-plan`. The wider acceptance set has its own runner:
+  `pnpm exec vitest run --config docs/acceptance/vitest.config.ts`. There
+  `qwen-acceptance` and `reasoning-stream` skip unless their endpoint is enabled
+  (`CHATLESS_QWEN=1`, `CHATLESS_QWEN_URL`, ...), and `retrieval-eval` fails with
+  `run python docs/acceptance/build-eval-db.py first` until the fixture exists.
+  Name the run you actually did; a skipped suite is not evidence.
 - Prompts are English-only, answers follow the user (`docs/prompt-language.md`);
   the test above is what keeps them that way.
 - Default permission scope is a product decision, not a convenience knob
