@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { buildAgentContractBlock, resolvePromptLocale } from '@/lib/mcp/prompt/agentContract';
+import { buildAgentContractBlock } from '@/lib/mcp/prompt/agentContract';
 import { composeSystemPrompt } from '@/lib/mcp/prompt/composition';
 import { TOOLS_REGISTRY_TOOLS, getToolsForGroup } from '@/lib/mcp/nativeTools/toolRegistry';
 import { PromptEnvelopeBuilder } from '@/lib/mcp/pipeline/context/PromptEnvelopeBuilder';
@@ -65,8 +65,9 @@ function productionEnvelope(): { system: string; tools: ToolDef[]; tokenBudget: 
     description: tool.description,
     parameters: (tool.input_schema as { schema?: unknown }).schema,
   }));
-  // Measure the production contract, not a copy of it.
-  const contractMessage = composeSystemPrompt([buildAgentContractBlock(resolvePromptLocale('zh'))]).systemMessage;
+  // Measure the production contract, not a copy of it. No locale argument: the
+  // contract block is English-only for every provider (docs/prompt-language.md).
+  const contractMessage = composeSystemPrompt([buildAgentContractBlock()]).systemMessage;
   const envelope = new PromptEnvelopeBuilder().build({
     systemMessage: contractMessage,
     tools: defs as never,
