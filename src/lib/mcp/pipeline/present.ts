@@ -1,7 +1,8 @@
 /**
  * 拒绝一次调用时回给模型的载荷。形状属于对模型的契约：
- * `public/tool-docs/fs.txt` 承诺了 `AUTH_DENIED` 的含义，`AgentLoopRunner` 读的是
- * 嵌套的 `error.code`，所以不能拿字符串 `error` 或扁平的 `code` 顶替。
+ * `public/tool-docs/fs.txt` 把 `AUTH_DENIED` 写成了对模型的承诺。仓库里目前没有任何代码
+ * 读这个 code（`AgentLoopRunner` 读的是 `EXECUTION_UNKNOWN`），所以它的嵌套形状——
+ * `error.code` 而不是扁平 `code` 或字符串 `error`——只能由 present.test.ts 钉住。
  */
 export type AuthDeniedParams = {
   server: string;

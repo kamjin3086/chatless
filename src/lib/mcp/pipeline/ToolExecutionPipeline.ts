@@ -252,28 +252,9 @@ export class ToolExecutionPipeline {
   }
 
   /**
-   * Refuses a call whose path or command still carries an unresolved `@Alias`.
-   *
-   * Passing it on is how a command like `cd @WorkDir` created a literal
-   * `@WorkDir` folder, so this returns a structured result the model can act on
-   * and never dispatches to an adapter.
-   */
-  /**
-   * shell_executor 的前置解析：workingDir 与 command 里的 @WorkDir / @Alias 换成真实
-   * 路径，好让审批卡片和后端看到同一个目录。解析本身是 best-effort，失败就保持原参数，
-   * 交给后面的校验与授权处理；但替换后仍残留的别名既不是路径也不是命令，必须在这里挡掉，
-   * 否则 `cd @WorkDir` 会创建出一个字面量目录。
-   */
-  /**
-   * 文件系统门：把路径解析成真实目标、按 allowlist 与免问状态决定放行还是发审批卡片，
-   * 再把用户的回答换成这一次调用真正需要的授予。判定本身在 policy/，这里只做读 store、
-   * 等用户、落盘这些副作用。解析或授予失败统一回 FILESYSTEM_GATE_FAILED，与原实现一致：
-   * 不把异常吞成"没这回事"。
-   */
-  /**
    * 非文件系统调用的门：shell 的信任来自访问策略（持久开关，或本会话此前在卡片上做的
-   * 选择），其余服务器看全局自动授权。要问就把卡片发出去；答完之后 shell 的"以后都不问"
-   * 与"本会话不再问"各自落到该落的地方，下一条命令会重新走一遍策略。
+   * 选择），其余服务器看全局自动授权。要问就把卡片发出去；答完之后 shell 的全局免问
+   * 与会话免问各自落到该落的地方，下一条命令会重新走一遍策略。
    */
   private async serverGate(params: {
     invocation: ToolInvocation
@@ -546,6 +527,12 @@ export class ToolExecutionPipeline {
     return summary;
   }
 
+  /**
+   * 文件系统门：把路径解析成真实目标、按 allowlist 与免问状态决定放行还是发审批卡片，
+   * 再把用户的回答换成这一次调用真正需要的授予。判定本身在 policy/，这里只做读 store、
+   * 等用户、落盘这些副作用。解析或授予失败统一回 FILESYSTEM_GATE_FAILED，与原实现一致：
+   * 不把异常吞成"没这回事"。
+   */
   private async filesystemGate(params: {
     invocation: ToolInvocation
     server: string
@@ -642,7 +629,7 @@ export class ToolExecutionPipeline {
           // delete reports its parent but never offers that choice.
           const approvableDirectory = policy.approvableDirectory;
           // 看着和策略里的 approvableDirectory 是同一个表达式，但它多一层归一，且只喂给
-          // 模型可见的拒绍文案。复用策略那份要么改动授权路径（安全相关），要么改动模型
+          // 模型可见的拒绝文案。复用策略那份要么改动授权路径（安全相关），要么改动模型
           // 文案（契约禁止），都比容忍这点重复更贵，所以两边各算各的。
           const suggestDir = normalizeSlashPath(resolution.directory?.path) || dirnameOf(primaryAbsolutePath);
           const approval = await this.requestApproval({
@@ -742,6 +729,12 @@ export class ToolExecutionPipeline {
     return { kind: 'ready', invocation: nextInvocation, sessionWorkDir, grants };
   }
 
+  /**
+   * shell_executor 的前置解析：workingDir 与 command 里的 @WorkDir / @Alias 换成真实
+   * 路径，好让审批卡片和后端看到同一个目录。解析本身是 best-effort，失败就保持原参数，
+   * 交给后面的校验与授权处理；但替换后仍残留的别名既不是路径也不是命令，必须在这里挡掉，
+   * 否则 `cd @WorkDir` 会创建出一个字面量目录。
+   */
   private async prepareShellCall(params: {
     invocation: ToolInvocation
     server: string
@@ -854,6 +847,13 @@ export class ToolExecutionPipeline {
     return { kind: 'ready', invocation: nextInvocation, sessionWorkDir };
   }
 
+  /**
+   * Refuses a call whose path or command still carries an unresolved `@Alias`.
+   *
+   * Passing it on is how a command like `cd @WorkDir` created a literal
+   * `@WorkDir` folder, so this returns a structured result the model can act on
+   * and never dispatches to an adapter.
+   */
   private async rejectUnresolvedAlias(params: {
     assistantMessageId: string;
     conversationId: string;

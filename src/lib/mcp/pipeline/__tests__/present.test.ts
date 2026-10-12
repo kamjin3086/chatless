@@ -2,9 +2,9 @@ import { describe, expect, test } from 'vitest';
 import { buildAuthDeniedResult } from '../present';
 
 /**
- * 这些断言钉的是"模型看到什么"，不是内部实现。三处下游依赖这个形状：
- * public/tool-docs/fs.txt 承诺 AUTH_DENIED、AgentLoopRunner 读嵌套的 error.code、
- * 工具卡片按 suggestion.action 决定提示什么。改形状就等于改对用户的承诺。
+ * 这些断言钉的是"模型看到什么"，不是内部实现。成文的依赖只有
+ * public/tool-docs/fs.txt 里对 AUTH_DENIED 的承诺；suggestion.action 目前还没有消费者，
+ * 把它钉住是为了将来卡片真的去读它时，不会悄悄拿到另一个形状。改形状就是改对模型的承诺。
  */
 describe('buildAuthDeniedResult: the shape the model is promised', () => {
   test('error stays a nested object carrying code, never a bare string', () => {
