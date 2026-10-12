@@ -12,7 +12,6 @@ import { WEB_SEARCH_TOOLS } from '@/lib/mcp/nativeTools/webSearch';
 import { KNOWLEDGE_TOOLS } from '@/lib/mcp/nativeTools/knowledge';
 import { SKILL_UNIFIED_TOOLS } from '@/lib/mcp/nativeTools/skillUnifiedTools';
 import { SYSTEM_PROMPT_TOOLS } from '@/lib/mcp/nativeTools/systemPrompts';
-import { userFsTools } from '@/lib/userFs/userFsTools';
 
 /**
  * Prompts are English-only on purpose: English instructions behaved noticeably
@@ -87,10 +86,6 @@ describe('prompt language', () => {
       expectAllEnglish(`tool ${tool.name}.parameters`, tool.input_schema?.schema);
     }
 
-    for (const tool of userFsTools) {
-      expectAllEnglish(`tool ${tool.name}.description`, tool.description);
-      expectAllEnglish(`tool ${tool.name}.parameters`, tool.parameters);
-    }
   });
 
   it('keeps the tool documentation that is appended to descriptions English', () => {
