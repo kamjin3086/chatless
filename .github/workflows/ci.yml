@@ -54,6 +54,11 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Check PR title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: pnpm check:pr-title
       - name: Run linting
         run: pnpm lint:ci
       - name: Type check

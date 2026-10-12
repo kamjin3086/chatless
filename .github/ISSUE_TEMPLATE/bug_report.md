@@ -1,50 +1,56 @@
 ---
-name: Bug 报告
-about: 创建一个 bug 报告以帮助我们改进 Chatless 桌面应用
+name: Bug report
+about: Create a bug report to help us improve the Chatless desktop app
 title: '[BUG] '
 labels: ['bug', 'desktop-app']
 assignees: ''
 ---
 
-## 🐛 问题描述
+<!--
+请用你能写准确的任何语言填写，中文完全可以。维护者会在分诊时把标题、
+复现步骤与结论改写成英文，并保留你的原文（docs/agents/language.md）。
+Write in whichever language you can be precise in; maintainers normalize the record to English.
+-->
 
-请简要描述这个 bug。
+## 🐛 Description
 
-## 🔄 重现步骤
+Please describe the bug briefly.
 
-重现该行为的步骤：
-1. 启动 Chatless 应用
-2. [描述具体操作步骤]
-3. 看到错误
+## 🔄 Steps to reproduce
 
-## ✅ 预期行为
+Steps that reproduce the behaviour:
+1. Start the Chatless app
+2. [Describe the exact steps]
+3. See the error
 
-请描述您期望发生的事情。
+## ✅ Expected behaviour
 
-## ❌ 实际行为
+Please describe what you expected to happen.
 
-请描述实际发生的事情。
+## ❌ Actual behaviour
 
-## 💻 环境信息
+Please describe what actually happened.
 
-**操作系统：**
+## 💻 Environment
+
+**Operating system:**
 - [ ] Windows
 - [ ] macOS
 - [ ] Linux
 
-**Chatless 版本：** [例如 0.3.6]
+**Chatless version:** [e.g. 0.3.6]
 
-**系统信息：**
-- 操作系统版本：[例如 Windows 11, macOS 14, Ubuntu 22.04]
-- 系统架构：[ ] x64 [ ] ARM64
+**System information:**
+- OS version: [e.g. Windows 11, macOS 14, Ubuntu 22.04]
+- Architecture: [ ] x64 [ ] ARM64
 
-## 🔧 故障排除
+## 🔧 Troubleshooting
 
-**已尝试的解决步骤：**
-- [ ] 重启应用
-- [ ] 重新安装应用
-- [ ] 其他：[请描述]
+**Steps already tried:**
+- [ ] Restarted the app
+- [ ] Reinstalled the app
+- [ ] Other: [please describe]
 
-## 📸 截图（可选）
+## 📸 Screenshots (optional)
 
-如果适用，添加截图以帮助解释您的问题。 
+If applicable, add screenshots to help explain your problem.

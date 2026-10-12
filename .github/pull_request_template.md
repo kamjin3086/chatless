@@ -1,35 +1,46 @@
-## 📝 描述
+<!-- PR 标题与正文用英文：`type(scope): description`，ASCII。CI 会检查标题。
+     Full bar for agent-authored PRs: docs/agents/maintenance.md -->
 
-请包含对更改的简要描述以及相关动机。列出此 PR 解决的任何依赖项。
+## 📝 Summary
 
-修复 #(issue)
+What changed, in three lines or fewer. Motivation and any dependency it resolves.
 
-## 🔄 更改类型
+Fixes #(issue)
 
-请删除不相关的选项：
+## 🔄 Type of change
 
-- [ ] Bug 修复（修复了不会破坏现有功能的错误）
-- [ ] 新功能（添加了不会破坏现有功能的功能）
-- [ ] 破坏性更改（修复或功能会导致现有功能无法按预期工作）
-- [ ] 文档更新（仅更新文档）
+- [ ] Bug fix (non-breaking)
+- [ ] New feature (non-breaking)
+- [ ] Breaking change (fix or feature that would change existing behaviour)
+- [ ] Documentation update
 
-## 🧪 测试
+## 🔬 Evidence
 
-请描述您为测试更改而执行的测试。提供说明以便我们可以重现。
+Before / after, the commands actually run, and their real output. Numbers, not
+"tests pass". State explicitly what was **not** verified.
 
-- [ ] 测试 A
-- [ ] 测试 B
+```text
+pnpm test  ->  Test Files X passed, Tests Y passed
+```
 
-## 📸 截图（可选）
+| | Before | After |
+|---|---|---|
+| | | |
 
-如果适用，添加截图以帮助解释您的更改。
+## 🚪 Merge danger
 
-## 📋 检查清单
+- **Door:** one-way (data format, permission default, public behaviour) / two-way (a revert is enough)
+- **Blast radius:** which subsystems or users can feel this
 
-- [ ] 我的代码遵循此项目的样式指南
-- [ ] 我已经自行检查了我的代码
-- [ ] 我已经对我的更改进行了相应的测试
-- [ ] 我已经更新了必要的文档
-- [ ] 我的更改不会产生新的警告
-- [ ] 我添加了测试来证明我的修复是有效的或我的功能有效
-- [ ] 所有新的和现有的测试都通过了 
+## 🤖 Authored by
+
+- [ ] Written by an AI agent (or heavily agent-assisted)
+- [ ] The PR title and body are in English, title is `type(scope): description`
+
+## ✅ Checklist
+
+- [ ] `pnpm verify` passes locally (lint:ci + typecheck + build)
+- [ ] New/changed behaviour is covered by a test that would have failed before
+- [ ] No unrelated cleanup, no drive-by formatting
+- [ ] Generated files regenerated, not hand-edited
+- [ ] Docs updated where the behaviour is user-visible
