@@ -15,6 +15,8 @@
     "format": "biome format src --write && biome organize-imports src --write",
     "test": "vitest run",
     "test:acceptance": "vitest run --config docs/acceptance/vitest.config.ts",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks || true",
     "tauri": "tauri",
     "generate:settings-index": "node scripts/generate-settings-index.cjs",
     "update:app-info": "node scripts/update-app-info.js",

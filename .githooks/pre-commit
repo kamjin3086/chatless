@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Fast pre-commit guardrail for this clone. Wired by `pnpm install` (the
+# `prepare` script sets core.hooksPath=.githooks, a value stored in this
+# clone's .git/config only - it changes nothing global).
+#
+# Budget: a handful of seconds. These are the checks this repo had no local
+# guardrail for at all; everything used to be CI-only:
+#   1. conflict markers in staged content
+#   2. formatting on exactly the staged files (biome, the tool `pnpm format` uses)
+#   3. typecheck (`pnpm typecheck`, about 5s)
+# Anything slower stays CI's job: `pnpm verify` (lint:ci + typecheck + build) is
+# still the bar before pushing. See docs/agents/maintenance.md.
+#
+# Skip once with:  git commit --no-verify
+
+set -uo pipefail
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+fail=0
+report() { printf 'pre-commit: %s\n' "$1"; }
+
+# 1. conflict markers
+marked=""
+while IFS= read -r file; do
+  [ -f "$file" ] || continue
+  if grep -qE '^(<<<<<<< |>>>>>>>)' "$file" 2>/dev/null; then
+    marked="$marked $file"
+  fi
+done <<< "$staged"
+if [ -n "$marked" ]; then
+  report "conflict markers in:$marked"
+  fail=1
+fi
+
+# 2. formatting, staged files only - never blame a change for old files
+lintable=$(printf '%s\n' "$staged" | grep -E '\.(ts|tsx|mts|cts|mjs|cjs|js)$' || true)
+if [ -n "$lintable" ]; then
+  # shellcheck disable=SC2086
+  if ! npx biome format $lintable > /tmp/chatless-precommit-biome.log 2>&1; then
+    report "staged files are not formatted - run: npx biome format --write <files>"
+    sed -n '1,10p' /tmp/chatless-precommit-biome.log
+    fail=1
+  fi
+fi
+
+# 3. types
+if [ -f tsconfig.json ] && ! npx tsc -p tsconfig.json --noEmit > /tmp/chatless-precommit-tsc.log 2>&1; then
+  report "typecheck failed - run: pnpm typecheck"
+  sed -n '1,10p' /tmp/chatless-precommit-tsc.log
+  fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  report "commit blocked ($(printf '%s\n' "$staged" | wc -l | tr -d ' ') files staged)"
+  exit 1
+fi
