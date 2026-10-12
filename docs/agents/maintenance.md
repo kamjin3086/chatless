@@ -80,7 +80,14 @@ one to run.
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
 | Start-up, window, tray, macOS visuals | `scripts/verify-app-startup.sh src-tauri/target/release/chatless` - macOS only (hard-coded log path), needs a release build |
-| Search / knowledge / budget work | the wired audits in `pnpm test`, plus `pnpm exec vitest run --config docs/acceptance/vitest.config.ts` - see the note below |
+| Search / knowledge / budget work | the wired audits in `pnpm test`, plus `pnpm test:acceptance` - see the note below |
+| "What is the actual state here" | `pnpm repo:state` |
+| New worktree for a task | `pnpm wt:add ../wt-<topic> -b <branch>` |
+
+Evidence comes from the runner and the pointer, not from a summary line:
+`gh run view --job <id> --log` shows the test lines CI actually produced (that is
+how `final-plan.audit.test.ts` was proven to run), and
+`gh api repos/<owner>/<repo>/git/ref/heads/main` is where main actually is.
 
 Pick the check that would have caught the bug. "The process is alive" passed on
 0.7.0 while the app was pegging a core and never finished initialising; that is
@@ -117,18 +124,26 @@ still works (`docs/tauri-window-pitfalls.md`).
 ## Before touching git
 
 This repo can have several writers at once: a human, another agent session, a
-worktree left open from a previous run. Three probes before the first write:
+worktree left open from a previous run. One command answers all three probes:
 
 ```bash
-git branch --show-current   # whose branch am I on?
-git worktree list           # who else has this repo checked out?
-git status -sb              # dirty from someone else? ahead or behind?
+pnpm repo:state   # main sha, your branch + dirty/ahead, every worktree and how far
+                  # behind main it is, whether main is merged into HEAD, open PRs
 ```
 
 - **Commit only on a branch you created this session.** If HEAD sits on someone
   else's branch, do not switch branches to escape - that moves the tree out from
   under the live session and your edits land in their next commit. Take your own
-  tree instead: `git worktree add ../wt-<topic> -b <branch> origin/main`.
+  tree: `pnpm wt:add ../wt-<topic> -b <branch>` (it links `node_modules` with an
+  absolute path, which the hand-written `ln -s ../repo/node_modules` is not).
+- Name the rev you merge: `git merge --no-edit origin/main`. A `git merge` without
+  one merges the branch's own upstream and prints "Already up to date", which is
+  easy to read as success. `pnpm repo:state`'s `main merged in` line is the check;
+  it prints `unknown`, or flags that main is only a local ref here, instead of
+  guessing - and names which reason it fell back for, because "gh unavailable" is a
+  different problem from "gh is rate limited". The reason belongs in the code, not
+  in this file: see the `ghText` comment in `scripts/repo-state.mjs` for the bug
+  that taught it.
 - Never `git add -A` in a tree you did not create. Stage your own paths, and revert
   an experiment with `git restore --source=HEAD -- <one file>`, never with a
   whole-file `git checkout` that also eats the real edits sitting next to it.

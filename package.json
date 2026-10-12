@@ -33,6 +33,8 @@
     "tag:repush": "node scripts/repushtag.mjs",
     "release": "pnpm typecheck && node scripts/release.mjs",
     "check:pr-title": "node scripts/check-pr-title.mjs",
+    "repo:state": "node scripts/repo-state.mjs",
+    "wt:add": "node scripts/wt-add.mjs",
     "export:model-rules": "node scripts/export-model-fetch-rules.mjs"
   },
   "dependencies": {

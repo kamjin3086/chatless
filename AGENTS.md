@@ -19,7 +19,10 @@ pnpm typecheck
 pnpm verify       # lint:ci + typecheck + build, run this before pushing
 pnpm check:pr-title "<title>"
 pnpm test:acceptance   # wider acceptance set, mostly env-gated
+pnpm repo:state   # main sha, worktrees, whose branch this tree is, open PRs
 ```
+
+Starting a separate tree for a task: `pnpm wt:add ../wt-<topic> -b <branch>`.
 
 A pre-commit hook runs typecheck and formatting on staged files. It is a seatbelt,
 not the bar: `pnpm verify` before pushing is still on you, and
