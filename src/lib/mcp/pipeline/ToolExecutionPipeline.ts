@@ -89,16 +89,8 @@ function needsAuthorization(server: string, tool: string, autoAuth: boolean, arg
     return !autoAuth;
   }
 
-  // user_fs：保持现有行为——仅写入需要确认（读/list 属于“在已授权目录内的低风险操作”）
-  if (srv === 'user_fs') {
-    return tl === 'write_user_file' && !autoAuth;
-  }
-
   // Skill installation and modification change the local execution
   // environment.  Only inspection remains approval-free.
-  if (srv === 'skills_fs') {
-    return !/^(read_skill_resource|list_skill_resources|list_files)$/.test(tl);
-  }
   if (srv === 'skills' || srv === 'skill') {
     return !/^(list|guide|read_file|list_files|check_deps|use)$/.test(tl);
   }

@@ -4,7 +4,6 @@ import { ShellExecutorAdapter } from './ShellExecutorAdapter';
 import { SkillUnifiedAdapter } from './SkillUnifiedAdapter';
 import { SystemToolAdapter } from './SystemToolAdapter';
 import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
-import { UserFsAdapter } from './UserFsAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
 import { KnowledgeAdapter } from './KnowledgeAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
@@ -16,6 +15,7 @@ import { ToolResultAdapter } from './ToolResultAdapter';
  * 注意：Skill 相关适配器已统一为 SkillUnifiedAdapter
  * - 移除了 SkillsToolAdapter (旧的 list_available_skills 等)
  * - 移除了 SkillsFsAdapter (旧的 skills_fs 操作)
+ * - 移除了 UserFsAdapter (旧的 user_fs 操作，名单已无人可写)
  * - 合并到 SkillUnifiedAdapter (统一的 skill__* 工具)
  */
 export function createDefaultAdapters(): ToolAdapter[] {
@@ -24,7 +24,6 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new ToolResultAdapter(),
     new WebSearchAdapter(),
     new SkillUnifiedAdapter(),
-    new UserFsAdapter(),
     new FilesystemAdapter(),
     new ShellExecutorAdapter(),
     new KnowledgeAdapter(),
@@ -39,7 +38,6 @@ export { ShellExecutorAdapter } from './ShellExecutorAdapter';
 export { SkillUnifiedAdapter } from './SkillUnifiedAdapter';
 export { SystemToolAdapter } from './SystemToolAdapter';
 export { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
-export { UserFsAdapter } from './UserFsAdapter';
 export { WebSearchAdapter } from './WebSearchAdapter';
 export { KnowledgeAdapter } from './KnowledgeAdapter';
 export { ToolResultAdapter } from './ToolResultAdapter';
