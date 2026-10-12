@@ -83,13 +83,19 @@ still works (`docs/tauri-window-pitfalls.md`).
 ## Repo reality an agent needs to know
 
 - **Two vitest configs, and CI runs only one of them.** `pnpm test` (root
-  `vitest.config.ts`) collects `workspace-budget`, `dense-fusion` and
-  `final-plan`. The wider acceptance set has its own runner:
-  `pnpm exec vitest run --config docs/acceptance/vitest.config.ts`. There
-  `qwen-acceptance` and `reasoning-stream` skip unless their endpoint is enabled
-  (`CHATLESS_QWEN=1`, `CHATLESS_QWEN_URL`, ...), and `retrieval-eval` fails with
+  `vitest.config.ts`) collects `docs/acceptance/workspace-budget.audit.test.ts`,
+  `docs/acceptance/dense-fusion.audit.test.ts` and
+  `docs/acceptance/final-plan.audit.test.ts`. The wider set has its own runner:
+  `pnpm test:acceptance` (`vitest run --config docs/acceptance/vitest.config.ts`).
+  There `docs/acceptance/qwen-acceptance.audit.test.ts` and
+  `docs/acceptance/reasoning-stream.audit.test.ts` skip unless their endpoint is
+  enabled (`CHATLESS_QWEN=1`, `CHATLESS_QWEN_URL`, ...), and
+  `docs/acceptance/retrieval-eval.audit.test.ts` fails with
   `run python docs/acceptance/build-eval-db.py first` until the fixture exists.
-  Name the run you actually did; a skipped suite is not evidence.
+  Name the run you actually did; a skipped suite is not evidence. The wiring of
+  both configs is itself a test - an `include` entry that matches nothing, or a
+  doc citing an audit file that is not there, fails
+  `scripts/__tests__/vitestInventory.test.mjs`.
 - Prompts are English-only, answers follow the user (`docs/prompt-language.md`);
   the test above is what keeps them that way.
 - Default permission scope is a product decision, not a convenience knob
@@ -100,6 +106,29 @@ still works (`docs/tauri-window-pitfalls.md`).
   `docs/issue-triage-2026-09-30.md`.
 - GitHub numbers are shared between issues and PRs: `gh pr view <n>` first, fall
   back to `gh issue view <n>`.
+
+## Before touching git
+
+This repo can have several writers at once: a human, another agent session, a
+worktree left open from a previous run. Three probes before the first write:
+
+```bash
+git branch --show-current   # whose branch am I on?
+git worktree list           # who else has this repo checked out?
+git status -sb              # dirty from someone else? ahead or behind?
+```
+
+- **Commit only on a branch you created this session.** If HEAD sits on someone
+  else's branch, do not switch branches to escape - that moves the tree out from
+  under the live session and your edits land in their next commit. Take your own
+  tree instead: `git worktree add ../wt-<topic> -b <branch> origin/main`.
+- Never `git add -A` in a tree you did not create. Stage your own paths, and revert
+  an experiment with `git restore --source=HEAD -- <one file>`, never with a
+  whole-file `git checkout` that also eats the real edits sitting next to it.
+- Before deleting files you created, prove they are safely elsewhere
+  (`git hash-object <file>` against `git rev-parse origin/main:<path>`), then delete.
+- `gh pr view` with no arguments happily returns *some* other PR when the current
+  branch has none; it is not a branch lookup. Compare `headRefName` with the branch.
 
 ## Act, or ask
 
