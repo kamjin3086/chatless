@@ -85,9 +85,14 @@ one to run.
 | New worktree for a task | `pnpm wt:add ../wt-<topic> -b <branch>` |
 
 Evidence comes from the runner and the pointer, not from a summary line:
-`gh run view --job <id> --log` shows the test lines CI actually produced (that is
-how `final-plan.audit.test.ts` was proven to run), and
-`gh api repos/<owner>/<repo>/git/ref/heads/main` is where main actually is.
+`pnpm ci:log <pr|--job <id>>` is a *view* over `gh run view --log` with the gh prefixes
+and ANSI removed, keeping the classes listed in `KEEP_RULES` in `scripts/ci-log.mjs`
+(test counts, the PR-title check with its indented reason, TS/Rust/biome/next/coverage
+failures); that is how `final-plan.audit.test.ts` was proven to run. A filter can
+always be missing a class, so an empty or suspicious view is not evidence of absence -
+`--grep <text>` widens it and `--all` is the raw log. `pnpm repo:state` shows the PR list and
+main's sha, and names which source it used - `gh api
+repos/<owner>/<repo>/git/ref/heads/main` is where main actually is.
 
 Pick the check that would have caught the bug. "The process is alive" passed on
 0.7.0 while the app was pegging a core and never finished initialising; that is
@@ -139,16 +144,24 @@ pnpm repo:state   # main sha, your branch + dirty/ahead, every worktree and how 
 - Name the rev you merge: `git merge --no-edit origin/main`. A `git merge` without
   one merges the branch's own upstream and prints "Already up to date", which is
   easy to read as success. `pnpm repo:state`'s `main merged in` line is the check;
-  it prints `unknown`, or flags that main is only a local ref here, instead of
-  guessing - and names which reason it fell back for, because "gh unavailable" is a
-  different problem from "gh is rate limited". The reason belongs in the code, not
-  in this file: see the `ghText` comment in `scripts/repo-state.mjs` for the bug
-  that taught it.
+  it prints `unknown` rather than guessing, and names the reason it fell back - the
+  reasons live in `scripts/repo-state.mjs`, not here, because "gh not installed" and
+  "gh is rate limited" are different problems to act on.
 - Never `git add -A` in a tree you did not create. Stage your own paths, and revert
   an experiment with `git restore --source=HEAD -- <one file>`, never with a
   whole-file `git checkout` that also eats the real edits sitting next to it.
-- Before deleting files you created, prove they are safely elsewhere
-  (`git hash-object <file>` against `git rev-parse origin/main:<path>`), then delete.
+- A commit message containing backticks or `$()` goes in a file passed with
+  `git commit -F <file>`. An unquoted heredoc is a shell: `` `git branch -D main` ``
+  in the message body does not document a mistake, it commits the transcript of one.
+- Before deleting anything you created, prove it is safely elsewhere, then delete.
+  Files: `git hash-object <file>` against `git rev-parse origin/main:<path>`.
+  Branches: `git merge-base --is-ancestor <rev> origin/main`, or `git branch --contains
+  <rev>` over the refs that should still hold it; tags are `git tag --contains <rev>`,
+  and `git worktree list` (or `pnpm repo:state`) says which worktree holds which
+  branch. Naming a branch does not make it yours to delete: `git branch -D` on a branch
+  no worktree has checked out prints `Deleted branch <name> (was <sha>).` (under
+  `LC_ALL=C` - git localises the message) and moves on, and only a checked-out branch
+  is refused.
 - `gh pr view` with no arguments happily returns *some* other PR when the current
   branch has none; it is not a branch lookup. Compare `headRefName` with the branch.
 

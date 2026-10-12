@@ -119,6 +119,15 @@ function git(args, cwd) {
   }).trim();
 }
 
+/** Run git, answering `fallback` where this repository simply has no answer. */
+function tryGit(args, fallback) {
+  try {
+    return git(args);
+  } catch {
+    return fallback;
+  }
+}
+
 function ghJson(args) {
   return JSON.parse(
     execFileSync('gh', args, {
@@ -280,7 +289,13 @@ function collect() {
     return { ...wt, behindMain };
   });
 
-  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+  // An unborn HEAD (fresh init, --orphan) makes `rev-parse --abbrev-ref HEAD` exit 128,
+  // which used to take the whole report down. A branch name is usually still available,
+  // and everything that genuinely cannot be known prints unknown instead.
+  const branch =
+    tryGit(['symbolic-ref', '--short', '-q', 'HEAD'], '') ||
+    tryGit(['rev-parse', '--abbrev-ref', 'HEAD'], '') ||
+    'unknown';
   let mainMergedIn;
   try {
     git(['merge-base', '--is-ancestor', mainSha, 'HEAD']);

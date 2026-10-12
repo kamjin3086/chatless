@@ -32,6 +32,39 @@ machine produced.
   *possible*; reading readiness as the event is how a branch that never merged
   gets reported as merged.
 
+- **Must:** a bounded query proves nothing about what lies outside its bound. A list
+  fetched with `-L N`, `limit` or `slice` may not be used to print an absence - it
+  prints `>=N` or `unknown`. PR #93's review caught a newest-N window over all PR
+  states printing "open PRs: none" after an open PR aged out of it; the finding is in
+  that PR's body, reachable with `gh pr view 93 --json body | grep -- '-L 50'`.
+
+## Running a review
+
+These bind whoever dispatches a review as much as whoever performs it.
+
+- **Must:** a review agent is given a way to execute - `bash` in its tool list, or a
+  paired evidence agent. Read an agent's own definition instead of trusting its name:
+
+  ```bash
+  grep -H '^tools:' ~/.pi/agent/agents/*.md \
+    ~/.pi/agent/npm/node_modules/pi-subagents/agents/*.md
+  ```
+
+  On this machine that prints `bash` for `diff-reviewer` and for `evidence-runner`
+  (prefer the first; use the second for mechanical proof) and no `bash` for the builtin
+  `reviewer`, whose list is `read, grep, find, ls, watchdog_diff, contact_supervisor`.
+  A read-only reviewer produces two kinds of noise: claims it cannot
+  check, and claims that are wrong. One review round asserted that
+  `git worktree add <path> origin/main` silently creates a local branch, so a
+  detached-HEAD hint must be wrong. Check it the locale-independent way: after that
+  command, `git -C <path> rev-parse --abbrev-ref HEAD` prints `HEAD`.
+- **Must:** a finding that could have been executed but was not, says so - and the
+  agent acting on it runs it first. "Supervisor must run: …" is a handoff, not
+  evidence.
+- **Should:** hand a reviewer the diff it is meant to read. A working-tree diff
+  helper shows only uncommitted changes, so a committed branch looks empty to it and
+  it will review files instead of the patch, which is a different and weaker review.
+
 ## Merging
 
 - **Must:** when a merge deletes a block of code, the merge commit message names
@@ -82,4 +115,5 @@ Chinese content is not a finding, and no PR is opened to translate it.
 | Model-facing prompts stay English | `src/lib/prompts/__tests__/prompt-language.test.ts`, see `docs/prompt-language.md` |
 | Start-up actually finishes, window stays responsive | `scripts/verify-app-startup.sh`, see `docs/tauri-window-pitfalls.md` |
 | Product scope, capability layers, quality budgets | `docs/agents/constraints.md` - judgement, no check |
+| Reviewer can execute; unexecuted checks labelled and run first | no check - whoever dispatches the review chooses the agent |
 | Agent maintenance bar, git safety, evidence format | `docs/agents/maintenance.md` |

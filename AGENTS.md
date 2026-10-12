@@ -20,6 +20,7 @@ pnpm verify       # lint:ci + typecheck + build, run this before pushing
 pnpm check:pr-title "<title>"
 pnpm test:acceptance   # wider acceptance set, mostly env-gated
 pnpm repo:state   # main sha, worktrees, whose branch this tree is, open PRs
+pnpm ci:log 94    # what CI actually printed: test counts, checks (build output when printed)
 ```
 
 Starting a separate tree for a task: `pnpm wt:add ../wt-<topic> -b <branch>`.
@@ -31,7 +32,8 @@ not the bar: `pnpm verify` before pushing is still on you, and
 Issues and pull requests may be authored by an agent, provided the work costs the
 owner nothing extra - no red CI, no diff noise, no evidence-free bodies. The full
 bar, the gh operations and the verification matrix: `docs/agents/maintenance.md`.
-Reviewing a diff instead of writing one: `CODING_STANDARDS.md`.
+Reviewing a diff instead of writing one: `CODING_STANDARDS.md` - which also says what
+a review agent has to be able to *run*, because a read-only reviewer guesses.
 
 ## Agent skills
 
