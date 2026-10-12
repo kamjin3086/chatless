@@ -28,6 +28,7 @@ not the bar: `pnpm verify` before pushing is still on you, and
 Issues and pull requests may be authored by an agent, provided the work costs the
 owner nothing extra - no red CI, no diff noise, no evidence-free bodies. The full
 bar, the gh operations and the verification matrix: `docs/agents/maintenance.md`.
+Reviewing a diff instead of writing one: `CODING_STANDARDS.md`.
 
 ## Language
 
