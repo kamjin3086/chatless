@@ -261,16 +261,5 @@ export class SimpleHandler implements FormatHandler {
     };
   }
 
-  cleanIncomplete(text: string): string {
-    let result = text;
-    
-    // 移除不完整的 to= 格式
-    result = result.replace(/(?:^|\s)to\s*=\s*[a-z0-9_.-]+\s*\{[^}]*$/gi, '');
-    
-    // 移除不完整的分隔符格式
-    result = result.replace(/to\s*=\s*>+[a-z0-9_-]+>+[a-z0-9_-]+>+\s*\{[^}]*$/gi, '');
-    
-    return result;
-  }
 }
 

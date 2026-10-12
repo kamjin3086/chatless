@@ -187,18 +187,5 @@ export class OpenAIHandler implements FormatHandler {
     };
   }
 
-  cleanIncomplete(text: string): string {
-    // 清理不完整的 function_call 或 tool_calls
-    // 例如: {"function_call": {"name": "test
-    let result = text;
-    
-    // 移除不完整的 function_call
-    result = result.replace(/"function_call"\s*:\s*\{[^}]*$/g, '');
-    
-    // 移除不完整的 tool_calls
-    result = result.replace(/"tool_calls"\s*:\s*\[[^\]]*$/g, '');
-    
-    return result;
-  }
 }
 
