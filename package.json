@@ -34,6 +34,7 @@
     "release": "pnpm typecheck && node scripts/release.mjs",
     "check:pr-title": "node scripts/check-pr-title.mjs",
     "repo:state": "node scripts/repo-state.mjs",
+    "ci:log": "node scripts/ci-log.mjs",
     "wt:add": "node scripts/wt-add.mjs",
     "export:model-rules": "node scripts/export-model-fetch-rules.mjs"
   },
