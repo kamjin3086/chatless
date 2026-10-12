@@ -24,6 +24,30 @@ machine produced.
   dynamic dispatch) says how it was searched - `grep`, reference search,
   `git log -S` - because the search that did not look for string dispatch proves
   nothing.
+- **Must:** an outcome is read from the pointer that moves, never from a readiness
+  field. "Merged" means `git/ref/heads/main` moved and the PR's own `state` says
+  `MERGED` - `pnpm repo:state` prints main's pointer and the state of the PRs it
+  can reach, and prints `unknown` for whatever it cannot reach.
+  `mergeable`, `mergeStateStatus` and a green `gh pr checks` say a merge is
+  *possible*; reading readiness as the event is how a branch that never merged
+  gets reported as merged.
+
+## Merging
+
+- **Must:** when a merge deletes a block of code, the merge commit message names
+  the module that owns that behaviour now and the check that proves nothing dangles.
+  "Kept main's side" is not a resolution. The reviewer then verifies those two
+  claims instead of re-reading a whole diff of two colliding refactors.
+  *Why:* the `#86` merge deleted that branch's inline copies of three policy
+  helpers, defensible only because main had moved that logic into
+  `src/lib/mcp/pipeline/policy/` (`toolRisk.ts`, `policy.ts`). Check it with
+  `git show <rev>:src/lib/mcp/pipeline/ToolExecutionPipeline.ts | grep -c 'needsAuthorization\|isPlanOnlyAllowed\|getFilesystemOp'`:
+  6 at the merge's first parent `70758ba`, 2 at merge `2ce6d2f` - the import line
+  and one call site. Both revs are reachable from `main`, which
+  `git merge-base --is-ancestor 2ce6d2f main` confirms (exit 0).
+- **Must:** merge a named rev (`git merge --no-edit origin/main`). Without one git
+  merges the branch's own upstream and prints "Already up to date", which is
+  indistinguishable from success at a glance.
 
 ## Shape of a change
 
