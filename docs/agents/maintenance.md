@@ -48,7 +48,7 @@ Required in the body (the template enforces the shape):
 
 1. **Summary** - what changed, in three lines or fewer.
 2. **Evidence** - before / after, the exact commands run and their real output
-   (`pnpm test` → `Test Files 80 passed, Tests 410 passed`). Numbers, not
+   (`pnpm test` -> `Test Files N passed (N), Tests N passed (N)`). Numbers, not
    "tests pass". If something was not verified, say so in the same block.
 3. **Merge danger** - `Door:` one-way (hard to undo: data format, permission
    default, public behaviour) or two-way (revert is enough); `Blast Radius:`
@@ -73,7 +73,7 @@ not mention.
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
 | Start-up, window, tray, macOS visuals | `scripts/verify-app-startup.sh src-tauri/target/release/chatless` - macOS only (hard-coded log path), needs a release build |
-| Search / knowledge / budget work | `docs/acceptance/*.audit.test.ts` - see the trap below |
+| Search / knowledge / budget work | the `docs/acceptance/*.audit.test.ts` that are wired in - see the note below |
 
 Pick the check that would have caught the bug. "The process is alive" passed on
 0.7.0 while the app was pegging a core and never finished initialising; that is
@@ -82,12 +82,13 @@ still works (`docs/tauri-window-pitfalls.md`).
 
 ## Repo reality an agent needs to know
 
-- **`docs/acceptance/*.audit.test.ts` are not gates.** Only
-  `workspace-budget.audit.test.ts` is in `vitest.config.ts`. The others cannot be
-  run by path either (`include` filters them out), and `qwen-acceptance` /
-  `retrieval-eval` additionally need a generated fixture
-  (`python docs/acceptance/build-eval-db.py`). Treat them as manual acceptance
-  runs and say which ones you actually ran.
+- **Not everything in `docs/acceptance/` runs.** `vitest.config.ts` collects
+  `workspace-budget`, `dense-fusion` and `final-plan`. The other two cannot be
+  collected by path either (`include` filters them out): `retrieval-eval` needs a
+  generated fixture (`python docs/acceptance/build-eval-db.py`), and
+  `qwen-acceptance` is stale against the current prompt API
+  (`resolvePromptLocale is not a function`) - it is a deletion candidate, not a
+  gate. Say which acceptance runs you actually made.
 - Prompts are English-only, answers follow the user (`docs/prompt-language.md`);
   the test above is what keeps them that way.
 - Default permission scope is a product decision, not a convenience knob
