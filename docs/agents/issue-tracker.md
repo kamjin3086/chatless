@@ -36,6 +36,8 @@ Read it as in **Read an issue** above.
 
 ## Wayfinding operations
 
+> **尚未在本仓库启用。** `wayfinder:*` 标签不存在（`gh label list` 零命中），`/wayfinder` skill 也未安装。下面的步骤先不要直接跑；要用时先建标签、装 skill，再照做。
+
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
 
 - **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
