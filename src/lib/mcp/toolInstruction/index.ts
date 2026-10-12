@@ -22,8 +22,7 @@
  * ```typescript
  * import { 
  *   filterForDisplay, 
- *   detectToolInstruction,
- *   createToolInstructionSuppressor 
+ *   detectToolInstruction
  * } from '@/lib/mcp/toolInstruction';
  * 
  * // 过滤显示内容
@@ -34,10 +33,6 @@
  * if (result.detected) {
  *   console.log(`检测到工具调用: ${result.server}.${result.tool}`);
  * }
- * 
- * // 流式抑制
- * const suppressor = createToolInstructionSuppressor();
- * const update = suppressor.push(chunk);
  * ```
  */
 
@@ -45,7 +40,6 @@
 export { 
   type ToolInstructionFormat,
   type PatternDefinition,
-  type SuppressionMode,
   type SuppressionTrigger,
   TOOL_INSTRUCTION_PATTERNS,
   INCOMPLETE_TAG_PREFIXES,
@@ -68,14 +62,6 @@ export {
   type DetectionResult,
   detectToolInstruction
 } from './detector';
-
-// 抑制器
-export {
-  type SuppressorOptions,
-  type SuppressorUpdate,
-  type ToolInstructionSuppressor,
-  createToolInstructionSuppressor
-} from './suppressor';
 
 // 标记工具
 export {

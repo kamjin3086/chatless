@@ -135,26 +135,11 @@ export class ToolCallEventHandler implements EventHandler {
       // 创建工具卡片ID
       cardId = stableCardId;
 
-      // 关键 UX：tool_call 到来时，先把抑制阀/inline thinking 的“尾巴”冲刷到 UI，
+      // 关键 UX：tool_call 到来时，先把 inline thinking 的“尾巴”冲刷到 UI，
       // 否则会出现“工具卡片出来了但文本还没渲染完”的观感（尾部文本要等 onComplete 才 flush）。
       try {
         const store = useChatStore.getState();
         const anyCtx = context as any;
-        const sup = anyCtx?._toolSuppressor as { flush?: () => { tail: string; captured?: string; hadSuppression: boolean } } | undefined;
-        if (store && sup?.flush) {
-          const flushed = sup.flush();
-          if (flushed?.tail) {
-            store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: flushed.tail } as any);
-          }
-        } else {
-          // 兼容旧实现：冲刷 context.suppression.buffer
-          const s = (context as any).suppression as { buffer?: string; active?: boolean } | undefined;
-          if (store && s && !s.active && s.buffer && s.buffer.length > 0) {
-            const tail = s.buffer;
-            s.buffer = '';
-            store.dispatchMessageAction(context.messageId, { type: 'TOKEN_APPEND', chunk: tail } as any);
-          }
-        }
 
         // 冲刷 inline thinking 解析器尾部（例如 <think> 未闭合）
         const inline = anyCtx?._inlineThinking as { flush?: () => Array<{ type: string; text?: string }> } | undefined;

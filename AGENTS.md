@@ -30,6 +30,20 @@ owner nothing extra - no red CI, no diff noise, no evidence-free bodies. The ful
 bar, the gh operations and the verification matrix: `docs/agents/maintenance.md`.
 Reviewing a diff instead of writing one: `CODING_STANDARDS.md`.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as GitHub issues on `kamjin3086/chatless`; use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` at the repo root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Language
 
 Commits, code comments, branch names, pull requests and the maintainer-side issue record
@@ -47,5 +61,3 @@ no contribution is rejected over prose language.
 - `docs/default-permissions.md` - default filesystem / HTTP / opener scope
 - `docs/skills-architecture.md`, `docs/sync-architecture.md`, `docs/tauri-window-pitfalls.md`,
   `docs/llm-troubleshooting.md` - per-subsystem state and known traps
-
-<!-- PR #83 appends an "Agent skills" section here (issue tracker, triage labels, domain docs). -->

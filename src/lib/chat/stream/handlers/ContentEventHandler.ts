@@ -72,8 +72,8 @@ export class ContentEventHandler implements EventHandler {
     // - 判断是否有文本内容应该使用 segments 而不是 content
     context.content += chunk;
 
-    // —— 早阻断抑制阀（已简化：工具指令抑制由 ToolChannelParser 统一处理） ——
-    const visible = applySuppressionValve(context, chunk);
+    // 工具指令抑制在 provider 层的 ToolChannelParser 完成，这里只处理可见文本
+    const visible = chunk;
     if (!visible) return;
 
     // —— Inline thinking 解析（仅当 provider 未提供 thinking_* 事件时启用） ——
@@ -154,24 +154,3 @@ function splitInlineThinking(context: StreamContext, visibleChunk: string) {
   return out;
 }
 
-/**
- * 早阻断"抑制阀"（已简化）
- * 
- * 重要变更：工具指令抑制已统一由 ToolChannelParser（Provider 层）处理。
- * 此函数现在直接透传内容，不再创建额外的 suppressor 实例。
- * 
- * 这样做是为了避免多个 suppressor 实例导致的状态不一致问题：
- * - 之前 ContentEventHandler 和 ToolChannelParser 各自创建 suppressor
- * - 当内容被分割到不同实例处理时，会导致工具指令识别失败
- * - 现在统一在 ToolChannelParser 层处理，确保单一状态机处理完整的流
- */
-function applySuppressionValve(context: StreamContext, chunk: string): string {
-  // 保留 context.suppression 字段用于兼容性
-  if (!context.suppression) {
-    context.suppression = { buffer: '', active: false, braceDepth: 0, seenJsonStart: false, guardWindow: 64 };
-  }
-
-  
-  // 直接返回原始 chunk，工具指令抑制由 ToolChannelParser 在 Provider 层统一处理
-  return chunk;
-}

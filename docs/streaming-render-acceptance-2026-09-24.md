@@ -45,6 +45,7 @@
 2. **屏障事件不额外 flush**。正文落 store 的时机＝200 字符阈值 + 流结束/出错时的 flush；
    卡片标记与最终正文都由完成路径的 flush 保证。这样正文只有一个写入者，避免多处竞争。
 3. **未删除 `StreamEventDispatcher` / `ToolCardService`**：它们已无生产调用方，但不在本计划清单内，留待单独清理。
+   *（已清：`chore/delete-dead-tool-path` 一并删除了这两个与 `ChatGateway`、`toolRepair/`，均无 importer，且无测试覆盖。）*
 
 ## 实测与门槛
 

@@ -178,20 +178,6 @@ export class DatabaseService {
   }
 
   /**
-   * 更新对话标题
-   */
-  public async updateConversationTitle(conversationId: string, title: string): Promise<Conversation> {
-    return this.getConversationRepository().updateTitle(conversationId, title);
-  }
-
-  /**
-   * 切换收藏标记
-   */
-  public async toggleConversationFavorite(conversationId: string): Promise<Conversation> {
-    return this.getConversationRepository().toggleFavorite(conversationId);
-  }
-
-  /**
    * 删除对话
    */
   public async deleteConversation(conversationId: string): Promise<boolean> {
@@ -307,13 +293,6 @@ export class DatabaseService {
       model,
       thinking_start_time
     );
-  }
-
-  /**
-   * 搜索消息
-   */
-  public async searchMessages(query: string, conversationId?: string): Promise<Message[]> {
-    return this.getMessageRepository().searchMessages(query, conversationId);
   }
 
   // === 知识库相关方法 ===
@@ -434,71 +413,6 @@ export class DatabaseService {
     return this.promptRepository;
   }
 
-  // === 统计和健康检查 ===
-
-  /**
-   * 获取数据库统计信息
-   */
-  public async getStatistics(): Promise<{
-    conversations: any;
-    messages: any;
-    knowledgeBases: number;
-  }> {
-    const conversationStats = await this.getConversationRepository().getStatistics();
-    const messageStats = await this.getMessageRepository().getMessageStatistics();
-    const knowledgeBases = await this.getAllKnowledgeBases();
-
-    return {
-      conversations: conversationStats,
-      messages: messageStats,
-      knowledgeBases: knowledgeBases.length
-    };
-  }
-
-  /**
-   * 数据库健康检查
-   */
-  public async healthCheck(): Promise<{
-    isHealthy: boolean;
-    errors: string[];
-    statistics: any;
-  }> {
-    const errors: string[] = [];
-    let statistics = null;
-
-    try {
-      // 检查数据库连接
-      if (!this.dbManager) {
-        errors.push('数据库管理器未初始化');
-        return { isHealthy: false, errors, statistics };
-      }
-
-      // 获取统计信息
-      statistics = await this.getStatistics();
-
-      // 检查数据库状态
-      const dbStatus = await this.dbManager.getStatus();
-      if (!dbStatus.isConnected) {
-        errors.push('数据库连接异常');
-      }
-
-      // 检查迁移状态
-      const migrationManager = this.dbManager.getMigrationManager();
-      const migrationStatus = await migrationManager.getStatus();
-      if (migrationStatus.pendingMigrations > 0) {
-        errors.push(`有 ${migrationStatus.pendingMigrations} 个待处理迁移`);
-      }
-
-    } catch (error) {
-      errors.push(`健康检查失败: ${error instanceof Error ? error.message : '未知错误'}`);
-    }
-
-    return {
-      isHealthy: errors.length === 0,
-      errors,
-      statistics
-    };
-  }
 
   /**
    * 关闭数据库连接
