@@ -6,6 +6,7 @@ import type { ThinkingLevel } from '../thinkingLevels';
 import {
   THINKING_LEVEL_ORDER,
   findThinkingMapping,
+  resolveThinkingModelName,
   supportedThinkingLevels,
   thinkingWireFor,
 } from '../thinkingLevels';
@@ -48,17 +49,22 @@ describe('thinking level vocabulary and mapping', () => {
 
   it('requires the provider to match too; a model name alone is not a carrier', () => {
     // `deepseek-r1` looks like a reasoning model, but Ollama is not an OpenAI-compatible
-    // gateway and its carrier is a different field entirely, so the honest answer here
-    // is "unverified": no tiers offered, nothing sent.
-    expect(supportedThinkingLevels('Ollama', 'deepseek-r1:32b')).toEqual([]);
+    // gateway: it must not borrow that gateway's effort field, and what it does offer is
+    // its own carrier (off), not a guessed tier list.
+    expect(supportedThinkingLevels('Ollama', 'deepseek-r1:32b')).toEqual([
+      'off',
+    ]);
     expect(thinkingWireFor('Ollama', 'deepseek-r1:32b', 'medium')).toBeNull();
-    expect(findThinkingMapping('Ollama', 'deepseek-r1:32b')).toBeNull();
-    // and the rule sends nothing at all
+    expect(findThinkingMapping('Ollama', 'deepseek-r1:32b')?.id).toBe(
+      'ollama-think',
+    );
+    // and the rule sends nothing at all for a level Ollama was not promised
     const out = ParameterPolicyEngine.apply('Ollama', 'deepseek-r1:32b', {
       thinkingLevel: 'medium',
     });
     expect(out).not.toHaveProperty('reasoning_effort');
     expect(out).not.toHaveProperty('thinkingLevel');
+    expect(out).not.toHaveProperty('thinking');
   });
 
   it('pins every advertised level on the OpenAI row to its exact wire value', () => {
@@ -90,6 +96,7 @@ describe('thinking level vocabulary and mapping', () => {
       carrier: 'reasoning_effort',
       field: 'reasoning_effort',
       value: 'medium',
+      overrides: false,
     });
   });
 
@@ -167,8 +174,91 @@ describe('thinking level through the parameter policy', () => {
     const out = ParameterPolicyEngine.apply('Google AI', 'gemini-2.5-pro', {});
     expect(out.generationConfig.thinkingConfig.thinkingBudget).toBe(1024);
   });
+  it('expresses off on Ollama as think:false rather than omitting the field', () => {
+    // Ollama's API takes true/false/null and nothing graded unless /api/show names it,
+    // so the only level this repo claims for Ollama is "do not think". The generic
+    // `thinking` option is what the Ollama provider already turns into the body field.
+    const out = ParameterPolicyEngine.apply('Ollama', 'qwen3:32b', {
+      thinkingLevel: 'off',
+    });
+    expect(out.thinking).toBe(false);
+    expect(out).not.toHaveProperty('thinkingLevel');
+    expect(out).not.toHaveProperty('reasoning_effort');
+    expect(supportedThinkingLevels('Ollama', 'qwen3:32b')).toEqual(['off']);
+  });
+
+  it('lets the level override the older boolean on Ollama', () => {
+    // The boolean says "think", the level says "do not", and the level is the newer,
+    // more specific statement. Silently keeping the boolean would be the failure.
+    const out = ParameterPolicyEngine.apply('Ollama', 'qwen3:32b', {
+      thinking: true,
+      thinkingLevel: 'off',
+    });
+    expect(out.thinking).toBe(false);
+  });
+
+  it('never puts a tier-in-the-name template on the wire', () => {
+    const out = ParameterPolicyEngine.apply(
+      'OpenAI Compatible',
+      'some-reasoner',
+      {
+        thinkingModelSuffixes: { off: '-instruct' },
+      },
+    );
+    expect(out).not.toHaveProperty('thinkingModelSuffixes');
+    expect(out).not.toHaveProperty('reasoning_effort');
+  });
 });
 
+describe('tier-baked-into-the-name routers', () => {
+  const suffixes = {
+    off: '-instruct',
+    low: '_llamacpp-low',
+    medium: '_llamacpp-medium',
+    xhigh: '_llamacpp-xhigh',
+  };
+
+  it('leaves the model alone when no template or no level is in play', () => {
+    expect(resolveThinkingModelName({ model: 'Qwen3.8-Flash-Next' })).toBe(
+      'Qwen3.8-Flash-Next',
+    );
+    expect(
+      resolveThinkingModelName({ model: 'X', level: 'auto', suffixes }),
+    ).toBe('X');
+    expect(
+      resolveThinkingModelName({ model: 'X', level: 'low', suffixes: {} }),
+    ).toBe('X');
+  });
+
+  it('picks the sibling model the level names', () => {
+    expect(
+      resolveThinkingModelName({
+        model: 'Qwen3.8-Flash-Next',
+        level: 'off',
+        suffixes,
+      }),
+    ).toBe('Qwen3.8-Flash-Next-instruct');
+    expect(
+      resolveThinkingModelName({
+        model: 'Qwen3.8-Flash-Next_llamacpp',
+        level: 'medium',
+        suffixes,
+      }),
+    ).toBe('Qwen3.8-Flash-Next_llamacpp_llamacpp-medium');
+  });
+
+  it('refuses to invent a model name for a level with no sibling', () => {
+    // Sending a guessed name means a confusing router 404 at generation time; failing
+    // at request build time names the level and the model instead.
+    expect(() =>
+      resolveThinkingModelName({
+        model: 'Qwen3.8-Flash-Next',
+        level: 'minimal',
+        suffixes,
+      }),
+    ).toThrow(/minimal/);
+  });
+});
 describe('thinking level as a stored model parameter', () => {
   it('is not sent while it stays on auto', () => {
     const opts = ModelParametersService.convertToChatOptions({

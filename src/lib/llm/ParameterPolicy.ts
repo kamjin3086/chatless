@@ -62,9 +62,10 @@ const builtinRules: ParameterRule[] = [
     apply: (base, context) => {
       const next: ParameterPatch = { ...base };
       const level = next.thinkingLevel as ThinkingLevel | undefined;
-      // The generic name is never a wire field: leaving it behind would send
+      // The generic names are never wire fields: leaving them behind would send
       // `thinkingLevel` to a server that has never heard of it.
       delete next.thinkingLevel;
+      delete next.thinkingModelSuffixes;
       if (!level || level === 'auto' || !context) return next;
       const wire = thinkingWireFor(
         context.providerName,
@@ -75,8 +76,10 @@ const builtinRules: ParameterRule[] = [
       // rather than reinterpret the choice as a nearby tier.
       if (!wire) return next;
       // An explicit provider-native value in the request (advanced JSON, a session
-      // override) outranks a level, matching how the pre-existing rules behave.
-      if (next[wire.field] !== undefined) return next;
+      // override) outranks a level, matching how the pre-existing rules behave - except
+      // where the carrier writes the same option as the older boolean, where the level
+      // is the more specific statement.
+      if (next[wire.field] !== undefined && !wire.overrides) return next;
       next[wire.field] = wire.value;
       return next;
     },
