@@ -1,6 +1,7 @@
 import { tauriFetch } from '@/lib/request';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
+import type { StreamCallbacks } from '@/lib/llm/types';
 
 /**
  * 通用消息结构，后续可移到独立 types 文件
@@ -24,29 +25,12 @@ export interface CheckResult {
   meta?: any;
 }
 
-export interface StreamCallbacks {
-  /**
-   * 结构化事件回调（推荐使用）
-   * 接收Provider输出的结构化事件，无需再次解析
-   */
-  onEvent?: (event: StreamEvent) => void;
-  
-  onStart?: () => void;
-  
-  /**
-   * 文本token回调（向后兼容）
-   * 如果提供了onEvent，onToken将被忽略
-   */
-  onToken?: (token: string) => void;
-  
-  /**
-   * 可选：当提供商返回内联图片数据（如 Google inlineData）时回调
-   * data 为 base64 字符串（不带前缀），mimeType 如 image/png
-   */
-  onImage?: (image: { mimeType: string; data: string }) => void;
-  onComplete?: () => void;
-  onError?: (err: Error) => void;
-}
+/**
+ * One definition, in `@/lib/llm/types`. There used to be two near-identical
+ * `StreamCallbacks` interfaces, and adding a callback to one of them compiled fine and did
+ * nothing on the provider side - which is a trap, not a detail.
+ */
+export type { StreamCallbacks };
 
 export interface SseRequestOptions {
   url: string;

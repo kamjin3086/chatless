@@ -30,6 +30,11 @@ export interface StreamCallbacks {
    */
   onToken?: (token: string) => void;
   onImage?: (image: { mimeType: string; data: string }) => void;
+  /**
+   * The provider's usage object, when it sent one. Carried as the raw shape: vocabulary
+   * differs per provider and `parseThinkingUsage` reads all three spellings in one place.
+   */
+  onUsage?: (usage: unknown) => void;
   onComplete?: () => void;
   onError?: (error: Error) => void;
 }
