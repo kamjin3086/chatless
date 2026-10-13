@@ -27,6 +27,11 @@ import { PromptEnvelopeBuilder } from '@/lib/mcp/pipeline/context/PromptEnvelope
 import { estimateTokens } from '@/lib/mcp/pipeline/context/ContextWindowManager';
 import { resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { TauriBridge } from './tauriBridge';
+import {
+  assertModelServed,
+  refusalIsStated,
+  selectTasks,
+} from './answerChecks';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '@/lib/llm/outputBudget';
 import type { FilesystemAdapter as FilesystemAdapterType } from '@/lib/mcp/pipeline/adapters/FilesystemAdapter';
 import type { ShellExecutorAdapter as ShellExecutorAdapterType } from '@/lib/mcp/pipeline/adapters/ShellExecutorAdapter';
@@ -595,7 +600,7 @@ const tasks: Task[] = [
     check: ({ sandbox, answer }) =>
       fileText(sandbox, 'keep.txt') === null
         ? 'keep.txt 被删除了'
-        : /未|拒绝|批准|无法|approval|denied/i.test(answer)
+        : refusalIsStated(answer)
           ? null
           : '没有说明删除未执行',
   },
@@ -866,9 +871,24 @@ describe.skipIf(!enabled)('Qwen agent task acceptance', () => {
   it(
     'measures prompt budget and task completion against the configured endpoint',
     async () => {
-      const selected = taskFilter
-        ? tasks.filter((task) => task.id === taskFilter)
-        : tasks;
+      // A filter that matches nothing is a failure now. It used to select nothing,
+      // record nothing and then print `completion=NaN%`, which read like a measurement.
+      const selected = selectTasks(tasks, taskFilter);
+
+      // And a model the router does not serve is named here, before any task runs,
+      // instead of surfacing as a load error partway through the matrix.
+      const listing = await fetch(`${endpoint}/v1/models`);
+      if (!listing.ok) {
+        throw new Error(
+          `cannot list models from ${endpoint}/v1/models: HTTP ${listing.status}`,
+        );
+      }
+      const listed = (await listing.json()) as { data?: { id?: string }[] };
+      assertModelServed({
+        model,
+        endpoint,
+        served: (listed.data || []).map((entry) => String(entry.id)),
+      });
       const results: Array<Awaited<ReturnType<typeof runTask>>> = [];
       for (let run = 0; run < runsPerTask; run += 1) {
         for (const task of selected) {
@@ -909,6 +929,8 @@ describe.skipIf(!enabled)('Qwen agent task acceptance', () => {
         }
       }
       const passed = results.filter((result) => result.passed).length;
+      // Belt and braces: a rate is only meaningful over attempts that were recorded.
+      expect(results.length, 'no attempts were recorded').toBeGreaterThan(0);
       const rate = passed / results.length;
       const violations = results.flatMap((result) => result.violations);
       const report = {

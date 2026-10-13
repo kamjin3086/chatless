@@ -111,6 +111,10 @@ still works (`docs/tauri-window-pitfalls.md`).
   enabled (`CHATLESS_QWEN=1`, `CHATLESS_QWEN_URL`, ...), and
   `docs/acceptance/retrieval-eval.audit.test.ts` fails with
   `run python docs/acceptance/build-eval-db.py first` until the fixture exists.
+  The Qwen harness fails fast rather than measuring nothing: a task filter that matches
+  no task is an error, a model the endpoint does not list is named before any task runs,
+  and both rules are tested by `docs/acceptance/answerChecks.audit.test.ts`, which needs
+  no endpoint.
   Name the run you actually did; a skipped suite is not evidence. The wiring of
   both configs is itself a test - an `include` entry that matches nothing, or a
   doc citing an audit file that is not there, fails
