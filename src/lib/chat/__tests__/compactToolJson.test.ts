@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseCompactToolJson, splitTextAndToolJson } from '@/lib/chat/compactToolJson';
+import {
+  parseCompactToolJson,
+  splitTextAndToolJson,
+} from '@/lib/chat/compactToolJson';
 
 describe('compactToolJson', () => {
   it('parses web_search style JSON', () => {
@@ -13,8 +16,12 @@ describe('compactToolJson', () => {
   });
 
   it('splits fenced tool JSON from surrounding text', () => {
-    const parts = splitTextAndToolJson('调用如下：\n```json\n{"name":"web_search","arguments":{"query":"test"}}\n```\n完成');
+    const parts = splitTextAndToolJson(
+      '调用如下：\n```json\n{"name":"web_search","arguments":{"query":"test"}}\n```\n完成',
+    );
     expect(parts.some((p) => p.type === 'tool')).toBe(true);
-    expect(parts.some((p) => p.type === 'text' && p.text.includes('调用'))).toBe(true);
+    expect(
+      parts.some((p) => p.type === 'text' && p.text.includes('调用')),
+    ).toBe(true);
   });
 });

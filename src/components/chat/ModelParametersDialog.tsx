@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,10 @@ import {
   supportedThinkingLevels,
   type ThinkingLevel,
 } from '@/lib/llm/thinkingLevels';
+import {
+  thinkingCacheNotice,
+  validateThinkingRequest,
+} from '@/lib/chat/thinkingRequestValidation';
 import { useLocaleStore } from '@/store/localeStore';
 import type { TranslationKey } from '@/i18n/types';
 
@@ -248,6 +252,28 @@ function ParamSelectRow({
   );
 }
 
+// 自定义参数相关函数
+// Module scope, not a component closure: the thinking advisory below depends on the
+// parsed custom rows, and a function recreated on every render would make that memo
+// recompute constantly for no reason.
+function convertValue(value: string, asString = false): any {
+  if (asString) return value;
+
+  // 尝试转换为数字
+  const numValue = parseFloat(value);
+  if (!isNaN(numValue) && isFinite(numValue) && value.trim() !== '') {
+    return numValue;
+  }
+
+  // 尝试转换为布尔值
+  const lowerValue = value.toLowerCase().trim();
+  if (lowerValue === 'true') return true;
+  if (lowerValue === 'false') return false;
+
+  // 默认返回字符串
+  return value;
+}
+
 interface ModelParametersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -443,6 +469,20 @@ export function ModelParametersDialog({
         stopSequences,
         advancedOptions: { ...advanced, ...customParamsObj },
       };
+      // A combination this API refuses is refused here, with the reason already on screen
+      // next to the control. Nothing is clamped, lowered or dropped on the way in: the
+      // user changes one of the two values, or accepts the consequence.
+      const blocking = validateThinkingRequest({
+        providerName,
+        modelId,
+        level: effectiveThinkingLevel,
+        maxOutputTokens: parameters.maxTokens,
+        advanced: configToSave.advancedOptions,
+      });
+      if (blocking?.kind === 'blocked') {
+        setIsLoading(false);
+        return;
+      }
       await specializedStorage.models.setModelParameters(
         providerName,
         modelId,
@@ -493,24 +533,56 @@ export function ModelParametersDialog({
     }
   };
 
-  // 自定义参数相关函数
-  const convertValue = (value: string, asString: boolean = false): any => {
-    if (asString) return value;
-
-    // 尝试转换为数字
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue) && isFinite(numValue) && value.trim() !== '') {
-      return numValue;
+  // The request as it would go out: a level here plus whatever the raw JSON and the
+  // custom rows add. The advisory below reads this, and saving refuses the same thing the
+  // screen says, so the two can never disagree.
+  const effectiveThinkingLevel: ThinkingLevel =
+    parameters.enableThinkingLevel === true
+      ? (parameters.thinkingLevel ?? 'auto')
+      : 'auto';
+  const pendingAdvanced = useMemo(() => {
+    const merged: Record<string, any> = {};
+    try {
+      const trimmed = advancedJsonText?.trim();
+      const parsed = trimmed ? JSON.parse(trimmed) : {};
+      if (parsed && typeof parsed === 'object') Object.assign(merged, parsed);
+    } catch {
+      // Malformed JSON has its own message right under the editor; the advisory simply
+      // has no advanced part to reason about until it parses again.
     }
-
-    // 尝试转换为布尔值
-    const lowerValue = value.toLowerCase().trim();
-    if (lowerValue === 'true') return true;
-    if (lowerValue === 'false') return false;
-
-    // 默认返回字符串
-    return value;
-  };
+    for (const param of customParameters) {
+      if (param.key.trim()) {
+        merged[param.key] = convertValue(param.value, param.asString);
+      }
+    }
+    return merged;
+  }, [advancedJsonText, customParameters]);
+  const thinkingIssue = useMemo(
+    () =>
+      validateThinkingRequest({
+        providerName,
+        modelId,
+        level: effectiveThinkingLevel,
+        maxOutputTokens: parameters.maxTokens,
+        advanced: pendingAdvanced,
+      }),
+    [
+      providerName,
+      modelId,
+      effectiveThinkingLevel,
+      parameters.maxTokens,
+      pendingAdvanced,
+    ],
+  );
+  const thinkingCacheHint = useMemo(
+    () =>
+      thinkingCacheNotice({
+        providerName,
+        modelId,
+        level: effectiveThinkingLevel,
+      }),
+    [providerName, modelId, effectiveThinkingLevel],
+  );
 
   const addCustomParameter = () => {
     setCustomParameters((prev) => [
@@ -857,6 +929,21 @@ export function ModelParametersDialog({
                   : undefined
               }
             />
+            {thinkingIssue?.kind === 'blocked' && (
+              <p className="text-xs text-rose-500">
+                {t(thinkingIssue.key as TranslationKey)}
+              </p>
+            )}
+            {thinkingIssue?.kind === 'warn' && (
+              <p className="text-xs text-amber-500">
+                {t(thinkingIssue.key as TranslationKey)}
+              </p>
+            )}
+            {thinkingCacheHint && (
+              <p className="text-xs text-slate-400">
+                {t(thinkingCacheHint as TranslationKey)}
+              </p>
+            )}
             <ParamToggleRow
               enabled={(parameters as any).enableStreaming !== false}
               onEnabledChange={(v) =>

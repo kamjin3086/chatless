@@ -41,6 +41,19 @@ const zhCN: TranslationDict = {
   'thinkingLevel.medium': '中',
   'thinkingLevel.high': '高',
   'thinkingLevel.xhigh': '极高',
+  'thinkingLevel.max': '尽力思考',
+  'modelParams.thinking.conflictEffortDisabled':
+    '关闭思考和 xhigh / max 档不能同时使用：请把思考等级降到 high 或更低，或者让思考保持开启。',
+  'modelParams.thinking.conflictDisabledUnsupported':
+    '这个型号不允许关闭思考（任何档位下都会被拒绝），请改成选择一个思考等级。',
+  'modelParams.thinking.conflictBudgetAboveMax':
+    '手动思考预算必须小于最大输出 token，否则请求一定会被拒绝。',
+  'modelParams.thinking.conflictBudgetTooSmall':
+    '手动思考预算不得低于 1024 token，否则请求一定会被拒绝。',
+  'modelParams.thinking.warnEffortNeedsRoom':
+    '思考用的 token 也算在最大输出里；这一档建议把上限设到 64k 左右，不然回答容易被截断。',
+  'modelParams.thinking.cacheNotice':
+    '在这个 provider 上改动思考等级会让 prompt cache 失效，接下来的请求要重新按未缓存计费。',
 };
 
 export default zhCN;

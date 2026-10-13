@@ -32,6 +32,10 @@ describe('thinking level vocabulary and mapping', () => {
       'medium',
       'high',
       'xhigh',
+      // Anthropic's deepest rung. It is in the vocabulary rather than in some provider's
+      // private list because every consumer - picker, session override, telemetry - keys
+      // off this one order; the rows are what keep it off models that lack it.
+      'max',
     ]);
   });
 

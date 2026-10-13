@@ -45,6 +45,19 @@ const enUS: TranslationDict = {
   'thinkingLevel.medium': 'Medium',
   'thinkingLevel.high': 'High',
   'thinkingLevel.xhigh': 'Very high',
+  'thinkingLevel.max': 'Maximum',
+  'modelParams.thinking.conflictEffortDisabled':
+    'Turning thinking off cannot be combined with xhigh or max: choose high or lower, or leave thinking on.',
+  'modelParams.thinking.conflictDisabledUnsupported':
+    'This model cannot be told not to think at any level; pick a thinking level instead.',
+  'modelParams.thinking.conflictBudgetAboveMax':
+    'A manual thinking budget has to be smaller than the maximum output tokens, or the request is rejected.',
+  'modelParams.thinking.conflictBudgetTooSmall':
+    'A manual thinking budget has to be at least 1024 tokens, or the request is rejected.',
+  'modelParams.thinking.warnEffortNeedsRoom':
+    'Thinking tokens count against the output limit; around 64k is the suggested floor at this level, or answers get truncated.',
+  'modelParams.thinking.cacheNotice':
+    'Changing the thinking level on this provider invalidates prompt caching, so the next requests pay uncached.',
 };
 
 export default enUS;
