@@ -102,15 +102,19 @@ still works (`docs/tauri-window-pitfalls.md`).
 ## Repo reality an agent needs to know
 
 - **Two vitest configs, and CI runs only one of them.** `pnpm test` (root
-  `vitest.config.ts`) collects `docs/acceptance/workspace-budget.audit.test.ts`,
-  `docs/acceptance/dense-fusion.audit.test.ts` and
-  `docs/acceptance/final-plan.audit.test.ts`. The wider set has its own runner:
+  `vitest.config.ts`) collects every `docs/acceptance/*.audit.test.ts`, so all of them
+  are transpiled on every run even when they skip themselves for want of an endpoint or a
+  generated corpus. That is deliberate and it is enforced by the inventory test: the Qwen
+  harness once sat on `main` in a shape esbuild could not parse (TypeScript accepts the
+  trailing comma biome puts in a wrapped `typeof import(...)` type, esbuild does not), and
+  nothing noticed, because nothing transpiled it until someone tried to run it. The wider
+  set has its own runner:
   `pnpm test:acceptance` (`vitest run --config docs/acceptance/vitest.config.ts`).
   There `docs/acceptance/qwen-acceptance.audit.test.ts` and
   `docs/acceptance/reasoning-stream.audit.test.ts` skip unless their endpoint is
   enabled (`CHATLESS_QWEN=1`, `CHATLESS_QWEN_URL`, ...), and
-  `docs/acceptance/retrieval-eval.audit.test.ts` fails with
-  `run python docs/acceptance/build-eval-db.py first` until the fixture exists.
+  `docs/acceptance/retrieval-eval.audit.test.ts` skips, printing
+  `run python docs/acceptance/build-eval-db.py first`, until the fixture exists.
   The Qwen harness fails fast rather than measuring nothing: a task filter that matches
   no task is an error, a model the endpoint does not list is named before any task runs,
   and both rules are tested by `docs/acceptance/answerChecks.audit.test.ts`, which needs

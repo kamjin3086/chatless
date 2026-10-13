@@ -25,11 +25,47 @@ const skipDirs = new Set([
 ]);
 
 /** @param {string} configPath path relative to the repo root */
+/**
+ * Drop `//` comment tails without touching quoted strings.
+ *
+ * The include list is full of prose explaining why each entry is there, and a glob in a
+ * comment is not a glob: without this, a comment mentioning `typeof import('x').Y` becomes
+ * an "entry that collects nothing" and the checker reports a wiring problem that does not
+ * exist. Quote-aware, so real entries containing slashes survive.
+ */
+function stripLineComments(text) {
+  return text
+    .split('\n')
+    .map((line) => {
+      let quote = '';
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        if (quote) {
+          if (ch === quote) quote = '';
+          continue;
+        }
+        if (ch === "'" || ch === '"') quote = ch;
+        else if (ch === '/' && line[i + 1] === '/') return line.slice(0, i);
+      }
+      return line;
+    })
+    .join('\n');
+}
+
+/** The include globs a vitest config declares, comments excluded. */
+function parseIncludeEntries(text) {
+  const block = stripLineComments(text).match(/include:\s*\[([\s\S]*?)\]/);
+  if (!block) throw new Error('no include list');
+  return [...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+}
+
 function includeEntries(configPath) {
   const text = fs.readFileSync(path.join(repoRoot, configPath), 'utf8');
-  const block = text.match(/include:\s*\[([\s\S]*?)\]/);
-  if (!block) throw new Error(`${configPath} declares no include list`);
-  return [...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  try {
+    return parseIncludeEntries(text);
+  } catch {
+    throw new Error(`${configPath} declares no include list`);
+  }
 }
 
 /** @returns {Generator<string>} every tracked-ish file path, repo-relative */
@@ -69,6 +105,24 @@ function collectedBy(patterns) {
   return [...walk()].filter((file) => matchers.some((re) => re.test(file)));
 }
 
+describe('include list parsing', () => {
+  it('ignores globs and quoted words inside comments', () => {
+    const text = `export default defineConfig({
+  test: {
+    include: [
+      // A comment mentioning 'x' or 'docs/acceptance/*.audit.test.ts' is prose, not wiring.
+      'src/**/*.test.ts', // trailing note about 'nothing.test.ts'
+    ],
+  },
+});`;
+    expect(parseIncludeEntries(text)).toEqual(['src/**/*.test.ts']);
+  });
+
+  it('still fails loudly when there is no include list at all', () => {
+    expect(() => parseIncludeEntries('export default {};')).toThrow();
+  });
+});
+
 describe('vitest include wiring', () => {
   for (const config of configs) {
     it(`${config}: every include entry matches real files`, () => {
@@ -84,18 +138,20 @@ describe('vitest include wiring', () => {
     });
   }
 
-  it('every acceptance audit is collected by at least one config', () => {
+  it('every acceptance audit is transpiled by the normal suite', () => {
     const audits = [...walk()].filter((file) =>
       file.endsWith('.audit.test.ts'),
     );
     expect(audits.length).toBeGreaterThan(0);
-    const collected = new Set(
-      configs.flatMap((config) => collectedBy(includeEntries(config))),
-    );
+    // Coverage by *either* config was the old claim, and it was the hole: the acceptance
+    // config only runs when an operator sets an endpoint variable, so an audit collected
+    // only there is never even transpiled in CI. `pnpm test` has to collect every one of
+    // them - skipping themselves is fine, never having been parsed is not.
+    const collected = new Set(collectedBy(includeEntries('vitest.config.ts')));
     const orphans = audits.filter((file) => !collected.has(file));
     expect(
       orphans,
-      `not collected by either config: ${orphans.join(', ')}`,
+      `not collected by vitest.config.ts, so nothing transpiles them until a live run: ${orphans.join(', ')}`,
     ).toEqual([]);
   });
 });
