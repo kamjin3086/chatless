@@ -8,9 +8,15 @@ export class ModelParametersService {
   /**
    * 获取指定模型的参数配置
    */
-  static async getModelParameters(providerName: string, modelId: string): Promise<ModelParameters> {
+  static async getModelParameters(
+    providerName: string,
+    modelId: string,
+  ): Promise<ModelParameters> {
     try {
-      const savedParams = await specializedStorage.models.getModelParameters(providerName, modelId);
+      const savedParams = await specializedStorage.models.getModelParameters(
+        providerName,
+        modelId,
+      );
       if (savedParams) {
         return savedParams as ModelParameters;
       }
@@ -25,12 +31,16 @@ export class ModelParametersService {
    * 保存模型参数配置
    */
   static async setModelParameters(
-    providerName: string, 
-    modelId: string, 
-    parameters: ModelParameters
+    providerName: string,
+    modelId: string,
+    parameters: ModelParameters,
   ): Promise<void> {
     try {
-      await specializedStorage.models.setModelParameters(providerName, modelId, parameters);
+      await specializedStorage.models.setModelParameters(
+        providerName,
+        modelId,
+        parameters,
+      );
     } catch (error) {
       console.error('保存模型参数失败:', error);
       throw error;
@@ -40,9 +50,15 @@ export class ModelParametersService {
   /**
    * 删除模型参数配置
    */
-  static async removeModelParameters(providerName: string, modelId: string): Promise<void> {
+  static async removeModelParameters(
+    providerName: string,
+    modelId: string,
+  ): Promise<void> {
     try {
-      await specializedStorage.models.removeModelParameters(providerName, modelId);
+      await specializedStorage.models.removeModelParameters(
+        providerName,
+        modelId,
+      );
     } catch (error) {
       console.error('删除模型参数失败:', error);
       throw error;
@@ -64,7 +80,10 @@ export class ModelParametersService {
     const window = Math.floor(Number(contextWindow));
     if (!Number.isFinite(window) || window <= 0) return false;
     try {
-      const saved = await ModelParametersService.getModelParameters(providerName, modelId);
+      const saved = await ModelParametersService.getModelParameters(
+        providerName,
+        modelId,
+      );
       if (saved.observedContextWindow === window) return false;
       await ModelParametersService.setModelParameters(providerName, modelId, {
         ...saved,
@@ -82,7 +101,10 @@ export class ModelParametersService {
    * 只有两边都没有时才算未知（未知 = 不下发 max_tokens）。
    */
   static effectiveContextWindow(
-    params: { contextWindow?: number; observedContextWindow?: number } | null | undefined,
+    params:
+      | { contextWindow?: number; observedContextWindow?: number }
+      | null
+      | undefined,
   ): number | undefined {
     const toPositive = (value: unknown) => {
       const parsed = Math.floor(Number(value));
@@ -124,53 +146,110 @@ export class ModelParametersService {
   /**
    * 将模型参数转换为聊天选项格式
    */
-  static convertToChatOptions(parameters: ModelParameters): Record<string, any> {
+  static convertToChatOptions(
+    parameters: ModelParameters,
+  ): Record<string, any> {
     // 仅当用户"启用"某参数或者值与默认不同，才传给 Provider
     const opts: Record<string, any> = { ...(parameters.advancedOptions || {}) };
     const def = DEFAULT_MODEL_PARAMETERS;
 
-    const shouldSet = (enabledFlag: boolean | undefined, value: any, defValue: any) => {
+    const shouldSet = (
+      enabledFlag: boolean | undefined,
+      value: any,
+      defValue: any,
+    ) => {
       // 若显式关闭则不传；若与默认相同且未显式开启也不传
       if (enabledFlag === false) return false;
       if (enabledFlag === true) return true;
       return value !== defValue;
     };
 
-    if (shouldSet(parameters.enableTemperature, parameters.temperature, def.temperature)) {
+    if (
+      shouldSet(
+        parameters.enableTemperature,
+        parameters.temperature,
+        def.temperature,
+      )
+    ) {
       opts.temperature = parameters.temperature;
     }
-    if (shouldSet(parameters.enableMaxTokens, parameters.maxTokens, def.maxTokens)) {
+    if (
+      shouldSet(parameters.enableMaxTokens, parameters.maxTokens, def.maxTokens)
+    ) {
       opts.maxTokens = parameters.maxTokens;
     }
     if (shouldSet(parameters.enableTopP, parameters.topP, def.topP)) {
       opts.topP = parameters.topP;
     }
-    if (shouldSet((parameters as any).enableTopK, (parameters as any).topK, (def as any).topK)) {
+    if (
+      shouldSet(
+        (parameters as any).enableTopK,
+        (parameters as any).topK,
+        (def as any).topK,
+      )
+    ) {
       (opts as any).topK = (parameters as any).topK;
     }
-    if (shouldSet((parameters as any).enableMinP, (parameters as any).minP, (def as any).minP)) {
+    if (
+      shouldSet(
+        (parameters as any).enableMinP,
+        (parameters as any).minP,
+        (def as any).minP,
+      )
+    ) {
       (opts as any).minP = (parameters as any).minP;
     }
-    if (shouldSet(parameters.enableFrequencyPenalty, parameters.frequencyPenalty, def.frequencyPenalty)) {
+    if (
+      shouldSet(
+        parameters.enableFrequencyPenalty,
+        parameters.frequencyPenalty,
+        def.frequencyPenalty,
+      )
+    ) {
       opts.frequencyPenalty = parameters.frequencyPenalty;
     }
-    if (shouldSet(parameters.enablePresencePenalty, parameters.presencePenalty, def.presencePenalty)) {
+    if (
+      shouldSet(
+        parameters.enablePresencePenalty,
+        parameters.presencePenalty,
+        def.presencePenalty,
+      )
+    ) {
       opts.presencePenalty = parameters.presencePenalty;
     }
-    if (shouldSet(parameters.enableStopSequences, parameters.stopSequences.length, 0)) {
+    if (
+      shouldSet(
+        parameters.enableStopSequences,
+        parameters.stopSequences.length,
+        0,
+      )
+    ) {
       if (parameters.stopSequences.length > 0) {
         opts.stop = parameters.stopSequences;
       }
     }
-    
+
     // 处理思考和流式响应参数
-    if (shouldSet(parameters.enableThinking, parameters.thinking, def.thinking)) {
+    if (
+      shouldSet(parameters.enableThinking, parameters.thinking, def.thinking)
+    ) {
       opts.thinking = parameters.thinking;
     }
-    if (shouldSet(parameters.enableStreaming, parameters.streaming, def.streaming)) {
+    // A level is sent only when explicitly enabled and not `auto`, so a model that
+    // never touched the control sends exactly what it always sent.
+    if (
+      parameters.enableThinkingLevel === true &&
+      parameters.thinkingLevel &&
+      parameters.thinkingLevel !== 'auto'
+    ) {
+      opts.thinkingLevel = parameters.thinkingLevel;
+    }
+    if (
+      shouldSet(parameters.enableStreaming, parameters.streaming, def.streaming)
+    ) {
       opts.streaming = parameters.streaming;
     }
-    
+
     return opts;
   }
 
@@ -185,7 +264,11 @@ export class ModelParametersService {
    */
   static applyOutputBudget(
     options: Record<string, any>,
-    params: { contextWindow?: number; observedContextWindow?: number; enableMaxTokens?: boolean },
+    params: {
+      contextWindow?: number;
+      observedContextWindow?: number;
+      enableMaxTokens?: boolean;
+    },
   ): Record<string, any> {
     const next = { ...options };
     const window = ModelParametersService.effectiveContextWindow(params);
@@ -198,7 +281,8 @@ export class ModelParametersService {
       // 在自动模式下不下发），所以这里能区分自动与手动。自动模式交给服务端。
       const budget = resolveOutputBudget({
         contextWindow: window,
-        userMaxTokens: typeof options.maxTokens === 'number' ? options.maxTokens : undefined,
+        userMaxTokens:
+          typeof options.maxTokens === 'number' ? options.maxTokens : undefined,
       });
       if (typeof budget === 'number') next.maxTokens = budget;
       else delete next.maxTokens;
@@ -214,45 +298,75 @@ export class ModelParametersService {
    * - 会尽量从顶层或 generationConfig 中提取基础参数
    * - 其余参数保留在 advancedOptions 中，且会移除与基础参数重复的字段
    */
-  static parseFromChatOptions(options: Record<string, any> | null | undefined): ModelParameters {
+  static parseFromChatOptions(
+    options: Record<string, any> | null | undefined,
+  ): ModelParameters {
     const src: any = options || {};
-    const gen: any = (src.generationConfig && typeof src.generationConfig === 'object') ? src.generationConfig : {};
+    const gen: any =
+      src.generationConfig && typeof src.generationConfig === 'object'
+        ? src.generationConfig
+        : {};
 
     const temperature: number =
-      (typeof src.temperature === 'number' ? src.temperature :
-        (typeof gen.temperature === 'number' ? gen.temperature : DEFAULT_MODEL_PARAMETERS.temperature));
+      typeof src.temperature === 'number'
+        ? src.temperature
+        : typeof gen.temperature === 'number'
+          ? gen.temperature
+          : DEFAULT_MODEL_PARAMETERS.temperature;
 
     const maxTokens: number =
-      (typeof src.maxTokens === 'number' ? src.maxTokens :
-        (typeof src.maxOutputTokens === 'number' ? src.maxOutputTokens :
-          (typeof gen.maxOutputTokens === 'number' ? gen.maxOutputTokens : DEFAULT_MODEL_PARAMETERS.maxTokens)));
+      typeof src.maxTokens === 'number'
+        ? src.maxTokens
+        : typeof src.maxOutputTokens === 'number'
+          ? src.maxOutputTokens
+          : typeof gen.maxOutputTokens === 'number'
+            ? gen.maxOutputTokens
+            : DEFAULT_MODEL_PARAMETERS.maxTokens;
 
     // The context window is a capability we track, never a request field.
     const contextWindow: number | undefined =
-      (typeof src.contextWindow === 'number' ? src.contextWindow :
-        (typeof gen.contextWindow === 'number' ? gen.contextWindow : undefined));
+      typeof src.contextWindow === 'number'
+        ? src.contextWindow
+        : typeof gen.contextWindow === 'number'
+          ? gen.contextWindow
+          : undefined;
 
     const topP: number =
-      (typeof src.topP === 'number' ? src.topP :
-        (typeof gen.topP === 'number' ? gen.topP : DEFAULT_MODEL_PARAMETERS.topP));
+      typeof src.topP === 'number'
+        ? src.topP
+        : typeof gen.topP === 'number'
+          ? gen.topP
+          : DEFAULT_MODEL_PARAMETERS.topP;
 
     const topK: number =
-      (typeof src.topK === 'number' ? src.topK :
-        (typeof gen.topK === 'number' ? gen.topK : (DEFAULT_MODEL_PARAMETERS as any).topK || 0));
+      typeof src.topK === 'number'
+        ? src.topK
+        : typeof gen.topK === 'number'
+          ? gen.topK
+          : (DEFAULT_MODEL_PARAMETERS as any).topK || 0;
 
     const minP: number =
-      (typeof src.minP === 'number' ? src.minP :
-        (typeof gen.minP === 'number' ? gen.minP : (DEFAULT_MODEL_PARAMETERS as any).minP || 0));
+      typeof src.minP === 'number'
+        ? src.minP
+        : typeof gen.minP === 'number'
+          ? gen.minP
+          : (DEFAULT_MODEL_PARAMETERS as any).minP || 0;
 
     const frequencyPenalty: number =
-      (typeof src.frequencyPenalty === 'number' ? src.frequencyPenalty : DEFAULT_MODEL_PARAMETERS.frequencyPenalty);
+      typeof src.frequencyPenalty === 'number'
+        ? src.frequencyPenalty
+        : DEFAULT_MODEL_PARAMETERS.frequencyPenalty;
 
     const presencePenalty: number =
-      (typeof src.presencePenalty === 'number' ? src.presencePenalty : DEFAULT_MODEL_PARAMETERS.presencePenalty);
+      typeof src.presencePenalty === 'number'
+        ? src.presencePenalty
+        : DEFAULT_MODEL_PARAMETERS.presencePenalty;
 
     const stopSeq: string[] = Array.isArray(src.stop)
-      ? src.stop as string[]
-      : (Array.isArray(gen.stopSequences) ? gen.stopSequences as string[] : []);
+      ? (src.stop as string[])
+      : Array.isArray(gen.stopSequences)
+        ? (gen.stopSequences as string[])
+        : [];
 
     // 构造 advancedOptions：从深拷贝的对象中移除基础字段
     const advanced = JSON.parse(JSON.stringify(src || {}));
@@ -268,12 +382,20 @@ export class ModelParametersService {
     delete advanced.presencePenalty;
     delete advanced.stop;
     // 移除 generationConfig 中与基础字段重复的项
-    if (advanced.generationConfig && typeof advanced.generationConfig === 'object') {
-      if (advanced.generationConfig.temperature !== undefined) delete advanced.generationConfig.temperature;
-      if (advanced.generationConfig.maxOutputTokens !== undefined) delete advanced.generationConfig.maxOutputTokens;
-      if (advanced.generationConfig.contextWindow !== undefined) delete advanced.generationConfig.contextWindow;
-      if (advanced.generationConfig.topP !== undefined) delete advanced.generationConfig.topP;
-      if (advanced.generationConfig.stopSequences !== undefined) delete advanced.generationConfig.stopSequences;
+    if (
+      advanced.generationConfig &&
+      typeof advanced.generationConfig === 'object'
+    ) {
+      if (advanced.generationConfig.temperature !== undefined)
+        delete advanced.generationConfig.temperature;
+      if (advanced.generationConfig.maxOutputTokens !== undefined)
+        delete advanced.generationConfig.maxOutputTokens;
+      if (advanced.generationConfig.contextWindow !== undefined)
+        delete advanced.generationConfig.contextWindow;
+      if (advanced.generationConfig.topP !== undefined)
+        delete advanced.generationConfig.topP;
+      if (advanced.generationConfig.stopSequences !== undefined)
+        delete advanced.generationConfig.stopSequences;
       // 如果 generationConfig 变空对象，保留（兼容后续可能新增字段），不特殊处理
     }
 
@@ -296,9 +418,12 @@ export class ModelParametersService {
   /**
    * 获取指定会话的参数配置
    */
-  static async getSessionParameters(conversationId: string): Promise<ModelParameters | null> {
+  static async getSessionParameters(
+    conversationId: string,
+  ): Promise<ModelParameters | null> {
     try {
-      const savedParams = await specializedStorage.models.getSessionParameters(conversationId);
+      const savedParams =
+        await specializedStorage.models.getSessionParameters(conversationId);
       if (savedParams) {
         return savedParams as ModelParameters;
       }
@@ -313,11 +438,14 @@ export class ModelParametersService {
    * 保存会话参数配置
    */
   static async setSessionParameters(
-    conversationId: string, 
-    parameters: ModelParameters
+    conversationId: string,
+    parameters: ModelParameters,
   ): Promise<void> {
     try {
-      await specializedStorage.models.setSessionParameters(conversationId, parameters);
+      await specializedStorage.models.setSessionParameters(
+        conversationId,
+        parameters,
+      );
     } catch (error) {
       console.error('保存会话参数失败:', error);
       throw error;
@@ -347,4 +475,4 @@ export class ModelParametersService {
       return [];
     }
   }
-} 
+}

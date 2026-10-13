@@ -79,3 +79,11 @@ _Avoid_: 授权结果
 **提权 (Promotion)**:
 一个审批回答落到策略上的状态增量。它和"把增量写进 store / 数据库"是两件事：前者可测，后者是执行。
 _Avoid_: 自动授权
+
+**思考等级 (ThinkingLevel)**:
+用户就"回答前该想多少"表的一次态：`auto | off | minimal | low | medium | high | xhigh`。`auto` 是独立一档，含义是"什么都不下发，由模型决定"，不是被藏起来的默认值——它恰好等于有等级概念之前的行为。未收录的模型只能显示为未验证并什么都不发，绝不把用户选的等级悄悄换成邻近的另一档。
+_Avoid_: 推理开关、深度思考档位
+
+**思考载体 (ThinkingCarrier)**:
+某个 provider 表达思考等级的方式：`reasoning_effort` / `thinking_level` / `thinking_budget` / `ollama_think` / `model_alias` / `unsupported`。等级是用户的话，载体是网关的话；两者分开，加一家 provider 就是往映射表里加一行数据，而不是多一个分支。
+_Avoid_: provider 特判、reasoning_effort（那只是其中一种载体）

@@ -4,7 +4,15 @@
  * - 便于预置厂商/模型的必要参数（如 Gemini 思考预算），并为后续用户自定义留出入口
  */
 
+import { thinkingWireFor, type ThinkingLevel } from './thinkingLevels';
+
 export type ParameterPatch = Record<string, any>;
+
+/** What a rule is being applied to, so a rule can stay a table lookup instead of a guess. */
+export interface ParameterRuleContext {
+  providerName: string;
+  modelId: string;
+}
 
 export interface ParameterRule {
   id: string;
@@ -18,11 +26,19 @@ export interface ParameterRule {
    */
   providerMode?: 'strict' | 'relaxed';
   model?: RegExp; // 可选：按模型 ID 匹配
-  apply: (base: ParameterPatch) => ParameterPatch; // 返回新对象或在拷贝上修改
+  apply: (
+    base: ParameterPatch,
+    context?: ParameterRuleContext,
+  ) => ParameterPatch; // 返回新对象或在拷贝上修改
 }
 
-function mergeDeep<T extends object, U extends object>(target: T, source: U): T & U {
-  const output: any = Array.isArray(target) ? [...(target as any)] : { ...(target as any) };
+function mergeDeep<T extends object, U extends object>(
+  target: T,
+  source: U,
+): T & U {
+  const output: any = Array.isArray(target)
+    ? [...(target as any)]
+    : { ...(target as any) };
   if (typeof source !== 'object' || source === null) return output as T & U;
   for (const [key, value] of Object.entries(source as any)) {
     if (Array.isArray(value)) {
@@ -39,6 +55,33 @@ function mergeDeep<T extends object, U extends object>(target: T, source: U): T 
 /** 预置规则集合（可按需扩展） */
 const builtinRules: ParameterRule[] = [
   {
+    id: 'thinking-level',
+    priority: 40,
+    description:
+      '把通用的思考等级翻译成该 provider 的字段；auto 或未收录的模型一律不下发',
+    apply: (base, context) => {
+      const next: ParameterPatch = { ...base };
+      const level = next.thinkingLevel as ThinkingLevel | undefined;
+      // The generic name is never a wire field: leaving it behind would send
+      // `thinkingLevel` to a server that has never heard of it.
+      delete next.thinkingLevel;
+      if (!level || level === 'auto' || !context) return next;
+      const wire = thinkingWireFor(
+        context.providerName,
+        context.modelId,
+        level,
+      );
+      // Unverified model, or a level that model does not advertise: send nothing
+      // rather than reinterpret the choice as a nearby tier.
+      if (!wire) return next;
+      // An explicit provider-native value in the request (advanced JSON, a session
+      // override) outranks a level, matching how the pre-existing rules behave.
+      if (next[wire.field] !== undefined) return next;
+      next[wire.field] = wire.value;
+      return next;
+    },
+  },
+  {
     id: 'google-gemini-thinking-required',
     priority: 100,
     description:
@@ -53,11 +96,21 @@ const builtinRules: ParameterRule[] = [
       const patch: ParameterPatch = {
         generationConfig: {
           // 统一映射 maxTokens → maxOutputTokens（若用户显式设置才透传）
-          ...(base?.maxOutputTokens || base?.maxTokens || base?.generationConfig?.maxOutputTokens
-            ? { maxOutputTokens: base?.maxOutputTokens ?? base?.maxTokens ?? base?.generationConfig?.maxOutputTokens }
+          ...(base?.maxOutputTokens ||
+          base?.maxTokens ||
+          base?.generationConfig?.maxOutputTokens
+            ? {
+                maxOutputTokens:
+                  base?.maxOutputTokens ??
+                  base?.maxTokens ??
+                  base?.generationConfig?.maxOutputTokens,
+              }
             : {}),
           ...(base?.stop || base?.generationConfig?.stopSequences
-            ? { stopSequences: base?.stop ?? base?.generationConfig?.stopSequences }
+            ? {
+                stopSequences:
+                  base?.stop ?? base?.generationConfig?.stopSequences,
+              }
             : {}),
           thinkingConfig: {
             // 仅当未设置或为 0 时，给出非零预算，避免 400 错误
@@ -84,9 +137,12 @@ const builtinRules: ParameterRule[] = [
     apply: (base) => {
       const patch: ParameterPatch = {
         generationConfig: {
-          responseModalities: Array.isArray((base as any)?.generationConfig?.responseModalities) && (base as any).generationConfig.responseModalities.length > 0
-            ? (base as any).generationConfig.responseModalities
-            : ['IMAGE', 'TEXT'],
+          responseModalities:
+            Array.isArray(
+              (base as any)?.generationConfig?.responseModalities,
+            ) && (base as any).generationConfig.responseModalities.length > 0
+              ? (base as any).generationConfig.responseModalities
+              : ['IMAGE', 'TEXT'],
         },
       };
       return mergeDeep(base, patch);
@@ -95,18 +151,29 @@ const builtinRules: ParameterRule[] = [
 ];
 
 export class ParameterPolicyEngine {
-  private static _builtin: ParameterRule[] = builtinRules.slice().sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  private static _builtin: ParameterRule[] = builtinRules
+    .slice()
+    .sort((a, b) => (a.priority || 0) - (b.priority || 0));
   // 预留用户自定义规则通道（后续可从存储加载）
   private static _userRules: ParameterRule[] = [];
 
   /** 注册/替换用户规则集合（可用于未来的设置界面） */
   static setUserRules(rules: ParameterRule[]): void {
-    ParameterPolicyEngine._userRules = (rules || []).slice().sort((a, b) => (a.priority || 0) - (b.priority || 0));
+    ParameterPolicyEngine._userRules = (rules || [])
+      .slice()
+      .sort((a, b) => (a.priority || 0) - (b.priority || 0));
   }
 
   /** 按 provider/model 依次应用匹配的规则，后匹配可覆盖先前注入项（通过优先级调控顺序） */
-  static apply(providerName: string, modelId: string, baseOptions: ParameterPatch = {}): ParameterPatch {
-    const allRules = [...ParameterPolicyEngine._builtin, ...ParameterPolicyEngine._userRules];
+  static apply(
+    providerName: string,
+    modelId: string,
+    baseOptions: ParameterPatch = {},
+  ): ParameterPatch {
+    const allRules = [
+      ...ParameterPolicyEngine._builtin,
+      ...ParameterPolicyEngine._userRules,
+    ];
     let merged: ParameterPatch = { ...(baseOptions || {}) };
     for (const rule of allRules) {
       const providerMode = rule.providerMode ?? 'relaxed';
@@ -117,10 +184,9 @@ export class ParameterPolicyEngine {
         : true;
       const matchModel = rule.model ? rule.model.test(modelId) : true;
       if (matchProvider && matchModel) {
-        merged = rule.apply(merged) || merged;
+        merged = rule.apply(merged, { providerName, modelId }) || merged;
       }
     }
     return merged;
   }
 }
-
