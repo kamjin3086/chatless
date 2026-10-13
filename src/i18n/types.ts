@@ -27,6 +27,18 @@ export type TranslationKey =
   | 'window.minimize'
   | 'window.maximize'
   | 'window.restore'
-  | 'window.close';
+  | 'window.close'
+  | 'modelParams.thinkingLevel'
+  | 'modelParams.thinkingLevel.help'
+  | 'modelParams.thinkingLevel.auto'
+  | 'modelParams.thinkingLevel.inherit'
+  | 'modelParams.thinkingLevel.suppress'
+  | 'modelParams.thinkingLevel.unverified'
+  | 'thinkingLevel.off'
+  | 'thinkingLevel.minimal'
+  | 'thinkingLevel.low'
+  | 'thinkingLevel.medium'
+  | 'thinkingLevel.high'
+  | 'thinkingLevel.xhigh';
 
 export type TranslationDict = Record<TranslationKey, string>;

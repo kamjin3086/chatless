@@ -28,6 +28,19 @@ const zhCN: TranslationDict = {
   'window.maximize': '最大化',
   'window.restore': '还原',
   'window.close': '关闭',
+  'modelParams.thinkingLevel': '思考等级',
+  'modelParams.thinkingLevel.help':
+    '告诉模型在回答前思考多少。保持“自动”则不下发任何参数，完全由模型决定；未收录的模型不会下发。',
+  'modelParams.thinkingLevel.auto': '自动（由模型决定）',
+  'modelParams.thinkingLevel.inherit': '继承模型设置',
+  'modelParams.thinkingLevel.suppress': '关闭：不下发思考等级',
+  'modelParams.thinkingLevel.unverified': '此模型未验证，不会下发思考等级',
+  'thinkingLevel.off': '不思考',
+  'thinkingLevel.minimal': '极简',
+  'thinkingLevel.low': '低',
+  'thinkingLevel.medium': '中',
+  'thinkingLevel.high': '高',
+  'thinkingLevel.xhigh': '极高',
 };
 
 export default zhCN;

@@ -1,4 +1,5 @@
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '@/lib/llm/outputBudget';
+import type { ThinkingLevel } from '@/lib/llm/thinkingLevels';
 
 export interface ModelParameters {
   // 启用/禁用控制（为每个基础参数提供可选开关）
@@ -16,9 +17,16 @@ export interface ModelParameters {
   enableFrequencyPenalty?: boolean;
   enablePresencePenalty?: boolean;
   enableStopSequences?: boolean;
-  enableThinking?: boolean;  // 控制思考模式（Ollama等支持）
+  enableThinking?: boolean; // 控制思考模式（Ollama等支持）
+  /**
+   * How much the model should think. `auto` sends nothing and leaves the choice to the
+   * model. It coexists with the `thinking` boolean on purpose: that one says whether the
+   * model thinks at all, this one says how much. Retiring the boolean is a later ticket.
+   */
+  enableThinkingLevel?: boolean;
+  thinkingLevel?: ThinkingLevel;
   enableStreaming?: boolean; // 控制流式响应
-  enableFormat?: boolean;    // 控制输出格式（Ollama等支持）
+  enableFormat?: boolean; // 控制输出格式（Ollama等支持）
 
   temperature: number;
   maxTokens: number;
@@ -38,9 +46,9 @@ export interface ModelParameters {
   frequencyPenalty: number;
   presencePenalty: number;
   stopSequences: string[];
-  thinking?: boolean;  // 是否启用思考（默认true）
+  thinking?: boolean; // 是否启用思考（默认true）
   streaming?: boolean; // 是否启用流式响应（默认true）
-  format?: string;     // 输出格式（如"json"）
+  format?: string; // 输出格式（如"json"）
   responseFormat?: 'none' | 'json' | 'schema'; // 响应格式控制
   responseFormatSchema?: string; // JSON Schema（当responseFormat为schema时）
   /** 可选：高级参数（将直接合并到 Provider 选项中），例如 Gemini 的 generationConfig */
@@ -65,8 +73,9 @@ export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
   enableFrequencyPenalty: false,
   enablePresencePenalty: false,
   enableStopSequences: false,
-  enableThinking: false,  // 默认不启用思考（避免不兼容的模型报错）
-  enableStreaming: true,  // 默认启用流式响应（大多数情况下需要实时输出）
+  enableThinking: false, // 默认不启用思考（避免不兼容的模型报错）
+  enableThinkingLevel: false, // no level sent by default: identical to the pre-level behaviour
+  enableStreaming: true, // 默认启用流式响应（大多数情况下需要实时输出）
   temperature: 0.7,
   maxTokens: DEFAULT_MAX_OUTPUT_TOKENS,
   topP: 1.0,
@@ -75,44 +84,69 @@ export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
   frequencyPenalty: 0.0,
   presencePenalty: 0.0,
   stopSequences: [],
-  thinking: true,  // 默认启用
+  thinking: true, // 默认启用
+  thinkingLevel: 'auto', // 默认不表态
   streaming: true, // 默认启用
   responseFormat: 'none', // 默认不限制格式
   responseFormatSchema: '',
-  advancedOptions: {}
+  advancedOptions: {},
 };
 
 export const MODEL_PARAMETER_LIMITS = {
-  temperature: { 
-    min: 0.0, max: 2.0, step: 0.1,
-    inputMin: 0.0, inputMax: 10.0
+  temperature: {
+    min: 0.0,
+    max: 2.0,
+    step: 0.1,
+    inputMin: 0.0,
+    inputMax: 10.0,
   },
-  maxTokens: { 
-    min: 1, max: 32768, step: 1,
-    inputMin: 1, inputMax: 1000000
+  maxTokens: {
+    min: 1,
+    max: 32768,
+    step: 1,
+    inputMin: 1,
+    inputMax: 1000000,
   },
   contextWindow: {
-    min: 2048, max: 2000000, step: 1024,
-    inputMin: 512, inputMax: 2000000
+    min: 2048,
+    max: 2000000,
+    step: 1024,
+    inputMin: 512,
+    inputMax: 2000000,
   },
-  topP: { 
-    min: 0.0, max: 1.0, step: 0.1,
-    inputMin: 0.0, inputMax: 1.0
+  topP: {
+    min: 0.0,
+    max: 1.0,
+    step: 0.1,
+    inputMin: 0.0,
+    inputMax: 1.0,
   },
-  topK: { 
-    min: 0, max: 200, step: 1,
-    inputMin: 0, inputMax: 10000
+  topK: {
+    min: 0,
+    max: 200,
+    step: 1,
+    inputMin: 0,
+    inputMax: 10000,
   },
-  minP: { 
-    min: 0.0, max: 1.0, step: 0.05,
-    inputMin: 0.0, inputMax: 1.0
+  minP: {
+    min: 0.0,
+    max: 1.0,
+    step: 0.05,
+    inputMin: 0.0,
+    inputMax: 1.0,
   },
-  frequencyPenalty: { 
-    min: -2.0, max: 2.0, step: 0.1,
-    inputMin: -10.0, inputMax: 10.0
+  frequencyPenalty: {
+    min: -2.0,
+    max: 2.0,
+    step: 0.1,
+    inputMin: -10.0,
+    inputMax: 10.0,
   },
-  presencePenalty: { 
-    min: -2.0, max: 2.0, step: 0.1,
-    inputMin: -10.0, inputMax: 10.0
-  }
-}; 
+  presencePenalty: {
+    min: -2.0,
+    max: 2.0,
+    step: 0.1,
+    inputMin: -10.0,
+    inputMax: 10.0,
+  },
+};

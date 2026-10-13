@@ -5,14 +5,15 @@ import { toast } from '@/components/ui/sonner';
 import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { useChatStore } from "@/store/chatStore";
+import { useChatStore } from '@/store/chatStore';
 import { type Message as LlmMessage } from '@/lib/llm';
 import { HistoryBuilder } from '@/lib/chat/HistoryBuilder';
-import type { Message, Conversation } from "@/types/chat";
+import type { Message, Conversation } from '@/types/chat';
 import { exportConversationMarkdown } from '@/lib/chat/actions/download';
 // import { retryAssistantMessage } from '@/lib/chat/actions/retry';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { composeChatOptions } from '@/lib/chat/OptionComposer';
+import { dropInheritedThatSessionDisabled } from '@/lib/chat/sessionParameterMerge';
 import { usePromptStore } from '@/store/promptStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { performanceMonitor } from '@/lib/performance/PerformanceMonitor';
@@ -28,48 +29,62 @@ import { getProcessSandbox } from '@/lib/skills/sandbox';
 
 // type StoreMessage = any;
 
-export const useChatActions = (selectedModelId: string | null, currentProviderName: string, sessionParameters?: any) => {
+export const useChatActions = (
+  selectedModelId: string | null,
+  currentProviderName: string,
+  sessionParameters?: any,
+) => {
   const router = useRouter();
-  const currentConversationId = useChatStore((state) => state.currentConversationId);
-  const currentConversation = useChatStore((state) => 
-    currentConversationId ? state.conversations.find(c => c.id === currentConversationId) : null
+  const currentConversationId = useChatStore(
+    (state) => state.currentConversationId,
   );
-  
+  const currentConversation = useChatStore((state) =>
+    currentConversationId
+      ? state.conversations.find((c) => c.id === currentConversationId)
+      : null,
+  );
+
   const addMessage = useChatStore((state) => state.addMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
   const deleteMessage = useChatStore((state) => state.deleteMessage);
   const updateConversation = useChatStore((state) => state.updateConversation);
-  const setInputDraft = useChatStore((s)=>s.setInputDraft);
-  const notifyStreamStart = useChatStore((s)=>s.notifyStreamStart);
+  const setInputDraft = useChatStore((s) => s.setInputDraft);
+  const notifyStreamStart = useChatStore((s) => s.notifyStreamStart);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const createConversation = useChatStore((state) => state.createConversation);
-  const setLastUsedModelForChat = useChatStore((state) => state.setLastUsedModelForChat);
-  
+  const setLastUsedModelForChat = useChatStore(
+    (state) => state.setLastUsedModelForChat,
+  );
+
   // 添加滚动到底部的回调函数
   const scrollToBottomRef = useRef<(() => void) | null>(null);
-  
+
   // 设置滚动回调函数
   const setScrollToBottomCallback = useCallback((callback: () => void) => {
     scrollToBottomRef.current = callback;
   }, []);
-  
+
   const isGenerating = useChatStore((state) => {
-    const current = state.conversations.find(c => c.id === state.currentConversationId);
-    return current?.messages?.some(m => m.status === 'loading') ?? false;
+    const current = state.conversations.find(
+      (c) => c.id === state.currentConversationId,
+    );
+    return current?.messages?.some((m) => m.status === 'loading') ?? false;
   });
 
   // MCP 工具递归计数已迁移到 streamToolMiddleware
 
   const [isStale, setIsStale] = useState(false);
   const lastActivityTimeRef = useRef<number>(Date.now());
-  
+
   // 运行状态来自 AgentRunState；UI 不再扫描工具卡片推断是否仍在执行。
   const agentRunActive = useChatStore((state) => {
     const cid = state.currentConversationId;
     if (!cid) return false;
     const conv = state.conversations.find((c) => c.id === cid);
-    const assistant = [...(conv?.messages || [])].reverse().find((m) => m.role === 'assistant');
+    const assistant = [...(conv?.messages || [])]
+      .reverse()
+      .find((m) => m.role === 'assistant');
     return Boolean(assistant?.id && state.agentRuns?.[assistant.id]?.running);
   });
 
@@ -80,7 +95,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   const pendingContentRef = useRef<string>('');
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [tokenCount, setTokenCount] = useState(0);
-  
+
   // 批量更新机制
   const batchUpdateRef = useRef<{
     tokenCount: number;
@@ -89,106 +104,121 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
   }>({
     tokenCount: 0,
     lastUpdateTime: 0,
-    pendingUpdate: false
+    pendingUpdate: false,
   });
-  
+
   const idleWatchRef = useRef<IdleGenerationWatchHandle | null>(null);
-  
+
   // 添加内容变化检测变量
   const lastSavedContentRef = useRef('');
-  
+
   // 防抖状态引用移除，保持最小必要状态
   const debouncedTokenUpdateRef = useRef<NodeJS.Timeout | null>(null);
 
   // stop 二次确认：第一次 stop 停生成/链路；短时间内再次 stop 则尝试强制取消正在运行的工具
-  const [stopGenerationHint, setStopGenerationHint] = useState<string | null>(null);
+  const [stopGenerationHint, setStopGenerationHint] = useState<string | null>(
+    null,
+  );
 
-  const navigateToSettings = useCallback((tab: string = 'localModels') => {
-    router.push(`/settings?tab=${tab}`);
-  }, [router]);
+  const navigateToSettings = useCallback(
+    (tab: string = 'localModels') => {
+      router.push(`/settings?tab=${tab}`);
+    },
+    [router],
+  );
 
   // 将错误信息压缩为短文本，避免右下角提示过长
   // onError is handled by StreamOrchestrator; this helper remains for retry
   // and provider setup paths.
   // const _briefErrorText = useCallback((err: unknown, maxLen: number = 180): string => trimToastDescription(err, maxLen) || '', []);
 
-  const checkApiKeyValidity = useCallback(async (providerName: string, modelId: string): Promise<boolean> => {
-    try {
-      // 获取provider配置信息
-      const { providerRepository } = await import('@/lib/provider/ProviderRepository');
-      const providers = await providerRepository.getAll();
-      const provider = providers.find(p => p.name === providerName);
-      
-      if (!provider) {
-        console.warn(`Provider ${providerName} not found`);
+  const checkApiKeyValidity = useCallback(
+    async (providerName: string, modelId: string): Promise<boolean> => {
+      try {
+        // 获取provider配置信息
+        const { providerRepository } = await import(
+          '@/lib/provider/ProviderRepository'
+        );
+        const providers = await providerRepository.getAll();
+        const provider = providers.find((p) => p.name === providerName);
+
+        if (!provider) {
+          console.warn(`Provider ${providerName} not found`);
+          return false;
+        }
+
+        // 如果provider不需要密钥，直接返回true
+        if (!provider.requiresKey) {
+          return true;
+        }
+
+        // 如果provider需要密钥，检查是否有有效的API密钥
+        const { KeyManager } = await import('@/lib/llm/KeyManager');
+
+        // 先检查模型级别的API密钥
+        const modelKey = await KeyManager.getModelKey(providerName, modelId);
+        if (modelKey && modelKey.trim()) {
+          return true;
+        }
+
+        // 再检查provider级别的API密钥
+        const providerKey = await KeyManager.getProviderKey(providerName);
+        if (providerKey && providerKey.trim()) {
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error('Error checking API key validity:', error);
         return false;
       }
-      
-      // 如果provider不需要密钥，直接返回true
-      if (!provider.requiresKey) {
-        return true;
-      }
-      
-      // 如果provider需要密钥，检查是否有有效的API密钥
-      const { KeyManager } = await import('@/lib/llm/KeyManager');
-      
-      // 先检查模型级别的API密钥
-      const modelKey = await KeyManager.getModelKey(providerName, modelId);
-      if (modelKey && modelKey.trim()) {
-        return true;
-      }
-      
-      // 再检查provider级别的API密钥
-      const providerKey = await KeyManager.getProviderKey(providerName);
-      if (providerKey && providerKey.trim()) {
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error checking API key validity:', error);
-      return false;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // 优化的批量更新函数
-  const batchUpdateMessage = useCallback((messageId: string, content: string, thinking_start_time: number) => {
-    // 立即更新UI状态，保证响应性
-    currentContentRef.current = content;
-    pendingContentRef.current = content;
-    
-    // 增加token计数
-    batchUpdateRef.current.tokenCount++;
-    
-    // 调试日志移除以减少控制台噪音
-    
-    // 判断是否需要更新数据库
-    const shouldUpdate = 
-      batchUpdateRef.current.tokenCount >= 10 || // 每10个token更新一次
-      Date.now() - batchUpdateRef.current.lastUpdateTime >= 2000; // 或每2秒更新一次
-    
-    if (shouldUpdate && !batchUpdateRef.current.pendingUpdate) {
-      batchUpdateRef.current.pendingUpdate = true;
-      batchUpdateRef.current.lastUpdateTime = Date.now();
-      
-      // 异步更新数据库
-      void updateMessage(messageId, {
-        content: content,
-        thinking_start_time: thinking_start_time,
-      }).then(() => {
-        lastSavedContentRef.current = content;
-        batchUpdateRef.current.tokenCount = 0;
-        batchUpdateRef.current.pendingUpdate = false;
-      }).catch((_error) => {
-        // 静默失败，避免打断流
-        batchUpdateRef.current.pendingUpdate = false;
-      });
-    } else if (shouldUpdate && batchUpdateRef.current.pendingUpdate) {
-      // 跳过：已有更新在进行中
-    } else {
-      // 跳过：未满足触发条件
-    }
-  }, [updateMessage]);
+  const batchUpdateMessage = useCallback(
+    (messageId: string, content: string, thinking_start_time: number) => {
+      // 立即更新UI状态，保证响应性
+      currentContentRef.current = content;
+      pendingContentRef.current = content;
+
+      // 增加token计数
+      batchUpdateRef.current.tokenCount++;
+
+      // 调试日志移除以减少控制台噪音
+
+      // 判断是否需要更新数据库
+      const shouldUpdate =
+        batchUpdateRef.current.tokenCount >= 10 || // 每10个token更新一次
+        Date.now() - batchUpdateRef.current.lastUpdateTime >= 2000; // 或每2秒更新一次
+
+      if (shouldUpdate && !batchUpdateRef.current.pendingUpdate) {
+        batchUpdateRef.current.pendingUpdate = true;
+        batchUpdateRef.current.lastUpdateTime = Date.now();
+
+        // 异步更新数据库
+        void updateMessage(messageId, {
+          content: content,
+          thinking_start_time: thinking_start_time,
+        })
+          .then(() => {
+            lastSavedContentRef.current = content;
+            batchUpdateRef.current.tokenCount = 0;
+            batchUpdateRef.current.pendingUpdate = false;
+          })
+          .catch((_error) => {
+            // 静默失败，避免打断流
+            batchUpdateRef.current.pendingUpdate = false;
+          });
+      } else if (shouldUpdate && batchUpdateRef.current.pendingUpdate) {
+        // 跳过：已有更新在进行中
+      } else {
+        // 跳过：未满足触发条件
+      }
+    },
+    [updateMessage],
+  );
 
   // 已移除未使用的防抖函数，避免无意义的闭包与告警
 
@@ -214,7 +244,7 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
 
   /**
    * 构建发送给LLM的消息历史
-   * 
+   *
    * @param conversationId 会话ID
    * @param messages 消息列表
    * @param userContent 用户当前输入的内容
@@ -223,349 +253,422 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
    * @param options 可选参数
    * @returns 构建好的历史消息数组
    */
-  const buildLlmHistory = useCallback(async (
-    conversationId: string,
-    messages: Message[],
-    userContent: string,
-    provider?: string,
-    model?: string,
-    options?: {
-      images?: string[];
-      contextData?: string;
-      excludeMessagesAfterIndex?: number; // 用于重试时排除后续消息
-    }
-  ): Promise<LlmMessage[]> => {
-    const hb = new HistoryBuilder();
-    
-    // No system text is added here.  The prompt composer owns the single system
-    // message (time, user prompt, environment, capabilities), so the history
-    // stays free of duplicated or per-turn system blocks.
-    //
-    // Web search is a native tool in the unified Agent runtime: no hidden
-    // pre-search happens here either, so the model stays in charge.
-    
-    // 3. 处理历史消息
-    if (messages && messages.length > 0) {
-      // 如果指定了excludeMessagesAfterIndex，只取该索引之前的消息
-      const messagesToUse = options?.excludeMessagesAfterIndex !== undefined
-        ? messages.slice(0, options.excludeMessagesAfterIndex)
-        : messages;
-      
-      // 对于有版本的消息，只使用每个版本组的最新版本
-      const { getLatestVersionMessages } = await import('@/lib/chat/MessageVersionHelper');
-      const latestVersionMessages = getLatestVersionMessages(messagesToUse);
-      
-      hb.addMany(latestVersionMessages
-        .filter((msg: any) => msg.role === 'user' || msg.role === 'assistant')
-        .map((msg: any) => ({
-          role: msg.role,
-          content: msg.content || '',
-          images: msg.images,
-          contextData: msg.context_data
-        })) as any);
-    }
-    
-    // 4. 添加当前用户输入
-    hb.addUser(userContent, options?.images, options?.contextData);
-    
-    return hb.take();
-  }, []);
+  const buildLlmHistory = useCallback(
+    async (
+      conversationId: string,
+      messages: Message[],
+      userContent: string,
+      provider?: string,
+      model?: string,
+      options?: {
+        images?: string[];
+        contextData?: string;
+        excludeMessagesAfterIndex?: number; // 用于重试时排除后续消息
+      },
+    ): Promise<LlmMessage[]> => {
+      const hb = new HistoryBuilder();
+
+      // No system text is added here.  The prompt composer owns the single system
+      // message (time, user prompt, environment, capabilities), so the history
+      // stays free of duplicated or per-turn system blocks.
+      //
+      // Web search is a native tool in the unified Agent runtime: no hidden
+      // pre-search happens here either, so the model stays in charge.
+
+      // 3. 处理历史消息
+      if (messages && messages.length > 0) {
+        // 如果指定了excludeMessagesAfterIndex，只取该索引之前的消息
+        const messagesToUse =
+          options?.excludeMessagesAfterIndex !== undefined
+            ? messages.slice(0, options.excludeMessagesAfterIndex)
+            : messages;
+
+        // 对于有版本的消息，只使用每个版本组的最新版本
+        const { getLatestVersionMessages } = await import(
+          '@/lib/chat/MessageVersionHelper'
+        );
+        const latestVersionMessages = getLatestVersionMessages(messagesToUse);
+
+        hb.addMany(
+          latestVersionMessages
+            .filter(
+              (msg: any) => msg.role === 'user' || msg.role === 'assistant',
+            )
+            .map((msg: any) => ({
+              role: msg.role,
+              content: msg.content || '',
+              images: msg.images,
+              contextData: msg.context_data,
+            })) as any,
+        );
+      }
+
+      // 4. 添加当前用户输入
+      hb.addUser(userContent, options?.images, options?.contextData);
+
+      return hb.take();
+    },
+    [],
+  );
 
   const stopGenerationIdleWatch = useCallback(() => {
     idleWatchRef.current?.stop();
     idleWatchRef.current = null;
   }, []);
 
-  const handleSendMessage = useCallback(async (
-    content: string, 
-    documentData?: { 
-      documentReference: { 
-        fileName: string; 
-        fileType: string; 
-        fileSize: number; 
-        summary: string 
-      }; 
-      contextData: string 
-      sourceContent?: string
-      sourceBytes?: Uint8Array
-    },
-    knowledgeBase?: { id: string; name: string },
-    options?: { conversation?: Conversation, conversationId?: string, images?: string[], planOnly?: boolean }
-  ) => {
-    // 运行中输入是当前任务的补充，而不是启动竞争的第二个循环。
-    const steeringConversationId = options?.conversationId || currentConversationId;
-    if (steeringConversationId) {
-      const state = useChatStore.getState();
-      const activeConversation = state.conversations.find((c) => c.id === steeringConversationId);
-      const activeRunId = Object.entries(state.agentRuns || {})
-        .find(([, run]) => run.running && run.conversationId === steeringConversationId)?.[0];
-      const activeAssistant = activeRunId
-        ? { id: activeRunId }
-        : [...(activeConversation?.messages || [])]
-          .reverse()
-          .find((message: any) => message?.role === 'assistant' && message?.status === 'loading');
-      const steeringContent = documentData?.contextData
-        ? `${content.trim()}\n\n[补充资料]\n${documentData.contextData.slice(0, 12000)}`.trim()
-        : content;
+  const handleSendMessage = useCallback(
+    async (
+      content: string,
+      documentData?: {
+        documentReference: {
+          fileName: string;
+          fileType: string;
+          fileSize: number;
+          summary: string;
+        };
+        contextData: string;
+        sourceContent?: string;
+        sourceBytes?: Uint8Array;
+      },
+      knowledgeBase?: { id: string; name: string },
+      options?: {
+        conversation?: Conversation;
+        conversationId?: string;
+        images?: string[];
+        planOnly?: boolean;
+      },
+    ) => {
+      // 运行中输入是当前任务的补充，而不是启动竞争的第二个循环。
+      const steeringConversationId =
+        options?.conversationId || currentConversationId;
+      if (steeringConversationId) {
+        const state = useChatStore.getState();
+        const activeConversation = state.conversations.find(
+          (c) => c.id === steeringConversationId,
+        );
+        const activeRunId = Object.entries(state.agentRuns || {}).find(
+          ([, run]) =>
+            run.running && run.conversationId === steeringConversationId,
+        )?.[0];
+        const activeAssistant = activeRunId
+          ? { id: activeRunId }
+          : [...(activeConversation?.messages || [])]
+              .reverse()
+              .find(
+                (message: any) =>
+                  message?.role === 'assistant' &&
+                  message?.status === 'loading',
+              );
+        const steeringContent = documentData?.contextData
+          ? `${content.trim()}\n\n[补充资料]\n${documentData.contextData.slice(0, 12000)}`.trim()
+          : content;
+        let attachmentDocumentIds: string[] | undefined;
+        if (activeAssistant?.id && documentData?.sourceBytes?.length) {
+          const { attachDocumentToConversation } = await import(
+            '@/lib/documents/conversationDocumentService'
+          );
+          const attached = await attachDocumentToConversation({
+            conversationId: steeringConversationId,
+            name: documentData.documentReference.fileName,
+            bytes: documentData.sourceBytes,
+          });
+          attachmentDocumentIds = [attached.documentId];
+        }
+        if (
+          activeAssistant?.id &&
+          (await AgentLoopRunner.steer(activeAssistant.id, {
+            text: steeringContent,
+            images: options?.images,
+            attachmentDocumentIds,
+          }))
+        ) {
+          toast.info('补充已排队', {
+            description: '当前步骤完成后交给模型处理。',
+          });
+          return;
+        }
+      }
+
+      const modelToUse = selectedModelId;
+      if (!modelToUse) {
+        toast.error('请先选择一个AI模型', {
+          description: '点击此处前往设置页面选择模型',
+          action: {
+            label: '前往设置',
+            onClick: () => navigateToSettings('localModels'),
+          },
+        });
+        return;
+      }
+
+      if (!currentProviderName) {
+        toast.error('模型提供商信息丢失', {
+          description: '无法确定当前模型所属的提供商，请重新选择模型。',
+        });
+        return;
+      }
+
+      // —— 统一计算本次会话应当使用的 Provider ——
+      let effectiveProvider = currentProviderName;
+      try {
+        const { specializedStorage } = await import('@/lib/storage');
+        const lastPair =
+          await specializedStorage.models.getLastSelectedModelPair();
+        if (lastPair && lastPair.modelId === modelToUse && lastPair.provider) {
+          effectiveProvider = lastPair.provider;
+        }
+      } catch {
+        /* ignore, fallback to currentProviderName */
+      }
+
+      const apiKeyValid = await checkApiKeyValidity(
+        effectiveProvider,
+        modelToUse,
+      );
+      if (!apiKeyValid) {
+        toast.error('API密钥无效', {
+          description: '请前往设置页面配置有效的API密钥',
+          action: {
+            label: '前往设置',
+            onClick: () => navigateToSettings('localModels'),
+          },
+        });
+        return;
+      }
+
+      // 重置流式更新状态（仅内部缓存）。tokenCount 在 onStart 开始流时再置零，避免提前清零影响可视化
+      currentContentRef.current = '';
+      pendingContentRef.current = '';
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+
+      // 重置批量更新状态
+      batchUpdateRef.current = {
+        tokenCount: 0,
+        lastUpdateTime: 0,
+        pendingUpdate: false,
+      };
+
+      let conversationId = options?.conversationId || currentConversationId;
+
+      // const isCreatingNewConversation = !conversationId;
+      if (!conversationId) {
+        try {
+          conversationId = await createConversation(
+            `新对话 ${new Date().toLocaleTimeString()}`,
+            modelToUse,
+            effectiveProvider,
+          );
+        } catch {
+          toast.error('创建对话失败', {
+            description: '无法创建新的对话，请重试。',
+          });
+          return;
+        }
+      }
+
+      const finalConversationId = conversationId;
+
+      if (currentConversation?.model_id !== modelToUse && finalConversationId) {
+        void updateConversation(finalConversationId, { model_id: modelToUse });
+      }
+
+      void setLastUsedModelForChat(finalConversationId, modelToUse);
+
+      const now = Date.now();
+      const userMessageId = uuidv4();
+      const newMessage: Message = {
+        id: userMessageId,
+        conversation_id: finalConversationId,
+        role: 'user',
+        content,
+        created_at: now,
+        updated_at: now,
+        status: 'sent',
+        model: modelToUse,
+        document_reference: documentData?.documentReference,
+        context_data: documentData?.contextData,
+        knowledge_base_reference: knowledgeBase,
+        images: options?.images,
+      };
       let attachmentDocumentIds: string[] | undefined;
-      if (activeAssistant?.id && documentData?.sourceBytes?.length) {
-        const { attachDocumentToConversation } = await import('@/lib/documents/conversationDocumentService');
+      if (documentData?.sourceBytes?.length) {
+        const { attachDocumentToConversation } = await import(
+          '@/lib/documents/conversationDocumentService'
+        );
         const attached = await attachDocumentToConversation({
-          conversationId: steeringConversationId,
+          conversationId: finalConversationId,
           name: documentData.documentReference.fileName,
           bytes: documentData.sourceBytes,
         });
         attachmentDocumentIds = [attached.documentId];
       }
-      if (activeAssistant?.id && await AgentLoopRunner.steer(activeAssistant.id, {
-        text: steeringContent,
-        images: options?.images,
-        attachmentDocumentIds,
-      })) {
-        toast.info('补充已排队', { description: '当前步骤完成后交给模型处理。' });
-        return;
+      await addMessage(newMessage);
+
+      // 标题生成改为在首次 AI 回复完成后触发，避免并发与限流压力。
+
+      // 发送消息后立即滚动到底部
+      if (scrollToBottomRef.current) {
+        // 使用 setTimeout 确保 DOM 更新完成后再滚动
+        setTimeout(() => {
+          scrollToBottomRef.current?.();
+        }, 0);
+
+        // 额外确保滚动到底部，防止某些情况下滚动失败
+        setTimeout(() => {
+          scrollToBottomRef.current?.();
+        }, 100);
       }
-    }
 
-    const modelToUse = selectedModelId;
-    if (!modelToUse) {
-      toast.error('请先选择一个AI模型', {
-        description: '点击此处前往设置页面选择模型',
-        action: {
-          label: '前往设置',
-          onClick: () => navigateToSettings('localModels')
-        }
-      });
-      return;
-    }
-    
-    if (!currentProviderName) {
-      toast.error('模型提供商信息丢失', {
-        description: '无法确定当前模型所属的提供商，请重新选择模型。',
-      });
-      return;
-    }
+      const thinking_start_time = Date.now();
+      const assistantMessageId = uuidv4();
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        conversation_id: finalConversationId,
+        role: 'assistant',
+        content: '',
+        created_at: now,
+        updated_at: now,
+        status: 'loading',
+        model: modelToUse,
+        thinking_start_time: thinking_start_time,
+      };
+      await addMessage(assistantMessage);
 
-    // —— 统一计算本次会话应当使用的 Provider ——
-    let effectiveProvider = currentProviderName;
-    try {
-      const { specializedStorage } = await import('@/lib/storage');
-      const lastPair = await specializedStorage.models.getLastSelectedModelPair();
-      if (lastPair && lastPair.modelId === modelToUse && lastPair.provider) {
-        effectiveProvider = lastPair.provider;
-      }
-    } catch { /* ignore, fallback to currentProviderName */ }
-
-    const apiKeyValid = await checkApiKeyValidity(effectiveProvider, modelToUse);
-    if (!apiKeyValid) {
-      toast.error('API密钥无效', {
-        description: '请前往设置页面配置有效的API密钥',
-        action: {
-          label: '前往设置',
-          onClick: () => navigateToSettings('localModels')
-        }
-      });
-      return;
-    }
-
-    // 重置流式更新状态（仅内部缓存）。tokenCount 在 onStart 开始流时再置零，避免提前清零影响可视化
-    currentContentRef.current = '';
-    pendingContentRef.current = '';
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-    }
-    
-    // 重置批量更新状态
-    batchUpdateRef.current = {
-      tokenCount: 0,
-      lastUpdateTime: 0,
-      pendingUpdate: false
-    };
-
-    let conversationId = options?.conversationId || currentConversationId;
-    
-    // const isCreatingNewConversation = !conversationId;
-    if (!conversationId) {
+      // 尝试在 Provider 串起流之前，做一次“必需条件”的同步校验，例如 API Key
       try {
-        conversationId = await createConversation(`新对话 ${new Date().toLocaleTimeString()}`, modelToUse, effectiveProvider);
-      } catch {
-        toast.error('创建对话失败', { description: '无法创建新的对话，请重试。' });
-        return;
-      }
-    }
-
-    const finalConversationId = conversationId;
-    
-    if (currentConversation?.model_id !== modelToUse && finalConversationId) {
-      void updateConversation(finalConversationId, { model_id: modelToUse });
-    }
-
-    void setLastUsedModelForChat(finalConversationId, modelToUse);
-
-    const now = Date.now();
-    const userMessageId = uuidv4();
-    const newMessage: Message = {
-      id: userMessageId,
-      conversation_id: finalConversationId,
-      role: 'user',
-      content,
-      created_at: now,
-      updated_at: now,
-      status: 'sent',
-      model: modelToUse,
-      document_reference: documentData?.documentReference,
-      context_data: documentData?.contextData,
-      knowledge_base_reference: knowledgeBase,
-      images: options?.images
-    };
-    let attachmentDocumentIds: string[] | undefined;
-    if (documentData?.sourceBytes?.length) {
-      const { attachDocumentToConversation } = await import('@/lib/documents/conversationDocumentService');
-      const attached = await attachDocumentToConversation({
-        conversationId: finalConversationId,
-        name: documentData.documentReference.fileName,
-        bytes: documentData.sourceBytes,
-      });
-      attachmentDocumentIds = [attached.documentId];
-    }
-    await addMessage(newMessage);
-
-    // 标题生成改为在首次 AI 回复完成后触发，避免并发与限流压力。
-
-    // 发送消息后立即滚动到底部
-    if (scrollToBottomRef.current) {
-      // 使用 setTimeout 确保 DOM 更新完成后再滚动
-      setTimeout(() => {
-        scrollToBottomRef.current?.();
-      }, 0);
-      
-      // 额外确保滚动到底部，防止某些情况下滚动失败
-      setTimeout(() => {
-        scrollToBottomRef.current?.();
-      }, 100);
-    }
-
-    const thinking_start_time = Date.now();
-    const assistantMessageId = uuidv4();
-    const assistantMessage: Message = {
-      id: assistantMessageId,
-      conversation_id: finalConversationId,
-      role: 'assistant',
-      content: '',
-      created_at: now,
-      updated_at: now,
-      status: 'loading',
-      model: modelToUse,
-      thinking_start_time: thinking_start_time,
-    };
-    await addMessage(assistantMessage);
-
-    // 尝试在 Provider 串起流之前，做一次“必需条件”的同步校验，例如 API Key
-    try {
-      const ok = await checkApiKeyValidity(effectiveProvider, modelToUse);
-      if (!ok) {
-        // 模拟 onError 早失败：删除AI占位与用户消息并回填
-        void deleteMessage(assistantMessageId);
-        void deleteMessage(userMessageId);
-        try { if (finalConversationId) setInputDraft(finalConversationId, content); } catch { /* noop */ }
-        toast.error('未配置 API 密钥', { description: '请在设置中配置有效的密钥后重试。' });
-        return;
-      }
-    } catch { /* 若校验不可用则继续，让 Provider 触发 onError */ }
-
-    if (finalConversationId) {
-      try {
-        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-        if (knowledgeBase) {
-          useConversationAttachmentStore.getState().setKnowledgeBase(finalConversationId, {
-            id: knowledgeBase.id,
-            name: knowledgeBase.name,
+        const ok = await checkApiKeyValidity(effectiveProvider, modelToUse);
+        if (!ok) {
+          // 模拟 onError 早失败：删除AI占位与用户消息并回填
+          void deleteMessage(assistantMessageId);
+          void deleteMessage(userMessageId);
+          try {
+            if (finalConversationId)
+              setInputDraft(finalConversationId, content);
+          } catch {
+            /* noop */
+          }
+          toast.error('未配置 API 密钥', {
+            description: '请在设置中配置有效的密钥后重试。',
           });
-        } else {
-          useConversationAttachmentStore.getState().clearKnowledgeBase(finalConversationId);
+          return;
         }
       } catch {
-        /* noop */
+        /* 若校验不可用则继续，让 Provider 触发 onError */
       }
-    }
 
-    // 构建历史消息（含系统提示词 + MCP 上下文【混合模式】）
-    const historyForLlm = await buildLlmHistory(
-      finalConversationId,
-      currentConversation?.messages || [],
-      content,
-      effectiveProvider,
-      modelToUse,
-      {
-        images: options?.images,
-        contextData: documentData?.contextData,
+      if (finalConversationId) {
+        try {
+          const { useConversationAttachmentStore } = await import(
+            '@/store/conversationAttachmentStore'
+          );
+          if (knowledgeBase) {
+            useConversationAttachmentStore
+              .getState()
+              .setKnowledgeBase(finalConversationId, {
+                id: knowledgeBase.id,
+                name: knowledgeBase.name,
+              });
+          } else {
+            useConversationAttachmentStore
+              .getState()
+              .clearKnowledgeBase(finalConversationId);
+          }
+        } catch {
+          /* noop */
+        }
       }
-    );
 
-    // 调试信息已移除，避免控制台噪音
+      // 构建历史消息（含系统提示词 + MCP 上下文【混合模式】）
+      const historyForLlm = await buildLlmHistory(
+        finalConversationId,
+        currentConversation?.messages || [],
+        content,
+        effectiveProvider,
+        modelToUse,
+        {
+          images: options?.images,
+          contextData: documentData?.contextData,
+        },
+      );
 
-    let sendErrorNotified = false;
+      // 调试信息已移除，避免控制台噪音
 
-    if (modelToUse) {
-      // 参数优先级：会话参数（可覆盖/可显式禁用） > 模型级参数 > 系统默认
-      let baseOptions: Record<string, any> = {};
+      let sendErrorNotified = false;
 
-      try {
-        // 1) 取模型级参数并转换为通用聊天选项
-        const modelParams = await ModelParametersService.getModelParameters(effectiveProvider, modelToUse);
-        const modelOpts = ModelParametersService.convertToChatOptions(modelParams);
+      if (modelToUse) {
+        // 参数优先级：会话参数（可覆盖/可显式禁用） > 模型级参数 > 系统默认
+        let baseOptions: Record<string, any> = {};
 
-        // 2) 取会话级参数（可能为空），转换为聊天选项
-        let sessionOpts: Record<string, any> = {};
-        if (sessionParameters) {
-          sessionOpts = ModelParametersService.convertToChatOptions(sessionParameters);
-        }
+        try {
+          // 1) 取模型级参数并转换为通用聊天选项
+          const modelParams = await ModelParametersService.getModelParameters(
+            effectiveProvider,
+            modelToUse,
+          );
+          const modelOpts =
+            ModelParametersService.convertToChatOptions(modelParams);
 
-        // 3) 处理“显式禁用”的会话级开关：
-        //    若用户在会话级将某项 enableX = false，则需要从继承的模型参数里删除对应项
-        const filteredModelOpts: Record<string, any> = { ...modelOpts };
-        const maybeDelete = (flag: boolean | undefined, key: string) => {
-          if (flag === false && key in filteredModelOpts) delete filteredModelOpts[key];
-        };
-        if (sessionParameters) {
-          const sp: any = sessionParameters;
-          maybeDelete(sp.enableTemperature, 'temperature');
-          maybeDelete(sp.enableMaxTokens, 'maxTokens');
-          maybeDelete(sp.enableTopP, 'topP');
-          maybeDelete(sp.enableTopK, 'topK');
-          maybeDelete(sp.enableMinP, 'minP');
-          maybeDelete(sp.enableFrequencyPenalty, 'frequencyPenalty');
-          maybeDelete(sp.enablePresencePenalty, 'presencePenalty');
-          // Stop 序列在 convertToChatOptions 中映射为 stop
-          maybeDelete(sp.enableStopSequences, 'stop');
-        }
+          // 2) 取会话级参数（可能为空），转换为聊天选项
+          let sessionOpts: Record<string, any> = {};
+          if (sessionParameters) {
+            sessionOpts =
+              ModelParametersService.convertToChatOptions(sessionParameters);
+          }
 
-        // 4) 合并，确保会话级覆盖模型级
-        baseOptions = { ...filteredModelOpts, ...sessionOpts };
-        // 输出预算：关闭 / 手动 / 自动三态在这里收敛，窗口取用户填写与服务商上报的较小值。
-        baseOptions = ModelParametersService.applyOutputBudget(
-          baseOptions,
-          ModelParametersService.resolveBudgetParameters(modelParams, sessionParameters),
-        );
+          // 3) A conversation may explicitly switch off something the model default set;
+          //    the shared table in sessionParameterMerge decides what that removes.
+          const filteredModelOpts: Record<string, any> =
+            dropInheritedThatSessionDisabled(modelOpts, sessionParameters);
 
-        const composed = await composeChatOptions(effectiveProvider, modelToUse, baseOptions, currentConversationId || null, content);
+          // 4) 合并，确保会话级覆盖模型级
+          baseOptions = { ...filteredModelOpts, ...sessionOpts };
+          // 输出预算：关闭 / 手动 / 自动三态在这里收敛，窗口取用户填写与服务商上报的较小值。
+          baseOptions = ModelParametersService.applyOutputBudget(
+            baseOptions,
+            ModelParametersService.resolveBudgetParameters(
+              modelParams,
+              sessionParameters,
+            ),
+          );
 
-        try { notifyStreamStart(finalConversationId); } catch { /* noop */ }
-        await AgentLoopRunner.run({
+          const composed = await composeChatOptions(
+            effectiveProvider,
+            modelToUse,
+            baseOptions,
+            currentConversationId || null,
+            content,
+          );
+
+          try {
+            notifyStreamStart(finalConversationId);
+          } catch {
+            /* noop */
+          }
+          await AgentLoopRunner.run({
             assistantMessageId,
             conversationId: finalConversationId,
             provider: effectiveProvider,
             model: modelToUse,
             historyForLlm: historyForLlm as any,
             originalUserContent: content,
-            input: { text: content, images: options?.images, attachmentDocumentIds },
+            input: {
+              text: content,
+              images: options?.images,
+              attachmentDocumentIds,
+            },
             options: composed,
             planOnly: options?.planOnly,
             runtimeHooks: {
               onAgentStart: () => {
                 lastActivityTimeRef.current = Date.now();
                 setTokenCount(0);
-                batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
+                batchUpdateRef.current = {
+                  tokenCount: 0,
+                  lastUpdateTime: 0,
+                  pendingUpdate: false,
+                };
               },
               onStreamError: () => {
                 sendErrorNotified = true;
@@ -585,7 +688,11 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
                 }
 
                 const perfId = `onEvent_agentloop_${event?.type}`;
-                performanceMonitor.start(perfId, { type: event?.type, mode: 'agentloop', messageId: assistantMessageId });
+                performanceMonitor.start(perfId, {
+                  type: event?.type,
+                  mode: 'agentloop',
+                  messageId: assistantMessageId,
+                });
                 try {
                   // no-op：事件本体由 StreamOrchestrator 处理
                 } finally {
@@ -593,74 +700,120 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
                 }
               },
             },
-        });
-        return;
-
-      } catch (err) {
-        if (!sendErrorNotified) {
-          showSendErrorToast(err, { providerName: effectiveProvider });
+          });
+          return;
+        } catch (err) {
+          if (!sendErrorNotified) {
+            showSendErrorToast(err, { providerName: effectiveProvider });
+          }
+          const msg = err instanceof Error ? err.message : String(err);
+          void updateMessage(assistantMessageId, {
+            status: 'error',
+            content: `发送失败：${msg}`,
+          });
+          return;
         }
-        const msg = err instanceof Error ? err.message : String(err);
+      } else {
+        // 未选择模型
         void updateMessage(assistantMessageId, {
           status: 'error',
-          content: `发送失败：${msg}`,
+          content: '未选择模型',
+          thinking_duration: 0,
+        });
+        toast.error('未选择模型', {
+          description: '在发送消息前，请先在顶部选择一个AI模型。',
+        });
+      }
+    },
+    [
+      selectedModelId,
+      currentProviderName,
+      sessionParameters,
+      currentConversationId,
+      currentConversation,
+      createConversation,
+      updateConversation,
+      setLastUsedModelForChat,
+      addMessage,
+      updateMessage,
+      navigateToSettings,
+      checkApiKeyValidity,
+      batchUpdateMessage,
+    ],
+  );
+
+  const handleEmptyStatePromptClick = useCallback(
+    async (prompt: string) => {
+      if (!selectedModelId) {
+        toast.error('请先选择一个模型', {
+          description: '点击此处前往设置页面选择模型',
+          action: {
+            label: '前往设置',
+            onClick: () => navigateToSettings('localModels'),
+          },
         });
         return;
       }
-    } else {
-       // 未选择模型
-       void updateMessage(assistantMessageId, { status: 'error', content: "未选择模型", thinking_duration: 0 });
-       toast.error('未选择模型', { description: "在发送消息前，请先在顶部选择一个AI模型。" });
-    }
-  }, [selectedModelId, currentProviderName, sessionParameters, currentConversationId, currentConversation, createConversation, updateConversation, setLastUsedModelForChat, addMessage, updateMessage, navigateToSettings, checkApiKeyValidity, batchUpdateMessage]);
-  
-  const handleEmptyStatePromptClick = useCallback(async (prompt: string) => {
-    if (!selectedModelId) {
-      toast.error('请先选择一个模型', {
-        description: '点击此处前往设置页面选择模型',
-        action: { label: '前往设置', onClick: () => navigateToSettings('localModels') }
-      });
-      return;
-    }
-    const apiKeyValid = await checkApiKeyValidity(currentProviderName, selectedModelId);
-    if (!apiKeyValid) {
-      toast.error('API密钥无效', {
-        description: '请前往设置页面配置有效的API密钥',
-        action: { label: '前往设置', onClick: () => navigateToSettings('localModels') }
-      });
-      return;
-    }
-    await handleSendMessage(prompt);
-  }, [selectedModelId, currentProviderName, handleSendMessage, checkApiKeyValidity, navigateToSettings]);
+      const apiKeyValid = await checkApiKeyValidity(
+        currentProviderName,
+        selectedModelId,
+      );
+      if (!apiKeyValid) {
+        toast.error('API密钥无效', {
+          description: '请前往设置页面配置有效的API密钥',
+          action: {
+            label: '前往设置',
+            onClick: () => navigateToSettings('localModels'),
+          },
+        });
+        return;
+      }
+      await handleSendMessage(prompt);
+    },
+    [
+      selectedModelId,
+      currentProviderName,
+      handleSendMessage,
+      checkApiKeyValidity,
+      navigateToSettings,
+    ],
+  );
 
   const handleStopGeneration = useCallback(() => {
     setStopGenerationHint('正在停止生成…');
     stopGenerationIdleWatch();
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
-    if (debouncedTokenUpdateRef.current) clearTimeout(debouncedTokenUpdateRef.current);
-    
+    if (debouncedTokenUpdateRef.current)
+      clearTimeout(debouncedTokenUpdateRef.current);
+
     // 不清空 currentContentRef，保留已生成文本；也不重置 tokenCount，让用户看到该次统计
-    
+
     // 更新当前消息状态为已停止
     if (currentConversation?.messages) {
       const lastAssistantMessage = currentConversation.messages
         .filter((msg: Message) => msg.role === 'assistant')
         .pop();
-      
+
       if (lastAssistantMessage) {
         // 停止不仅要停 SSE，还要停止整个 agent loop（阻止后续 follow-up / tool 链路继续推进）
         try {
-          ToolCallCoordinator.getInstance().cancelMessage(lastAssistantMessage.id);
+          ToolCallCoordinator.getInstance().cancelMessage(
+            lastAssistantMessage.id,
+          );
         } catch {
           // ignore
         }
         try {
-          AgentLoopRunner.cancel({ assistantMessageId: lastAssistantMessage.id });
+          AgentLoopRunner.cancel({
+            assistantMessageId: lastAssistantMessage.id,
+          });
         } catch {
           // ignore
         }
         try {
-          useAuthorizationStore.getState().rejectAuthorizationsByMessageId(lastAssistantMessage.id);
+          useAuthorizationStore
+            .getState()
+            .rejectAuthorizationsByMessageId(lastAssistantMessage.id);
         } catch {
           // ignore
         }
@@ -668,10 +821,18 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         // 需求：点击停止后，把该次 agent 运行中的卡片都置为“已停止”，并 best-effort 取消执行
         try {
           const st = useChatStore.getState();
-          const conv = st.conversations.find((c) => c.id === currentConversationId);
-          const msg: any = conv?.messages.find((m) => m.id === lastAssistantMessage.id);
-          const rawSegs: any[] = Array.isArray(msg?.segments) ? msg.segments : [];
-          const vmItems: any[] = Array.isArray(msg?.segments_vm?.items) ? msg.segments_vm.items : [];
+          const conv = st.conversations.find(
+            (c) => c.id === currentConversationId,
+          );
+          const msg: any = conv?.messages.find(
+            (m) => m.id === lastAssistantMessage.id,
+          );
+          const rawSegs: any[] = Array.isArray(msg?.segments)
+            ? msg.segments
+            : [];
+          const vmItems: any[] = Array.isArray(msg?.segments_vm?.items)
+            ? msg.segments_vm.items
+            : [];
           const segs = rawSegs.length > 0 ? rawSegs : vmItems;
 
           const coord = ToolCallCoordinator.getInstance();
@@ -711,20 +872,31 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         }
 
         const thinking_duration = lastAssistantMessage.thinking_start_time
-          ? Math.floor((Date.now() - lastAssistantMessage.thinking_start_time) / 1000)
+          ? Math.floor(
+              (Date.now() - lastAssistantMessage.thinking_start_time) / 1000,
+            )
           : 0;
 
         // 若用户主动停止且思考栏仍在计时，手动发出 THINK_END 以终止计时显示
         try {
           const st = useChatStore.getState();
-          const conv = st.conversations.find(c => c.id === currentConversationId);
-          const msg: any = conv?.messages.find(m => m.id === lastAssistantMessage.id);
+          const conv = st.conversations.find(
+            (c) => c.id === currentConversationId,
+          );
+          const msg: any = conv?.messages.find(
+            (m) => m.id === lastAssistantMessage.id,
+          );
           const segs = Array.isArray(msg?.segments) ? msg.segments : [];
-          const stillThinking = segs.length && segs[segs.length - 1]?.kind === 'think';
+          const stillThinking =
+            segs.length && segs[segs.length - 1]?.kind === 'think';
           if (stillThinking) {
-            st.dispatchMessageAction(lastAssistantMessage.id, { type: 'THINK_END' } as any);
+            st.dispatchMessageAction(lastAssistantMessage.id, {
+              type: 'THINK_END',
+            } as any);
           }
-        } catch { /* noop */ }
+        } catch {
+          /* noop */
+        }
 
         void updateMessage(lastAssistantMessage.id, {
           status: 'error',
@@ -749,7 +921,8 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     return () => {
       idleWatchRef.current?.stop();
       if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
-      if (debouncedTokenUpdateRef.current) clearTimeout(debouncedTokenUpdateRef.current);
+      if (debouncedTokenUpdateRef.current)
+        clearTimeout(debouncedTokenUpdateRef.current);
     };
   }, []);
 
@@ -776,22 +949,30 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
         setIsStale(true);
         handleStopGeneration();
         const currentState = useChatStore.getState();
-        const current = currentState.conversations.find((c) => c.id === currentState.currentConversationId);
-        const loadingMessage = current?.messages?.find((m) => m.status === 'loading');
+        const current = currentState.conversations.find(
+          (c) => c.id === currentState.currentConversationId,
+        );
+        const loadingMessage = current?.messages?.find(
+          (m) => m.status === 'loading',
+        );
         if (loadingMessage) {
           const content = currentContentRef.current || '';
-          void currentState.finalizeStreamedMessage(
-            loadingMessage.id,
-            'aborted',
-            content,
-            loadingMessage.model,
-          ).catch(() => {});
+          void currentState
+            .finalizeStreamedMessage(
+              loadingMessage.id,
+              'aborted',
+              content,
+              loadingMessage.model,
+            )
+            .catch(() => {});
           void updateMessage(loadingMessage.id, {
             status: 'error',
             content: content.trim() || '响应超时',
           });
         }
-        toast.error('响应超时', { description: '模型长时间未返回数据，请检查网络或模型服务状态。' });
+        toast.error('响应超时', {
+          description: '模型长时间未返回数据，请检查网络或模型服务状态。',
+        });
         stopGenerationIdleWatch();
       },
     });
@@ -799,192 +980,247 @@ export const useChatActions = (selectedModelId: string | null, currentProviderNa
     return () => {
       stopGenerationIdleWatch();
     };
-  }, [isGenerating, handleStopGeneration, updateMessage, stopGenerationIdleWatch]);
+  }, [
+    isGenerating,
+    handleStopGeneration,
+    updateMessage,
+    stopGenerationIdleWatch,
+  ]);
 
-  const handleTitleChange = useCallback((newTitle: string) => {
-    if (currentConversationId && newTitle && newTitle.trim() !== '') {
-      void renameConversation(currentConversationId, newTitle);
-    }
-  }, [currentConversationId, renameConversation]);
-  
+  const handleTitleChange = useCallback(
+    (newTitle: string) => {
+      if (currentConversationId && newTitle && newTitle.trim() !== '') {
+        void renameConversation(currentConversationId, newTitle);
+      }
+    },
+    [currentConversationId, renameConversation],
+  );
+
   const handleDeleteConversation = useCallback(() => {
     if (currentConversationId) {
       void deleteConversation(currentConversationId);
     }
   }, [currentConversationId, deleteConversation]);
 
-  const handleRetryMessage = useCallback(async (messageIdToRetry: string) => {
-    const st = useChatStore.getState();
-    const conv = currentConversationId ? st.conversations.find(c => c.id === currentConversationId) : null;
-    if (!conv) return;
-    const idx = conv.messages.findIndex(m => m.id === messageIdToRetry);
-    if (idx < 0) return;
-    const target = conv.messages[idx];
-    if (target.role !== 'assistant') return;
-    const continueStoppedRun = target.status === 'aborted' || String(target.content || '').includes('[用户停止了生成]');
-    // 找前一个 user
-    let userIdx = idx - 1;
-    while (userIdx >= 0 && conv.messages[userIdx].role !== 'user') userIdx--;
-    if (userIdx < 0) return;
-    const userMsg = conv.messages[userIdx];
+  const handleRetryMessage = useCallback(
+    async (messageIdToRetry: string) => {
+      const st = useChatStore.getState();
+      const conv = currentConversationId
+        ? st.conversations.find((c) => c.id === currentConversationId)
+        : null;
+      if (!conv) return;
+      const idx = conv.messages.findIndex((m) => m.id === messageIdToRetry);
+      if (idx < 0) return;
+      const target = conv.messages[idx];
+      if (target.role !== 'assistant') return;
+      const continueStoppedRun =
+        target.status === 'aborted' ||
+        String(target.content || '').includes('[用户停止了生成]');
+      // 找前一个 user
+      let userIdx = idx - 1;
+      while (userIdx >= 0 && conv.messages[userIdx].role !== 'user') userIdx--;
+      if (userIdx < 0) return;
+      const userMsg = conv.messages[userIdx];
 
-    // 版本组信息：如果是第一次重试，建立版本组；否则使用已有版本组
-    const groupId = target.version_group_id || userMsg.id;
-    
-    // 如果原消息还没有版本组ID，先给它设置上（作为版本0）
-    if (!target.version_group_id) {
-      await updateMessage(target.id, {
+      // 版本组信息：如果是第一次重试，建立版本组；否则使用已有版本组
+      const groupId = target.version_group_id || userMsg.id;
+
+      // 如果原消息还没有版本组ID，先给它设置上（作为版本0）
+      if (!target.version_group_id) {
+        await updateMessage(target.id, {
+          version_group_id: groupId,
+          version_index: 0,
+        });
+      }
+
+      const siblings = conv.messages.filter(
+        (m) => m.role === 'assistant' && m.version_group_id === groupId,
+      );
+      const nextIndex =
+        siblings.length > 0
+          ? Math.max(...siblings.map((s) => s.version_index || 0)) + 1
+          : 1;
+
+      // 创建新版本消息（不是插入到列表后面，而是与原消息关联为同一组）
+      const newAssistantId = uuidv4();
+      const newVersionMsg: Message = {
+        id: newAssistantId,
+        conversation_id: conv.id,
+        role: 'assistant',
+        content: '',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        status: 'loading',
+        model: conv.model_id,
         version_group_id: groupId,
-        version_index: 0,
-      });
-    }
-    
-    const siblings = conv.messages.filter(m => m.role==='assistant' && m.version_group_id === groupId);
-    const nextIndex = (siblings.length > 0 ? Math.max(...siblings.map(s => s.version_index || 0)) + 1 : 1);
+        version_index: nextIndex,
+      } as any;
 
-    // 创建新版本消息（不是插入到列表后面，而是与原消息关联为同一组）
-    const newAssistantId = uuidv4();
-    const newVersionMsg: Message = {
-      id: newAssistantId,
-      conversation_id: conv.id,
-      role: 'assistant',
-      content: '',
-      created_at: Date.now(),
-      updated_at: Date.now(),
-      status: 'loading',
-      model: conv.model_id,
-      version_group_id: groupId,
-      version_index: nextIndex,
-    } as any;
-    
-    // 直接添加到消息列表中（会被分组逻辑处理）
-    await st.addMessage(newVersionMsg);
+      // 直接添加到消息列表中（会被分组逻辑处理）
+      await st.addMessage(newVersionMsg);
 
-    // 选择 provider/model 与参数（提前获取，供 buildLlmHistory 使用）
-    const modelToUse = conv.model_id;
-    let effectiveProvider = currentProviderName;
-    try {
-      const { specializedStorage } = await import('@/lib/storage');
-      const lastPair = await specializedStorage.models.getLastSelectedModelPair();
-      if (lastPair && lastPair.modelId === modelToUse && lastPair.provider) {
-        effectiveProvider = lastPair.provider;
+      // 选择 provider/model 与参数（提前获取，供 buildLlmHistory 使用）
+      const modelToUse = conv.model_id;
+      let effectiveProvider = currentProviderName;
+      try {
+        const { specializedStorage } = await import('@/lib/storage');
+        const lastPair =
+          await specializedStorage.models.getLastSelectedModelPair();
+        if (lastPair && lastPair.modelId === modelToUse && lastPair.provider) {
+          effectiveProvider = lastPair.provider;
+        }
+      } catch {
+        /* noop */
       }
-    } catch { /* noop */ }
 
-    // 构建历史（不包含当前被重试的 assistant 内容）
-    // 使用统一的 buildLlmHistory 函数，传入 userIdx 作为截止索引
-    const historyForLlm = await buildLlmHistory(
-      conv.id,
-      conv.messages,
-      userMsg.content,
-      effectiveProvider,
-      modelToUse,
-      {
-        images: userMsg.images,
-        contextData: userMsg.context_data,
-        excludeMessagesAfterIndex: userIdx, // 只取到 user 消息为止，不包含后续的 assistant 消息
-      }
-    );
-
-
-    const apiKeyValid = await checkApiKeyValidity(effectiveProvider, modelToUse);
-    if (!apiKeyValid) {
-      toast.error('API密钥无效', { description: '请前往设置页面配置有效的API密钥' });
-      // 占位转错误
-      void updateMessage(newAssistantId, { status: 'error', content: '未配置 API 密钥' });
-      return;
-    }
-
-    try {
-      const modelParams = await ModelParametersService.getModelParameters(effectiveProvider, modelToUse);
-      const modelOpts = ModelParametersService.convertToChatOptions(modelParams);
-      let sessionOpts: Record<string, any> = {};
-      if (sessionParameters) {
-        sessionOpts = ModelParametersService.convertToChatOptions(sessionParameters);
-      }
-      const filteredModelOpts: Record<string, any> = { ...modelOpts };
-      const maybeDelete = (flag: boolean | undefined, key: string) => {
-        if (flag === false && key in filteredModelOpts) delete filteredModelOpts[key];
-      };
-      if (sessionParameters) {
-        const sp: any = sessionParameters;
-        maybeDelete(sp.enableTemperature, 'temperature');
-        maybeDelete(sp.enableMaxTokens, 'maxTokens');
-        maybeDelete(sp.enableTopP, 'topP');
-        maybeDelete(sp.enableTopK, 'topK');
-        maybeDelete(sp.enableMinP, 'minP');
-        maybeDelete(sp.enableFrequencyPenalty, 'frequencyPenalty');
-        maybeDelete(sp.enablePresencePenalty, 'presencePenalty');
-        maybeDelete(sp.enableStopSequences, 'stop');
-      }
-      const composed = await composeChatOptions(
+      // 构建历史（不包含当前被重试的 assistant 内容）
+      // 使用统一的 buildLlmHistory 函数，传入 userIdx 作为截止索引
+      const historyForLlm = await buildLlmHistory(
+        conv.id,
+        conv.messages,
+        userMsg.content,
         effectiveProvider,
         modelToUse,
-        ModelParametersService.applyOutputBudget(
-          { ...filteredModelOpts, ...sessionOpts },
-          ModelParametersService.resolveBudgetParameters(modelParams, sessionParameters),
-        ),
-        conv.id,
-        userMsg.content,
-      );
-      try { notifyStreamStart(conv.id); } catch { /* noop */ }
-      await AgentLoopRunner.run({
-        assistantMessageId: newAssistantId,
-        conversationId: conv.id,
-        provider: effectiveProvider,
-        model: modelToUse,
-        historyForLlm: historyForLlm as any,
-        originalUserContent: userMsg.content,
-        continuationRunId: continueStoppedRun ? target.id : undefined,
-        continuationPrompt: continueStoppedRun ? '继续完成尚未完成的任务。不要重复已经完成的操作。' : undefined,
-        // Regenerating revises the answer from the existing record.  It must
-        // never silently repeat a prior write, shell command, or MCP action.
-        regenerate: !continueStoppedRun,
-        regenerationParentRunId: !continueStoppedRun ? target.id : undefined,
-        options: composed,
-        runtimeHooks: {
-          onAgentStart: () => {
-            lastActivityTimeRef.current = Date.now();
-            setTokenCount(0);
-            batchUpdateRef.current = { tokenCount: 0, lastUpdateTime: 0, pendingUpdate: false };
-          },
-          onStreamError: () => {
-            stopGenerationIdleWatch();
-          },
-          onStreamEvent: (event: any) => {
-            lastActivityTimeRef.current = Date.now();
-            const t = String(event?.type || '');
-            if (t === 'content_token' || t === 'thinking_token') {
-              batchUpdateRef.current.tokenCount += 1;
-              if (batchUpdateRef.current.tokenCount >= 10) {
-                const delta = batchUpdateRef.current.tokenCount;
-                batchUpdateRef.current.tokenCount = 0;
-                setTokenCount((prev) => prev + delta);
-              }
-            }
-          },
+        {
+          images: userMsg.images,
+          contextData: userMsg.context_data,
+          excludeMessagesAfterIndex: userIdx, // 只取到 user 消息为止，不包含后续的 assistant 消息
         },
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '重试失败';
-      void updateMessage(newAssistantId, { status: 'error', content: message });
-    }
-  }, [
-    currentConversationId,
-    currentConversation,
-    currentProviderName,
-    sessionParameters,
-    notifyStreamStart,
-    stopGenerationIdleWatch,
-    checkApiKeyValidity,
-    updateMessage,
-  ]);
+      );
+
+      const apiKeyValid = await checkApiKeyValidity(
+        effectiveProvider,
+        modelToUse,
+      );
+      if (!apiKeyValid) {
+        toast.error('API密钥无效', {
+          description: '请前往设置页面配置有效的API密钥',
+        });
+        // 占位转错误
+        void updateMessage(newAssistantId, {
+          status: 'error',
+          content: '未配置 API 密钥',
+        });
+        return;
+      }
+
+      try {
+        const modelParams = await ModelParametersService.getModelParameters(
+          effectiveProvider,
+          modelToUse,
+        );
+        const modelOpts =
+          ModelParametersService.convertToChatOptions(modelParams);
+        let sessionOpts: Record<string, any> = {};
+        if (sessionParameters) {
+          sessionOpts =
+            ModelParametersService.convertToChatOptions(sessionParameters);
+        }
+        const filteredModelOpts: Record<string, any> = { ...modelOpts };
+        const maybeDelete = (flag: boolean | undefined, key: string) => {
+          if (flag === false && key in filteredModelOpts)
+            delete filteredModelOpts[key];
+        };
+        if (sessionParameters) {
+          const sp: any = sessionParameters;
+          maybeDelete(sp.enableTemperature, 'temperature');
+          maybeDelete(sp.enableMaxTokens, 'maxTokens');
+          maybeDelete(sp.enableTopP, 'topP');
+          maybeDelete(sp.enableTopK, 'topK');
+          maybeDelete(sp.enableMinP, 'minP');
+          maybeDelete(sp.enableFrequencyPenalty, 'frequencyPenalty');
+          maybeDelete(sp.enablePresencePenalty, 'presencePenalty');
+          maybeDelete(sp.enableStopSequences, 'stop');
+        }
+        const composed = await composeChatOptions(
+          effectiveProvider,
+          modelToUse,
+          ModelParametersService.applyOutputBudget(
+            { ...filteredModelOpts, ...sessionOpts },
+            ModelParametersService.resolveBudgetParameters(
+              modelParams,
+              sessionParameters,
+            ),
+          ),
+          conv.id,
+          userMsg.content,
+        );
+        try {
+          notifyStreamStart(conv.id);
+        } catch {
+          /* noop */
+        }
+        await AgentLoopRunner.run({
+          assistantMessageId: newAssistantId,
+          conversationId: conv.id,
+          provider: effectiveProvider,
+          model: modelToUse,
+          historyForLlm: historyForLlm as any,
+          originalUserContent: userMsg.content,
+          continuationRunId: continueStoppedRun ? target.id : undefined,
+          continuationPrompt: continueStoppedRun
+            ? '继续完成尚未完成的任务。不要重复已经完成的操作。'
+            : undefined,
+          // Regenerating revises the answer from the existing record.  It must
+          // never silently repeat a prior write, shell command, or MCP action.
+          regenerate: !continueStoppedRun,
+          regenerationParentRunId: !continueStoppedRun ? target.id : undefined,
+          options: composed,
+          runtimeHooks: {
+            onAgentStart: () => {
+              lastActivityTimeRef.current = Date.now();
+              setTokenCount(0);
+              batchUpdateRef.current = {
+                tokenCount: 0,
+                lastUpdateTime: 0,
+                pendingUpdate: false,
+              };
+            },
+            onStreamError: () => {
+              stopGenerationIdleWatch();
+            },
+            onStreamEvent: (event: any) => {
+              lastActivityTimeRef.current = Date.now();
+              const t = String(event?.type || '');
+              if (t === 'content_token' || t === 'thinking_token') {
+                batchUpdateRef.current.tokenCount += 1;
+                if (batchUpdateRef.current.tokenCount >= 10) {
+                  const delta = batchUpdateRef.current.tokenCount;
+                  batchUpdateRef.current.tokenCount = 0;
+                  setTokenCount((prev) => prev + delta);
+                }
+              }
+            },
+          },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '重试失败';
+        void updateMessage(newAssistantId, {
+          status: 'error',
+          content: message,
+        });
+      }
+    },
+    [
+      currentConversationId,
+      currentConversation,
+      currentProviderName,
+      sessionParameters,
+      notifyStreamStart,
+      stopGenerationIdleWatch,
+      checkApiKeyValidity,
+      updateMessage,
+    ],
+  );
 
   // Placeholder handler for share（仍待实现）
   const handleShare = useCallback(() => {}, []);
 
   const handleDownload = useCallback(async () => {
-    await exportConversationMarkdown(currentConversation ?? null, currentConversationId ?? null);
+    await exportConversationMarkdown(
+      currentConversation ?? null,
+      currentConversationId ?? null,
+    );
   }, [currentConversationId, currentConversation]);
   const handleImageUpload = useCallback((_file: File) => {}, []);
   const handleFileUpload = useCallback((_file: File) => {}, []);

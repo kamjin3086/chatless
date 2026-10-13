@@ -9,12 +9,15 @@ const enUS: TranslationDict = {
   'nav.settings': 'Settings',
   'nav.devTools': 'Dev Tools',
   'settings.general.title': 'General',
-  'settings.general.description': 'Language, theme, fonts, and other basic preferences.',
+  'settings.general.description':
+    'Language, theme, fonts, and other basic preferences.',
   'settings.general.language': 'Language',
   'settings.general.theme': 'Theme',
   'settings.general.nightBrightness': 'Night brightness',
-  'settings.general.minimizeToTray': 'Minimize to system tray when clicking minimize',
-  'settings.general.closeToTray': 'Close window to tray (quit from the tray menu)',
+  'settings.general.minimizeToTray':
+    'Minimize to system tray when clicking minimize',
+  'settings.general.closeToTray':
+    'Close window to tray (quit from the tray menu)',
   'settings.general.closeConfirm': 'Confirm before closing',
   'tray.newChat': 'New Chat',
   'tray.minimize': 'Minimize to Tray',
@@ -28,6 +31,20 @@ const enUS: TranslationDict = {
   'window.maximize': 'Maximize',
   'window.restore': 'Restore',
   'window.close': 'Close',
+  'modelParams.thinkingLevel': 'Thinking level',
+  'modelParams.thinkingLevel.help':
+    'How much the model should think before answering. “Auto” sends nothing and leaves the choice to the model; unverified models are never sent a level.',
+  'modelParams.thinkingLevel.auto': 'Auto (model decides)',
+  'modelParams.thinkingLevel.inherit': 'Inherit the model setting',
+  'modelParams.thinkingLevel.suppress': 'Off: send no thinking level',
+  'modelParams.thinkingLevel.unverified':
+    'Not verified for this model - no level is sent',
+  'thinkingLevel.off': 'Off',
+  'thinkingLevel.minimal': 'Minimal',
+  'thinkingLevel.low': 'Low',
+  'thinkingLevel.medium': 'Medium',
+  'thinkingLevel.high': 'High',
+  'thinkingLevel.xhigh': 'Very high',
 };
 
 export default enUS;
