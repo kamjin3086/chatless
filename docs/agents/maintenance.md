@@ -115,6 +115,13 @@ still works (`docs/tauri-window-pitfalls.md`).
   both configs is itself a test - an `include` entry that matches nothing, or a
   doc citing an audit file that is not there, fails
   `scripts/__tests__/vitestInventory.test.mjs`.
+- **A shared inference endpoint is the operator's working machine, not a fixture.** Asking
+  a router for a model it has not loaded yet evicts or contends with whatever is already
+  serving, which costs the owner real work. Do not point an agent or a probe at model
+  names beyond the one already agreed for a run, and ask before starting a live run that
+  would load something new. The gate is enforced where it can be: an audit that resolves
+  sibling model names needs both `CHATLESS_QWEN=1` and `CHATLESS_MODEL_PROBE=1`, so a
+  command copied out of a ticket cannot quietly load a second model.
 - Prompts are English-only, answers follow the user (`docs/prompt-language.md`);
   the test above is what keeps them that way.
 - Default permission scope is a product decision, not a convenience knob
