@@ -439,6 +439,20 @@ pub async fn cancel_safe_shell(execution_id: String) -> Result<bool, String> {
   Ok(false)
 }
 
+/// A program that is not installed is a different fact from a command that ran and
+/// failed. Said plainly: which program was missing, on this machine, without dragging in
+/// another operating system - a Linux runner that sees "Windows" goes hunting for a
+/// problem it does not have, and the model burned its attempts the same way.
+fn spawn_failure(program: &str, error: std::io::Error) -> String {
+  if error.kind() == std::io::ErrorKind::NotFound {
+    return format!(
+      "无法启动 \"{}\": 这台机器上找不到该程序。请确认它已安装，或把 shell 指向本机确实存在的解释器。",
+      program
+    );
+  }
+  format!("启动命令失败: {}", error)
+}
+
 /// 安全执行 shell 命令
 ///
 /// 启动一个后台进程（dev server、watch、长构建）。
@@ -567,7 +581,9 @@ pub async fn start_managed_process(
     std::sync::Arc::new(JobHandle(job.0 as isize))
   };
 
-  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let mut child = cmd
+    .spawn()
+    .map_err(|e| spawn_failure(&options.command, e))?;
   let pid = child.id().unwrap_or_default();
 
   #[cfg(windows)]
@@ -914,7 +930,9 @@ pub async fn run_blocking_shell(options: ExecuteOptions, app_data_dir: PathBuf) 
   };
 
   // 启动进程
-  let mut child = cmd.spawn().map_err(|e| format!("启动命令失败: {}", e))?;
+  let mut child = cmd
+    .spawn()
+    .map_err(|e| spawn_failure(&options.command, e))?;
   let pid = child.id().unwrap_or_default();
 
   #[cfg(windows)]
@@ -1694,5 +1712,70 @@ mod local_server_tests {
     }
     let _ = std::fs::remove_dir_all(&root);
     assert!(problems.is_empty(), "{problems:?}");
+  }
+}
+
+/// The platform the shell plan chooses is the platform this process runs on, so a
+/// trivial POSIX command has to come back with its output and exit code - and a program
+/// that does not exist has to be described as that, not as a bare OS error code that the
+/// model reads as "try another Windows shell".
+#[cfg(all(test, not(windows)))]
+mod posix_shell_tests {
+  use super::*;
+
+  fn options(command: &str, args: Vec<String>) -> ExecuteOptions {
+    ExecuteOptions {
+      execution_id: None,
+      command: command.to_string(),
+      args,
+      working_dir: Some(std::env::temp_dir().to_string_lossy().to_string()),
+      timeout_ms: 10_000,
+      env: HashMap::new(),
+      max_output_size: 64 * 1024,
+      raw_last_arg: false,
+    }
+  }
+
+  #[tokio::test]
+  async fn a_trivial_command_reports_output_and_exit_code() {
+    let result = run_blocking_shell(
+      options("bash", vec!["-lc".into(), "echo posix-shell-102".into()]),
+      std::env::temp_dir(),
+    )
+    .await
+    .expect("bash is what a POSIX host plans for");
+
+    assert!(result.success, "stderr: {:?}", result.stderr);
+    assert_eq!(result.exit_code, 0);
+    assert!(result.stdout.contains("posix-shell-102"), "{:?}", result.stdout);
+  }
+
+  #[tokio::test]
+  async fn a_nonzero_exit_is_a_result_and_not_an_error() {
+    let result = run_blocking_shell(
+      options("bash", vec!["-lc".into(), "exit 3".into()]),
+      std::env::temp_dir(),
+    )
+    .await
+    .expect("a nonzero exit is reported, not raised");
+    assert!(!result.success);
+    assert_eq!(result.exit_code, 3);
+  }
+
+  #[tokio::test]
+  async fn a_missing_program_is_named_rather_than_an_os_error_code() {
+    let error = run_blocking_shell(
+      options("definitely-not-installed-102", vec![]),
+      std::env::temp_dir(),
+    )
+    .await
+    .expect_err("a program that does not exist cannot succeed");
+
+    assert!(
+      error.contains("definitely-not-installed-102"),
+      "the message must name the program: {error}"
+    );
+    assert!(!error.to_lowercase().contains("windows"), "{error}");
+    assert!(!error.contains("os error 2"), "{error}");
   }
 }

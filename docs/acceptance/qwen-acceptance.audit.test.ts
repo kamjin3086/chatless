@@ -37,6 +37,17 @@ import type { FilesystemAdapter as FilesystemAdapterType } from '@/lib/mcp/pipel
 import type { ShellExecutorAdapter as ShellExecutorAdapterType } from '@/lib/mcp/pipeline/adapters/ShellExecutorAdapter';
 
 const acceptanceDir = path.join(process.cwd(), 'docs', 'acceptance');
+function userAgentForRunner(): string {
+  const platform = process.platform;
+  const core =
+    platform === 'win32'
+      ? 'Windows NT 10.0; Win64; x64'
+      : platform === 'darwin'
+        ? 'Macintosh; Intel Mac OS X 10_15_7'
+        : 'X11; Linux x86_64';
+  return `Mozilla/5.0 (${core}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36`;
+}
+
 const endpoint = (
   process.env.CHATLESS_QWEN_URL || 'http://10.126.126.2:8101'
 ).replace(/\/$/, '');
@@ -160,13 +171,12 @@ beforeAll(async () => {
     appDataDir: async () => dataDir,
     join: async (...parts: string[]) => path.join(...parts),
   }));
-  // The adapters behave differently in an SSR context and pick a shell from the
-  // user agent, so the harness announces the platform the app actually runs on.
+  // The adapters behave differently in an SSR context, so the harness announces one.
+  // The user agent has to agree with the runner: a fixed Windows string here made the
+  // shell plan choose cmd.exe on a Linux box, and every shell task failed to start
+  // while the platform error text talked about Windows (#102).
   vi.stubGlobal('window', {});
-  vi.stubGlobal('navigator', {
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
-  });
+  vi.stubGlobal('navigator', { userAgent: userAgentForRunner() });
 
   ({ FilesystemAdapter } = await import(
     '@/lib/mcp/pipeline/adapters/FilesystemAdapter'
@@ -586,11 +596,18 @@ const tasks: Task[] = [
     id: 'shell-echo',
     category: 'shell',
     input: '执行命令 echo verify-shell，并告诉我输出。',
-    check: ({ answer, toolNames }) =>
-      toolNames.some((name) => name === 'shell__run') &&
-      /verify-shell/.test(answer)
-        ? null
-        : '没有通过 shell 得到输出',
+    check: ({ answer, sandbox }) => {
+      // The marker has to come back in the command's own result. Checking only the
+      // answer text let a run "pass" while every shell call had failed to start - two
+      // of the three runs in the attached report did exactly that.
+      const echoed = sandbox.calls.some(
+        (call) =>
+          call.name === 'shell__run' &&
+          /verify-shell/.test(String((call.result as any)?.stdout ?? '')),
+      );
+      if (!echoed) return '没有 shell 调用真的带回输出';
+      return /verify-shell/.test(answer) ? null : '没有把输出报告给用户';
+    },
   },
   {
     id: 'shell-refuse-untrusted',

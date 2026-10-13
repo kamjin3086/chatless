@@ -7,11 +7,19 @@
  * from keywords: a command that works in `run` has to work in `start`.
  */
 
+import { resolveHostPlatform, syncHostPlatform } from './hostPlatform';
+
 export type ShellKind = 'cmd' | 'powershell' | 'bash';
 export type ShellMode = ShellKind | 'auto' | 'pwsh';
 export type HostPlatform = 'windows' | 'macos' | 'linux';
 
-export const SHELL_MODES: readonly ShellMode[] = ['auto', 'cmd', 'powershell', 'pwsh', 'bash'];
+export const SHELL_MODES: readonly ShellMode[] = [
+  'auto',
+  'cmd',
+  'powershell',
+  'pwsh',
+  'bash',
+];
 
 export interface CommandPlan {
   /** Executable to spawn. */
@@ -31,15 +39,38 @@ export interface CommandPlan {
   verbatimLastArg?: boolean;
 }
 
+/**
+ * What each host actually has. The unsupported-shell message is built from this table,
+ * so a Linux user can never again be told about Windows by a mistaken platform guess:
+ * there is no branch that names a platform other than the one in hand.
+ */
+const HOST_SHELLS: Record<
+  HostPlatform,
+  { label: string; shells: ShellKind[] }
+> = {
+  windows: { label: 'Windows', shells: ['cmd', 'powershell'] },
+  macos: { label: 'macOS', shells: ['bash'] },
+  linux: { label: 'Linux', shells: ['bash'] },
+};
+
 export type CommandPlanResult =
   | { ok: true; plan: CommandPlan }
   | { ok: false; code: string; message: string; hints: string[] };
 
+/**
+ * Last resort only: what a user agent claims about the machine. Prefer
+ * `hostPlatform()` / `syncHostPlatform()`, which ask the runtime instead of the browser.
+ * Exposed for callers that already know better and for tests.
+ */
 export function detectPlatform(userAgent?: string): HostPlatform {
-  const ua = String(userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '')).toLowerCase();
-  if (ua.includes('win')) return 'windows';
-  if (ua.includes('mac')) return 'macos';
-  return 'linux';
+  return (
+    resolveHostPlatform({
+      nodePlatform: null,
+      userAgent:
+        userAgent ??
+        (typeof navigator !== 'undefined' ? navigator.userAgent : null),
+    }) ?? 'linux'
+  );
 }
 
 export function defaultShellFor(platform: HostPlatform): ShellKind {
@@ -51,14 +82,28 @@ export function defaultShellFor(platform: HostPlatform): ShellKind {
  * unsupported platform combinations come back as structured results, so the
  * model can correct itself instead of the call failing as an exception.
  */
-export function planCommand(params: { command: unknown; shell?: unknown; platform?: HostPlatform }): CommandPlanResult {
-  const platform = params.platform ?? detectPlatform();
+export function planCommand(params: {
+  command: unknown;
+  shell?: unknown;
+  platform?: HostPlatform;
+}): CommandPlanResult {
+  // The caller normally passes the platform it resolved from the runtime; falling back
+  // to the synchronous runtime signal (Node's own platform, then a user agent) keeps a
+  // caller that forgot from silently planning for the wrong operating system.
+  const platform = params.platform ?? syncHostPlatform();
   const command = String(params.command ?? '');
   if (!command.trim()) {
-    return { ok: false, code: 'INVALID_ARGUMENTS', message: 'command is required', hints: [] };
+    return {
+      ok: false,
+      code: 'INVALID_ARGUMENTS',
+      message: 'command is required',
+      hints: [],
+    };
   }
 
-  const rawMode = String(params.shell ?? '').trim().toLowerCase();
+  const rawMode = String(params.shell ?? '')
+    .trim()
+    .toLowerCase();
   if (rawMode && !SHELL_MODES.includes(rawMode as ShellMode)) {
     return {
       ok: false,
@@ -75,29 +120,44 @@ export function planCommand(params: { command: unknown; shell?: unknown; platfor
 
   const mode = (rawMode || 'auto') as ShellMode;
   const autoSelected = mode === 'auto';
-  const shell: ShellKind = mode === 'auto' ? defaultShellFor(platform) : mode === 'pwsh' ? 'powershell' : mode;
+  const shell: ShellKind =
+    mode === 'auto'
+      ? defaultShellFor(platform)
+      : mode === 'pwsh'
+        ? 'powershell'
+        : mode;
 
-  if (platform === 'windows' && shell === 'bash') {
+  const host = HOST_SHELLS[platform];
+  if (!host.shells.includes(shell)) {
     return {
       ok: false,
       code: 'SHELL_UNSUPPORTED',
-      message: 'Windows 上不支持 shell=bash。请改用 shell="cmd" 或 shell="powershell"。',
-      hints: ['cmd 适合 dir /b、&&、.bat/.cmd', 'powershell 适合 Get-ChildItem、Remove-Item、$env:'],
-    };
-  }
-  if (platform !== 'windows' && shell !== 'bash') {
-    return {
-      ok: false,
-      code: 'SHELL_UNSUPPORTED',
-      message: 'macOS/Linux 上不支持 shell=cmd/powershell。请改用 shell="bash"。',
-      hints: ['macOS/Linux 用 bash -lc 执行整行命令'],
+      message:
+        `${host.label} 上没有 shell=${shell}。这台机器可用：` +
+        `${host.shells.map((name) => `"${name}"`).join('、')}，默认是 "${host.shells[0]}"。`,
+      hints:
+        platform === 'windows'
+          ? [
+              'cmd 适合 dir /b、&&、.bat/.cmd',
+              'powershell 适合 Get-ChildItem、Remove-Item、$env:',
+            ]
+          : [
+              `${host.label} 用 bash -lc 执行整行命令`,
+              '不确定时省略 shell 参数，用这台机器的默认 shell',
+            ],
     };
   }
 
   if (shell === 'cmd') {
     return {
       ok: true,
-      plan: { file: 'cmd.exe', args: ['/d', '/s', '/c', command], shell, autoSelected, verbatimLastArg: true },
+      plan: {
+        file: 'cmd.exe',
+        args: ['/d', '/s', '/c', command],
+        shell,
+        autoSelected,
+        verbatimLastArg: true,
+      },
     };
   }
   if (shell === 'powershell') {
@@ -106,8 +166,16 @@ export function planCommand(params: { command: unknown; shell?: unknown; platfor
     const file = mode === 'pwsh' ? 'pwsh' : 'powershell.exe';
     return {
       ok: true,
-      plan: { file, args: ['-NoProfile', '-NonInteractive', '-Command', command], shell, autoSelected },
+      plan: {
+        file,
+        args: ['-NoProfile', '-NonInteractive', '-Command', command],
+        shell,
+        autoSelected,
+      },
     };
   }
-  return { ok: true, plan: { file: 'bash', args: ['-lc', command], shell, autoSelected } };
+  return {
+    ok: true,
+    plan: { file: 'bash', args: ['-lc', command], shell, autoSelected },
+  };
 }
