@@ -20,7 +20,9 @@ describe('judgeApiReachable', () => {
   });
 
   it('treats OpenAI-style 401 as reachable API', () => {
-    const body = JSON.stringify({ error: { message: 'Incorrect API key', type: 'invalid_request_error' } });
+    const body = JSON.stringify({
+      error: { message: 'Incorrect API key', type: 'invalid_request_error' },
+    });
     const judged = judgeApiReachable(401, body, 'application/json');
     expect(judged.ok).toBe(true);
   });
@@ -45,13 +47,17 @@ describe('judgeApiReachable', () => {
 describe('classifyNetworkError', () => {
   it('maps Windows connection refused to NETWORK', () => {
     const result = classifyNetworkError(
-      new Error('error trying to connect: tcp connect error: 由于目标计算机积极拒绝，无法连接。 (os error 10061)'),
+      new Error(
+        'error trying to connect: tcp connect error: 由于目标计算机积极拒绝，无法连接。 (os error 10061)',
+      ),
     );
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('NETWORK');
   });
 
   it('maps timeouts', () => {
-    expect(classifyNetworkError(new Error('request timeout')).reason).toBe('TIMEOUT');
+    expect(classifyNetworkError(new Error('request timeout')).reason).toBe(
+      'TIMEOUT',
+    );
   });
 });

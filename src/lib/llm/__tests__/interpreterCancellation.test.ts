@@ -9,13 +9,21 @@ describe('LLMInterpreter request cancellation', () => {
     let callbacks: any;
     const provider = {
       name: 'fixture',
-      chatStream: vi.fn(async (_model, _messages, received) => { callbacks = received; }),
+      chatStream: vi.fn(async (_model, _messages, received) => {
+        callbacks = received;
+      }),
       cancelStream: vi.fn(),
     };
     ProviderRegistry.register(provider as any);
     const interpreter = new LLMInterpreter();
 
-    await interpreter.streamChat('fixture', 'model', [], {}, { __requestId: 'request-a' });
+    await interpreter.streamChat(
+      'fixture',
+      'model',
+      [],
+      {},
+      { __requestId: 'request-a' },
+    );
     interpreter.cancelStream('request-a');
     expect(provider.cancelStream).toHaveBeenCalledOnce();
 

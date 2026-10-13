@@ -37,9 +37,16 @@ describe('standard strategy reasoning channel', () => {
       'content_token',
       'stream_complete',
     ]);
-    expect(events.filter((e) => e.type === 'thinking_token').map((e: any) => e.content).join(''))
-      .toBe('The user wrote');
-    const body = events.filter((e) => e.type === 'content_token').map((e: any) => e.content).join('');
+    expect(
+      events
+        .filter((e) => e.type === 'thinking_token')
+        .map((e: any) => e.content)
+        .join(''),
+    ).toBe('The user wrote');
+    const body = events
+      .filter((e) => e.type === 'content_token')
+      .map((e: any) => e.content)
+      .join('');
     expect(body).toBe('你好！');
     expect(body).not.toContain('<think>');
   });
@@ -52,8 +59,14 @@ describe('standard strategy reasoning channel', () => {
       ...strategy.processToken({ content: 'one</think>answer' }).events,
       ...strategy.processToken({ done: true }).events,
     ];
-    const thinking = events.filter((e) => e.type === 'thinking_token').map((e: any) => e.content).join('');
-    const body = events.filter((e) => e.type === 'content_token').map((e: any) => e.content).join('');
+    const thinking = events
+      .filter((e) => e.type === 'thinking_token')
+      .map((e: any) => e.content)
+      .join('');
+    const body = events
+      .filter((e) => e.type === 'content_token')
+      .map((e: any) => e.content)
+      .join('');
     expect(thinking).toContain('step');
     expect(body).toContain('answer');
     expect(body).not.toContain('<think>');
@@ -72,9 +85,15 @@ describe('OpenAI-compatible provider reasoning stream', () => {
       'data: [DONE]',
       '',
     ].join('\n\n');
-    mocks.fetch.mockResolvedValue(new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
+    mocks.fetch.mockResolvedValue(
+      new Response(body, { headers: { 'content-type': 'text/event-stream' } }),
+    );
 
-    const provider = new OpenAICompatibleProvider('https://example.test/v1', undefined, 'fixture');
+    const provider = new OpenAICompatibleProvider(
+      'https://example.test/v1',
+      undefined,
+      'fixture',
+    );
     vi.spyOn(provider as any, 'getApiKey').mockResolvedValue('fixture');
     const events: any[] = [];
     await provider.chatStream('hi', [{ role: 'user', content: 'hi' }], {
@@ -84,8 +103,14 @@ describe('OpenAI-compatible provider reasoning stream', () => {
     const types = events.map((event) => event.type);
     expect(types.filter((type) => type === 'thinking_start')).toHaveLength(1);
     expect(types.filter((type) => type === 'thinking_end')).toHaveLength(1);
-    const thinking = events.filter((e) => e.type === 'thinking_token').map((e) => e.content).join('');
-    const answer = events.filter((e) => e.type === 'content_token').map((e) => e.content).join('');
+    const thinking = events
+      .filter((e) => e.type === 'thinking_token')
+      .map((e) => e.content)
+      .join('');
+    const answer = events
+      .filter((e) => e.type === 'content_token')
+      .map((e) => e.content)
+      .join('');
     expect(thinking).toBe('The user');
     expect(answer).toBe('你好！有什么可以帮你的吗？');
     expect(JSON.stringify(events)).not.toContain('<think>');
