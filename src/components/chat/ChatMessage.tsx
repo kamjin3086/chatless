@@ -8,7 +8,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useChatStore } from '@/store/chatStore';
 import { UserMessageBlock } from './UserMessageBlock';
 import { AIMessageBlock } from './AIMessageBlock';
-import { ThinkingTurnBadge } from './ThinkingTurnBadge';
+import {
+  ThinkingLevelFacts,
+  hasThinkingEvidence,
+} from './ThinkingLevelFacts';
 import type { Message } from '@/types/chat';
 import { motion } from 'framer-motion';
 
@@ -149,6 +152,12 @@ function ChatMessageComponent({
     );
   }, [segments]);
   
+  // 只有本轮真的思考过，才在下方报档位；配置了档位不等于用了档位。
+  const thoughtThisTurn = React.useMemo(
+    () => hasThinkingEvidence({ segments, thinkingDuration: thinking_duration }),
+    [segments, thinking_duration],
+  );
+
   const isSettled = !isStreaming && status !== 'sending' && status !== 'pending';
   const shouldShowTimestamp = isSettled && !hasRunningToolCall && !isAgentLoopRunning;
   
@@ -354,7 +363,7 @@ function ChatMessageComponent({
             </div>
             {!isUser && (
               <div className="flex items-center gap-0.5 whitespace-nowrap">
-                <ThinkingTurnBadge messageId={id} />
+                {thoughtThisTurn && <ThinkingLevelFacts messageId={id} />}
                 {onRetry && (
                   <button
                     onClick={onRetry}

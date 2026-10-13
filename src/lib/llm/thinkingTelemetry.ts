@@ -160,62 +160,6 @@ export function buildThinkingTurn(args: {
   };
 }
 
-export interface ThinkingLevelAggregate {
-  level: ThinkingLevel;
-  sent: boolean;
-  turns: number;
-  /** Turns whose provider reported usage. Everything else is excluded from the totals. */
-  usageTurns: number;
-  /** How many of those turns actually carried a reasoning count. */
-  reasoningTurns: number;
-  totalMs: number;
-  avgMs: number;
-  promptTokens: number;
-  completionTokens: number;
-  reasoningTokens: number;
-}
-
-/**
- * Compare levels over recent turns.
- *
- * Rows come back in the documented level order, not by arrival, because a table whose order
- * changes with the last message cannot be read. Totals ignore turns that reported nothing -
- * an average over turns where half the providers stayed silent would quietly flatter
- * whichever level happened to be used on chatty endpoints.
- */
-export function aggregateThinkingTurns(
-  turns: ThinkingTurnRecord[],
-): ThinkingLevelAggregate[] {
-  const byLevel = new Map<ThinkingLevel, ThinkingTurnRecord[]>();
-  for (const turn of turns) {
-    const list = byLevel.get(turn.level) ?? [];
-    list.push(turn);
-    byLevel.set(turn.level, list);
-  }
-  const rows: ThinkingLevelAggregate[] = [];
-  for (const level of THINKING_LEVEL_ORDER) {
-    const group = byLevel.get(level);
-    if (!group || group.length === 0) continue;
-    const withUsage = group.filter((t) => t.usageReported);
-    const sum = (pick: (t: ThinkingTurnRecord) => number | undefined) =>
-      withUsage.reduce((total, t) => total + (pick(t) ?? 0), 0);
-    const totalMs = group.reduce((total, t) => total + t.durationMs, 0);
-    rows.push({
-      level,
-      sent: group.some((t) => t.sent),
-      turns: group.length,
-      usageTurns: withUsage.length,
-      reasoningTurns: group.filter((t) => t.reasoningTokens !== undefined)
-        .length,
-      totalMs,
-      avgMs: Math.round(totalMs / group.length),
-      promptTokens: sum((t) => t.promptTokens),
-      completionTokens: sum((t) => t.completionTokens),
-      reasoningTokens: sum((t) => t.reasoningTokens),
-    });
-  }
-  return rows;
-}
 
 /** What a finished run has to say about itself, resolved at finish time. */
 export interface ThinkingRunContext {

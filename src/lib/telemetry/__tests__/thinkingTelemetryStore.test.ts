@@ -112,17 +112,6 @@ describe('the thinking turn store', () => {
     expect(seen).toEqual([1]);
   });
 
-  it('aggregates only the window it was asked for', async () => {
-    const t = await load();
-    t.resetThinkingTurnsForTests();
-    await t.recordThinkingTurn(turn({ level: 'low', durationMs: 1000 }));
-    await t.recordThinkingTurn(turn({ level: 'high', durationMs: 5000 }));
-    const all = await t.aggregateRecentThinking();
-    expect(all.map((r) => r.level)).toEqual(['low', 'high']);
-    const lastOne = await t.aggregateRecentThinking(1);
-    expect(lastOne.map((r) => r.level)).toEqual(['high']);
-  });
-
   it('still works when storage is unreachable', async () => {
     // The app must keep answering even when nothing can be written: telemetry is not
     // allowed to become the reason a reply fails.
@@ -170,8 +159,7 @@ describe('the thinking turn store', () => {
     const all = await t.readThinkingTurns();
     expect(all).toHaveLength(1);
     expect(all[0].durationMs).toBe(5000);
-    const rows = await t.aggregateRecentThinking(20);
-    expect(rows.reduce((total, row) => total + row.turns, 0)).toBe(1);
+    expect(await t.readThinkingTurns()).toHaveLength(1);
   });
 
   it('lets every listener see a turn even when one of them throws', async () => {

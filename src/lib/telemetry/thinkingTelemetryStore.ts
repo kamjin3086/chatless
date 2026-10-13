@@ -1,7 +1,5 @@
 import {
-  type ThinkingLevelAggregate,
   type ThinkingTurnRecord,
-  aggregateThinkingTurns,
   mergeThinkingTurn,
 } from '@/lib/llm/thinkingTelemetry';
 /**
@@ -124,19 +122,6 @@ export async function getTurnForMessage(
     if (turns[i].messageId === messageId) return { ...turns[i] };
   }
   return null;
-}
-
-/**
- * Aggregate the recent window by level. Pass a smaller `limit` to ask about the last few
- * turns only; the default is the whole stored window, which is what "over recent turns"
- * means to a user looking at this a week later.
- */
-export async function aggregateRecentThinking(
-  limit?: number,
-): Promise<ThinkingLevelAggregate[]> {
-  await ensureLoaded();
-  const window = limit && limit > 0 ? turns.slice(-limit) : turns;
-  return aggregateThinkingTurns(window);
 }
 
 export function subscribeThinkingTurns(
