@@ -16,6 +16,10 @@ export default defineConfig({
       // is not a gate, so anything runnable lives here.
       'docs/acceptance/dense-fusion.audit.test.ts',
       'docs/acceptance/final-plan.audit.test.ts',
+      // Rules the acceptance harness applies (task filtering, model preflight, refusal
+      // wording). Pure and deterministic, so CI checks the checker itself rather than
+      // relying on whoever remembers to set an endpoint variable.
+      'docs/acceptance/answerChecks.audit.test.ts',
       // Repo-level gates that used to be a human habit (PR title shape). Cheap,
       // deterministic, so they run with the normal suite.
       'scripts/__tests__/**/*.test.mjs',
