@@ -1,20 +1,33 @@
-"use client";
+'use client';
 
 import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { Ellipsis, PanelLeft, PenLine, Settings } from 'lucide-react';
-import { ModelSelector } from "./ModelSelector";
-import { ProviderMetadata } from "@/lib/metadata/types";
+import { ModelSelector } from './ModelSelector';
+import { ProviderMetadata } from '@/lib/metadata/types';
 import { DeleteConversationDialog } from './DeleteConversationDialog';
 import { EditableTitle } from './EditableTitle';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { PromptPill } from './PromptPill';
 import { useEffect } from 'react';
-import { getEnabledConfiguredServers, getConnectedServers, getEnabledServersForConversation, setEnabledServersForConversation } from '@/lib/mcp/chatIntegration';
+import {
+  getEnabledConfiguredServers,
+  getConnectedServers,
+  getEnabledServersForConversation,
+  setEnabledServersForConversation,
+} from '@/lib/mcp/chatIntegration';
 import { LocateFixed } from 'lucide-react';
 import { MessageNavigationMenu } from './MessageNavigationMenu';
+import { ThinkingLevelSwitch } from './ThinkingLevelSwitch';
 import type { Message } from '@/types/chat';
+import type { ModelParameters } from '@/types/model-params';
 
 interface ChatHeaderProps {
   title: string;
@@ -33,6 +46,9 @@ interface ChatHeaderProps {
   hasSessionParameters?: boolean;
   onOpenSessionParameters?: () => void;
   /** 消息导航（长会话里跳转到指定消息）；为空时不显示入口 */
+  /** #100: the quick thinking switch lives beside the model selector. */
+  sessionParameters?: ModelParameters | null;
+  onSessionParametersSaved?: () => void | Promise<void>;
   navigationMessages?: Message[];
   onNavigateToMessage?: (messageId: string) => void;
 }
@@ -52,13 +68,15 @@ export function ChatHeader({
   tokenCount: _tokenCount = 0,
   hasSessionParameters,
   onOpenSessionParameters,
+  sessionParameters,
+  onSessionParametersSaved,
   navigationMessages,
   onNavigateToMessage,
 }: ChatHeaderProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [_mcpAll, setMcpAll] = useState<string[]>([]);
   const [_mcpConnected, setMcpConnected] = useState<string[]>([]);
-  const conversationId = useChatStore((s)=>s.currentConversationId);
+  const conversationId = useChatStore((s) => s.currentConversationId);
   const [enabledForConv, setEnabledForConv] = useState<string[]>([]);
 
   const createConversation = useChatStore((state) => state.createConversation);
@@ -81,16 +99,21 @@ export function ChatHeader({
     (async () => {
       setMcpAll(await getEnabledConfiguredServers());
       setMcpConnected(await getConnectedServers());
-      if (conversationId) setEnabledForConv(await getEnabledServersForConversation(conversationId));
+      if (conversationId)
+        setEnabledForConv(
+          await getEnabledServersForConversation(conversationId),
+        );
     })();
   }, [conversationId]);
 
   const _toggleServer = async (name: string) => {
     let next: string[];
-    if (enabledForConv.includes(name)) next = enabledForConv.filter(n => n !== name);
+    if (enabledForConv.includes(name))
+      next = enabledForConv.filter((n) => n !== name);
     else next = [...enabledForConv, name];
     setEnabledForConv(next);
-    if (conversationId) await setEnabledServersForConversation(conversationId, next);
+    if (conversationId)
+      await setEnabledServersForConversation(conversationId, next);
   };
 
   return (
@@ -98,15 +121,15 @@ export function ChatHeader({
       <div className="app-topbar h-9 px-3 border-b border-slate-200/60 dark:border-white/10 flex items-center justify-between glass-surface">
         {/* 左侧：侧栏开关 + 标题 */}
         <div className="flex items-center gap-1 flex-1 min-w-0">
-          <button 
-            onClick={toggleSidebar} 
-            className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors" 
+          <button
+            onClick={toggleSidebar}
+            className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
             title="侧边栏"
             aria-label="切换侧边栏"
           >
             <PanelLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </button>
-          
+
           {!isSidebarOpen && (
             <button
               onClick={handleNewChat}
@@ -117,14 +140,14 @@ export function ChatHeader({
               <PenLine className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             </button>
           )}
-          
+
           <EditableTitle
             initialTitle={title}
             onTitleChange={onTitleChange}
             className="text-[13px] font-medium text-slate-600 dark:text-slate-300 ml-0.5 min-w-0 max-w-[min(40vw,20rem)]"
             inputClassName="text-[13px]"
           />
-          
+
           {tags?.map((tag, index) => (
             <span
               key={index}
@@ -135,17 +158,26 @@ export function ChatHeader({
           ))}
           <div className="flex-1 h-8 min-w-2" data-tauri-drag-region />
         </div>
-        
+
         {/* 右侧：模型选择为主控件，按名称向左撑开 */}
         <div className="flex items-center gap-0.5 shrink-0">
-          <ModelSelector 
-              allMetadata={allMetadata}
-              currentModelId={currentModelId}
-              currentProviderName={currentProviderName}
-              onModelChange={handleModelChange}
-              disabled={isModelSelectorDisabled}
-            />
-          
+          <ModelSelector
+            allMetadata={allMetadata}
+            currentModelId={currentModelId}
+            currentProviderName={currentProviderName}
+            onModelChange={handleModelChange}
+            disabled={isModelSelectorDisabled}
+          />
+
+          <ThinkingLevelSwitch
+            provider={currentProviderName || ''}
+            modelId={currentModelId}
+            conversationId={conversationId || ''}
+            sessionParameters={sessionParameters}
+            onSessionParametersSaved={onSessionParametersSaved}
+            disabled={isModelSelectorDisabled || !currentProviderName}
+          />
+
           <PromptPill />
 
           {/* 消息导航：长会话里跳转到指定消息。放在头部而不是悬浮在消息上，避免遮挡内容 */}
@@ -170,7 +202,7 @@ export function ChatHeader({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button 
+              <button
                 className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
                 title="更多"
                 aria-label="更多操作"
@@ -179,28 +211,45 @@ export function ChatHeader({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-36 text-xs">
-              <DropdownMenuItem onSelect={handleNewChat} className="text-xs">新建对话</DropdownMenuItem>
-              <DropdownMenuItem onSelect={onShare} className="text-xs">分享</DropdownMenuItem>
-              <DropdownMenuItem onSelect={onDownload} className="text-xs">导出</DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleNewChat} className="text-xs">
+                新建对话
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onShare} className="text-xs">
+                分享
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onDownload} className="text-xs">
+                导出
+              </DropdownMenuItem>
               {onOpenSessionParameters && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={onOpenSessionParameters} className="text-xs">
+                  <DropdownMenuItem
+                    onSelect={onOpenSessionParameters}
+                    className="text-xs"
+                  >
                     <Settings className="w-3 h-3 mr-1.5" />
                     参数
-                    {hasSessionParameters && <span className="ml-auto text-[9px] text-slate-400">·</span>}
+                    {hasSessionParameters && (
+                      <span className="ml-auto text-[9px] text-slate-400">
+                        ·
+                      </span>
+                    )}
                   </DropdownMenuItem>
                 </>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={() => setShowDeleteConfirm(true)} className="text-xs">
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => setShowDeleteConfirm(true)}
+                className="text-xs"
+              >
                 删除
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
-      
+
       <DeleteConversationDialog
         isOpen={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
@@ -209,4 +258,4 @@ export function ChatHeader({
       />
     </>
   );
-} 
+}

@@ -884,18 +884,8 @@ export function ModelParametersDialog({
               inputMax={MODEL_PARAMETER_LIMITS.presencePenalty.inputMax}
             />
 
-            <ParamToggleRow
-              enabled={(parameters as any).enableThinking === true}
-              onEnabledChange={(v) =>
-                setParameters((prev) => ({ ...prev, enableThinking: v }) as any)
-              }
-              label="思考模式"
-              help="启用后，模型会展示思考过程。关闭则直接输出结果。"
-              value={!!(parameters as any).thinking}
-              onValueChange={(v) =>
-                setParameters((prev) => ({ ...prev, thinking: v }) as any)
-              }
-            />
+            {/* No thinking-boolean row: #100 retired its entry point, and a value left
+                over from before is translated on read (src/lib/chat/thinkingScope). */}
 
             {/* Thinking level: nothing sent = the model decides; an unverified model is
                 told so rather than offered tiers */}

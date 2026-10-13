@@ -1563,74 +1563,9 @@ export function SessionParametersDialog({
                   </div>
                 )}
 
-                {/* Thinking */}
-                <div className="flex items-center gap-2 py-1">
-                  <Checkbox
-                    checked={parameters.enableThinking === true}
-                    onCheckedChange={(checked) =>
-                      updateParameter('enableThinking', Boolean(checked))
-                    }
-                    className="h-3.5 w-3.5"
-                  />
-
-                  <div className="flex items-center gap-1.5 w-36">
-                    <Label
-                      className={cn(
-                        'text-xs',
-                        parameters.enableThinking === false
-                          ? 'text-slate-400'
-                          : 'text-slate-600 dark:text-slate-300',
-                      )}
-                    >
-                      启用思考模式
-                    </Label>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle className="w-3 h-3 text-slate-400 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="text-[11px]">
-                          启用后，模型会展示思考过程。
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-
-                  <div className="flex-1 flex items-center justify-end gap-2">
-                    <span
-                      className={cn(
-                        'text-[11px]',
-                        parameters.enableThinking === false
-                          ? 'text-slate-400'
-                          : 'text-slate-500',
-                      )}
-                    >
-                      {parameters.thinking ? '已启用' : '已禁用'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newParams = {
-                          ...parameters,
-                          thinking: !parameters.thinking,
-                        };
-                        setParameters(newParams);
-                        handleApplyImmediate(newParams);
-                      }}
-                      disabled={parameters.enableThinking === false}
-                      className={cn(
-                        'px-2.5 py-1 text-[11px] rounded-md transition-colors',
-                        parameters.thinking
-                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
-                          : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
-                        parameters.enableThinking === false &&
-                          'opacity-50 cursor-not-allowed',
-                      )}
-                    >
-                      {parameters.thinking ? '开启' : '关闭'}
-                    </button>
-                  </div>
-                </div>
+                {/* The old thinking boolean has no entry point here any more (#100): a
+                    stored value is still honoured when it means something this model can
+                    act on, and the level below is the only thing a user can now choose. */}
 
                 {/* Thinking level: inherit the model, send nothing, or choose it here */}
                 <div className="flex items-center gap-2 py-1">

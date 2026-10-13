@@ -39,6 +39,28 @@ const enUS: TranslationDict = {
   'modelParams.thinkingLevel.suppress': 'Off: send no thinking level',
   'modelParams.thinkingLevel.unverified':
     'Not verified for this model - no level is sent',
+  'thinkingSwitch.label': 'Thinking',
+  'thinkingSwitch.source.model': 'model default',
+  'thinkingSwitch.source.conversation': 'this conversation',
+  'thinkingSwitch.source.message': 'this message only',
+  'thinkingSwitch.source.model-default': 'the model decides',
+  'thinkingSwitch.source.unverified': 'unverified',
+  'thinkingSwitch.scope.model': "Make this the model's default",
+  'thinkingSwitch.scope.conversation': 'Apply to this conversation only',
+  'thinkingSwitch.scope.message': 'Apply to the next message only',
+  'thinkingSwitch.unverifiedHint':
+    'This model is unverified: no thinking level is sent',
+  'thinkingSwitch.staleHint':
+    'The saved level is not offered by this model, so nothing is sent',
+  'thinkingSwitch.pendingHint': 'Sent once, with the next message',
+  'thinkingShortcut.help': 'Alt+D cycles levels, Alt+Shift+D reverses',
+  'thinkingSwitch.migration.off':
+    'The old thinking switch was off; that is now the "do not think" level',
+  'thinkingSwitch.migration.kept-on':
+    'The old thinking switch is still on and this level does not change it',
+  'thinkingSwitch.migration.kept-unsupported':
+    'The old thinking switch is still off and this model has no matching level',
+  'modelParams.thinkingLevel.source': 'Currently from: {0}',
   'thinkingLevel.off': 'Off',
   'thinkingLevel.minimal': 'Minimal',
   'thinkingLevel.low': 'Low',

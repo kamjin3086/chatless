@@ -1,4 +1,5 @@
 import { specializedStorage } from './storage';
+import { migrateLegacyThinkingBoolean } from '@/lib/chat/thinkingScope';
 import { DEFAULT_MODEL_PARAMETERS } from '@/types/model-params';
 import type { ModelParameters } from '@/types/model-params';
 import { adaptFieldsForProvider } from './llm/provider-field-support';
@@ -12,18 +13,52 @@ export class ModelParametersService {
     providerName: string,
     modelId: string,
   ): Promise<ModelParameters> {
+    const saved = await ModelParametersService.readStoredModelParameters(
+      providerName,
+      modelId,
+    );
+    if (!saved) return DEFAULT_MODEL_PARAMETERS;
+    // #100 retired the boolean's entry point; what is already stored is translated here,
+    // once, so the wire and every screen read the same meaning. `getRawModelParameters`
+    // stays available for the one thing that must know a migration happened: the control's
+    // explanation. Defaults are not migrated - they are this code's own baseline, not a
+    // user's old choice.
+    return migrateLegacyThinkingBoolean({
+      provider: providerName,
+      modelId,
+      params: saved,
+    }).params;
+  }
+
+  /**
+   * The stored bag as written, with nothing translated - or null when there is nothing
+   * stored. Null matters: `DEFAULT_MODEL_PARAMETERS` carries `enableThinkingLevel: false`,
+   * which means "this bag refused a level", and handing that to a model the user never
+   * configured would make the control blame the model for an absence.
+   */
+  static async getRawModelParameters(
+    providerName: string,
+    modelId: string,
+  ): Promise<ModelParameters | null> {
+    return ModelParametersService.readStoredModelParameters(
+      providerName,
+      modelId,
+    );
+  }
+
+  private static async readStoredModelParameters(
+    providerName: string,
+    modelId: string,
+  ): Promise<ModelParameters | null> {
     try {
       const savedParams = await specializedStorage.models.getModelParameters(
         providerName,
         modelId,
       );
-      if (savedParams) {
-        return savedParams as ModelParameters;
-      }
-      return DEFAULT_MODEL_PARAMETERS;
+      return savedParams ? (savedParams as ModelParameters) : null;
     } catch (error) {
       console.error('获取模型参数失败:', error);
-      return DEFAULT_MODEL_PARAMETERS;
+      return null;
     }
   }
 

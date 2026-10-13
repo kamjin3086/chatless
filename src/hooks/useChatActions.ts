@@ -14,6 +14,7 @@ import { exportConversationMarkdown } from '@/lib/chat/actions/download';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { composeChatOptions } from '@/lib/chat/OptionComposer';
 import { dropInheritedThatSessionDisabled } from '@/lib/chat/sessionParameterMerge';
+import { resolveConversationParameters } from '@/lib/chat/sendParameterMerge';
 import { usePromptStore } from '@/store/promptStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { performanceMonitor } from '@/lib/performance/PerformanceMonitor';
@@ -610,17 +611,24 @@ export const useChatActions = (
           const modelOpts =
             ModelParametersService.convertToChatOptions(modelParams);
 
-          // 2) 取会话级参数（可能为空），转换为聊天选项
+          // 2) 会话级参数：先落定"仅本条消息"的一次性选择与旧布尔迁移，再转换为聊天选项。
+          //    发送与重新生成走同一个解析，两条路径的参数必须一致。
+          const resolvedSession = await resolveConversationParameters({
+            conversationId: finalConversationId,
+            provider: effectiveProvider,
+            modelId: modelToUse,
+            sessionParams: sessionParameters,
+          });
           let sessionOpts: Record<string, any> = {};
-          if (sessionParameters) {
+          if (resolvedSession) {
             sessionOpts =
-              ModelParametersService.convertToChatOptions(sessionParameters);
+              ModelParametersService.convertToChatOptions(resolvedSession);
           }
 
           // 3) A conversation may explicitly switch off something the model default set;
           //    the shared table in sessionParameterMerge decides what that removes.
           const filteredModelOpts: Record<string, any> =
-            dropInheritedThatSessionDisabled(modelOpts, sessionParameters);
+            dropInheritedThatSessionDisabled(modelOpts, resolvedSession);
 
           // 4) 合并，确保会话级覆盖模型级
           baseOptions = { ...filteredModelOpts, ...sessionOpts };
@@ -629,7 +637,7 @@ export const useChatActions = (
             baseOptions,
             ModelParametersService.resolveBudgetParameters(
               modelParams,
-              sessionParameters,
+              resolvedSession,
             ),
           );
 
@@ -1111,27 +1119,25 @@ export const useChatActions = (
         );
         const modelOpts =
           ModelParametersService.convertToChatOptions(modelParams);
+        // Same resolution as a normal send, and the same shared table for what a
+        // conversation's "switch this off" removes. This path used to carry a shorter list
+        // of its own that never learned about thinking, so a conversation could turn
+        // thinking off for a message and get it back on a regeneration.
+        const resolvedSession = await resolveConversationParameters({
+          conversationId: conv.id,
+          provider: effectiveProvider,
+          modelId: modelToUse,
+          sessionParams: sessionParameters,
+          // Revising an older answer is not the message a one-shot choice was made for.
+          applyMessageScope: false,
+        });
         let sessionOpts: Record<string, any> = {};
-        if (sessionParameters) {
+        if (resolvedSession) {
           sessionOpts =
-            ModelParametersService.convertToChatOptions(sessionParameters);
+            ModelParametersService.convertToChatOptions(resolvedSession);
         }
-        const filteredModelOpts: Record<string, any> = { ...modelOpts };
-        const maybeDelete = (flag: boolean | undefined, key: string) => {
-          if (flag === false && key in filteredModelOpts)
-            delete filteredModelOpts[key];
-        };
-        if (sessionParameters) {
-          const sp: any = sessionParameters;
-          maybeDelete(sp.enableTemperature, 'temperature');
-          maybeDelete(sp.enableMaxTokens, 'maxTokens');
-          maybeDelete(sp.enableTopP, 'topP');
-          maybeDelete(sp.enableTopK, 'topK');
-          maybeDelete(sp.enableMinP, 'minP');
-          maybeDelete(sp.enableFrequencyPenalty, 'frequencyPenalty');
-          maybeDelete(sp.enablePresencePenalty, 'presencePenalty');
-          maybeDelete(sp.enableStopSequences, 'stop');
-        }
+        const filteredModelOpts: Record<string, any> =
+          dropInheritedThatSessionDisabled(modelOpts, resolvedSession);
         const composed = await composeChatOptions(
           effectiveProvider,
           modelToUse,
@@ -1139,7 +1145,7 @@ export const useChatActions = (
             { ...filteredModelOpts, ...sessionOpts },
             ModelParametersService.resolveBudgetParameters(
               modelParams,
-              sessionParameters,
+              resolvedSession,
             ),
           ),
           conv.id,

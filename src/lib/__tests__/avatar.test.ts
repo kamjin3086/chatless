@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { generateAvatarDataUrl, getAvatarInitials, hashSeed } from '@/lib/avatar';
+import {
+  generateAvatarDataUrl,
+  getAvatarInitials,
+  hashSeed,
+} from '@/lib/avatar';
 
 describe('getAvatarInitials', () => {
   it('takes the first two latin letters for a single word', () => {
@@ -31,7 +35,11 @@ describe('generateAvatarDataUrl', () => {
   });
 
   it('uses a single letter at small sizes', () => {
-    const svg = decodeURIComponent(generateAvatarDataUrl('homelab', 'homelab', 18).slice('data:image/svg+xml;utf8,'.length));
+    const svg = decodeURIComponent(
+      generateAvatarDataUrl('homelab', 'homelab', 18).slice(
+        'data:image/svg+xml;utf8,'.length,
+      ),
+    );
     expect(svg).toContain('H</text>');
     expect(svg).not.toContain('HL</text>');
   });
