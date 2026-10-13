@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getPromptCacheStats, resetPromptCacheMetrics } from '@/lib/llm/promptCacheMetrics';
+import {
+  getPromptCacheStats,
+  resetPromptCacheMetrics,
+} from '@/lib/llm/promptCacheMetrics';
 import { OpenAICompatibleProvider } from '../OpenAICompatibleProvider';
 
 /**
@@ -18,16 +21,27 @@ beforeEach(() => {
 
 describe('provider prompt cache accounting', () => {
   it('records cached tokens from the trailing usage frame', async () => {
-    mocks.fetch.mockResolvedValue(new Response([
-      'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":null}]}',
-      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"model":"qwen","usage":{"prompt_tokens":4000,"prompt_tokens_details":{"cached_tokens":3200}}}',
-      'data: [DONE]',
-      '',
-    ].join('\n\n'), { headers: { 'content-type': 'text/event-stream' } }));
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        [
+          'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":null}]}',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"model":"qwen","usage":{"prompt_tokens":4000,"prompt_tokens_details":{"cached_tokens":3200}}}',
+          'data: [DONE]',
+          '',
+        ].join('\n\n'),
+        { headers: { 'content-type': 'text/event-stream' } },
+      ),
+    );
 
-    const provider = new OpenAICompatibleProvider('https://example.test/v1', undefined, 'fixture');
+    const provider = new OpenAICompatibleProvider(
+      'https://example.test/v1',
+      undefined,
+      'fixture',
+    );
     vi.spyOn(provider as any, 'getApiKey').mockResolvedValue('fixture');
-    await provider.chatStream('qwen', [{ role: 'user', content: 'hi' }], { onEvent: vi.fn() });
+    await provider.chatStream('qwen', [{ role: 'user', content: 'hi' }], {
+      onEvent: vi.fn(),
+    });
 
     const stats = getPromptCacheStats();
     expect(stats.reporting).toBe(1);

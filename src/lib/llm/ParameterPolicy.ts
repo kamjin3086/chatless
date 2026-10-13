@@ -4,7 +4,12 @@
  * - 便于预置厂商/模型的必要参数（如 Gemini 思考预算），并为后续用户自定义留出入口
  */
 
-import { thinkingWireFor, type ThinkingLevel } from './thinkingLevels';
+import {
+  readWireField,
+  thinkingWireFor,
+  withWireField,
+  type ThinkingLevel,
+} from './thinkingLevels';
 
 export type ParameterPatch = Record<string, any>;
 
@@ -79,23 +84,26 @@ const builtinRules: ParameterRule[] = [
       // override) outranks a level, matching how the pre-existing rules behave - except
       // where the carrier writes the same option as the older boolean, where the level
       // is the more specific statement.
-      if (next[wire.field] !== undefined && !wire.overrides) return next;
-      next[wire.field] = wire.value;
-      return next;
+      if (readWireField(next, wire.field) !== undefined && !wire.overrides) {
+        return next;
+      }
+      return withWireField(next, wire.field, wire.value);
     },
   },
   {
     id: 'google-gemini-thinking-required',
     priority: 100,
     description:
-      '为需要思考模式或仅支持思考模式的 Gemini 系列模型注入非零思考预算，避免 Budget 0 错误',
+      '统一 Gemini 的 generationConfig 字段命名；思考预算不再由这里兜底，交给思考等级',
     provider: /^(google\s*ai)$/i,
     providerMode: 'relaxed',
     // 兼容常见形态：gemini-2.5-pro、gemini-2.5-pro-latest、gemini-2.5-flash-thinking、gemini-1.5-pro-thinking 等
     model:
       /^(gemini-2\.5-(pro|flash-thinking)(?:-[a-z]+)?|gemini-1\.5-.*-thinking|gemini-2\.0-.*-thinking|.*-thinking)$/i,
     apply: (base) => {
-      // 只注入思考预算；不强行设置 temperature/topP 等通用参数，避免用户未开启也被下发
+      // Only field naming happens here. This rule used to pin thinkingBudget to 1024,
+      // which both competed with a level the user had chosen and was a number nobody had
+      // picked; sending nothing at all is the documented way to get dynamic thinking.
       const patch: ParameterPatch = {
         generationConfig: {
           // 统一映射 maxTokens → maxOutputTokens（若用户显式设置才透传）
@@ -115,14 +123,6 @@ const builtinRules: ParameterRule[] = [
                   base?.stop ?? base?.generationConfig?.stopSequences,
               }
             : {}),
-          thinkingConfig: {
-            // 仅当未设置或为 0 时，给出非零预算，避免 400 错误
-            thinkingBudget:
-              base?.generationConfig?.thinkingConfig?.thinkingBudget &&
-              base?.generationConfig?.thinkingConfig?.thinkingBudget > 0
-                ? base.generationConfig.thinkingConfig.thinkingBudget
-                : 1024,
-          },
         },
       };
       return mergeDeep(base, patch);

@@ -170,9 +170,13 @@ describe('thinking level through the parameter policy', () => {
     expect(out.thinking).toBe(true);
   });
 
-  it('does not disturb the pre-existing Gemini thinking budget', () => {
-    const out = ParameterPolicyEngine.apply('Google AI', 'gemini-2.5-pro', {});
-    expect(out.generationConfig.thinkingConfig.thinkingBudget).toBe(1024);
+  it('does not disturb unrelated Gemini generation fields', () => {
+    const out = ParameterPolicyEngine.apply('Google AI', 'gemini-2.5-pro', {
+      generationConfig: { temperature: 0.3 },
+      thinkingLevel: 'medium',
+    });
+    expect(out.generationConfig.temperature).toBe(0.3);
+    expect(out.generationConfig.thinkingConfig.thinkingBudget).toBe(8192);
   });
   it('expresses off on Ollama as think:false rather than omitting the field', () => {
     // Ollama's API takes true/false/null and nothing graded unless /api/show names it,

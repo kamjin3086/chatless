@@ -32,16 +32,27 @@ async function run(content: string, opts: Record<string, unknown> = {}) {
     'data: [DONE]',
     '',
   ].join('\n\n');
-  mocks.fetch.mockResolvedValue(new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
+  mocks.fetch.mockResolvedValue(
+    new Response(body, { headers: { 'content-type': 'text/event-stream' } }),
+  );
 
-  const provider = new OpenAICompatibleProvider('https://example.test/v1', undefined, 'fixture');
+  const provider = new OpenAICompatibleProvider(
+    'https://example.test/v1',
+    undefined,
+    'fixture',
+  );
   vi.spyOn(provider as any, 'getApiKey').mockResolvedValue('fixture');
   const events: any[] = [];
   const errors: any[] = [];
-  await provider.chatStream('hi', [{ role: 'user', content: 'hi' }], {
-    onEvent: (event) => events.push(event),
-    onError: (error) => errors.push(error),
-  }, opts);
+  await provider.chatStream(
+    'hi',
+    [{ role: 'user', content: 'hi' }],
+    {
+      onEvent: (event) => events.push(event),
+      onError: (error) => errors.push(error),
+    },
+    opts,
+  );
   return { events, errors, provider };
 }
 

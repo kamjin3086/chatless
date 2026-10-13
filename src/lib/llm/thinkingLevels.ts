@@ -46,8 +46,11 @@ export const THINKING_LEVEL_ORDER: ThinkingLevel[] = [
 /** Wire field a carrier is expressed as. Levels not in `wire` are not offered. */
 const CARRIER_FIELD: Record<ThinkingCarrier, string | null> = {
   reasoning_effort: 'reasoning_effort',
-  thinking_level: 'thinking_level',
-  thinking_budget: 'thinking_budget',
+  // Gemini documents both fields nested inside generationConfig.thinkingConfig, and a
+  // dotted name here means exactly that path: a flat `thinking_level` would be ignored
+  // by the API and the level would silently do nothing.
+  thinking_level: 'generationConfig.thinkingConfig.thinkingLevel',
+  thinking_budget: 'generationConfig.thinkingConfig.thinkingBudget',
   model_alias: null,
   unsupported: null,
   // Ollama's API field is `think`, but the provider already translates this repo's
@@ -55,6 +58,38 @@ const CARRIER_FIELD: Record<ThinkingCarrier, string | null> = {
   // that path already reads instead of inventing a second one.
   ollama_think: 'thinking',
 };
+
+/**
+ * A carrier field may be a dotted path (see `CARRIER_FIELD`). Reading and writing one
+ * never mutates the caller's object: the option bag is shared with the UI and with
+ * stored parameters, and a rule that reached through it would leave a level applied to
+ * a request the user never asked for.
+ */
+export function readWireField(source: unknown, field: string): unknown {
+  return field
+    .split('.')
+    .reduce<any>((acc, key) => (acc == null ? undefined : acc[key]), source);
+}
+
+export function withWireField<T extends Record<string, any>>(
+  target: T,
+  field: string,
+  value: unknown,
+): T {
+  const keys = field.split('.');
+  const branch = (value: any) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? { ...value }
+      : value;
+  const root: any = branch(target);
+  let cursor = root;
+  for (const key of keys.slice(0, -1)) {
+    cursor[key] = branch(cursor[key] ?? {});
+    cursor = cursor[key];
+  }
+  cursor[keys[keys.length - 1]] = value;
+  return root as T;
+}
 
 export interface ThinkingMapping {
   id: string;
@@ -77,6 +112,30 @@ export interface ThinkingMapping {
  * levels in this field, so an unlisted model is reported as unverified rather than
  * guessed at - the same rule as everywhere else in this repo.
  */
+/**
+ * Gemini's two shapes are per-generation and not interchangeable: the 3 series takes a
+ * `thinkingLevel` string and each model advertises a different subset, while the 2.5
+ * series documents `thinkingBudget` and says outright that it does not support
+ * thinkingLevel. Every number below sits inside the range the documentation gives that
+ * model (2.5 Flash 0..24576, 2.5 Flash Lite 512..24576, 2.5 Pro 128..32768); the choice
+ * of rung is ours, the range is not. Levels a model is not documented to accept are
+ * absent, so they are never offered and never sent.
+ */
+const GEMINI_PROVIDER = /^google\s*ai$/i;
+const GEMINI_LEVELS_FULL = {
+  minimal: 'minimal',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+};
+const GEMINI_LEVELS_NO_MINIMAL = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+};
+const GEMINI_BUDGET_FLASH = { off: 0, low: 1024, medium: 8192, high: 24576 };
+const GEMINI_BUDGET_PRO = { low: 1024, medium: 8192, high: 32768 };
+
 export const THINKING_MAPPINGS: ThinkingMapping[] = [
   {
     id: 'openai-reasoning',
@@ -110,6 +169,58 @@ export const THINKING_MAPPINGS: ThinkingMapping[] = [
       medium: 'medium',
       high: 'high',
     },
+  },
+  {
+    id: 'gemini-3-image-thinking-level',
+    description: '图像型号只文档化了 minimal 与 high 两档',
+    provider: GEMINI_PROVIDER,
+    model: /^gemini-3\.1-flash-lite-image/i,
+    carrier: 'thinking_level',
+    wire: { minimal: 'minimal', high: 'high' },
+  },
+  {
+    id: 'gemini-3-thinking-level',
+    description:
+      'Gemini 3 用 thinkingLevel；各型号支持的档位不同，未文档化的档位一律不下发',
+    provider: GEMINI_PROVIDER,
+    model:
+      /^(gemini-3\.6-flash|gemini-3\.5-flash-lite|gemini-3\.1-flash-lite|gemini-3-flash)/i,
+    carrier: 'thinking_level',
+    wire: GEMINI_LEVELS_FULL,
+  },
+  {
+    id: 'gemini-3-no-minimal-thinking-level',
+    description: '3.8 Flash 与 3.1 Pro 没有 minimal，也不允许关闭思考',
+    provider: GEMINI_PROVIDER,
+    model: /^(gemini-3\.8-flash|gemini-3\.1-pro)/i,
+    carrier: 'thinking_level',
+    wire: GEMINI_LEVELS_NO_MINIMAL,
+  },
+  {
+    id: 'gemini-3-pro-thinking-level',
+    description: 'Gemini 3 Pro 只文档化了 low 与 high',
+    provider: GEMINI_PROVIDER,
+    model: /^gemini-3-pro/i,
+    carrier: 'thinking_level',
+    wire: { low: 'low', high: 'high' },
+  },
+  {
+    id: 'gemini-25-flash-budget',
+    description:
+      'Gemini 2.5 Flash / Flash Lite 只认 thinkingBudget，off 就是文档里的预算 0',
+    provider: GEMINI_PROVIDER,
+    model: /^gemini-2\.5-flash/i,
+    carrier: 'thinking_budget',
+    wire: GEMINI_BUDGET_FLASH,
+  },
+  {
+    id: 'gemini-25-pro-budget',
+    description:
+      'Gemini 2.5 Pro 只认 thinkingBudget（128 到 32768），且无法关闭思考，所以没有 off',
+    provider: GEMINI_PROVIDER,
+    model: /^gemini-2\.5-pro/i,
+    carrier: 'thinking_budget',
+    wire: GEMINI_BUDGET_PRO,
   },
   {
     id: 'ollama-think',
