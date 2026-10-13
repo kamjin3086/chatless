@@ -39,6 +39,13 @@ export type TranslationKey =
   | 'thinkingLevel.low'
   | 'thinkingLevel.medium'
   | 'thinkingLevel.high'
-  | 'thinkingLevel.xhigh';
+  | 'thinkingLevel.xhigh'
+  | 'thinkingLevel.max'
+  | 'modelParams.thinking.conflictEffortDisabled'
+  | 'modelParams.thinking.conflictDisabledUnsupported'
+  | 'modelParams.thinking.conflictBudgetAboveMax'
+  | 'modelParams.thinking.conflictBudgetTooSmall'
+  | 'modelParams.thinking.warnEffortNeedsRoom'
+  | 'modelParams.thinking.cacheNotice';
 
 export type TranslationDict = Record<TranslationKey, string>;

@@ -22,7 +22,10 @@ export type ThinkingLevel =
   | 'low'
   | 'medium'
   | 'high'
-  | 'xhigh';
+  | 'xhigh'
+  /** Anthropic's deepest rung. Only that provider's rows offer it, so no other model
+   * is ever shown a tier its API would refuse. */
+  | 'max';
 
 /** How a level reaches a given provider. */
 export type ThinkingCarrier =
@@ -30,6 +33,8 @@ export type ThinkingCarrier =
   | 'thinking_level'
   | 'thinking_budget'
   | 'ollama_think'
+  | 'anthropic_effort'
+  | 'anthropic_disable'
   | 'model_alias'
   | 'unsupported';
 
@@ -41,6 +46,7 @@ export const THINKING_LEVEL_ORDER: ThinkingLevel[] = [
   'medium',
   'high',
   'xhigh',
+  'max',
 ];
 
 /** Wire field a carrier is expressed as. Levels not in `wire` are not offered. */
@@ -57,6 +63,10 @@ const CARRIER_FIELD: Record<ThinkingCarrier, string | null> = {
   // internal `thinking` option into that body field, so the carrier aims at the option
   // that path already reads instead of inventing a second one.
   ollama_think: 'thinking',
+  // Anthropic steers depth with `output_config.effort`, and says the depth of a
+  // thinking *mode* is not an effort level: turning it off is `thinking.type`.
+  anthropic_effort: 'output_config.effort',
+  anthropic_disable: 'thinking.type',
 };
 
 /**
@@ -136,6 +146,30 @@ const GEMINI_LEVELS_NO_MINIMAL = {
 const GEMINI_BUDGET_FLASH = { off: 0, low: 1024, medium: 8192, high: 24576 };
 const GEMINI_BUDGET_PRO = { low: 1024, medium: 8192, high: 32768 };
 
+/**
+ * Anthropic steers depth with `output_config.effort` (the extended-thinking page tells
+ * you to drop `budget_tokens` for exactly this), and the rungs differ per model: 4.6 has
+ * `max` but no `xhigh`, and Opus 4.5 is still in manual mode where effort rides next to a
+ * budget. "Do not think" is not an effort level: it is `thinking.type`, spelled `disabled`
+ * nearly everywhere and `between_tools` on Sonnet 5.5 - and Opus 5.5 refuses both at every
+ * level, so it gets no off row at all and is never offered one.
+ */
+const ANTHROPIC_PROVIDER = /^anthropic$/i;
+const ANTHROPIC_EFFORTS = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  xhigh: 'xhigh',
+  max: 'max',
+};
+const ANTHROPIC_EFFORTS_NO_XHIGH = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'max',
+};
+const ANTHROPIC_EFFORTS_MANUAL = { low: 'low', medium: 'medium', high: 'high' };
+
 export const THINKING_MAPPINGS: ThinkingMapping[] = [
   {
     id: 'openai-reasoning',
@@ -184,7 +218,7 @@ export const THINKING_MAPPINGS: ThinkingMapping[] = [
       'Gemini 3 用 thinkingLevel；各型号支持的档位不同，未文档化的档位一律不下发',
     provider: GEMINI_PROVIDER,
     model:
-      /^(gemini-3\.6-flash|gemini-3\.5-flash-lite|gemini-3\.1-flash-lite|gemini-3-flash)/i,
+      /^(gemini-3\.6-flash|gemini-3\.5-flash-lite|gemini-3\.1-flash-lite|gemini-3-flash)(?!-image)/i,
     carrier: 'thinking_level',
     wire: GEMINI_LEVELS_FULL,
   },
@@ -223,6 +257,50 @@ export const THINKING_MAPPINGS: ThinkingMapping[] = [
     wire: GEMINI_BUDGET_PRO,
   },
   {
+    id: 'anthropic-effort',
+    description:
+      'Anthropic 用 output_config.effort 控制深度，不再下发固定 budget',
+    provider: ANTHROPIC_PROVIDER,
+    model:
+      /claude-(fable|mythos|opus|sonnet)-5|claude-opus-4[.\-][78]|claude-haiku-5[.\-]5/i,
+    carrier: 'anthropic_effort',
+    wire: ANTHROPIC_EFFORTS,
+  },
+  {
+    id: 'anthropic-effort-no-xhigh',
+    description: '4.6 有 max 但没有 xhigh',
+    provider: ANTHROPIC_PROVIDER,
+    model: /claude-(opus|sonnet)-4[.\-]6/i,
+    carrier: 'anthropic_effort',
+    wire: ANTHROPIC_EFFORTS_NO_XHIGH,
+  },
+  {
+    id: 'anthropic-effort-manual',
+    description: 'Opus 4.5 仍走手动预算，这里只给安全的三档',
+    provider: ANTHROPIC_PROVIDER,
+    model: /claude-opus-4[.\-]5/i,
+    carrier: 'anthropic_effort',
+    wire: ANTHROPIC_EFFORTS_MANUAL,
+  },
+  {
+    id: 'anthropic-off-between-tools',
+    description: 'Sonnet 5.5 最低一档叫 between_tools，不是 disabled',
+    provider: ANTHROPIC_PROVIDER,
+    model: /claude-sonnet-5[.\-]5/i,
+    carrier: 'anthropic_disable',
+    wire: { off: 'between_tools' },
+  },
+  {
+    id: 'anthropic-off-disabled',
+    description:
+      '关闭思考走 thinking.type，不是少发一个字段；Opus 5.5 不接受任何关法',
+    provider: ANTHROPIC_PROVIDER,
+    model:
+      /claude-(fable|mythos|sonnet)-5|claude-opus-5(?![.\-]5)|claude-(opus|sonnet)-4[.\-][5678]|claude-haiku-5[.\-]5/i,
+    carrier: 'anthropic_disable',
+    wire: { off: 'disabled' },
+  },
+  {
     id: 'ollama-think',
     description:
       'Ollama takes think true/false only; graded tiers are model-defined and must come from /api/show, so nothing finer is claimed here',
@@ -233,16 +311,28 @@ export const THINKING_MAPPINGS: ThinkingMapping[] = [
   },
 ];
 
+/**
+ * More than one row can describe the same model, because a provider may express one
+ * level in a field and another level in a different field - Anthropic's effort rungs
+ * live in `output_config`, while "do not think" lives in `thinking.type`. Matching
+ * stops at the first row only when asking for one row; asking what is offered unions
+ * them, and asking for a level takes the first row that actually advertises it.
+ */
+export function findThinkingMappings(
+  providerName: string,
+  modelId: string,
+): ThinkingMapping[] {
+  return THINKING_MAPPINGS.filter(
+    (mapping) =>
+      mapping.provider.test(providerName) && mapping.model.test(modelId),
+  );
+}
+
 export function findThinkingMapping(
   providerName: string,
   modelId: string,
 ): ThinkingMapping | null {
-  for (const mapping of THINKING_MAPPINGS) {
-    if (mapping.provider.test(providerName) && mapping.model.test(modelId)) {
-      return mapping;
-    }
-  }
-  return null;
+  return findThinkingMappings(providerName, modelId)[0] ?? null;
 }
 
 /** Levels worth offering in the UI. Empty means "unverified: send nothing". */
@@ -250,10 +340,11 @@ export function supportedThinkingLevels(
   providerName: string,
   modelId: string,
 ): ThinkingLevel[] {
-  const mapping = findThinkingMapping(providerName, modelId);
-  if (!mapping || !mapping.wire) return [];
+  const mappings = findThinkingMappings(providerName, modelId);
   return THINKING_LEVEL_ORDER.filter(
-    (level) => level !== 'auto' && mapping.wire?.[level] !== undefined,
+    (level) =>
+      level !== 'auto' &&
+      mappings.some((mapping) => mapping.wire?.[level] !== undefined),
   );
 }
 
@@ -275,20 +366,23 @@ export function thinkingWireFor(
   level: ThinkingLevel,
 ): ThinkingWire | null {
   if (level === 'auto') return null;
-  const mapping = findThinkingMapping(providerName, modelId);
-  if (!mapping) return null;
-  const value = mapping.wire?.[level];
-  if (value === undefined) return null;
-  const field = CARRIER_FIELD[mapping.carrier];
-  if (!field) return null;
-  return {
-    carrier: mapping.carrier,
-    field,
-    value,
-    // On Ollama the older boolean and the level both write the same option, and the
-    // level is the newer, more specific statement.
-    overrides: mapping.carrier === 'ollama_think',
-  };
+  for (const mapping of findThinkingMappings(providerName, modelId)) {
+    const value = mapping.wire?.[level];
+    const field = value === undefined ? null : CARRIER_FIELD[mapping.carrier];
+    // `undefined` means "this row does not advertise that level"; a real wire value can
+    // be 0 (Gemini's way of saying "do not think") or false (Ollama's), so a truthiness
+    // test here would silently drop the one level whose whole point is to be explicit.
+    if (value === undefined || !field) continue;
+    return {
+      carrier: mapping.carrier,
+      field,
+      value,
+      // On Ollama the older boolean and the level both write the same option, and the
+      // level is the newer, more specific statement.
+      overrides: mapping.carrier === 'ollama_think',
+    };
+  }
+  return null;
 }
 
 /**
@@ -325,4 +419,14 @@ export function resolveThinkingModelName(args: {
     );
   }
   return `${model}${suffix}`;
+}
+
+/**
+ * What the model does when nothing is sent - the only level that costs nothing to choose,
+ * because the documentation says an effort equal to the default is equivalent to omitting
+ * it, and prompt caching is keyed on the resolved value.
+ */
+export function anthropicDefaultEffort(modelId: string): string | null {
+  if (findThinkingMappings('Anthropic', modelId).length === 0) return null;
+  return /claude-(opus|haiku)-5[.\-]5/i.test(modelId) ? 'medium' : 'high';
 }

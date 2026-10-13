@@ -1,13 +1,21 @@
-import { BaseProvider, CheckResult, StreamCallbacks, LlmMessage } from './BaseProvider';
+import {
+  BaseProvider,
+  CheckResult,
+  StreamCallbacks,
+  LlmMessage,
+} from './BaseProvider';
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
-import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
+import {
+  parsePromptCacheUsage,
+  recordPromptCacheUsage,
+} from '@/lib/llm/promptCacheMetrics';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '@/lib/llm/outputBudget';
 import { createStreamEvent } from '../types/stream-events';
-import { 
-  type ToolDefinition, 
-  toAnthropicTools, 
+import {
+  type ToolDefinition,
+  toAnthropicTools,
   toAnthropicToolChoice,
 } from '../types/tool-schema';
 
@@ -17,6 +25,57 @@ import {
  * - ✅ 支持Claude模型
  * - ✅ 支持结构化事件输出（onEvent优先）
  */
+/**
+ * The request-body seam for Anthropic: flat options in, the fields this API expects out.
+ * Extracted from `streamChat` so the thinking-level wiring can be asserted where the body
+ * is built - a level that lands in a field this API never reads would pass every test that
+ * only looks at options.
+ */
+export function buildAnthropicRequestOptions(
+  options: Record<string, any> = {},
+): Record<string, any> {
+  // 过滤扩展字段，避免把 mcpServers/extensions 传入
+  const o: any = options || {};
+  const {
+    extensions: _extensions,
+    mcpServers: _mcpServers,
+    tools: _tools,
+    toolChoice: _toolChoice,
+    ...restOpts
+  } = o;
+  const mapped: any = { ...restOpts };
+  if (o.maxTokens !== undefined && mapped.max_tokens === undefined)
+    mapped.max_tokens = o.maxTokens;
+  if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined)
+    mapped.max_tokens = o.maxOutputTokens;
+  // Anthropic 的 max_tokens 是必填字段：自动模式下我们没有下发值，这里必须补一个。
+  // 窗口已知时取窗口的 1/8（夹在 1024 与 8192 之间），否则用手动滑块的默认值。
+  if (mapped.max_tokens === undefined) {
+    const window = Number((o as any).contextWindowTokens);
+    mapped.max_tokens =
+      Number.isFinite(window) && window > 0
+        ? Math.max(
+            1024,
+            Math.min(DEFAULT_MAX_OUTPUT_TOKENS, Math.floor(window / 8)),
+          )
+        : DEFAULT_MAX_OUTPUT_TOKENS;
+  }
+  if (o.stop !== undefined && mapped.stop_sequences === undefined)
+    mapped.stop_sequences = o.stop;
+  if (o.topP !== undefined && mapped.top_p === undefined) mapped.top_p = o.topP;
+  if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;
+  if (o.minP !== undefined && mapped.min_p === undefined) mapped.min_p = o.minP;
+  // The older "does it think" switch is a boolean on Ollama-shaped providers. This API
+  // has never accepted `thinking: true` - a thinking configuration is an object with a
+  // `type` - so a bare boolean here would have been a 400 on every request that carried
+  // one. Dropping it is the honest reading of a value that meant nothing here; #100
+  // retires the boolean outright.
+  if (typeof mapped.thinking !== 'object' || mapped.thinking === null) {
+    delete mapped.thinking;
+  }
+  return mapped;
+}
+
 export class AnthropicProvider extends BaseProvider {
   private sseClient: SSEClient;
   private thinkingStrategy: ThinkingModeStrategy;
@@ -28,16 +87,28 @@ export class AnthropicProvider extends BaseProvider {
     this.thinkingStrategy = ThinkingStrategyFactory.createStandardStrategy();
   }
 
-  async fetchModels(): Promise<Array<{name: string, label?: string, aliases?: string[]}> | null> {
+  async fetchModels(): Promise<Array<{
+    name: string;
+    label?: string;
+    aliases?: string[];
+  }> | null> {
     const list = getStaticModels('Anthropic');
-    return list?.map((m)=>({ name: m.id, label: m.label, aliases: [m.id] })) ?? null;
+    return (
+      list?.map((m) => ({ name: m.id, label: m.label, aliases: [m.id] })) ??
+      null
+    );
   }
 
   async checkConnection(): Promise<CheckResult> {
     const base = this.baseUrl.replace(/\/$/, '');
     const url = `${base}/messages`;
     const apiKey = await this.getApiKey();
-    const body = { model: 'claude-3-opus-20240229', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, stream: false } as any;
+    const body = {
+      model: 'claude-3-opus-20240229',
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
+      stream: false,
+    } as any;
     try {
       const { tauriFetch } = await import('@/lib/request');
       const { judgeApiReachable } = await import('./healthcheck');
@@ -58,8 +129,14 @@ export class AnthropicProvider extends BaseProvider {
       const text = (await resp.text?.()) || '';
       const contentType = resp?.headers?.get?.('content-type') || '';
       const judged = judgeApiReachable(status, text, contentType);
-      if (judged.ok) return { ok: true, message: judged.message, meta: { status } };
-      return { ok: false, reason: judged.reason || 'UNKNOWN', message: judged.message || `HTTP ${status}`, meta: { status } };
+      if (judged.ok)
+        return { ok: true, message: judged.message, meta: { status } };
+      return {
+        ok: false,
+        reason: judged.reason || 'UNKNOWN',
+        message: judged.message || `HTTP ${status}`,
+        meta: { status },
+      };
     } catch (e: any) {
       const { classifyNetworkError } = await import('./healthcheck');
       return classifyNetworkError(e);
@@ -73,65 +150,69 @@ export class AnthropicProvider extends BaseProvider {
     model: string,
     messages: LlmMessage[],
     callbacks: StreamCallbacks,
-    options: any = {}
+    options: any = {},
   ): Promise<void> {
     const apiKey = await this.getApiKey(model);
     if (!apiKey) {
       const err = new Error('NO_KEY');
       (err as any).code = 'NO_KEY';
-      (err as any).userMessage = '未配置 API 密钥（Anthropic）。请在设置中配置密钥后重试';
+      (err as any).userMessage =
+        '未配置 API 密钥（Anthropic）。请在设置中配置密钥后重试';
       callbacks.onError?.(err);
       return;
     }
 
     // Claude expects messages as array of {role, content}
     const endpoint = `${this.baseUrl.replace(/\/$/, '')}/messages`;
-    // 过滤扩展字段，避免把 mcpServers/extensions 传入
     const o: any = options || {};
-    const { 
-      extensions: _extensions, 
-      mcpServers: _mcpServers,
-      tools: toolDefs,
-      toolChoice,
-      ...restOpts 
-    } = o;
-    const mapped: any = { ...restOpts };
-    if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
-    if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;
-    // Anthropic 的 max_tokens 是必填字段：自动模式下我们没有下发值，这里必须补一个。
-    // 窗口已知时取窗口的 1/8（夹在 1024 与 8192 之间），否则用手动滑块的默认值。
-    if (mapped.max_tokens === undefined) {
-      const window = Number((o as any).contextWindowTokens);
-      mapped.max_tokens = Number.isFinite(window) && window > 0
-        ? Math.max(1024, Math.min(DEFAULT_MAX_OUTPUT_TOKENS, Math.floor(window / 8)))
-        : DEFAULT_MAX_OUTPUT_TOKENS;
-    }
-    if (o.stop !== undefined && mapped.stop_sequences === undefined) mapped.stop_sequences = o.stop;
-    if (o.topP !== undefined && mapped.top_p === undefined) mapped.top_p = o.topP;
-    if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;
-    if (o.minP !== undefined && mapped.min_p === undefined) mapped.min_p = o.minP;
+    const { tools: toolDefs, toolChoice } = o;
+    const mapped = buildAnthropicRequestOptions(options);
 
-    const systemMessages = messages.filter((m) => m.role === 'system' || m.role === 'developer');
+    const systemMessages = messages.filter(
+      (m) => m.role === 'system' || m.role === 'developer',
+    );
     const anthropicMessages = messages
       .filter((m) => m.role !== 'system' && m.role !== 'developer')
       .map((m: any) => {
-        if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+        if (
+          m.role === 'assistant' &&
+          Array.isArray(m.tool_calls) &&
+          m.tool_calls.length
+        ) {
           const content: any[] = [];
           if (m.content) content.push({ type: 'text', text: m.content });
           for (const call of m.tool_calls) {
             let input: unknown = {};
-            try { input = JSON.parse(call.function?.arguments || '{}'); } catch { /* keep empty object */ }
-            content.push({ type: 'tool_use', id: call.id, name: call.function?.name, input });
+            try {
+              input = JSON.parse(call.function?.arguments || '{}');
+            } catch {
+              /* keep empty object */
+            }
+            content.push({
+              type: 'tool_use',
+              id: call.id,
+              name: call.function?.name,
+              input,
+            });
           }
           return { role: 'assistant', content };
         }
         if (m.role === 'tool') {
           return {
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content || '' }],
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: m.tool_call_id,
+                content: m.content || '',
+              },
+            ],
           };
         }
-        return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content || '' };
+        return {
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content || '',
+        };
       });
     const body: Record<string, unknown> = {
       model,
@@ -139,12 +220,13 @@ export class AnthropicProvider extends BaseProvider {
       stream: true,
       ...mapped,
     };
-    if (systemMessages.length) body.system = systemMessages.map((m) => m.content).join('\n\n');
-    
+    if (systemMessages.length)
+      body.system = systemMessages.map((m) => m.content).join('\n\n');
+
     // 添加原生工具调用支持（如果提供了工具定义）
     if (toolDefs && Array.isArray(toolDefs) && toolDefs.length > 0) {
       body.tools = toAnthropicTools(toolDefs as ToolDefinition[]);
-      
+
       if (toolChoice) {
         body.tool_choice = toAnthropicToolChoice(toolChoice);
       }
@@ -152,15 +234,18 @@ export class AnthropicProvider extends BaseProvider {
 
     // 重置策略状态
     this.thinkingStrategy.reset();
-    
+
     // 工具调用状态追踪
-    const toolCallState: Map<number, {
-      id: string;
-      name: string;
-      input: string;
-    }> = new Map();
+    const toolCallState: Map<
+      number,
+      {
+        id: string;
+        name: string;
+        input: string;
+      }
+    > = new Map();
     // Native tool calling：工具调用由 tool_use 块显式提供，不需要额外的“当前工具索引”状态
-    
+
     try {
       await this.sseClient.startConnection(
         {
@@ -172,7 +257,7 @@ export class AnthropicProvider extends BaseProvider {
             'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify(body),
-          debugTag: 'AnthropicProvider'
+          debugTag: 'AnthropicProvider',
         },
         {
           onStart: callbacks.onStart,
@@ -188,11 +273,23 @@ export class AnthropicProvider extends BaseProvider {
                   const json = JSON.parse(part);
                   // Anthropic reports cache usage on message_start / message_delta.
                   if (json?.message?.usage) {
-                    recordPromptCacheUsage(parsePromptCacheUsage(json.message.usage, 'anthropic', json.message.model));
+                    recordPromptCacheUsage(
+                      parsePromptCacheUsage(
+                        json.message.usage,
+                        'anthropic',
+                        json.message.model,
+                      ),
+                    );
                   } else if (json?.usage) {
-                    recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'anthropic', json?.message?.model));
+                    recordPromptCacheUsage(
+                      parsePromptCacheUsage(
+                        json.usage,
+                        'anthropic',
+                        json?.message?.model,
+                      ),
+                    );
                   }
-                  
+
                   // 处理内容块开始（可能是工具调用）
                   if (json.type === 'content_block_start') {
                     const contentBlock = json.content_block;
@@ -204,35 +301,42 @@ export class AnthropicProvider extends BaseProvider {
                       });
                     }
                   }
-                  
+
                   // 处理内容块增量
                   if (json.type === 'content_block_delta') {
                     const delta = json.delta;
-                    
+
                     // 处理工具输入增量
-                    if (delta?.type === 'input_json_delta' && toolCallState.has(json.index)) {
+                    if (
+                      delta?.type === 'input_json_delta' &&
+                      toolCallState.has(json.index)
+                    ) {
                       const state = toolCallState.get(json.index)!;
                       state.input += delta.partial_json || '';
                     }
-                    
+
                     // 处理文本内容
                     const token = delta?.text;
                     if (token) {
                       const result = this.thinkingStrategy.processToken({
                         content: token,
-                        done: false
+                        done: false,
                       });
-                      
+
                       // Native-only Agent：必须使用结构化事件（onEvent），不允许降级回文本
                       if (!callbacks.onEvent) {
-                        throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
+                        throw new Error(
+                          'Native-only Agent mode requires StreamCallbacks.onEvent',
+                        );
                       }
                       if (result.events && result.events.length > 0) {
-                        result.events.forEach(event => callbacks.onEvent!(event));
+                        result.events.forEach((event) =>
+                          callbacks.onEvent!(event),
+                        );
                       }
                     }
                   }
-                  
+
                   // 处理内容块结束
                   if (json.type === 'content_block_stop') {
                     // 发送累积的工具调用
@@ -242,7 +346,7 @@ export class AnthropicProvider extends BaseProvider {
                       toolCallState.delete(json.index);
                     }
                   }
-                  
+
                   // 处理消息结束
                   if (json.type === 'message_stop') {
                     // 发送所有剩余的工具调用
@@ -252,15 +356,21 @@ export class AnthropicProvider extends BaseProvider {
                       }
                     }
                     toolCallState.clear();
-                    
-                    const result = this.thinkingStrategy.processToken({ done: true });
+
+                    const result = this.thinkingStrategy.processToken({
+                      done: true,
+                    });
                     if (!callbacks.onEvent) {
-                      throw new Error('Native-only Agent mode requires StreamCallbacks.onEvent');
+                      throw new Error(
+                        'Native-only Agent mode requires StreamCallbacks.onEvent',
+                      );
                     }
                     if (result.events && result.events.length > 0) {
-                      result.events.forEach(event => callbacks.onEvent!(event));
+                      result.events.forEach((event) =>
+                        callbacks.onEvent!(event),
+                      );
                     }
-                    
+
                     callbacks.onComplete?.();
                     this.sseClient.stopConnection();
                   }
@@ -269,8 +379,8 @@ export class AnthropicProvider extends BaseProvider {
             } catch (err) {
               console.error('[Anthropic SSE] parse error', err);
             }
-          }
-        }
+          },
+        },
       );
     } catch (error: any) {
       console.error('[AnthropicProvider] SSE connection failed:', error);
@@ -283,25 +393,27 @@ export class AnthropicProvider extends BaseProvider {
    */
   private emitToolCall(
     tc: { id: string; name: string; input: string },
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
   ): void {
     // 解析服务器和工具名称
     // 关键：避免出现 server=default 导致 “服务器 default 配置未找到”
-    const { normalizeToolCallServerAndTool } = require('@/lib/mcp/normalizeToolCallName');
-    const n = normalizeToolCallServerAndTool({ serverName: 'default', toolName: tc.name });
+    const {
+      normalizeToolCallServerAndTool,
+    } = require('@/lib/mcp/normalizeToolCallName');
+    const n = normalizeToolCallServerAndTool({
+      serverName: 'default',
+      toolName: tc.name,
+    });
     const serverName = n.serverName;
     const toolName = n.toolName;
-    
+
     // 发送工具调用事件
     if (callbacks.onEvent) {
-      const toolEvent = createStreamEvent.toolCall(
-        tc.id,
-        {
-          serverName,
-          toolName,
-          arguments: tc.input,
-        }
-      );
+      const toolEvent = createStreamEvent.toolCall(tc.id, {
+        serverName,
+        toolName,
+        arguments: tc.input,
+      });
       callbacks.onEvent(toolEvent);
     }
   }
