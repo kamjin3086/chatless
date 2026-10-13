@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -6,8 +6,8 @@ import { ChatHeader } from '@/components/chat/ChatHeader';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
 import { ScrollToBottomButton } from '@/components/chat/ScrollToBottomButton';
 import { SessionParametersDialog } from '@/components/chat/SessionParametersDialog';
-import type { Message } from "@/types/chat";
-import { useChatStore } from "@/store/chatStore";
+import type { Message } from '@/types/chat';
+import { useChatStore } from '@/store/chatStore';
 import { useSearchParams } from 'next/navigation';
 
 import { ChatInitializing } from '@/components/chat/ChatInitializing';
@@ -37,29 +37,41 @@ interface Conversation {
 export default function ChatPage() {
   const [isClient, setIsClient] = useState(false);
   const [isInputAreaHovered, setIsInputAreaHovered] = useState(false);
-  const ensureMessagesLoaded = useChatStore((state) => state.ensureMessagesLoaded);
-  const currentConversationId = useChatStore((state) => state.currentConversationId);
+  const ensureMessagesLoaded = useChatStore(
+    (state) => state.ensureMessagesLoaded,
+  );
+  const currentConversationId = useChatStore(
+    (state) => state.currentConversationId,
+  );
   const currentConversation = useChatStore((state) => {
     const id = state.currentConversationId;
-    return id ? (state.conversations.find((c:any) => c.id === id) as Conversation | undefined) : null;
+    return id
+      ? (state.conversations.find((c: any) => c.id === id) as
+          | Conversation
+          | undefined)
+      : null;
   });
-  
+
   const searchParams = useSearchParams();
   const selectedKnowledgeBaseId = searchParams.get('knowledgeBase');
-  const deepLinkConversationId = searchParams.get('conversation') || searchParams.get('conversationId');
-  const setCurrentConversation = useChatStore((s)=>s.setCurrentConversation);
-  
-  const { 
-    llmInitialized, 
-    allMetadata, 
-    selectedModelId, 
-    currentProviderName, 
-    handleModelChange 
+  const deepLinkConversationId =
+    searchParams.get('conversation') || searchParams.get('conversationId');
+  const setCurrentConversation = useChatStore((s) => s.setCurrentConversation);
+
+  const {
+    llmInitialized,
+    allMetadata,
+    selectedModelId,
+    currentProviderName,
+    handleModelChange,
   } = useModelSelection();
 
   // 会话参数相关状态
-  const [currentSessionParameters, setCurrentSessionParameters] = useState<ModelParameters | undefined>(undefined);
-  const [sessionParametersDialogOpen, setSessionParametersDialogOpen] = useState(false);
+  const [currentSessionParameters, setCurrentSessionParameters] = useState<
+    ModelParameters | undefined
+  >(undefined);
+  const [sessionParametersDialogOpen, setSessionParametersDialogOpen] =
+    useState(false);
 
   // 加载会话参数
   useEffect(() => {
@@ -73,7 +85,9 @@ export default function ChatPage() {
   const loadSessionParameters = async () => {
     try {
       if (currentConversationId) {
-        const sessionParams = await ModelParametersService.getSessionParameters(currentConversationId);
+        const sessionParams = await ModelParametersService.getSessionParameters(
+          currentConversationId,
+        );
         setCurrentSessionParameters(sessionParams || undefined);
       }
     } catch (error) {
@@ -97,7 +111,11 @@ export default function ChatPage() {
     handleFileUpload,
     tokenCount,
     setScrollToBottomCallback,
-  } = useChatActions(selectedModelId, currentProviderName, currentSessionParameters);
+  } = useChatActions(
+    selectedModelId,
+    currentProviderName,
+    currentSessionParameters,
+  );
 
   // 编辑消息相关状态
   interface EditingMessageData {
@@ -111,8 +129,9 @@ export default function ChatPage() {
     contextData?: string;
     knowledgeBaseReference?: { id: string; name: string };
   }
-  const [editingMessage, setEditingMessage] = useState<EditingMessageData | null>(null);
-  
+  const [editingMessage, setEditingMessage] =
+    useState<EditingMessageData | null>(null);
+
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   // 滚动容器元素本身：Virtuoso 的 customScrollParent 必须在挂载时确定，
   // 所以用 state 拿到元素后再渲染消息列表（ref 首次渲染时还是 null）。
@@ -129,22 +148,27 @@ export default function ChatPage() {
     ensureBottomIfNear,
     showScrollToBottom,
     hasNewMessageWhileAway,
-    shouldFollowOutput
+    shouldFollowOutput,
   } = useScrollManagement(
-      scrollContainerRef,
-      currentConversation?.messages as Message[] | undefined,
-      currentConversationId,
-      isLoading
+    scrollContainerRef,
+    currentConversation?.messages as Message[] | undefined,
+    currentConversationId,
+    isLoading,
   );
 
   // 注册 Virtuoso 的按ID滚动API，供“跳转到消息”使用
   const scrollToMessageRef = useRef<((id: string) => void) | null>(null);
-  const registerScrollToMessage = (fn: (id: string) => void) => { scrollToMessageRef.current = fn; };
+  const registerScrollToMessage = (fn: (id: string) => void) => {
+    scrollToMessageRef.current = fn;
+  };
   // 轻动画高亮暂时关闭
   const _highlightMessage = (_id: string, _retries: number = 0) => {};
   // 统一的消息定位：将目标消息放置在视口约 35% 位置
   const TARGET_VIEWPORT_BIAS = 0.35; // 0 顶部, 1 底部
-  const scrollToMessageWithBias = (id: string, options?: { smooth?: boolean; retries?: number }) => {
+  const scrollToMessageWithBias = (
+    id: string,
+    options?: { smooth?: boolean; retries?: number },
+  ) => {
     const smooth = options?.smooth ?? false;
     const retries = options?.retries ?? 8;
     const container = scrollContainerRef.current;
@@ -155,15 +179,29 @@ export default function ChatPage() {
         const crect = container.getBoundingClientRect();
         const erect = el.getBoundingClientRect();
         const delta = erect.top - crect.top;
-        const desired = container.scrollTop + delta - container.clientHeight * TARGET_VIEWPORT_BIAS;
-        const max = Math.max(0, container.scrollHeight - container.clientHeight);
+        const desired =
+          container.scrollTop +
+          delta -
+          container.clientHeight * TARGET_VIEWPORT_BIAS;
+        const max = Math.max(
+          0,
+          container.scrollHeight - container.clientHeight,
+        );
         const target = Math.min(max, Math.max(0, desired));
-        container.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'auto' });
-      } catch { /* noop */ }
+        container.scrollTo({
+          top: target,
+          behavior: smooth ? 'smooth' : 'auto',
+        });
+      } catch {
+        /* noop */
+      }
       return;
     }
     if (retries > 0) {
-      window.setTimeout(() => scrollToMessageWithBias(id, { smooth, retries: retries - 1 }), 60);
+      window.setTimeout(
+        () => scrollToMessageWithBias(id, { smooth, retries: retries - 1 }),
+        60,
+      );
     }
   };
   // 进入/切换会话时定位到“最后一条用户消息”，不再强制到底部
@@ -175,7 +213,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (initialAnchoredRef.current) return;
     const msgs = (currentConversation?.messages as Message[] | undefined) || [];
-    const lastUser = [...msgs].reverse().find(m => m.role === 'user');
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
     if (!lastUser) return; // 没有用户消息则不主动滚动
     const doScroll = () => {
       if (scrollToMessageRef.current) {
@@ -190,7 +228,8 @@ export default function ChatPage() {
 
   // 新消息追加后：仅当用户已接近底部时，才对齐到底部（轻量滚动）
   useEffect(() => {
-    const len = (currentConversation?.messages as Message[] | undefined)?.length || 0;
+    const len =
+      (currentConversation?.messages as Message[] | undefined)?.length || 0;
     if (len === 0) return;
     // 初次进入会话定位尚未完成时，避免把视图拉到底部
     if (!initialAnchoredRef.current) return;
@@ -202,8 +241,9 @@ export default function ChatPage() {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
       if (!initialAnchoredRef.current) {
-        const msgs = (currentConversation?.messages as Message[] | undefined) || [];
-        const lastUser = [...msgs].reverse().find(m => m.role === 'user');
+        const msgs =
+          (currentConversation?.messages as Message[] | undefined) || [];
+        const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
         if (!lastUser) return;
         if (scrollToMessageRef.current) {
           scrollToMessageRef.current(lastUser.id);
@@ -247,11 +287,14 @@ export default function ChatPage() {
   }, [currentConversationId, ensureMessagesLoaded]);
 
   // 实时渲染：直接使用会话消息，确保流式更新不被延迟
-  const liveMessages = (currentConversation?.messages as Message[] | undefined) || [];
+  const liveMessages =
+    (currentConversation?.messages as Message[] | undefined) || [];
 
   const handleEditMessage = (messageId: string, _content: string) => {
     if (!currentConversation) return;
-    const msg = (currentConversation.messages as Message[]).find(m => m.id === messageId);
+    const msg = (currentConversation.messages as Message[]).find(
+      (m) => m.id === messageId,
+    );
     if (!msg) return;
     setEditingMessage({
       content: msg.content,
@@ -261,14 +304,20 @@ export default function ChatPage() {
     });
     // 滚动到底部，确保输入框可见
     setTimeout(() => {
-      scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
+      scrollContainerRef.current?.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
     }, 0);
   };
 
   const handleCancelEdit = () => setEditingMessage(null);
 
   // 保存思考时长的回调函数
-  const handleSaveThinkingDuration = (_messageId: string, _duration: number) => {
+  const handleSaveThinkingDuration = (
+    _messageId: string,
+    _duration: number,
+  ) => {
     // 这里可以添加额外的逻辑，比如记录到日志或发送到分析服务
   };
 
@@ -277,7 +326,11 @@ export default function ChatPage() {
     setCurrentSessionParameters(parameters);
   };
 
-  const setupState = resolveChatSetupState(llmInitialized, allMetadata, selectedModelId);
+  const setupState = resolveChatSetupState(
+    llmInitialized,
+    allMetadata,
+    selectedModelId,
+  );
   const canSend = setupState === 'ready';
 
   if (!isClient) {
@@ -286,7 +339,7 @@ export default function ChatPage() {
 
   if (!currentConversationId || !currentConversation) {
     return (
-      <EmptyChatView 
+      <EmptyChatView
         allMetadata={allMetadata}
         selectedModelId={selectedModelId}
         onModelChange={handleModelChange}
@@ -304,7 +357,7 @@ export default function ChatPage() {
 
   // 预留：如需根据消息时间显示工具栏，可以使用下方筛选（当前未用）
   // const toolbarMessages: Message[] = (currentConversation?.messages || [])
-  //   .filter((msg): msg is Message & { created_at: number; updated_at: number } => 
+  //   .filter((msg): msg is Message & { created_at: number; updated_at: number } =>
   //     typeof msg.created_at === 'number' && typeof msg.updated_at === 'number'
   //   );
 
@@ -325,6 +378,8 @@ export default function ChatPage() {
         tokenCount={tokenCount}
         hasSessionParameters={!!currentSessionParameters}
         onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
+        sessionParameters={currentSessionParameters}
+        onSessionParametersSaved={loadSessionParameters}
         navigationMessages={currentConversation.messages as Message[]}
         onNavigateToMessage={navigateToMessage}
       />
@@ -332,85 +387,105 @@ export default function ChatPage() {
         <main className="flex-1 flex flex-col min-h-0">
           {/* 消息区单独定位：悬浮导航条锚在“消息区”底部，而不是整个面板底部（否则会压住输入框） */}
           <div className="relative flex-1 min-h-0">
-          <div
-            className="absolute inset-0 custom-scrollbar"
-            ref={attachScrollContainer}
-            onMouseEnter={() => { if (scrollContainerRef.current) scrollContainerRef.current.style.overflowY = 'auto'; }}
-            onMouseLeave={() => { if (scrollContainerRef.current) scrollContainerRef.current.style.overflowY = 'hidden'; }}
-            style={{ overflowY: 'hidden', scrollbarGutter: 'stable' }}
-          >
-            {scrollParent && (
-            <ChatMessageList
-              chatId={currentConversationId}
-              messages={liveMessages}
-              isLoading={isLoading}
-              onEditMessage={handleEditMessage}
-              onRetryMessage={handleRetryMessage}
-              onDeleteMessage={() => {}}
-              onSaveThinkingDuration={handleSaveThinkingDuration}
-              messageRefs={messageRefs}
-              messagesEndRef={managedEndRef}
-              scrollParent={scrollParent}
-              onRegisterScrollToMessage={registerScrollToMessage}
-              shouldFollowOutput={shouldFollowOutput}
-              onPromptClick={handleEmptyStatePromptClick}
-              setupState={setupState}
-            initialTopMostItemIndex={(() => {
-              const msgs = liveMessages;
-              const idx = [...msgs].map((m)=>m.role).lastIndexOf('user');
-              return idx >= 0 ? idx : undefined as any;
-            })()}
+            <div
+              className="absolute inset-0 custom-scrollbar"
+              ref={attachScrollContainer}
+              onMouseEnter={() => {
+                if (scrollContainerRef.current)
+                  scrollContainerRef.current.style.overflowY = 'auto';
+              }}
+              onMouseLeave={() => {
+                if (scrollContainerRef.current)
+                  scrollContainerRef.current.style.overflowY = 'hidden';
+              }}
+              style={{ overflowY: 'hidden', scrollbarGutter: 'stable' }}
+            >
+              {scrollParent && (
+                <ChatMessageList
+                  chatId={currentConversationId}
+                  messages={liveMessages}
+                  isLoading={isLoading}
+                  onEditMessage={handleEditMessage}
+                  onRetryMessage={handleRetryMessage}
+                  onDeleteMessage={() => {}}
+                  onSaveThinkingDuration={handleSaveThinkingDuration}
+                  messageRefs={messageRefs}
+                  messagesEndRef={managedEndRef}
+                  scrollParent={scrollParent}
+                  onRegisterScrollToMessage={registerScrollToMessage}
+                  shouldFollowOutput={shouldFollowOutput}
+                  onPromptClick={handleEmptyStatePromptClick}
+                  setupState={setupState}
+                  initialTopMostItemIndex={(() => {
+                    const msgs = liveMessages;
+                    const idx = [...msgs]
+                      .map((m) => m.role)
+                      .lastIndexOf('user');
+                    return idx >= 0 ? idx : (undefined as any);
+                  })()}
+                />
+              )}
+              {/* managedEndRef 已由组件内部渲染，无需此处额外 div */}
+            </div>
+            {/* 新消息指示器 - 用户查看历史消息时有新消息到达 */}
+            <NewMessageIndicator
+              show={hasNewMessageWhileAway && !isInputAreaHovered}
+              onClick={handleScrollToBottom}
             />
-            )}
-            {/* managedEndRef 已由组件内部渲染，无需此处额外 div */}
-          </div>
-          {/* 新消息指示器 - 用户查看历史消息时有新消息到达 */}
-          <NewMessageIndicator
-            show={hasNewMessageWhileAway && !isInputAreaHovered}
-            onClick={handleScrollToBottom}
-          />
 
-          {/*
+            {/*
             悬浮控件：界面右侧、垂直居中，只留一个"回到底部"大圆钮。
             顶部/底部/定位三个小图标与它功能重叠（底部就是同一个动作），且竖排后
             互相压在一起；消息导航已移到聊天头部，这里因此只保留这一个按钮。
           */}
-          <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
-            <div className="pointer-events-auto">
-              <ScrollToBottomButton
-                show={showScrollToBottom && !hasNewMessageWhileAway && !isInputAreaHovered}
-                onClick={handleScrollToBottom}
-              />
+            <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
+              <div className="pointer-events-auto">
+                <ScrollToBottomButton
+                  show={
+                    showScrollToBottom &&
+                    !hasNewMessageWhileAway &&
+                    !isInputAreaHovered
+                  }
+                  onClick={handleScrollToBottom}
+                />
+              </div>
             </div>
           </div>
-          </div>
-          <div 
+          <div
             className="bg-transparent"
             onMouseEnter={() => setIsInputAreaHovered(true)}
             onMouseLeave={() => setIsInputAreaHovered(false)}
           >
             <div className="mx-auto w-full">
-            <ChatInput
-              isLoading={isLoading}
-              disabled={!canSend}
-              onSendMessage={handleSendMessage}
-              onStopGeneration={handleStopGeneration}
-              stopGenerationHint={stopGenerationHint}
-              onImageUpload={handleImageUpload}
-              onFileUpload={handleFileUpload}
-              selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}
-              tokenCount={tokenCount}
-              editingMessage={editingMessage}
-              onCancelEdit={handleCancelEdit}
-              // 会话参数相关
-              providerName={currentProviderName}
-              modelId={selectedModelId || undefined}
-              modelLabel={allMetadata?.find(p => p.models?.some(m => m.name === selectedModelId))?.models?.find(m => m.name === selectedModelId)?.label}
-              onSessionParametersChange={handleSessionParametersChange}
-              currentSessionParameters={currentSessionParameters}
-              conversationId={currentConversationId}
-              onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
-            />
+              <ChatInput
+                isLoading={isLoading}
+                disabled={!canSend}
+                onSendMessage={handleSendMessage}
+                onStopGeneration={handleStopGeneration}
+                stopGenerationHint={stopGenerationHint}
+                onImageUpload={handleImageUpload}
+                onFileUpload={handleFileUpload}
+                selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}
+                tokenCount={tokenCount}
+                editingMessage={editingMessage}
+                onCancelEdit={handleCancelEdit}
+                // 会话参数相关
+                providerName={currentProviderName}
+                modelId={selectedModelId || undefined}
+                modelLabel={
+                  allMetadata
+                    ?.find((p) =>
+                      p.models?.some((m) => m.name === selectedModelId),
+                    )
+                    ?.models?.find((m) => m.name === selectedModelId)?.label
+                }
+                onSessionParametersChange={handleSessionParametersChange}
+                currentSessionParameters={currentSessionParameters}
+                conversationId={currentConversationId}
+                onOpenSessionParameters={() =>
+                  setSessionParametersDialogOpen(true)
+                }
+              />
             </div>
           </div>
         </main>
@@ -427,7 +502,11 @@ export default function ChatPage() {
           onOpenChange={setSessionParametersDialogOpen}
           providerName={currentProviderName}
           modelId={selectedModelId}
-          modelLabel={allMetadata?.find(p => p.models?.some(m => m.name === selectedModelId))?.models?.find(m => m.name === selectedModelId)?.label}
+          modelLabel={
+            allMetadata
+              ?.find((p) => p.models?.some((m) => m.name === selectedModelId))
+              ?.models?.find((m) => m.name === selectedModelId)?.label
+          }
           conversationId={currentConversationId}
           onParametersChange={handleSessionParametersChange}
           currentParameters={currentSessionParameters}

@@ -1,27 +1,19 @@
 import type { ModelParameters } from '@/types/model-params';
-import type { ThinkingLevel } from '@/lib/llm/thinkingLevels';
+import {
+  type ThinkingChoice,
+  readThinkingChoice,
+} from '@/lib/chat/thinkingScope';
 
 /**
  * What a conversation says about the thinking level: follow the model default, refuse
  * to send one at all, or pick one for this conversation only. Kept as pure functions so
  * the tri-state is testable instead of being implied by widget state.
+ *
+ * The tri-state itself lives in `thinkingScope`, because #100 added two more scopes that
+ * read it the same way; a second copy here would be the duplicate-list mistake again.
  */
-export type SessionThinkingChoice = 'inherit' | 'suppress' | ThinkingLevel;
-
-export function readSessionThinkingChoice(
-  sessionParameters: Partial<ModelParameters> | null | undefined,
-): SessionThinkingChoice {
-  const p = sessionParameters || {};
-  if (p.enableThinkingLevel === false) return 'suppress';
-  if (
-    p.enableThinkingLevel === true &&
-    p.thinkingLevel &&
-    p.thinkingLevel !== 'auto'
-  ) {
-    return p.thinkingLevel;
-  }
-  return 'inherit';
-}
+export type SessionThinkingChoice = ThinkingChoice;
+export { readThinkingChoice as readSessionThinkingChoice };
 
 export function withSessionThinkingChoice(
   sessionParameters: Partial<ModelParameters>,
