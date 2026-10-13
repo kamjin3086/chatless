@@ -4,6 +4,8 @@ import { sha256Hex } from '@/lib/utils/sha256';
 import { resolveOutputReserve } from '@/lib/llm/outputBudget';
 
 /** An estimate, not a tokenizer. Includes protocol data and image payloads. */
+import { schemaTokenEstimate } from '@/lib/tokens/promptSize';
+
 export function estimateTokens(messages: LlmMessage[]): number {
   return Math.ceil(JSON.stringify(messages).length / 2.5);
 }
@@ -19,12 +21,24 @@ export type CompactOptions = {
   allowSummarize?: boolean;
   prefixMessages?: LlmMessage[];
   tools?: unknown;
-  checkpoint?: { summary: string; coveredMessages: number; historyFingerprint: string };
+  checkpoint?: {
+    summary: string;
+    coveredMessages: number;
+    historyFingerprint: string;
+  };
   /** 本轮实际用上了历史摘要（复用或新生成）时回调，供界面显示"已压缩"。 */
-  onCompacted?: (info: { summary: string; coveredMessages: number; reused: boolean }) => void;
+  onCompacted?: (info: {
+    summary: string;
+    coveredMessages: number;
+    reused: boolean;
+  }) => void;
   /** Cancels the compaction request together with its owning run. */
   signal?: AbortSignal;
-  onCheckpoint?: (checkpoint: { summary: string; coveredMessages: number; historyFingerprint: string }) => Promise<void>;
+  onCheckpoint?: (checkpoint: {
+    summary: string;
+    coveredMessages: number;
+    historyFingerprint: string;
+  }) => Promise<void>;
 };
 
 export type ContextCheckpoint = {
@@ -35,11 +49,33 @@ export type ContextCheckpoint = {
 
 const summaryInstruction: LlmMessage = {
   role: 'system',
-  content: 'Compress the following older conversation into a concise record: the user goals and constraints, key findings with their sources, actions already taken and their side effects, what is still open, and how far the reading got. Never invent anything.',
+  content:
+    'Compress the following older conversation into a concise record: the user goals and constraints, key findings with their sources, actions already taken and their side effects, what is still open, and how far the reading got. Never invent anything.',
 };
 
+/**
+ * What a request carries besides history: the prompt prefix and the tool schemas.
+ *
+ * Extracted from `compact` so the divisor is testable on its own. Tool schemas are
+ * English JSON - `docs/prompt-language.md` makes every model-facing prompt English -
+ * so they get the English divisor; the old `/2.5` was a Chinese-text rule and overstated
+ * them by about two thirds. Message and history estimation keeps its own conservative
+ * divisor on purpose, because that content can be Chinese.
+ */
+export function fixedOverheadTokens(
+  prefixMessages: LlmMessage[] | undefined,
+  tools: unknown,
+): number {
+  return (
+    estimateTokens(prefixMessages || []) + schemaTokenEstimate(tools || [])
+  );
+}
+
 export class ContextWindowManager {
-  async compact(messages: LlmMessage[], opts: CompactOptions): Promise<LlmMessage[]> {
+  async compact(
+    messages: LlmMessage[],
+    opts: CompactOptions,
+  ): Promise<LlmMessage[]> {
     // 窗口未知时不做任何猜测：既不能判断"装不下"，也不该把历史摘要掉。
     // 之前这里默认 8192，于是 262K 窗口的模型被当成 8K：正常一轮被判超预算直接
     // 失败，刚聊几句又被提前压缩。压缩必须有真实窗口作为依据才做。
@@ -48,11 +84,12 @@ export class ContextWindowManager {
       return messages;
     }
 
-    const reserve = opts.reserveOutputTokens
-      ?? resolveOutputReserve({ contextWindow: window });
+    const reserve =
+      opts.reserveOutputTokens ??
+      resolveOutputReserve({ contextWindow: window });
     const safety = opts.safetyMarginRatio ?? 0.08;
     const capacity = Math.floor(window * (1 - safety)) - reserve;
-    const fixed = estimateTokens(opts.prefixMessages || []) + Math.ceil(JSON.stringify(opts.tools || []).length / 2.5);
+    const fixed = fixedOverheadTokens(opts.prefixMessages, opts.tools);
     const budget = Math.min(opts.maxInputTokens ?? capacity, capacity) - fixed;
 
     if (!Number.isFinite(budget) || budget <= 0) {
@@ -66,14 +103,31 @@ export class ContextWindowManager {
     while (split > 0 && messages[split].role !== 'user') split -= 1;
     if (!opts.allowSummarize || split === 0) {
       if (used <= budget) return messages;
-      throw new Error('当前完整轮次超出上下文预算；原始历史已保留，请缩小输入或调整模型窗口');
+      throw new Error(
+        '当前完整轮次超出上下文预算；原始历史已保留，请缩小输入或调整模型窗口',
+      );
     }
     const tail = messages.slice(split);
-    const historyFingerprint = await sha256Hex(JSON.stringify(messages.slice(0, split)));
-    if (opts.checkpoint?.coveredMessages === split && opts.checkpoint.historyFingerprint === historyFingerprint) {
-      const reused: LlmMessage[] = [{ role: 'system', content: `[Conversation summary]\n${opts.checkpoint.summary}` }, ...tail];
+    const historyFingerprint = await sha256Hex(
+      JSON.stringify(messages.slice(0, split)),
+    );
+    if (
+      opts.checkpoint?.coveredMessages === split &&
+      opts.checkpoint.historyFingerprint === historyFingerprint
+    ) {
+      const reused: LlmMessage[] = [
+        {
+          role: 'system',
+          content: `[Conversation summary]\n${opts.checkpoint.summary}`,
+        },
+        ...tail,
+      ];
       if (estimateTokens(reused) <= budget) {
-        opts.onCompacted?.({ summary: opts.checkpoint.summary, coveredMessages: split, reused: true });
+        opts.onCompacted?.({
+          summary: opts.checkpoint.summary,
+          coveredMessages: split,
+          reused: true,
+        });
         return reused;
       }
     }
@@ -84,8 +138,14 @@ export class ContextWindowManager {
     let seedSummary = '';
     let coveredStart = 0;
     const previous = opts.checkpoint;
-    if (previous?.summary && previous.coveredMessages > 0 && previous.coveredMessages < split) {
-      const prefixFingerprint = await sha256Hex(JSON.stringify(messages.slice(0, previous.coveredMessages)));
+    if (
+      previous?.summary &&
+      previous.coveredMessages > 0 &&
+      previous.coveredMessages < split
+    ) {
+      const prefixFingerprint = await sha256Hex(
+        JSON.stringify(messages.slice(0, previous.coveredMessages)),
+      );
       if (prefixFingerprint === previous.historyFingerprint) {
         seedSummary = previous.summary;
         coveredStart = previous.coveredMessages;
@@ -95,20 +155,33 @@ export class ContextWindowManager {
     // completed history must not fail just because the prefix is big. Segments
     // are formed with the same budget arithmetic as the real request, so the
     // whole prefix still fits in a single summary when it genuinely fits.
-    const summaryTokens = Math.max(512, Math.min(reserve, Math.floor(capacity * 0.25)));
+    const summaryTokens = Math.max(
+      512,
+      Math.min(reserve, Math.floor(capacity * 0.25)),
+    );
     const prefix = messages.slice(0, split);
 
     let summary = seedSummary;
     const summarize = async (part: LlmMessage[]): Promise<void> => {
       const prompt: LlmMessage[] = [summaryInstruction];
-      if (summary) prompt.push({ role: 'system', content: `[Existing summary]\n${summary}` });
-      prompt.push(...part, { role: 'user' as const, content: 'Write the summary.' });
+      if (summary)
+        prompt.push({
+          role: 'system',
+          content: `[Existing summary]\n${summary}`,
+        });
+      prompt.push(...part, {
+        role: 'user' as const,
+        content: 'Write the summary.',
+      });
       if (estimateTokens(prompt) > capacity) {
         throw new Error('待压缩历史超出摘要请求预算；原始历史已保留');
       }
       // No statistics-only fallback: a failed summary must not erase constraints.
       const response = await chat(opts.provider, opts.model, prompt, {
-        temperature: 0.2, maxTokens: summaryTokens, __signal: opts.signal, __priority: 'low',
+        temperature: 0.2,
+        maxTokens: summaryTokens,
+        __signal: opts.signal,
+        __priority: 'low',
       });
       const next = String(response?.content || '').trim();
       if (!next) throw new Error('历史压缩返回空摘要；原始历史已保留');
@@ -119,8 +192,15 @@ export class ContextWindowManager {
     for (const message of prefix.slice(coveredStart)) {
       if (segment.length) {
         const probe: LlmMessage[] = [summaryInstruction];
-        if (summary) probe.push({ role: 'system', content: `[Existing summary]\n${summary}` });
-        probe.push(...segment, message, { role: 'user' as const, content: 'Write the summary.' });
+        if (summary)
+          probe.push({
+            role: 'system',
+            content: `[Existing summary]\n${summary}`,
+          });
+        probe.push(...segment, message, {
+          role: 'user' as const,
+          content: 'Write the summary.',
+        });
         if (estimateTokens(probe) > capacity) {
           await summarize(segment);
           segment = [];
@@ -130,10 +210,18 @@ export class ContextWindowManager {
     }
     await summarize(segment);
     if (!summary) throw new Error('历史压缩返回空摘要；原始历史已保留');
-    await opts.onCheckpoint?.({ summary, coveredMessages: split, historyFingerprint });
+    await opts.onCheckpoint?.({
+      summary,
+      coveredMessages: split,
+      historyFingerprint,
+    });
     opts.onCompacted?.({ summary, coveredMessages: split, reused: false });
-    const result: LlmMessage[] = [{ role: 'system', content: `[Conversation summary]\n${summary}` }, ...tail];
-    if (estimateTokens(result) > budget) throw new Error('压缩后仍超出上下文预算；原始历史已保留');
+    const result: LlmMessage[] = [
+      { role: 'system', content: `[Conversation summary]\n${summary}` },
+      ...tail,
+    ];
+    if (estimateTokens(result) > budget)
+      throw new Error('压缩后仍超出上下文预算；原始历史已保留');
     return result;
   }
 }

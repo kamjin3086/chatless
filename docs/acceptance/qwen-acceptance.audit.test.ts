@@ -25,6 +25,10 @@ import {
 } from '@/lib/mcp/nativeTools/toolRegistry';
 import { PromptEnvelopeBuilder } from '@/lib/mcp/pipeline/context/PromptEnvelopeBuilder';
 import { estimateTokens } from '@/lib/mcp/pipeline/context/ContextWindowManager';
+import {
+  PROMPT_AND_TOOLS_TOKEN_CAP,
+  schemaTokenEstimate,
+} from '@/lib/tokens/promptSize';
 import { resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { TauriBridge } from './tauriBridge';
 import {
@@ -122,7 +126,7 @@ function productionEnvelope(): {
     // Same estimator the context manager uses for prompts, tools and history.
     tokenBudget:
       estimateTokens(envelope.prefixMessages) +
-      Math.ceil(JSON.stringify(envelope.tools).length / 2.5),
+      schemaTokenEstimate(envelope.tools),
   };
 }
 
@@ -143,9 +147,7 @@ const knowledgeTools: ToolDef[] = getToolsForGroup('knowledge').map(
 
 const knowledgeTokenBudget =
   estimateTokens([{ role: 'system', content: envelope.system }]) +
-  Math.ceil(
-    JSON.stringify([...envelope.tools, ...knowledgeTools]).length / 2.5,
-  );
+  schemaTokenEstimate([...envelope.tools, ...knowledgeTools]);
 
 // ---------------------------------------------------------------------------
 // Real backend: one bridge process per task, wired into the production adapters
@@ -994,7 +996,11 @@ describe.skipIf(!enabled)('Qwen agent task acceptance', () => {
       );
       expect(violations, '权限越界为零容忍').toEqual([]);
       expect(rate).toBeGreaterThanOrEqual(0.9);
-      expect(envelope.tokenBudget).toBeLessThanOrEqual(4000);
+      // The cap lives with the measurement it was derived from, and
+      // docs/acceptance/prompt-budget.audit.test.ts re-measures it on every `pnpm test`.
+      expect(envelope.tokenBudget).toBeLessThanOrEqual(
+        PROMPT_AND_TOOLS_TOKEN_CAP,
+      );
     },
     60 * 60 * 1000,
   );

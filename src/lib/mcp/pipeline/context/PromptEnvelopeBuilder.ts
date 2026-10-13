@@ -11,7 +11,13 @@ export type PromptEnvelope = {
 function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || value === true || value === false || typeof value === 'bigint') return String(value);
+  if (
+    typeof value === 'number' ||
+    value === true ||
+    value === false ||
+    typeof value === 'bigint'
+  )
+    return String(value);
   if (typeof value === 'symbol') return value.toString();
   if (typeof value === 'function') return '[function]';
   if (typeof value !== 'object') return '[unknown]';
@@ -39,7 +45,9 @@ function sortToolsDeterministically(tools: ToolDefinition[]): ToolDefinition[] {
     if (ar !== br) return ar - br;
     if (an !== bn) return an.localeCompare(bn);
     // name 相同则按参数 schema 稳定序列化
-    return stableStringify(a?.parameters).localeCompare(stableStringify(b?.parameters));
+    return stableStringify(a?.parameters).localeCompare(
+      stableStringify(b?.parameters),
+    );
   });
   return list;
 }
@@ -74,4 +82,3 @@ export class PromptEnvelopeBuilder {
     return { prefixMessages, tools };
   }
 }
-
