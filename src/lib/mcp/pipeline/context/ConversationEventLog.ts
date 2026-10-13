@@ -1,11 +1,27 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
 import type { ToolCallRequest } from '@/lib/llm/types/tool-schema';
 
-export type ContextChangeKind = 'permissions' | 'environment' | 'tools' | 'other';
+export type ContextChangeKind =
+  | 'permissions'
+  | 'environment'
+  | 'tools'
+  | 'other';
 
 export type ConversationEvent =
-  | { type: 'user_message'; content: string; inputId?: string; images?: string[]; attachmentDocumentIds?: string[] }
-  | { type: 'queued_user_input'; inputId: string; content: string; images?: string[]; attachmentDocumentIds?: string[] }
+  | {
+      type: 'user_message';
+      content: string;
+      inputId?: string;
+      images?: string[];
+      attachmentDocumentIds?: string[];
+    }
+  | {
+      type: 'queued_user_input';
+      inputId: string;
+      content: string;
+      images?: string[];
+      attachmentDocumentIds?: string[];
+    }
   | { type: 'assistant_message'; content: string }
   | {
       type: 'tool_call_requested';
@@ -68,16 +84,30 @@ export class ConversationEventLog {
     this.append({ type: 'assistant_message', content: String(content ?? '') });
   }
 
-  appendToolCallRequested(params: Omit<Extract<ConversationEvent, { type: 'tool_call_requested' }>, 'type'>) {
+  appendToolCallRequested(
+    params: Omit<
+      Extract<ConversationEvent, { type: 'tool_call_requested' }>,
+      'type'
+    >,
+  ) {
     this.append({ type: 'tool_call_requested', ...params });
   }
 
-  appendToolCallOutput(params: Omit<Extract<ConversationEvent, { type: 'tool_call_output' }>, 'type'>) {
+  appendToolCallOutput(
+    params: Omit<
+      Extract<ConversationEvent, { type: 'tool_call_output' }>,
+      'type'
+    >,
+  ) {
     this.append({ type: 'tool_call_output', ...params });
   }
 
   appendContextChange(kind: ContextChangeKind, content: string) {
-    this.append({ type: 'context_change', kind, content: String(content ?? '') });
+    this.append({
+      type: 'context_change',
+      kind,
+      content: String(content ?? ''),
+    });
   }
 
   renderForModel(mode: RenderMode = 'text_wrapper'): LlmMessage[] {
@@ -86,7 +116,10 @@ export class ConversationEventLog {
     if (mode === 'tool_role') {
       // 最小协议化实现：tool_call_requested -> assistant.tool_calls；tool_call_output -> role=tool（tool_call_id）
       const pending: ToolCallRequest[] = [];
-      const requested = new Map<string, { request: ToolCallRequest; key: string }>();
+      const requested = new Map<
+        string,
+        { request: ToolCallRequest; key: string }
+      >();
       const started = new Set<string>();
       const completed = new Set<string>();
       let pendingProviderData: Record<string, unknown> | undefined;
@@ -95,7 +128,11 @@ export class ConversationEventLog {
       for (const e of this.events) {
         if (e.type === 'queued_user_input') continue;
         if (e.type === 'user_message') {
-          out.push({ role: 'user', content: renderUserInput(e), images: e.images });
+          out.push({
+            role: 'user',
+            content: renderUserInput(e),
+            images: e.images,
+          });
           continue;
         }
         if (e.type === 'assistant_message') {
@@ -111,7 +148,10 @@ export class ConversationEventLog {
           continue;
         }
         if (e.type === 'tool_call_requested') {
-          const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : `call_${pending.length}`;
+          const id =
+            e.callId && String(e.callId).trim()
+              ? String(e.callId).trim()
+              : `call_${pending.length}`;
           const key = callKeyOf(e);
           pending.push({
             id,
@@ -134,16 +174,27 @@ export class ConversationEventLog {
           continue;
         }
         if (e.type === 'tool_call_output') {
-          const id = e.callId && String(e.callId).trim() ? String(e.callId).trim() : undefined;
+          const id =
+            e.callId && String(e.callId).trim()
+              ? String(e.callId).trim()
+              : undefined;
           completed.add(callKeyOf(e));
 
           if (pending.length > 0 && !didEmitAssistantForPending) {
             const previous = out.at(-1);
-            if (previous?.role === 'assistant' && !previous.tool_calls?.length) {
+            if (
+              previous?.role === 'assistant' &&
+              !previous.tool_calls?.length
+            ) {
               previous.tool_calls = [...pending];
               previous.providerData = pendingProviderData;
             } else {
-              out.push({ role: 'assistant', content: '', tool_calls: [...pending], providerData: pendingProviderData });
+              out.push({
+                role: 'assistant',
+                content: '',
+                tool_calls: [...pending],
+                providerData: pendingProviderData,
+              });
             }
             pending.splice(0, pending.length);
             pendingProviderData = undefined;
@@ -162,8 +213,14 @@ export class ConversationEventLog {
             continue;
           }
 
-          const content = typeof e.output === 'string' ? e.output : safeJson(e.output);
-          out.push({ role: 'tool', content, tool_call_id: id, name: `${e.server}__${e.tool}` });
+          const content =
+            typeof e.output === 'string' ? e.output : safeJson(e.output);
+          out.push({
+            role: 'tool',
+            content,
+            tool_call_id: id,
+            name: `${e.server}__${e.tool}`,
+          });
           continue;
         }
       }
@@ -173,7 +230,12 @@ export class ConversationEventLog {
       // model context instead of silently omitting it, which could invite an
       // unsafe replay of a write or external action.
       if (pending.length > 0) {
-        out.push({ role: 'assistant', content: '', tool_calls: [...pending], providerData: pendingProviderData });
+        out.push({
+          role: 'assistant',
+          content: '',
+          tool_calls: [...pending],
+          providerData: pendingProviderData,
+        });
       }
       for (const { request, key } of requested.values()) {
         if (!completed.has(key)) {
@@ -191,13 +253,19 @@ export class ConversationEventLog {
     }
 
     // 默认 text_wrapper（与旧逻辑兼容）
-    const pendingTextRequests: Array<Extract<ConversationEvent, { type: 'tool_call_requested' }>> = [];
+    const pendingTextRequests: Array<
+      Extract<ConversationEvent, { type: 'tool_call_requested' }>
+    > = [];
     const completedTextCalls = new Set<string>();
     const startedTextCalls = new Set<string>();
     for (const e of this.events) {
       if (e.type === 'queued_user_input') continue;
       if (e.type === 'user_message') {
-        out.push({ role: 'user', content: renderUserInput(e), images: e.images });
+        out.push({
+          role: 'user',
+          content: renderUserInput(e),
+          images: e.images,
+        });
         continue;
       }
       if (e.type === 'assistant_message') {
@@ -252,7 +320,12 @@ export class ConversationEventLog {
  * authoritative key; the signature fallback keeps tool rounds from providers
  * that omit it from collapsing into "unknown".
  */
-function callKeyOf(event: { callId?: string; server?: string; tool?: string; args?: unknown }): string {
+function callKeyOf(event: {
+  callId?: string;
+  server?: string;
+  tool?: string;
+  args?: unknown;
+}): string {
   const id = event.callId && String(event.callId).trim();
   if (id) return `id:${id}`;
   return `sig:${event.server || ''}.${event.tool || ''}:${safeJson(event.args || {})}`;
@@ -270,7 +343,8 @@ function pendingResultPayload(started: boolean): Record<string, unknown> {
       resultStatus: 'unknown',
       error: {
         code: 'EXECUTION_UNKNOWN',
-        message: 'The previous run ended after this call started but before its result was recorded. Verify the effect before retrying.',
+        message:
+          'The previous run ended after this call started but before its result was recorded. Verify the effect before retrying.',
       },
     };
   }
@@ -279,12 +353,15 @@ function pendingResultPayload(started: boolean): Record<string, unknown> {
     resultStatus: 'not_executed',
     error: {
       code: 'EXECUTION_NOT_STARTED',
-      message: 'This call was requested but never started before the run ended. It can be issued again.',
+      message:
+        'This call was requested but never started before the run ended. It can be issued again.',
     },
   };
 }
 
-function renderUserInput(event: Extract<ConversationEvent, { type: 'user_message' }>): string {
+function renderUserInput(
+  event: Extract<ConversationEvent, { type: 'user_message' }>,
+): string {
   if (!event.attachmentDocumentIds?.length) return event.content;
   return `${event.content}\n\n[Attached session documents: ${event.attachmentDocumentIds.join(', ')}]`.trim();
 }
@@ -296,4 +373,3 @@ function safeJson(value: unknown): string {
     return String(value);
   }
 }
-

@@ -20,6 +20,9 @@ export default defineConfig({
       // wording). Pure and deterministic, so CI checks the checker itself rather than
       // relying on whoever remembers to set an endpoint variable.
       'docs/acceptance/answerChecks.audit.test.ts',
+      // Prompt budget sizing: deterministic, needs no endpoint, and it is the gate that
+      // keeps the estimator and the documented prompt language from drifting apart again.
+      'docs/acceptance/prompt-budget.audit.test.ts',
       // Repo-level gates that used to be a human habit (PR title shape). Cheap,
       // deterministic, so they run with the normal suite.
       'scripts/__tests__/**/*.test.mjs',
