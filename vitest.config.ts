@@ -7,22 +7,16 @@ export default defineConfig({
     environment: 'node',
     include: [
       'src/**/__tests__/**/*.test.ts',
-      // The workspace/output-budget gates used to live only in an explicit
-      // acceptance run and stayed red for a whole release. They are cheap and
-      // deterministic, so they run with the normal suite now.
-      'docs/acceptance/workspace-budget.audit.test.ts',
-      // Two more audits that need nothing generated: dense-fusion is pure, and
-      // final-plan builds its own SQLite fixture inline. A test nothing collects
-      // is not a gate, so anything runnable lives here.
-      'docs/acceptance/dense-fusion.audit.test.ts',
-      'docs/acceptance/final-plan.audit.test.ts',
-      // Rules the acceptance harness applies (task filtering, model preflight, refusal
-      // wording). Pure and deterministic, so CI checks the checker itself rather than
-      // relying on whoever remembers to set an endpoint variable.
-      'docs/acceptance/answerChecks.audit.test.ts',
-      // Prompt budget sizing: deterministic, needs no endpoint, and it is the gate that
-      // keeps the estimator and the documented prompt language from drifting apart again.
-      'docs/acceptance/prompt-budget.audit.test.ts',
+      // Every acceptance audit, collected on every `pnpm test`.
+      //
+      // They used to be listed one by one, which meant a file added to docs/acceptance
+      // was never transpiled by anything until a live run touched it: the file that
+      // started this could not be parsed at all (biome wraps a `typeof import(...)` type with
+      // a trailing comma, TypeScript accepts it, esbuild does not), and `pnpm typecheck`
+      // waved it through. A test nothing collects is not a gate; a test nothing transpiles
+      // is worse, because it looks like one. Env-gated files still skip themselves - they
+      // just now have to parse and import first.
+      'docs/acceptance/*.audit.test.ts',
       // Repo-level gates that used to be a human habit (PR title shape). Cheap,
       // deterministic, so they run with the normal suite.
       'scripts/__tests__/**/*.test.mjs',

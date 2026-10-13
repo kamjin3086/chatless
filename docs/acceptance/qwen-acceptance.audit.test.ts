@@ -31,6 +31,10 @@ import {
 } from '@/lib/tokens/promptSize';
 import { resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { TauriBridge } from './tauriBridge';
+// A named type import, not `typeof import('...').X`: TypeScript tolerates the trailing
+// comma biome inserts when it wraps that form, esbuild does not, and nothing in CI
+// transpiles this file until a live run asks it to.
+import type { ToolInvocation as ToolInvocationCtor } from '@/lib/mcp/pipeline/ToolInvocation';
 import {
   assertModelServed,
   refusalIsStated,
@@ -157,9 +161,7 @@ let bridge: TauriBridge;
 let dataDir = '';
 let FilesystemAdapter: typeof FilesystemAdapterType;
 let ShellExecutorAdapter: typeof ShellExecutorAdapterType;
-let ToolInvocation: typeof import(
-  '@/lib/mcp/pipeline/ToolInvocation',
-).ToolInvocation;
+let ToolInvocation: typeof ToolInvocationCtor;
 
 beforeAll(async () => {
   if (!enabled) return;
