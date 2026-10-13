@@ -140,6 +140,7 @@ export class OpenAIProvider extends BaseProvider {
             }
             try {
               const json = JSON.parse(jsonStr);
+              if (json?.usage) cb.onUsage?.(json.usage);
               const delta = json?.choices?.[0]?.delta;
               if (typeof delta?.reasoning_content === 'string') {
                 reasoningContent += delta.reasoning_content;

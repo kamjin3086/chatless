@@ -16,6 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { ThinkingCostPanel } from './ThinkingCostPanel';
 import { ModelParametersService } from '@/lib/model-parameters';
 import {
   type ThinkingMigration,
@@ -314,6 +315,7 @@ export function ThinkingLevelSwitch({
           )}
           <div className="mt-0.5">{t('thinkingShortcut.help')}</div>
         </div>
+        <ThinkingCostPanel />
       </PopoverContent>
     </Popover>
   );

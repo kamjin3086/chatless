@@ -317,6 +317,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const delta = json?.choices?.[0]?.delta ?? {};
         if (json?.usage) {
           recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'openai-compatible', json?.model));
+          cb.onUsage?.(json.usage);
         }
 
         
@@ -553,6 +554,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const delta = json?.choices?.[0]?.delta ?? {};
         if (json?.usage) {
           recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'openai-compatible', json?.model));
+          cb.onUsage?.(json.usage);
         }
         const finishReason = json?.choices?.[0]?.finish_reason;
         if (finishReason === 'length' || finishReason === 'content_filter') {

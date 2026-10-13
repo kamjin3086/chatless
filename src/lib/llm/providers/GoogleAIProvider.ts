@@ -279,6 +279,9 @@ export class GoogleAIProvider extends BaseProvider {
               if (this.processedPayloads.has(payload)) return; // 完全重复的 payload 直接跳过
               this.processedPayloads.add(payload);
               const parsedData = JSON.parse(payload);
+              // Gemini bills thinking separately (thoughtsTokenCount) and puts the numbers on
+              // the last chunk, which is also where candidates may be absent entirely.
+              if (parsedData?.usageMetadata) cb.onUsage?.(parsedData.usageMetadata);
 
               // 检查是否有candidates数组
               if (

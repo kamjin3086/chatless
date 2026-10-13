@@ -202,6 +202,9 @@ export class OpenAIResponsesProvider extends BaseProvider {
           }
           case 'response.output_text.done':
           case 'response.completed': {
+            // The Responses API bills on the completed envelope (input_tokens /
+            // output_tokens_details), which is not the chat shape the others send.
+            if (data?.response?.usage) cb.onUsage?.(data.response.usage);
             // 流结束，发送完成事件
             const result = this.thinkingStrategy.processToken({ done: true });
             
@@ -373,6 +376,7 @@ export class OpenAIResponsesProvider extends BaseProvider {
               }
               case 'response.output_text.done':
               case 'response.completed': {
+                if (data?.response?.usage) cb.onUsage?.(data.response.usage);
                 const result = this.thinkingStrategy.processToken({ done: true });
                 
                 if (!cb.onEvent) {

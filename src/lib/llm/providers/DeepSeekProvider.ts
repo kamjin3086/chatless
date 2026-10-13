@@ -129,6 +129,7 @@ export class DeepSeekProvider extends BaseProvider {
               const json = JSON.parse(rawData);
               if (json?.usage) {
                 recordPromptCacheUsage(parsePromptCacheUsage(json.usage, 'deepseek', json?.model));
+                cb.onUsage?.(json.usage);
               }
               const delta = json?.choices?.[0]?.delta || {};
               const token = delta?.content;

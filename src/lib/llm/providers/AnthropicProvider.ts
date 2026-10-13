@@ -280,6 +280,7 @@ export class AnthropicProvider extends BaseProvider {
                         json.message.model,
                       ),
                     );
+                    callbacks.onUsage?.(json.message.usage);
                   } else if (json?.usage) {
                     recordPromptCacheUsage(
                       parsePromptCacheUsage(
@@ -288,6 +289,7 @@ export class AnthropicProvider extends BaseProvider {
                         json?.message?.model,
                       ),
                     );
+                    callbacks.onUsage?.(json.usage);
                   }
 
                   // 处理内容块开始（可能是工具调用）

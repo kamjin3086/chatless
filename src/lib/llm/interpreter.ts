@@ -6,6 +6,8 @@ import type { BaseProvider } from './providers/BaseProvider';
 import { ProviderRegistry } from './index';
 import { ParameterPolicyEngine } from './ParameterPolicy';
 import { resolveThinkingModelName } from './thinkingLevels';
+import { createThinkingTurnWatcher } from './thinkingTelemetry';
+import { recordThinkingTurn } from '@/lib/telemetry/thinkingTelemetryStore';
 import { OpenAICompatibleProvider } from './providers/OpenAICompatibleProvider';
 import { OpenAIProvider } from './providers/OpenAIProvider';
 import { GoogleAIProvider } from './providers/GoogleAIProvider';
@@ -165,7 +167,7 @@ export class LLMInterpreter {
     provider: string,
     model: string,
     messages: Message[],
-    callbacks: StreamCallbacks,
+    callbacksIn: StreamCallbacks,
     options: ChatOptions = {},
   ): Promise<void> {
     const requestId =
@@ -174,6 +176,42 @@ export class LLMInterpreter {
         ? (options as any).__requestId
         : '__legacy__';
     const useProvider = provider; // 不做魔法纠正，维持调用方选择
+
+    // #101: one wrap point for cost accounting. It observes only - the request that leaves
+    // is built by the code below, untouched. The context is a getter because the provider
+    // form that applies (a custom aggregator may speak as OpenAI-compatible) and the level
+    // that survived parameter policy are both settled further down, and reading them early
+    // would describe the model the user picked rather than the request that went out.
+    const thinkingWatcher = createThinkingTurnWatcher({
+      context: () => ({
+        provider: policyProviderName || useProvider,
+        model,
+        level: (options as Record<string, any> | undefined)?.thinkingLevel,
+        conversationId: (options as Record<string, any> | undefined)?.conversationId,
+        messageId: (options as Record<string, any> | undefined)?.messageId,
+      }),
+    });
+    const callbacks: StreamCallbacks = {
+      ...callbacksIn,
+      onUsage: (usage) => {
+        thinkingWatcher.noteUsage(usage);
+        callbacksIn.onUsage?.(usage);
+      },
+      onComplete: () => {
+        // Only a completed run is a sample, and only a chat answer has a message to attach
+        // it to: retrieval and schema-generation calls stay out of a view that is about
+        // turns. Telemetry must never be the reason a reply fails, so nothing here is
+        // awaited and nothing here may throw into the caller.
+        try {
+          if ((options as Record<string, any> | undefined)?.messageId) {
+            recordThinkingTurn(thinkingWatcher.finish()).catch(() => {});
+          }
+        } catch (error) {
+          console.error('thinking telemetry could be recorded', error);
+        }
+        callbacksIn.onComplete?.();
+      },
+    };
 
     const strategy = ProviderRegistry.get(useProvider);
     if (!strategy) {

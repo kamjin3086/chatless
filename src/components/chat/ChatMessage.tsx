@@ -8,6 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useChatStore } from '@/store/chatStore';
 import { UserMessageBlock } from './UserMessageBlock';
 import { AIMessageBlock } from './AIMessageBlock';
+import { ThinkingTurnBadge } from './ThinkingTurnBadge';
 import type { Message } from '@/types/chat';
 import { motion } from 'framer-motion';
 
@@ -353,6 +354,7 @@ function ChatMessageComponent({
             </div>
             {!isUser && (
               <div className="flex items-center gap-0.5 whitespace-nowrap">
+                <ThinkingTurnBadge messageId={id} />
                 {onRetry && (
                   <button
                     onClick={onRetry}
