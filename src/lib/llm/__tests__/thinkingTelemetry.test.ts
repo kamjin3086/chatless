@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  aggregateThinkingTurns,
   buildThinkingTurn,
   formatThinkingDuration,
   mergeThinkingTurn,
@@ -140,77 +139,6 @@ function turn(over: Partial<ReturnType<typeof buildThinkingTurn>>) {
   } as ReturnType<typeof buildThinkingTurn>;
 }
 
-describe('comparing levels over recent turns', () => {
-  it('groups by level with wall-clock and token totals', () => {
-    const rows = aggregateThinkingTurns([
-      turn({
-        level: 'low',
-        durationMs: 1000,
-        completionTokens: 100,
-        reasoningTokens: 20,
-      }),
-      turn({
-        level: 'low',
-        durationMs: 3000,
-        completionTokens: 200,
-        reasoningTokens: 40,
-      }),
-      turn({
-        level: 'high',
-        durationMs: 9000,
-        completionTokens: 900,
-        reasoningTokens: 800,
-      }),
-    ]);
-    expect(rows.map((r) => r.level)).toEqual(['low', 'high']);
-    expect(rows[0]).toMatchObject({
-      turns: 2,
-      totalMs: 4000,
-      avgMs: 2000,
-      completionTokens: 300,
-      reasoningTokens: 60,
-      usageTurns: 2,
-    });
-    expect(rows[1]).toMatchObject({
-      turns: 1,
-      avgMs: 9000,
-      reasoningTokens: 800,
-    });
-  });
-
-  it('gives the unsent case its own row', () => {
-    const rows = aggregateThinkingTurns([
-      turn({ level: 'auto', sent: false, durationMs: 500 }),
-    ]);
-    expect(rows[0]).toMatchObject({ level: 'auto', sent: false, turns: 1 });
-  });
-
-  it('counts turns with no usage apart, so an average is not a lie', () => {
-    const rows = aggregateThinkingTurns([
-      turn({ completionTokens: 100, usageReported: true }),
-      turn({ usageReported: false }),
-    ]);
-    expect(rows[0]).toMatchObject({
-      turns: 2,
-      usageTurns: 1,
-      completionTokens: 100,
-    });
-  });
-
-  it('says nothing when there is nothing to say', () => {
-    expect(aggregateThinkingTurns([])).toEqual([]);
-  });
-
-  it('walks the documented order rather than the arrival order', () => {
-    const rows = aggregateThinkingTurns([
-      turn({ level: 'xhigh' }),
-      turn({ level: 'off' }),
-      turn({ level: 'low' }),
-    ]);
-    expect(rows.map((r) => r.level)).toEqual(['off', 'low', 'xhigh']);
-  });
-});
-
 describe('reading the numbers out loud', () => {
   it('turns milliseconds into something a person compares', () => {
     expect(formatThinkingDuration(900)).toBe('0.9s');
@@ -223,19 +151,6 @@ describe('reading the numbers out loud', () => {
     expect(formatThinkingTokens(1234)).toBe('1,234');
     expect(formatThinkingTokens(0)).toBe('0');
     expect(formatThinkingTokens(undefined)).toBe('—');
-  });
-});
-
-describe('not inventing a zero in a summary', () => {
-  it('counts which levels ever reported a reasoning count', () => {
-    const rows = aggregateThinkingTurns([
-      // Reported usage, but no reasoning count in it.
-      turn({ level: 'low', completionTokens: 5 }),
-      // Reported, and the count really was zero.
-      turn({ level: 'low', completionTokens: 5, reasoningTokens: 0 }),
-    ]);
-    expect(rows[0].reasoningTurns).toBe(1);
-    expect(rows[0].reasoningTokens).toBe(0);
   });
 });
 
