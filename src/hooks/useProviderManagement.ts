@@ -13,6 +13,8 @@ import { useProviderMetaStore } from '@/store/providerMetaStore';
 import { useProviderStore } from '@/store/providerStore';
 import { mapToProviderWithStatus } from '@/lib/provider/transform';
 import { preloadProviderAndModelLogos } from '@/lib/utils/logoPreloader';
+import { AVAILABLE_PROVIDERS_CATALOG } from '@/lib/provider/catalog';
+import { resolveRequiresKey } from '@/lib/provider/keyRequirement';
 
 // 设置布局与 AI 模型页会各调一次 hook；连通性检查只跑一轮，避免状态点连闪
 let didInitProviderConfigCheck = false;
@@ -148,7 +150,15 @@ export function useProviderManagement() {
         // 初始化配置状态：仅依据“输入框（持久化的 apiKey）是否为空”来显示未配置密钥
         const configStatusUpdates: Record<string, any> = {};
         list.forEach(p => {
-          const needsKey = !!p.requiresKey;
+          const def = AVAILABLE_PROVIDERS_CATALOG.find(
+            (d) => d.name === p.name || d.id === p.name,
+          );
+          const needsKey = resolveRequiresKey({
+            stored: p.requiresKey,
+            catalog: def?.requiresKey,
+            strategy: (p as any).strategy,
+            url: p.url,
+          }).requiresKey;
           const hasKey = !!(p.apiKey && String(p.apiKey).trim());
           if (needsKey && !hasKey) {
             configStatusUpdates[p.name] = {
@@ -433,6 +443,21 @@ export function useProviderManagement() {
     }
   }, [handleSingleProviderRefresh, providers]);
 
+  /** 「免密」开关：保存选择并让运行时立刻按新答案行事，不必重启。 */
+  const handleKeyRequirementChange = useCallback(async (providerName: string, requiresKeyValue: boolean) => {
+    try {
+      const { updateProviderConfigUseCase } = await import('@/lib/provider/usecases/UpdateProviderConfig');
+      await updateProviderConfigUseCase.execute(providerName, { requiresKey: requiresKeyValue });
+      const { syncDynamicProviders } = await import('@/lib/llm');
+      await syncDynamicProviders();
+      const current = providers.find((p) => p.name === providerName);
+      if (current) void handleSingleProviderRefresh(current, false);
+    } catch (error: any) {
+      console.error('更新密钥要求失败:', error);
+      toast.error('保存失败', { description: error?.message || '无法保存该更改。' });
+    }
+  }, [handleSingleProviderRefresh, providers]);
+
   const handleModelApiKeyChange = useCallback(async (providerName: string, modelName: string, apiKey: string) => {
     const finalApiKey = apiKey || null;
     // setProviders(prev => // This line was removed as per the edit hint
@@ -514,6 +539,7 @@ export function useProviderManagement() {
     isRefreshing,
     handleServiceUrlChange,
     handleProviderDefaultApiKeyChange,
+  handleKeyRequirementChange,
     handleModelApiKeyChange,
     handleGlobalRefresh,
     handleSingleProviderRefresh,

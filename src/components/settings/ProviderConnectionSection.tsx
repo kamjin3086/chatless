@@ -243,6 +243,9 @@ interface ProviderConnectionSectionProps {
   docUrl?: string;
   onDefaultApiKeyChange: (providerName: string, apiKey: string) => void;
   onDefaultApiKeyBlur: (providerName: string) => void;
+  /** Current answer to "must this endpoint have a key?", after the user's choice. */
+  requiresKey?: boolean;
+  onRequiresKeyChange?: (providerName: string, requiresKey: boolean) => void;
   endpointPreview?: string;
   isConnecting?: boolean;
 }
@@ -259,6 +262,8 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
     docUrl,
     onDefaultApiKeyChange,
     onDefaultApiKeyBlur,
+    requiresKey,
+    onRequiresKeyChange,
     endpointPreview,
     isConnecting,
   } = props;
@@ -276,6 +281,26 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
             <ConnectionStatusHint provider={provider} isConnecting={isConnecting} />
           </div>
         </div>
+
+        {onRequiresKeyChange ? (
+          <div className="flex h-5 items-center gap-2 min-w-0">
+            <label className="shrink-0 whitespace-nowrap text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400">
+              密钥要求
+            </label>
+            <label
+              className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400 select-none"
+              title="本地或局域网服务常常不需要密钥；取消勾选后，留空密钥也能使用。"
+            >
+              <input
+                type="checkbox"
+                className="h-3 w-3 accent-blue-600"
+                checked={requiresKey !== true}
+                onChange={(e) => onRequiresKeyChange(provider.name, !e.target.checked)}
+              />
+              免密
+            </label>
+          </div>
+        ) : null}
 
         {showApiKeyFields ? (
           <div className="flex h-5 items-center gap-2 min-w-0">
