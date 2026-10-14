@@ -26,6 +26,8 @@ interface ProviderSettingsProps {
   isInitialChecking: boolean; // 是否处于全局初始检查状态 (用于禁用按钮)
   onUrlChange: (providerName: string, url: string) => void;
   onDefaultApiKeyChange: (providerName: string, apiKey: string) => void;
+  requiresKey?: boolean;
+  onRequiresKeyChange?: (providerName: string, requiresKey: boolean) => void;
   onDefaultApiKeyBlur: (providerName: string) => void;
   onModelApiKeyChange: (modelName: string, apiKey: string) => void; // Model 也使用 name
   onModelApiKeyBlur: (modelName: string) => void;
@@ -42,6 +44,8 @@ function ProviderSettingsImpl({
   isInitialChecking,
   onUrlChange,
   onDefaultApiKeyChange,
+  requiresKey,
+  onRequiresKeyChange,
   onDefaultApiKeyBlur,
   onModelApiKeyChange,
   onModelApiKeyBlur,
@@ -293,6 +297,8 @@ function ProviderSettingsImpl({
               setLocalDefaultApiKey={setLocalDefaultApiKey}
               docUrl={docUrl}
               onDefaultApiKeyChange={onDefaultApiKeyChange}
+              requiresKey={requiresKey}
+              onRequiresKeyChange={onRequiresKeyChange}
               onDefaultApiKeyBlur={onDefaultApiKeyBlur}
               endpointPreview={endpointPreview}
               isConnecting={checking}

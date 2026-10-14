@@ -148,8 +148,23 @@ export const useChatActions = (
           return false;
         }
 
-        // 如果provider不需要密钥，直接返回true
-        if (!provider.requiresKey) {
+        // 是否需要密钥只有一处判断：用户选择 > 目录默认 > 策略/地址本地性（#118）
+        const { AVAILABLE_PROVIDERS_CATALOG } = await import(
+          '@/lib/provider/catalog'
+        );
+        const { resolveRequiresKey } = await import(
+          '@/lib/provider/keyRequirement'
+        );
+        const def = AVAILABLE_PROVIDERS_CATALOG.find(
+          (d) => d.name === providerName || d.id === providerName,
+        );
+        const { requiresKey } = resolveRequiresKey({
+          stored: provider.requiresKey,
+          catalog: def?.requiresKey,
+          strategy: (provider as any).strategy,
+          url: (provider as any).url,
+        });
+        if (!requiresKey) {
           return true;
         }
 

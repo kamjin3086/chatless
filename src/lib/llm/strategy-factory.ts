@@ -6,21 +6,40 @@ import { GoogleAIProvider } from './providers/GoogleAIProvider';
 import { DeepSeekProvider } from './providers/DeepSeekProvider';
 import { OllamaProvider } from './providers/OllamaProvider';
 import { OpenAIResponsesProvider } from './providers/OpenAIResponsesProvider';
+import {
+  keyIsSatisfied,
+  resolveRequiresKey,
+} from '@/lib/provider/keyRequirement';
 import type { CatalogProviderDef } from '@/lib/provider/catalog';
 
 /**
  * 简易工厂：根据目录定义创建 Provider 实例。
  * openai-compatible 默认复用 OpenAIProvider 行为（/v1/models、/v1/chat/completions）。
  */
-export function createProviderInstance(def: CatalogProviderDef, url: string, apiKey?: string | null): BaseProvider {
+export function createProviderInstance(
+  def: CatalogProviderDef,
+  url: string,
+  apiKey?: string | null,
+  options: { requiresKey?: unknown } = {},
+): BaseProvider {
   const baseUrl = (url || '').trim();
+  // One place decides, so the send path, the connection check and the badge cannot disagree
+  // about whether this endpoint needs a credential (#118).
+  const requiresKey = resolveRequiresKey({
+    stored: options.requiresKey,
+    catalog: def.requiresKey,
+    strategy: def.strategy,
+    url: baseUrl || def.defaultUrl,
+  }).requiresKey;
   class InlineMultiStrategyProvider extends BaseProvider {
     constructor(displayName: string, base: string, key?: string | null) {
       super(displayName, base, key);
     }
     async checkConnection() {
       const key = await this.getApiKey();
-      if (!key) return { ok: false, reason: 'NO_KEY', message: 'NO_KEY' } as const;
+      if (!keyIsSatisfied({ requiresKey: (this as any).requiresKey !== false, apiKey: key })) {
+        return { ok: false, reason: 'NO_KEY', message: 'NO_KEY' } as const;
+      }
       
       // 使用专门的连通性检查函数
       const baseUrl = this.baseUrl.replace(/\/$/, '');
@@ -61,14 +80,21 @@ export function createProviderInstance(def: CatalogProviderDef, url: string, api
     }
     private async createDelegate(strategy: string) {
       const key = await this.getApiKey();
+      // A delegate that forgot the aggregate's key requirement would demand a key the user
+      // already declared unnecessary.
+      const inherit = (p: any) => {
+        p.aliasProviderName = this.name;
+        p.requiresKey = (this as any).requiresKey;
+        return p;
+      };
       switch (strategy) {
-        case 'openai': { const p = new OpenAIProvider(this.baseUrl, key || undefined, this.name); (p as any).aliasProviderName = this.name; return p; }
-        case 'openai-responses': { const p = new OpenAIResponsesProvider(this.baseUrl, key || undefined, this.name); (p as any).aliasProviderName = this.name; return p; }
-        case 'anthropic': { const p = new AnthropicProvider(this.baseUrl, key || undefined); (p as any).aliasProviderName = this.name; return p; }
-        case 'gemini': { const p = new GoogleAIProvider(this.baseUrl, key || undefined); (p as any).aliasProviderName = this.name; return p; }
-        case 'deepseek': { const p = new DeepSeekProvider(this.baseUrl, key || undefined); (p as any).aliasProviderName = this.name; return p; }
+        case 'openai': { const p = new OpenAIProvider(this.baseUrl, key || undefined, this.name); return inherit(p); }
+        case 'openai-responses': { const p = new OpenAIResponsesProvider(this.baseUrl, key || undefined, this.name); return inherit(p); }
+        case 'anthropic': { const p = new AnthropicProvider(this.baseUrl, key || undefined); return inherit(p); }
+        case 'gemini': { const p = new GoogleAIProvider(this.baseUrl, key || undefined); return inherit(p); }
+        case 'deepseek': { const p = new DeepSeekProvider(this.baseUrl, key || undefined); return inherit(p); }
         case 'openai-compatible':
-        default: { const p = new OpenAICompatibleProvider(this.baseUrl, key || undefined, this.name); (p as any).aliasProviderName = this.name; return p; }
+        default: { const p = new OpenAICompatibleProvider(this.baseUrl, key || undefined, this.name); return inherit(p); }
       }
     }
     async chatStream(model: string, messages: any[], callbacks: any, options: Record<string, any> = {}) {
@@ -84,31 +110,31 @@ export function createProviderInstance(def: CatalogProviderDef, url: string, api
           baseUrl || def.defaultUrl || 'https://api.openai.com/v1',
           apiKey || undefined,
           def.name
-        ); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+        ); (inst as any).requiresKey = requiresKey; return inst; }
     case 'openai-responses':
       { const inst = new OpenAIResponsesProvider(
           baseUrl || def.defaultUrl || 'https://api.openai.com/v1',
           apiKey || undefined,
           def.name
-        ); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+        ); (inst as any).requiresKey = requiresKey; return inst; }
     case 'openai-compatible':
       { const inst = new OpenAICompatibleProvider(
           baseUrl || def.defaultUrl || 'https://api.openai.com/v1',
           apiKey || undefined,
           def.name
-        ); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+        ); (inst as any).requiresKey = requiresKey; return inst; }
     case 'anthropic':
-      { const inst = new AnthropicProvider(baseUrl || def.defaultUrl || 'https://api.anthropic.com/v1', apiKey || undefined); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+      { const inst = new AnthropicProvider(baseUrl || def.defaultUrl || 'https://api.anthropic.com/v1', apiKey || undefined); (inst as any).requiresKey = requiresKey; return inst; }
     case 'gemini':
-      { const inst = new GoogleAIProvider(baseUrl || def.defaultUrl || 'https://generativelanguage.googleapis.com/v1beta', apiKey || undefined); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+      { const inst = new GoogleAIProvider(baseUrl || def.defaultUrl || 'https://generativelanguage.googleapis.com/v1beta', apiKey || undefined); (inst as any).requiresKey = requiresKey; return inst; }
     case 'deepseek':
-      { const inst = new DeepSeekProvider(baseUrl || def.defaultUrl || 'https://api.deepseek.com', apiKey || undefined); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+      { const inst = new DeepSeekProvider(baseUrl || def.defaultUrl || 'https://api.deepseek.com', apiKey || undefined); (inst as any).requiresKey = requiresKey; return inst; }
     case 'ollama':
-      return new OllamaProvider(baseUrl || 'http://localhost:11434');
+      { const inst = new OllamaProvider(baseUrl || 'http://localhost:11434'); (inst as any).requiresKey = requiresKey; return inst; }
     case 'multi':
-      return new InlineMultiStrategyProvider(def.name, baseUrl || def.defaultUrl || '', apiKey || undefined);
+      { const inst = new InlineMultiStrategyProvider(def.name, baseUrl || def.defaultUrl || '', apiKey || undefined); (inst as any).requiresKey = requiresKey; return inst; }
     default:
-      { const inst = new OpenAICompatibleProvider(baseUrl || def.defaultUrl || 'https://api.openai.com/v1', apiKey || undefined); (inst as any).requiresKey = !!def.requiresKey; return inst; }
+      { const inst = new OpenAICompatibleProvider(baseUrl || def.defaultUrl || 'https://api.openai.com/v1', apiKey || undefined); (inst as any).requiresKey = requiresKey; return inst; }
   }
 }
 

@@ -174,6 +174,7 @@ export function AiModelSettings() {
     isLoading,
     handleServiceUrlChange,
     handleProviderDefaultApiKeyChange,
+    handleKeyRequirementChange,
     handleModelApiKeyChange,
     handleSingleProviderRefresh,
     handlePreferenceChange
@@ -404,6 +405,8 @@ export function AiModelSettings() {
             isConnecting={selectedProvider.displayStatus === 'CONNECTING'}
             isInitialChecking={isLoading}
             onUrlChange={handleServiceUrlChange}
+            requiresKey={selectedProvider.requiresApiKey}
+            onRequiresKeyChange={handleKeyRequirementChange}
             onDefaultApiKeyChange={handleProviderDefaultApiKeyChange}
             onDefaultApiKeyBlur={handleDefaultApiKeyBlur}
             onModelApiKeyChange={(modelName, apiKey) => handleModelApiKeyChange(selectedProvider.name, modelName, apiKey)}
