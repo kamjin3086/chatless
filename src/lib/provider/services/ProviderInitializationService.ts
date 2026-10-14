@@ -21,10 +21,16 @@ export class ProviderInitializationService {
     p: any,
     existingConfig?: ProviderEntity
   ): Promise<ProviderEntity> {
-    // 从catalog中获取正确的requiresKey值
+    // 与发送路径同一条规则：本地证据 > 目录默认 > 用户自建（#118）。
+    // 早先这里只查目录、否则一律“要密钥”，于是自建端点每次启动都被改回需要密钥。
     const { AVAILABLE_PROVIDERS_CATALOG } = await import("../catalog");
     const catalogDef = AVAILABLE_PROVIDERS_CATALOG.find(def => def.name === p.name);
-    const requiresKey = catalogDef ? catalogDef.requiresKey : p.name !== "Ollama"; // 兜底逻辑
+    const { resolveRequiresKey } = await import("../keyRequirement");
+    const requiresKey = resolveRequiresKey({
+      catalog: catalogDef?.requiresKey,
+      strategy: p.strategy ?? catalogDef?.strategy,
+      url: existingConfig?.url || p.baseUrl || "",
+    }).requiresKey;
 
     // 优化：若已有持久化 apiKey 则不访问 KeyManager
     const apiKey = existingConfig?.apiKey ?? (requiresKey ? await KeyManager.getProviderKey(p.name) : null);

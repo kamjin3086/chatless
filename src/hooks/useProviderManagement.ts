@@ -154,7 +154,6 @@ export function useProviderManagement() {
             (d) => d.name === p.name || d.id === p.name,
           );
           const needsKey = resolveRequiresKey({
-            isUserAdded: (p as any).isUserAdded,
             catalog: def?.requiresKey,
             strategy: (p as any).strategy,
             url: p.url,

@@ -1,22 +1,27 @@
 /**
  * One answer to "does this provider need an API key?".
  *
- * The question was being asked five ways - the send path, the registry build, the status
- * badge, the add-provider default and the aggregate provider - and they disagreed, which is
- * how keyless endpoints (LM Studio, Ollama, a gateway on the LAN) got blocked with a message
- * about a missing key. The rule is deliberately short, because every extra knob here is a
- * setting the user has to understand:
+ * The question was being asked several ways - the send path, the registry build, the status
+ * badge, the initial status written at startup and the aggregate provider - and they
+ * disagreed, which is how keyless endpoints (LM Studio, Ollama, a gateway on the LAN) got
+ * blocked with a message about a missing key. The rule is deliberately short, because every
+ * extra knob here is a setting the user has to understand:
  *
- * 1. an endpoint the user set up is keyless unless they say otherwise by filling in a key.
- *    Nobody adds a LAN endpoint expecting the app to demand a credential it cannot have;
- * 2. otherwise local evidence - loopback, a private network, an IPv6 literal, Ollama - needs
- *    nothing, even when the catalogue entry was written for a hosted service;
- * 3. otherwise the built-in catalogue's answer, and a missing answer means a key is required.
+ * 1. local evidence wins: loopback, a private network, an IPv6 literal, or the ollama
+ *    strategy needs nothing. The address is the endpoint actually configured, whereas the
+ *    catalogue describes the service people subscribe to, and a self-hosted gateway filed
+ *    under a hosted default was the reported failure. If it does need a credential it
+ *    answers 401, which is information from the endpoint rather than a guess made first;
+ * 2. otherwise the catalogue's answer, because a hosted service the user switched on
+ *    genuinely needs a key. This cannot be "did the user add it": enabling Azure or
+ *    OpenRouter from the catalogue marks those as user-added too;
+ * 3. otherwise the endpoint is the user's own and unlisted - no key filled in is the
+ *    configuration, not a mistake.
  *
- * A provider that does require a credential and does not have one is the case this governs;
- * a key that exists is always used, so hosted providers behave exactly as before.
+ * A provider that requires a credential and lacks one is what this governs; a key that
+ * exists is always used, so nothing here changes how a configured provider behaves.
  */
-export type KeyRequirementSource = 'user-added' | 'local' | 'catalog' | 'default';
+export type KeyRequirementSource = 'local' | 'catalog' | 'custom';
 
 const PRIVATE_V4 = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
 
@@ -26,25 +31,26 @@ export function isLocalEndpoint(url?: string | null): boolean {
   if (!raw) return false;
   let host = '';
   try {
-    host = new URL(raw.includes('://') ? raw : `http://${raw}`).hostname.toLowerCase();
+    host = new URL(
+      raw.includes('://') ? raw : `http://${raw}`,
+    ).hostname.toLowerCase();
   } catch {
     return false;
   }
   host = host.replace(/^\[|\]$/g, '');
   if (!host) return false;
   if (host.includes(':')) return true;
-  return host === 'localhost' || host.endsWith('.localhost') || PRIVATE_V4.test(host);
+  return (
+    host === 'localhost' || host.endsWith('.localhost') || PRIVATE_V4.test(host)
+  );
 }
 
 export function resolveRequiresKey(args: {
-  isUserAdded?: boolean;
+  /** The catalogue's answer for this provider, or undefined when it is not in the catalogue. */
   catalog?: unknown;
   strategy?: string | null;
   url?: string | null;
 }): { requiresKey: boolean; source: KeyRequirementSource } {
-  if (args.isUserAdded === true) {
-    return { requiresKey: false, source: 'user-added' };
-  }
   if (
     String(args.strategy ?? '').toLowerCase() === 'ollama' ||
     isLocalEndpoint(args.url)
@@ -54,7 +60,7 @@ export function resolveRequiresKey(args: {
   if (typeof args.catalog === 'boolean') {
     return { requiresKey: args.catalog, source: 'catalog' };
   }
-  return { requiresKey: true, source: 'default' };
+  return { requiresKey: false, source: 'custom' };
 }
 
 /** Is the key requirement met? A blank string is no key, not a key. */

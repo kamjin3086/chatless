@@ -2,22 +2,30 @@ import { describe, expect, it } from 'vitest';
 import { keyIsSatisfied, resolveRequiresKey } from '../keyRequirement';
 
 describe('deciding whether a provider needs a key', () => {
-  it('treats an endpoint the user set up as keyless', () => {
-    // The rule this encodes: a self-built endpoint without a key is not a misconfiguration.
-    expect(
-      resolveRequiresKey({
-        isUserAdded: true,
-        catalog: true,
-        strategy: 'openai-compatible',
-        url: 'https://gateway.example.com/v1',
-      }),
-    ).toEqual({ requiresKey: false, source: 'user-added' });
+  it('still requires a key of a hosted service the user switched on', () => {
+    // Enabling Azure/OpenRouter/Groq from the catalogue sets isUserAdded: true, so
+    // "the user added it" cannot be the test for "this is the user's own endpoint".
+    for (const name of ['Azure OpenAI', 'OpenRouter', 'Groq', 'New API']) {
+      expect(
+        resolveRequiresKey({
+          catalog: true,
+          strategy: 'openai-compatible',
+          url: 'https://gateway.example.com/v1',
+        }),
+        name,
+      ).toEqual({ requiresKey: true, source: 'catalog' });
+    }
   });
 
-  it('still requires a key of a built-in hosted service', () => {
+  it('treats an endpoint that is not in the catalogue as the user own', () => {
+    // No catalogue entry means nobody told us about this service, so no key filled in
+    // is the configuration rather than a mistake.
     expect(
-      resolveRequiresKey({ catalog: true, strategy: 'openai', url: 'https://api.openai.com/v1' }),
-    ).toEqual({ requiresKey: true, source: 'catalog' });
+      resolveRequiresKey({
+        strategy: 'openai-compatible',
+        url: 'https://gw.example.com/v1',
+      }),
+    ).toEqual({ requiresKey: false, source: 'custom' });
   });
 
   it('reads a local address as needing no credential', () => {
@@ -30,15 +38,26 @@ describe('deciding whether a provider needs a key', () => {
       }),
     ).toEqual({ requiresKey: false, source: 'local' });
     expect(
-      resolveRequiresKey({ strategy: 'openai-compatible', url: 'http://localhost:1234/v1' })
-        .requiresKey,
+      resolveRequiresKey({
+        strategy: 'openai-compatible',
+        url: 'http://localhost:1234/v1',
+      }).requiresKey,
     ).toBe(false);
     expect(
-      resolveRequiresKey({ strategy: 'openai-compatible', url: 'https://api.example.com/v1' })
-        .requiresKey,
-    ).toBe(true);
-    expect(resolveRequiresKey({ strategy: 'ollama' }).requiresKey).toBe(false);
-    expect(resolveRequiresKey({}).requiresKey).toBe(true);
+      resolveRequiresKey({
+        catalog: true,
+        strategy: 'openai-compatible',
+        url: 'http://localhost:1234/v1',
+      }).source,
+    ).toBe('local');
+    // Ollama answers keyless even where only the strategy says so.
+    expect(
+      resolveRequiresKey({
+        catalog: true,
+        strategy: 'ollama',
+        url: 'https://remote.example.com',
+      }),
+    ).toEqual({ requiresKey: false, source: 'local' });
   });
 
   it('treats a blank key as no key', () => {
