@@ -14,7 +14,6 @@ export class UpdateProviderConfigUseCase {
     | "displayName"
     | "url"
     | "apiKey"
-    | "requiresKey"
     | "strategy"
     | "isVisible"
     | "preferences"
@@ -40,10 +39,6 @@ export class UpdateProviderConfigUseCase {
     }
     if (typeof input.isVisible !== 'undefined') {
       next.isVisible = !!input.isVisible;
-    }
-    if (typeof input.requiresKey !== 'undefined') {
-      // The user's own answer about their endpoint; it outranks the catalogue default.
-      next.requiresKey = !!input.requiresKey;
     }
     if (typeof input.preferences !== 'undefined') {
       next.preferences = { ...target.preferences, ...input.preferences };

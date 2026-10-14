@@ -154,7 +154,6 @@ export function useProviderManagement() {
             (d) => d.name === p.name || d.id === p.name,
           );
           const needsKey = resolveRequiresKey({
-            stored: p.requiresKey,
             catalog: def?.requiresKey,
             strategy: (p as any).strategy,
             url: p.url,
@@ -443,21 +442,6 @@ export function useProviderManagement() {
     }
   }, [handleSingleProviderRefresh, providers]);
 
-  /** 「免密」开关：保存选择并让运行时立刻按新答案行事，不必重启。 */
-  const handleKeyRequirementChange = useCallback(async (providerName: string, requiresKeyValue: boolean) => {
-    try {
-      const { updateProviderConfigUseCase } = await import('@/lib/provider/usecases/UpdateProviderConfig');
-      await updateProviderConfigUseCase.execute(providerName, { requiresKey: requiresKeyValue });
-      const { syncDynamicProviders } = await import('@/lib/llm');
-      await syncDynamicProviders();
-      const current = providers.find((p) => p.name === providerName);
-      if (current) void handleSingleProviderRefresh(current, false);
-    } catch (error: any) {
-      console.error('更新密钥要求失败:', error);
-      toast.error('保存失败', { description: error?.message || '无法保存该更改。' });
-    }
-  }, [handleSingleProviderRefresh, providers]);
-
   const handleModelApiKeyChange = useCallback(async (providerName: string, modelName: string, apiKey: string) => {
     const finalApiKey = apiKey || null;
     // setProviders(prev => // This line was removed as per the edit hint
@@ -539,7 +523,6 @@ export function useProviderManagement() {
     isRefreshing,
     handleServiceUrlChange,
     handleProviderDefaultApiKeyChange,
-  handleKeyRequirementChange,
     handleModelApiKeyChange,
     handleGlobalRefresh,
     handleSingleProviderRefresh,

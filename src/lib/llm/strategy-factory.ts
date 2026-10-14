@@ -20,14 +20,15 @@ export function createProviderInstance(
   def: CatalogProviderDef,
   url: string,
   apiKey?: string | null,
-  options: { requiresKey?: unknown } = {},
+  options: { knownToCatalogue?: boolean } = {},
 ): BaseProvider {
   const baseUrl = (url || '').trim();
   // One place decides, so the send path, the connection check and the badge cannot disagree
   // about whether this endpoint needs a credential (#118).
   const requiresKey = resolveRequiresKey({
-    stored: options.requiresKey,
-    catalog: def.requiresKey,
+    // A synthesised def for an unlisted provider must not pass its stored flag off as the
+    // catalogue's answer; only the real catalogue speaks for a hosted service.
+    catalog: options.knownToCatalogue === false ? undefined : def.requiresKey,
     strategy: def.strategy,
     url: baseUrl || def.defaultUrl,
   }).requiresKey;

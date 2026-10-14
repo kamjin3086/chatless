@@ -161,9 +161,7 @@ export class ProviderModelService {
         const base = rule.useV1 && !/\/v1\b/.test(base0) ? `${base0}/v1` : base0;
         const url = base + (rule.endpointSuffix || '/models');
         const headers: Record<string, string> = {};
-        if (target?.requiresKey) {
-          try { const { KeyManager } = await import('@/lib/llm/KeyManager'); const k = await KeyManager.getProviderKey(name); if (k) headers['Authorization'] = `Bearer ${k}`; } catch {}
-        }
+        try { const { KeyManager } = await import('@/lib/llm/KeyManager'); const k = await KeyManager.getProviderKey(name); if (k) headers['Authorization'] = `Bearer ${k}`; } catch {}
         let onlineList: any[] = [];
         let ruleSuccess = false;
         try {

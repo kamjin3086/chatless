@@ -90,14 +90,14 @@ export async function syncDynamicProviders(): Promise<void> {
           strategy: (p as any).strategy || 'openai-compatible',
           requiresKey: p.requiresKey,
           defaultUrl: p.url,
-        }, p.url, p.apiKey, { requiresKey: p.requiresKey });
+        }, p.url, p.apiKey);
         ProviderRegistry.register(inst);
         continue;
       }
-      // The stored choice wins: a catalogue default must not overwrite what the user said
-      // about their own endpoint (#118).
+      // Not in the catalogue, so this is an endpoint the user set up: keyless unless they
+      // say otherwise by filling in a key (#118).
       const inst = createProviderInstance(def, p.url, p.apiKey, {
-        requiresKey: p.requiresKey,
+        knownToCatalogue: false,
       });
       // 设置 name 与 def.name 保持一致（Provider 子类构造器已固定 name），若不一致可忽略
       ProviderRegistry.register(inst);

@@ -326,14 +326,19 @@ export class LLMInterpreter {
       // 若存在"生效策略"，则在解释器层按策略委派到对应 Provider 实现，
       // 以解决自定义聚合 Provider 在注册时为 openai-compatible 的情况。
       if (effectiveStrategy) {
-        // 检查原始Provider是否需要API密钥，如果不需要则跳过委派
+        // 免密的普通 Provider 直接用自己的实现，不必委派。聚合（multi）例外：逐模型委派
+        // 就是它存在的意义，而自建端点现在也算免密，不能被这条短路绕过。
         const { providerRepository } = await import(
           '@/lib/provider/ProviderRepository'
         );
         const providers = await providerRepository.getAll();
         const originalProvider = providers.find((p) => p.name === useProvider);
 
-        if (originalProvider && !originalProvider.requiresKey) {
+        if (
+          originalProvider &&
+          !originalProvider.requiresKey &&
+          (originalProvider as any).strategy !== 'multi'
+        ) {
           // 如果原始Provider不需要API密钥，直接使用原始Provider，不进行委派
           await this.runProviderStream(
             requestId,

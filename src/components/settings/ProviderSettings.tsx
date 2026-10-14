@@ -26,8 +26,6 @@ interface ProviderSettingsProps {
   isInitialChecking: boolean; // 是否处于全局初始检查状态 (用于禁用按钮)
   onUrlChange: (providerName: string, url: string) => void;
   onDefaultApiKeyChange: (providerName: string, apiKey: string) => void;
-  requiresKey?: boolean;
-  onRequiresKeyChange?: (providerName: string, requiresKey: boolean) => void;
   onDefaultApiKeyBlur: (providerName: string) => void;
   onModelApiKeyChange: (modelName: string, apiKey: string) => void; // Model 也使用 name
   onModelApiKeyBlur: (modelName: string) => void;
@@ -44,8 +42,6 @@ function ProviderSettingsImpl({
   isInitialChecking,
   onUrlChange,
   onDefaultApiKeyChange,
-  requiresKey,
-  onRequiresKeyChange,
   onDefaultApiKeyBlur,
   onModelApiKeyChange,
   onModelApiKeyBlur,
@@ -218,7 +214,9 @@ function ProviderSettingsImpl({
   }, [provider.name, provider.models, localRepoModels]);
 
   // 是否显示 API Key 相关字段 (Ollama 等不需要)
-  const showApiKeyFields = provider.requiresApiKey !== false;
+  // 自建端点默认免密，但密钥输入框要留着：随时可以补上密钥。
+  const showApiKeyFields =
+    provider.isUserAdded === true || provider.requiresApiKey !== false;
 
   // 是否允许用户新增模型（除 Ollama） - 保留以便后续使用
   const _canAddModels = provider.name !== 'Ollama';
@@ -297,8 +295,6 @@ function ProviderSettingsImpl({
               setLocalDefaultApiKey={setLocalDefaultApiKey}
               docUrl={docUrl}
               onDefaultApiKeyChange={onDefaultApiKeyChange}
-              requiresKey={requiresKey}
-              onRequiresKeyChange={onRequiresKeyChange}
               onDefaultApiKeyBlur={onDefaultApiKeyBlur}
               endpointPreview={endpointPreview}
               isConnecting={checking}

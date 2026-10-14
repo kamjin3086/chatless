@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { AVAILABLE_PROVIDERS_CATALOG, CatalogStrategy } from '@/lib/provider/catalog';
 import { providerRepository } from '@/lib/provider/ProviderRepository';
-import { resolveRequiresKey } from '@/lib/provider/keyRequirement';
 import { ProviderStatus } from '@/lib/provider/types';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -252,11 +251,9 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       await providerRepository.upsert({
         name: finalId,
         url: '',
-        // 是否需要密钥由同一条规则判断（本地/局域网地址默认免密），不再一律假定要密钥（#118）
-        requiresKey: resolveRequiresKey({ strategy: customStrategy, url }).requiresKey,
-        status: resolveRequiresKey({ strategy: customStrategy, url }).requiresKey
-          ? ProviderStatus.NO_KEY
-          : ProviderStatus.UNKNOWN,
+        // 用户自建的端点默认免密（#118）：不填密钥就能用，填了照常发送。
+        requiresKey: false,
+        status: ProviderStatus.UNKNOWN,
         lastChecked: 0,
         apiKey: null,
         isUserAdded: true,
