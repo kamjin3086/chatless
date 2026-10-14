@@ -13,14 +13,14 @@ const def = (over: Record<string, unknown> = {}) =>
   }) as any;
 
 describe('the key requirement travels with the provider', () => {
-  it('honours the stored choice over the catalogue default', () => {
+  it('treats an endpoint the user added as keyless', () => {
     // A routable address, so the local-endpoint rule cannot be what makes this pass.
     const inst = createProviderInstance(
       def(),
       'https://gateway.example.com/v1',
       null,
       {
-        requiresKey: false,
+        isUserAdded: true,
       },
     );
     expect((inst as any).requiresKey).toBe(false);

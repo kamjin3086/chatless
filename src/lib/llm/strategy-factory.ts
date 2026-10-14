@@ -20,13 +20,13 @@ export function createProviderInstance(
   def: CatalogProviderDef,
   url: string,
   apiKey?: string | null,
-  options: { requiresKey?: unknown } = {},
+  options: { isUserAdded?: boolean } = {},
 ): BaseProvider {
   const baseUrl = (url || '').trim();
   // One place decides, so the send path, the connection check and the badge cannot disagree
   // about whether this endpoint needs a credential (#118).
   const requiresKey = resolveRequiresKey({
-    stored: options.requiresKey,
+    isUserAdded: options.isUserAdded,
     catalog: def.requiresKey,
     strategy: def.strategy,
     url: baseUrl || def.defaultUrl,

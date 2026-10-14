@@ -159,7 +159,7 @@ export const useChatActions = (
           (d) => d.name === providerName || d.id === providerName,
         );
         const { requiresKey } = resolveRequiresKey({
-          stored: provider.requiresKey,
+          isUserAdded: (provider as any).isUserAdded,
           catalog: def?.requiresKey,
           strategy: (provider as any).strategy,
           url: (provider as any).url,

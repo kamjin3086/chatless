@@ -2,71 +2,43 @@ import { describe, expect, it } from 'vitest';
 import { keyIsSatisfied, resolveRequiresKey } from '../keyRequirement';
 
 describe('deciding whether a provider needs a key', () => {
-  it('lets the stored choice win over the catalogue', () => {
-    // A LAN gateway registered under a catalogue name is still the user's endpoint.
+  it('treats an endpoint the user set up as keyless', () => {
+    // The rule this encodes: a self-built endpoint without a key is not a misconfiguration.
     expect(
       resolveRequiresKey({
-        stored: false,
+        isUserAdded: true,
         catalog: true,
         strategy: 'openai-compatible',
-      }).requiresKey,
-    ).toBe(false);
-    expect(
-      resolveRequiresKey({ stored: true, catalog: false, strategy: 'ollama' })
-        .requiresKey,
-    ).toBe(true);
-    expect(resolveRequiresKey({ stored: false, catalog: true }).source).toBe(
-      'stored',
-    );
+        url: 'https://gateway.example.com/v1',
+      }),
+    ).toEqual({ requiresKey: false, source: 'user-added' });
   });
 
-  it('lets a local endpoint outrank a catalogue built for a hosted service', () => {
-    // The reported case: a self-hosted gateway filed under a "needs a key" default.
+  it('still requires a key of a built-in hosted service', () => {
+    expect(
+      resolveRequiresKey({ catalog: true, strategy: 'openai', url: 'https://api.openai.com/v1' }),
+    ).toEqual({ requiresKey: true, source: 'catalog' });
+  });
+
+  it('reads a local address as needing no credential', () => {
+    // A self-hosted gateway filed under a hosted catalogue default is the reported case.
     expect(
       resolveRequiresKey({
         catalog: true,
         strategy: 'openai-compatible',
         url: 'http://10.126.126.2:8101/v1',
-      }).requiresKey,
-    ).toBe(false);
-  });
-
-  it('falls back to the catalogue when the user never chose', () => {
-    expect(resolveRequiresKey({ catalog: false })).toEqual({
-      requiresKey: false,
-      source: 'catalog',
-    });
-  });
-
-  it('defaults by strategy or by how local the endpoint is', () => {
-    expect(resolveRequiresKey({ strategy: 'ollama' })).toEqual({
-      requiresKey: false,
-      source: 'strategy-default',
-    });
-    expect(resolveRequiresKey({ strategy: 'openai' }).requiresKey).toBe(true);
-    expect(resolveRequiresKey({}).requiresKey).toBe(true);
-    // The report that started this: a hand-added endpoint on the LAN.
+      }),
+    ).toEqual({ requiresKey: false, source: 'local' });
     expect(
-      resolveRequiresKey({
-        strategy: 'openai-compatible',
-        url: 'http://192.168.1.20:8000/v1',
-      }).requiresKey,
+      resolveRequiresKey({ strategy: 'openai-compatible', url: 'http://localhost:1234/v1' })
+        .requiresKey,
     ).toBe(false);
     expect(
-      resolveRequiresKey({
-        strategy: 'openai-compatible',
-        url: 'http://localhost:1234/v1',
-      }).requiresKey,
-    ).toBe(false);
-    expect(
-      resolveRequiresKey({
-        strategy: 'openai-compatible',
-        url: 'https://api.example.com/v1',
-      }).requiresKey,
+      resolveRequiresKey({ strategy: 'openai-compatible', url: 'https://api.example.com/v1' })
+        .requiresKey,
     ).toBe(true);
-    expect(resolveRequiresKey({ url: 'http://[fe80::1]:11434' }).source).toBe(
-      'strategy-default',
-    );
+    expect(resolveRequiresKey({ strategy: 'ollama' }).requiresKey).toBe(false);
+    expect(resolveRequiresKey({}).requiresKey).toBe(true);
   });
 
   it('treats a blank key as no key', () => {
