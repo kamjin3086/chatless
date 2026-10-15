@@ -1,10 +1,50 @@
 name: CI
 
+# A ref that has moved does not need the run already in flight on it. What a stack of
+# small commits costs is queue time, and only the newest commit on the ref is the
+# thing anyone is asking about.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main, develop ]
+    # Prose is not compiled, so it does not get a build. `**` takes everything in and
+    # the `!` patterns take the noise back out; order is load-bearing, which is why the
+    # re-included docs come after `!**.md`.
+    #
+    # Two docs are re-included on purpose, because `pnpm test` reads them and would
+    # otherwise go red on main with no run to point at: docs/prompt-language.md carries
+    # the sizing divisor asserted by docs/acceptance/prompt-budget.audit.test.ts, and
+    # docs/agents/maintenance.md carries the gate claims asserted by
+    # scripts/__tests__/vitestInventory.test.mjs. Everything else under
+    # docs/acceptance/ is matched by `**` and stays in: the normal suite collects every
+    # audit there.
+    #
+    # A filtered-out run is not a pass and not a pending check either - the workflow
+    # does not run at all. Safe while main has no branch protection; if required status
+    # checks are ever added, a prose-only pull request would sit at "Pending" forever,
+    # so revisit this filter then. The pull request title gate lives in pr-title.yml
+    # precisely so that filtering cannot switch it off.
+    paths:
+      - '**'
+      - '!**.md'
+      - '!LICENSE'
+      - '!.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/**'
+      - 'docs/prompt-language.md'
+      - 'docs/agents/maintenance.md'
   pull_request:
     branches: [ main ]
+    paths:
+      - '**'
+      - '!**.md'
+      - '!LICENSE'
+      - '!.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/**'
+      - 'docs/prompt-language.md'
+      - 'docs/agents/maintenance.md'
   workflow_dispatch:
     inputs:
       test_type:
@@ -54,11 +94,6 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Check PR title
-        if: github.event_name == 'pull_request'
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: pnpm check:pr-title
       - name: Run linting
         run: pnpm lint:ci
       - name: Type check

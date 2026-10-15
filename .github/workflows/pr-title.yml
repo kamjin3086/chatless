@@ -1,0 +1,29 @@
+name: Pull request title
+
+# Split out of ci.yml because ci.yml is filtered by paths, and this gate has to hold
+# for every pull request - a prose-only one is exactly the case CI skips, and its
+# title still becomes the squash-merged subject on main.
+# See docs/agents/language.md and the "No path, no run" rule in
+# docs/agents/maintenance.md: a gate the filter walks past is not a gate.
+on:
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: pr-title-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout the checker
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.4
+      - name: Check PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: pnpm check:pr-title
