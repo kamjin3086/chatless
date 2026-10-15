@@ -1,3 +1,9 @@
+import { takeMessageScope } from '@/lib/chat/messageThinkingScope';
+import {
+  foldMessageScopeIntoSession,
+  migrateLegacyThinkingBoolean,
+} from '@/lib/chat/thinkingScope';
+import { sanitizeParameterPatch } from '@/lib/model-parameters';
 /**
  * The one place a send's conversation-level parameters get settled.
  *
@@ -7,12 +13,10 @@
  * message and get it back on a regeneration. Whatever the message that triggered a run, the
  * parameters behind it must be the same, so both paths call this.
  */
-import type { ModelParameters } from '@/types/model-params';
-import {
-  foldMessageScopeIntoSession,
-  migrateLegacyThinkingBoolean,
-} from '@/lib/chat/thinkingScope';
-import { takeMessageScope } from '@/lib/chat/messageThinkingScope';
+import type {
+  ModelParameterPatch,
+  ModelParameters,
+} from '@/types/model-params';
 
 /**
  * Typed as a full `ModelParameters` because that is what the call sites hand to
@@ -31,13 +35,11 @@ export async function resolveConversationParameters(args: {
    * next real message with nothing.
    */
   applyMessageScope?: boolean;
-}): Promise<ModelParameters | null> {
+}): Promise<ModelParameterPatch | null> {
   const { conversationId, provider, modelId } = args;
   // Consumed here, so the choice applies to this run and to no later one.
   const messageParams =
-    args.applyMessageScope === false
-      ? null
-      : takeMessageScope(conversationId);
+    args.applyMessageScope === false ? null : takeMessageScope(conversationId);
   const session = args.sessionParams ?? null;
   if (session === null && !messageParams) return null;
   const migrated =
@@ -48,5 +50,5 @@ export async function resolveConversationParameters(args: {
   const settled = messageParams
     ? foldMessageScopeIntoSession(migrated, messageParams)
     : migrated;
-  return settled as ModelParameters;
+  return sanitizeParameterPatch(settled);
 }
