@@ -8,6 +8,7 @@ import {
   readThinkingChoice,
 } from '../thinkingScope';
 import { dropInheritedThatSessionDisabled } from '../sessionParameterMerge';
+import type { ThinkingLevel } from '@/lib/llm/thinkingLevels';
 import { ModelParametersService } from '@/lib/model-parameters';
 import {
   DEFAULT_MODEL_PARAMETERS,
@@ -125,7 +126,15 @@ describe('reading one scope', () => {
 });
 
 describe('cycling levels with the keyboard', () => {
-  const opts = ['auto', 'off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+  const opts: ThinkingLevel[] = [
+    'auto',
+    'off',
+    'minimal',
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+  ];
 
   it('walks the documented order and wraps', () => {
     expect(cycleThinkingLevel({ options: opts, current: 'auto' })).toBe('off');
@@ -149,9 +158,9 @@ describe('cycling levels with the keyboard', () => {
   it('visits every tier a model has and none it lacks', () => {
     // A model with two tiers: the cycle is the model's list, not the global one, so no
     // click can land on a tier this model was never documented to serve.
-    const narrow = ['auto', 'minimal', 'high'];
+    const narrow: ThinkingLevel[] = ['auto', 'minimal', 'high'];
     const seen: string[] = [];
-    let at = 'auto';
+    let at: ThinkingLevel = 'auto';
     for (let i = 0; i < narrow.length; i += 1) {
       at = cycleThinkingLevel({ options: narrow, current: at });
       seen.push(at);
@@ -187,7 +196,14 @@ describe('choosing a scope', () => {
   });
 
   it('round-trips every tier it can write', () => {
-    for (const level of ['off', 'minimal', 'low', 'medium', 'high', 'xhigh']) {
+    for (const level of [
+      'off',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ] as ThinkingLevel[]) {
       const next = applyThinkingChoice({ ...CLEAN, scope: 'model', level });
       expect(readThinkingChoice(next.modelParams)).toBe(level);
     }
@@ -297,7 +313,10 @@ describe('choosing a scope', () => {
 
 describe('folding a message choice into the send', () => {
   it('changes nothing when no message choice is pending', () => {
-    const session = { enableThinkingLevel: true, thinkingLevel: 'low' };
+    const session: Partial<ModelParameters> = {
+      enableThinkingLevel: true,
+      thinkingLevel: 'low',
+    };
     expect(foldMessageScopeIntoSession(session, null)).toEqual(session);
   });
 

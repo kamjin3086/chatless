@@ -71,7 +71,7 @@ describe('reading stored parameters', () => {
       'openai',
       'gpt-5.8',
     );
-    expect(raw.thinking).toBe(true);
+    expect(raw?.thinking).toBe(true);
     const migrated = await ModelParametersService.getModelParameters(
       'openai',
       'gpt-5.8',

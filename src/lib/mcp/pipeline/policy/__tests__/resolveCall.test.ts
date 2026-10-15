@@ -17,8 +17,17 @@ const WORKDIR: AllowlistDirectory = {
 
 const DIRECTORIES = [WORKDIR, PROJECT];
 
+/** A real invocation always carries these; they are not what the tests below are about. */
+const realInvocation = () => ({
+  provider: 'openai-compatible',
+  model: 'gpt-fixture',
+  historyForLlm: [],
+  originalUserContent: 'question',
+});
+
 function call(args: Record<string, unknown>) {
   return new ToolInvocation({
+    ...realInvocation(),
     assistantMessageId: 'run-1', conversationId: 'conv-1',
     server: 'filesystem', tool: 'write_file', args, callId: 'call-1',
   });
@@ -34,27 +43,27 @@ describe('resolveFilesystemCall', () => {
 
     expect(result.kind).toBe('resolved');
     if (result.kind !== 'resolved') return;
-    expect(result.invocation.args.path).toBe('C:/Users/me/project/src/a.ts');
+    expect(result.invocation.args!.path).toBe('C:/Users/me/project/src/a.ts');
     expect(result.primaryPath).toBe('C:/Users/me/project/src/a.ts');
     expect(result.requestedPath).toBe('@Project/src/a.ts');
     expect(result.directory?.alias).toBe('Project');
     // The rest of the arguments travel untouched.
-    expect(result.invocation.args.content).toBe('x');
+    expect(result.invocation.args!.content).toBe('x');
   });
 
   it('resolves both sides of a rename', () => {
     const result = resolve({ oldPath: '@Project/a.ts', newPath: '@WorkDir/b.ts' });
 
     if (result.kind !== 'resolved') throw new Error(`expected resolved, got ${result.kind}`);
-    expect(result.invocation.args.oldPath).toBe('C:/Users/me/project/a.ts');
-    expect(result.invocation.args.newPath).toBe('/tmp/session-work/b.ts');
+    expect(result.invocation.args!.oldPath).toBe('C:/Users/me/project/a.ts');
+    expect(result.invocation.args!.newPath).toBe('/tmp/session-work/b.ts');
   });
 
   it('resolves every entry of a bulk path list', () => {
     const result = resolve({ paths: ['@Project/a.ts', '@Project/b.ts'] });
 
     if (result.kind !== 'resolved') throw new Error(`expected resolved, got ${result.kind}`);
-    expect(result.invocation.args.paths).toEqual([
+    expect(result.invocation.args!.paths).toEqual([
       'C:/Users/me/project/a.ts', 'C:/Users/me/project/b.ts',
     ]);
   });

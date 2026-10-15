@@ -13,7 +13,11 @@ describe('agent tool surface', () => {
   });
 
   it('no longer exposes the retired Coding Pack', () => {
-    expect(TOOL_GROUPS.some((group) => group.id === 'coding')).toBe(false);
+        // Typed as a plain string on purpose: 'coding' is not a ToolGroupId any more, and
+    // comparing two types that cannot overlap is what tsc (rightly) refuses. Keeping the
+    // comparison live is the point - if the group is ever re-added, this must fail.
+    const retiredGroupId: string = 'coding';
+    expect(TOOL_GROUPS.some((group) => group.id === retiredGroupId)).toBe(false);
     const everyTool = TOOL_GROUPS.flatMap((group) => group.tools.map(({ server }) => server));
     expect(everyTool).not.toContain('code');
   });

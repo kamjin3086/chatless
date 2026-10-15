@@ -63,6 +63,8 @@ jobs:
         run: pnpm lint:ci
       - name: Type check
         run: pnpm typecheck
+      - name: Type check the tests
+        run: pnpm typecheck:tests
       - name: Run unit tests
         run: pnpm test
 

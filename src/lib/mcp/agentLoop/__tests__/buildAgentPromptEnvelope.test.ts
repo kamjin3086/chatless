@@ -49,7 +49,7 @@ describe('buildAgentPromptEnvelope', () => {
       useNativeTools: true,
       nativeTools: [],
       enabledServers: [],
-    } as const;
+    };
     const first = buildAgentPromptEnvelope({
       ...base,
       systemMessages: [

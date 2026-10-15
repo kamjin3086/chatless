@@ -3,6 +3,14 @@ import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
 
+/** A real invocation always carries these; they are not what the tests below are about. */
+const realInvocation = () => ({
+  provider: 'openai-compatible',
+  model: 'gpt-fixture',
+  historyForLlm: [],
+  originalUserContent: 'question',
+});
+
 /**
  * 这几条钉的是文件系统门在 run() 这个接缝上必须表现出的行为，全部来自契约里
  * "行为必须原样保留"的清单。它们刻意不调用私有的 filesystemGate：门是实现细节，
@@ -41,7 +49,7 @@ vi.mock('@/lib/tauri/filesystemCommands', () => ({
 vi.mock('@/store/authorizationStore', () => ({
   useAuthorizationStore: {
     getState: () => ({
-      addPendingAuthorization: (auth: { onApprove: (d?: 'once' | 'always' | 'unrestricted') => void; onReject: () => void }) => {
+      addPendingAuthorization: (auth: { id: string; onApprove: (d?: 'once' | 'always' | 'unrestricted') => void; onReject: () => void }) => {
         mocks.approvals.push(auth);
         if (mocks.answer === 'approve') auth.onApprove(mocks.decision);
         else auth.onReject();
@@ -92,6 +100,7 @@ const adapter = () => ({
 });
 
 const fsInvocation = (args: Record<string, unknown>, callId: string) => new ToolInvocation({
+  ...realInvocation(),
   assistantMessageId: 'run-gate',
   conversationId: 'conv-gate',
   server: 'filesystem',

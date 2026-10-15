@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FilesystemAdapter } from '../FilesystemAdapter';
 import { ToolInvocation } from '../../ToolInvocation';
 
+/** A real invocation always carries these; they are not what this test is about. */
+const realInvocation = () => ({
+  provider: 'openai-compatible', model: 'gpt-fixture', historyForLlm: [], originalUserContent: 'question',
+});
+
 const mocks = vi.hoisted(() => ({
   editFile: vi.fn(),
   searchFiles: vi.fn(),
@@ -17,6 +22,7 @@ vi.mock('@/lib/tauri/filesystemCommands', () => ({
 beforeEach(() => vi.clearAllMocks());
 
 const invocation = (tool: string, args: Record<string, unknown>) => new ToolInvocation({
+  ...realInvocation(),
   assistantMessageId: 'run-1', conversationId: 'conv-1', server: 'fs', tool, args, callId: 'call-1',
 });
 

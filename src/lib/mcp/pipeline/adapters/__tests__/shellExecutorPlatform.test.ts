@@ -25,8 +25,17 @@ vi.mock('@/lib/skills/sandbox', () => ({
   }),
 }));
 
+/** A real invocation always carries these; they are not what the tests below are about. */
+const realInvocation = () => ({
+  provider: 'openai-compatible',
+  model: 'gpt-fixture',
+  historyForLlm: [],
+  originalUserContent: 'question',
+});
+
 const invocation = (args: Record<string, unknown>) =>
   new ToolInvocation({
+    ...realInvocation(),
     assistantMessageId: 'run-1',
     conversationId: 'conv-1',
     server: 'shell',

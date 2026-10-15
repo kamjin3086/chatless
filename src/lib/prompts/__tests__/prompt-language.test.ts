@@ -83,7 +83,10 @@ describe('prompt language', () => {
     ];
     for (const tool of tools) {
       expectAllEnglish(`tool ${tool.name}.description`, tool.description);
-      expectAllEnglish(`tool ${tool.name}.parameters`, tool.input_schema?.schema);
+      const schema = (tool.input_schema as { schema?: unknown } | undefined)?.schema;
+      // Without this a renamed or dropped schema would make the check vacuously pass.
+      expect(schema, `tool ${tool.name}.parameters is missing`).toBeDefined();
+      expectAllEnglish(`tool ${tool.name}.parameters`, schema);
     }
 
   });

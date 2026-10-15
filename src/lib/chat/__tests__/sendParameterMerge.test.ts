@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveConversationParameters } from '../sendParameterMerge';
 import { clearMessageScope, setMessageScope } from '../messageThinkingScope';
 import { readThinkingChoice } from '../thinkingScope';
+import type { ModelParameters } from '@/types/model-params';
 
 const CHAT = 'conv-1';
 const OPENAI = { provider: 'openai', modelId: 'gpt-5.8' };
@@ -10,7 +11,10 @@ describe("settling a run's conversation parameters", () => {
   beforeEach(() => clearMessageScope(CHAT));
 
   it('leaves a conversation alone when no message choice is pending', async () => {
-    const session = { enableThinkingLevel: true, thinkingLevel: 'low' };
+    const session: Partial<ModelParameters> = {
+      enableThinkingLevel: true,
+      thinkingLevel: 'low',
+    };
     expect(
       await resolveConversationParameters({
         conversationId: CHAT,
