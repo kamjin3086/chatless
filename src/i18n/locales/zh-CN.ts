@@ -41,19 +41,10 @@ const zhCN: TranslationDict = {
   'thinkingFacts.reasoning': '推理 {0} tokens',
   'thinkingFacts.requestTotal': '请求总耗时 {0}',
   'thinkingSwitch.label': '思考',
-  'thinkingSwitch.source.model': '模型默认',
-  'thinkingSwitch.source.conversation': '本会话',
-  'thinkingSwitch.source.message': '仅本条消息',
-  'thinkingSwitch.source.model-default': '由模型决定',
-  'thinkingSwitch.source.unverified': '未验证',
-  'thinkingSwitch.scope.model': '设为该模型默认',
-  'thinkingSwitch.scope.conversation': '只用于本会话',
-  'thinkingSwitch.scope.message': '只用于下一条消息',
+
   'thinkingSwitch.unverifiedHint':
     '端点未经确认：所选档位按 reasoning_effort 下发',
-  'thinkingSwitch.noTiersHint':
-    '此模型没有可下发的思考档位（自动 / 不发仍可用）',
-  'thinkingSwitch.suppressOption': '不发思考等级',
+
   'thinkingSwitch.staleHint': '保存的档位此模型不提供，本次不下发',
   'thinkingSwitch.pendingHint': '下一条消息只发一次',
   'thinkingShortcut.help': 'Alt+D 循环切换，Alt+Shift+D 反向',
@@ -62,7 +53,7 @@ const zhCN: TranslationDict = {
     '旧版“思考模式：开”仍然生效，思考档位不会改动它',
   'thinkingSwitch.migration.kept-unsupported':
     '旧版“思考模式：关”仍然生效，此模型没有对应档位',
-  'modelParams.thinkingLevel.source': '当前来自：{0}',
+
   'thinkingLevel.off': '不思考',
   'thinkingLevel.minimal': '极简',
   'thinkingLevel.low': '低',

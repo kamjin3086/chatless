@@ -9,7 +9,9 @@
   /*
    * Width of the conversation column (messages + composer). It grows with the
    * window instead of leaving a fixed 48rem column in the middle of a wide
-   * screen, but stops before the line length gets uncomfortable to read.
+   * screen, but stops before the line length gets uncomfortable to read. The ceiling is
+   * shared by the messages and the composer on purpose: when one of them caps earlier than
+   * the other, the composer looks like a box that shrank out of place.
    */
   --chat-content-max: 48rem;
 }
@@ -19,7 +21,11 @@
 }
 
 @media (min-width: 1600px) {
-  :root { --chat-content-max: 64rem; }
+  :root { --chat-content-max: 72rem; }
+}
+
+@media (min-width: 2200px) {
+  :root { --chat-content-max: 84rem; }
 }
 
 /* 逐字平滑淡入关键帧：通过为每个字符包裹 span 的方式成本太高，

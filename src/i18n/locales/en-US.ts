@@ -45,19 +45,10 @@ const enUS: TranslationDict = {
   'thinkingFacts.reasoning': '{0} reasoning tokens',
   'thinkingFacts.requestTotal': 'request took {0}',
   'thinkingSwitch.label': 'Thinking',
-  'thinkingSwitch.source.model': 'model default',
-  'thinkingSwitch.source.conversation': 'this conversation',
-  'thinkingSwitch.source.message': 'this message only',
-  'thinkingSwitch.source.model-default': 'the model decides',
-  'thinkingSwitch.source.unverified': 'unverified',
-  'thinkingSwitch.scope.model': "Make this the model's default",
-  'thinkingSwitch.scope.conversation': 'Apply to this conversation only',
-  'thinkingSwitch.scope.message': 'Apply to the next message only',
+
   'thinkingSwitch.unverifiedHint':
     'Endpoint unverified: a chosen tier goes out as reasoning_effort',
-  'thinkingSwitch.noTiersHint':
-    'This model offers no thinking tier; auto and send-nothing still apply',
-  'thinkingSwitch.suppressOption': 'Send no thinking level',
+
   'thinkingSwitch.staleHint':
     'The saved level is not offered by this model, so nothing is sent',
   'thinkingSwitch.pendingHint': 'Sent once, with the next message',
@@ -68,7 +59,7 @@ const enUS: TranslationDict = {
     'The old thinking switch is still on and this level does not change it',
   'thinkingSwitch.migration.kept-unsupported':
     'The old thinking switch is still off and this model has no matching level',
-  'modelParams.thinkingLevel.source': 'Currently from: {0}',
+
   'thinkingLevel.off': 'Off',
   'thinkingLevel.minimal': 'Minimal',
   'thinkingLevel.low': 'Low',
