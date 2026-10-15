@@ -39,6 +39,158 @@ function pickArg(args: Record<string, unknown> | undefined, key: string): string
   return s((args as any)[key]);
 }
 
+/**
+ * The front of a long value, on one line.
+ *
+ * Head-and-tail truncation was the old habit, and for a command it printed the program and
+ * the closing punctuation of the script - `$exts=@(jpg,j... "$(__.Count)" }` - while for a
+ * URL it printed `https://example.co...path/he`. Both cut away the part a reader scans for.
+ * The front is what identifies a value, so the tail goes, and the cut lands on a word
+ * boundary rather than inside a flag.
+ */
+export function previewLine(value: string, maxLen = 70): string {
+  const oneLine = String(value || '').replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= maxLen) return oneLine;
+  const head = oneLine.slice(0, maxLen);
+  return `${head.replace(/\s+\S*$/, '')}…`;
+}
+
+/** A shell preview: one line, and a continued line counts as one command. */
+export function previewCommand(command: string, maxLen = 70): string {
+  return previewLine(String(command || '').replace(/\\\s*\n/g, ' '), maxLen);
+}
+
+/**
+ * What an external tool returned, in the few characters a person can read.
+ *
+ * A weather query came back looking like `{"content":[{"type":"text","text":"上海：晴…"}]}`
+ * because the card printed the envelope: MCP results are a wrapper around text, and the
+ * wrapper says nothing the user asked for. Anything this cannot understand is still printed
+ * in full, because a preview that hides the result is worse than an ugly one.
+ */
+export function previewResult(value: unknown): string {
+  const parsed = coerceResult(value);
+  if (parsed === null || parsed === undefined) return '';
+  // The result box scrolls, so prose is shown whole: the complaint was that it was
+  // unreadable, not that it was long, and cutting here would eat the "truncated" marker
+  // the store already added.
+  if (typeof parsed === 'string') return parsed;
+  if (Array.isArray(parsed)) {
+    const scalars = parsed.filter(
+      (x) => typeof x === 'string' || typeof x === 'number',
+    );
+    if (scalars.length === parsed.length && scalars.length > 0)
+      return previewLine(scalars.slice(0, 6).map((x) => String(x)).join(' · '), 600);
+    return `${parsed.length} 项`;
+  }
+  if (typeof parsed === 'object') {
+    const pairs = pairValues(parsed as Record<string, unknown>, Object.keys(parsed));
+    if (pairs) return previewLine(pairs, 600);
+    try {
+      return previewLine(JSON.stringify(parsed), 600);
+    } catch {
+      return '';
+    }
+  }
+  return String(parsed);
+}
+
+/** A result that arrived already stringified is still a result, not prose to print raw. */
+function coerceResult(value: unknown): unknown {
+  let current = value;
+  if (typeof current === 'string') {
+    const text = current.trim();
+    if (!/^[{[]/.test(text)) return text;
+    try {
+      current = JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  if (current && typeof current === 'object' && !Array.isArray(current)) {
+    const record = current as Record<string, unknown>;
+    const content = record.content;
+    if (Array.isArray(content)) {
+      const texts = content
+        .filter((part) => part && typeof part === 'object')
+        .map((part) => (part as Record<string, unknown>).text)
+        .filter((text) => typeof text === 'string' && text.trim() !== '')
+        .map((text) => String(text).trim());
+      if (texts.length > 0) return texts.join('\n');
+    }
+    // A store-side truncation says `Object(9000 chars)` plus a raw preview; that shape is
+    // the store's own honesty, so keep both lines rather than squeezing it into a pair.
+    if (
+      typeof record.summary === 'string' &&
+      typeof record.preview === 'string' &&
+      Object.keys(record).length === 2
+    )
+      return `${record.summary}\n${record.preview}`;
+    for (const key of ['result', 'data', 'output']) {
+      if (key in record && Object.keys(record).length === 1)
+        return coerceResult(record[key]);
+    }
+  }
+  return current;
+}
+
+/** Keys whose value says what the call is about, most informative first. */
+const ABOUT_KEYS = [
+  'query', 'search_query', 'q', 'question', 'search', 'keyword', 'term', 'text',
+  'prompt', 'message', 'input', 'city', 'location', 'address', 'place', 'country',
+  'region', 'date', 'time', 'name', 'title', 'subject', 'path', 'file_path', 'file',
+  'directory', 'dir', 'url', 'id', 'sql', 'pattern', 'command',
+];
+
+/** Knobs that tune a call. They are never what a reader is scanning for. */
+const NOISE_KEY = /^(units?|unit|lang|language|locale|format|pretty(?:_print)?|verbose|debug|trace|page|limit|offset|count|max_?results?(?:_count)?|top_?k|timeout(?:_ms)?|mode|version|recursive|depth|include.*|exclude.*)$/i;
+
+/** Values that must never be printed into a transcript surface. */
+const SECRET_KEY = /(api[_-]?key|token|secret|passwor(?:d|d)|credential|authorization|cookie)/i;
+
+function shortValue(v: unknown): string {
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) {
+    const scalars = v.filter(
+      (x) => typeof x === 'string' || typeof x === 'number',
+    );
+    if (scalars.length === 0) return '';
+    const shown = scalars.slice(0, 3).map((x) => String(x)).join('、');
+    return scalars.length > 3 ? `${shown}…` : shown;
+  }
+  if (typeof v !== 'string') return '';
+  return v.length > 40 ? `${v.slice(0, 39)}…` : v;
+}
+
+/**
+ * The few arguments worth showing for a tool this app knows nothing about. An external
+ * (MCP) tool otherwise arrives as a name - `weather · get_forecast` tells the user that
+ * something happened, not whether it asked about Shanghai or Berlin.
+ */
+function pairValues(
+  values: Record<string, unknown>,
+  orderedKeys: string[],
+  limit = 3,
+): string {
+  const parts: string[] = [];
+  for (const key of orderedKeys) {
+    if (parts.length >= limit) break;
+    if (SECRET_KEY.test(key) || NOISE_KEY.test(key)) continue;
+    const value = shortValue(values[key]);
+    if (!value) continue;
+    parts.push(`${key}=${value}`);
+  }
+  return parts.join(' · ');
+}
+
+function describeArgs(args: Record<string, unknown>): string {
+  const keys = Object.keys(args || {});
+  return pairValues(args, [
+    ...ABOUT_KEYS.filter((k) => keys.includes(k)),
+    ...keys.filter((k) => !ABOUT_KEYS.includes(k)),
+  ]);
+}
+
 export function presentToolCard(params: {
   server: string;
   tool: string;
@@ -157,7 +309,7 @@ export function presentToolCard(params: {
   // ---------- shell ----------
   if (srv === 'shell_executor' || srv === 'shell-executor' || srv === 'shell') {
     const cmd = pickArg(args, 'command');
-    return { titleLine: '运行命令', detailLineLabel: '命令', detailLineFull: cmd, detailLineShort: truncate(cmd, 35), kind: 'shell' };
+    return { titleLine: '运行命令', detailLineLabel: '命令', detailLineFull: cmd, detailLineShort: previewCommand(cmd), kind: 'shell' };
   }
 
   // ---------- web ----------
@@ -242,7 +394,14 @@ export function presentToolCard(params: {
 
   // ---------- generic fallback ----------
   const maybeUrl = pickArg(args, 'url');
-  if (maybeUrl) return { titleLine: '访问链接', detailLineLabel: 'URL', detailLineFull: maybeUrl, detailLineShort: truncate(maybeUrl, 40), kind: 'url' };
+  if (maybeUrl)
+    return {
+      titleLine: '访问链接',
+      detailLineLabel: 'URL',
+      detailLineFull: maybeUrl,
+      detailLineShort: previewLine(maybeUrl, 55),
+      kind: 'url',
+    };
   const maybePath = pickArg(args, 'path');
   if (maybePath) return { titleLine: `${server} 操作`, detailLineLabel: '路径', detailLineFull: maybePath, detailLineShort: basename(maybePath) || truncate(maybePath, 30), kind: 'path' };
 
@@ -259,7 +418,14 @@ export function presentToolCard(params: {
     'tools': '工具',
   };
   const friendlyServer = friendlyServerNames[srv] || server;
-  
-  return { titleLine: `${friendlyServer} · ${tool}`, kind: 'generic' };
+  const about = describeArgs(args);
+
+  return {
+    titleLine: `${friendlyServer} · ${tool}`,
+    detailLineLabel: about ? '参数' : undefined,
+    detailLineFull: about || undefined,
+    detailLineShort: about || undefined,
+    kind: 'generic',
+  };
 }
 

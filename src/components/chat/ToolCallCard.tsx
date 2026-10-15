@@ -7,7 +7,7 @@ import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { useChatStore } from '@/store/chatStore';
 import { toast } from '@/components/ui/sonner';
-import { presentToolCard } from './toolCardPresentation';
+import { presentToolCard, previewResult } from './toolCardPresentation';
 
 type ToolCallStatus = 'success' | 'error' | 'running' | 'pending_auth' | 'stopped';
 
@@ -293,7 +293,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
             <div>
               <div className="text-emerald-500/80 mb-0.5">结果</div>
               <pre className="text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/30 rounded-md p-1.5 overflow-auto max-h-36 whitespace-pre-wrap break-all font-mono text-[10px]">
-                {resultPreview}
+                {previewResult(resultPreview)}
               </pre>
             </div>
           )}
