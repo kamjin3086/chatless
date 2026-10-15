@@ -4,12 +4,12 @@ import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
 
 /** A real invocation always carries these; they are not what the tests below are about. */
-const REAL_INVOCATION = {
+const realInvocation = () => ({
   provider: 'openai-compatible',
   model: 'gpt-fixture',
   historyForLlm: [],
   originalUserContent: 'question',
-};
+});
 
 const mocks = vi.hoisted(() => ({
   setAllowlist: vi.fn(async () => ({ ok: true })),
@@ -96,7 +96,7 @@ const fsAdapter = () => ({
 const run = (pipeline: ToolExecutionPipeline, params: {
   server: string; tool: string; args: Record<string, unknown>; callId: string;
 }) => pipeline.run(new ToolInvocation({
-  ...REAL_INVOCATION,
+  ...realInvocation(),
   assistantMessageId: 'run-1', conversationId: 'conv-1',
   server: params.server, tool: params.tool, args: params.args, callId: params.callId,
 }));

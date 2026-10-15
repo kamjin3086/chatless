@@ -18,16 +18,16 @@ const WORKDIR: AllowlistDirectory = {
 const DIRECTORIES = [WORKDIR, PROJECT];
 
 /** A real invocation always carries these; they are not what the tests below are about. */
-const REAL_INVOCATION = {
+const realInvocation = () => ({
   provider: 'openai-compatible',
   model: 'gpt-fixture',
   historyForLlm: [],
   originalUserContent: 'question',
-};
+});
 
 function call(args: Record<string, unknown>) {
   return new ToolInvocation({
-    ...REAL_INVOCATION,
+    ...realInvocation(),
     assistantMessageId: 'run-1', conversationId: 'conv-1',
     server: 'filesystem', tool: 'write_file', args, callId: 'call-1',
   });

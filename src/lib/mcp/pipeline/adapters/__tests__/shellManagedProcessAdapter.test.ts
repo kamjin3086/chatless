@@ -4,9 +4,9 @@ import { ToolInvocation } from '../../ToolInvocation';
 import { planCommand } from '@/lib/shell/commandPlan';
 
 /** A real invocation always carries these; they are not what this test is about. */
-const REAL_INVOCATION = {
+const realInvocation = () => ({
   provider: 'openai-compatible', model: 'gpt-fixture', historyForLlm: [], originalUserContent: 'question',
-};
+});
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(async () => ({ executionId: 'shell:run-1:card-1', pid: 4242 })),
@@ -34,7 +34,7 @@ vi.mock('@/lib/skills/sandbox', () => ({
 beforeEach(() => vi.clearAllMocks());
 
 const invocation = (tool: string, args: Record<string, unknown>) => new ToolInvocation({
-  ...REAL_INVOCATION,
+  ...realInvocation(),
   assistantMessageId: 'run-1', conversationId: 'conv-1', server: 'shell', tool, args, callId: 'call-1',
 });
 

@@ -4,12 +4,12 @@ import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
 
 /** A real invocation always carries these; they are not what the tests below are about. */
-const REAL_INVOCATION = {
+const realInvocation = () => ({
   provider: 'openai-compatible',
   model: 'gpt-fixture',
   historyForLlm: [],
   originalUserContent: 'question',
-};
+});
 
 /**
  * 这几条钉的是文件系统门在 run() 这个接缝上必须表现出的行为，全部来自契约里
@@ -100,7 +100,7 @@ const adapter = () => ({
 });
 
 const fsInvocation = (args: Record<string, unknown>, callId: string) => new ToolInvocation({
-  ...REAL_INVOCATION,
+  ...realInvocation(),
   assistantMessageId: 'run-gate',
   conversationId: 'conv-gate',
   server: 'filesystem',

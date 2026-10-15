@@ -2,30 +2,35 @@
 /**
  * When formatting is enforced, and when it is not.
  *
- * `main` carries files that biome would reflow entirely. Reformatting one of those inside
- * a change PR buries the change in churn - the repo's own rule is no drive-by formatting -
- * yet a hook that demands "your staged files must be formatted" pushes straight past that
- * rule, because leaving a pre-existing dirty file dirty fails the hook. That is why
- * `git commit --no-verify` became a habit here, and a habit of skipping the guardrail is
- * worse than the original dirt.
+ * `main` is largely unformatted - 759 of 856 tracked files under src fail
+ * `npx biome format <file>` as of writing - so a hook that demands "your staged files must
+ * be formatted" cannot be satisfied without reflowing whole files, which buries the change
+ * the commit is actually about. That mismatch is what sent people to `git commit
+ * --no-verify`, and a habit of skipping the guardrail is worse than the dirt it checked.
  *
- * So the rule is per-file, and it is mechanical: a file is held to biome only if the
- * version at HEAD already satisfied biome. Otherwise the dirt is pre-existing and this
- * change PR is not the place to clear it. Clearing it is its own formatting-only PR.
+ * So the rule is per-file and mechanical: a file is held to biome only if the version being
+ * committed already satisfied biome. Everything else is pre-existing dirt, and clearing it
+ * is a formatting-only commit of its own, not a line inside someone's change PR.
  *
- *   --staged              the hook's mode; exits 1 if the change introduced the dirt
- *   --check <files...>    assess named files, same exit codes
- *   --write <files...>    format named files only. A directory is refused: `biome format
- *                         --write src` is how a 2,000-line accidental commit happens.
- *                         Refusing to reflow a file HEAD left unformatted is the same
- *                         rule, and needs --allow-reflow to override.
+ *   --staged              the hook's mode; judges the *index*, which is what git commits
+ *   --check <files…>      judge working-tree copies
+ *   --write <files…>      format named files only. A directory is refused: `biome format
+ *                         --write src` is how a 2,000-line accidental commit happens. A
+ *                         file HEAD left unformatted is refused too, unless --allow-reflow.
+ *
+ * Exit codes: 0 nothing to complain about, 1 this change introduced dirt, 2 the check
+ * itself could not run (biome unavailable, file unreadable). A check that cannot run must
+ * never report the thing it failed to look at as clean.
  */
-import { execFileSync, execSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 const CODE_EXT = /\.(ts|tsx|mts|cts|mjs|cjs|js)$/;
+
+/** Raised when the check itself could not run - distinct from "this file is dirty". */
+export class FormatCheckUnavailable extends Error {}
 
 /** The one decision this file exists for. */
 export function decide({ headClean, workClean }) {
@@ -36,47 +41,64 @@ export function decide({ headClean, workClean }) {
 /** Biome's exit status is the cleanliness signal; --config-path keeps the repo's rules. */
 export function makeBiomeCleanCheck(root, run = spawnSync) {
   return function isCleanText(text, file) {
-    const tmp = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'chatless-fmt-')),
-      path.basename(file),
-    );
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatless-fmt-'));
+    const tmp = path.join(dir, path.basename(file));
     fs.writeFileSync(tmp, text);
     try {
       const res = run('npx', ['biome', 'format', '--config-path', root, tmp], {
         cwd: root,
         encoding: 'utf8',
       });
+      // npx missing, biome killed, biome OOM: not a verdict about this file.
+      if (res.error || res.status === null || res.status === undefined) {
+        throw new FormatCheckUnavailable(
+          `biome could not run (${res.error?.message ?? `signal ${res.signal}`}); the format check cannot be trusted`,
+        );
+      }
       return res.status === 0;
     } finally {
-      fs.rmSync(path.dirname(tmp), { recursive: true, force: true });
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   };
 }
 
-function defaultHeadText(root, file) {
+function git(root, args, allowFail = false) {
   try {
-    return execFileSync('git', ['show', `HEAD:${file}`], {
+    return execFileSync('git', args, {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
-  } catch {
-    return null; // not in HEAD: a new file, which has no pre-existing dirt to blame
+  } catch (err) {
+    if (allowFail) return null;
+    throw err;
   }
 }
 
-export function assess(files, { root, isClean, headText = defaultHeadText }) {
+const headText = (root, file) => git(root, ['show', `HEAD:${file}`], true);
+const indexText = (root, file) => git(root, ['show', `:${file}`], true);
+
+/**
+ * `subject` supplies the bytes under judgement: the index for --staged (that is what git is
+ * about to commit), the working tree for --check and --write. HEAD cleanliness is computed
+ * only for a file that is already dirty, because each biome call costs about a quarter of
+ * a second and the hook has a budget.
+ */
+export function assess(
+  files,
+  { root, isClean, subject = headText, head = headText },
+) {
   return files
     .filter((file) => CODE_EXT.test(file))
     .map((file) => {
-      const head = headText(root, file);
-      const headClean = head === null ? true : isClean(head, file);
-      let workClean = true;
-      try {
-        workClean = isClean(fs.readFileSync(path.join(root, file)), file);
-      } catch {
-        workClean = true; // deleted or unreadable here: nothing to format
-      }
+      const bytes = subject(root, file);
+      if (bytes === null)
+        throw new FormatCheckUnavailable(`cannot read ${file}`);
+      const workClean = isClean(bytes, file);
+      if (workClean)
+        return { file, headClean: true, workClean, status: 'clean' };
+      const base = head(root, file);
+      const headClean = base === null ? true : isClean(base, file);
       return {
         file,
         headClean,
@@ -107,28 +129,30 @@ export function parseArgs(argv) {
 }
 
 function stagedFiles(root) {
-  return execSync('git diff --cached --name-only --diff-filter=ACM', {
-    cwd: root,
-    encoding: 'utf8',
-  })
-    .split('\n')
+  return git(
+    root,
+    ['diff', '--cached', '--name-only', '--diff-filter=ACM', '-z'],
+    true,
+  )
+    .split('\0')
     .filter(Boolean);
 }
 
 export function main(
   argv,
-  { root = process.cwd(), run, isClean: injectedClean, headText } = {},
+  { root = process.cwd(), run, isClean: injectedClean, subject, head } = {},
 ) {
+  const say = (line) => process.stdout.write(`format-policy: ${line}\n`);
   let parsed;
   try {
     parsed = parseArgs(argv);
   } catch (err) {
-    process.stdout.write(`format-policy: ${err.message}\n`);
+    say(err.message);
     return 2;
   }
   const { mode, files, allowReflow, unknownFlags } = parsed;
   if (unknownFlags.length) {
-    process.stdout.write(`format-policy: unknown flag ${unknownFlags[0]}\n`);
+    say(`unknown flag ${unknownFlags[0]}`);
     return 2;
   }
   const dirs = files.filter((f) => {
@@ -139,51 +163,80 @@ export function main(
     }
   });
   if (mode === '--write' && dirs.length) {
-    process.stdout.write(
-      `format-policy: refusing directories (${dirs.join(', ')}). Name the files you changed.\n`,
+    say(
+      `refusing directories (${dirs.join(', ')}). Name the files you changed.`,
     );
     return 2;
   }
+
   const runner = run ?? spawnSync;
   // Injectable so the rule can be tested without paying for biome on every case.
   const isClean = injectedClean ?? makeBiomeCleanCheck(root, runner);
-  const heads = headText ?? ((r, file) => defaultHeadText(r, file));
-  const target = mode === '--staged' ? stagedFiles(root) : files;
-  const rows = assess(target, { root, isClean, headText: heads });
+  const contentSubject =
+    subject ??
+    (mode === '--staged'
+      ? indexText
+      : (_root, file) => {
+          try {
+            return fs.readFileSync(path.join(root, file), 'utf8');
+          } catch {
+            return null;
+          }
+        });
+
+  let rows;
+  try {
+    const target = mode === '--staged' ? stagedFiles(root) : files;
+    rows = assess(target, {
+      root,
+      isClean,
+      subject: contentSubject,
+      head: head ?? headText,
+    });
+  } catch (err) {
+    say(err.message);
+    return 2;
+  }
 
   if (mode === '--write') {
     const blocked = rows.filter((r) => !r.headClean && !allowReflow);
     const todo = rows.filter((r) => r.headClean || allowReflow);
     for (const row of blocked) {
-      process.stdout.write(
-        `format-policy: skipped ${row.file} - HEAD is already unformatted, reformatting would bury your change. Use --allow-reflow if this is a formatting-only commit.\n`,
+      say(
+        `skipped ${row.file} - HEAD is already unformatted, reformatting would bury your change. Use --allow-reflow if this is a formatting-only commit.`,
       );
     }
+    let failed = 0;
     for (const row of todo) {
-      runner(
+      const res = runner(
         'npx',
         ['biome', 'format', '--config-path', root, '--write', row.file],
-        { cwd: root },
+        {
+          cwd: root,
+          encoding: 'utf8',
+        },
       );
-      process.stdout.write(`formatted ${row.file}\n`);
+      if (res?.status !== 0) {
+        failed += 1;
+        say(`biome could not format ${row.file} - the file was left untouched`);
+      } else {
+        process.stdout.write(`formatted ${row.file}\n`);
+      }
     }
-    // A skip that exits 0 reads as success to whoever asked for the format.
-    return blocked.length ? 1 : 0;
+    // A skip or a failed write that exits 0 reads as success to whoever asked for it.
+    return blocked.length || failed ? 1 : 0;
   }
 
   const regressions = rows.filter((r) => r.status === 'regression');
-  const preExisting = rows.filter((r) => r.status === 'pre-existing');
-  for (const row of preExisting) {
-    process.stdout.write(
-      `format-policy: not held to format - ${row.file} was already unformatted at HEAD (clear it in its own commit)\n`,
+  for (const row of rows.filter((r) => r.status === 'pre-existing')) {
+    say(
+      `not held to format - ${row.file} was already unformatted at HEAD (clear it in its own commit)`,
     );
   }
-  for (const row of regressions) {
-    process.stdout.write(`format-policy: not formatted - ${row.file}\n`);
-  }
+  for (const row of regressions) say(`not formatted - ${row.file}`);
   if (regressions.length) {
-    process.stdout.write(
-      `format-policy: ${regressions.length} file(s) introduced formatting dirt - run: pnpm fmt ${regressions.map((r) => r.file).join(' ')}\n`,
+    say(
+      `${regressions.length} file(s) introduced formatting dirt - run: pnpm fmt ${regressions.map((r) => r.file).join(' ')}`,
     );
     return 1;
   }

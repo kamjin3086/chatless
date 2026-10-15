@@ -1,5 +1,6 @@
 // Test files are TypeScript too: the root tsconfig excludes every
 // test file, so a test can pass a field production code deleted and nothing notices.
+// docs/acceptance is included because `pnpm test` collects and runs those audits.
 {
   "compilerOptions": {
     "forceConsistentCasingInFileNames": true,
@@ -33,7 +34,8 @@
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    "docs/acceptance/**/*.ts"
   ],
   "exclude": [
     "node_modules",

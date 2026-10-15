@@ -141,10 +141,20 @@ const envelope = productionEnvelope();
  * Tasks that exercise that capability must therefore run with the same tool set
  * the app would send, otherwise the model is asked for a capability it cannot see.
  */
+/** Fields a real invocation always carries; the harness is about what the model asks for. */
+const realInvocation = () => ({
+  provider: 'openai-compatible',
+  model: 'qwen-acceptance',
+  historyForLlm: [] as never[],
+  originalUserContent: 'acceptance task',
+});
+
 const knowledgeTools: ToolDef[] = getToolsForGroup('knowledge').map(
   ({ server, tool }) => ({
     name: `${server}__${tool.name}`,
-    description: tool.description,
+    // The catalogue allows a null description; a tool list sent to a server wants a
+    // string, and the harness never reads it back.
+    description: tool.description ?? '',
     parameters: (tool.input_schema as { schema?: unknown }).schema,
   }),
 );
@@ -345,6 +355,7 @@ async function runTool(sandbox: Sandbox, call: ToolCall): Promise<unknown> {
     const adapter = new FilesystemAdapter();
     const result = await adapter.execute(
       new ToolInvocation({
+        ...realInvocation(),
         assistantMessageId: RUN_ID,
         conversationId: CONVERSATION_ID,
         server: 'fs',
@@ -401,6 +412,7 @@ async function runTool(sandbox: Sandbox, call: ToolCall): Promise<unknown> {
     return record(
       await adapter.execute(
         new ToolInvocation({
+          ...realInvocation(),
           assistantMessageId: RUN_ID,
           conversationId: CONVERSATION_ID,
           server: 'shell',
@@ -910,7 +922,11 @@ describe.skipIf(!enabled)('Qwen agent task acceptance', () => {
         endpoint,
         served: (listed.data || []).map((entry) => String(entry.id)),
       });
-      const results: Array<Awaited<ReturnType<typeof runTask>>> = [];
+      // A failed task is reported as a row too, so the row type has to admit 'error'.
+      type RunRow = Omit<Awaited<ReturnType<typeof runTask>>, 'terminal'> & {
+        terminal: TerminalState;
+      };
+      const results: RunRow[] = [];
       for (let run = 0; run < runsPerTask; run += 1) {
         for (const task of selected) {
           try {

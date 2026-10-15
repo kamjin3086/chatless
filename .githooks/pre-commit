@@ -7,7 +7,11 @@
 # guardrail for at all; everything used to be CI-only:
 #   1. conflict markers in staged content
 #   2. formatting on exactly the staged files, and only where HEAD already conformed
-#   3. typecheck (`pnpm typecheck`, about 5s)
+#      (one biome call per dirty staged file, ~0.2s each, so the cost scales with what you
+#      staged rather than with the tree)
+#   3. typecheck of production code (`pnpm typecheck`, about 5s). Test types live in
+#      `pnpm typecheck:tests`, run by `pnpm verify` and CI; keeping them out of the hook is
+#      what keeps the hook fast.
 # Anything slower stays CI's job: `pnpm verify` (lint:ci + typecheck + build) is
 # still the bar before pushing. See docs/agents/maintenance.md.
 #
@@ -26,8 +30,10 @@ report() { printf 'pre-commit: %s\n' "$1"; }
 # 1. conflict markers
 marked=""
 while IFS= read -r file; do
-  [ -f "$file" ] || continue
-  if grep -qE '^(<<<<<<< |>>>>>>>)' "$file" 2>/dev/null; then
+  [ -n "$file" ] || continue
+  # Judge the index, because the index is what git is about to commit - a working-tree
+  # grep would pass a staged conflict and fail a clean one.
+  if git show ":$file" 2>/dev/null | grep -qE '^(<<<<<<< |>>>>>>>)'; then
     marked="$marked $file"
   fi
 done <<< "$staged"

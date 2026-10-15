@@ -101,16 +101,24 @@ why `verify-app-startup.sh` asserts that start-up *finishes* and that a resize
 still works (`docs/tauri-window-pitfalls.md`).
 
 ## Repo reality an agent needs to know
-- **Formatting is judged per file, and only where HEAD already conformed.** `main` carries
-  about twenty files biome would reflow entirely. Reformatting one inside a change PR buries
-  the change, so `scripts/format-policy.mjs` - which is what the pre-commit hook now calls -
-  holds a file to biome only if the version at HEAD already satisfied it. `pnpm fmt <files>`
-  is the daily command: it refuses a directory, and refuses to reflow a pre-existing dirty
-  file unless `--allow-reflow` (a formatting-only commit). A dirty file you did not dirty is
-  therefore no longer a reason to reach for `git commit --no-verify`; clearing the standing
-  dirt is its own commit. Judge cleanliness on file bytes - `biome format --stdin-file-path`
-  has reported unformatted files as clean, which is how one whole-tree reflow got justified.
-
+- **Formatting is judged per file, and only where HEAD already conformed.** main is largely
+  unformatted: `for f in $(git ls-files 'src/**/*.ts' 'src/**/*.tsx'); do npx biome format
+  "$f" >/dev/null 2>&1 || echo "$f"; done` fails **759 of 856** tracked files under src. A
+  hook that demanded format anyway had exactly two outcomes - whole-file reflows that bury
+  the change (one commit produced 2,191 lines of it) or `git commit --no-verify` - and both
+  were happening. So `scripts/format-policy.mjs`, which is what the hook now calls, holds a
+  file to biome only if the version being committed already satisfied it: today that is the
+  ~97 conforming files, and nothing else. `pnpm fmt <files>` is the daily command; it
+  refuses a directory, refuses to reflow pre-existing dirt unless `--allow-reflow`, and
+  treats a biome that could not run as an error rather than as a pass. Two consequences to
+  keep in sight: the format gate stays narrow until the standing dirt is cleared, and clearing
+  it is a formatting-only commit of ~759 files - the owner's call, not something to slip into
+  a change PR. Judge cleanliness on file bytes: `biome format --stdin-file-path` has reported
+  unformatted files as clean, and one whole-tree reflow got justified that way.
+- **`pnpm typecheck` never looks at a test file.** That is where a test could pass a field
+  production code had deleted. `pnpm typecheck:tests` covers `src` tests plus the
+  `docs/acceptance` audits `pnpm test` runs, and is part of `pnpm verify` and CI; the
+  pre-commit hook deliberately runs only the production typecheck to stay fast.
 - **Two vitest configs, and CI runs only one of them.** `pnpm test` (root
   `vitest.config.ts`) collects every `docs/acceptance/*.audit.test.ts`, so all of them
   are transpiled on every run even when they skip themselves for want of an endpoint or a

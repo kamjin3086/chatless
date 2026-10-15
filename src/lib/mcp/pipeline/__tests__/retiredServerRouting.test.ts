@@ -4,12 +4,12 @@ import { ToolInvocation } from '../ToolInvocation';
 import { createDefaultAdapters } from '../adapters';
 
 /** A real invocation always carries these; they are not what the tests below are about. */
-const REAL_INVOCATION = {
+const realInvocation = () => ({
   provider: 'openai-compatible',
   model: 'gpt-fixture',
   historyForLlm: [],
   originalUserContent: 'question',
-};
+});
 
 const mocks = vi.hoisted(() => ({ approvals: [] as Array<{ id: string }> }));
 
@@ -60,7 +60,7 @@ vi.mock('@/lib/database/services/DatabaseService', () => ({
 
 function invocation(server: string, tool: string, args: Record<string, unknown> = { path: '@WorkDir/notes.md' }) {
   return new ToolInvocation({
-    ...REAL_INVOCATION,
+    ...realInvocation(),
     assistantMessageId: 'run-retired',
     conversationId: 'conv-retired',
     server,
