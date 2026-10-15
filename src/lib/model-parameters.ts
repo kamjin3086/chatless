@@ -252,15 +252,16 @@ export class ModelParametersService {
     ) {
       opts.presencePenalty = parameters.presencePenalty;
     }
-    if (
-      shouldSet(
-        parameters.enableStopSequences,
-        parameters.stopSequences.length,
-        0,
-      )
-    ) {
-      if (parameters.stopSequences.length > 0) {
-        opts.stop = parameters.stopSequences;
+    // `stopSequences` lives in the stored bag, not in the type: a session bag written by a
+    // partial save simply does not have the key, and this read `.length` off the missing
+    // value before the enabled flag was even consulted - so a chat that had never opened the
+    // parameters dialog threw on every send once a session bag appeared for it.
+    const stopSequences = Array.isArray(parameters.stopSequences)
+      ? parameters.stopSequences
+      : [];
+    if (shouldSet(parameters.enableStopSequences, stopSequences.length, 0)) {
+      if (stopSequences.length > 0) {
+        opts.stop = stopSequences;
       }
     }
 
