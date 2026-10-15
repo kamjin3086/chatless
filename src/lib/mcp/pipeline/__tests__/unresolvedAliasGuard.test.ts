@@ -3,6 +3,14 @@ import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
 
+/** A real invocation always carries these; they are not what the tests below are about. */
+const REAL_INVOCATION = {
+  provider: 'openai-compatible',
+  model: 'gpt-fixture',
+  historyForLlm: [],
+  originalUserContent: 'question',
+};
+
 const mocks = vi.hoisted(() => ({
   setAllowlist: vi.fn(async () => ({ ok: true })),
   grantCallScope: vi.fn(async () => ({ ok: true, path: '' })),
@@ -88,6 +96,7 @@ const fsAdapter = () => ({
 const run = (pipeline: ToolExecutionPipeline, params: {
   server: string; tool: string; args: Record<string, unknown>; callId: string;
 }) => pipeline.run(new ToolInvocation({
+  ...REAL_INVOCATION,
   assistantMessageId: 'run-1', conversationId: 'conv-1',
   server: params.server, tool: params.tool, args: params.args, callId: params.callId,
 }));
@@ -118,7 +127,7 @@ describe('unresolved @Alias', () => {
 
     expect(result).toMatchObject({ success: true });
     expect(adapter.execute).toHaveBeenCalledOnce();
-    const invocation = adapter.execute.mock.calls[0][0] as { args: { command: string; workingDir?: string } };
+    const invocation = (adapter.execute.mock.calls[0] as unknown as [{ args: { command: string; workingDir?: string } }])[0];
     expect(invocation.args.command).toBe(`cd ${mocks.sessionWorkDir}`);
     // The default working directory travels with the call, so the card and the
     // backend agree on where it runs.

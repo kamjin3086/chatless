@@ -13,7 +13,7 @@ describe('agent tool surface', () => {
   });
 
   it('no longer exposes the retired Coding Pack', () => {
-    expect(TOOL_GROUPS.some((group) => group.id === 'coding')).toBe(false);
+    expect((TOOL_GROUPS as Array<{ id: string }>).some((group) => group.id === 'coding')).toBe(false);
     const everyTool = TOOL_GROUPS.flatMap((group) => group.tools.map(({ server }) => server));
     expect(everyTool).not.toContain('code');
   });

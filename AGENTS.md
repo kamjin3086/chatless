@@ -16,7 +16,9 @@ approved yet.
 ```bash
 pnpm test         # unit + the gates that used to be a human habit
 pnpm typecheck
-pnpm verify       # lint:ci + typecheck + build, run this before pushing
+pnpm typecheck:tests   # the root typecheck excludes every test file
+pnpm verify       # lint:ci + typecheck + test types + build, run this before pushing
+pnpm fmt <file…>   # format only the files you named (it refuses a directory)
 pnpm check:pr-title "<title>"
 pnpm test:acceptance   # wider acceptance set, mostly env-gated
 pnpm repo:state   # main sha, worktrees, whose branch this tree is, open PRs

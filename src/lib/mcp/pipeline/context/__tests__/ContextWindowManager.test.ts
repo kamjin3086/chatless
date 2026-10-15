@@ -240,7 +240,7 @@ describe('fixed overhead', () => {
 
   it('still counts the prompt prefix', () => {
     const tools = [{ name: 'x', description: 'a'.repeat(400) }];
-    const prefix: LlmMessage[] = [{ role: 'system', content: 'b'.repeat(800) }];
+    const prefix: Message[] = [{ role: 'system', content: 'b'.repeat(800) }];
     expect(fixedOverheadTokens(prefix, tools)).toBeGreaterThan(
       fixedOverheadTokens([], tools),
     );

@@ -3,6 +3,14 @@ import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
 
+/** A real invocation always carries these; they are not what the tests below are about. */
+const REAL_INVOCATION = {
+  provider: 'openai-compatible',
+  model: 'gpt-fixture',
+  historyForLlm: [],
+  originalUserContent: 'question',
+};
+
 const mocks = vi.hoisted(() => ({
   setAllowlist: vi.fn(async () => ({ ok: true })),
   grantCallScope: vi.fn(async () => ({ ok: true, path: '' })),
@@ -88,6 +96,7 @@ describe('one-time filesystem approval', () => {
     };
     const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
     const invocation = new ToolInvocation({
+      ...REAL_INVOCATION,
       assistantMessageId: 'run-1',
       conversationId: 'conv-1',
       server: 'filesystem',
@@ -106,7 +115,7 @@ describe('one-time filesystem approval', () => {
     });
     // The approval must never become a persistent authorization.
     const persistedPaths = mocks.setAllowlist.mock.calls
-      .flatMap((call) => ((call[0] as { directories?: Array<{ path: string }> })?.directories || []).map((d) => d.path));
+      .flatMap((call) => (((call as unknown as Array<{ directories?: Array<{ path: string }> }>)[0])?.directories || []).map((d) => d.path));
     expect(persistedPaths).toEqual([]);
     expect(mocks.revokeCallScope).toHaveBeenCalledWith({ runId: 'run-1', callId: 'call-1' });
   });
@@ -119,6 +128,7 @@ describe('one-time filesystem approval', () => {
     };
     const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
     const invocation = new ToolInvocation({
+      ...REAL_INVOCATION,
       assistantMessageId: 'run-2',
       conversationId: 'conv-1',
       server: 'filesystem',
@@ -145,6 +155,7 @@ describe('directory-level filesystem approval', () => {
 
   const write = (pipeline: ToolExecutionPipeline, id: string, path: string) => pipeline.run(
     new ToolInvocation({
+      ...REAL_INVOCATION,
       assistantMessageId: id,
       conversationId: 'conv-1',
       server: 'filesystem',
@@ -168,6 +179,7 @@ describe('directory-level filesystem approval', () => {
     // A different folder, and a delete, run without another prompt.
     await write(pipeline, 'run-b', 'D:/elsewhere/second.txt');
     await pipeline.run(new ToolInvocation({
+      ...REAL_INVOCATION,
       assistantMessageId: 'run-c',
       conversationId: 'conv-1',
       server: 'filesystem',
@@ -205,6 +217,7 @@ describe('directory-level filesystem approval', () => {
     const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
     mocks.decision = 'unrestricted';
     const run = (id: string, command: string) => pipeline.run(new ToolInvocation({
+      ...REAL_INVOCATION,
       assistantMessageId: id,
       conversationId: 'conv-1',
       server: 'shell',
@@ -231,6 +244,7 @@ describe('directory-level filesystem approval', () => {
     };
     const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
     const run = (id: string, tool: string, args: Record<string, unknown>) => pipeline.run(new ToolInvocation({
+      ...REAL_INVOCATION,
       assistantMessageId: id,
       conversationId: 'conv-1',
       server: 'shell',

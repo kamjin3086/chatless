@@ -3,6 +3,14 @@ import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess, getConversationAccess } from '@/lib/mcp/accessPolicy';
 
+/** A real invocation always carries these; they are not what the tests below are about. */
+const REAL_INVOCATION = {
+  provider: 'openai-compatible',
+  model: 'gpt-fixture',
+  historyForLlm: [],
+  originalUserContent: 'question',
+};
+
 /**
  * Pin what each approval answer *does* before the policy is extracted from the
  * pipeline. The three answers mean different things per scope - fs `always`
@@ -77,6 +85,7 @@ function pipelineThatExecutes() {
 
 function fsCall(tool: string, path: string, callId: string) {
   return new ToolInvocation({
+    ...REAL_INVOCATION,
     assistantMessageId: `run-${callId}`, conversationId: CONVERSATION,
     server: 'filesystem', tool, args: { path }, callId,
   });
@@ -84,6 +93,7 @@ function fsCall(tool: string, path: string, callId: string) {
 
 function shellCall(callId: string) {
   return new ToolInvocation({
+    ...REAL_INVOCATION,
     assistantMessageId: `run-${callId}`, conversationId: CONVERSATION,
     server: 'shell', tool: 'run', args: { command: 'ls' }, callId,
   });
@@ -176,6 +186,7 @@ describe('shell promotion: the same word means something else', () => {
     for (const tool of ['logs', 'list', 'stop']) {
       mocks.approvals.length = 0;
       await pipelineThatExecutes().run(new ToolInvocation({
+        ...REAL_INVOCATION,
         assistantMessageId: `run-${tool}`, conversationId: CONVERSATION,
         server: 'shell', tool, args: {}, callId: `s-${tool}`,
       }));

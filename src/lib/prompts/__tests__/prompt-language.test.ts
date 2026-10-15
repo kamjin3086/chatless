@@ -83,7 +83,7 @@ describe('prompt language', () => {
     ];
     for (const tool of tools) {
       expectAllEnglish(`tool ${tool.name}.description`, tool.description);
-      expectAllEnglish(`tool ${tool.name}.parameters`, tool.input_schema?.schema);
+      expectAllEnglish(`tool ${tool.name}.parameters`, (tool.input_schema as { schema?: unknown } | undefined)?.schema);
     }
 
   });

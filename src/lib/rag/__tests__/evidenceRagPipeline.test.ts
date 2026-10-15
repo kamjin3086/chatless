@@ -83,8 +83,7 @@ describe('Evidence RAG v2 pipeline (integration)', () => {
       metadata: { ...c.metadata, score: 1 - i * 0.1, documentHash: 'abc123' },
     }));
     const relevantOnly = chunks.filter((c) => c.sourceText.includes('本地隐私'));
-    const blocksByDoc = new Map<string, SourceBlock[]>([['doc-fixture', FIXTURE_DOC.blocks]]);
-    const evidence = buildEvidenceFromChunks({ chunks: relevantOnly, blocksByDoc, limit: 4 });
+    const evidence = buildEvidenceFromChunks({ chunks: relevantOnly, limit: 4 });
     expect(evidence.length).toBeGreaterThan(0);
     expect(evidence[0].quote).toContain('本地隐私');
     expect(evidence[0].quote).not.toContain('天气与旅游');
@@ -99,8 +98,7 @@ describe('Evidence RAG v2 pipeline (integration)', () => {
       knowledgeBaseId: 'kb-1',
       metadata: { ...c.metadata, score: 0.9 },
     }));
-    const blocksByDoc = new Map<string, SourceBlock[]>([[ 'doc-fixture', FIXTURE_DOC.blocks ]]);
-    const evidence = buildEvidenceFromChunks({ chunks, blocksByDoc, limit: 2 });
+    const evidence = buildEvidenceFromChunks({ chunks, limit: 2 });
     const raw = `产品定位见[[E1]]，伪造引用[[E9]]应被丢弃。`;
     const { displayAnswer, citations } = applyCitations(raw, evidence);
     expect(displayAnswer).toContain('[1]');
@@ -130,8 +128,7 @@ describe('Evidence RAG v2 pipeline (integration)', () => {
     const runId = 'run-test-1';
     clearEvidenceRegistry(runId);
     const chunks = mergeSourceBlocksToChunks(FIXTURE_DOC, 'doc-fixture');
-    const blocksByDoc = new Map<string, SourceBlock[]>([[ 'doc-fixture', FIXTURE_DOC.blocks ]]);
-    const evidence = buildEvidenceFromChunks({ chunks, blocksByDoc, limit: 1 });
+    const evidence = buildEvidenceFromChunks({ chunks, limit: 1 });
     const registered = registerEvidence(runId, evidence);
     expect(registered[0].id).toBe('E1');
     expect(readEvidence(runId, 'E1')?.quote).toContain('本地隐私');

@@ -4,10 +4,10 @@ import { AgentRunEventStore } from '../AgentRunEventStore';
 
 vi.mock('../AgentRunEventStore', () => ({
   AgentRunEventStore: {
-    ensureRun: vi.fn().mockResolvedValue(undefined),
-    appendEvent: vi.fn().mockResolvedValue(undefined),
+    ensureRun: vi.fn().mockResolvedValue(1),
+    appendEvent: vi.fn().mockResolvedValue(1),
     loadEvents: vi.fn().mockResolvedValue([]),
-    setRunStatus: vi.fn().mockResolvedValue(undefined),
+    setRunStatus: vi.fn().mockResolvedValue(1),
   },
 }));
 
@@ -22,13 +22,13 @@ vi.mock('@/lib/mcp/pipeline/context/ContextWindowManager', () => ({
 describe('AgentRunControlPlane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(AgentRunEventStore.appendEvent).mockResolvedValue(undefined);
+    vi.mocked(AgentRunEventStore.appendEvent).mockResolvedValue(1);
   });
 
   it('serializes concurrent durable writes before exposing events', async () => {
     const plane = new AgentRunControlPlane('run', 'conv', 'msg');
     let release!: () => void;
-    vi.mocked(AgentRunEventStore.appendEvent).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    vi.mocked(AgentRunEventStore.appendEvent).mockImplementationOnce(() => new Promise<number>((resolve) => { release = () => resolve(1); }));
     const first = plane.record({ type: 'user_message', content: 'one' });
     const second = plane.record({ type: 'user_message', content: 'two' });
     await vi.waitFor(() => expect(AgentRunEventStore.appendEvent).toHaveBeenCalledTimes(1));

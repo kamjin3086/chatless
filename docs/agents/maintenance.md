@@ -67,7 +67,7 @@ not mention.
 
 `pnpm install` wires a pre-commit hook (`core.hooksPath=.githooks`, stored in the
 clone's own `.git/config`): conflict markers, `biome format` on the staged files
-only, and `pnpm typecheck` - about 7 seconds. It is a seatbelt, not the bar:
+only, and `pnpm typecheck` - about 7 seconds. The format check exempts a file that was already unformatted at HEAD, so `--no-verify` is not the answer to someone else's dirt. It is a seatbelt, not the bar:
 `pnpm verify` before pushing is still what keeps CI green, and
 `git commit --no-verify` exists for the rare commit where the hook is the wrong
 one to run.
@@ -75,7 +75,8 @@ one to run.
 | Change | Run |
 |--------|-----|
 | Any TypeScript | `pnpm test` and `pnpm typecheck` |
-| Before pushing any code | `pnpm verify` (lint:ci + typecheck + build) |
+| TypeScript that only tests use | `pnpm typecheck:tests` - the root `typecheck` excludes every test file |
+| Before pushing any code | `pnpm verify` (lint:ci + typecheck + typecheck:tests + build) |
 | PR title | `pnpm check:pr-title "<title>"` |
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
@@ -100,6 +101,15 @@ why `verify-app-startup.sh` asserts that start-up *finishes* and that a resize
 still works (`docs/tauri-window-pitfalls.md`).
 
 ## Repo reality an agent needs to know
+- **Formatting is judged per file, and only where HEAD already conformed.** `main` carries
+  about twenty files biome would reflow entirely. Reformatting one inside a change PR buries
+  the change, so `scripts/format-policy.mjs` - which is what the pre-commit hook now calls -
+  holds a file to biome only if the version at HEAD already satisfied it. `pnpm fmt <files>`
+  is the daily command: it refuses a directory, and refuses to reflow a pre-existing dirty
+  file unless `--allow-reflow` (a formatting-only commit). A dirty file you did not dirty is
+  therefore no longer a reason to reach for `git commit --no-verify`; clearing the standing
+  dirt is its own commit. Judge cleanliness on file bytes - `biome format --stdin-file-path`
+  has reported unformatted files as clean, which is how one whole-tree reflow got justified.
 
 - **Two vitest configs, and CI runs only one of them.** `pnpm test` (root
   `vitest.config.ts`) collects every `docs/acceptance/*.audit.test.ts`, so all of them
