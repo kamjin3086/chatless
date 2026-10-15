@@ -4,6 +4,7 @@ import { ProviderStatus, type ProviderEntity } from "../types";
 import { modelRepository } from "../ModelRepository";
 import { getStaticModels, type ProviderName } from "../staticModels";
 import { syncDynamicProviders } from "@/lib/llm";
+import { resolveRequiresKey } from "../keyRequirement";
 
 /**
  * 确保指定内置 Provider 已存在且在 UI 中可见。
@@ -17,7 +18,15 @@ export class EnsureProviderEnabledUseCase {
     if (!existing) {
       const def = AVAILABLE_PROVIDERS_CATALOG.find(d => d.name === name);
       const url = def?.defaultUrl || "";
-      const requiresKey = def?.requiresKey ?? (name !== 'Ollama');
+      // Same rule the send path and the status badge use: local evidence first, then the
+      // catalogue, then "an endpoint that is not in the catalogue is the user's own".
+      // Enabling "New API" - whose own default URL is loopback - used to file it as
+      // missing a key before anyone had typed an address.
+      const requiresKey = resolveRequiresKey({
+        catalog: def?.requiresKey,
+        strategy: def?.strategy,
+        url,
+      }).requiresKey;
       const entity: ProviderEntity = {
         name,
         displayName: name,
