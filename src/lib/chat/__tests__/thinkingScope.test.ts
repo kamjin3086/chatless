@@ -101,6 +101,24 @@ describe('effective thinking level', () => {
     expect(view.stale).toBe(true);
   });
 
+  it('choosing auto at a scope hands the question back to the scope below', () => {
+    const next = applyThinkingChoice({
+      modelParams: { enableThinkingLevel: true, thinkingLevel: 'low' },
+      conversationParams: { enableThinkingLevel: true, thinkingLevel: 'high' },
+      messageParams: null,
+      scope: 'conversation',
+      level: 'inherit',
+    });
+    const view = effectiveThinking({
+      ...KNOWN,
+      modelParams: next.modelParams,
+      conversationParams: next.conversationParams,
+      messageParams: next.messageParams,
+    });
+    expect(view.level).toBe('low');
+    expect(view.source).toBe('model');
+  });
+
   it('lets one message refuse the level its session set', () => {
     // The "none" the control needs: suppressing outranks a lower scope rather than
     // inheriting past it, so a single message can go out with no thinking level.

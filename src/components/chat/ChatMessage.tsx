@@ -249,10 +249,10 @@ function ChatMessageComponent({
   return (
     <div
       className={cn(
-        "flex chat-transition group mt-2 mb-2 relative w-full focus-within:outline-none",
+        "flex chat-transition group mt-2 mb-2 relative w-full min-w-0 focus-within:outline-none",
         isUser
-          ? "flex-row-reverse justify-start max-w-[min(85%,42rem)] ml-auto"
-          : "max-w-[min(100%,48rem)]"
+          ? "flex-row-reverse justify-start max-w-[min(85%,var(--chat-content-max))] ml-auto"
+          : "max-w-[min(100%,var(--chat-content-max))]"
       )}
       tabIndex={-1}
     >

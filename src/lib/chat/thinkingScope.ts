@@ -200,10 +200,14 @@ export interface ThinkingChoiceResult {
 export function applyThinkingChoice(
   args: ThinkingScopes & {
     scope: ThinkingScope;
-    level: ThinkingLevel | 'suppress';
+    level: ThinkingChoice;
   },
 ): ThinkingChoiceResult {
-  const { scope, level } = args;
+  const { scope } = args;
+  // Choosing `auto` at a scope is the same write as clearing it: this scope stops having
+  // an opinion and whatever is below it answers.
+  const level: ThinkingLevel | 'suppress' =
+    args.level === 'inherit' ? 'auto' : args.level;
   const pendingOpinion = readThinkingChoice(args.messageParams) !== 'inherit';
   const clearMessage = scope !== 'message' && pendingOpinion;
 

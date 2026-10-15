@@ -23,3 +23,26 @@
   /* 空 */
 }
 
+/* === Wide content stays inside the conversation column ===
+ * A table or code block sized by its own content used to spill past the column, which is
+ * what made the composer look like it had failed to grow. Wrapping and scrolling are the
+ * containment; the column width itself is set in globals.css.
+ */
+.markdown-content-area {
+  min-width: 0;
+}
+
+.markdown-content-area table {
+  max-width: 100%;
+}
+
+.markdown-content-area th,
+.markdown-content-area td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-content-area pre {
+  max-width: 100%;
+  overflow-x: auto;
+}

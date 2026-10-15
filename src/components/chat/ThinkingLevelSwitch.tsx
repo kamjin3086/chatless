@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/popover';
 import { ModelParametersService } from '@/lib/model-parameters';
 import {
+  type ThinkingChoice,
   type ThinkingMigration,
   type ThinkingScope,
   applyThinkingChoice,
@@ -48,8 +49,6 @@ interface ThinkingLevelSwitchProps {
   disabled?: boolean;
 }
 
-const SCOPES: ThinkingScope[] = ['model', 'conversation', 'message'];
-
 /** True when the keystroke belongs to text entry, not to the shortcut. */
 function isTextEntry(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -75,7 +74,10 @@ export function ThinkingLevelSwitch({
   // so the cast lives here at the boundary instead of blurring the whole function.
   const t = (key: string) => translate(key as TranslationKey);
   const [open, setOpen] = useState(false);
-  const [scope, setScope] = useState<ThinkingScope>('model');
+  // One place to write, so the menu is a level and nothing else. The model default and
+  // the per-message override stay where they were: the model parameters dialog, and the
+  // keyboard cycle, which still reach every scope.
+  const COMMIT_SCOPE: ThinkingScope = 'conversation';
   const [modelParams, setModelParams] = useState<Partial<ModelParameters>>({});
   const [pending, setPending] = useState<Partial<ModelParameters> | null>(null);
   const [migration, setMigration] = useState<ThinkingMigration>('none');
@@ -130,21 +132,13 @@ export function ThinkingLevelSwitch({
     [provider, modelId, modelParams, sessionParameters, pending],
   );
 
-  const levelLabel = useCallback(
-    (level: ThinkingLevel) =>
-      level === 'auto'
-        ? t('modelParams.thinkingLevel.auto')
-        : t(`thinkingLevel.${level}`),
-    [t],
-  );
-
   /**
    * Write a choice where the chosen scope says to write it. A conversation choice goes to
    * the session store the session panel uses, then the page reloads its copy - this control
    * does not keep a second answer to the same question.
    */
   const commit = useCallback(
-    async (target: ThinkingScope, level: ThinkingLevel | 'suppress') => {
+    async (target: ThinkingScope, level: ThinkingChoice) => {
       if (!modelId) return;
       const next = applyThinkingChoice({
         scope: target,
@@ -220,7 +214,16 @@ export function ThinkingLevelSwitch({
 
   if (!modelId) return null;
 
-  const sourceLabel = t(`thinkingSwitch.source.${view.source}`);
+  /**
+   * The tier names are the wire vocabulary (`reasoning_effort` takes `low`, `medium`,
+   * `high`), so they are shown as-is. A translated 中 next to a server that says `medium`
+   * is one more thing to translate in your head for no benefit.
+   */
+  const rawLevel = (level: ThinkingLevel) => level;
+  const canSayOff = view.options.includes('off');
+  const tiers = view.options.filter(
+    (level) => level !== 'auto' && level !== 'off',
+  );
   const migrationNote = (which: ThinkingMigration) =>
     which === 'off'
       ? t('thinkingSwitch.migration.off')
@@ -234,15 +237,9 @@ export function ThinkingLevelSwitch({
     : !view.verified
       ? t('thinkingSwitch.unverifiedHint')
       : migrationNote(migration) || migrationNote(sessionMigration);
-  // Whether the scope being aimed at is the one currently refusing to send a level.
-  const scopeParams =
-    scope === 'message'
-      ? pending
-      : scope === 'conversation'
-        ? sessionParameters
-        : modelParams;
-  const suppressing = readThinkingChoice(scopeParams) === 'suppress';
-  const readout = `${levelLabel(view.level)} · ${sourceLabel}`;
+  // Whether this chat is the scope currently refusing to send a level.
+  const suppressing = readThinkingChoice(sessionParameters) === 'suppress';
+  const readout = rawLevel(view.level);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -264,37 +261,46 @@ export function ThinkingLevelSwitch({
           <span className="max-w-[7rem] truncate">{readout}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-2 text-[12px]">
-        <div className="mb-1.5 flex flex-wrap gap-1">
-          {SCOPES.map((candidate) => (
+      <PopoverContent align="end" solid className="w-56 p-1.5 text-[12px]">
+        <ul className="flex flex-col gap-0.5">
+          <li>
             <button
-              key={candidate}
               type="button"
-              onClick={() => setScope(candidate)}
-              aria-pressed={scope === candidate}
+              onClick={() => {
+                void commit(COMMIT_SCOPE, 'inherit');
+                setOpen(false);
+              }}
               className={cn(
-                'rounded px-2 py-0.5',
-                scope === candidate
-                  ? 'bg-slate-200 dark:bg-slate-700'
-                  : 'hover:bg-slate-100 dark:hover:bg-slate-800',
+                'w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800',
+                view.level === 'auto' && !suppressing && 'font-medium',
               )}
             >
-              {t(`thinkingSwitch.scope.${candidate}`)}
+              auto
             </button>
-          ))}
-        </div>
-        <ul className="flex flex-col gap-0.5">
-          {view.options.length <= 1 && (
-            <li className="px-1 py-1 text-slate-500 dark:text-slate-400">
-              {t('thinkingSwitch.noTiersHint')}
-            </li>
-          )}
-          {view.options.map((level) => (
+          </li>
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                // `off` where the endpoint can say "do not think"; where it cannot, the
+                // honest choice is to send no thinking level at all.
+                void commit(COMMIT_SCOPE, canSayOff ? 'off' : 'suppress');
+                setOpen(false);
+              }}
+              className={cn(
+                'w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800',
+                (view.level === 'off' || suppressing) && 'font-medium',
+              )}
+            >
+              off
+            </button>
+          </li>
+          {tiers.map((level) => (
             <li key={level}>
               <button
                 type="button"
                 onClick={() => {
-                  void commit(scope, level);
+                  void commit(COMMIT_SCOPE, level);
                   setOpen(false);
                 }}
                 className={cn(
@@ -302,37 +308,17 @@ export function ThinkingLevelSwitch({
                   level === view.level && 'font-medium',
                 )}
               >
-                {levelLabel(level)}
+                {rawLevel(level)}
               </button>
             </li>
           ))}
-          <li>
-            <button
-              type="button"
-              onClick={() => {
-                void commit(scope, 'suppress');
-                setOpen(false);
-              }}
-              className={cn(
-                'w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800',
-                suppressing && 'font-medium',
-              )}
-            >
-              {t('thinkingSwitch.suppressOption')}
-            </button>
-          </li>
         </ul>
         <div className="mt-1.5 border-t border-slate-200 pt-1.5 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-          <div>
-            {t('modelParams.thinkingLevel.source').replace('{0}', sourceLabel)}
-          </div>
           {hint && <div className="mt-0.5">{hint}</div>}
           {pending && (
             <div className="mt-0.5">
               {t('thinkingSwitch.pendingHint')} ·{' '}
-              {levelLabel(
-                (pending.thinkingLevel as ThinkingLevel | undefined) ?? 'auto',
-              )}
+              {String(pending.thinkingLevel ?? 'auto')}
             </div>
           )}
           <div className="mt-0.5">{t('thinkingShortcut.help')}</div>
