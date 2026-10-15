@@ -1,0 +1,49 @@
+name: cache-cleanup
+
+# Actions 存储免费额度只有 0.5 GB，本仓库的 rust/pnpm 缓存单条就有几百 MB，
+# 一周就能把额度顶满（顶满后 GitHub 拒绝写入新缓存，CI 反而每次都白跑）。
+# 每周清掉 7 天没被访问过的缓存；新缓存照常由 CI 自己重建。
+on:
+  schedule:
+    - cron: "0 3 * * 0" # 每周日 03:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: cache-cleanup
+  cancel-in-progress: true
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete caches idle for 7+ days
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const cutoff = Date.now() - 7 * 864e5;
+            let pages = 0, deleted = 0, freed = 0;
+            for (;;) {
+              const { data } = await github.rest.actions.getActionsCacheList({
+                owner, repo, per_page: 100, page: ++pages,
+              });
+              const caches = data.actions_caches || [];
+              if (!caches.length) break;
+              for (const c of caches) {
+                if (new Date(c.last_accessed_at) < cutoff) {
+                  await github.rest.actions.deleteActionsCacheById({
+                    owner, repo, cache_id: c.id,
+                  });
+                  deleted++;
+                  freed += c.size_in_bytes;
+                  core.info(`deleted ${c.key} (${(c.size_in_bytes / 1048576).toFixed(1)} MB)`);
+                }
+              }
+              if (caches.length < 100) break;
+            }
+            core.info(`done: ${deleted} caches deleted, ${(freed / 1048576).toFixed(1)} MB freed`);

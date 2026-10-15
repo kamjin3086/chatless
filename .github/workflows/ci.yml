@@ -7,9 +7,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# CI runs once per pull request and on demand. There is deliberately no `push`
+# trigger: main only ever moves by merging a pull request, and that merge push
+# used to replay the exact same checks the PR had just run - every merge bought
+# two full runs for one change. If a direct-push safety net is ever wanted,
+# main should get branch protection requiring a PR instead.
 on:
-  push:
-    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
     # Prose is not compiled, so it does not get a build. `**` takes everything in and
     # the `!` patterns take the noise back out; order is load-bearing, which is why the
     # re-included docs come after `!**.md`.
@@ -27,16 +32,6 @@ on:
     # checks are ever added, a prose-only pull request would sit at "Pending" forever,
     # so revisit this filter then. The pull request title gate lives in pr-title.yml
     # precisely so that filtering cannot switch it off.
-    paths:
-      - '**'
-      - '!**.md'
-      - '!LICENSE'
-      - '!.github/ISSUE_TEMPLATE/**'
-      - '.github/workflows/**'
-      - 'docs/prompt-language.md'
-      - 'docs/agents/maintenance.md'
-  pull_request:
-    branches: [ main ]
     paths:
       - '**'
       - '!**.md'
@@ -112,6 +107,13 @@ jobs:
         uses: actions/checkout@v4
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          # The free plan's Actions storage is 0.5 GB and this repo's caches
+          # used to pile up past it, at which point GitHub silently refuses
+          # every new cache write. Once usage crosses the threshold on a cache
+          # hit, stale caches get pruned automatically.
+          cleanup-on-hit: true
+          cleanup-on-hit-threshold-percentage: 70
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
