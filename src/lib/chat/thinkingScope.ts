@@ -13,6 +13,7 @@
 import type { ModelParameters } from '@/types/model-params';
 import {
   type ThinkingLevel,
+  isVerifiedThinkingModel,
   supportedThinkingLevels,
 } from '@/lib/llm/thinkingLevels';
 
@@ -74,36 +75,35 @@ export interface ThinkingView {
    * silently dropping it is the failure this feature exists to avoid.
    */
   stale: boolean;
+  /** False when the tiers come from the generic field rather than a verified mapping. */
+  verified: boolean;
 }
 
-/** Tiers worth choosing, with `auto` available first; empty means "unverified". */
+/** Tiers worth choosing, `auto` first. Never empty: an unknown model gets the generic tiers. */
 export function thinkingOptionsFor(
   provider: string,
   modelId: string,
 ): ThinkingLevel[] {
-  const supported = supportedThinkingLevels(provider, modelId);
-  return supported.length > 0 ? ['auto', ...supported] : [];
+  return ['auto', ...supportedThinkingLevels(provider, modelId)];
 }
 
 export function effectiveThinking(state: ThinkingState): ThinkingView {
   const options = thinkingOptionsFor(state.provider, state.modelId);
-  const unverified = options.length === 0;
+  const verified = isVerifiedThinkingModel(state.provider, state.modelId);
+  const unverified = !verified;
 
   for (const { scope, read } of SCOPE_PRIORITY) {
     const choice = readThinkingChoice(read(state));
     if (choice === 'inherit') continue;
     if (choice === 'suppress') {
-      return { level: 'auto', source: scope, options, stale: false };
-    }
-    if (unverified) {
-      // Nothing can be sent for this pair, so say the true thing rather than echoing a
-      // stored value that will never reach the model.
-      return { level: 'auto', source: 'unverified', options, stale: false };
+      return { level: 'auto', source: scope, options, stale: false, verified };
     }
     if (!options.includes(choice)) {
-      return { level: 'auto', source: scope, options, stale: true };
+      // A tier this pair cannot express (an `xhigh` saved before the table changed, say):
+      // the honest answer is that it will not be sent, not a nearby tier.
+      return { level: 'auto', source: scope, options, stale: true, verified };
     }
-    return { level: choice, source: scope, options, stale: false };
+    return { level: choice, source: scope, options, stale: false, verified };
   }
 
   return {
@@ -111,6 +111,7 @@ export function effectiveThinking(state: ThinkingState): ThinkingView {
     source: unverified ? 'unverified' : 'model-default',
     options,
     stale: false,
+    verified,
   };
 }
 
@@ -153,9 +154,15 @@ function withoutChoice(
 
 function withChoice(
   params: Partial<ModelParameters> | null | undefined,
-  level: ThinkingLevel,
+  level: ThinkingLevel | 'suppress',
 ): Partial<ModelParameters> {
   const next = withoutChoice(params);
+  if (level === 'suppress') {
+    // An explicit "this scope sends no thinking level", which outranks a lower scope that
+    // does set one - the way to get "no level for this one message" past a session level.
+    next.enableThinkingLevel = false;
+    return next;
+  }
   if (level !== 'auto') {
     next.enableThinkingLevel = true;
     next.thinkingLevel = level;
@@ -191,7 +198,10 @@ export interface ThinkingChoiceResult {
  *   is a standing choice, and the honest readout after such a write is "conversation".
  */
 export function applyThinkingChoice(
-  args: ThinkingScopes & { scope: ThinkingScope; level: ThinkingLevel },
+  args: ThinkingScopes & {
+    scope: ThinkingScope;
+    level: ThinkingLevel | 'suppress';
+  },
 ): ThinkingChoiceResult {
   const { scope, level } = args;
   const pendingOpinion = readThinkingChoice(args.messageParams) !== 'inherit';

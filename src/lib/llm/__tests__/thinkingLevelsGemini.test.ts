@@ -133,10 +133,11 @@ describe('Gemini 2.5 takes thinkingBudget', () => {
   it('is scoped to the provider, not to the model name', () => {
     // A gateway that happens to serve a model called `gemini-2.5-flash` does not get to
     // speak Gemini's nested dialect; that is how a field reaches a server that never
-    // advertised one.
+    // advertised one. It does get the generic OpenAI-shaped field, which is what an
+    // OpenAI-compatible gateway speaks.
     expect(
       supportedThinkingLevels('OpenAI Compatible', 'gemini-2.5-flash'),
-    ).toEqual([]);
+    ).toEqual(['minimal', 'low', 'medium', 'high']);
     const out = ParameterPolicyEngine.apply(
       'OpenAI Compatible',
       'gemini-2.5-flash',
@@ -146,6 +147,7 @@ describe('Gemini 2.5 takes thinkingBudget', () => {
     );
     expect(out).not.toHaveProperty('generationConfig');
     expect(out).not.toHaveProperty('thinkingLevel');
+    expect(out.reasoning_effort).toBe('low');
   });
 
   it("does not write through to the caller's option object", () => {

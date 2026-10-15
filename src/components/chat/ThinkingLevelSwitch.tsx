@@ -24,6 +24,7 @@ import {
   cycleThinkingLevel,
   effectiveThinking,
   migrateLegacyThinkingBoolean,
+  readThinkingChoice,
 } from '@/lib/chat/thinkingScope';
 import {
   clearMessageScope,
@@ -143,7 +144,7 @@ export function ThinkingLevelSwitch({
    * does not keep a second answer to the same question.
    */
   const commit = useCallback(
-    async (target: ThinkingScope, level: ThinkingLevel) => {
+    async (target: ThinkingScope, level: ThinkingLevel | 'suppress') => {
       if (!modelId) return;
       const next = applyThinkingChoice({
         scope: target,
@@ -228,12 +229,19 @@ export function ThinkingLevelSwitch({
         : which === 'kept-unsupported'
           ? t('thinkingSwitch.migration.kept-unsupported')
           : null;
-  const hint =
-    view.source === 'unverified'
+  const hint = view.stale
+    ? t('thinkingSwitch.staleHint')
+    : !view.verified
       ? t('thinkingSwitch.unverifiedHint')
-      : view.stale
-        ? t('thinkingSwitch.staleHint')
-        : migrationNote(migration) || migrationNote(sessionMigration);
+      : migrationNote(migration) || migrationNote(sessionMigration);
+  // Whether the scope being aimed at is the one currently refusing to send a level.
+  const scopeParams =
+    scope === 'message'
+      ? pending
+      : scope === 'conversation'
+        ? sessionParameters
+        : modelParams;
+  const suppressing = readThinkingChoice(scopeParams) === 'suppress';
   const readout = `${levelLabel(view.level)} · ${sourceLabel}`;
 
   return (
@@ -276,9 +284,9 @@ export function ThinkingLevelSwitch({
           ))}
         </div>
         <ul className="flex flex-col gap-0.5">
-          {view.options.length === 0 && (
+          {view.options.length <= 1 && (
             <li className="px-1 py-1 text-slate-500 dark:text-slate-400">
-              {t('thinkingSwitch.unverifiedHint')}
+              {t('thinkingSwitch.noTiersHint')}
             </li>
           )}
           {view.options.map((level) => (
@@ -298,6 +306,21 @@ export function ThinkingLevelSwitch({
               </button>
             </li>
           ))}
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                void commit(scope, 'suppress');
+                setOpen(false);
+              }}
+              className={cn(
+                'w-full rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800',
+                suppressing && 'font-medium',
+              )}
+            >
+              {t('thinkingSwitch.suppressOption')}
+            </button>
+          </li>
         </ul>
         <div className="mt-1.5 border-t border-slate-200 pt-1.5 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
           <div>

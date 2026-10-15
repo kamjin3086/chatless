@@ -112,6 +112,8 @@ export interface ThinkingMapping {
    */
   provider: RegExp;
   model: RegExp;
+  /** True for the catch-all row that stands for "some OpenAI-compatible box". */
+  generic?: boolean;
   carrier: ThinkingCarrier;
   /** level -> wire value. `auto` is never mapped: it means send nothing. */
   wire?: Partial<Record<ThinkingLevel, string | number | boolean>>;
@@ -189,6 +191,7 @@ export const THINKING_MAPPINGS: ThinkingMapping[] = [
   },
   {
     id: 'openai-compatible-reasoning',
+    generic: true,
     description:
       'Self-hosted OpenAI-compatible servers exposing an effort knob (vLLM, SGLang, gateways)',
     provider:
@@ -335,12 +338,64 @@ export function findThinkingMapping(
   return findThinkingMappings(providerName, modelId)[0] ?? null;
 }
 
-/** Levels worth offering in the UI. Empty means "unverified: send nothing". */
+/**
+ * Tiers offered for an endpoint nothing is known about, and the one field name enough
+ * OpenAI-compatible servers (vLLM, SGLang, gateways) use for them. Refusing to offer
+ * anything left the control dead for exactly the models the owner runs - a level you cannot
+ * choose is not a level - while "I do not know this endpoint" remains said out loud: the
+ * switch labels the send as generic, and the wire carries `verified: false`.
+ *
+ * `off` is deliberately absent: no generic "do not think" value is safe to invent, so
+ * turning levels off is the explicit *suppress* choice rather than a wire guess. `xhigh`
+ * and `max` stay provider-specific for the same reason.
+ */
+export const GENERIC_THINKING_LEVELS: ThinkingLevel[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+];
+
+const GENERIC_EFFORT: Partial<Record<ThinkingLevel, string>> = {
+  minimal: 'minimal',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+};
+
+/** True when a row in the table speaks this provider/model pair, tiers included. */
+export function isVerifiedThinkingModel(
+  providerName: string,
+  modelId: string,
+): boolean {
+  return findThinkingMappings(providerName, modelId).length > 0;
+}
+
+/**
+ * True when the table recognises this provider as a named service with its own dialect
+ * (OpenAI, Anthropic, Gemini, Ollama...). A gateway under an arbitrary name is not one, and
+ * neither is "OpenAI Compatible" serving a model the row declines to answer for.
+ */
+export function isThinkingDialectKnown(providerName: string): boolean {
+  return THINKING_MAPPINGS.some(
+    (mapping) => !mapping.generic && mapping.provider.test(providerName),
+  );
+}
+
+/** Levels worth offering in the UI. Never empty: an unknown model gets the generic tiers. */
 export function supportedThinkingLevels(
   providerName: string,
   modelId: string,
 ): ThinkingLevel[] {
   const mappings = findThinkingMappings(providerName, modelId);
+  if (mappings.length === 0) {
+    // A service the table knows and declined for this model gets nothing: sending a guess
+    // to a native API is worse than no tier. An endpoint the table has never met gets the
+    // generic field, because the alternative is a control the user cannot use at all.
+    return isThinkingDialectKnown(providerName)
+      ? []
+      : [...GENERIC_THINKING_LEVELS];
+  }
   return THINKING_LEVEL_ORDER.filter(
     (level) =>
       level !== 'auto' &&
@@ -354,6 +409,8 @@ export interface ThinkingWire {
   value: string | number | boolean;
   /** The level is the more specific statement and replaces anything already set. */
   overrides?: boolean;
+  /** False when the field is a generic guess rather than a mapped endpoint behaviour. */
+  verified?: boolean;
 }
 
 /**
@@ -380,7 +437,24 @@ export function thinkingWireFor(
       // On Ollama the older boolean and the level both write the same option, and the
       // level is the newer, more specific statement.
       overrides: mapping.carrier === 'ollama_think',
+      verified: true,
     };
+  }
+  // Nothing is known about this endpoint, but the user still chose a tier: send the
+  // generic field and say so on the wire.
+  if (
+    !isVerifiedThinkingModel(providerName, modelId) &&
+    !isThinkingDialectKnown(providerName)
+  ) {
+    const effort = GENERIC_EFFORT[level];
+    if (effort) {
+      return {
+        carrier: 'reasoning_effort',
+        field: CARRIER_FIELD.reasoning_effort as string,
+        value: effort,
+        verified: false,
+      };
+    }
   }
   return null;
 }
