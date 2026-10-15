@@ -40,24 +40,22 @@ function pickArg(args: Record<string, unknown> | undefined, key: string): string
 }
 
 /**
- * The front of a long value, on one line.
+ * One line, no hard length limit.
  *
- * Head-and-tail truncation was the old habit, and for a command it printed the program and
- * the closing punctuation of the script - `$exts=@(jpg,j... "$(__.Count)" }` - while for a
- * URL it printed `https://example.co...path/he`. Both cut away the part a reader scans for.
- * The front is what identifies a value, so the tail goes, and the cut lands on a word
- * boundary rather than inside a flag.
+ * Two habits were wrong here. Head-and-tail truncation printed a command's program and its
+ * closing punctuation - `$exts=@(jpg,j... "$(__.Count)" }` - and a URL came out as
+ * `https://example.co...path/he`: both cut away the part a reader scans for. And the length
+ * limit did not belong in the data at all, because the row knows how much room it has and
+ * ellipsizes it. So this collapses to one line and stops; the row does the cutting and a
+ * wide window shows more than a narrow one.
  */
-export function previewLine(value: string, maxLen = 70): string {
-  const oneLine = String(value || '').replace(/\s+/g, ' ').trim();
-  if (oneLine.length <= maxLen) return oneLine;
-  const head = oneLine.slice(0, maxLen);
-  return `${head.replace(/\s+\S*$/, '')}…`;
+export function previewLine(value: string): string {
+  return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 /** A shell preview: one line, and a continued line counts as one command. */
-export function previewCommand(command: string, maxLen = 70): string {
-  return previewLine(String(command || '').replace(/\\\s*\n/g, ' '), maxLen);
+export function previewCommand(command: string): string {
+  return previewLine(String(command || '').replace(/\\\s*\n/g, ' '));
 }
 
 /**
@@ -80,14 +78,18 @@ export function previewResult(value: unknown): string {
       (x) => typeof x === 'string' || typeof x === 'number',
     );
     if (scalars.length === parsed.length && scalars.length > 0)
-      return previewLine(scalars.slice(0, 6).map((x) => String(x)).join(' · '), 600);
+      return previewLine(scalars.slice(0, 6).map((x) => String(x)).join(' · '));
     return `${parsed.length} 项`;
   }
   if (typeof parsed === 'object') {
-    const pairs = pairValues(parsed as Record<string, unknown>, Object.keys(parsed));
-    if (pairs) return previewLine(pairs, 600);
+    const pairs = pairValues(
+      parsed as Record<string, unknown>,
+      Object.keys(parsed),
+      true,
+    );
+    if (pairs) return previewLine(pairs);
     try {
-      return previewLine(JSON.stringify(parsed), 600);
+      return previewLine(JSON.stringify(parsed));
     } catch {
       return '';
     }
@@ -167,9 +169,16 @@ function shortValue(v: unknown): string {
  * (MCP) tool otherwise arrives as a name - `weather · get_forecast` tells the user that
  * something happened, not whether it asked about Shanghai or Berlin.
  */
+/**
+ * `key=value` pairs, or bare values when the row already says what the call is.
+ *
+ * The asymmetry is deliberate: `天气查询 上海` reads, and so does `temp_c=28 · city=上海`,
+ * while `天气查询 city=上海` says the same thing twice and `28 · 上海` is a riddle.
+ */
 function pairValues(
   values: Record<string, unknown>,
   orderedKeys: string[],
+  withKeys: boolean,
   limit = 3,
 ): string {
   const parts: string[] = [];
@@ -178,17 +187,41 @@ function pairValues(
     if (SECRET_KEY.test(key) || NOISE_KEY.test(key)) continue;
     const value = shortValue(values[key]);
     if (!value) continue;
-    parts.push(`${key}=${value}`);
+    parts.push(withKeys ? `${key}=${value}` : value);
   }
   return parts.join(' · ');
 }
 
 function describeArgs(args: Record<string, unknown>): string {
   const keys = Object.keys(args || {});
-  return pairValues(args, [
-    ...ABOUT_KEYS.filter((k) => keys.includes(k)),
-    ...keys.filter((k) => !ABOUT_KEYS.includes(k)),
-  ]);
+  return pairValues(
+    args,
+    [
+      ...ABOUT_KEYS.filter((k) => keys.includes(k)),
+      ...keys.filter((k) => !ABOUT_KEYS.includes(k)),
+    ],
+    false,
+  );
+}
+
+/**
+ * A verb for an external tool, when one can be guessed safely. A confident wrong verb reads
+ * worse than the raw `server · tool`, so this list is short and every entry is pinned by a
+ * test - anything not on it keeps the names the user can grep for.
+ */
+const TOOL_VERBS: Array<[RegExp, string]> = [
+  [/forecast|weather/i, '天气查询'],
+  [/translate/i, '翻译'],
+  [/search|query|lookup/i, '搜索'],
+  [/fetch|browse|scrape|webpage/i, '抓取网页'],
+  [/^(send|notify|post_message)/i, '发送'],
+  [/^list[_-]/i, '列出'],
+  [/download/i, '下载'],
+];
+
+function describeToolName(server: string, tool: string): string {
+  const verb = TOOL_VERBS.find(([pattern]) => pattern.test(tool))?.[1];
+  return verb ?? `${server} · ${tool}`;
 }
 
 export function presentToolCard(params: {
@@ -309,7 +342,7 @@ export function presentToolCard(params: {
   // ---------- shell ----------
   if (srv === 'shell_executor' || srv === 'shell-executor' || srv === 'shell') {
     const cmd = pickArg(args, 'command');
-    return { titleLine: '运行命令', detailLineLabel: '命令', detailLineFull: cmd, detailLineShort: previewCommand(cmd), kind: 'shell' };
+    return { titleLine: '运行', detailLineLabel: '命令', detailLineFull: cmd, detailLineShort: previewCommand(cmd), kind: 'shell' };
   }
 
   // ---------- web ----------
@@ -399,7 +432,7 @@ export function presentToolCard(params: {
       titleLine: '访问链接',
       detailLineLabel: 'URL',
       detailLineFull: maybeUrl,
-      detailLineShort: previewLine(maybeUrl, 55),
+      detailLineShort: previewLine(maybeUrl),
       kind: 'url',
     };
   const maybePath = pickArg(args, 'path');
@@ -421,7 +454,7 @@ export function presentToolCard(params: {
   const about = describeArgs(args);
 
   return {
-    titleLine: `${friendlyServer} · ${tool}`,
+    titleLine: describeToolName(friendlyServer, tool),
     detailLineLabel: about ? '参数' : undefined,
     detailLineFull: about || undefined,
     detailLineShort: about || undefined,

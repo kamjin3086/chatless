@@ -179,7 +179,6 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           </span>
           {(presentation.detailLineShort || presentation.detailLineFull) && (
             <>
-              <span className="text-slate-300 dark:text-slate-600">→</span>
               <span className="text-slate-500 dark:text-slate-400 truncate" title={presentation.detailLineFull}>
                 {presentation.detailLineShort || presentation.detailLineFull}
               </span>

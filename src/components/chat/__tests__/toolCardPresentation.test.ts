@@ -16,14 +16,15 @@ describe('command preview', () => {
     '(Get-ChildItem -Path $env:USERPROFILE\\Downloads -File | ' +
     'Where-Object { $exts -contains $_.Extension } | Measure-Object) | ForEach-Object { \\"$($_.Count)\\" }"';
 
-  it('keeps the front of a long command and drops the tail', () => {
+  it('collapses a long command onto one line and lets the row do the cutting', () => {
+    // A character cap in the data was the wrong place for this: the row knows how much
+    // room it has, the window knows it better than a constant, and a fixed cut throws
+    // away text a wide window could have shown.
     const preview = previewCommand(PS);
     expect(preview.startsWith('powershell -NoProfile -Command')).toBe(true);
-    // Head-and-tail truncation is what produced `... "$(__.Count)" }`: the tail of a
-    // script is its closing punctuation, which tells the reader nothing.
     expect(preview).not.toContain('...');
-    expect(preview.endsWith('…')).toBe(true);
-    expect(preview.length).toBeLessThanOrEqual(71);
+    expect(preview).not.toContain('\n');
+    expect(preview).toContain('$env:USERPROFILE');
   });
 
   it('collapses the newlines of a multi-line script into one line', () => {
@@ -35,9 +36,10 @@ describe('command preview', () => {
     expect(previewCommand('ls -la ~/Downloads')).toBe('ls -la ~/Downloads');
   });
 
-  it('cuts on a word boundary so a flag is not sliced in half', () => {
-    const preview = previewCommand(`git log ${'--oneline '.repeat(20)}`);
-    expect(preview.endsWith('--oneline…')).toBe(true);
+  it('does not invent an ellipsis the row will draw anyway', () => {
+    expect(previewCommand(`git log ${'--oneline '.repeat(20)}`)).not.toContain(
+      '…',
+    );
   });
 
   it('shows the command in full when the card is expanded', () => {
@@ -46,22 +48,23 @@ describe('command preview', () => {
       tool: 'execute',
       args: { command: PS },
     });
-    expect(card.titleLine).toBe('运行命令');
+    expect(card.titleLine).toBe('运行');
     expect(card.detailLineFull).toBe(PS);
     expect(card.detailLineShort).toBe(previewCommand(PS));
   });
 });
 
 describe('external tool preview', () => {
-  it('names what the tool was asked about, not only which tool it was', () => {
+  it('reads as a sentence about what was asked', () => {
     const card = presentToolCard({
       server: 'weather',
       tool: 'get_forecast',
       args: { city: '上海', units: 'metric', lang: 'zh-CN' },
     });
-    expect(card.titleLine).toContain('weather');
-    expect(card.titleLine).toContain('get_forecast');
-    expect(card.detailLineShort).toContain('上海');
+    expect(card.titleLine).toBe('天气查询');
+    // The title already names the call, so the detail is the value: `天气查询 上海`, not
+    // `天气查询 → city=上海`.
+    expect(card.detailLineShort).toBe('上海');
     // Settings that tune the call are noise in a one-line preview.
     expect(card.detailLineShort).not.toContain('metric');
     expect(card.detailLineShort).not.toContain('zh-CN');
@@ -110,6 +113,15 @@ describe('external tool preview', () => {
     const card = presentToolCard({ server: 'weather', tool: 'ping', args: {} });
     expect(card.titleLine).toBe('weather · ping');
     expect(card.detailLineShort ?? '').toBe('');
+  });
+
+  it('keeps the raw name when no verb can be guessed safely', () => {
+    // A confident wrong verb reads worse than `srvr · do_thing`, so the vocabulary stays
+    // short and everything it does claim is pinned here.
+    expect(
+      presentToolCard({ server: 'jira', tool: 'transition_issue', args: {} })
+        .titleLine,
+    ).toBe('jira · transition_issue');
   });
 });
 
