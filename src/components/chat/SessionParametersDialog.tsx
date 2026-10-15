@@ -87,8 +87,8 @@ export function SessionParametersDialog({
     DEFAULT_MODEL_PARAMETERS,
   );
   const t = useLocaleStore((s) => s.t);
-  // What this conversation may choose: an empty list means the table never verified this
-  // provider/model, so the only honest options are inherit and suppress.
+  // What this conversation may choose. An unverified model gets the generic tiers - they
+  // are sent through reasoning_effort and labelled as unverified, not hidden.
   const thinkingTiers = supportedThinkingLevels(providerName, modelId);
   const thinkingChoice = readSessionThinkingChoice(parameters);
   const thinkingOptions: ThinkingLevel[] =

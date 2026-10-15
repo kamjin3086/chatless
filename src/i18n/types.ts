@@ -49,6 +49,8 @@ export type TranslationKey =
   | 'thinkingSwitch.scope.conversation'
   | 'thinkingSwitch.scope.message'
   | 'thinkingSwitch.unverifiedHint'
+  | 'thinkingSwitch.noTiersHint'
+  | 'thinkingSwitch.suppressOption'
   | 'thinkingSwitch.staleHint'
   | 'thinkingSwitch.pendingHint'
   | 'thinkingShortcut.help'

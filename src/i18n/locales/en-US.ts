@@ -54,7 +54,10 @@ const enUS: TranslationDict = {
   'thinkingSwitch.scope.conversation': 'Apply to this conversation only',
   'thinkingSwitch.scope.message': 'Apply to the next message only',
   'thinkingSwitch.unverifiedHint':
-    'This model is unverified: no thinking level is sent',
+    'Endpoint unverified: a chosen tier goes out as reasoning_effort',
+  'thinkingSwitch.noTiersHint':
+    'This model offers no thinking tier; auto and send-nothing still apply',
+  'thinkingSwitch.suppressOption': 'Send no thinking level',
   'thinkingSwitch.staleHint':
     'The saved level is not offered by this model, so nothing is sent',
   'thinkingSwitch.pendingHint': 'Sent once, with the next message',

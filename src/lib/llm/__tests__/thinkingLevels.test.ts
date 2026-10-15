@@ -7,6 +7,9 @@ import {
   THINKING_LEVEL_ORDER,
   findThinkingMapping,
   resolveThinkingModelName,
+  GENERIC_THINKING_LEVELS,
+  isThinkingDialectKnown,
+  isVerifiedThinkingModel,
   supportedThinkingLevels,
   thinkingWireFor,
 } from '../thinkingLevels';
@@ -101,6 +104,7 @@ describe('thinking level vocabulary and mapping', () => {
       field: 'reasoning_effort',
       value: 'medium',
       overrides: false,
+      verified: true,
     });
   });
 
@@ -108,10 +112,42 @@ describe('thinking level vocabulary and mapping', () => {
     expect(thinkingWireFor('OpenAI', 'o4-mini', 'off')?.value).toBe('none');
   });
 
-  it('reports no supported levels for a model the table has never seen', () => {
+  it('offers the generic tiers to an endpoint the table has never met', () => {
+    // Withholding the tiers left the control dead for the endpoints the owner actually
+    // runs; "unverified" is now something the wire says out loud, not a reason to hide
+    // the choice.
+    expect(isVerifiedThinkingModel('Nebula Router', 'qwen-flash')).toBe(false);
+    expect(isThinkingDialectKnown('Nebula Router')).toBe(false);
+    expect(supportedThinkingLevels('Nebula Router', 'qwen-flash')).toEqual([
+      'minimal',
+      'low',
+      'medium',
+      'high',
+    ]);
+    expect(thinkingWireFor('Nebula Router', 'qwen-flash', 'medium')).toEqual({
+      carrier: 'reasoning_effort',
+      field: 'reasoning_effort',
+      value: 'medium',
+      verified: false,
+    });
+  });
+
+  it('invents nothing for a service the table knows and declined', () => {
+    // gpt-4o has no thinking field at all; guessing one would trade a dead control for a
+    // request the API rejects.
     expect(findThinkingMapping('OpenAI', 'gpt-4o')).toBeNull();
+    expect(isThinkingDialectKnown('OpenAI')).toBe(true);
     expect(supportedThinkingLevels('OpenAI', 'gpt-4o')).toEqual([]);
     expect(thinkingWireFor('OpenAI', 'gpt-4o', 'medium')).toBeNull();
+  });
+
+  it('refuses a tier no generic field can express', () => {
+    // xhigh and max stay provider-specific; inventing a value for them would be a guess
+    // dressed up as a mapping.
+    expect(thinkingWireFor('Nebula Router', 'qwen-flash', 'xhigh')).toBeNull();
+    expect(
+      supportedThinkingLevels('Nebula Router', 'qwen-flash'),
+    ).not.toContain('off');
   });
 
   it('does not offer a level a mapped model does not accept', () => {
@@ -151,12 +187,29 @@ describe('thinking level through the parameter policy', () => {
     expect(out).not.toHaveProperty('thinkingLevel');
   });
 
-  it('never leaks the generic field to an unmapped provider', () => {
-    const out = ParameterPolicyEngine.apply('Some Router', 'qwen3-plain', {
-      thinkingLevel: 'medium',
-    });
-    expect(out).not.toHaveProperty('thinkingLevel');
-    expect(out).not.toHaveProperty('reasoning_effort');
+  it('sends the generic field for an unmapped provider only when a level was chosen', () => {
+    // Nothing is sent unless the user picks a tier, so an endpoint that refuses unknown
+    // fields sees exactly the request it saw before this change.
+    expect(
+      ParameterPolicyEngine.apply('Some Router', 'qwen3-plain', {
+        thinkingLevel: 'medium',
+      }),
+    ).toMatchObject({ reasoning_effort: 'medium' });
+    expect(
+      ParameterPolicyEngine.apply('Some Router', 'qwen3-plain', {
+        thinkingLevel: 'auto',
+      }),
+    ).not.toHaveProperty('reasoning_effort');
+    expect(
+      ParameterPolicyEngine.apply('Some Router', 'qwen3-plain', {
+        enableThinkingLevel: false,
+      }),
+    ).not.toHaveProperty('reasoning_effort');
+    expect(
+      ParameterPolicyEngine.apply('Some Router', 'qwen3-plain', {
+        thinkingLevel: 'medium',
+      }),
+    ).not.toHaveProperty('thinkingLevel');
   });
 
   it('lets an explicit provider-native value beat the level', () => {

@@ -72,22 +72,58 @@ describe('effective thinking level', () => {
     expect(view.source).toBe('message');
   });
 
-  it('offers nothing on a provider it has not verified', () => {
+  it('offers the generic tiers on a provider it has not verified, and says who they are', () => {
     const view = effectiveThinking({ ...UNKNOWN, modelParams: {} });
     expect(view.level).toBe('auto');
     expect(view.source).toBe('unverified');
-    expect(view.options).toEqual([]);
+    expect(view.verified).toBe(false);
+    expect(view.options).toEqual(['auto', 'minimal', 'low', 'medium', 'high']);
   });
 
-  it('still calls an unverified model unverified when a level was saved', () => {
-    // A choice saved under another model, or before the table changed: the honest answer
-    // is "this model is not verified", not the stored value.
+  it('shows a saved level on an unverified model and marks it generic', () => {
+    // It will be sent, through the generic field, so hiding the choice would be the lie;
+    // `verified: false` is where the uncertainty belongs.
     const view = effectiveThinking({
       ...UNKNOWN,
       modelParams: { enableThinkingLevel: true, thinkingLevel: 'high' },
     });
+    expect(view.level).toBe('high');
+    expect(view.source).toBe('model');
+    expect(view.verified).toBe(false);
+  });
+
+  it('marks a tier no generic field can express as not going out', () => {
+    const view = effectiveThinking({
+      ...UNKNOWN,
+      modelParams: { enableThinkingLevel: true, thinkingLevel: 'xhigh' },
+    });
     expect(view.level).toBe('auto');
-    expect(view.source).toBe('unverified');
+    expect(view.stale).toBe(true);
+  });
+
+  it('lets one message refuse the level its session set', () => {
+    // The "none" the control needs: suppressing outranks a lower scope rather than
+    // inheriting past it, so a single message can go out with no thinking level.
+    const session: Partial<ModelParameters> = {
+      enableThinkingLevel: true,
+      thinkingLevel: 'high',
+    };
+    const next = applyThinkingChoice({
+      modelParams: {},
+      conversationParams: session,
+      messageParams: null,
+      scope: 'message',
+      level: 'suppress',
+    });
+    expect(readThinkingChoice(next.messageParams)).toBe('suppress');
+    const view = effectiveThinking({
+      ...KNOWN,
+      modelParams: next.modelParams,
+      conversationParams: next.conversationParams,
+      messageParams: next.messageParams,
+    });
+    expect(view.level).toBe('auto');
+    expect(view.source).toBe('message');
   });
 
   it('offers auto plus the tiers this model actually has', () => {
