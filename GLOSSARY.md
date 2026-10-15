@@ -91,3 +91,24 @@ _Avoid_: 全局思考开关（不存在一个地方存着所有答案）
 **思考载体 (ThinkingCarrier)**:
 某个 provider 表达思考等级的方式：`reasoning_effort` / `thinking_level` / `thinking_budget` / `ollama_think` / `model_alias` / `unsupported`。等级是用户的话，载体是网关的话；两者分开，加一家 provider 就是往映射表里加一行数据，而不是多一个分支。
 _Avoid_: provider 特判、reasoning_effort（那只是其中一种载体）
+
+### Provider 与密钥
+
+**目录 (catalogue)**:
+应用内置的 provider 清单。判断"这是不是用户自己的端点"，唯一依据是它在不在目录里。
+_Avoid_: 用 `isUserAdded` 判断自建（见下）
+
+**isUserAdded**:
+只说明"用户启用了这个 provider"。从目录里启用 Azure OpenAI、OpenRouter、Groq、New API 时它同样是 `true`。
+_Avoid_: 自建标记、用户添加的端点——它区分不了目录内与目录外，曾经因此让所有托管服务静默变成免密（徽标消失、发送门打开、请求吃 401）
+
+**requiresKey**:
+"要不要催用户填密钥"，由 `resolveRequiresKey({catalog, strategy, url})` 一处得出：先看本地证据（回环地址、`*.localhost`、`10.`/`192.168.`/`172.16-31.` 私网段、方括号 IPv6、ollama 策略），再看目录答案，都不认识就按"用户自己的、免密"处理。
+_Avoid_: 在启动流程里另行按目录重算一遍（那正是自建端点每次重启都被改回"未配置密钥"的原因）
+
+**密钥存在即使用**:
+`requiresKey` 决定的是要不要提示用户填，不是要不要发 `Authorization`。只要存着密钥就发出去，否则一个"免密但用户填了密钥"的端点会静默 401。
+
+**免密端点 (keyless)**:
+判定为不需要密钥的端点，不发 `Authorization` 头。
+_Avoid_: 占位密钥（`nopass` 之类写进代码的假凭据）——它毁掉了"已配置"与"未配置"的区别，"未配置密钥"徽标会退化成一次裸 401；服务端真要求非空 token 时，由用户自己在该 provider 的密钥栏里填哨兵值

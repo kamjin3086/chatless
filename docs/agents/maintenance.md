@@ -115,6 +115,30 @@ still works (`docs/tauri-window-pitfalls.md`).
   it is a formatting-only commit of ~759 files - the owner's call, not something to slip into
   a change PR. Judge cleanliness on file bytes: `biome format --stdin-file-path` has reported
   unformatted files as clean, and one whole-tree reflow got justified that way.
+- **`gh`'s GraphQL path fails at random and the REST path is the way through.** `gh pr
+  create` / `gh issue create` ride GraphQL and die with
+  `Post "https://api.github.com/graphql": EOF` on a flaky link, while `api.github.com` over
+  REST keeps working. The fallbacks are all used here and all work:
+  `gh api -X POST repos/<owner>/<repo>/pulls --input file.json`,
+  `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=... -f body=...`,
+  `gh api -X PUT repos/<owner>/<repo>/pulls/<n>/merge -f merge_method=squash`,
+  `gh api -X POST repos/<owner>/<repo>/issues/<n>/comments -f body=...`.
+- **`git push` can be dead while the API is fine.** TLS to `github.com:443` failed for every
+  push across a whole session while `gh api` answered normally. A commit can be moved without
+  git's transport: create a blob per file, `POST /git/trees` with `base_tree`,
+  `POST /git/commits` with the current main sha as parent, then `POST /git/refs` (or
+  `PATCH /git/refs/heads/<branch>` with `force`). The resulting sha differs from the local
+  one - same content, different object - so state it in the PR rather than quoting a local
+  sha as if it were the remote head.
+- **Which surfaces are empty outside Tauri, and what to check instead.** `/settings` renders
+  nothing on a plain dev server - only the `- region "Notifications alt+T"` node - because the
+  provider list comes from the Tauri store; the chat page needs a live session, which needs a
+  model, which needs that same store. So a browser proves layout and CSS on the chat shell
+  (the empty state, the composer) and proves nothing about provider rows, key inputs, badges
+  or dialogs. Do not spend an hour rediscovering this: for those surfaces the honest options
+  are a component-level test, or a manual check on a real build by the owner, and a claim
+  should say which one it is. A dev-only store stub is the better fix and is still not built
+  (#124).
 - **`pnpm typecheck` never looks at a test file.** That is where a test could pass a field
   production code had deleted. `pnpm typecheck:tests` covers `src` tests plus the
   `docs/acceptance` audits `pnpm test` runs, and is part of `pnpm verify` and CI; the
