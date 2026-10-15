@@ -14,18 +14,25 @@
  *     quietly reinterpreted as a nearby level the model may not accept.
  */
 
-/** Ordered from "let the model decide" through "think as long as you need". */
-export type ThinkingLevel =
-  | 'auto'
-  | 'off'
-  | 'minimal'
-  | 'low'
-  | 'medium'
-  | 'high'
-  | 'xhigh'
-  /** Anthropic's deepest rung. Only that provider's rows offer it, so no other model
-   * is ever shown a tier its API would refuse. */
-  | 'max';
+/**
+ * Ordered from "let the model decide" through "think as long as you need". A value list
+ * rather than a bare union so anything reading untrusted storage can ask, at runtime,
+ * whether a level exists instead of keeping its own copy of the answer.
+ */
+export const THINKING_LEVELS = [
+  'auto',
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  // Anthropic's deepest rung. Only that provider's rows offer it, so no other model
+  // is ever shown a tier its API would refuse.
+  'max',
+] as const;
+
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 /** How a level reaches a given provider. */
 export type ThinkingCarrier =

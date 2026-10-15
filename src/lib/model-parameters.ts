@@ -1,9 +1,128 @@
-import { specializedStorage } from './storage';
 import { migrateLegacyThinkingBoolean } from '@/lib/chat/thinkingScope';
-import { DEFAULT_MODEL_PARAMETERS } from '@/types/model-params';
-import type { ModelParameters } from '@/types/model-params';
-import { adaptFieldsForProvider } from './llm/provider-field-support';
+import {
+  DEFAULT_MODEL_PARAMETERS,
+  MODEL_PARAMETER_LIMITS,
+} from '@/types/model-params';
+import type {
+  ModelParameterPatch,
+  ModelParameters,
+} from '@/types/model-params';
 import { resolveOutputBudget } from './llm/outputBudget';
+import { adaptFieldsForProvider } from './llm/provider-field-support';
+import { THINKING_LEVELS } from './llm/thinkingLevels';
+import { specializedStorage } from './storage';
+
+type FieldShape =
+  | { kind: 'number' }
+  | { kind: 'int' }
+  | { kind: 'boolean' }
+  | { kind: 'string' }
+  | { kind: 'enum'; allowed: readonly string[] }
+  | { kind: 'stringArray' }
+  | { kind: 'object' };
+
+/**
+ * Every field a parameter bag may carry and what a trustworthy value looks like.
+ *
+ * The bag is JSON written by older versions of this app and edited by hand often enough to
+ * be worth expecting the unexpected. Without this table a stored `"0.7"`, a `null` array or
+ * a temperature of 99 went straight through to a request, and one of those shapes reached a
+ * user as a crash (#137). A field this table does not name is a field nothing should be
+ * reading either, so it is dropped rather than passed along.
+ */
+const PARAM_FIELDS: Record<string, FieldShape> = {
+  temperature: { kind: 'number' },
+  maxTokens: { kind: 'int' },
+  contextWindow: { kind: 'int' },
+  observedContextWindow: { kind: 'int' },
+  topP: { kind: 'number' },
+  topK: { kind: 'int' },
+  minP: { kind: 'number' },
+  frequencyPenalty: { kind: 'number' },
+  presencePenalty: { kind: 'number' },
+  stopSequences: { kind: 'stringArray' },
+  thinking: { kind: 'boolean' },
+  thinkingLevel: { kind: 'enum', allowed: THINKING_LEVELS },
+  streaming: { kind: 'boolean' },
+  format: { kind: 'string' },
+  responseFormat: { kind: 'enum', allowed: ['none', 'json', 'schema'] },
+  responseFormatSchema: { kind: 'string' },
+  advancedOptions: { kind: 'object' },
+  enableTemperature: { kind: 'boolean' },
+  enableMaxTokens: { kind: 'boolean' },
+  enableTopP: { kind: 'boolean' },
+  enableTopK: { kind: 'boolean' },
+  enableMinP: { kind: 'boolean' },
+  enableFrequencyPenalty: { kind: 'boolean' },
+  enablePresencePenalty: { kind: 'boolean' },
+  enableStopSequences: { kind: 'boolean' },
+  enableThinking: { kind: 'boolean' },
+  enableThinkingLevel: { kind: 'boolean' },
+  enableStreaming: { kind: 'boolean' },
+  enableFormat: { kind: 'boolean' },
+};
+
+function cleanNumber(raw: number, key: string): number {
+  const limits = (
+    MODEL_PARAMETER_LIMITS as Record<string, Partial<ModelParameters>>
+  )[key] as
+    | { min?: number; max?: number; inputMin?: number; inputMax?: number }
+    | undefined;
+  const low = limits?.inputMin ?? limits?.min;
+  const high = limits?.inputMax ?? limits?.max;
+  let value = raw;
+  if (low !== undefined && value < low) value = low;
+  if (high !== undefined && value > high) value = high;
+  return value;
+}
+
+function cleanValue(raw: unknown, shape: FieldShape, key: string): unknown {
+  switch (shape.kind) {
+    case 'number':
+      return typeof raw === 'number' && Number.isFinite(raw)
+        ? cleanNumber(raw, key)
+        : undefined;
+    case 'int':
+      return typeof raw === 'number' && Number.isFinite(raw)
+        ? Math.round(cleanNumber(raw, key))
+        : undefined;
+    case 'boolean':
+      return typeof raw === 'boolean' ? raw : undefined;
+    case 'string':
+      return typeof raw === 'string' ? raw : undefined;
+    case 'enum':
+      return shape.allowed.includes(raw as string) ? raw : undefined;
+    case 'stringArray':
+      return Array.isArray(raw)
+        ? raw.filter((x) => typeof x === 'string')
+        : undefined;
+    case 'object':
+      return raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? raw
+        : undefined;
+  }
+}
+
+/**
+ * Clean one scope's bag without completing it.
+ *
+ * A session that never mentioned stop sequences must keep not mentioning it: `auto` and
+ * "this scope has no opinion" are carried by absence, and filling the gaps would make the
+ * session appear to have chosen every model default. Untrustworthy values are dropped,
+ * which is the same as never having chosen them.
+ */
+export function sanitizeParameterPatch(raw: unknown): ModelParameterPatch {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const source = raw as Record<string, unknown>;
+  const patch: ModelParameterPatch = {};
+  for (const [key, shape] of Object.entries(PARAM_FIELDS)) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const value = cleanValue(source[key], shape, key);
+    if (value === undefined) continue;
+    (patch as Record<string, unknown>)[key] = value;
+  }
+  return patch;
+}
 
 export class ModelParametersService {
   /**
@@ -23,11 +142,17 @@ export class ModelParametersService {
     // stays available for the one thing that must know a migration happened: the control's
     // explanation. Defaults are not migrated - they are this code's own baseline, not a
     // user's old choice.
-    return migrateLegacyThinkingBoolean({
-      provider: providerName,
-      modelId,
-      params: saved,
-    }).params;
+    // Types are checked once, here, so no consumer has to re-guess what a hand-edited or
+    // older store may contain. Absence is deliberately preserved: a migration that removed a
+    // retired field, or a scope that never mentioned one, means something that a default
+    // would erase.
+    return sanitizeParameterPatch(
+      migrateLegacyThinkingBoolean({
+        provider: providerName,
+        modelId,
+        params: saved,
+      }).params,
+    ) as ModelParameters;
   }
 
   /**
@@ -156,7 +281,7 @@ export class ModelParametersService {
    */
   static resolveBudgetParameters(
     model: ModelParameters,
-    session?: ModelParameters | null,
+    session?: ModelParameterPatch | null,
   ): ModelParameters {
     if (!session) return model;
     return {
@@ -181,9 +306,13 @@ export class ModelParametersService {
   /**
    * 将模型参数转换为聊天选项格式
    */
-  static convertToChatOptions(
-    parameters: ModelParameters,
-  ): Record<string, any> {
+  static convertToChatOptions(input: ModelParameterPatch): Record<string, any> {
+    // A conversation or a message hands this a patch - only what the user touched - so it
+    // is cleaned here rather than trusted. Absence is preserved on purpose; a wrong type is
+    // dropped as if the value had never been chosen.
+    const parameters: ModelParameters = sanitizeParameterPatch(
+      input,
+    ) as ModelParameters;
     // 仅当用户"启用"某参数或者值与默认不同，才传给 Provider
     const opts: Record<string, any> = { ...(parameters.advancedOptions || {}) };
     const def = DEFAULT_MODEL_PARAMETERS;

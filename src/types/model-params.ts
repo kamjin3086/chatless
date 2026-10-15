@@ -55,6 +55,15 @@ export interface ModelParameters {
   advancedOptions?: Record<string, any>;
 }
 
+/**
+ * What one scope (a session, the next message) actually stored: only the keys the user
+ * touched. It is deliberately not interchangeable with `ModelParameters` - a scope that
+ * never mentioned stop sequences does not have the key, and code that reads a patch as if
+ * it were complete is how `undefined is not an object` reaches a user. Take this type when
+ * reading a scope; call `normalizeModelParameters` when a complete bag is needed.
+ */
+export type ModelParameterPatch = Partial<ModelParameters>;
+
 export interface ModelConfig {
   providerName: string;
   modelId: string;
