@@ -8,7 +8,6 @@ import type {
   ModelParameters,
 } from '@/types/model-params';
 import { resolveOutputBudget } from './llm/outputBudget';
-import { adaptFieldsForProvider } from './llm/provider-field-support';
 import { THINKING_LEVELS } from './llm/thinkingLevels';
 import { specializedStorage } from './storage';
 
