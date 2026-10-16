@@ -133,7 +133,7 @@ export class AppCleanupService {
         await this.cleanup();
       });
 
-      } catch (error) {
+    } catch (error) {
       console.warn('⚠️ 设置窗口关闭监听器失败:', error);
       this.setupFallbackCloseListener();
     }
