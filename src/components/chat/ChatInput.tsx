@@ -1,6 +1,14 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
+import {
+  commitHistory,
+  composerHistory,
+  historyShortcut,
+  redoHistory,
+  undoHistory,
+} from "./composerHistory";
+import { nextInputHeight, oneLineHeight } from "./inputHeight";
 import { ListChecks, Send, StopCircle } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
@@ -182,7 +190,11 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
   // —— 输入框高度控制：默认自适应，支持顶部拖拽，最大不超过视口 40% ——
-  const MIN_INPUT_HEIGHT = 66; // 与样式中的 min-h 保持一致
+  const MIN_INPUT_HEIGHT = 66; // absolute floor; the real one is measured per element
+  // The composer's own undo list; see ./composerHistory for why native undo is not enough.
+  const historyRef = useRef(composerHistory(""));
+  const historyScopeRef = useRef<string | null>(conversationId ?? null);
+  const historyScope = conversationId ?? null;
   const [maxInputHeight, setMaxInputHeight] = useState<number>(Math.floor(window.innerHeight * 0.4));
   const sessionManualHeight = useUiSession((s: any)=> s.chatInputHeight);
   const setSessionManualHeight = useUiSession((s: any)=> s.setChatInputHeight);
@@ -265,6 +277,8 @@ export function ChatInput({
     const convId = conversationId || useChatStore.getState().currentConversationId;
     if (lastStreamConvId && convId && lastStreamConvId === convId) {
       setInputValue("");
+      // The cleared box is a fresh baseline: undo after a send must not put the sent text back.
+      historyRef.current = composerHistory("");
       setAttachedDocument(null);
       setAttachedImages([]);
       try { clearInputDraft(convId); } catch { /* noop */ }
@@ -273,7 +287,18 @@ export function ChatInput({
         // 若用户手动设置过高度，则保持；否则自适应到内容高度
         const mh = (sessionManualHeight ?? manualHeight);
         if (mh !== null) {
-          textareaRef.current.style.height = `${Math.max(MIN_INPUT_HEIGHT, mh)}px`;
+          const styles = window.getComputedStyle(textareaRef.current);
+          textareaRef.current.style.height = `${nextInputHeight({
+            contentHeight: mh,
+            oneLine: oneLineHeight({
+              lineHeight: styles.lineHeight,
+              fontSize: styles.fontSize,
+              paddingTop: styles.paddingTop,
+              paddingBottom: styles.paddingBottom,
+            }),
+            limit: Math.max(MIN_INPUT_HEIGHT, maxInputHeight),
+            manual: mh,
+          })}px`;
         } else {
           textareaRef.current.style.height = 'auto';
         }
@@ -314,20 +339,51 @@ export function ChatInput({
     }
   };
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // A different conversation is a different draft, not an edit of this one: without this,
+      // undo would carry text from one conversation into another.
+      if (historyScopeRef.current !== historyScope) {
+        historyScopeRef.current = historyScope;
+        historyRef.current = composerHistory(inputValue);
+      } else {
+        historyRef.current = commitHistory(historyRef.current, inputValue);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inputValue, conversationId, historyScope]);
+
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const limit = Math.max(MIN_INPUT_HEIGHT, maxInputHeight);
-    // 若用户未手动设置高度，则根据内容自适应增长，封顶 limit
-    if (manualHeight === null) {
+    // One line of the element's own metrics is the floor. The old constant (rows=3 plus
+    // MIN_INPUT_HEIGHT, kept in step with a CSS class by hand) made an empty composer three
+    // lines tall and went wrong with any font or density change.
+    const styles =
+      typeof window !== 'undefined' ? window.getComputedStyle(textarea) : ({} as CSSStyleDeclaration);
+    const oneLine = Math.max(
+      24,
+      oneLineHeight({
+        lineHeight: styles.lineHeight,
+        fontSize: styles.fontSize,
+        paddingTop: styles.paddingTop,
+        paddingBottom: styles.paddingBottom,
+      }),
+    );
+    const limit = Math.max(oneLine, maxInputHeight);
+    const contentHeight = (() => {
+      const previous = textarea.style.height;
       textarea.style.height = 'auto';
-      const next = Math.min(Math.max(textarea.scrollHeight, MIN_INPUT_HEIGHT), limit);
-      textarea.style.height = `${next}px`;
-    } else {
-      // 采用手动高度，但仍然设置最大高度限制
-      const applied = Math.min(Math.max(manualHeight, MIN_INPUT_HEIGHT), limit);
-      textarea.style.height = `${applied}px`;
-    }
+      const height = textarea.scrollHeight;
+      textarea.style.height = previous;
+      return height;
+    })();
+    textarea.style.height = `${nextInputHeight({
+      contentHeight,
+      oneLine,
+      limit,
+      manual: manualHeight,
+    })}px`;
     textarea.style.maxHeight = `${limit}px`;
   };
 
@@ -665,6 +721,35 @@ export function ChatInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Ctrl+Z / Cmd+Z undo, Ctrl+Shift+Z (and Ctrl+Y on Windows) redo - while the composer is
+    // the thing being typed in. Prevented here so the browser does not also undo underneath.
+    const isComposing =
+      (e.nativeEvent as { isComposing?: boolean })?.isComposing === true;
+    const shortcut = isComposing ? null : historyShortcut(e);
+    if (shortcut) {
+      // Whatever is on screen right now is part of the user's text, so commit it before
+      // stepping - otherwise a Ctrl+Z within the debounce window throws away what was just
+      // typed and cannot redo it.
+      historyRef.current =
+        historyScopeRef.current === historyScope
+          ? commitHistory(historyRef.current, inputValue)
+          : composerHistory(inputValue);
+      historyScopeRef.current = historyScope;
+      const step =
+        shortcut === "undo" ? undoHistory(historyRef.current) : redoHistory(historyRef.current);
+      if (step === historyRef.current) return; // nothing to do: let the browser try
+      e.preventDefault();
+      historyRef.current = step;
+      setInputValue(step.present);
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(step.present.length, step.present.length);
+        adjustTextareaHeight();
+      });
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       // 1) 若 @ 面板打开，回车只代入选择，不发送（由面板自身处理 onSelect）
       if (mentionOpen) { e.preventDefault(); return; }
@@ -819,7 +904,7 @@ export function ChatInput({
 
   return (
     <div className={cn(
-      "input-area w-full max-w-[var(--chat-content-max)] mx-auto mb-2",
+      "input-area chat-content mb-2",
       disabled && "opacity-45 pointer-events-none"
     )}>
       {/* 编辑模式提示栏 */}
@@ -1061,8 +1146,8 @@ export function ChatInput({
             "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
             (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-slate-900 dark:caret-slate-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-slate-900 dark:text-slate-100 tabular-nums"
           )}
-          style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }}
-          rows={3}
+          style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }} // adjustTextareaHeight owns the real limit
+          rows={1}
           disabled={disabled || isParsingDocument}
         />
         <McpMentionPanel
