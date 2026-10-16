@@ -7,7 +7,7 @@ import { Image } from '@tauri-apps/api/image';
 import { defaultWindowIcon } from '@tauri-apps/api/app';
 import { platform } from '@tauri-apps/plugin-os';
 import { translate } from '@/i18n';
-import { RESTORE_STEPS, trayClickAction } from './trayClick';
+import { restoreWindow, trayClickAction } from './trayClick';
 import { useLocaleStore } from '@/store/localeStore';
 
 // 系统托盘管理类
@@ -100,32 +100,10 @@ class SystemTrayManager {
    * Bring the window forward, whatever state it is in. A minimized window is "visible", so
    * `show()` alone leaves it minimized in the taskbar - the click that appears to do nothing.
    */
-  private async restoreWindow() {
-    try {
-      const window = getCurrentWindow();
-      for (const step of RESTORE_STEPS) {
-        if (step === 'unminimize') await window.unminimize();
-        else if (step === 'show') await window.show();
-        else await window.setFocus();
-      }
-    } catch (error) {
-      console.error('恢复窗口失败:', error);
-    }
-  }
-
-  // 显示窗口
-  private async showWindow() {
-    await this.restoreWindow();
-  }
-
-  // 隐藏窗口
-  private async hideWindow() {
-    try {
-      const window = getCurrentWindow();
-      await window.hide();
-    } catch (error) {
-      console.error('隐藏窗口失败:', error);
-    }
+  private async bringWindowForward() {
+    await restoreWindow(getCurrentWindow(), (step, error) =>
+      console.error('restore window step failed:', step, error),
+    );
   }
 
   private async toggleWindow() {
@@ -136,7 +114,7 @@ class SystemTrayManager {
         minimized: await window.isMinimized(),
       });
       if (action === 'hide') await window.hide();
-      else await this.restoreWindow();
+      else await this.bringWindowForward();
     } catch (error) {
       console.error('切换窗口状态失败:', error);
     }
@@ -144,7 +122,7 @@ class SystemTrayManager {
 
   // 确保窗口显示并获取焦点
   private async ensureWindowVisible() {
-    await this.restoreWindow();
+    await this.bringWindowForward();
   }
 
   // 导航到指定页面
