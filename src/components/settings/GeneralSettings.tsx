@@ -136,11 +136,6 @@ export function GeneralSettings() {
             onChange={(v) => setGlobalFontSize(v as any)}
           />
           <ToggleSwitch
-            label={t('settings.general.minimizeToTray')}
-            checked={ui.minimizeToTray}
-            onChange={ui.setMinimizeToTray}
-          />
-          <ToggleSwitch
             label={t('settings.general.closeConfirm')}
             checked={ui.showCloseConfirmation}
             onChange={(v) => ui.setShowCloseConfirmation(v)}

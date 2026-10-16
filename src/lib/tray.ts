@@ -7,6 +7,7 @@ import { Image } from '@tauri-apps/api/image';
 import { defaultWindowIcon } from '@tauri-apps/api/app';
 import { platform } from '@tauri-apps/plugin-os';
 import { translate } from '@/i18n';
+import { RESTORE_STEPS, trayClickAction } from './trayClick';
 import { useLocaleStore } from '@/store/localeStore';
 
 // 系统托盘管理类
@@ -42,7 +43,7 @@ class SystemTrayManager {
           {
             id: 'minimize',
             text: t('tray.minimize'),
-            action: () => this.minimizeToTray()
+            action: () => this.minimizeWindow()
           },
           separator2,
           {
@@ -95,15 +96,26 @@ class SystemTrayManager {
     }
   }
 
-  // 显示窗口
-  private async showWindow() {
+  /**
+   * Bring the window forward, whatever state it is in. A minimized window is "visible", so
+   * `show()` alone leaves it minimized in the taskbar - the click that appears to do nothing.
+   */
+  private async restoreWindow() {
     try {
       const window = getCurrentWindow();
-      await window.show();
-      await window.setFocus();
+      for (const step of RESTORE_STEPS) {
+        if (step === 'unminimize') await window.unminimize();
+        else if (step === 'show') await window.show();
+        else await window.setFocus();
+      }
     } catch (error) {
-      console.error('显示窗口失败:', error);
+      console.error('恢复窗口失败:', error);
     }
+  }
+
+  // 显示窗口
+  private async showWindow() {
+    await this.restoreWindow();
   }
 
   // 隐藏窗口
@@ -116,18 +128,15 @@ class SystemTrayManager {
     }
   }
 
-  // 切换窗口显示/隐藏
   private async toggleWindow() {
     try {
       const window = getCurrentWindow();
-      const isVisible = await window.isVisible();
-      
-      if (isVisible) {
-        await window.hide();
-      } else {
-        await window.show();
-        await window.setFocus();
-      }
+      const action = trayClickAction({
+        visible: await window.isVisible(),
+        minimized: await window.isMinimized(),
+      });
+      if (action === 'hide') await window.hide();
+      else await this.restoreWindow();
     } catch (error) {
       console.error('切换窗口状态失败:', error);
     }
@@ -135,13 +144,7 @@ class SystemTrayManager {
 
   // 确保窗口显示并获取焦点
   private async ensureWindowVisible() {
-    try {
-      const window = getCurrentWindow();
-      await window.show();
-      await window.setFocus();
-    } catch (error) {
-      console.error('显示窗口失败:', error);
-    }
+    await this.restoreWindow();
   }
 
   // 导航到指定页面
@@ -172,13 +175,17 @@ class SystemTrayManager {
     }
   }
 
-  // 最小化到托盘
-  private async minimizeToTray() {
+  /**
+   * Minimize means minimize: the window goes to the taskbar, where the user expects to find it
+   * again. Hiding it here was "minimize to tray", which sent every minimize into the corner
+   * icons and made opening the window a two-step hunt.
+   */
+  private async minimizeWindow() {
     try {
       const window = getCurrentWindow();
-      await window.hide();
+      await window.minimize();
     } catch (error) {
-      console.error('最小化到托盘失败:', error);
+      console.error('最小化窗口失败:', error);
     }
   }
 

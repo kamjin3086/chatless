@@ -12,7 +12,6 @@ const SIDEBAR_WIDTH_KEY = "ui_sidebar_width"; // 'narrow' | 'medium' | 'wide'
 const COLLAPSE_CHAT_SIDEBAR_KEY = "ui_collapse_chat_sidebar";
 const TIMEZONE_KEY = "ui_timezone"; // e.g. 'local', 'UTC', 'UTC+8', 'America/New_York'
 const SHOW_CLOSE_CONFIRMATION_KEY = "ui_show_close_confirmation";
-const MINIMIZE_TO_TRAY_KEY = "ui_minimize_to_tray";
 const CLOSE_TO_TRAY_KEY = "ui_close_to_tray";
 const GLASS_THEME_KEY = "ui_glass_theme";
 const GLASS_WALLPAPER_KEY = "ui_glass_wallpaper_file";
@@ -52,7 +51,6 @@ interface UiPreferencesState {
 
   // 应用行为
   showCloseConfirmation: boolean;
-  minimizeToTray: boolean;
   closeToTray: boolean;
 
   // 逐字淡入强度
@@ -72,7 +70,6 @@ interface UiPreferencesState {
   setCmdPaletteEnabled: (flag: boolean) => void;
   setCmdPaletteShortcut: (sc: string) => void;
   setShowCloseConfirmation: (flag: boolean) => void;
-  setMinimizeToTray: (flag: boolean) => void;
   setCloseToTray: (flag: boolean) => void;
   setCharFadeIntensity: (v: CharFadeIntensity) => void;
   setWindowSizePreset: (v: WindowSizePreset) => void;
@@ -102,7 +99,6 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
   cmdPaletteShortcut: 'ctrl+p',
 
   showCloseConfirmation: true,
-  minimizeToTray: true,
   closeToTray: false,
   charFadeIntensity: 'normal',
   windowSizePreset: '1024x768',
@@ -164,10 +160,6 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     set({ showCloseConfirmation: flag });
     StorageUtil.setItem<boolean>(SHOW_CLOSE_CONFIRMATION_KEY, flag, 'user-preferences.json');
   },
-  setMinimizeToTray: (flag) => {
-    set({ minimizeToTray: flag });
-    StorageUtil.setItem<boolean>(MINIMIZE_TO_TRAY_KEY, flag, 'user-preferences.json');
-  },
   setCloseToTray: (flag) => {
     set({ closeToTray: flag });
     StorageUtil.setItem<boolean>(CLOSE_TO_TRAY_KEY, flag, 'user-preferences.json');
@@ -201,7 +193,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
 
 // 异步初始化首选项
 (async () => {
-  const [showIcon, simple, lowAnim, width, collapse, tz, iconSize, cpEnabled, cpShortcut, showCloseConfirm, minimizeToTray, charFadeIntensity, iconPreset, windowSizePreset, glassTheme, glassWallpaperFile, nightBrightness, closeToTray] = await Promise.all([
+  const [showIcon, simple, lowAnim, width, collapse, tz, iconSize, cpEnabled, cpShortcut, showCloseConfirm, charFadeIntensity, iconPreset, windowSizePreset, glassTheme, glassWallpaperFile, nightBrightness, closeToTray] = await Promise.all([
     StorageUtil.getItem<boolean>(SHOW_SETTING_ICONS_KEY, true, 'user-preferences.json'),
     StorageUtil.getItem<boolean>(SIMPLE_MODE_KEY, true, 'user-preferences.json'),
     StorageUtil.getItem<boolean>(LOW_ANIMATION_KEY, false, 'user-preferences.json'),
@@ -212,7 +204,6 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     StorageUtil.getItem<boolean>('ui_cmd_palette_enabled', true, 'user-preferences.json'),
     StorageUtil.getItem<string>('ui_cmd_palette_shortcut', 'ctrl+p', 'user-preferences.json'),
     StorageUtil.getItem<boolean>(SHOW_CLOSE_CONFIRMATION_KEY, true, 'user-preferences.json'),
-    StorageUtil.getItem<boolean>(MINIMIZE_TO_TRAY_KEY, true, 'user-preferences.json'),
     StorageUtil.getItem<CharFadeIntensity>('ui_char_fade_intensity', 'normal', 'user-preferences.json'),
     StorageUtil.getItem<SectionIconPreset>('ui_settings_icon_preset', 'brand', 'user-preferences.json'),
     StorageUtil.getItem<WindowSizePreset>('ui_window_size_preset', '1024x768', 'user-preferences.json'),
@@ -233,7 +224,6 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     cmdPaletteEnabled: cpEnabled ?? true,
     cmdPaletteShortcut: cpShortcut || 'ctrl+p',
     showCloseConfirmation: showCloseConfirm ?? true,
-    minimizeToTray: minimizeToTray ?? true,
     closeToTray: closeToTray ?? false,
     charFadeIntensity: (charFadeIntensity as CharFadeIntensity) ?? 'normal',
     settingsIconPreset: (iconPreset as SectionIconPreset) ?? 'brand',
