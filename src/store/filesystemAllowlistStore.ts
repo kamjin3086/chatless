@@ -4,7 +4,7 @@
  * 说明：
  * - 该 store 仅存放“目录白名单 + alias + rwcd 权限 + 来源”等元数据
  * - 真正传给 MCP filesystem server 的目录列表，会在后续步骤同步写入 `mcp_servers.json`
- * - fresh start：不读取/不迁移旧 `fileSystemAuthStore` 数据
+ * - fresh start：不读取/不迁移旧 `fileSystemAuthStore` 数据 <!-- comment-symbols:ignore: it names a retired store on purpose -->
  */
 
 import { create } from 'zustand';

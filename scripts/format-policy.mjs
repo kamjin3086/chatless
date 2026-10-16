@@ -33,9 +33,33 @@ const CODE_EXT = /\.(ts|tsx|mts|cts|mjs|cjs|js)$/;
 export class FormatCheckUnavailable extends Error {}
 
 /** The one decision this file exists for. */
-export function decide({ headClean, workClean }) {
-  if (workClean) return 'clean';
+export function decide({
+  headClean,
+  workClean,
+  reflow = 0,
+  reflowMinLines = 20,
+}) {
+  if (workClean) {
+    if (headClean) return 'clean';
+    // A file HEAD left unformatted that is now clean was reflowed. Small ones - an edit that
+    // happens to clear the offending line - are not what this guards, so size decides.
+    return reflow >= reflowMinLines ? 'reflow' : 'clean';
+  }
   return headClean ? 'regression' : 'pre-existing';
+}
+
+/** Lines that differ between HEAD and what is being committed (order-insensitive). */
+export function changedLineCount(base, bytes) {
+  const before = new Set(String(base).split('\n'));
+  const after = String(bytes).split('\n');
+  let differing = 0;
+  for (const line of after) if (!before.has(line)) differing += 1;
+  return differing;
+}
+
+/** The message for a reflow, said once wherever the state is detected. */
+export function describeReflow(files) {
+  return `reflowed ${files.length} file(s) HEAD left unformatted: ${files.join(', ')} - that buries the change under biome's opinion. Put the formatting in its own commit, or pass --allow-reflow and say so in the PR.`;
 }
 
 /** Biome's exit status is the cleanliness signal; --config-path keeps the repo's rules. */
@@ -86,7 +110,7 @@ const indexText = (root, file) => git(root, ['show', `:${file}`], true);
  */
 export function assess(
   files,
-  { root, isClean, subject = headText, head = headText },
+  { root, isClean, subject = headText, head = headText, reflowMinLines = 20 },
 ) {
   return files
     .filter((file) => CODE_EXT.test(file))
@@ -95,15 +119,24 @@ export function assess(
       if (bytes === null)
         throw new FormatCheckUnavailable(`cannot read ${file}`);
       const workClean = isClean(bytes, file);
-      if (workClean)
-        return { file, headClean: true, workClean, status: 'clean' };
       const base = head(root, file);
+      // A file whose bytes did not move cannot have reflowed, so the HEAD question is not
+      // asked for it - each biome call is about a quarter of a second and the hook has a
+      // budget. Anything else pays the question, because "clean now" is only half the story:
+      // clean now and dirty at HEAD is a whole-file reflow inside someone's change.
+      if (workClean && (base === null || base === bytes))
+        return { file, headClean: true, workClean, status: 'clean' };
       const headClean = base === null ? true : isClean(base, file);
       return {
         file,
         headClean,
         workClean,
-        status: decide({ headClean, workClean }),
+        status: decide({
+          headClean,
+          workClean,
+          reflow: base === null ? 0 : changedLineCount(base, bytes),
+          reflowMinLines,
+        }),
       };
     });
 }
@@ -227,6 +260,14 @@ export function main(
     return blocked.length || failed ? 1 : 0;
   }
 
+  const reflows = allowReflow ? [] : rows.filter((r) => r.status === 'reflow');
+  for (const row of rows.filter((r) => r.status === 'reflow')) {
+    if (allowReflow)
+      say(
+        `reflow allowed for ${row.file} - the PR should say this commit is formatting`,
+      );
+  }
+  if (reflows.length) say(describeReflow(reflows.map((r) => r.file)));
   const regressions = rows.filter((r) => r.status === 'regression');
   for (const row of rows.filter((r) => r.status === 'pre-existing')) {
     say(
@@ -238,9 +279,8 @@ export function main(
     say(
       `${regressions.length} file(s) introduced formatting dirt - run: pnpm fmt ${regressions.map((r) => r.file).join(' ')}`,
     );
-    return 1;
   }
-  return 0;
+  return regressions.length || reflows.length ? 1 : 0;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

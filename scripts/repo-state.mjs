@@ -85,7 +85,13 @@ export function formatState(state) {
     const behind =
       wt.behindMain === null || wt.behindMain === undefined
         ? ' behind-main=unknown'
-        : ` behind-main=${wt.behindMain}`;
+        : ` behind-main=${wt.behindMain}` +
+          // The number is not trivia: a `git reset --soft origin/main` here quietly stages
+          // the reversal of those commits, and the only thing that ever caught it this week
+          // was a pre-commit typecheck failing on a deleted function.
+          (Number(wt.behindMain) > 0
+            ? ` (a soft reset here reverts ${wt.behindMain})`
+            : '');
     lines.push(
       `  ${wt.path} ${branch} ${String(wt.head).slice(0, 7)}${behind}`,
     );

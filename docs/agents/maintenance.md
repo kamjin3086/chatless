@@ -101,6 +101,17 @@ why `verify-app-startup.sh` asserts that start-up *finishes* and that a resize
 still works (`docs/tauri-window-pitfalls.md`).
 
 ## Repo reality an agent needs to know
+- **A comment that names a symbol promises that symbol exists.** `pnpm check:comments`
+  (`scripts/comment-symbols.mjs`) pulls the backticked lowerCamelCase names out of comments in
+  code files (10+ characters, two inner capitals) and fails on one that no non-test code in
+  `src`/`scripts` defines; the hook runs it over staged files and lets exit 2 - the check
+  itself broken - through as a warning. Two review rounds caught these by hand (#138 left a
+  type's doc saying "call `normalizeModelParameters` when a complete bag is needed" for a
+  function that PR deleted), which makes it mechanical, not judgement. Resolution means
+  *definition-adjacent*, not mention: the first version grepped the bare name across docs too,
+  and then the doc that recounted the stale-pointer story was what certified the pointer alive.
+  Reproduce the shape with a file whose only content is a comment naming a function that does
+  not exist: `node scripts/comment-symbols.mjs <that file>` exits 1.
 - **Formatting is judged per file, and only where HEAD already conformed.** main is largely
   unformatted: `for f in $(git ls-files 'src/**/*.ts' 'src/**/*.tsx'); do npx biome format
   "$f" >/dev/null 2>&1 || echo "$f"; done` fails **759 of 856** tracked files under src. A
@@ -110,7 +121,12 @@ still works (`docs/tauri-window-pitfalls.md`).
   file to biome only if the version being committed already satisfied it: today that is the
   ~97 conforming files, and nothing else. `pnpm fmt <files>` is the daily command; it
   refuses a directory, refuses to reflow pre-existing dirt unless `--allow-reflow`, and
-  treats a biome that could not run as an error rather than as a pass. Two consequences to
+  treats a biome that could not run as an error rather than as a pass. The refusal is now
+  two-way: a file HEAD left unformatted that your staged version has fully formatted is a
+  **reflow** (20+ differing lines) and is refused. Three PRs this week arrived that way
+  (#138, #141, #143); check one: `git show --stat 71e7f1b | grep provider-field-support` prints
+  234 changed lines for a six-line fix. Each was caused by calling `npx biome check --write`
+  directly instead of `pnpm fmt`, which had already refused. Two consequences to
   keep in sight: the format gate stays narrow until the standing dirt is cleared, and clearing
   it is a formatting-only commit of ~759 files - the owner's call, not something to slip into
   a change PR. Judge cleanliness on file bytes: `biome format --stdin-file-path` has reported
@@ -121,8 +137,30 @@ still works (`docs/tauri-window-pitfalls.md`).
   REST keeps working. The fallbacks are all used here and all work:
   `gh api -X POST repos/<owner>/<repo>/pulls --input file.json`,
   `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=... -f body=...`,
-  `gh api -X PUT repos/<owner>/<repo>/pulls/<n>/merge -f merge_method=squash`,
-  `gh api -X POST repos/<owner>/<repo>/issues/<n>/comments -f body=...`.
+  `gh api -X PUT repos/<owner>/<repo>/pulls/<n>/merge -f merge_method=squash -f sha=<head-sha>`,
+  `gh api -X POST repos/<owner>/<repo>/issues/<n>/comments -f body=...`,
+  `gh api -X POST repos/<owner>/<repo>/issues -f title=... -F body=@file.md`.
+  Add the issue body with `-F body=@file`, not `-f body=`, or a multi-line body arrives truncated.
+  **A retry loop must de-duplicate before it repeats**: an issue POST that dies on the way back
+  may still have created the issue. This week's #140 and #142 were each retried in a 20× loop,
+  which is 20 tickets one flaky response away from happening. Check first:
+  `gh api "repos/<owner>/<repo>/issues?state=all&per_page=50" --jq '.[].title' | grep -F "<title>"`.
+- **Read CI with `pnpm ci:log --checks <pr|sha>`, not with `gh pr checks`.** `gh pr checks`
+  rides the same GraphQL path that dies first, and `pnpm ci:log <pr>` answers a different
+  question (what a finished run printed). `--checks` reads REST `commits/:sha/check-runs` and
+  prints a verdict: `green`, `still running (…)`, `not green (…)`, exit 0 / 3 / 1.
+  **An empty board is not "queued" and not "the paths filter skipped it"**: it means Actions
+  never took the event, which happened to two PRs while the link was bad, and the fix is to
+  push again (any commit, or `--force-with-lease`). On #141 the board stayed empty for two
+  hours while `gh api "repos/<owner>/<repo>/actions/runs?per_page=5" --jq '.workflow_runs[].head_branch'`
+  showed no run for the branch at all; closing and reopening the PR changed nothing, and the
+  force-push started CI within seconds. Exit codes: 0 green, 1 not green, 3 still running, 4
+  no run registered.
+- **A merge command's failure can be about your worktree, not about the merge.** With `main`
+  checked out in another worktree, `gh pr merge --squash --delete-branch` exits non-zero
+  (`致命错误：'main' 已经被工作区 … 使用`) *after* the merge succeeded on the server. Ask the
+  server (`gh api repos/<owner>/<repo>/pulls/<n> -q .state`) before concluding anything, and
+  prefer the REST merge form above when several worktrees are alive.
 - **`git push` can be dead while the API is fine.** TLS to `github.com:443` failed for every
   push across a whole session while `gh api` answered normally. A commit can be moved without
   git's transport: create a blob per file, `POST /git/trees` with `base_tree`,
@@ -191,6 +229,12 @@ worktree left open from a previous run. One command answers all three probes:
 ```bash
 pnpm repo:state   # main sha, your branch + dirty/ahead, every worktree and how far
                   # behind main it is, whether main is merged into HEAD, open PRs
+
+`behind-main=N` is not trivia. Rewriting history (`git reset --soft origin/main`, a rebase onto
+a ref you fetched but did not merge) in a tree that is behind stages the reversal of those N
+commits, quietly: this week a soft reset did exactly that, and the only thing that noticed was
+a pre-commit typecheck failing on a function the "new" commit had deleted. `repo:state` now
+spells it out per worktree.
 ```
 
 - **Commit only on a branch you created this session.** If HEAD sits on someone
