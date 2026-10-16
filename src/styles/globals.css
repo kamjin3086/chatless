@@ -327,6 +327,15 @@ body {
   }
 }
 
+/* One column definition for the message list and the composer. They are read as a single
+   block, so the two of them agreeing on the width is not a detail - when they drift, the right
+   edge looks ragged no matter how each one looks on its own. */
+.chat-content {
+  width: 100%;
+  max-width: var(--chat-content-max);
+  margin-inline: auto;
+}
+
 /* 输入区域样式 */
 .input-area {
   border-radius: 0;
