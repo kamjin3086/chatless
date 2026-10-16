@@ -1,10 +1,12 @@
 /**
  * Provider字段支持配置与适配器
  * 
- * 职责：
- * 1. 定义每个Provider支持的参数字段
- * 2. 提供通用字段名到Provider特定字段名的映射
- * 3. 统一过滤和转换参数，避免API错误
+ * 职责（今天真的被用到的那部分）：
+ * 决定参数对话框里出现哪些控件，两个对话框读它。
+ *
+ * 它**不**决定请求里的字段名：发出去的字段名写在各 Provider 文件里，
+ * `adaptFieldsForProvider` 在本文件之外没有任何调用者。把这张表当成请求的地图是一张
+ * 错误的地图；把两份答案合并是 #142，别在这里再加第三份局部答案。
  */
 
 /**
@@ -100,6 +102,9 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
       maxTokens: true,
       topP: true,
       topK: true,
+      // Gemini 的 generationConfig 收 minP，Provider 本来也把它透传出去了；写在这里
+      // 对话框才会给出这个控件，而不是把一个真实存在的选项藏掉。
+      minP: true,
       stopSequences: true,
       streaming: true,
     },
@@ -164,7 +169,10 @@ export const PROVIDER_FIELD_SUPPORT: Record<string, ProviderFieldSupport> = Obje
  * 获取Provider完整配置
  */
 export function getProviderConfig(providerName: string): ProviderConfig {
-  const normalizedName = providerName.toLowerCase();
+  // 界面上用的是给人看的标签（'Google AI'），表格的键用的是 API 自己的写法
+  // （'google-ai'）。只 toLowerCase 永远对不上 Gemini 那一行，于是每次都落到
+  // OpenAI 形状的兜底：Gemini 的对话框因此不给 topK 和 minP，而上面的表格明明说它支持。
+  const normalizedName = providerName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   
   // 尝试精确匹配
   if (PROVIDER_CONFIGS[normalizedName]) {
