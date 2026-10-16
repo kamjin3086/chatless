@@ -13,7 +13,6 @@ export type TranslationKey =
   | 'settings.general.language'
   | 'settings.general.theme'
   | 'settings.general.nightBrightness'
-  | 'settings.general.minimizeToTray'
   | 'settings.general.closeConfirm'
   | 'settings.general.closeToTray'
   | 'tray.newChat'
