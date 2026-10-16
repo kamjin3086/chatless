@@ -332,6 +332,18 @@ body {
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+  /*
+   * The side inset belongs on the composer as padding, never as a side margin: a
+   * side margin here (even without !important) outranks the component's `mx-auto`,
+   * so as soon as the column is wider than --chat-content-max - exactly what
+   * collapsing the conversation list does - the composer stops centring and sits
+   * against the left edge. Padding keeps the inset out of the centreing maths, and
+   * the ceiling grows by the same inset so the composer stays exactly as wide as
+   * the message column it belongs to.
+   */
+  --composer-inset: 0px;
+  padding-inline: var(--composer-inset);
+  max-width: calc(var(--chat-content-max) + 2 * var(--composer-inset));
 }
 
 .input-area:focus-within {
@@ -968,9 +980,7 @@ html:not(.glass-ui).page-paper .glass-nav {
 }
 
 html:not(.glass-ui) .input-area {
-  width: auto !important;
-  margin-left: 12px;
-  margin-right: 12px;
+  --composer-inset: 12px;
 }
 
 html:not(.glass-ui):not(.dark) .composer-box {
@@ -1460,9 +1470,7 @@ html.glass-ui .bg-slate-50 {
 }
 
 .glass-ui .input-area {
-  width: auto !important;
-  margin-left: 8px !important;
-  margin-right: 8px !important;
+  --composer-inset: 8px;
   margin-bottom: 8px !important;
   background-image: none !important;
   background-color: transparent !important;
