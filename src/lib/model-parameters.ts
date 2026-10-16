@@ -26,10 +26,11 @@ type FieldShape =
  * The bag is JSON written by older versions of this app and edited by hand often enough to
  * be worth expecting the unexpected. Without this table a stored `"0.7"`, a `null` array or
  * a temperature of 99 went straight through to a request, and one of those shapes reached a
- * user as a crash (#137). A field this table does not name is a field nothing should be
- * reading either, so it is dropped rather than passed along.
+ * user as a crash (#137). The type is what keeps this table honest: a field added to
+ * `ModelParameters` without a row here does not compile, so there is no such thing as a
+ * parameter this table has simply never heard of.
  */
-const PARAM_FIELDS: Record<string, FieldShape> = {
+const PARAM_FIELDS: Record<keyof ModelParameters, FieldShape> = {
   temperature: { kind: 'number' },
   maxTokens: { kind: 'int' },
   contextWindow: { kind: 'int' },
@@ -141,17 +142,11 @@ export class ModelParametersService {
     // stays available for the one thing that must know a migration happened: the control's
     // explanation. Defaults are not migrated - they are this code's own baseline, not a
     // user's old choice.
-    // Types are checked once, here, so no consumer has to re-guess what a hand-edited or
-    // older store may contain. Absence is deliberately preserved: a migration that removed a
-    // retired field, or a scope that never mentioned one, means something that a default
-    // would erase.
-    return sanitizeParameterPatch(
-      migrateLegacyThinkingBoolean({
-        provider: providerName,
-        modelId,
-        params: saved,
-      }).params,
-    ) as ModelParameters;
+    return migrateLegacyThinkingBoolean({
+      provider: providerName,
+      modelId,
+      params: saved,
+    }).params;
   }
 
   /**
@@ -164,10 +159,19 @@ export class ModelParametersService {
     providerName: string,
     modelId: string,
   ): Promise<ModelParameters | null> {
-    return ModelParametersService.readStoredModelParameters(
-      providerName,
-      modelId,
-    );
+    // Deliberately not `readStoredModelParameters`. This reader exists so a control can
+    // explain a migration to the user, and that explanation has to be about the bag as it
+    // was written: a clamped or trimmed bag would describe a value the store never held.
+    try {
+      const saved = await specializedStorage.models.getModelParameters(
+        providerName,
+        modelId,
+      );
+      return saved ? (saved as ModelParameters) : null;
+    } catch (error) {
+      console.error('读取原始模型参数失败:', error);
+      return null;
+    }
   }
 
   private static async readStoredModelParameters(
@@ -179,7 +183,16 @@ export class ModelParametersService {
         providerName,
         modelId,
       );
-      return savedParams ? (savedParams as ModelParameters) : null;
+      // Every service-level read of a parameter bag comes through here, so this is where
+      // values get typed and clamped; a consumer therefore does not have to re-guess what a
+      // hand-edited or older store may contain. Two honest exceptions, both findable with
+      // `grep -rn "as ModelParameters" src`: `getRawModelParameters` below, which stays raw
+      // on purpose, and `ModelParametersDialog`, which reads storage directly (#144).
+      // Absence is preserved: a migration that deleted a retired field, or a scope that
+      // never mentioned one, means something a default would erase.
+      return savedParams
+        ? (sanitizeParameterPatch(savedParams) as ModelParameters)
+        : null;
     } catch (error) {
       console.error('获取模型参数失败:', error);
       return null;
@@ -589,7 +602,9 @@ export class ModelParametersService {
       const savedParams =
         await specializedStorage.models.getSessionParameters(conversationId);
       if (savedParams) {
-        return savedParams as ModelParameters;
+        // Same boundary as a model's bag: a conversation's bag is read by a send *and* by
+        // the dialog, and the two must not disagree about what a stored value said.
+        return sanitizeParameterPatch(savedParams) as ModelParameters;
       }
       return null;
     } catch (error) {

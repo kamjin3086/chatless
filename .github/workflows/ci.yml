@@ -8,10 +8,16 @@ concurrency:
   cancel-in-progress: true
 
 # CI runs once per pull request and on demand. There is deliberately no `push`
-# trigger: main only ever moves by merging a pull request, and that merge push
-# used to replay the exact same checks the PR had just run - every merge bought
-# two full runs for one change. If a direct-push safety net is ever wanted,
-# main should get branch protection requiring a PR instead.
+# trigger: a merge push used to replay the exact same checks the PR had just ran,
+# and on this plan every merge bought two full runs for one change.
+#
+# What that trades away is post-merge verification, and it rests on a convention -
+# main moves by pull request - which is not enforced: `gh api
+# repos/kamjin3086/chatless/branches/main/protection` answers 404 "Branch not
+# protected". A direct push to main therefore gets no run at all, and nothing will
+# notice. If that ever stops being acceptable, add branch protection requiring a PR
+# - which is what would make the missing trigger safe - rather than trusting the
+# convention to hold on its own.
 on:
   pull_request:
     branches: [ main ]

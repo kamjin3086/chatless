@@ -59,8 +59,14 @@ export interface ModelParameters {
  * What one scope (a session, the next message) actually stored: only the keys the user
  * touched. It is deliberately not interchangeable with `ModelParameters` - a scope that
  * never mentioned stop sequences does not have the key, and code that reads a patch as if
- * it were complete is how `undefined is not an object` reaches a user. Take this type when
- * reading a scope; call `normalizeModelParameters` when a complete bag is needed.
+ * it were complete is how `undefined is not an object` reaches a user (#137).
+ *
+ * Nothing on the read path produces a complete bag from a stored one, on purpose: defaults
+ * would erase the difference between "the user chose this" and "nothing was ever chosen".
+ * `sanitizeParameterPatch` is the closest thing - it drops values it cannot trust and keeps
+ * every absence - so a consumer treats a patch as "trustworthy where present", never as
+ * whole. `DEFAULT_MODEL_PARAMETERS` spread under a bag is the way to get a complete object,
+ * and only where the user is about to be shown a control with no stored value behind it.
  */
 export type ModelParameterPatch = Partial<ModelParameters>;
 
