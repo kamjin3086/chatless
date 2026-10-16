@@ -42,6 +42,21 @@ if [ -n "$marked" ]; then
   fail=1
 fi
 
+# 2a. a comment that names a symbol promises that symbol exists. Cheap: one grep per name,
+# and only the names in files you staged. See scripts/comment-symbols.mjs.
+# exit 0 clean, 1 a stale promise (the author's to fix), 2 the check could not run - which is
+# reported and let through, because blocking a commit for a missing grep teaches --no-verify.
+# xargs turns any child failure into 123, which would make a real finding look like a broken
+# check - so read the names here and keep the exit code the script actually returned.
+staged_files=()
+while IFS= read -r -d '' f; do staged_files+=("$f"); done < <(git diff --cached --name-only --diff-filter=ACM -z)
+if [ ${#staged_files[@]} -gt 0 ] && ! node scripts/comment-symbols.mjs "${staged_files[@]}"; then
+  case $? in
+    1) report "a comment names a symbol that no longer exists - fix the comment or restore the symbol"; fail=1 ;;
+    *) report "comment symbol check could not run; nothing was concluded" ;;
+  esac
+fi
+
 # 2. formatting, judged per file: a file already unformatted at HEAD is not this change's
 # business to reflow - that is how a change commit turns into 2,000 lines of churn, and the
 # reason `--no-verify` was getting used. See scripts/format-policy.mjs.

@@ -316,3 +316,60 @@ describe('when the check itself cannot run', () => {
     );
   });
 });
+
+describe('a reflow is not a free change', () => {
+  // Retrospective: three PRs this week carried whole-file biome reflows mixed into logic
+  // changes. `pnpm fmt` refuses to create one; calling biome directly gets past that, and
+  // the per-file policy, which only looks for new dirt, had nothing to say. A file HEAD left
+  // unformatted that is now fully formatted is a reflow, and it belongs in its own commit.
+  it('names the state that used to be invisible', async () => {
+    const { decide } = await import('../format-policy.mjs');
+    expect(decide({ headClean: true, workClean: true, reflow: 99 })).toBe(
+      'clean',
+    );
+    expect(decide({ headClean: false, workClean: true, reflow: 99 })).toBe(
+      'reflow',
+    );
+    expect(decide({ headClean: true, workClean: false })).toBe('regression');
+    expect(decide({ headClean: false, workClean: false })).toBe('pre-existing');
+  });
+
+  it('only pays for the HEAD question when the file actually changed', async () => {
+    const { assess } = await import('../format-policy.mjs');
+    const asked = [];
+    const rows = assess(['same.ts', 'reflowed.ts'], {
+      root: '/r',
+      isClean: (text) => {
+        if (text === 'bytes-before') asked.push('bytes-before');
+        // what HEAD left unformatted stays unformatted as far as this spy is concerned
+        return text !== 'bytes-before';
+      },
+      subject: () => 'bytes-after',
+      head: (_r, f) => (f === 'same.ts' ? 'bytes-after' : 'bytes-before'),
+      reflowMinLines: 1,
+    });
+    // only the file whose bytes moved asks HEAD anything
+    expect(asked).toEqual(['bytes-before']);
+    expect(rows.map((r) => [r.file, r.status])).toEqual([
+      ['same.ts', 'clean'],
+      ['reflowed.ts', 'reflow'],
+    ]);
+  });
+
+  it('lets a small cleanup through, because that is not what the rule guards', async () => {
+    const { decide } = await import('../format-policy.mjs');
+    expect(decide({ headClean: false, workClean: true, reflow: 2 })).toBe(
+      'clean',
+    );
+    expect(decide({ headClean: false, workClean: true, reflow: 60 })).toBe(
+      'reflow',
+    );
+  });
+
+  it('is reported as something to split, not as clean', async () => {
+    const { describeReflow } = await import('../format-policy.mjs');
+    const line = describeReflow(['src/a.ts']);
+    expect(line).toContain('src/a.ts');
+    expect(line).toContain('--allow-reflow');
+  });
+});

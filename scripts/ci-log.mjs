@@ -121,6 +121,53 @@ function logFragment(line) {
 
 /** @param {string} raw @param {string} [grepFor] @returns {string[]} */
 
+/**
+ * What a board of check-runs says about a commit, without the log export.
+ *
+ * `gh pr checks` and this script's log path both ride GraphQL, and GraphQL is the first
+ * channel to die on this network - which left a merge decision with nothing to read. The REST
+ * check-runs endpoint kept answering, so the verdict gets built here. An empty board is
+ * called out on purpose: twice a pull request had no run at all, because Actions never
+ * received the event, and "no rows" reads like "still queued" to whoever is waiting.
+ */
+export function summariseCheckRuns(runs) {
+  const list = Array.isArray(runs) ? runs : [];
+  if (!list.length) {
+    return {
+      registered: false,
+      // Not "still running": a board with no rows and a board still filling up are different
+      // answers, and the second one is the only one worth waiting on.
+      settled: false,
+      pass: false,
+      failed: [],
+      pending: [],
+      note: 'no workflow run is registered for this commit. That is not the paths filter skipping a build - Actions never took the event. Push again (any commit, or --force-with-lease) to re-trigger it.',
+    };
+  }
+  // Anything that is not success, skip or neutral is a red board, whatever it is called:
+  // a cancelled or action-required run is exactly the thing a merge should not walk past.
+  const OK = new Set(['success', 'skipped', 'neutral']);
+  const failed = list
+    .filter((r) => r.status === 'completed' && !OK.has(r.conclusion))
+    .map((r) => r.name);
+  const pending = list
+    .filter((r) => r.status !== 'completed')
+    .map((r) => r.name);
+  return {
+    registered: true,
+    settled: pending.length === 0,
+    pass: pending.length === 0 && failed.length === 0,
+    failed,
+    pending,
+    note: list
+      .map(
+        (r) =>
+          `${r.name}=${r.status}${r.conclusion && r.conclusion !== 'neutral' ? `/${r.conclusion}` : ''}`,
+      )
+      .join(' '),
+  };
+}
+
 function gh(args) {
   return execFileSync('gh', args, {
     encoding: 'utf8',
@@ -136,7 +183,7 @@ function gh(args) {
  * @param {string[]} argv
  */
 export function parseArgs(argv) {
-  const flags = { '--all': 0, '--grep': 1, '--job': 1 };
+  const flags = { '--all': 0, '--grep': 1, '--job': 1, '--checks': 1 };
   const skip = new Set();
   for (const [flag, arity] of Object.entries(flags)) {
     const at = argv.indexOf(flag);
@@ -146,10 +193,12 @@ export function parseArgs(argv) {
   }
   const grepAt = argv.indexOf('--grep');
   const jobAt = argv.indexOf('--job');
+  const checksAt = argv.indexOf('--checks');
   return {
     all: argv.includes('--all'),
     extra: grepAt >= 0 ? argv[grepAt + 1] : undefined,
     job: jobAt >= 0 ? argv[jobAt + 1] : undefined,
+    checks: checksAt >= 0 ? argv[checksAt + 1] : undefined,
     positional: argv.filter(
       (a, i) => !skip.has(i) && !Object.keys(flags).includes(a),
     ),
@@ -162,6 +211,48 @@ if (process.argv[1] && process.argv[1].endsWith('ci-log.mjs')) {
 
   try {
     let raw;
+    if (cli.checks) {
+      // A PR number or a commit sha; the REST path is chosen over `gh pr checks` because the
+      // latter needs GraphQL, which is the part that fails when this script is useful.
+      const target = cli.checks;
+      const isSha = /^[0-9a-f]{7,40}$/i.test(target);
+      const sha = isSha
+        ? target
+        : gh([
+            'api',
+            'repos/{owner}/{repo}/pulls/' + target,
+            '--jq',
+            '.head.sha',
+          ]).trim();
+      const board = gh([
+        'api',
+        `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`,
+        '--jq',
+        '.check_runs[] | [.name, .status, .conclusion // ""] | @tsv',
+      ]);
+      const runs = board
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const [name, status, conclusion] = line.split('\t');
+          return { name, status, conclusion: conclusion || null };
+        });
+      const verdict = summariseCheckRuns(runs);
+      console.log(`${isSha ? sha : `PR ${target}`} @ ${sha.slice(0, 7)}`);
+      console.log(verdict.note);
+      if (verdict.registered) {
+        console.log(
+          verdict.pass
+            ? 'verdict: green'
+            : verdict.settled
+              ? `verdict: not green (${verdict.failed.join(', ') || 'not all passing'})`
+              : `verdict: still running (${verdict.pending.join(', ')})`,
+        );
+      }
+      process.exit(
+        verdict.pass ? 0 : verdict.registered ? (verdict.settled ? 1 : 3) : 4,
+      );
+    }
     if (job) {
       raw = gh(['run', 'view', '--job', job, '--log']);
     } else if (positional[0]) {
@@ -190,7 +281,7 @@ if (process.argv[1] && process.argv[1].endsWith('ci-log.mjs')) {
       raw = gh(['run', 'view', runId, '--log']);
     } else {
       console.error(
-        'usage: ci-log <pr-number> | --job <jobId> [--grep text] [--all]',
+        'usage: ci-log <pr-number> | --job <jobId> [--grep text] [--all] | --checks <pr|sha>',
       );
       process.exit(2);
     }

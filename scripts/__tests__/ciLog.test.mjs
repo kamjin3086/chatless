@@ -145,3 +145,46 @@ describe('selectRelevant', () => {
     ]);
   });
 });
+
+describe('reading check status without the log export', () => {
+  // `gh pr checks` and `pnpm ci:log` both ride the GraphQL endpoint, and that endpoint is the
+  // first thing to die on this network. A merge decision should not depend on it: the REST
+  // check-runs answer, and the summarising of it, belongs here.
+  it('knows a settled clean board from a pending one and a red one', async () => {
+    const { summariseCheckRuns } = await import('../ci-log.mjs');
+    const run = (name, status, conclusion) => ({ name, status, conclusion });
+    const green = [
+      run('frontend-checks', 'completed', 'success'),
+      run('backend-check', 'completed', 'success'),
+      run('test-tauri-macos', 'completed', 'skipped'),
+    ];
+    expect(summariseCheckRuns(green)).toMatchObject({
+      settled: true,
+      pass: true,
+    });
+    const pending = summariseCheckRuns([
+      run('backend-check', 'in_progress', null),
+    ]);
+    expect(pending).toMatchObject({ settled: false, pass: false });
+    const red = summariseCheckRuns([
+      run('check', 'completed', 'failure'),
+      run('frontend-checks', 'completed', 'success'),
+    ]);
+    expect(red.pass).toBe(false);
+    expect(red.failed).toEqual(['check']);
+  });
+
+  it('says out loud that an empty board means no run was registered', async () => {
+    // Empty is not "skipped by the paths filter". Twice this week a pull request had no run
+    // at all - Actions never received the event - and the silence read as "still queued".
+    const { summariseCheckRuns } = await import('../ci-log.mjs');
+    const none = summariseCheckRuns([]);
+    expect(none.registered).toBe(false);
+    expect(none.note).toContain('no workflow run');
+  });
+
+  it('accepts --checks as a mode', async () => {
+    const { parseArgs } = await import('../ci-log.mjs');
+    expect(parseArgs(['--checks', '143'])).toMatchObject({ checks: '143' });
+  });
+});
