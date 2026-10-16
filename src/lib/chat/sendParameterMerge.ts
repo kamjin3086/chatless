@@ -19,10 +19,12 @@ import type {
 } from '@/types/model-params';
 
 /**
- * Typed as a full `ModelParameters` because that is what the call sites hand to
- * `convertToChatOptions`: stored bags are written by the parameters dialog, which saves the
- * whole set. Pending and partial bags are merged into that shape, so the cast is a
- * restatement of what storage already guarantees, not a hole poked through the type.
+ * What a send should carry for this conversation, as a patch: session bag, plus the
+ * one-shot message choice folded over it, minus anything untrustworthy. It is deliberately
+ * not a complete object - "this scope has no opinion about temperature" is carried by the
+ * key being absent, and the caller decides what that means against the model's own bag.
+ * The bag is cleaned here too, not because storage skipped it, but because a one-shot
+ * choice reaches this function from memory and has never been through the store at all.
  */
 export async function resolveConversationParameters(args: {
   conversationId: string;
