@@ -10,7 +10,7 @@ import { streamdownRemarkPlugins } from '@/lib/markdown/remarkPlugins';
 import { replaceAliasPathsForDisplayWithContext } from '@/lib/filesystemAllowlist/displayPathAliases';
 import { convertHtmlBreaksToMd, escapeControlTags, splitOpenFence } from './streamTextPrep';
 
-interface StreamingMarkdownProps {
+export interface StreamingMarkdownProps {
   content: string;
   /** 流式进行中：此时不做逐行语法高亮，也不显示代码块控件。 */
   isStreaming?: boolean;

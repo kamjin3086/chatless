@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { splitTextAndToolJson } from '@/lib/chat/compactToolJson';
 import { CompactToolJsonLine } from './CompactToolJsonLine';
-import { StreamingMarkdown } from './StreamingMarkdown';
+import { LazyStreamingMarkdown } from './LazyStreamingMarkdown';
 import { CitationRichText } from './CitationRichText';
 import type { Citation } from '@/lib/rag/evidenceTypes';
 
@@ -40,7 +40,7 @@ export function MessageTextContent({
           );
         }
         return (
-          <StreamingMarkdown key={`text-${i}`} content={part.text} isStreaming={isStreaming} />
+          <LazyStreamingMarkdown key={`text-${i}`} content={part.text} isStreaming={isStreaming} />
         );
       })}
     </>

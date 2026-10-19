@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { StreamingMarkdown } from './StreamingMarkdown';
+import { LazyStreamingMarkdown } from './LazyStreamingMarkdown';
 
 interface ThinkingBarProps {
   thinkingContent: string;
@@ -78,7 +78,7 @@ export const ThinkingBar = ({
         {isExpanded && hasContent && (
           <div className="mt-2 pl-4 text-sm border-l border-slate-200/60 dark:border-slate-700/50">
             <div className="markdown-content-area text-slate-600 dark:text-slate-300">
-              <StreamingMarkdown content={thinkingContent} sizeOverride="small" isStreaming={isActive} />
+              <LazyStreamingMarkdown content={thinkingContent} sizeOverride="small" isStreaming={isActive} />
             </div>
           </div>
         )}
@@ -106,7 +106,7 @@ export const ThinkingBar = ({
       {isExpanded && hasContent && (
         <div className="mt-2 pl-4 text-sm border-l border-slate-200/40 dark:border-slate-700/40">
           <div className="markdown-content-area text-slate-600 dark:text-slate-300">
-            <StreamingMarkdown content={thinkingContent} sizeOverride="small" />
+            <LazyStreamingMarkdown content={thinkingContent} sizeOverride="small" />
           </div>
         </div>
       )}
