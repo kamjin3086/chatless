@@ -1,18 +1,42 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import { lazy, Suspense } from 'react';
 import type { StreamingMarkdownProps } from './StreamingMarkdown';
 
 /**
- * The markdown renderer is the most expensive thing on the chat route: `streamdown` brings
- * shiki, mermaid and katex with it, and they land in one 630 kB chunk - 866 kB of first-load
- * JS for the route, measured from the build's own route table (#153).
+ * The markdown renderer is the most expensive thing on a page that shows answers:
+ * `streamdown` brings shiki, mermaid and katex, and before this they arrived with the chat
+ * route's first load - 866 kB of first-load JS, 630 kB of it in one chunk (#153).
  *
- * It is only needed once there is an answer to render, so it is fetched then. The fallback is
- * the raw text under the same wrapper, which is what the reader is waiting for anyway: no
- * blank frame, and no syntax colouring to lose during the load.
+ * It is fetched when there is something to render. Until then the raw text is shown under
+ * the same wrapper, so the first tokens of an answer are visible instead of a hole; a
+ * `next/dynamic` fallback could not do that, because its `loading` component receives no
+ * props and would have to render nothing.
  */
-export const LazyStreamingMarkdown = dynamic<StreamingMarkdownProps>(
-  () => import('./StreamingMarkdown').then((mod) => mod.StreamingMarkdown),
-  { ssr: false, loading: () => null },
+const StreamingMarkdown = lazy(() =>
+  import('./StreamingMarkdown').then((mod) => ({
+    default: mod.StreamingMarkdown,
+  })),
 );
+
+export function LazyStreamingMarkdown({
+  content,
+  className,
+  ...props
+}: StreamingMarkdownProps) {
+  return (
+    <Suspense
+      fallback={
+        <div
+          className={className}
+          data-streaming-markdown-loading
+          style={{ whiteSpace: 'pre-wrap' }}
+        >
+          {content}
+        </div>
+      }
+    >
+      <StreamingMarkdown content={content} className={className} {...props} />
+    </Suspense>
+  );
+}
