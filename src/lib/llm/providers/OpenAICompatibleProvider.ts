@@ -9,7 +9,6 @@ import { toOpenAIMessage } from './messageMapping';
 import { getGatewayExtraHeaders } from '@/lib/provider/attribution';
 import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { readContextWindow } from '@/lib/llm/modelWindow';
-import { TURN_BOUNDARY_STOP_SEQUENCES } from '@/lib/llm/chatTemplateTokens';
 import { dumpLlmRequest, isLlmDebugEnabled, reportTurnBoundary } from '../debugLog';
 import { toWireOptions } from '../wireOptions';
 import { 
@@ -174,15 +173,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
     if (o.presencePenalty !== undefined && mapped.presence_penalty === undefined)
       mapped.presence_penalty = o.presencePenalty;
     if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
-    // A model that leaks its chat template also keeps generating the turns after
-    // it. Asking the server to stop on the boundary tokens ends the turn there
-    // instead; a sequence that never appears in honest output is a no-op. An
-    // explicit stop list from the caller is left untouched.
-    //
-    // Deliberately OpenAI-compatible only: self-hosted servers and gateways are
-    // where the template leaks, while the official OpenAI provider rejects `stop`
-    // on some reasoning models with a 400.
-    if (mapped.stop === undefined) mapped.stop = [...TURN_BOUNDARY_STOP_SEQUENCES];
+    // No default `stop` list. It used to carry the chat-template boundary tokens, on top
+    // of the client-side cut that fixed the invented-turn bug; a sampling parameter the
+    // user never set is not this app's to invent, and it shows up in every request they
+    // inspect. The boundary is still cut as the stream arrives
+    // (`providers/thinking/turnBoundary.ts`), which is what makes the continuation
+    // impossible to display.
 
     const body: Record<string, unknown> = {
       model,

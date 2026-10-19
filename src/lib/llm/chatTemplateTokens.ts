@@ -58,20 +58,6 @@ export const STRIP_ONLY_TOKENS = [...TURN_OPEN_TOKENS, ...HEADER_TOKENS];
 /** Every template token this app knows about. */
 export const ALL_TEMPLATE_TOKENS = [...TURN_END_TOKENS, ...STRIP_ONLY_TOKENS];
 
-/**
- * Passed as an OpenAI-compatible `stop` list when the caller configured none.
- *
- * Stopping server-side prevents the continuation from being generated at all,
- * and a sequence that never appears in honest output is a no-op. Capped at
- * four entries because llama.cpp accepts at most four.
- */
-export const TURN_BOUNDARY_STOP_SEQUENCES = [
-  '<|im_end|>',
-  '<|eot_id|>',
-  '<|end_of_turn|>',
-  '<|endoftext|>',
-];
-
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

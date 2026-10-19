@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OpenAICompatibleProvider } from '../OpenAICompatibleProvider';
-import { TURN_BOUNDARY_STOP_SEQUENCES } from '@/lib/llm/chatTemplateTokens';
 
 /**
  * Regression: an OpenAI-compatible server handed back the model's raw chat
@@ -91,10 +90,15 @@ describe('OpenAI-compatible provider turn boundary', () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('sends boundary tokens as stop sequences when the caller configured none', async () => {
+  it('sends no stop list when the caller configured none', async () => {
+    // A sampling parameter the user never set is not ours to invent. The turn
+    // boundary is cut client-side, which is the mechanism that fixed the invented
+    // turn in the first place; the server-side `stop` list was belt and braces on
+    // top of it, and it is visible in every request a user inspects.
     await run('<think>x</think>答案');
     const sent = mocks.fetch.mock.calls[0][1].body;
-    expect(sent.stop).toEqual([...TURN_BOUNDARY_STOP_SEQUENCES]);
+    expect(sent.stop).toBeUndefined();
+    expect('stop' in sent).toBe(false);
   });
 
   it('keeps an explicit stop list from the caller', async () => {
