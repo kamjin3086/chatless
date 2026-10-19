@@ -241,7 +241,17 @@ export class SSEClient {
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          // #151: the server's own explanation is the only thing that makes a refusal
+          // actionable, and this is the only place that can still read it. Bounded, because
+          // a gateway may answer with an HTML page.
+          const detail = await response
+            .text()
+            .then((text) => text.replace(/\s+/g, ' ').trim())
+            .catch(() => '');
+          const suffix = detail ? `: ${detail.slice(0, 2000)}` : '';
+          throw new Error(
+            `HTTP ${response.status} ${response.statusText}`.trim() + suffix,
+          );
         }
 
         if (!response.body) {
