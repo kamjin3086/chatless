@@ -8,6 +8,13 @@ import { defaultWindowIcon } from '@tauri-apps/api/app';
 import { platform } from '@tauri-apps/plugin-os';
 import { translate } from '@/i18n';
 import { restoreWindow, trayClickAction } from './trayClick';
+import {
+  TRAY_MENU_ORDER,
+  TRAY_SEPARATOR_AFTER,
+  trayItemLabelKey,
+  trayItemRestoresWindow,
+  type TrayMenuItemId,
+} from './trayMenu';
 import { useLocaleStore } from '@/store/localeStore';
 
 // 系统托盘管理类
@@ -27,37 +34,21 @@ class SystemTrayManager {
       const locale = useLocaleStore.getState().locale;
       const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
-      // 创建真正的分割线
-      const separator1 = await PredefinedMenuItem.new({ item: 'Separator' });
-      const separator2 = await PredefinedMenuItem.new({ item: 'Separator' });
-
-      // 创建菜单项并直接绑定事件处理器
-      const menu = await Menu.new({
-        items: [
-          {
-            id: 'new_chat',
-            text: t('tray.newChat'),
-            action: () => this.createNewChat()
-          },
-          separator1,
-          {
-            id: 'minimize',
-            text: t('tray.minimize'),
-            action: () => this.minimizeWindow()
-          },
-          separator2,
-          {
-            id: 'settings',
-            text: t('tray.settings'),
-            action: () => this.navigateTo('settings')
-          },
-          {
-            id: 'quit',
-            text: t('tray.quit'),
-            action: () => this.quit()
-          }
-        ]
-      });
+      // The menu is data (`lib/trayMenu.ts`): order, separators and which items bring the
+      // window back before running. A tray click on Linux only opens this menu, so the first
+      // item exists to get the window back in one more click.
+      const items: Array<Record<string, unknown> | PredefinedMenuItem> = [];
+      for (const id of TRAY_MENU_ORDER) {
+        items.push({
+          id,
+          text: t(trayItemLabelKey(id)),
+          action: () => void this.runMenuItem(id),
+        });
+        if (TRAY_SEPARATOR_AFTER.includes(id)) {
+          items.push(await PredefinedMenuItem.new({ item: 'Separator' }));
+        }
+      }
+      const menu = await Menu.new({ items: items as any });
 
   
       let iconPath: string | undefined = undefined;
@@ -80,7 +71,10 @@ class SystemTrayManager {
         tooltip: 'chatless',
         icon: iconImage || defaultIcon || 'icons/icon.ico',
         menu,
-        menuOnLeftClick: false, // 左键点击不显示菜单
+        // A Linux tray icon is an AppIndicator: its click opens the attached menu and no
+        // click event is delivered, so pointing the left button at the menu is the only way
+        // the window can be reached from there. Elsewhere the click toggles the window.
+        menuOnLeftClick: platform() === 'linux',
         action: (event) => {
           // 处理托盘图标点击事件
           if (event.type === 'Click' && event.button === 'Left' && event.buttonState === 'Up') {
@@ -120,17 +114,32 @@ class SystemTrayManager {
     }
   }
 
-  // 确保窗口显示并获取焦点
-  private async ensureWindowVisible() {
-    await this.bringWindowForward();
+  /**
+   * One entry point for every menu item: restore first when the item is about reaching the
+   * window, then do what the item says. Quit is the one exception - it exits, and restoring
+   * first would only flash a window on the way out.
+   */
+  private async runMenuItem(id: TrayMenuItemId) {
+    if (trayItemRestoresWindow(id)) await this.bringWindowForward();
+    try {
+      switch (id) {
+        case 'show':
+          return; // bringing it forward is the whole action
+        case 'new_chat':
+          return this.createNewChat();
+        case 'settings':
+          return this.navigateTo('settings');
+        case 'quit':
+          return this.quit();
+      }
+    } catch (error) {
+      console.error(`托盘菜单项 ${id} 执行失败:`, error);
+    }
   }
 
   // 导航到指定页面
   private async navigateTo(page: string) {
     try {
-      // 确保窗口显示
-      await this.ensureWindowVisible();
-      
       const window = getCurrentWindow();
       // 发送导航事件到前端
       await window.emit('navigate', page);
@@ -142,28 +151,11 @@ class SystemTrayManager {
   // 创建新聊天会话
   private async createNewChat() {
     try {
-      // 确保窗口显示
-      await this.ensureWindowVisible();
-      
       const window = getCurrentWindow();
       // 发送创建新聊天事件到前端
       await window.emit('create-new-chat');
     } catch (error) {
       console.error('创建新聊天失败:', error);
-    }
-  }
-
-  /**
-   * Minimize means minimize: the window goes to the taskbar, where the user expects to find it
-   * again. Hiding it here was "minimize to tray", which sent every minimize into the corner
-   * icons and made opening the window a two-step hunt.
-   */
-  private async minimizeWindow() {
-    try {
-      const window = getCurrentWindow();
-      await window.minimize();
-    } catch (error) {
-      console.error('最小化窗口失败:', error);
     }
   }
 

@@ -16,7 +16,7 @@ export type TranslationKey =
   | 'settings.general.closeConfirm'
   | 'settings.general.closeToTray'
   | 'tray.newChat'
-  | 'tray.minimize'
+  | 'tray.show'
   | 'tray.settings'
   | 'tray.quit'
   | 'common.cancel'

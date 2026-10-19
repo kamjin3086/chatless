@@ -16,7 +16,7 @@ const zhCN: TranslationDict = {
   'settings.general.closeToTray': '关闭窗口时隐藏到系统托盘（从托盘菜单退出）',
   'settings.general.closeConfirm': '关闭时显示确认',
   'tray.newChat': '新建聊天',
-  'tray.minimize': '最小化',
+  'tray.show': '显示窗口',
   'tray.settings': '设置',
   'tray.quit': '退出',
   'common.cancel': '取消',

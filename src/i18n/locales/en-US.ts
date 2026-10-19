@@ -18,7 +18,7 @@ const enUS: TranslationDict = {
     'Close window to tray (quit from the tray menu)',
   'settings.general.closeConfirm': 'Confirm before closing',
   'tray.newChat': 'New Chat',
-  'tray.minimize': 'Minimize',
+  'tray.show': 'Show Window',
   'tray.settings': 'Settings',
   'tray.quit': 'Quit',
   'common.cancel': 'Cancel',
