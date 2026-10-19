@@ -76,7 +76,11 @@ Do not force English onto these; the cost is real and the benefit is zero.
   wrong. English `Definition` prose around a Chinese term is the right shape.
 - **Existing Chinese docs under `docs/`**. No backfill. New docs default to
   English unless they are user-facing.
-- **Chinese-language conversation** with a Chinese-speaking reporter in an issue thread.
+- **Chinese-language conversation** with a Chinese-speaking reporter in an issue
+  thread, including the comment that reports a fix or closes the issue. The reporter
+  is the reader of that thread, so a Chinese report gets a Chinese reply. A
+  disposition *document* - triage summary, ADR, acceptance report - is still Tier 2
+  English, and it quotes the thread rather than replacing it.
 
 ## Intake recipe: normalizing a Chinese report
 
