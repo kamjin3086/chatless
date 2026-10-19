@@ -32,7 +32,9 @@ export function getCurrentTimeInfo(): {
     date: `${year}-${month}-${day}`,
     time: `${hours}:${minutes}`,
     weekday,
-    datetime: `${year}-${month}-${day} ${weekday} ${hours}:${minutes}`,
+    // Day precision on purpose: this string ends up in every request, and a block that
+    // changes every minute makes every request a different prompt. See the test.
+    datetime: `${year}-${month}-${day} ${weekday}`,
     timestamp: now.getTime(),
   };
 }
@@ -44,7 +46,7 @@ export function getCurrentTimeInfo(): {
  */
 export function buildTimeContextMessage(includeInSearch: boolean = false): string {
   const timeInfo = getCurrentTimeInfo();
-  
+
   let message = `[Current time] ${timeInfo.datetime}`;
   
   if (includeInSearch) {
