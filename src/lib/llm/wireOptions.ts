@@ -26,9 +26,21 @@
  * is still each provider's own business (and #142 is about making the dialogs and the
  * request path share one table for it). The rule here is narrower and answers a different
  * question: which names belong to this app, and therefore never reach a server.
+ *
+ * Three of the names below are also a wire field in some protocol - `stop` for OpenAI,
+ * `tools` for OpenAI, `options` for Ollama. They stay on the list on purpose: the provider
+ * writes that field itself, from the original bag, and the app's copy must still not
+ * travel, or a server that spells it differently sees both.
  */
 
-/** Options this app reads, or that a provider renames, so they are never wire names. */
+/**
+ * Options this app reads, or that a provider renames, so they are never wire names.
+ *
+ * `__`-prefixed keys need no entry here. For everything else this list is the whole
+ * answer, and a new app-side name that is added without it will leak: the check in
+ * `__tests__/wireOptions.test.ts` keeps it in step with the dialogs' field table, which is
+ * the other place these names are written down.
+ */
 const APP_ONLY_KEYS: ReadonlySet<string> = new Set([
   // Bookkeeping: our ids, our flags, our resolved numbers.
   'conversationId',
@@ -63,8 +75,8 @@ const APP_ONLY_KEYS: ReadonlySet<string> = new Set([
 /**
  * True for a key that describes the request to this app rather than to the server.
  * `__`-prefixed keys are internal by convention (`__schedulerLease`, `__requestId`,
- * `__signal`, `__priority`, `__internal`, `__silentMode`), which is why the rule does not
- * need extending when the next one is added.
+ * `__signal`, `__priority`, `__internal`, `__silentMode`), so that half of the rule needs no
+ * maintenance; the named half is the list above.
  */
 export function isAppOnlyOption(key: string): boolean {
   return key.startsWith('__') || APP_ONLY_KEYS.has(key);

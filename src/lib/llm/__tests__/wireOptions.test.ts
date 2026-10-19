@@ -9,6 +9,7 @@
  * be visible.
  */
 import { describe, expect, it } from 'vitest';
+import { PROVIDER_CONFIGS } from '../provider-field-support';
 import { isAppOnlyOption, toWireOptions } from '../wireOptions';
 
 describe('app options never become wire fields', () => {
@@ -24,7 +25,7 @@ describe('app options never become wire fields', () => {
         thinkingLevel: 'high',
         __schedulerLease: true,
         __requestId: 'request-1',
-        __signal: undefined,
+        __signal: new AbortController().signal,
         __priority: 'low',
         __internal: true,
         __silentMode: true,
@@ -97,5 +98,20 @@ describe('app options never become wire fields', () => {
     expect(isAppOnlyOption('maxTokens')).toBe(true);
     expect(isAppOnlyOption('max_tokens')).toBe(false);
     expect(isAppOnlyOption('temperature')).toBe(false);
+  });
+
+  it('agrees with the dialogs’ field table about which names are ours', () => {
+    // `provider-field-support.ts` is where the parameter dialogs read the same names, and
+    // #142 is about merging it with the request path. Until then this refuses to let the
+    // two drift apart silently: a name the table can map but this rule does not know is a
+    // name that would travel to the server beside its translation.
+    for (const [provider, config] of Object.entries(PROVIDER_CONFIGS)) {
+      for (const genericName of Object.keys(config.fieldMapping ?? {})) {
+        expect(
+          isAppOnlyOption(genericName),
+          `${provider}.fieldMapping.${genericName} is not recognised as an app-side name`,
+        ).toBe(true);
+      }
+    }
   });
 });

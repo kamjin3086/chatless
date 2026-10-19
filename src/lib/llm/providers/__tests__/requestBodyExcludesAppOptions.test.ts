@@ -49,18 +49,52 @@ const appOptions = {
   __silentMode: true,
 };
 
-const appOnlyKeys = [
-  '__schedulerLease',
-  '__requestId',
-  '__internal',
-  '__silentMode',
+/**
+ * Names this app owns outright: no provider's protocol has ever taken one as a field.
+ * `tools`, `stop` and `options` are deliberately absent - they are real wire fields for the
+ * OpenAI family and for Ollama, and a provider writes those itself from the original bag.
+ * What must not travel is the app's copy of the names below.
+ */
+const neverWireKeys = [
   'streaming',
   'conversationId',
   'messageId',
   'contextWindowTokens',
+  'thinkingLevel',
+  'thinkingModelSuffixes',
   'maxTokens',
+  'maxOutputTokens',
   'topP',
+  'topK',
+  'minP',
+  'frequencyPenalty',
+  'presencePenalty',
+  'numPredict',
+  'numCtx',
+  'repeatLastN',
+  'repeatPenalty',
+  'toolChoice',
+  'parallelToolCalls',
+  'extensions',
+  'mcpServers',
 ];
+
+/** Every key in the body at any depth - Ollama nests its parameters under `options`. */
+function keysIn(
+  value: unknown,
+  path = 'body',
+): Array<{ key: string; path: string }> {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => keysIn(item, `${path}[${index}]`));
+  }
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value as Record<string, unknown>).flatMap(
+    ([key, inner]) => [
+      { key, path: `${path}.${key}` },
+      ...keysIn(inner, `${path}.${key}`),
+    ],
+  );
+}
 
 function rejected(): Response {
   return new Response(
@@ -145,10 +179,12 @@ describe.each(cases)('$name request body', ({ make, maxTokensField }) => {
     vi.stubGlobal('fetch', mocks.browserFetch);
   });
 
-  it('carries no option that only this app understands', async () => {
-    const body = JSON.stringify(await bodyFor(make));
-    for (const key of appOnlyKeys) {
-      expect(body, `${key} reached the wire`).not.toContain(key);
+  it('carries no key that only this app owns', async () => {
+    // Key-level, not substring: a JSON string cannot tell a leaked key from a value that
+    // happens to spell the same word.
+    for (const { key, path } of keysIn(await bodyFor(make))) {
+      expect(key.startsWith('__'), `${path} reached the wire`).toBe(false);
+      expect(neverWireKeys, `${path} reached the wire`).not.toContain(key);
     }
   });
 
