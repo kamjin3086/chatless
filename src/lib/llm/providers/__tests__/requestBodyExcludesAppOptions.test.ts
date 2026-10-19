@@ -16,6 +16,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AnthropicProvider } from '../AnthropicProvider';
 import { DeepSeekProvider } from '../DeepSeekProvider';
+import { GoogleAIProvider } from '../GoogleAIProvider';
 import { OllamaProvider } from '../OllamaProvider';
 import { OpenAICompatibleProvider } from '../OpenAICompatibleProvider';
 import { OpenAIProvider } from '../OpenAIProvider';
@@ -146,6 +147,14 @@ const cases: Case[] = [
     make: () => new OllamaProvider('http://localhost:11434'),
     maxTokensField: 'num_predict',
   },
+  {
+    // Google builds its body explicitly rather than spreading the bag, but its
+    // `generationConfig` has its own camelCase wire names (`topP`, `maxOutputTokens`), which
+    // is exactly the shape a reader could mistake for a leftover app-side name.
+    name: 'Google AI',
+    make: () => new GoogleAIProvider('https://example.test/v1beta', 'fixture'),
+    maxTokensField: 'maxOutputTokens',
+  },
 ];
 
 /** The body the provider handed to its transport, whichever transport it used. */
@@ -171,7 +180,7 @@ async function bodyFor(
   return typeof sent === 'string' ? JSON.parse(sent) : sent;
 }
 
-describe.each(cases)('$name request body', ({ make, maxTokensField }) => {
+describe.each(cases)('$name request body', ({ name, make, maxTokensField }) => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.tauriFetch.mockResolvedValue(rejected());
@@ -182,8 +191,18 @@ describe.each(cases)('$name request body', ({ make, maxTokensField }) => {
   it('carries no key that only this app owns', async () => {
     // Key-level, not substring: a JSON string cannot tell a leaked key from a value that
     // happens to spell the same word.
+    // Gemini's `generationConfig` spells the same three parameters in camelCase. Those are
+    // its wire names, not leftovers, so they are allowed there and nowhere else - outside
+    // that object a `topP`/`maxOutputTokens` would be an app-side name on the wire.
+    const geminiWire =
+      name === 'Google AI'
+        ? new Set(['topP', 'maxOutputTokens', 'stopSequences'])
+        : new Set<string>();
+
     for (const { key, path } of keysIn(await bodyFor(make))) {
       expect(key.startsWith('__'), `${path} reached the wire`).toBe(false);
+      if (path.startsWith('body.generationConfig.') && geminiWire.has(key))
+        continue;
       expect(neverWireKeys, `${path} reached the wire`).not.toContain(key);
     }
   });
