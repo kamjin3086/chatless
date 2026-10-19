@@ -9,7 +9,7 @@ import {
   redoHistory,
   undoHistory,
 } from '../composerHistory';
-import { nextInputHeight, oneLineHeight } from '../inputHeight';
+import { composerFloor, nextInputHeight, oneLineHeight } from '../inputHeight';
 
 /**
  * The composer is a controlled textarea whose value also gets written by drafts, the send
@@ -107,29 +107,39 @@ describe('how tall the composer is', () => {
     expect(oneLineHeight({ fontSize: '16px' })).toBe(24 + 0);
   });
 
-  it('sits at one line when empty and grows with the text', () => {
-    const oneLine = oneLineHeight(styles);
-    expect(nextInputHeight({ contentHeight: 24, oneLine, limit: 240 })).toBe(
-      70,
-    );
-    expect(nextInputHeight({ contentHeight: 150, oneLine, limit: 240 })).toBe(
+  it('sits two lines tall when empty, so it reads as a place to write', () => {
+    // A single row made the composer look like a search field (one line of text inside a
+    // 70px box). The floor is a line count, not a constant: 2 lines + 46px of padding.
+    expect(composerFloor(styles)).toBe(94);
+    const floor = composerFloor(styles);
+    expect(nextInputHeight({ contentHeight: 24, floor, limit: 240 })).toBe(94);
+    expect(nextInputHeight({ contentHeight: 150, floor, limit: 240 })).toBe(
       150,
     );
-    expect(nextInputHeight({ contentHeight: 4000, oneLine, limit: 240 })).toBe(
+    expect(nextInputHeight({ contentHeight: 4000, floor, limit: 240 })).toBe(
       240,
     );
   });
 
   it('honours a height the user dragged to, within the same bounds', () => {
-    const oneLine = oneLineHeight(styles);
+    const floor = composerFloor(styles);
     expect(
-      nextInputHeight({ contentHeight: 30, oneLine, limit: 240, manual: 180 }),
+      nextInputHeight({ contentHeight: 30, floor, limit: 240, manual: 180 }),
     ).toBe(180);
     expect(
-      nextInputHeight({ contentHeight: 30, oneLine, limit: 240, manual: 5 }),
-    ).toBe(70);
+      nextInputHeight({ contentHeight: 30, floor, limit: 240, manual: 5 }),
+    ).toBe(94);
     expect(
-      nextInputHeight({ contentHeight: 30, oneLine, limit: 240, manual: 9999 }),
+      nextInputHeight({ contentHeight: 30, floor, limit: 240, manual: 9999 }),
     ).toBe(240);
+  });
+
+  it('keeps the two-line floor even when the window is short', () => {
+    // `limit` is 40% of the viewport; on a tiny window that can fall below the floor, and a
+    // composer shorter than its floor would clip the first line.
+    const floor = composerFloor(styles);
+    expect(nextInputHeight({ contentHeight: 24, floor, limit: 60 })).toBe(
+      floor,
+    );
   });
 });

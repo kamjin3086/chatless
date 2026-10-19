@@ -8,7 +8,7 @@ import {
   redoHistory,
   undoHistory,
 } from "./composerHistory";
-import { nextInputHeight, oneLineHeight } from "./inputHeight";
+import { composerFloor, nextInputHeight } from "./inputHeight";
 import { ListChecks, Send, StopCircle } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
@@ -185,7 +185,9 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
   // —— 输入框高度控制：默认自适应，支持顶部拖拽，最大不超过视口 40% ——
-  const MIN_INPUT_HEIGHT = 66; // absolute floor; the real one is measured per element
+  // The drag handle's floor until the element's own metrics are read; the composer's real
+  // floor is `composerFloor(...)` - two lines - measured per element in `adjustTextareaHeight`.
+  const MIN_INPUT_HEIGHT = 66;
   // The composer's own undo list; see ./composerHistory for why native undo is not enough.
   const historyRef = useRef(composerHistory(""));
   const historyScopeRef = useRef<string | null>(conversationId ?? null);
@@ -285,13 +287,21 @@ export function ChatInput({
           const styles = window.getComputedStyle(textareaRef.current);
           textareaRef.current.style.height = `${nextInputHeight({
             contentHeight: mh,
-            oneLine: oneLineHeight({
+            floor: composerFloor({
               lineHeight: styles.lineHeight,
               fontSize: styles.fontSize,
               paddingTop: styles.paddingTop,
               paddingBottom: styles.paddingBottom,
             }),
-            limit: Math.max(MIN_INPUT_HEIGHT, maxInputHeight),
+            limit: Math.max(
+              composerFloor({
+                lineHeight: styles.lineHeight,
+                fontSize: styles.fontSize,
+                paddingTop: styles.paddingTop,
+                paddingBottom: styles.paddingBottom,
+              }),
+              maxInputHeight,
+            ),
             manual: mh,
           })}px`;
         } else {
@@ -351,21 +361,21 @@ export function ChatInput({
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    // One line of the element's own metrics is the floor. The old constant (rows=3 plus
-    // MIN_INPUT_HEIGHT, kept in step with a CSS class by hand) made an empty composer three
-    // lines tall and went wrong with any font or density change.
+    // The floor is a line count measured against the element's own metrics - two lines for
+    // an empty composer - so it neither collapses to a one-row search field nor depends on a
+    // constant that a font or density change silently invalidates.
     const styles =
       typeof window !== 'undefined' ? window.getComputedStyle(textarea) : ({} as CSSStyleDeclaration);
-    const oneLine = Math.max(
+    const floor = Math.max(
       24,
-      oneLineHeight({
+      composerFloor({
         lineHeight: styles.lineHeight,
         fontSize: styles.fontSize,
         paddingTop: styles.paddingTop,
         paddingBottom: styles.paddingBottom,
       }),
     );
-    const limit = Math.max(oneLine, maxInputHeight);
+    const limit = Math.max(floor, maxInputHeight);
     const contentHeight = (() => {
       const previous = textarea.style.height;
       textarea.style.height = 'auto';
@@ -375,7 +385,7 @@ export function ChatInput({
     })();
     textarea.style.height = `${nextInputHeight({
       contentHeight,
-      oneLine,
+      floor,
       limit,
       manual: manualHeight,
     })}px`;
@@ -899,7 +909,7 @@ export function ChatInput({
 
   return (
     <div className={cn(
-      "input-area chat-content mb-2",
+      "input-area chat-content mb-5",
       disabled && "opacity-45 pointer-events-none"
     )}>
       {/* 编辑模式提示栏 */}
