@@ -114,6 +114,77 @@ describe('the shape table covers the whole type', () => {
   });
 });
 
+describe('the bag a screen reads', () => {
+  it('is the cleaned bag, not the stored JSON', async () => {
+    // #144: the dialog read storage directly, so a hand-edited `"0.9"` sat on the slider
+    // while the send path dropped the same value. One read, one meaning.
+    stored['model:openai/gpt-5.8'] = {
+      enableTemperature: true,
+      temperature: '0.9',
+      topP: 0.7,
+      thinking: false,
+    };
+    const { ModelParametersService } = await import('@/lib/model-parameters');
+
+    // The screen sees what the wire sees, down to the retired boolean's translation.
+    expect(
+      await ModelParametersService.getModelParametersOrNull(
+        'openai',
+        'gpt-5.8',
+      ),
+    ).toEqual({
+      enableTemperature: true,
+      topP: 0.7,
+      enableThinkingLevel: true,
+      thinkingLevel: 'off',
+    });
+  });
+
+  it('still says nothing was stored, where the complete bag would say "defaults"', async () => {
+    // The dialog needs the difference to decide whether the user changed anything;
+    // `getModelParameters` keeps answering with a complete bag for callers that want one.
+    const { DEFAULT_MODEL_PARAMETERS } = await import('@/types/model-params');
+    const { ModelParametersService } = await import('@/lib/model-parameters');
+
+    expect(
+      await ModelParametersService.getModelParametersOrNull(
+        'openai',
+        'nothing',
+      ),
+    ).toBeNull();
+    expect(
+      await ModelParametersService.getModelParameters('openai', 'nothing'),
+    ).toEqual(DEFAULT_MODEL_PARAMETERS);
+  });
+
+  it('agrees with the complete bag whenever something was stored', async () => {
+    // Two readers, one meaning: absence is the only thing that may differ between them.
+    stored['model:anthropic/claude-sonnet-5'] = {
+      temperature: 0.2,
+      maxTokens: 4096,
+      stopSequences: '###',
+      advancedOptions: { reasoning_effort: 'high' },
+    };
+    const { ModelParametersService } = await import('@/lib/model-parameters');
+
+    const orNull = await ModelParametersService.getModelParametersOrNull(
+      'anthropic',
+      'claude-sonnet-5',
+    );
+    expect(orNull).toEqual(
+      await ModelParametersService.getModelParameters(
+        'anthropic',
+        'claude-sonnet-5',
+      ),
+    );
+    expect(orNull).toEqual({
+      temperature: 0.2,
+      maxTokens: 4096,
+      advancedOptions: { reasoning_effort: 'high' },
+    });
+  });
+});
+
 describe('the raw reader stays raw', () => {
   it('hands back the bag as written, because a migration hint is about that bag', async () => {
     // The service reader above drops what it cannot trust. This one must not: the control

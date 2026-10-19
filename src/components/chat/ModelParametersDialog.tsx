@@ -23,6 +23,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { X, Plus, RotateCcw, Settings, Check, HelpCircle } from 'lucide-react';
 import { specializedStorage } from '@/lib/storage';
+import { ModelParametersService } from '@/lib/model-parameters';
 import type { ModelParameters } from '@/types/model-params';
 import {
   DEFAULT_MODEL_PARAMETERS,
@@ -380,15 +381,19 @@ export function ModelParametersDialog({
     }
 
     try {
-      const savedParams = await specializedStorage.models.getModelParameters(
+      // The same bag a send reads: cleaned at the storage boundary, migrated once, and null
+      // when nothing is stored, so a hand-edited value the wire drops is no longer shown as a
+      // choice (#144). A value that cleaned to nothing still sits next to an enabled switch -
+      // that paired representation is #140, not this read.
+      const savedParams = await ModelParametersService.getModelParametersOrNull(
         providerName,
         modelId,
       );
       if (savedParams) {
-        setParameters(savedParams as ModelParameters);
-        setStopSequences((savedParams as ModelParameters).stopSequences || []);
-        setSavedParameters(savedParams as ModelParameters);
-        const adv = (savedParams as ModelParameters).advancedOptions || {};
+        setParameters(savedParams);
+        setStopSequences(savedParams.stopSequences || []);
+        setSavedParameters(savedParams);
+        const adv = savedParams.advancedOptions || {};
         setAdvancedJsonText(JSON.stringify(adv, null, 2));
 
         // 加载自定义参数
@@ -483,6 +488,9 @@ export function ModelParametersDialog({
         setIsLoading(false);
         return;
       }
+      // What is written is what this dialog read (cleaned) plus what the user changed here: a
+      // hand-edited value the boundary rejected is not written back. Round-tripping it would
+      // restore the split #144 removed.
       await specializedStorage.models.setModelParameters(
         providerName,
         modelId,

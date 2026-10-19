@@ -132,11 +132,33 @@ export class ModelParametersService {
     providerName: string,
     modelId: string,
   ): Promise<ModelParameters> {
+    return (
+      (await ModelParametersService.getModelParametersOrNull(
+        providerName,
+        modelId,
+      )) ?? DEFAULT_MODEL_PARAMETERS
+    );
+  }
+
+  /**
+   * The bag a send would use, or null when the store has nothing for this model.
+   *
+   * `getModelParameters` answers with a complete bag, which is what a caller that needs one
+   * asks for. A screen needs the difference: "nothing stored" and "the user chose the
+   * defaults" mean different things to a slider and to a change-detection comparison. Both
+   * readers must see the same cleaned, migrated values all the same - the model parameter
+   * dialog used to read the stored JSON itself and show a hand-edited `"0.9"` that the wire
+   * dropped (#144).
+   */
+  static async getModelParametersOrNull(
+    providerName: string,
+    modelId: string,
+  ): Promise<ModelParameters | null> {
     const saved = await ModelParametersService.readStoredModelParameters(
       providerName,
       modelId,
     );
-    if (!saved) return DEFAULT_MODEL_PARAMETERS;
+    if (!saved) return null;
     // #100 retired the boolean's entry point; what is already stored is translated here,
     // once, so the wire and every screen read the same meaning. `getRawModelParameters`
     // stays available for the one thing that must know a migration happened: the control's
@@ -174,6 +196,21 @@ export class ModelParametersService {
     }
   }
 
+  /**
+   * A stored bag, cleaned: a wrong type is dropped as if it had never been chosen, a number
+   * is clamped to what the UI allows, an unknown field is not forwarded, and absence is
+   * preserved. Every read of a stored bag comes through here, so a consumer does not have to
+   * re-guess what a hand-edited or older store may contain - the model parameter dialog used
+   * to read storage itself and showed a value the wire dropped (#144).
+   *
+   * The one reader that skips this is `getRawModelParameters` above, on purpose: a migration
+   * hint has to describe the bag as it was written. Both reads of a bag are findable with
+   * `grep -rn "getModelParameters\|getSessionParameters" src`.
+   */
+  private static cleanStoredBag(saved: unknown): ModelParameters | null {
+    return saved ? (sanitizeParameterPatch(saved) as ModelParameters) : null;
+  }
+
   private static async readStoredModelParameters(
     providerName: string,
     modelId: string,
@@ -183,16 +220,7 @@ export class ModelParametersService {
         providerName,
         modelId,
       );
-      // Every service-level read of a parameter bag comes through here, so this is where
-      // values get typed and clamped; a consumer therefore does not have to re-guess what a
-      // hand-edited or older store may contain. Two honest exceptions, both findable with
-      // `grep -rn "as ModelParameters" src`: `getRawModelParameters` below, which stays raw
-      // on purpose, and `ModelParametersDialog`, which reads storage directly (#144).
-      // Absence is preserved: a migration that deleted a retired field, or a scope that
-      // never mentioned one, means something a default would erase.
-      return savedParams
-        ? (sanitizeParameterPatch(savedParams) as ModelParameters)
-        : null;
+      return ModelParametersService.cleanStoredBag(savedParams);
     } catch (error) {
       console.error('获取模型参数失败:', error);
       return null;
@@ -601,12 +629,9 @@ export class ModelParametersService {
     try {
       const savedParams =
         await specializedStorage.models.getSessionParameters(conversationId);
-      if (savedParams) {
-        // Same boundary as a model's bag: a conversation's bag is read by a send *and* by
-        // the dialog, and the two must not disagree about what a stored value said.
-        return sanitizeParameterPatch(savedParams) as ModelParameters;
-      }
-      return null;
+      // Same boundary as a model's bag: a conversation's bag is read by a send *and* by
+      // the dialog, and the two must not disagree about what a stored value said.
+      return ModelParametersService.cleanStoredBag(savedParams);
     } catch (error) {
       console.error('获取会话参数失败:', error);
       return null;
