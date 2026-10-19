@@ -1125,8 +1125,22 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 /* ------------------------------ */
 
 .glass-ui {
-  --glass-fill: rgba(255, 255, 255, 0.26);
-  --glass-fill-strong: rgba(255, 255, 255, 0.34);
+  /*
+   * Three elevation levels and nothing in between: `base` is the window sheet, `surface` is
+   * a region or card inside it, `overlay` is anything that carries text over the backdrop.
+   * The old names stay as aliases because dozens of components read them.
+   */
+  --glass-base-fill: rgba(255, 255, 255, 0.26);
+  --glass-surface-fill: rgba(255, 255, 255, 0.32);
+  --glass-overlay-fill: rgba(250, 252, 255, 0.95);
+  --glass-fill: var(--glass-base-fill);
+  --glass-fill-strong: var(--glass-surface-fill);
+  --glass-divider: rgba(15, 23, 42, 0.09);
+  /* Laid over the wallpaper so any photo lands inside a readable luminance range. */
+  /* Sized by measurement, not by taste: the lightest secondary text still clears 4.5:1
+     over a black photograph. See lib/glass/__tests__/contrast.test.ts. */
+  --glass-veil: rgba(248, 250, 252, 0.76);
+  --glass-veil-blur: 24px;
   --glass-border: rgba(100, 116, 139, 0.28);
   --glass-highlight: rgba(255, 255, 255, 0.45);
   --glass-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
@@ -1159,16 +1173,23 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
   --glass-text-primary: rgb(30, 41, 59);
   --glass-text-secondary: rgb(71, 85, 105);
   --glass-text-muted: rgb(100, 116, 139);
-  --glass-blur: 40px;
+  /* The only live blur in the app is the window sheet's. */
+  --glass-blur: 28px;
   --glass-gap: 8px;
   --background: transparent;
 }
 
 .glass-ui.dark {
   /* 浅色霜面叠在深色壁纸上，才能透出色相；深蓝填充会把毛玻璃糊成整块海军蓝 */
-  --glass-fill: rgba(255, 255, 255, 0.06);
-  --glass-fill-strong: rgba(255, 255, 255, 0.14);
-  --glass-border: rgba(255, 255, 255, 0.26);
+  --glass-base-fill: rgba(255, 255, 255, 0.07);
+  --glass-surface-fill: rgba(255, 255, 255, 0.11);
+  --glass-overlay-fill: rgba(17, 20, 27, 0.95);
+  --glass-fill: var(--glass-base-fill);
+  --glass-fill-strong: var(--glass-surface-fill);
+  --glass-divider: rgba(255, 255, 255, 0.11);
+  /* Sized by measurement: the dimmest muted text still clears 3:1 over a white photograph. */
+  --glass-veil: rgba(5, 8, 13, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.22);
   --glass-highlight: rgba(255, 255, 255, 0.42);
   --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.46);
   --glass-inset: inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
@@ -1200,79 +1221,115 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 }
 
 .glass-ui.reduced-motion {
-  --glass-blur: 10px;
+  /* Reducing motion means turning the live blur off and using a more solid fill - not a
+     smaller radius, which is the same cost with a worse look. */
+  --glass-blur: 0px;
 }
 
 .glass-ui body {
   background-color: transparent !important;
 }
 
+/*
+ * One calm field in one hue. The three-hue radial stack this replaces put cyan, teal and
+ * amber behind every accent in the product, so nothing on the glass could hold a colour.
+ * Two layers, one family: a soft highlight from the top and a slight vertical fall-off.
+ */
 html.glass-ui:not(.dark) {
-  background:
-    radial-gradient(880px 640px at 22% 18%, rgba(56, 189, 248, 0.22), transparent 58%),
-    radial-gradient(760px 560px at 82% 78%, rgba(45, 212, 191, 0.14), transparent 55%),
-    radial-gradient(520px 400px at 50% 42%, rgba(251, 191, 36, 0.08), transparent 62%),
-    linear-gradient(165deg, #f3f8fc 0%, #e7f0f7 52%, #edf4f9 100%);
+  background-color: #eaeef4;
+  background-image:
+    radial-gradient(1200px 900px at 18% -10%, rgba(255, 255, 255, 0.92), transparent 62%),
+    linear-gradient(168deg, #eff3f8 0%, #e6ebf2 54%, #e9edf3 100%);
   background-attachment: fixed;
 }
 
 html.glass-ui.dark {
-  background:
-    radial-gradient(880px 640px at 24% 16%, rgba(99, 102, 241, 0.28), transparent 56%),
-    radial-gradient(760px 560px at 80% 80%, rgba(14, 165, 233, 0.18), transparent 54%),
-    radial-gradient(520px 400px at 48% 38%, rgba(251, 191, 36, 0.06), transparent 60%),
-    linear-gradient(165deg, #1a1f2e 0%, #141824 52%, #181d2a 100%);
+  background-color: #0d1015;
+  background-image:
+    radial-gradient(1200px 900px at 20% -12%, rgba(96, 116, 148, 0.18), transparent 62%),
+    linear-gradient(168deg, #12161d 0%, #0c0f14 54%, #10141a 100%);
   background-attachment: fixed;
 }
 
+/*
+ * The wallpaper: an image layer (the baked ambient derivative, or the original under the CSS
+ * blur fallback) and a veil over it. The veil is what makes "any photo" land inside a
+ * readable luminance range without asking the user to pick a better picture.
+ */
 .glass-wallpaper {
-  background-color: #161a20;
   overflow: hidden;
 }
 
-.glass-ui:not(.dark) .glass-wallpaper {
-  background-color: #e8f4fc;
+.glass-wallpaper-image {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
-.glass-wallpaper-fallback {
-  background:
-    radial-gradient(880px 640px at 24% 16%, rgba(99, 102, 241, 0.28), transparent 56%),
-    radial-gradient(760px 560px at 80% 80%, rgba(14, 165, 233, 0.18), transparent 54%),
-    linear-gradient(165deg, #1a1f2e 0%, #141824 52%, #181d2a 100%);
+.glass-wallpaper-image-fallback {
+  /* Only used when the derivative could not be produced (no canvas, undecodable image). */
+  filter: blur(var(--glass-veil-blur));
+  transform: scale(1.06);
 }
 
-.glass-ui:not(.dark) .glass-wallpaper-fallback {
-  background:
-    radial-gradient(880px 640px at 22% 18%, rgba(56, 189, 248, 0.22), transparent 58%),
-    radial-gradient(760px 560px at 82% 78%, rgba(45, 212, 191, 0.14), transparent 55%),
-    radial-gradient(520px 400px at 50% 42%, rgba(251, 191, 36, 0.08), transparent 62%),
-    linear-gradient(165deg, #f3f8fc 0%, #e7f0f7 52%, #edf4f9 100%);
+.glass-wallpaper-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--glass-veil);
 }
 
+/*
+ * The rail is a flat region of the window sheet, not a second card: no fill, no border, no
+ * shadow, no blur. It is marked by a divider, which is all a region needs.
+ */
 .glass-ui .glass-nav {
-  background: var(--glass-fill) !important;
+  background: transparent !important;
   top: calc(var(--titlebar-height, 0px) + var(--glass-gap));
   left: var(--glass-gap);
   height: calc(100vh - var(--titlebar-height, 0px) - (var(--glass-gap) * 2)) !important;
-  border-radius: 14px;
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-inset), var(--glass-shadow);
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
+.glass-ui .glass-nav::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  right: 0;
+  width: 1px;
+  background: var(--glass-divider);
+  pointer-events: none;
+}
+
+/*
+ * One sheet per window: the glass spans the full width - the rail sits on it, flat - and
+ * pads its content past the rail. This is the only surface in the app with a live
+ * `backdrop-filter`; everything inside it spends fill, not blur.
+ */
 .glass-ui .glass-shell {
   position: fixed !important;
   z-index: 10;
   top: calc(var(--titlebar-height, 0px) + var(--glass-gap));
   right: var(--glass-gap);
   bottom: var(--glass-gap);
-  left: calc(var(--sidebar-width, 4.5rem) + var(--glass-gap) * 2);
+  left: var(--glass-gap);
   margin: 0 !important;
+  padding-left: var(--sidebar-width, 4.5rem);
   width: auto !important;
   height: auto !important;
   border-radius: 16px;
-  background: var(--glass-fill);
+  background: var(--glass-base-fill);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-inset), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+  box-sizing: border-box;
 }
 
 .glass-ui .glass-shell-inner {
@@ -1542,38 +1599,58 @@ html.glass-ui.dark .settings-card {
 }
 
 @supports not (backdrop-filter: blur(1px)) {
-  .glass-ui .glass-shell-inner,
-  .glass-ui .glass-nav {
-    background: rgba(15, 23, 42, 0.92) !important;
+  /* No blur available: the sheet becomes an opaque pane so text keeps its background. */
+  .glass-ui .glass-shell {
+    background: rgba(13, 16, 21, 0.94) !important;
   }
-  .glass-ui:not(.dark) .glass-shell-inner,
-  .glass-ui:not(.dark) .glass-nav {
-    background: rgba(255, 255, 255, 0.94) !important;
+  .glass-ui:not(.dark) .glass-shell {
+    background: rgba(250, 252, 255, 0.96) !important;
   }
 }
 
-/* 构建链路会丢掉这些 backdrop-filter；真正生效的是 GlassThemeApplier 注入的样式 */
+/*
+ * Surfaces spend fill, never blur (`--glass-blur` belongs to the sheet above). This block
+ * used to hold three more blur radii - 28/12/8 - under a comment claiming the build stripped
+ * them; the built CSS carried every one of them, and they fought the injected sheet.
+ */
+.glass-ui .glass-shell-inner,
 .glass-ui .glass-nav,
-.glass-ui .glass-shell-inner {
-  backdrop-filter: blur(28px);
-}
-.glass-ui .prompt-chip,
-.glass-ui .settings-card {
-  backdrop-filter: blur(12px);
-}
-.glass-ui .glass-overlay,
+.glass-ui .glass-surface,
 .glass-ui .glass-panel,
+.glass-ui .prompt-chip,
+.glass-ui .settings-card,
 .glass-ui .glass-field,
-.glass-ui .glass-inset,
+.glass-ui .glass-overlay,
 .glass-ui [role="dialog"],
 .glass-ui [data-sonner-toast] {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.glass-ui .glass-shell-inner,
+.glass-ui .glass-surface,
+.glass-ui .glass-panel,
+.glass-ui .prompt-chip,
+.glass-ui .settings-card {
   border-color: var(--glass-border);
 }
-.glass-ui.reduced-motion .glass-nav,
-.glass-ui.reduced-motion .glass-shell-inner,
-.glass-ui.reduced-motion .prompt-chip,
-.glass-ui.reduced-motion .settings-card {
-  backdrop-filter: blur(8px);
+
+.glass-ui.reduced-motion .glass-shell {
+  /* No live blur: the sheet falls back to a more solid fill. */
+  background: var(--glass-surface-fill);
+}
+
+/*
+ * Content chrome that blurs on its own in the regular theme (sticky headers, the context
+ * menu, the `backdrop-optimized` wrapper). Inside the glass sheet that blur would be a second
+ * live pass over an already-translucent pane, so it is off: only the sheet blurs.
+ */
+html.glass-ui .context-menu,
+html.glass-ui .sticky-header,
+html.glass-ui .history-sticky-header,
+html.glass-ui .backdrop-optimized {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* 玻璃主题滚动条：半透明圆条，无三角箭头 */

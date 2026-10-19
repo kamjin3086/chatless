@@ -1,4 +1,18 @@
-/** 构建链路会丢掉 .glass-ui 的 backdrop-filter；启用主题时注入到 document。 */
+/**
+ * The glass theme's rules. **Tokens live in `globals.css`** (`--glass-base-fill`,
+ * `--glass-surface-fill`, `--glass-overlay-fill`, `--glass-veil`, `--glass-blur`, ...); this
+ * sheet is where they are spent, injected at runtime because the theme is toggled on the root
+ * element. The two must not disagree - `__tests__/frostContract.test.ts` reads both.
+ *
+ * The old note here said the build stripped `.glass-ui` backdrop-filter, which is measurably
+ * false: the built CSS carried `.glass-ui .glass-nav { backdrop-filter: blur(28px) }`. The
+ * sheet stays because folding it into the Tailwind sheet is its own change, not because of
+ * that.
+ *
+ * The rules it encodes: one sheet per window with the app's only live `backdrop-filter`;
+ * the rail is a flat region of that sheet; surfaces spend fill; overlays carry text at ~95%
+ * opacity and never blur.
+ */
 export const GLASS_FROST_STYLE_ID = 'chatless-glass-frost';
 
 export const GLASS_FROST_CSS = `
@@ -7,23 +21,7 @@ html.glass-ui body {
   background-color: transparent !important;
 }
 
-html.glass-ui:not(.dark) {
-  background-image:
-    radial-gradient(880px 640px at 22% 18%, rgba(56, 189, 248, 0.22), transparent 58%),
-    radial-gradient(760px 560px at 82% 78%, rgba(45, 212, 191, 0.14), transparent 55%),
-    radial-gradient(520px 400px at 50% 42%, rgba(251, 191, 36, 0.08), transparent 62%),
-    linear-gradient(165deg, #f3f8fc 0%, #e7f0f7 52%, #edf4f9 100%);
-  background-attachment: fixed;
-}
-
-html.glass-ui.dark {
-  background-image:
-    radial-gradient(880px 640px at 24% 16%, rgba(99, 102, 241, 0.28), transparent 56%),
-    radial-gradient(760px 560px at 80% 80%, rgba(14, 165, 233, 0.18), transparent 54%),
-    radial-gradient(520px 400px at 48% 38%, rgba(251, 191, 36, 0.06), transparent 60%),
-    linear-gradient(165deg, #1a1f2e 0%, #141824 52%, #181d2a 100%);
-  background-attachment: fixed;
-}
+/* The backdrop (calm field, wallpaper fallback, veil colours) lives in globals.css. */
 
 html.glass-ui.simple-ui:not(.dark) .bg-white:not([role="dialog"]):not(.glass-float-dialog):not([data-slot="dialog-content"]):not([data-slot="alert-dialog-content"]):not([data-slot="sheet-content"]):not(.glass-switch-knob),
 html.glass-ui.dark.simple-ui .bg-white:not([role="dialog"]):not(.glass-float-dialog):not([data-slot="dialog-content"]):not([data-slot="alert-dialog-content"]):not([data-slot="sheet-content"]):not(.glass-switch-knob),
@@ -70,16 +68,11 @@ html.glass-ui.simple-ui [role="dialog"],
 html.glass-ui.simple-ui [data-slot="dialog-content"],
 html.glass-ui.simple-ui [data-slot="alert-dialog-content"],
 html.glass-ui.simple-ui [data-slot="sheet-content"] {
-  background-color: rgba(248, 252, 255, 0.78) !important;
+  background-color: var(--glass-overlay-fill) !important;
   background-image: none !important;
-  border-color: rgba(148, 163, 184, 0.38) !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
   border-radius: var(--glass-radius-overlay) !important;
-  backdrop-filter: blur(36px) saturate(1.55) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
-    0 24px 56px rgba(15, 23, 42, 0.16),
-    0 0 40px rgba(56, 189, 248, 0.1) !important;
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.18) !important;
   color: var(--glass-text-primary) !important;
 }
 
@@ -93,30 +86,25 @@ html.glass-ui.dark [data-radix-alert-dialog-content],
 html.glass-ui.dark.simple-ui .glass-float-dialog,
 html.glass-ui.dark.simple-ui [role="dialog"],
 html.glass-ui.dark.simple-ui [data-slot="dialog-content"] {
-  background-color: rgba(22, 28, 38, 0.72) !important;
-  border-color: rgba(255, 255, 255, 0.18) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 28px 64px rgba(0, 0, 0, 0.42),
-    0 0 36px rgba(56, 189, 248, 0.08) !important;
+  background-color: var(--glass-overlay-fill) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.48) !important;
   color: var(--glass-text-primary) !important;
 }
 
 html.glass-ui [data-sonner-toast] {
-  background-color: rgba(255, 255, 255, 0.62) !important;
+  background-color: var(--glass-overlay-fill) !important;
   background-image: none !important;
   border-color: var(--glass-border) !important;
   border-radius: var(--glass-radius-overlay) !important;
-  backdrop-filter: blur(24px) saturate(1.35) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 28px rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12) !important;
   color: var(--glass-text-primary) !important;
 }
 
 html.glass-ui.dark [data-sonner-toast] {
-  background-color: rgba(22, 26, 32, 0.58) !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 12px 32px rgba(0, 0, 0, 0.32) !important;
+  background-color: var(--glass-overlay-fill) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4) !important;
 }
 
 html.glass-ui .glass-float-menu,
@@ -128,12 +116,11 @@ html.glass-ui [role="menu"],
 html.glass-ui [role="listbox"],
 html.glass-ui .context-menu,
 html.glass-ui .bg-popover {
-  background-color: rgba(255, 255, 255, 0.5) !important;
+  background-color: var(--glass-overlay-fill) !important;
   background-image: none !important;
   border-color: var(--glass-border) !important;
   border-radius: var(--glass-radius-overlay) !important;
-  backdrop-filter: blur(20px) saturate(1.3) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 8px 24px rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1) !important;
   color: var(--glass-text-secondary) !important;
 }
 
@@ -146,9 +133,9 @@ html.glass-ui.dark [role="menu"],
 html.glass-ui.dark [role="listbox"],
 html.glass-ui.dark .context-menu,
 html.glass-ui.dark .bg-popover {
-  background-color: rgba(22, 26, 32, 0.42) !important;
+  background-color: var(--glass-overlay-fill) !important;
   border-color: rgba(255, 255, 255, 0.12) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 10px 28px rgba(0, 0, 0, 0.26) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34) !important;
   color: var(--glass-text-secondary) !important;
 }
 
@@ -160,8 +147,7 @@ html.glass-ui [role="tooltip"] {
   color: rgb(248, 250, 252) !important;
   border-color: rgba(148, 163, 184, 0.28) !important;
   border-radius: var(--glass-radius-chip) !important;
-  backdrop-filter: blur(12px) saturate(1.2) !important;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22) !important;
 }
 
 html.glass-ui.dark .glass-float-tip,
@@ -177,17 +163,16 @@ html.glass-ui .glass-panel,
 html.glass-ui.simple-ui .glass-panel,
 html.glass-ui .knowledge-card,
 html.glass-ui .chart-card {
-  background-color: rgba(255, 255, 255, 0.22) !important;
+  background-color: var(--glass-surface-fill) !important;
   background-image: none !important;
   border-color: rgba(100, 116, 139, 0.28) !important;
-  backdrop-filter: blur(18px) saturate(1.45) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
 }
 
 html.glass-ui.dark .glass-panel,
 html.glass-ui.dark .knowledge-card,
 html.glass-ui.dark .chart-card {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: var(--glass-surface-fill) !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
@@ -290,7 +275,6 @@ html.glass-ui [data-slot="sheet-overlay"],
 html.glass-ui [data-radix-dialog-overlay],
 html.glass-ui [data-radix-alert-dialog-overlay] {
   background: rgba(15, 23, 42, 0.36) !important;
-  backdrop-filter: blur(14px) saturate(1.12) !important;
 }
 
 html.glass-ui.dark .glass-scrim,
@@ -352,9 +336,8 @@ html.glass-ui [role="dialog"] [class~="bg-blue-500"]:not([data-slot="button"]):n
 
 html.glass-ui [data-slot="select-trigger"],
 html.glass-ui [role="tablist"] {
-  background-color: rgba(255, 255, 255, 0.14) !important;
+  background-color: var(--glass-surface-fill) !important;
   border-color: rgba(148, 163, 184, 0.2) !important;
-  backdrop-filter: blur(12px) saturate(1.38) !important;
   box-shadow: none !important;
 }
 
@@ -846,15 +829,14 @@ html.glass-ui.dark select {
 }
 
 html.glass-ui .glass-field:not(.inline-edit) {
-  background-color: rgba(255, 255, 255, 0.28) !important;
+  background-color: var(--glass-surface-fill) !important;
   border-color: var(--glass-border) !important;
   border-radius: var(--glass-radius-control) !important;
-  backdrop-filter: blur(12px) saturate(1.3) !important;
   color: var(--glass-text-primary) !important;
 }
 
 html.glass-ui.dark .glass-field:not(.inline-edit) {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: var(--glass-surface-fill) !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
 }
 
@@ -940,22 +922,20 @@ html.glass-ui.dark [class~="caret-blue-500"] {
   caret-color: var(--glass-accent-text) !important;
 }
 
-html.glass-ui .glass-nav,
-html.glass-ui .glass-shell {
-  backdrop-filter: blur(40px) saturate(1.42) !important;
-}
-
 html.glass-ui .glass-shell {
   position: fixed !important;
   z-index: 10;
+  /* The app's only live blur; the rail is a flat region of this sheet. */
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
 }
 
 html.glass-ui .glass-nav {
-  background: rgba(255, 255, 255, 0.18) !important;
+  background: transparent !important;
 }
 
 html.glass-ui .glass-shell {
-  background: rgba(255, 255, 255, 0.16) !important;
+  background: var(--glass-base-fill) !important;
 }
 
 html.glass-ui .glass-shell-inner {
@@ -963,11 +943,11 @@ html.glass-ui .glass-shell-inner {
 }
 
 html.glass-ui.dark .glass-nav {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: transparent !important;
 }
 
 html.glass-ui.dark .glass-shell {
-  background: rgba(255, 255, 255, 0.07) !important;
+  background: var(--glass-base-fill) !important;
 }
 
 html.glass-ui .input-area {
@@ -1001,10 +981,9 @@ html.glass-ui .prompt-chip,
 html.glass-ui .settings-card,
 html.glass-ui .setting-collapse,
 html.glass-ui .setting-collapse-content {
-  background: rgba(255, 255, 255, 0.14) !important;
+  background: var(--glass-surface-fill) !important;
   background-image: none !important;
   border-color: rgba(148, 163, 184, 0.28) !important;
-  backdrop-filter: blur(16px) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
 }
 
@@ -1088,12 +1067,11 @@ html.glass-ui.dark .provider-row:hover:not(.is-selected) {
 }
 
 html.glass-ui .chat-rail {
-  background: rgba(255, 255, 255, 0.16) !important;
-  backdrop-filter: blur(32px) saturate(1.42) !important;
+  background: var(--glass-surface-fill) !important;
 }
 
 html.glass-ui.dark .chat-rail {
-  background: rgba(255, 255, 255, 0.07) !important;
+  background: var(--glass-surface-fill) !important;
 }
 
 html.glass-ui [data-slot="select-trigger"]:not([data-variant="ghost"]) {
@@ -1136,18 +1114,9 @@ html.glass-ui.dark .window-btn-win.window-btn-close:hover {
   color: #fff !important;
 }
 
-html.glass-ui.reduced-motion .glass-nav,
-html.glass-ui.reduced-motion .glass-shell,
-html.glass-ui.reduced-motion .input-area,
-html.glass-ui.reduced-motion .chat-rail,
-html.glass-ui.reduced-motion .glass-overlay,
-html.glass-ui.reduced-motion .glass-panel,
-html.glass-ui.reduced-motion [role="dialog"],
-html.glass-ui.reduced-motion [data-radix-popper-content-wrapper] > *,
-html.glass-ui.reduced-motion [data-sonner-toast],
-html.glass-ui.reduced-motion .knowledge-card,
-html.glass-ui.reduced-motion .chart-card {
-  backdrop-filter: blur(8px) !important;
+/* Reduced motion is --glass-blur: 0 plus a more solid sheet; nothing else changes. */
+html.glass-ui.reduced-motion .glass-shell {
+  background: var(--glass-surface-fill) !important;
 }
 
 html.glass-ui,

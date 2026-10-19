@@ -104,3 +104,87 @@ export async function clearGlassWallpaperFile(stored: string | null | undefined)
     // 清理失败不影响关闭主题
   }
 }
+
+/**
+ * The ambient variant of a wallpaper: downscaled and blurred once, then reused.
+ *
+ * A photograph behind text is not readable on its own - a bright image washes the text out,
+ * a dark one swallows it - and the running UI must not pay a per-frame blur to find out. The
+ * blur is baked by the canvas, so the wallpaper layer is a plain image; the CSS filter is
+ * only the fallback for a source that cannot be decoded here.
+ *
+ * Animated images arrive as their first frame: a canvas takes a frame, not the animation.
+ * That is the accepted trade for "the wallpaper is atmosphere, not a gallery", and the
+ * picker says so.
+ */
+export const AMBIENT_MAX_EDGE = 1600;
+
+/** Blur radius baked into the derivative, in its own pixels. */
+export const AMBIENT_BLUR_PX = 18;
+
+/** Longest edge no larger than `maxEdge`, aspect preserved. Pure, so it can be tested. */
+export function ambientTargetSize(
+  width: number,
+  height: number,
+  maxEdge: number = AMBIENT_MAX_EDGE,
+): { width: number; height: number } {
+  const w = Math.max(1, Math.round(Number.isFinite(width) ? width : 1));
+  const h = Math.max(1, Math.round(Number.isFinite(height) ? height : 1));
+  const longest = Math.max(w, h);
+  if (longest <= maxEdge) return { width: w, height: h };
+  const scale = maxEdge / longest;
+  return {
+    width: Math.max(1, Math.round(w * scale)),
+    height: Math.max(1, Math.round(h * scale)),
+  };
+}
+
+const ambientCache = new Map<string, string>();
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('壁纸解码失败'));
+    image.src = src;
+  });
+}
+
+/**
+ * Downscale + blur into a data URL, memoised per source. Returns `null` where there is no
+ * canvas to draw on (unit tests, SSR) or the image cannot be decoded - the caller then shows
+ * the original with the CSS blur fallback.
+ */
+export async function deriveAmbientWallpaper(src: string): Promise<string | null> {
+  if (!src) return null;
+  const cached = ambientCache.get(src);
+  if (cached) return cached;
+  if (typeof document === 'undefined' || typeof Image === 'undefined') return null;
+
+  try {
+    const image = await loadImage(src);
+    const target = ambientTargetSize(
+      image.naturalWidth || image.width,
+      image.naturalHeight || image.height,
+    );
+    const canvas = document.createElement('canvas');
+    canvas.width = target.width;
+    canvas.height = target.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.filter = `blur(${AMBIENT_BLUR_PX}px)`;
+    // Drawing slightly larger than the canvas hides the blurred edge bleeding inward.
+    ctx.drawImage(image, -AMBIENT_BLUR_PX, -AMBIENT_BLUR_PX, target.width + AMBIENT_BLUR_PX * 2, target.height + AMBIENT_BLUR_PX * 2);
+    const url = canvas.toDataURL('image/jpeg', 0.82);
+    ambientCache.set(src, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/** Test-only: forget what was derived, so a case can re-run the pipeline. */
+export function resetAmbientWallpaperCache(): void {
+  ambientCache.clear();
+}

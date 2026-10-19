@@ -109,12 +109,12 @@ export function PersonalizationSettings() {
                    // eslint-disable-next-line @next/next/no-img-element
                    <img src={previewUrl} alt="" className="w-full h-full object-cover" />
                  ) : (
-                   <div className="w-full h-full glass-wallpaper-fallback" />
+                   <div className="w-full h-full bg-slate-200 dark:bg-slate-800" />
                  )}
                </div>
                <div className="min-w-0">
                  <div className="text-xs text-slate-700 dark:text-slate-300">聊天壁纸</div>
-                 <div className="text-[10px] text-slate-400">可选。不设壁纸时使用内置渐变</div>
+                 <div className="text-[10px] text-slate-400">可选。壁纸会做柔化与压暗处理，动图只取首帧</div>
                </div>
              </div>
              <div className="flex items-center gap-2 flex-shrink-0">

@@ -2,12 +2,12 @@ import { describe, expect, test } from 'vitest';
 import { GLASS_FROST_CSS } from '../frostStyle';
 
 describe('glass frost runtime css', () => {
-  test('压掉简洁模式的实心白底，并带上毛玻璃模糊', () => {
+  test('压掉简洁模式的实心白底，模糊只属于窗口玻璃', () => {
     expect(GLASS_FROST_CSS).toContain('simple-ui:not(.dark) .bg-white');
     expect(GLASS_FROST_CSS).toContain('background-color: transparent !important');
-    expect(GLASS_FROST_CSS).toContain('backdrop-filter: blur(40px)');
-    expect(GLASS_FROST_CSS).toContain('rgba(255, 255, 255, 0.16)');
-    expect(GLASS_FROST_CSS).toContain('#f3f8fc');
+    // The sheet's one live blur spends the token; the backdrop colours moved to globals.css.
+    expect(GLASS_FROST_CSS).toContain('backdrop-filter: blur(var(--glass-blur))');
+    expect(GLASS_FROST_CSS).not.toContain('#f3f8fc');
     expect(GLASS_FROST_CSS).not.toContain('255, 64, 160');
   });
 
@@ -53,8 +53,8 @@ describe('glass frost runtime css', () => {
   });
 
   test('通透饱和度与语义色玻璃 token 映射', () => {
-    expect(GLASS_FROST_CSS).toContain('saturate(1.42)');
-    expect(GLASS_FROST_CSS).toContain('saturate(1.45)');
+    expect(GLASS_FROST_CSS).toContain('saturate(1.2)');
+    expect(GLASS_FROST_CSS).toContain('var(--glass-base-fill)');
     expect(GLASS_FROST_CSS).toContain('var(--glass-accent)');
     expect(GLASS_FROST_CSS).toContain('var(--glass-agent-text)');
     expect(GLASS_FROST_CSS).toContain('var(--glass-search)');
@@ -95,8 +95,9 @@ describe('glass frost runtime css', () => {
       /html\.glass-ui \.glass-float-dialog[\s\S]*?html\.glass-ui\.dark \.glass-float-dialog/
     )?.[0];
     expect(dialogBlock).toBeTruthy();
-    expect(dialogBlock).toContain('saturate(1.55)');
-    expect(dialogBlock).toContain('rgba(248, 252, 255, 0.78)');
+    // Text-bearing overlays leave the glass channel: ~95% opacity, no live blur.
+    expect(dialogBlock).toContain('var(--glass-overlay-fill)');
+    expect(dialogBlock).not.toContain('backdrop-filter: blur');
     expect(dialogBlock).not.toContain('[data-slot="tooltip-content"]');
     expect(dialogBlock).not.toContain('[data-sonner-toast]');
     expect(GLASS_FROST_CSS).toContain('bg-white:not([role="dialog"])');
@@ -164,8 +165,12 @@ describe('glass frost runtime css', () => {
     expect(GLASS_FROST_CSS).toMatch(
       /\.provider-row\.is-selected \{[\s\S]*?background-color: var\(--glass-accent-soft\)/
     );
+    // The conversation rail is a surface inside the sheet now: fill, no live blur.
     expect(GLASS_FROST_CSS).toMatch(
-      /html\.glass-ui \.chat-rail \{[\s\S]*?backdrop-filter: blur\(32px\) saturate\(1\.42\)/
+      /html\.glass-ui \.chat-rail \{[\s\S]*?background: var\(--glass-surface-fill\) !important/
+    );
+    expect(GLASS_FROST_CSS).not.toMatch(
+      /html\.glass-ui \.chat-rail \{[\s\S]*?backdrop-filter: blur/
     );
     expect(GLASS_FROST_CSS).not.toMatch(
       /html\.glass-ui \.settings-rail,\s*html\.glass-ui \.chat-rail \{/
