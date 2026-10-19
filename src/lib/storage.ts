@@ -32,6 +32,20 @@ export class StorageUtil {
       return null;
     }
 
+    // #124: a browser has no Tauri store, so `Store.load` fails and `setItem` returns false -
+    // a write is simply gone, and anything that reads it back sees nothing. A development
+    // build swaps in an in-memory store with `?devStore=1`; see
+    // `docs/agents/maintenance.md` for what that does and does not make verifiable.
+    //
+    // The build gate is this `process.env.NODE_ENV` comparison, which the bundler inlines:
+    // in a production build the branch is `false && ...`, so the module is never imported
+    // and the stub is not in the payload either. A guard inside the module could not do
+    // that - the caller's argument object is evaluated before the branch is taken.
+    if (process.env.NODE_ENV !== 'production') {
+      const { devStore, devStoreEnabled } = await import('@/lib/dev/devStore');
+      if (devStoreEnabled()) return devStore(storeName) as unknown as Store;
+    }
+
     if (!this.stores.has(storeName)) {
       try {
         const store = await Store.load(storeName);

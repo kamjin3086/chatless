@@ -168,15 +168,39 @@ still works (`docs/tauri-window-pitfalls.md`).
   `PATCH /git/refs/heads/<branch>` with `force`). The resulting sha differs from the local
   one - same content, different object - so state it in the PR rather than quoting a local
   sha as if it were the remote head.
-- **Which surfaces are empty outside Tauri, and what to check instead.** `/settings` renders
-  nothing on a plain dev server - only the `- region "Notifications alt+T"` node - because the
-  provider list comes from the Tauri store; the chat page needs a live session, which needs a
-  model, which needs that same store. So a browser proves layout and CSS on the chat shell
-  (the empty state, the composer) and proves nothing about provider rows, key inputs, badges
-  or dialogs. Do not spend an hour rediscovering this: for those surfaces the honest options
-  are a component-level test, or a manual check on a real build by the owner, and a claim
-  should say which one it is. A dev-only store stub is the better fix and is still not built
-  (#124).
+- **What a browser can and cannot verify, and how to get past the empty store.** Measured
+  on `next dev` with headless Chrome, 2026-10-19:
+  - `http://localhost:3000/settings?tab=localModels&provider=DeepSeek&devStore=1` renders the
+    settings shell, the provider chips, DeepSeek's card with its `未配置密钥` badge, the API
+    key field and its two static models. Same DOM without the flag: the routes already
+    rendered, because `ProviderRepository` serves them from the initialization cache.
+  - What the flag adds is the store itself: `?devStore=1` (remembered in `sessionStorage` for
+    the tab, `?devStore=0` clears it) swaps `StorageUtil`'s Tauri store for an in-memory one
+    (`src/lib/dev/devStore.ts`). Without it `StorageUtil.setItem` returns false and a write
+    is simply gone; with it, initialization's own writes land (the page logs `Storage: Set
+    deepseek_models in provider-models.json`) and are read back. It lives in memory for the
+    tab only: a reload starts fresh, like a new install.
+  - A production payload does not contain it. The gate is `process.env.NODE_ENV !==
+    'production'` at the import site in `StorageUtil.getStore`, which the bundler inlines, so
+    the dynamic import is dropped: `pnpm build && grep -rl chatless:dev-store dist/` prints
+    nothing. A guard inside the module could not do that - the caller's argument object is
+    evaluated before the branch is taken, which is how an earlier version of this stub shipped
+    and wrote `chatless:dev-store` to `sessionStorage` before refusing. The Tauri runtime is
+    refused at the flag check, where a real store exists.
+  - Still Tauri-only: chat and conversations (SQLite), model refresh and connection checks
+    (`invoke`), downloads, the tray. Two settings tabs also go round `StorageUtil` and load the
+    plugin store directly, so the flag does not cover them: MCP servers
+    (`McpServersSettings.tsx`, `ServerManager.ts`) and the knowledge-base config
+    (`knowledgeBaseConfig.ts`).
+  - What a browser proves: layout, and the render that follows a stored write. It does not
+    prove an interactive flow by itself - typing a key into the provider card and watching
+    the badge flip was tried and not reproduced (the field commits on blur; the synthetic
+    blur wrote nothing), so that claim still needs a component test or a real build.
+  - Do not rediscover this by hand: open the URL above before concluding a settings surface
+    is unreachable, and say in the claim which of the three you used - browser-with-stub,
+    component test, or a real build. `google-chrome --headless=new --dump-dom <url> | ...`
+    dumps the hydrated DOM; on a cold dev server give it ~30s, because initialization's
+    network probes have to time out first.
 - **`pnpm typecheck` never looks at a test file.** That is where a test could pass a field
   production code had deleted. `pnpm typecheck:tests` covers `src` tests plus the
   `docs/acceptance` audits `pnpm test` runs, and is part of `pnpm verify` and CI; the
