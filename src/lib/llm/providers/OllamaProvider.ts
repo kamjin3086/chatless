@@ -3,6 +3,7 @@ import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '@/lib/llm/adapters/StreamEventAdapter';
 import { classifyNetworkError, judgeApiReachable } from './healthcheck';
+import { isAppOnlyOption } from '../wireOptions';
 
 export class OllamaProvider extends BaseProvider {
   private sseClient: SSEClient;
@@ -133,6 +134,9 @@ export class OllamaProvider extends BaseProvider {
     const o: any = opts || {};
     const { extensions, mcpServers: _mcpServers, ...restOpts } = o;
     for (const [key, value] of Object.entries(restOpts)) {
+      // #151: the bag also carries the scheduler lease, the request id and `streaming`;
+      // those describe the request to this app and must not land in the options object.
+      if (isAppOnlyOption(key)) continue;
       // 跳过已处理的标准参数和内部字段
       if (!['options', 'temperature', 'topP', 'topK', 'minP', 'stop', 'maxTokens', 'maxOutputTokens', 
            'numPredict', 'numCtx', 'repeatLastN', 'repeatPenalty', 'seed', 'frequencyPenalty', 'presencePenalty'].includes(key)) {

@@ -2,6 +2,7 @@ import { BaseProvider, CheckResult, LlmMessage, StreamCallbacks } from './BasePr
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
+import { toWireOptions } from '../wireOptions';
 
 /**
  * OpenAI Responses Provider
@@ -84,7 +85,8 @@ export class OpenAIResponsesProvider extends BaseProvider {
     const url = `${this.baseUrl.replace(/\/$/, '')}/responses`;
 
     // 选项映射：Responses 使用 max_output_tokens / temperature / top_p 等
-    const mapped: any = { ...opts };
+    // #151: only wire fields continue; the mapping below reads the original `opts`.
+    const mapped: any = toWireOptions(opts);
     if (opts.maxOutputTokens !== undefined && mapped.max_output_tokens === undefined) mapped.max_output_tokens = opts.maxOutputTokens;
     if (opts.maxTokens !== undefined && mapped.max_output_tokens === undefined) mapped.max_output_tokens = opts.maxTokens;
     if (opts.topP !== undefined && mapped.top_p === undefined) mapped.top_p = opts.topP;

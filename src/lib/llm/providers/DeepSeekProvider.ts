@@ -8,6 +8,7 @@ import { createStreamEvent } from '../types/stream-events';
 import { toOpenAIMessage } from './messageMapping';
 import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { toOpenAITools, toOpenAIToolChoice, type ToolDefinition } from '../types/tool-schema';
+import { toWireOptions } from '../wireOptions';
 
 /**
  * DeepSeek（深度寻求）模型服务 Provider
@@ -49,7 +50,8 @@ export class DeepSeekProvider extends BaseProvider {
 
     // 过滤扩展字段，避免把 mcpServers/extensions 传入
     const { extensions, mcpServers, tools: toolDefs, toolChoice, parallelToolCalls, ...restOpts } = (opts as any) || {};
-    const mapped: any = { ...restOpts };
+    // #151: only wire fields continue; the mapping below reads the original `opts`.
+    const mapped: any = toWireOptions(restOpts);
     if (opts.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxTokens;
     if (opts.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxOutputTokens;
     if (opts.topP !== undefined && mapped.top_p === undefined) mapped.top_p = opts.topP;

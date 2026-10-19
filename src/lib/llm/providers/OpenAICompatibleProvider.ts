@@ -11,6 +11,7 @@ import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptC
 import { readContextWindow } from '@/lib/llm/modelWindow';
 import { TURN_BOUNDARY_STOP_SEQUENCES } from '@/lib/llm/chatTemplateTokens';
 import { dumpLlmRequest, isLlmDebugEnabled, reportTurnBoundary } from '../debugLog';
+import { toWireOptions } from '../wireOptions';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -159,7 +160,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
       parallelToolCalls,
       ...restOpts 
     } = (opts as any) || {};
-    const mapped: any = { ...restOpts };
+    // #151: the bag also carries the scheduler lease, the request id and `streaming`.
+    // Only wire fields may continue; the mapping below reads the original `opts`.
+    const mapped: any = toWireOptions(restOpts);
     const o: any = opts as any;
     if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
     if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;

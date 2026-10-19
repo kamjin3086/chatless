@@ -9,6 +9,7 @@ import {
   toOpenAITools, 
   toOpenAIToolChoice,
 } from '../types/tool-schema';
+import { toWireOptions } from '../wireOptions';
 
 export class OpenAIProvider extends BaseProvider {
   private sseClient: SSEClient;
@@ -64,7 +65,8 @@ export class OpenAIProvider extends BaseProvider {
       parallelToolCalls,
       ...restOpts 
     } = (opts as any) || {};
-    const mapped: any = { ...restOpts };
+    // #151: only wire fields continue; the mapping below reads the original `opts`.
+    const mapped: any = toWireOptions(restOpts);
     const o: any = opts as any;
     if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
     if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;

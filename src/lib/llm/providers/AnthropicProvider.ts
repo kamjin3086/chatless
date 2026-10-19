@@ -18,6 +18,7 @@ import {
   toAnthropicTools,
   toAnthropicToolChoice,
 } from '../types/tool-schema';
+import { toWireOptions } from '../wireOptions';
 
 /**
  * Anthropic Claude Provider (v1 REST API)
@@ -43,7 +44,7 @@ export function buildAnthropicRequestOptions(
     toolChoice: _toolChoice,
     ...restOpts
   } = o;
-  const mapped: any = { ...restOpts };
+  const mapped: any = toWireOptions(restOpts);
   if (o.maxTokens !== undefined && mapped.max_tokens === undefined)
     mapped.max_tokens = o.maxTokens;
   if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined)
