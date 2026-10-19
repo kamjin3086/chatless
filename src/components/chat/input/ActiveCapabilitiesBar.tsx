@@ -8,7 +8,7 @@
  */
 
 import { useState, useRef } from "react";
-import { X, Database, Plug, Settings, Folder, ExternalLink, FileText } from "lucide-react";
+import { X, Database, Plug, Folder, ExternalLink, FileText } from "lucide-react";
 import type { KnowledgeBase } from "@/lib/knowledgeService";
 import { QuickSelectPopover, type QuickSelectOption } from "./QuickSelectPopover";
 import { cn } from "@/lib/utils";
@@ -33,10 +33,6 @@ interface ActiveCapabilitiesBarProps {
   enabledMcpServers?: string[];
   onClickMcp?: () => void;
   
-  // Session Parameters
-  hasSessionParameters?: boolean;
-  onClickSessionParameters?: () => void;
-
   // WorkDir
   workingDir?: string;
   /** True when @WorkDir is a directory the user attached (removable). */
@@ -60,8 +56,6 @@ export function ActiveCapabilitiesBar({
   onSelectKnowledgeBase,
   enabledMcpServers = [],
   onClickMcp,
-  hasSessionParameters,
-  onClickSessionParameters,
   workingDir,
   workingDirAttached = false,
   onRemoveWorkingDir,
@@ -80,7 +74,6 @@ export function ActiveCapabilitiesBar({
   const hasAny =
     selectedKnowledgeBase ||
     enabledMcpServers.length > 0 ||
-    hasSessionParameters ||
     (workingDirAttached && !!workingDir) ||
     !!attachedDocument;
 
@@ -201,22 +194,6 @@ export function ActiveCapabilitiesBar({
           >
             <Plug className="w-3 h-3" />
             <span>MCP: {enabledMcpServers.length}</span>
-          </button>
-        )}
-
-        {/* 会话参数标签 - 橙色系 */}
-        {hasSessionParameters && (
-          <button
-            onClick={onClickSessionParameters}
-            className={cn(
-              tagBase,
-              "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400",
-              "hover:bg-amber-100 dark:hover:bg-amber-900/50",
-              "border border-amber-200/50 dark:border-amber-800/50"
-            )}
-          >
-            <Settings className="w-3 h-3" />
-            <span>参数</span>
           </button>
         )}
       </div>

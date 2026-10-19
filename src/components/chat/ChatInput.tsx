@@ -99,9 +99,6 @@ interface ChatInputProps {
   modelLabel?: string;
   conversationId?: string; // 添加会话ID参数
   onSessionParametersChange?: (parameters: ModelParameters) => void;
-  currentSessionParameters?: ModelParameters;
-  /** 由外部（右上角三点菜单）触发打开会话参数 */
-  onOpenSessionParameters?: () => void;
 }
 
 export function ChatInput({
@@ -121,8 +118,6 @@ export function ChatInput({
   modelId: _modelId,
   modelLabel: _modelLabel,
   onSessionParametersChange: _onSessionParametersChange,
-  currentSessionParameters,
-  onOpenSessionParameters,
   conversationId
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState("");
@@ -1351,8 +1346,6 @@ export function ChatInput({
         attachedDocument={attachedDocument ? { name: attachedDocument.name, fileSize: attachedDocument.fileSize } : undefined}
         onRemoveDocument={() => removeAttachedDocument()}
         enabledMcpServers={[]}
-        hasSessionParameters={!!currentSessionParameters}
-        onClickSessionParameters={() => onOpenSessionParameters?.()}
       />
 
       {/* 会话参数弹窗已迁移到上层 Chat 页面统一挂载 */}

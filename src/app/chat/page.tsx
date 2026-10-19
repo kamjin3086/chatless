@@ -480,11 +480,7 @@ export default function ChatPage() {
                     ?.models?.find((m) => m.name === selectedModelId)?.label
                 }
                 onSessionParametersChange={handleSessionParametersChange}
-                currentSessionParameters={currentSessionParameters}
                 conversationId={currentConversationId}
-                onOpenSessionParameters={() =>
-                  setSessionParametersDialogOpen(true)
-                }
               />
             </div>
           </div>
