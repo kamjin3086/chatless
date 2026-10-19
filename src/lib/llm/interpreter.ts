@@ -47,6 +47,11 @@ export class LLMInterpreter {
       __silentMode: true, // 静默模式，不触发UI更新
     };
 
+    // #151: a refusal used to be reported to the caller as `{ content: '' }`, because both
+    // the rejection from `streamChat` and the terminal callback's error were swallowed.
+    // The settings probe then printed “响应内容为空，可能为不兼容的返回格式” over a plain
+    // HTTP 400. A failure the provider reported is the failure the caller gets.
+    let failure: unknown = null;
     await this.streamChat(
       provider,
       model,
@@ -83,12 +88,19 @@ export class LLMInterpreter {
         __internal: true,
       } as any,
       internalOptions,
-    ).catch(() => {});
+    ).catch((error) => {
+      failure = error;
+    });
 
     try {
       await donePromise;
-    } catch {
-      /* 忽略，交由上层回退 */
+    } catch (error) {
+      // The terminal callback rejects first when the provider reports a server refusal;
+      // the rejection above carries the same error (or none, for an early return).
+      failure = failure ?? error;
+    }
+    if (failure) {
+      throw failure instanceof Error ? failure : new Error(String(failure));
     }
     // 如果正文内容为空但有思考内容，返回思考内容（供标题生成等场景使用）
     const finalContent = content || thinkingContent;
