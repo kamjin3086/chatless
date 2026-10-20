@@ -3,16 +3,19 @@
 A map for the seams that cost exploration to find. Not a tour of `src` - one line per
 place where two subsystems have to agree, because that is where a change starts.
 
+Paths here were checked against the branch this file landed on. Work that is in flight is
+named by issue/PR instead of by path, so the map stays true until it lands and gets its row.
+
 ## Tool calls (native track and prompt track)
 
 The chain, in order, for a single turn:
 
 | Step | Where |
 |---|---|
-| Which track this run is on | `src/lib/llm/types/tool-capability.ts` (`resolveToolTrack`), read by `src/lib/mcp/agentLoop/resolveAgentToolCapability.ts` |
-| What the model is told | `src/lib/mcp/injection/promptBuilder.ts` - the native contract, or `buildToolChannelBlock` once, for the prompt track |
+| Which track this run is on | `src/lib/mcp/agentLoop/resolveAgentToolCapability.ts`, over the capability table in `src/lib/llm/config/tool-call-config.ts` |
+| What the model is told | `src/lib/mcp/injection/promptBuilder.ts` - the native contract, or one tool-channel block for the prompt track (#161 / #167) |
 | What the request carries | `src/lib/mcp/agentLoop/AgentLoopRunner.ts` - `tools` for the native track, none for the prompt track |
-| Turning answer text back into calls | `src/lib/chat/stream/promptTrack.ts` over `src/lib/llm/adapters/ToolChannelParser.ts`, prompt track only, one pass per turn |
+| Turning answer text back into calls | in flight in #161 / #167, in `src/lib/chat/stream/`, over `src/lib/llm/adapters/ToolChannelParser.ts` |
 | The formats it reads | `src/lib/mcp/toolInstruction/formats/pipeline.ts` and `handlers/` - a format is a handler, not a branch |
 | What the UI gets | `src/lib/chat/stream/handlers/ToolCallEventHandler.ts` → `src/lib/chat/segments.ts` → `src/components/chat/ToolCallCard.tsx` (`presentToolCard` owns the wording) |
 
@@ -30,9 +33,8 @@ in the stream layer.
 
 ## Window and chrome
 
-- Size/restore and the work-area clamp: `src-tauri/src/window_fit.rs`, applied in
-  `src-tauri/src/lib.rs`'s setup; the preset UI is
-  `src/components/settings/PersonalizationSettings.tsx` over `src/lib/window/windowFit.ts`.
+- The preset UI is `src/components/settings/PersonalizationSettings.tsx`; the work-area clamp
+  is in flight in #171 (`src-tauri/src/`, `src/lib/window/`).
 - Known traps: `docs/tauri-window-pitfalls.md`; screenshotting is `scripts/shot/`.
 
 ## Where the rules live
