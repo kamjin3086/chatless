@@ -54,9 +54,16 @@ interesting" exception.
 
 ### Voice
 
-- **The maintainer, not a supplicant.** No apology, no gratitude padding, no self-deprecation, no
-  "you don't have to do anything". A bug report is normal business; the owner owes a correct
-  answer, not contrition.
+- **The maintainer, not a supplicant.** No apology, no self-deprecation, no "you don't have to do
+  anything". A bug report is normal business; the owner owes a correct answer, not contrition.
+- **Thank where thanks are due, in the first sentence.** When the reporter did work that moved the
+  issue - logs or a reproduction detailed enough to save a round of questions, the version and
+  environment given unprompted, a suggestion that changes the fix - open with one short,
+  specific thank-you: `日志挺全的，省了我们一轮排查。` It names what it is for. Generic gratitude
+  (`感谢反馈`) is padding and reads as a template. One sentence, no exclamation marks, no
+  "非常/十分", no emoji: warm is not enthusiastic. And **no thank-you when the reporter only
+  restated the bug** - a report is normal business, and thanking every one of them devalues the
+  one that earned it.
 - **Warm, not servile.** A reply is one person talking to another. `修好了`、`这个场景确实容易踩`、
   `你贴的那行日志里…`、`我们之前漏了这条` are warmth: they show attention to the reporter's own
   details and give a straight answer. `确认是产品问题。临时办法：……` is a system notice - correct

@@ -81,8 +81,10 @@ Two things here are **required**, not preference:
   The translation for an English thread is `> AI-generated, human-reviewed.`
 - **A reply is written as the owner's own reply**, in the maintainer's voice: warm but not
   servile - plain spoken sentences, attention to the reporter's own details, a straight answer;
-  no apology, no gratitude padding, no hand-holding, and no system-notice tone either. Only four
-  classes may be posted
+  no apology, no hand-holding, and no system-notice tone either. Where the reporter's own work
+  helped (detailed logs, a reproduction, a suggestion), open with **one short, specific
+  thank-you** (`日志挺全的，省了我们一轮排查`) - never generic thanks, and none at all when the
+  report is just a report. Only four classes may be posted
   without asking - a merged-fix status line, a same-symptom-and-cause duplicate close, a
   needs-info ask, and a "not planned" whose policy you have already stated. Everything else
   (causes, workarounds, "expected behaviour", promises, priority) is drafted for you first.
