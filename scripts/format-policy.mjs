@@ -256,7 +256,10 @@ export function main(
         process.stdout.write(`formatted ${row.file}\n`);
       }
     }
-    // A skip or a failed write that exits 0 reads as success to whoever asked for it.
+    // A skip or a failed write that exits 0 reads as success to whoever asked for it. The exit
+    // code stays 1; the trailer says which of the two reasons it is.
+    const trailer = describeSkipOnly(blocked.length, failed);
+    if (trailer) say(trailer);
     return blocked.length || failed ? 1 : 0;
   }
 
@@ -281,6 +284,21 @@ export function main(
     );
   }
   return regressions.length || reflows.length ? 1 : 0;
+}
+
+/**
+ * The line that says the nonzero exit is not about your change (#158).
+ *
+ * `--write` exits 1 when it skipped a file whose HEAD bytes were already unformatted: the skip is
+ * correct (reformatting would bury the change), but the exit code alone reads as "your change
+ * failed" to whoever asked. Returns null when there is nothing reassuring to say - a real write
+ * failure, or no skips at all.
+ */
+export function describeSkipOnly(blocked, failed) {
+  if (!blocked || failed) return null;
+  return blocked === 1
+    ? 'nothing is wrong with your change - 1 file was already unformatted at HEAD and was skipped'
+    : `nothing is wrong with your change - ${blocked} files were already unformatted at HEAD and were skipped`;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
