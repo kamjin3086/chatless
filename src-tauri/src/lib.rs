@@ -2,6 +2,8 @@
 #[cfg(target_os = "macos")]
 mod macos_window;
 
+mod window_fit;
+
 use anyhow::Result;
 use log::LevelFilter;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -140,6 +142,12 @@ pub fn run() {
           // hiding stays a runtime action (tray / close-to-tray).
           let _ = win.show();
           let _ = win.set_decorations(false);
+          // A restored size can be larger than the desktop it lands on (saved on
+          // a bigger monitor, or a preset bigger than this work area). Fit it
+          // before the first paint: see src/window_fit.rs.
+          if let Err(err) = window_fit::fit_to_work_area(&win) {
+            log::warn!("fitting the main window to its work area failed: {err}");
+          }
 
           // Borderless windows get no corners from macOS, and the configured
           // window background colour would hide them even if they did. See
@@ -260,6 +268,9 @@ pub fn run() {
       cleanup_on_exit,
       exit,
       set_log_level,
+      // —— Window Commands ——
+      window_fit::window_work_area,
+      window_fit::apply_window_size,
       // —— Environment Check Commands ——
       check_npx_availability,
       get_environment_health,
