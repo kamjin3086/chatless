@@ -1126,24 +1126,46 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 
 .glass-ui {
   /*
-   * Three elevation levels and nothing in between: `base` is the window sheet, `surface` is
-   * a region or card inside it, `overlay` is anything that carries text over the backdrop.
+   * Four levels, and each one names a job: `base` is the window sheet, `surface` is a card
+   * inside it, `control` is anything you can press or type into, `overlay` is anything that
+   * carries text over the backdrop. The rail is not a level - it is the sheet showing a
+   * different mixture (`--glass-rail-fill`).
    * The old names stay as aliases because dozens of components read them.
    */
-  --glass-base-fill: rgba(255, 255, 255, 0.26);
-  --glass-surface-fill: rgba(255, 255, 255, 0.32);
+  --glass-base-fill: rgba(252, 253, 255, 0.74);
+  --glass-surface-fill: rgba(255, 255, 255, 0.72);
   --glass-overlay-fill: rgba(250, 252, 255, 0.95);
   --glass-fill: var(--glass-base-fill);
   --glass-fill-strong: var(--glass-surface-fill);
-  --glass-divider: rgba(15, 23, 42, 0.09);
+  /* The rail is a region of the sheet, so it is tinted rather than filled: a wash of the
+     backdrop's own ink, not a second pane. */
+  --glass-rail-fill: rgba(15, 23, 42, 0.075);
+  /* The rail's one raised mark: the current page. */
+  --glass-active-fill: rgba(255, 255, 255, 0.95);
+  /* A single sheen down from the top edge. Fill, not blur - the sheet has the only blur. */
+  --glass-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.12) 18%,
+    rgba(255, 255, 255, 0) 42%
+  );
+  --glass-divider: rgba(15, 23, 42, 0.08);
   /* Laid over the wallpaper so any photo lands inside a readable luminance range. */
   /* Sized by measurement, not by taste: the lightest secondary text still clears 4.5:1
      over a black photograph. See lib/glass/__tests__/contrast.test.ts. */
   --glass-veil: rgba(248, 250, 252, 0.76);
   --glass-veil-blur: 24px;
-  --glass-border: rgba(100, 116, 139, 0.28);
-  --glass-highlight: rgba(255, 255, 255, 0.45);
-  --glass-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+  --glass-border: rgba(15, 23, 42, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  /*
+   * Controls - chips, the composer, select triggers - keep a fill of their own. A translucent
+   * sheet that also flattens its controls leaves every affordance as bare text; the control
+   * level is what the eye reads as "this is a thing you can press".
+   */
+  --glass-control-fill: rgba(255, 255, 255, 0.92);
+  --glass-control-fill-hover: #ffffff;
+  --glass-control-border: rgba(15, 23, 42, 0.11);
+  --glass-shadow: 0 26px 60px rgba(15, 23, 42, 0.14);
   --glass-inset: inset 0 1px 0 var(--glass-highlight);
   --glass-input-border: rgba(212, 175, 110, 0.38);
   --glass-accent: rgba(14, 165, 233, 0.78);
@@ -1181,18 +1203,29 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 
 .glass-ui.dark {
   /* 浅色霜面叠在深色壁纸上，才能透出色相；深蓝填充会把毛玻璃糊成整块海军蓝 */
-  --glass-base-fill: rgba(255, 255, 255, 0.07);
-  --glass-surface-fill: rgba(255, 255, 255, 0.11);
+  --glass-base-fill: rgba(255, 255, 255, 0.08);
+  --glass-surface-fill: rgba(255, 255, 255, 0.12);
   --glass-overlay-fill: rgba(17, 20, 27, 0.95);
   --glass-fill: var(--glass-base-fill);
   --glass-fill-strong: var(--glass-surface-fill);
-  --glass-divider: rgba(255, 255, 255, 0.11);
+  --glass-rail-fill: rgba(2, 5, 9, 0.34);
+  --glass-active-fill: rgba(255, 255, 255, 0.12);
+  --glass-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.03) 18%,
+    rgba(255, 255, 255, 0) 44%
+  );
+  --glass-divider: rgba(255, 255, 255, 0.08);
   /* Sized by measurement: the dimmest muted text still clears 3:1 over a white photograph. */
   --glass-veil: rgba(5, 8, 13, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.22);
-  --glass-highlight: rgba(255, 255, 255, 0.42);
-  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.46);
-  --glass-inset: inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-control-fill: rgba(255, 255, 255, 0.06);
+  --glass-control-fill-hover: rgba(255, 255, 255, 0.11);
+  --glass-control-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 30px 70px rgba(0, 0, 0, 0.55);
+  --glass-inset: inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(0, 0, 0, 0.28);
   --glass-input-border: rgba(212, 175, 110, 0.32);
   --glass-accent: rgba(14, 165, 233, 0.65);
   --glass-accent-hover: rgba(56, 189, 248, 0.78);
@@ -1231,23 +1264,24 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 }
 
 /*
- * One calm field in one hue. The three-hue radial stack this replaces put cyan, teal and
- * amber behind every accent in the product, so nothing on the glass could hold a colour.
- * Two layers, one family: a soft highlight from the top and a slight vertical fall-off.
+ * One field, one hue, with a light source. The sheet is translucent, so the field behind it
+ * has to carry tonal range - a flat wash left the frosted pane reading as a grey slab. Still
+ * two layers into one family: a soft light from the upper left, and a fall-off to the far
+ * corner that gives the window edge something to sit against.
  */
 html.glass-ui:not(.dark) {
-  background-color: #eaeef4;
+  background-color: #cfdae9;
   background-image:
-    radial-gradient(1200px 900px at 18% -10%, rgba(255, 255, 255, 0.92), transparent 62%),
-    linear-gradient(168deg, #eff3f8 0%, #e6ebf2 54%, #e9edf3 100%);
+    radial-gradient(1100px 820px at 16% -10%, rgba(255, 255, 255, 0.5), transparent 60%),
+    linear-gradient(162deg, #e3eaf4 0%, #d2dce9 54%, #c7d2e2 100%);
   background-attachment: fixed;
 }
 
 html.glass-ui.dark {
-  background-color: #0d1015;
+  background-color: #070a0f;
   background-image:
-    radial-gradient(1200px 900px at 20% -12%, rgba(96, 116, 148, 0.18), transparent 62%),
-    linear-gradient(168deg, #12161d 0%, #0c0f14 54%, #10141a 100%);
+    radial-gradient(1200px 880px at 16% -8%, rgba(112, 140, 182, 0.34), transparent 62%),
+    linear-gradient(165deg, #101926 0%, #080c13 48%, #04070c 100%);
   background-attachment: fixed;
 }
 
@@ -1281,8 +1315,9 @@ html.glass-ui.dark {
 }
 
 /*
- * The rail is a flat region of the window sheet, not a second card: no fill, no border, no
- * shadow, no blur. It is marked by a divider, which is all a region needs.
+ * The rail is a region of the sheet: a tint of the backdrop's own ink, the sheet's corner
+ * radius, and a hairline divider. No border of its own, no shadow, no blur - it is the sheet
+ * showing a different mixture, not a second pane.
  */
 .glass-ui .glass-nav {
   background: transparent !important;
@@ -1294,6 +1329,18 @@ html.glass-ui.dark {
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+.glass-ui .glass-nav::before {
+  content: '';
+  position: absolute;
+  /* One pixel in, so the tint meets the sheet's border instead of drawing a second arc
+     inside its rounded corner; the radius is the sheet's 16px minus that border. */
+  inset: 1px 0 1px 1px;
+  z-index: -1;
+  border-radius: 15px 0 0 15px;
+  background: var(--glass-rail-fill);
+  pointer-events: none;
 }
 
 .glass-ui .glass-nav::after {
@@ -1323,8 +1370,16 @@ html.glass-ui.dark {
   padding-left: var(--sidebar-width, 4.5rem);
   width: auto !important;
   height: auto !important;
+  /* The sheet owns the rounded clip. It used to sit on `.glass-shell-inner`, which is inset by
+     the border and the rail's padding - so its corner arc landed in the middle of the rail and
+     drew a second rounded corner inside the sheet's own. */
+  overflow: hidden;
   border-radius: 16px;
-  background: var(--glass-base-fill);
+  background-color: var(--glass-base-fill);
+  /* The sheen is fill, not a second blur: it is how the pane catches the light source. */
+  background-image: var(--glass-sheen);
+  background-repeat: no-repeat;
+  background-size: 100% 240px;
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-inset), var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
@@ -1335,7 +1390,8 @@ html.glass-ui.dark {
 .glass-ui .glass-shell-inner {
   height: 100%;
   min-height: 0;
-  border-radius: 16px;
+  /* Radius lives on the sheet above; a second one here is an interior arc, not a corner. */
+  border-radius: 0;
   overflow: hidden;
   background: transparent;
 }
@@ -1344,14 +1400,9 @@ html.glass-ui.simple-ui .glass-shell {
   box-shadow: var(--glass-inset), var(--glass-shadow) !important;
 }
 
-html.glass-ui.simple-ui .glass-shell-inner,
-html.glass-ui.simple-ui .glass-nav,
-html.glass-ui.simple-ui .settings-card {
-  box-shadow: var(--glass-inset), 0 8px 28px rgba(0, 0, 0, 0.12) !important;
-}
-
+/* The rail is a region of the sheet: it never gets a shadow of its own, in any mode. */
 html.glass-ui.simple-ui .glass-nav {
-  box-shadow: var(--glass-inset), var(--glass-shadow) !important;
+  box-shadow: none !important;
 }
 
 .glass-ui .glass-shell .h-screen {
@@ -1371,15 +1422,16 @@ html.glass-ui.simple-ui.dark .glass-surface {
 }
 
 .glass-ui .glass-nav .nav-item,
-.glass-ui .glass-nav .nav-item-active,
 .glass-ui .glass-nav .nav-item:hover {
   background: transparent !important;
   box-shadow: none !important;
   border-color: transparent !important;
 }
 
-.glass-ui:not(.dark) .glass-nav .nav-item-active,
-.glass-ui.dark .glass-nav .nav-item-active {
+.glass-ui .glass-nav .nav-item-active {
+  background-color: var(--glass-active-fill) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+  border-color: transparent !important;
   color: var(--glass-accent-text) !important;
 }
 
@@ -1498,6 +1550,8 @@ html.glass-ui .bg-slate-50 {
   border-radius: 0;
   border: none !important;
   border-right: 1px solid var(--glass-border) !important;
+  /* Like the conversation list: part of the sheet, marked by its divider, not a tinted
+     panel - the settings page should not read as a different app from the chat page. */
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -1509,9 +1563,9 @@ html.glass-ui .bg-slate-50 {
 }
 
 .glass-ui .provider-rail {
-  background: transparent !important;
+  background: var(--glass-rail-fill) !important;
   box-shadow: none !important;
-  border-right-color: var(--glass-border) !important;
+  border-right: 1px solid var(--glass-border) !important;
 }
 
 .glass-ui .provider-detail {
@@ -1525,7 +1579,8 @@ html.glass-ui .bg-slate-50 {
 
 .glass-ui .chat-rail {
   border-right-color: var(--glass-border) !important;
-  background: var(--glass-fill-strong) !important;
+  /* Part of the sheet: the divider is the boundary, the fill is not. */
+  background: transparent !important;
 }
 
 .glass-ui .glass-chip-agent,
@@ -1546,33 +1601,30 @@ html.glass-ui .bg-slate-50 {
 }
 
 .glass-ui .input-area .composer-box {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  border-color: var(--glass-border) !important;
+  background-color: var(--glass-control-fill) !important;
+  border-color: var(--glass-control-border) !important;
   border-radius: 16px !important;
   overflow: hidden;
   isolation: isolate;
   background-clip: padding-box;
   backdrop-filter: none !important;
-  box-shadow: none !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight) !important;
 }
 
 .glass-ui .input-area .composer-box:focus-within {
   border-color: var(--glass-accent-border) !important;
-  box-shadow: none !important;
-}
-
-.glass-ui.dark .input-area .composer-box {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 0 0 2px rgba(56, 189, 248, 0.14) !important;
 }
 
 .glass-ui .prompt-chip {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: var(--glass-border) !important;
-  box-shadow: var(--glass-inset);
+  background-color: var(--glass-control-fill) !important;
+  border-color: var(--glass-control-border) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight) !important;
 }
 
-.glass-ui.dark .prompt-chip {
-  background: rgba(255, 255, 255, 0.07);
+.glass-ui .prompt-chip:hover {
+  background-color: var(--glass-control-fill-hover) !important;
+  border-color: var(--glass-border) !important;
 }
 
 .glass-ui .settings-card {

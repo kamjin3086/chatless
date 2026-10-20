@@ -92,7 +92,9 @@ export function SettingsLayout({ children, activeTab, onTabChange }: SettingsLay
                ref={mainRef}
                onScroll={handleScroll}
                className={cn(
-                 "settings-main flex-1 min-h-0 custom-scrollbar text-sm",
+                 // The page scrolls with the wheel/trackpad; a bar down the right of the sheet
+                 // was chrome the settings page did not need.
+                 "settings-main flex-1 min-h-0 no-scrollbar text-sm",
                  isProviderManager
                    ? "overflow-hidden p-0"
                    : "overflow-y-auto px-5 py-4"

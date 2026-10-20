@@ -38,6 +38,54 @@ values and the theme's own numbers.
 **Reduced motion means no live blur.** `--glass-blur: 0` and a more solid sheet, rather than a
 smaller radius, which costs the same and looks worse.
 
+## Revision: the first pass read as a flat slab
+
+The rules above are the right frame, but shipping them made the theme *duller* than the plain
+dark theme it replaced, and the screenshot at 1024×768 made it obvious why. Four things were
+wrong, and each was a consequence of over-applying "the sheet is the only surface":
+
+1. **The controls were flattened with the sheet.** The frost sheet set every chip, trigger and
+   field to `transparent`, including the composer's toolbar. A control without a fill is bare
+   text: affordances disappeared, and the theme read as the plain theme minus its edges. Controls
+   are now their own level - except the model selector, which is the header's widest control and
+   whose filled pill read as a raised slab on an otherwise flat header: it keeps no fill at rest
+   and only a hover fill, like the header's icon buttons.
+2. **The rail was invisible, not flat.** "Region, not card" was implemented as "no fill", so the
+   rail and the content had the same tone and only a hairline divider separated them. The
+   navigation rail is a *tint of the backdrop's ink* (`--glass-rail-fill`) with the sheet's
+   corner radius - still no border, shadow or blur of its own. The content rails are not: the
+   conversation list and the settings rail are content inside the sheet rather than chrome, and a
+   tonal step right next to the message column read as a gap, so they stay transparent with
+   their divider as the only boundary. The conversation list's drag handle no longer paints
+   `slate-900` either - that left a 4px black slot between two surfaces of the same tone, which
+   is the most literal version of the same complaint.
+3. **The current page had no mark.** The nav's active state was stripped along with the rest and
+   left as a hue shift of a few percent on the glyph. It is now the rail's single raised mark
+   (`--glass-active-fill`), which is what a rail is for.
+4. **The field had no light.** A smooth one-hue wash is invisible through a frosted pane, so the
+   sheet could only be flat. The field now carries a light source and a fall-off (still two
+   layers, still one hue), the sheet spends a matching top `--glass-sheen`, and its border,
+   inset highlight and shadow are sized to show the edge.
+5. **The sheet was rounded twice.** `.glass-shell-inner` carried `border-radius: 16px` plus
+   `overflow: hidden`, and it is inset by the sheet's border and the rail's padding - so its
+   clip landed in the middle of the settings rail and drew a rounded corner *inside* the
+   sheet's own. The sheet now owns the clip (`overflow: hidden` on `.glass-shell`) and the inner
+   container has no radius. The settings cards also held three radii at once - `rounded-lg`
+   (10px), `rounded-xl` (12px) and `rounded-2xl` (16px) - and the 16px card equalled the window
+   radius, which is what made it read as a window nested in the window; settings section cards
+   are one radius now.
+6. **The settings page drew a scrollbar it did not need.** The page still scrolls by wheel,
+   trackpad and keyboard; the 6-8px bar over the sheet did not earn its place, so the settings
+   scroller hides it - by name, because the sheet sets `thin` on every element and Chromium
+   prefers that property over `::-webkit-scrollbar` when both apply.
+
+Light and dark are tuned separately because the physics differ: in dark the sheet *lifts* off a
+near-black field (0.08 white), in light it is a bright pane on a cool field (0.82 of near-white),
+and the field itself is what makes light mode read as glass rather than as a white page.
+
+The controls, the rail tint and the active mark are fills. The blur count is still one; the
+wallpaper, the veil, the overlay opacity and the overflow rules are unchanged.
+
 ## Consequences
 
 - The wallpaper is atmosphere, not a gallery. That is the price of the floor, and it is why
@@ -48,3 +96,7 @@ smaller radius, which costs the same and looks worse.
 - The claim that the build stripped `.glass-ui` backdrop-filter was false (the built CSS carried
   the rail's rule). The sheet is still injected, for the folding reason above.
 - The night dimmer stacks on top of the veil; the veil is sized with the dimmer at 100 %.
+- The window's own size is not part of the theme. On a 1536×864 display at 125 % scaling the
+  logical desktop is 1228×691, so the 1024×768 window preset does not fit and its bottom and
+  right edges fall outside the screen — which is easy to mistake for a glass layout bug. The
+  screenshot pass has to resize the window to the work area before judging the theme.

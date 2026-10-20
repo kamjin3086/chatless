@@ -348,8 +348,11 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           <div
             onMouseDown={handleDragStart}
             className={cn(
+              // No fill of its own: the handle is a drag target, and the rail already ends in a
+              // divider. Painting it slate-900 left a 4px black slot between the rail and the
+              // chat area on the glass sheet, which read as a gap, not as a boundary.
               "relative w-1 cursor-col-resize group transition-colors duration-150",
-              isDragging ? "bg-slate-400/20" : "dark:bg-slate-900 bg-transparent hover:bg-slate-400/10"
+              isDragging ? "bg-slate-400/20" : "bg-transparent hover:bg-slate-400/10"
             )}
           >
             {/* 重置按钮，仅在拖拽时显示 */}

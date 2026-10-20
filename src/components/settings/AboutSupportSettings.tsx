@@ -12,7 +12,7 @@ import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
 const aboutCardClass =
-  "glass-panel rounded-xl border border-slate-200/50 dark:border-slate-700/50 p-4";
+  "glass-panel rounded-lg border border-slate-200/50 dark:border-slate-700/50 p-4";
 const aboutLinkClass =
   "text-xs text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 hover:underline";
 

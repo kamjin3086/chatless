@@ -341,21 +341,8 @@ html.glass-ui [role="tablist"] {
   box-shadow: none !important;
 }
 
-html.glass-ui [data-slot="select-trigger"][data-variant="ghost"],
-html.glass-ui.dark [data-slot="select-trigger"][data-variant="ghost"] {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-}
-
-html.glass-ui [data-slot="select-trigger"][data-variant="ghost"]:hover,
-html.glass-ui.dark [data-slot="select-trigger"][data-variant="ghost"]:hover {
-  background-color: rgba(148, 163, 184, 0.12) !important;
-}
-
-html.glass-ui.dark [data-slot="select-trigger"][data-variant="ghost"]:hover {
-  background-color: rgba(255, 255, 255, 0.06) !important;
+html.glass-ui [data-slot="select-trigger"][data-variant="ghost"]:hover {
+  background-color: var(--glass-control-fill) !important;
 }
 
 html.glass-ui.dark [data-slot="select-trigger"],
@@ -760,7 +747,7 @@ html.glass-ui .input-area .composer-tool {
 
 html.glass-ui .composer-tool:hover,
 html.glass-ui .input-area .composer-tool:hover {
-  background: transparent !important;
+  background-color: var(--glass-control-fill) !important;
 }
 
 /* The send button is the composer's single filled control: give it the glass
@@ -800,14 +787,20 @@ html.glass-ui .inline-edit.glass-field {
 }
 
 html.glass-ui .glass-nav .nav-item,
-html.glass-ui .glass-nav .nav-item-active,
 html.glass-ui .glass-nav .nav-item:hover {
   background: transparent !important;
   box-shadow: none !important;
   border-color: transparent !important;
 }
 
+/*
+ * The current page is the rail's one raised mark. Without it the only cue was the icon's
+ * colour, which on glass is a hue shift of a few percent.
+ */
 html.glass-ui .glass-nav .nav-item-active {
+  background-color: var(--glass-active-fill) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+  border-color: transparent !important;
   color: var(--glass-accent-text) !important;
 }
 
@@ -935,7 +928,10 @@ html.glass-ui .glass-nav {
 }
 
 html.glass-ui .glass-shell {
-  background: var(--glass-base-fill) !important;
+  background-color: var(--glass-base-fill) !important;
+  background-image: var(--glass-sheen) !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 240px !important;
 }
 
 html.glass-ui .glass-shell-inner {
@@ -947,7 +943,7 @@ html.glass-ui.dark .glass-nav {
 }
 
 html.glass-ui.dark .glass-shell {
-  background: var(--glass-base-fill) !important;
+  background-color: var(--glass-base-fill) !important;
 }
 
 html.glass-ui .input-area {
@@ -963,36 +959,28 @@ html.glass-ui.dark .input-area {
 }
 
 html.glass-ui .input-area .composer-box {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  border-color: var(--glass-border) !important;
+  background-color: var(--glass-control-fill) !important;
+  border-color: var(--glass-control-border) !important;
   border-radius: 16px !important;
   overflow: hidden !important;
   isolation: isolate;
   background-clip: padding-box;
   backdrop-filter: none !important;
-  box-shadow: none !important;
-}
-
-html.glass-ui.dark .input-area .composer-box {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight) !important;
 }
 
 html.glass-ui .prompt-chip,
 html.glass-ui .settings-card,
 html.glass-ui .setting-collapse,
 html.glass-ui .setting-collapse-content {
-  background: var(--glass-surface-fill) !important;
+  background-color: var(--glass-control-fill) !important;
   background-image: none !important;
-  border-color: rgba(148, 163, 184, 0.28) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+  border-color: var(--glass-control-border) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight) !important;
 }
 
-html.glass-ui.dark .prompt-chip,
-html.glass-ui.dark .settings-card,
-html.glass-ui.dark .setting-collapse,
-html.glass-ui.dark .setting-collapse-content {
-  background: rgba(255, 255, 255, 0.07) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
+html.glass-ui .prompt-chip:hover {
+  background-color: var(--glass-control-fill-hover) !important;
 }
 
 html.glass-ui .input-area [class~="bg-blue-600"]:not(.composer-tool):not(.composer-send),
@@ -1026,12 +1014,32 @@ html.glass-ui .input-area [class~="bg-emerald-950/40"] {
 }
 
 html.glass-ui .settings-rail,
+html.glass-ui .provider-rail {
+  /* Like the conversation list: the divider is the boundary, not a fill. */
+  background: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
 html.glass-ui .settings-main,
-html.glass-ui .provider-rail,
 html.glass-ui .provider-detail {
   background: transparent !important;
   backdrop-filter: none !important;
   box-shadow: none !important;
+}
+
+/*
+ * The settings page keeps scrolling (wheel, trackpad, keyboard) but draws no bar: it is the
+ * only 8px scrollbar over the sheet, and the page is short enough that it read as chrome.
+ * scrollbar-width needs the important: the sheet sets thin on every element for the app's own
+ * scrollbars, and Chromium prefers that property over ::-webkit-scrollbar when both are there.
+ */
+html.glass-ui .settings-main {
+  scrollbar-width: none !important;
+}
+
+html.glass-ui .settings-main::-webkit-scrollbar {
+  display: none !important;
 }
 
 html.glass-ui .provider-rail .glass-field {
@@ -1067,11 +1075,12 @@ html.glass-ui.dark .provider-row:hover:not(.is-selected) {
 }
 
 html.glass-ui .chat-rail {
-  background: var(--glass-surface-fill) !important;
-}
-
-html.glass-ui.dark .chat-rail {
-  background: var(--glass-surface-fill) !important;
+  /*
+   * The conversation list is part of the sheet, not a second pane: no fill of its own, just
+   * the divider its border already draws. Tinting it put a tonal step right next to the
+   * message column, which read as a gap rather than as a boundary.
+   */
+  background: transparent !important;
 }
 
 html.glass-ui [data-slot="select-trigger"]:not([data-variant="ghost"]) {
@@ -1178,5 +1187,24 @@ html.glass-ui ::-webkit-scrollbar-button:vertical:end:decrement {
   height: 0 !important;
   appearance: none !important;
   background: transparent !important;
+}
+
+/*
+ * The model selector is the header's widest control, and a filled pill there reads as a raised
+ * slab on an otherwise flat header. It sits *in* the header: no fill, no rim, no highlight at
+ * rest; the hover fill is the whole affordance, exactly like the header's icon buttons. Placed
+ * last on purpose - the class remaps above (bg-white/60 and friends) are equal in specificity
+ * and would otherwise put the pill back.
+ */
+html.glass-ui [data-slot="select-trigger"][data-variant="ghost"] {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+html.glass-ui [data-slot="select-trigger"][data-variant="ghost"]:hover,
+html.glass-ui [data-slot="select-trigger"][data-variant="ghost"][data-state="open"] {
+  background-color: var(--glass-control-fill) !important;
 }
 `;

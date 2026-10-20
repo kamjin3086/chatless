@@ -152,12 +152,19 @@ describe('glass frost runtime css', () => {
     );
   });
 
-  test('设置侧栏内化到主面板，不再叠一层磨砂卡片', () => {
+  test('设置侧栏内化到主面板，不叠磨砂卡片，也不是一片空白', () => {
+    // The rails are part of the sheet: transposed to the divider, no fill, no blur.
     expect(GLASS_FROST_CSS).toMatch(
-      /html\.glass-ui \.settings-rail,\s*html\.glass-ui \.settings-main[\s\S]*?background: transparent !important/
+      /html\.glass-ui \.settings-rail,\s*html\.glass-ui \.provider-rail \{[\s\S]*?background: transparent !important/
     );
     expect(GLASS_FROST_CSS).toMatch(
-      /html\.glass-ui \.settings-rail,\s*html\.glass-ui \.settings-main[\s\S]*?backdrop-filter: none !important/
+      /html\.glass-ui \.settings-rail,\s*html\.glass-ui \.provider-rail \{[\s\S]*?backdrop-filter: none !important/
+    );
+    expect(GLASS_FROST_CSS).toMatch(
+      /html\.glass-ui \.settings-main,\s*html\.glass-ui \.provider-detail \{[\s\S]*?background: transparent !important/
+    );
+    expect(GLASS_FROST_CSS).toMatch(
+      /html\.glass-ui \.settings-main,\s*html\.glass-ui \.provider-detail \{[\s\S]*?backdrop-filter: none !important/
     );
     expect(GLASS_FROST_CSS).toContain('.provider-rail');
     expect(GLASS_FROST_CSS).toContain('.provider-row.is-selected');
@@ -165,15 +172,12 @@ describe('glass frost runtime css', () => {
     expect(GLASS_FROST_CSS).toMatch(
       /\.provider-row\.is-selected \{[\s\S]*?background-color: var\(--glass-accent-soft\)/
     );
-    // The conversation rail is a surface inside the sheet now: fill, no live blur.
+    // The conversation list is part of the sheet: the divider is the boundary, not a fill.
     expect(GLASS_FROST_CSS).toMatch(
-      /html\.glass-ui \.chat-rail \{[\s\S]*?background: var\(--glass-surface-fill\) !important/
+      /html\.glass-ui \.chat-rail \{[\s\S]*?background: transparent !important/
     );
     expect(GLASS_FROST_CSS).not.toMatch(
       /html\.glass-ui \.chat-rail \{[\s\S]*?backdrop-filter: blur/
-    );
-    expect(GLASS_FROST_CSS).not.toMatch(
-      /html\.glass-ui \.settings-rail,\s*html\.glass-ui \.chat-rail \{/
     );
   });
 });

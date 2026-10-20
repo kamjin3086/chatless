@@ -71,7 +71,7 @@ export function PersonalizationSettings() {
   };
 
   return (
-    <div className="settings-card border border-slate-100 dark:border-slate-800 rounded-2xl p-6 space-y-6 bg-white dark:bg-slate-900/50 shadow-sm">
+    <div className="settings-card border border-slate-100 dark:border-slate-800 rounded-lg p-6 space-y-6 bg-white dark:bg-slate-900/50 shadow-sm">
       {/* 头部 */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-50 dark:border-slate-800">
         <Palette className="w-5 h-5 text-slate-600 dark:text-slate-400" />

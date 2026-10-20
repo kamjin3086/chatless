@@ -579,7 +579,7 @@ export function McpServersSettings() {
       }
     };
     return (
-      <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-4 bg-white dark:bg-slate-900 shadow-sm glass-panel">
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-4 bg-white dark:bg-slate-900 shadow-sm glass-panel">
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-slate-50 dark:border-slate-700 pb-3">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{isAdding ? '新增服务器' : '编辑服务器'}</h3>
@@ -988,7 +988,7 @@ export function McpServersSettings() {
         {renderEditor()}
 
       {importOpen && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 bg-white dark:bg-slate-900 shadow-lg backdrop-blur-sm glass-panel">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 space-y-4 bg-white dark:bg-slate-900 shadow-lg backdrop-blur-sm glass-panel">
           {/* 头部区域 */}
           <div className="flex items-start justify-between">
             <div>
@@ -1189,7 +1189,7 @@ export function McpServersSettings() {
         })}
       </div>
             {exportText && (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 bg-white dark:bg-slate-900 shadow-sm glass-panel">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 space-y-4 bg-white dark:bg-slate-900 shadow-sm glass-panel">
           <div className="border-b border-slate-100 pb-4">
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">导出 JSON</h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">可复制保存为 mcp.json</p>

@@ -64,6 +64,46 @@ describe('one sheet, one blur', () => {
     expect(globalsRail).toContain('backdrop-filter: none');
   });
 
+  it('and it is tinted as a region, so it is not invisible either', () => {
+    // "Flat" is a fill claim, not a "no fill" claim: an untinted rail and the sheet are the
+    // same surface, which is how the first pass lost the sidebar entirely.
+    expect(GLOBALS).toContain('--glass-rail-fill');
+    const band = block(GLOBALS, '.glass-ui .glass-nav::before {');
+    expect(band).toContain('background: var(--glass-rail-fill)');
+  });
+
+  it('the content rails are the sheet with a divider, not a second surface', () => {
+    // Tinting them put a tonal step beside the message column, which read as a gap, and the
+    // settings rail was clipped by a rounded inner container - a second arc inside the
+    // sheet's corner. The boundary is the divider their right border already draws.
+    for (const selector of ['.glass-ui .chat-rail {', '.glass-ui .settings-rail {']) {
+      const rail = block(GLOBALS, selector);
+      expect(rail, selector).toContain('background: transparent !important');
+      expect(rail, selector).toContain('var(--glass-border)');
+    }
+    for (const selector of [
+      'html.glass-ui .chat-rail {',
+      'html.glass-ui .settings-rail,',
+    ]) {
+      expect(block(SHEET, selector), selector).toContain('background: transparent !important');
+    }
+  });
+
+  it('the sheet owns the rounded clip, so nothing draws an interior arc', () => {
+    const shell = block(GLOBALS, '.glass-ui .glass-shell {');
+    expect(shell).toContain('border-radius: 16px');
+    expect(shell).toContain('overflow: hidden');
+    // A second radius on the inset inner container landed inside the rail, not at the corner.
+    const inner = block(GLOBALS, '.glass-ui .glass-shell-inner {');
+    expect(inner).toContain('border-radius: 0');
+  });
+
+  it('the current page is a mark, not only a colour shift', () => {
+    expect(GLOBALS).toContain('--glass-active-fill');
+    const active = block(SHEET, 'html.glass-ui .glass-nav .nav-item-active {');
+    expect(active).toContain('background-color: var(--glass-active-fill)');
+  });
+
   it('a divider marks it, and the token exists', () => {
     expect(GLOBALS).toContain('--glass-divider');
     expect(GLOBALS).toContain('.glass-ui .glass-nav::after');
@@ -84,8 +124,40 @@ describe('one sheet, one blur', () => {
   });
 });
 
-describe('text-bearing overlays leave the glass channel', () => {
-  it('dialogs, menus, toasts and tips are opaque enough to carry text', () => {
+describe('controls keep a surface of their own', () => {
+  it('the control level is a token, and chips, composer and triggers spend it', () => {
+    expect(GLOBALS).toContain('--glass-control-fill');
+    expect(block(GLOBALS, '.glass-ui .prompt-chip {')).toContain(
+      'background-color: var(--glass-control-fill)',
+    );
+    expect(block(GLOBALS, '.glass-ui .input-area .composer-box {')).toContain(
+      'background-color: var(--glass-control-fill)',
+    );
+    // The model selector sits in the header, not on it: no fill at rest, hover only.
+    const ghost = block(SHEET, 'html.glass-ui [data-slot="select-trigger"][data-variant="ghost"] {');
+    expect(ghost).toContain('background-color: transparent !important');
+    expect(ghost).toContain('border-color: transparent !important');
+    expect(ghost).toContain('box-shadow: none !important');
+  });
+
+  it('the pane catches a light source instead of being one flat fill', () => {
+    expect(GLOBALS).toContain('--glass-sheen');
+    expect(SHEET).toContain('background-image: var(--glass-sheen)');
+  });
+
+  it('the settings page scrolls without drawing a bar', () => {
+    // The sheet sets `thin` on every element; hiding the settings scroller's bar has to say so
+    // by name, or Chromium keeps the standard property over the pseudo-element.
+    expect(block(SHEET, 'html.glass-ui .settings-main {')).toContain(
+      'scrollbar-width: none !important',
+    );
+    expect(block(SHEET, 'html.glass-ui .settings-main::-webkit-scrollbar {')).toContain(
+      'display: none !important',
+    );
+  });
+});
+
+describe('text-bearing overlays leave the glass channel', () => {  it('dialogs, menus, toasts and tips are opaque enough to carry text', () => {
     for (const selector of [
       'html.glass-ui .glass-float-dialog,',
       'html.glass-ui .glass-float-menu,',
