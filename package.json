@@ -12,7 +12,7 @@
     "lint:ci": "next lint --dir src --quiet --max-warnings=0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:tests": "tsc -p tsconfig.tests.json --noEmit",
-    "verify": "pnpm lint:ci && pnpm typecheck && pnpm typecheck:tests && pnpm build",
+    "verify": "pnpm verify:fast && pnpm build",
     "format": "biome format src --write && biome organize-imports src --write",
     "fmt": "node scripts/format-policy.mjs --write",
     "fmt:check": "node scripts/format-policy.mjs --check",
@@ -26,7 +26,7 @@
     "icons:index": "node scripts/generate-icons-index.cjs",
     "predev": "pnpm run icons:index",
     "prestart": "pnpm run icons:index",
-    "prebuild": "pnpm run generate:settings-index && pnpm run update:app-info && pnpm run icons:index",
+    "prebuild": "pnpm run generate:settings-index && pnpm run update:app-info && pnpm run icons:index && node scripts/assert-dev-stopped.mjs",
     "pretauri": "pnpm run generate:settings-index && pnpm run update:app-info && pnpm run icons:index",
     "dev:db:reset": "tsx src/scripts/dev-db-reset.ts",
     "dev:test:providers": "tsx src/scripts/test-providers.ts",
@@ -40,7 +40,8 @@
     "repo:state": "node scripts/repo-state.mjs",
     "ci:log": "node scripts/ci-log.mjs",
     "wt:add": "node scripts/wt-add.mjs",
-    "export:model-rules": "node scripts/export-model-fetch-rules.mjs"
+    "export:model-rules": "node scripts/export-model-fetch-rules.mjs",
+    "verify:fast": "pnpm lint:ci && pnpm typecheck && pnpm typecheck:tests && pnpm test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.0.8",

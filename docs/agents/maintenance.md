@@ -159,7 +159,8 @@ one to run.
 |--------|-----|
 | Any TypeScript | `pnpm test` and `pnpm typecheck` |
 | TypeScript that only tests use | `pnpm typecheck:tests` - the root `typecheck` excludes every test file |
-| Before pushing any code | `pnpm verify` (lint:ci + typecheck + typecheck:tests + build) |
+| Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + test) - seconds to a couple of minutes |
+| Before pushing a build-affecting change, or when CI is the only gate | `pnpm verify` (= `verify:fast` + `next build`); the build takes ~18 minutes here and refuses to start while a dev server holds `dist` |
 | PR title | `pnpm check:pr-title "<title>"` |
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
