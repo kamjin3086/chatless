@@ -49,6 +49,21 @@ import { getToolDoc } from './toolDocLoader';
  *    - 保持普通聊天，不把文本内容解释为可执行调用
  *    - 返回 useNativeTools: false
  */
+/**
+ * Where the prompt is assembled, in the order the blocks are pushed (anchor on the comment ids or
+ * the block `order`, not on line numbers):
+ *
+ *   time / runtime       `runtime-environment` then the per-turn time block - the only block that
+ *                        changes every turn
+ *   session prompt       a prompt the user applied to this conversation (`system_prompt_applied`)
+ *   agent contract       `buildAgentContractBlock()` - the stable, small contract
+ *   native tool defs     `buildNativeToolDefinitions` - only on the native track
+ *   attachments          working directory, then the retrieval rules (only when tools are callable)
+ *   capabilities         the enabled-server line
+ *   tool channel         `buildToolChannelBlock` - only on the prompt track, once
+ *   web search / skills  policy block, then the skills index
+ *   plan-only            a per-turn block, added last
+ */
 export async function buildInitialPrompt(
   context: InjectionContext,
   signals: InjectionSignals
