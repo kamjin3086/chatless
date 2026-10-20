@@ -1,14 +1,26 @@
 /**
  * Provider字段支持配置与适配器
  *
- * What this table actually governs today: which controls the two parameter dialogs show.
+ * One table answers both questions the parameter dialogs and the request path ask: which
+ * fields a provider accepts, and what each one is called on the wire.
  *
- * It does NOT decide the field names that go on the wire - those are written inside each
- * provider, and nothing outside this file calls `adaptFieldsForProvider`
- * (`grep -rn adaptFieldsForProvider src` finds the definition and its own deprecation
- * notes). Reading this as
- * the map of outgoing requests is a wrong map. Merging the two answers is #142; do not add
- * a third local answer here.
+ * A provider row is written one field at a time - `minP: 'min_p'` - and nothing else:
+ * presence is the "supported" answer, the value is the wire spelling. `support` (which
+ * dialog controls exist) and `fieldMapping` (generic name -> different wire name) are
+ * derived from those rows, so adding a field is one row and the two answers cannot
+ * disagree. `null` marks a field the provider accepts but does not carry under a single
+ * key (the thinking carrier; Gemini streams by endpoint), which is the provider file's
+ * shape to keep.
+ *
+ * Looking a provider up goes through `resolveProviderConfig`, which normalizes the label
+ * the app shows ('Google AI') to the row key ('google-ai') and reports whether a row
+ * answered or the documented default did. Callers that need the fallback to be visible
+ * read `source` / `row` instead of inferring it from an object shape.
+ *
+ * What this table governs today: the two parameter dialogs and the drift test. The
+ * request path still re-derives the same names per provider; #142's second child (#177)
+ * is what makes the request path read this table. Until then, reading this as the map of
+ * outgoing requests is a wrong map. Do not add a third local answer here.
  */
 
 /**
@@ -31,15 +43,43 @@ export interface ProviderFieldSupport {
   format?: boolean; // Ollama支持format参数
 }
 
+/** Names the request path passes to a provider; the table's row keys. */
+export type ProviderFieldName =
+  | 'temperature'
+  | 'maxTokens'
+  | 'topP'
+  | 'topK'
+  | 'minP'
+  | 'frequencyPenalty'
+  | 'presencePenalty'
+  | 'stop'
+  | 'thinking'
+  | 'streaming'
+  | 'format';
+
+/**
+ * A field's wire spelling. `null` means "accepted, but the provider file carries it in a
+ * shape a flat key cannot express" (Anthropic's thinking object, Gemini's stream mode).
+ */
+export type ProviderFieldWire = string | null;
+
+/** One row per accepted field: generic name -> wire name. */
+export type ProviderFieldRows = Partial<
+  Record<ProviderFieldName, ProviderFieldWire>
+>;
+
 /**
  * Provider完整配置（支持+映射+转换）
  */
 export interface ProviderConfig {
-  /** 支持的字段 */
+  /** The rows this configuration was defined from. */
+  fields: ProviderFieldRows;
+
+  /** 支持的字段 - derived from `fields`. */
   support: ProviderFieldSupport;
 
-  /** 字段名称映射：通用名 -> Provider特定名 */
-  fieldMapping?: Record<string, string>;
+  /** 字段名称映射：通用名 -> Provider特定名 - derived from `fields`. */
+  fieldMapping: Record<string, string>;
 
   /** 特殊字段转换规则 */
   transformers?: Record<
@@ -49,175 +89,209 @@ export interface ProviderConfig {
 }
 
 /**
+ * Which dialog control a row feeds. `stop` feeds the `stopSequences` control; every other
+ * field feeds the control of its own name.
+ */
+const SUPPORT_KEY_BY_FIELD: Record<
+  ProviderFieldName,
+  keyof ProviderFieldSupport
+> = {
+  temperature: 'temperature',
+  maxTokens: 'maxTokens',
+  topP: 'topP',
+  topK: 'topK',
+  minP: 'minP',
+  frequencyPenalty: 'frequencyPenalty',
+  presencePenalty: 'presencePenalty',
+  stop: 'stopSequences',
+  thinking: 'thinking',
+  streaming: 'streaming',
+  format: 'format',
+};
+
+/**
+ * Other names the request path may pass for a row. They are derived too, so a provider
+ * that supports `maxTokens` does not need a second hand-written entry for
+ * `maxOutputTokens`.
+ */
+const FIELD_ALIASES: Partial<Record<ProviderFieldName, readonly string[]>> = {
+  maxTokens: ['maxOutputTokens'],
+  stop: ['stopSequences'],
+};
+
+function defineProvider(
+  fields: ProviderFieldRows,
+  transformers?: ProviderConfig['transformers'],
+): ProviderConfig {
+  const support: ProviderFieldSupport = {};
+  const fieldMapping: Record<string, string> = {};
+
+  for (const [field, wire] of Object.entries(fields) as [
+    ProviderFieldName,
+    ProviderFieldWire,
+  ][]) {
+    support[SUPPORT_KEY_BY_FIELD[field]] = true;
+    if (wire === null) continue;
+
+    // Identity mappings are not renames: the request path already uses that name.
+    if (wire !== field) fieldMapping[field] = wire;
+    for (const alias of FIELD_ALIASES[field] ?? []) {
+      if (wire !== alias) fieldMapping[alias] = wire;
+    }
+  }
+
+  return { fields, support, fieldMapping, transformers };
+}
+
+/**
  * 各Provider的完整配置（支持字段 + 字段映射 + 转换规则）
  */
 export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
   // Ollama - 支持最全面，使用snake_case
-  ollama: {
-    support: {
-      temperature: true,
-      maxTokens: true,
-      topP: true,
-      topK: true,
-      minP: true,
-      frequencyPenalty: true,
-      presencePenalty: true,
-      stopSequences: true,
-      thinking: true,
-      streaming: true,
-      format: true,
-    },
-    fieldMapping: {
-      topP: 'top_p',
-      topK: 'top_k',
-      minP: 'min_p',
-      maxTokens: 'num_predict',
-      maxOutputTokens: 'num_predict',
-      frequencyPenalty: 'frequency_penalty',
-      presencePenalty: 'presence_penalty',
-      stop: 'stop',
-    },
-  },
+  ollama: defineProvider({
+    temperature: 'temperature',
+    maxTokens: 'num_predict',
+    topP: 'top_p',
+    topK: 'top_k',
+    minP: 'min_p',
+    frequencyPenalty: 'frequency_penalty',
+    presencePenalty: 'presence_penalty',
+    stop: 'stop',
+    // Ollama's boolean `think` and the top-level `format` are body shapes, not a
+    // generic parameter name; `null` keeps the support answer without pretending the
+    // wire key is `thinking`.
+    thinking: null,
+    streaming: 'stream',
+    format: 'format',
+  }),
 
   // OpenAI - 标准OpenAI API，使用snake_case
-  openai: {
-    support: {
-      temperature: true,
-      maxTokens: true,
-      topP: true,
-      frequencyPenalty: true,
-      presencePenalty: true,
-      stopSequences: true,
-      streaming: true,
-    },
-    fieldMapping: {
-      topP: 'top_p',
-      maxTokens: 'max_tokens',
-      maxOutputTokens: 'max_tokens',
-      frequencyPenalty: 'frequency_penalty',
-      presencePenalty: 'presence_penalty',
-      stop: 'stop',
-    },
-  },
+  openai: defineProvider({
+    temperature: 'temperature',
+    maxTokens: 'max_tokens',
+    topP: 'top_p',
+    frequencyPenalty: 'frequency_penalty',
+    presencePenalty: 'presence_penalty',
+    stop: 'stop',
+    streaming: 'stream',
+  }),
 
   // Google AI - 使用generationConfig嵌套结构
-  'google-ai': {
-    support: {
-      temperature: true,
-      maxTokens: true,
-      topP: true,
-      topK: true,
-      // Gemini's generationConfig takes minP and the provider already passes it through;
-      // naming it here is what makes the dialog offer the control instead of hiding an
-      // option the provider has always supported.
-      minP: true,
-      stopSequences: true,
-      streaming: true,
-    },
-    // Google AI的字段映射在转换器中处理（需要放入generationConfig）
-    fieldMapping: {
-      maxTokens: 'maxOutputTokens',
-      maxOutputTokens: 'maxOutputTokens',
-      stop: 'stopSequences',
-    },
-  },
+  'google-ai': defineProvider({
+    temperature: 'temperature',
+    maxTokens: 'maxOutputTokens',
+    topP: 'topP',
+    topK: 'topK',
+    // Gemini's generationConfig takes minP and the provider already passes it through;
+    // naming it here is what makes the dialog offer the control instead of hiding an
+    // option the provider has always supported.
+    minP: 'minP',
+    stop: 'stopSequences',
+    // Streaming is the endpoint (`:streamGenerateContent`), not a body field.
+    streaming: null,
+  }),
 
   // Anthropic - 使用snake_case
-  anthropic: {
-    support: {
-      temperature: true,
-      maxTokens: true,
-      topP: true,
-      topK: true,
-      stopSequences: true,
-      streaming: true,
-    },
-    fieldMapping: {
-      topP: 'top_p',
-      topK: 'top_k',
-      maxTokens: 'max_tokens',
-      maxOutputTokens: 'max_tokens',
-      stop: 'stop_sequences',
-    },
-  },
+  anthropic: defineProvider({
+    temperature: 'temperature',
+    maxTokens: 'max_tokens',
+    topP: 'top_p',
+    topK: 'top_k',
+    stop: 'stop_sequences',
+    streaming: 'stream',
+  }),
 
   // DeepSeek - 类OpenAI，使用snake_case
-  deepseek: {
-    support: {
-      temperature: true,
-      maxTokens: true,
-      topP: true,
-      frequencyPenalty: true,
-      presencePenalty: true,
-      stopSequences: true,
-      streaming: true,
-    },
-    fieldMapping: {
-      topP: 'top_p',
-      maxTokens: 'max_tokens',
-      maxOutputTokens: 'max_tokens',
-      frequencyPenalty: 'frequency_penalty',
-      presencePenalty: 'presence_penalty',
-      stop: 'stop',
-    },
-  },
+  deepseek: defineProvider({
+    temperature: 'temperature',
+    maxTokens: 'max_tokens',
+    topP: 'top_p',
+    frequencyPenalty: 'frequency_penalty',
+    presencePenalty: 'presence_penalty',
+    stop: 'stop',
+    streaming: 'stream',
+  }),
 };
 
 /**
- * 兼容性：保留旧的PROVIDER_FIELD_SUPPORT导出
- * @deprecated 使用 PROVIDER_CONFIGS 替代
+ * The documented default: an endpoint without a row is assumed to speak the OpenAI chat
+ * protocol, because that is what "OpenAI-compatible" means in this app and what the old
+ * inline fallback encoded. It deliberately *is* the `openai` row, so there is one answer
+ * rather than a copy that drifts.
  */
-export const PROVIDER_FIELD_SUPPORT: Record<string, ProviderFieldSupport> =
-  Object.fromEntries(
-    Object.entries(PROVIDER_CONFIGS).map(([key, config]) => [
-      key,
-      config.support,
-    ]),
-  );
+export const DEFAULT_PROVIDER_CONFIG: ProviderConfig = PROVIDER_CONFIGS.openai;
+
+/**
+ * The label the app shows -> the row key. 'Google AI' -> 'google-ai', 'OpenAI / Azure'
+ * -> 'openai-azure'. Punctuation runs collapse to one dash and the edges are trimmed, so
+ * a display name cannot miss its row over a space or a slash.
+ */
+export function normalizeProviderName(providerName: string): string {
+  return providerName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export type ProviderLookupSource = 'exact' | 'contains' | 'default';
+
+export interface ProviderResolution {
+  /** The normalized lookup key. */
+  name: string;
+  /** The row that answered; `null` when the documented default answered. */
+  row: string | null;
+  /** How it was found. `default` is the visible "nothing claims this name" answer. */
+  source: ProviderLookupSource;
+  config: ProviderConfig;
+}
+
+/**
+ * 获取Provider完整配置，并说明是哪一行（或默认行）回答的。
+ *
+ * A label/row mismatch is not an error - the UI passes labels while rows are keyed with
+ * the API's spelling - but it must be observable: `source: 'default'` says no row claimed
+ * this provider, instead of an object shape quietly standing in for an answer.
+ */
+export function resolveProviderConfig(
+  providerName: string,
+): ProviderResolution {
+  const name = normalizeProviderName(providerName);
+
+  // 尝试精确匹配
+  if (name && PROVIDER_CONFIGS[name]) {
+    return { name, row: name, source: 'exact', config: PROVIDER_CONFIGS[name] };
+  }
+
+  // 尝试包含匹配（如 "openai-compatible"）。The guard keeps an empty label from
+  // matching the first row through `key.includes('')`.
+  if (name) {
+    for (const [row, config] of Object.entries(PROVIDER_CONFIGS)) {
+      if (name.includes(row) || row.includes(name)) {
+        return { name, row, source: 'contains', config };
+      }
+    }
+  }
+
+  return {
+    name,
+    row: null,
+    source: 'default',
+    config: DEFAULT_PROVIDER_CONFIG,
+  };
+}
 
 /**
  * 获取Provider完整配置
  */
 export function getProviderConfig(providerName: string): ProviderConfig {
-  // The UI passes the human-facing label ('Google AI') while rows are keyed with the API's
-  // own spelling ('google-ai'). A bare toLowerCase never matched Gemini's row, so every
-  // lookup fell through to the OpenAI-shaped fallback - which is why Gemini's dialog offered
-  // no topK and no minP that the row a few lines above says it takes.
-  const normalizedName = providerName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-  // 尝试精确匹配
-  if (PROVIDER_CONFIGS[normalizedName]) {
-    return PROVIDER_CONFIGS[normalizedName];
-  }
-
-  // 尝试模糊匹配
-  for (const [key, config] of Object.entries(PROVIDER_CONFIGS)) {
-    if (normalizedName.includes(key) || key.includes(normalizedName)) {
-      return config;
-    }
-  }
-
-  // 默认配置：支持基础字段，使用snake_case
-  return {
-    support: {
-      temperature: true,
-      maxTokens: true,
-      topP: true,
-      stopSequences: true,
-      streaming: true,
-    },
-    fieldMapping: {
-      topP: 'top_p',
-      maxTokens: 'max_tokens',
-      maxOutputTokens: 'max_tokens',
-      stop: 'stop',
-    },
-  };
+  return resolveProviderConfig(providerName).config;
 }
 
 /**
  * 获取Provider支持的字段配置（兼容旧接口）
- * @deprecated 使用 getProviderConfig 替代
+ * @deprecated Use `resolveProviderConfig(name).config.support` so the row that answered
+ * is visible; this wrapper hides the fallback.
  */
 export function getProviderFieldSupport(
   providerName: string,
@@ -232,6 +306,9 @@ export function getProviderFieldSupport(
  * 1. 过滤不支持的字段
  * 2. 映射字段名称（通用名 -> Provider特定名）
  * 3. 应用特殊转换规则
+ *
+ * @deprecated The dialogs and (after #177) the request path read the table directly;
+ * grep finds no caller outside this file.
  *
  * @param providerName Provider名称
  * @param options 通用选项对象
@@ -343,3 +420,15 @@ export function filterUnsupportedFields(
 
   return filtered;
 }
+
+/**
+ * 兼容性：保留旧的PROVIDER_FIELD_SUPPORT导出
+ * @deprecated 使用 PROVIDER_CONFIGS 替代
+ */
+export const PROVIDER_FIELD_SUPPORT: Record<string, ProviderFieldSupport> =
+  Object.fromEntries(
+    Object.entries(PROVIDER_CONFIGS).map(([key, config]) => [
+      key,
+      config.support,
+    ]),
+  );

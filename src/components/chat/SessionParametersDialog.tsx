@@ -39,7 +39,7 @@ import { usePromptStore } from '@/store/promptStore';
 import { useChatStore } from '@/store/chatStore';
 import { toast } from '@/components/ui/sonner';
 import {
-  getProviderFieldSupport,
+  resolveProviderConfig,
   type ProviderFieldSupport,
 } from '@/lib/llm/provider-field-support';
 import {
@@ -116,13 +116,13 @@ export function SessionParametersDialog({
 
   // Provider字段支持信息
   const [providerSupport, setProviderSupport] = useState<ProviderFieldSupport>(
-    () => getProviderFieldSupport(providerName),
+    () => resolveProviderConfig(providerName).config.support,
   );
 
   // 更新Provider字段支持信息
   useEffect(() => {
     if (providerName) {
-      setProviderSupport(getProviderFieldSupport(providerName));
+      setProviderSupport(resolveProviderConfig(providerName).config.support);
     }
   }, [providerName]);
 
