@@ -15,6 +15,7 @@
  * Exit code is 0 unless the tool itself cannot run; it reports, it does not judge.
  */
 import { execFileSync } from 'node:child_process';
+import { checkPrTitle } from './check-pr-title.mjs';
 
 const PR_WINDOW = 100;
 
@@ -110,6 +111,13 @@ export function formatState(state) {
       lines.push(
         `#${pr.number} ${pr.state}${pr.mergedAt ? ` ${pr.mergedAt}` : ''} ${pr.title}`,
       );
+      // The title gate runs in CI, which means a bad title is discovered after the
+      // push - and its workflow has no `edited` trigger, so a retitle alone does not
+      // clear the red check. The title is already here; say so before the push.
+      if (pr.state === 'OPEN') {
+        const [problem] = checkPrTitle(pr.title);
+        if (problem) lines.push(`  title gate: ${problem}`);
+      }
     }
   }
   return lines.join('\n');

@@ -174,6 +174,32 @@ describe('reading check status without the log export', () => {
     expect(red.failed).toEqual(['check']);
   });
 
+  it('reads the newest run when one check name repeats on the same commit', async () => {
+    // A retitle retriggers the title gate; the older failing run stays on the commit.
+    // Reading it after the fix reported a green board as "not green".
+    const { summariseCheckRuns } = await import('../ci-log.mjs');
+    const summary = summariseCheckRuns([
+      { id: 9, name: 'check', status: 'completed', conclusion: 'failure' },
+      { id: 12, name: 'check', status: 'completed', conclusion: 'success' },
+      { id: 11, name: 'frontend-checks', status: 'completed', conclusion: 'success' },
+    ]);
+
+    expect(summary.pass).toBe(true);
+    expect(summary.failed).toEqual([]);
+    expect(summary.note).toContain('superseded: check=failure');
+  });
+
+  it('keeps the later run pending rather than the earlier settled one', async () => {
+    const { summariseCheckRuns } = await import('../ci-log.mjs');
+    const summary = summariseCheckRuns([
+      { id: 4, name: 'backend-check', status: 'completed', conclusion: 'success' },
+      { id: 5, name: 'backend-check', status: 'in_progress', conclusion: null },
+    ]);
+
+    expect(summary.settled).toBe(false);
+    expect(summary.pending).toEqual(['backend-check']);
+  });
+
   it('says out loud that an empty board means no run was registered', async () => {
     // Empty is not "skipped by the paths filter". Twice this week a pull request had no run
     // at all - Actions never received the event - and the silence read as "still queued".

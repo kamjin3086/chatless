@@ -40,6 +40,7 @@
     "repo:state": "node scripts/repo-state.mjs",
     "ci:log": "node scripts/ci-log.mjs",
     "wt:add": "node scripts/wt-add.mjs",
+    "wt:remove": "node scripts/wt-remove.mjs",
     "export:model-rules": "node scripts/export-model-fetch-rules.mjs",
     "verify:fast": "pnpm lint:ci && pnpm typecheck && pnpm typecheck:tests && pnpm test",
     "shot": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shot/capture.ps1",
