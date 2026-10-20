@@ -110,6 +110,10 @@ export type ToolCallFormat =
   | 'gpt_oss_channel'
   | 'gpt_oss_commentary'
   | 'gpt_oss_tags'
+  // Field-observed text protocols (#165)
+  | 'bracket_calling'
+  | 'gemma_tool_call'
+  | 'deepseek_dsml'
   // 简化格式
   | 'json_tool_call'
   | 'commentary_simple'
@@ -218,6 +222,38 @@ export const FORMAT_REGISTRY: FormatMetadata[] = [
     mainstream: true,
     examples: [
       '<|channel|>', '<|message|>', '<|end|>', '<|thinking|>',
+    ]
+  },
+  // Field-observed text protocols (#165). Priorities sit between the GPT-OSS
+  // formats and the JSON fallback: they are more specific than a bare JSON scan.
+  {
+    id: 'bracket_calling',
+    name: 'Bracketed calling',
+    description: '[[calling server__tool with query: …]] — aggregator endpoints',
+    priority: 7,
+    mainstream: false,
+    examples: [
+      '[[calling knowledge__search with query: 卡布奇诺 温度]]',
+    ]
+  },
+  {
+    id: 'gemma_tool_call',
+    name: 'Gemma tool_call tags',
+    description: '<|tool_call>call:server__tool{…}<tool_call|>',
+    priority: 8,
+    mainstream: false,
+    examples: [
+      '<|tool_call>call:knowledge__list{}<tool_call|>',
+    ]
+  },
+  {
+    id: 'deepseek_dsml',
+    name: 'DeepSeek DSML',
+    description: 'DeepSeek full-width <｜DSML｜> invoke/parameter tags',
+    priority: 9,
+    mainstream: false,
+    examples: [
+      '<｜DSML｜tool_calls><｜DSML｜invoke name="knowledge__list"><｜DSML｜parameter name="query" string="true">卡布奇诺 温度</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>',
     ]
   },
   // 简化格式

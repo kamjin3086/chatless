@@ -17,6 +17,11 @@ const TOOL_START_PATTERNS = [
   '<use_mcp_tool>',
   '{"server":',
   '{"tool":',
+  // Field-observed text protocols (#165): the stream must stop showing the
+  // markup at the same point it stops showing the others.
+  '[[calling',
+  '<|tool_call>',
+  '<｜DSML｜',
 ];
 
 function startsWithToolPattern(text: string): boolean {
