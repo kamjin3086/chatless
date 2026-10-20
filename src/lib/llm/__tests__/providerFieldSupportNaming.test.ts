@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_PROVIDER_CONFIG,
   PROVIDER_CONFIGS,
-  getProviderConfig,
   normalizeProviderName,
   resolveProviderConfig,
 } from '../provider-field-support';
+
+const configOf = (providerName: string) =>
+  resolveProviderConfig(providerName).config;
 
 /**
  * These rows are what the parameter dialogs use to decide which controls exist, so a row
@@ -20,21 +22,19 @@ describe('looking up a provider by the name the app uses', () => {
     ['Ollama', 'minP'],
     ['DeepSeek', 'presencePenalty'],
   ] as const)('%s reports that it takes %s', (provider, field) => {
-    expect(getProviderConfig(provider).support[field]).toBe(true);
+    expect(configOf(provider).support[field]).toBe(true);
   });
 
   it('does not answer for Gemini with the OpenAI-shaped fallback', () => {
     // The fallback maps maxTokens to max_tokens; Gemini's generationConfig wants
     // maxOutputTokens, which is what the row says.
-    expect(getProviderConfig('Google AI').fieldMapping?.maxTokens).toBe(
+    expect(configOf('Google AI').fieldMapping.maxTokens).toBe(
       'maxOutputTokens',
     );
   });
 
   it('is not changed for a provider whose name already matched', () => {
-    expect(getProviderConfig('anthropic').fieldMapping?.stop).toBe(
-      'stop_sequences',
-    );
+    expect(configOf('anthropic').fieldMapping.stop).toBe('stop_sequences');
   });
 
   it('does not offer chat-only controls to the Responses endpoint', () => {
@@ -108,6 +108,11 @@ describe('a provider field is declared once', () => {
     expect(google.support.topK).toBe(true);
     expect(google.fields.minP).toBe('minP');
     expect(google.support.minP).toBe(true);
+  });
+
+  it('keeps identity wire names in the derived map', () => {
+    expect(PROVIDER_CONFIGS.ollama.fieldMapping.format).toBe('format');
+    expect(PROVIDER_CONFIGS.ollama.fields.format).toBe('format');
   });
 
   it('derives the aliases the request path may pass for a row', () => {

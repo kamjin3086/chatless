@@ -1,4 +1,7 @@
-import type { ModelParameters } from '@/types/model-params';
+import {
+  MODEL_PARAMETER_FLAGS,
+  type ModelParameters,
+} from '@/types/model-params';
 import {
   type ThinkingChoice,
   readThinkingChoice,
@@ -15,6 +18,14 @@ import {
 export type SessionThinkingChoice = ThinkingChoice;
 export { readThinkingChoice as readSessionThinkingChoice };
 
+export function withSessionThinkingChoice(
+  sessionParameters: ModelParameters,
+  choice: SessionThinkingChoice,
+): ModelParameters;
+export function withSessionThinkingChoice(
+  sessionParameters: Partial<ModelParameters>,
+  choice: SessionThinkingChoice,
+): Partial<ModelParameters>;
 export function withSessionThinkingChoice(
   sessionParameters: Partial<ModelParameters>,
   choice: SessionThinkingChoice,
@@ -38,20 +49,8 @@ export function withSessionThinkingChoice(
  * thinking, streaming, format and the thinking level, so a conversation could not turn
  * off what the model had turned on. One table, two callers.
  */
-const INHERITED_KEY_BY_FLAG: Array<[keyof ModelParameters, string]> = [
-  ['enableTemperature', 'temperature'],
-  ['enableMaxTokens', 'maxTokens'],
-  ['enableTopP', 'topP'],
-  ['enableTopK', 'topK'],
-  ['enableMinP', 'minP'],
-  ['enableFrequencyPenalty', 'frequencyPenalty'],
-  ['enablePresencePenalty', 'presencePenalty'],
-  ['enableStopSequences', 'stop'],
-  ['enableThinking', 'thinking'],
-  ['enableThinkingLevel', 'thinkingLevel'],
-  ['enableStreaming', 'streaming'],
-  ['enableFormat', 'format'],
-];
+const INHERITED_KEY_BY_FLAG: Array<[keyof ModelParameters, string]> =
+  MODEL_PARAMETER_FLAGS.map(({ flag, option }) => [flag, option]);
 
 /**
  * Drop inherited options the session explicitly disabled (`enableX === false`). An

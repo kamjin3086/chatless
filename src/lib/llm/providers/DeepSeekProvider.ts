@@ -59,7 +59,7 @@ export class DeepSeekProvider extends BaseProvider {
     if (opts.presencePenalty !== undefined && mapped.presence_penalty === undefined) mapped.presence_penalty = opts.presencePenalty;
     if (opts.stop !== undefined && mapped.stop === undefined) mapped.stop = opts.stop;
     // DeepSeek's chat protocol does not take top_k/min_p; the app's `thinking` boolean
-    // and `format` are not its fields either. Other native advancedOptions still pass.
+    // and `format` are not its fields either. Native fields under other names still pass.
     delete mapped.thinking;
     delete mapped.format;
 

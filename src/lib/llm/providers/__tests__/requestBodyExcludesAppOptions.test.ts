@@ -324,6 +324,14 @@ describe('parameters a provider does not have are not invented', () => {
     }
   });
 
+  it('the generic format never reaches the frozen Anthropic adapter', async () => {
+    const body = await bodyFor(
+      () => new AnthropicProvider('https://example.test/v1'),
+      { ...appOptions, format: 'json' },
+    );
+    expect(body).not.toHaveProperty('format');
+  });
+
   it.each(['OpenAI-compatible', 'OpenAI', 'DeepSeek'])(
     '%s carries the supported stop sequences and penalties',
     async (name) => {

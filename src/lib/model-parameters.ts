@@ -1,6 +1,7 @@
 import { migrateLegacyThinkingBoolean } from '@/lib/chat/thinkingScope';
 import {
   DEFAULT_MODEL_PARAMETERS,
+  MODEL_PARAMETER_FLAGS,
   MODEL_PARAMETER_LIMITS,
 } from '@/types/model-params';
 import type {
@@ -61,6 +62,45 @@ const PARAM_FIELDS: Record<keyof ModelParameters, FieldShape> = {
   enableStreaming: { kind: 'boolean' },
   enableFormat: { kind: 'boolean' },
 };
+
+/**
+ * A bag stored before the switches existed has a value but no `enableX`. The old send path
+ * read that value as a choice when it differed from the default; the strict model rule
+ * requires the switch, so infer it here rather than silently dropping a setting the user
+ * once made. Equal-to-default values stay switch-less: the old path did not send those and
+ * the new path must not start.
+ *
+ * `thinking`/`thinkingLevel` are deliberately skipped: `migrateLegacyThinkingBoolean` owns
+ * their translation, and a second opinion here would compete with it.
+ */
+function normalizeLegacyModelFlags(params: ModelParameters): ModelParameters {
+  const next = { ...params } as unknown as Record<string, unknown>;
+  const source = params as unknown as Record<string, unknown>;
+  for (const { flag, value: key } of MODEL_PARAMETER_FLAGS) {
+    if (flag in source) continue;
+    if (flag === 'enableThinking' || flag === 'enableThinkingLevel') continue;
+    const value = source[key];
+    if (value === undefined) continue;
+
+    if (key === 'maxTokens') {
+      if (value !== DEFAULT_MODEL_PARAMETERS.maxTokens) next[flag] = true;
+      continue;
+    }
+    if (key === 'format') {
+      // format was previewed but never assembled before this change; a stored format is
+      // a value the user set, and the new assembly is what lets it travel. Only a provider
+      // whose row declares format uses it; the others drop it at the wire boundary.
+      if (typeof value === 'string' && value !== 'none') next[flag] = true;
+      continue;
+    }
+    if (key === 'stopSequences') {
+      if (Array.isArray(value) && value.length > 0) next[flag] = true;
+      continue;
+    }
+    if (value !== DEFAULT_MODEL_PARAMETERS[key]) next[flag] = true;
+  }
+  return next as unknown as ModelParameters;
+}
 
 function cleanNumber(raw: number, key: string): number {
   const limits = (
@@ -164,11 +204,12 @@ export class ModelParametersService {
     // stays available for the one thing that must know a migration happened: the control's
     // explanation. Defaults are not migrated - they are this code's own baseline, not a
     // user's old choice.
-    return migrateLegacyThinkingBoolean({
+    const migrated = migrateLegacyThinkingBoolean({
       provider: providerName,
       modelId,
       params: saved,
     }).params;
+    return normalizeLegacyModelFlags(migrated);
   }
 
   /**

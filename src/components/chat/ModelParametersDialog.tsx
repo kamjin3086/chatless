@@ -634,7 +634,7 @@ export function ModelParametersDialog({
         ...((parameters as any).advancedOptions || {}),
         ...custom,
       },
-    } as ModelParameters);
+    });
   };
 
   const previewJson = generatePreviewJson();

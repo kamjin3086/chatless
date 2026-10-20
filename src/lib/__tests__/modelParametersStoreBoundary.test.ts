@@ -135,6 +135,9 @@ describe('the bag a screen reads', () => {
     ).toEqual({
       enableTemperature: true,
       topP: 0.7,
+      // No switch was stored for topP, but the value differed from the default, so the
+      // old send path read it as a choice; the model bag now says so explicitly.
+      enableTopP: true,
       enableThinkingLevel: true,
       thinkingLevel: 'off',
     });
@@ -180,8 +183,67 @@ describe('the bag a screen reads', () => {
     expect(orNull).toEqual({
       temperature: 0.2,
       maxTokens: 4096,
+      enableTemperature: true,
+      enableMaxTokens: true,
       advancedOptions: { reasoning_effort: 'high' },
     });
+  });
+});
+
+describe('a model bag stored before the switches existed', () => {
+  it('keeps the choices the old value-vs-default rule would have sent', async () => {
+    stored['model:openai/gpt-legacy'] = {
+      temperature: 0.3,
+      stopSequences: ['END'],
+    };
+    const { ModelParametersService } = await import('@/lib/model-parameters');
+    const params = await ModelParametersService.getModelParameters(
+      'openai',
+      'gpt-legacy',
+    );
+    expect(params.enableTemperature).toBe(true);
+    expect(params.enableStopSequences).toBe(true);
+    expect(params.temperature).toBe(0.3);
+    expect(params.stopSequences).toEqual(['END']);
+  });
+
+  it('does not turn a stored default into a choice', async () => {
+    const { DEFAULT_MODEL_PARAMETERS } = await import('@/types/model-params');
+    stored['model:openai/gpt-legacy-default'] = {
+      temperature: DEFAULT_MODEL_PARAMETERS.temperature,
+      stopSequences: [],
+    };
+    const { ModelParametersService } = await import('@/lib/model-parameters');
+    const params = await ModelParametersService.getModelParameters(
+      'openai',
+      'gpt-legacy-default',
+    );
+    expect(params.enableTemperature).toBeUndefined();
+    expect(params.enableStopSequences).toBeUndefined();
+  });
+
+  it('carries a legacy format as a set value', async () => {
+    stored['model:ollama/legacy-format'] = { format: 'json' };
+    const { ModelParametersService } = await import('@/lib/model-parameters');
+    const params = await ModelParametersService.getModelParameters(
+      'ollama',
+      'legacy-format',
+    );
+    expect(params.enableFormat).toBe(true);
+    expect(params.format).toBe('json');
+  });
+
+  it('does not turn an explicit off into a choice', async () => {
+    stored['model:openai/gpt-off'] = {
+      enableTemperature: false,
+      temperature: 0.3,
+    };
+    const { ModelParametersService } = await import('@/lib/model-parameters');
+    const params = await ModelParametersService.getModelParameters(
+      'openai',
+      'gpt-off',
+    );
+    expect(params.enableTemperature).toBe(false);
   });
 });
 

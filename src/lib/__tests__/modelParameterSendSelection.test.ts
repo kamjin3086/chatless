@@ -156,6 +156,18 @@ describe('a session patch says only what the conversation chose', () => {
     expect(chosen(convert({ stopSequences: [] }))).toEqual({});
   });
 
+  it('sends an explicitly switched value even when it equals the default', () => {
+    expect(
+      convert({ enableTemperature: true, temperature: 0.7 }).temperature,
+    ).toBe(0.7);
+    expect(
+      convert({
+        enableMaxTokens: true,
+        maxTokens: DEFAULT_MODEL_PARAMETERS.maxTokens,
+      }).maxTokens,
+    ).toBe(DEFAULT_MODEL_PARAMETERS.maxTokens);
+  });
+
   it('keeps an explicit off explicit', () => {
     expect(
       chosen(convert({ enableTemperature: false, temperature: 0.2 })),

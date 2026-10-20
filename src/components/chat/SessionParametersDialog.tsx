@@ -32,6 +32,7 @@ import { ModelParametersService } from '@/lib/model-parameters';
 import type { ModelParameters } from '@/types/model-params';
 import {
   DEFAULT_MODEL_PARAMETERS,
+  MODEL_FLAG_BY_VALUE,
   MODEL_PARAMETER_LIMITS,
 } from '@/types/model-params';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -47,11 +48,11 @@ import {
   type ThinkingLevel,
 } from '@/lib/llm/thinkingLevels';
 import {
-  dropInheritedThatSessionDisabled,
   readSessionThinkingChoice,
   withSessionThinkingChoice,
   type SessionThinkingChoice,
 } from '@/lib/chat/sessionParameterMerge';
+import { mergeSessionParameterOptions } from '@/lib/chat/sendParameterMerge';
 import { useLocaleStore } from '@/store/localeStore';
 import type { TranslationKey } from '@/i18n/types';
 
@@ -421,25 +422,18 @@ export function SessionParametersDialog({
       }
     });
 
-    const sessionOpt = ModelParametersService.convertToChatOptions(
-      {
-        ...parameters,
-        stopSequences,
-        advancedOptions: {
-          ...((parameters as any).advancedOptions || {}),
-          ...custom,
-        },
-      } as ModelParameters,
-      'session',
-    );
+    const sessionPatch = {
+      ...parameters,
+      stopSequences,
+      advancedOptions: {
+        ...((parameters as any).advancedOptions || {}),
+        ...custom,
+      },
+    };
 
-    let modelOpt: Record<string, any> = {};
-    if (modelParamsState) {
-      modelOpt = ModelParametersService.convertToChatOptions(modelParamsState);
-      modelOpt = dropInheritedThatSessionDisabled(modelOpt, parameters as any);
-    }
-
-    const merged = { ...modelOpt, ...sessionOpt };
+    const merged = modelParamsState
+      ? mergeSessionParameterOptions(modelParamsState, sessionPatch)
+      : ModelParametersService.convertToChatOptions(sessionPatch, 'session');
     return JSON.stringify(merged, null, 2);
   };
 
@@ -581,10 +575,7 @@ export function SessionParametersDialog({
   };
 
   // 即时应用参数（不关闭对话框）
-  const handleApplyImmediate = async (
-    params: ModelParameters,
-    stopOverride?: string[],
-  ) => {
+  const handleApplyImmediate = async (params: ModelParameters) => {
     try {
       // 处理自定义参数
       const customOptions: Record<string, any> = {};
@@ -596,7 +587,7 @@ export function SessionParametersDialog({
 
       const sessionParams = {
         ...params,
-        stopSequences: stopOverride ?? stopSequences,
+        stopSequences,
         advancedOptions: customOptions,
       };
 
@@ -618,6 +609,26 @@ export function SessionParametersDialog({
     const newParams = { ...parameters, [key]: value };
     setParameters(newParams);
     handleApplyImmediate(newParams);
+  };
+
+  const flagFor = (key: keyof ModelParameters) => MODEL_FLAG_BY_VALUE[key];
+
+  /**
+   * A slider or number field is a value the user chose: turning the value must also turn
+   * the switch explicit, otherwise a session value equal to the default would be read as
+   * "no opinion" and dropped while the control looks on.
+   */
+  const applyNumber = (
+    key: keyof ModelParameters,
+    raw: string,
+    integer = false,
+  ) => {
+    const value = integer ? parseInt(raw, 10) || 0 : parseFloat(raw) || 0;
+    const flag = flagFor(key);
+    const next = Object.assign({}, parameters, { [key]: value });
+    if (flag) Object.assign(next, { [flag]: true });
+    setParameters(next);
+    handleApplyImmediate(next);
   };
 
   const handleResetToModelDefault = async () => {
@@ -1017,15 +1028,9 @@ export function SessionParametersDialog({
                       };
                       setParameters(newParams);
                     }}
-                    onMouseUp={(e) => {
-                      const newParams = {
-                        ...parameters,
-                        temperature: parseFloat(
-                          (e.target as HTMLInputElement).value,
-                        ),
-                      };
-                      handleApplyImmediate(newParams);
-                    }}
+                    onMouseUp={(e) =>
+                      applyNumber('temperature', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enableTemperature === false
@@ -1049,13 +1054,7 @@ export function SessionParametersDialog({
                       };
                       setParameters(newParams);
                     }}
-                    onBlur={(e) => {
-                      const newParams = {
-                        ...parameters,
-                        temperature: parseFloat(e.target.value) || 0,
-                      };
-                      handleApplyImmediate(newParams);
-                    }}
+                    onBlur={(e) => applyNumber('temperature', e.target.value)}
                     disabled={parameters.enableTemperature === false}
                   />
                 </div>
@@ -1111,12 +1110,9 @@ export function SessionParametersDialog({
                         maxTokens: parseFloat(e.target.value),
                       }))
                     }
-                    onMouseUp={(e) => {
-                      const value = Math.round(
-                        parseFloat(e.currentTarget.value),
-                      );
-                      handleApplyImmediate({ ...parameters, maxTokens: value });
-                    }}
+                    onMouseUp={(e) =>
+                      applyNumber('maxTokens', e.currentTarget.value, true)
+                    }
                     style={{
                       background:
                         parameters.enableMaxTokens === false
@@ -1139,10 +1135,9 @@ export function SessionParametersDialog({
                         maxTokens: parseInt(e.target.value) || 0,
                       }))
                     }
-                    onBlur={(e) => {
-                      const value = parseInt(e.target.value, 10) || 0;
-                      handleApplyImmediate({ ...parameters, maxTokens: value });
-                    }}
+                    onBlur={(e) =>
+                      applyNumber('maxTokens', e.target.value, true)
+                    }
                     disabled={parameters.enableMaxTokens === false}
                   />
                 </div>
@@ -1198,10 +1193,9 @@ export function SessionParametersDialog({
                         topP: parseFloat(e.target.value),
                       }))
                     }
-                    onMouseUp={(e) => {
-                      const value = parseFloat(e.currentTarget.value);
-                      handleApplyImmediate({ ...parameters, topP: value });
-                    }}
+                    onMouseUp={(e) =>
+                      applyNumber('topP', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enableTopP === false
@@ -1224,10 +1218,7 @@ export function SessionParametersDialog({
                         topP: parseFloat(e.target.value) || 0,
                       }))
                     }
-                    onBlur={(e) => {
-                      const value = parseFloat(e.target.value) || 0;
-                      handleApplyImmediate({ ...parameters, topP: value });
-                    }}
+                    onBlur={(e) => applyNumber('topP', e.target.value)}
                     disabled={parameters.enableTopP === false}
                   />
                 </div>
@@ -1286,13 +1277,9 @@ export function SessionParametersDialog({
                         frequencyPenalty: parseFloat(e.target.value),
                       }))
                     }
-                    onMouseUp={(e) => {
-                      const value = parseFloat(e.currentTarget.value);
-                      handleApplyImmediate({
-                        ...parameters,
-                        frequencyPenalty: value,
-                      });
-                    }}
+                    onMouseUp={(e) =>
+                      applyNumber('frequencyPenalty', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enableFrequencyPenalty === false
@@ -1315,13 +1302,9 @@ export function SessionParametersDialog({
                         frequencyPenalty: parseFloat(e.target.value) || 0,
                       }))
                     }
-                    onBlur={(e) => {
-                      const value = parseFloat(e.target.value) || 0;
-                      handleApplyImmediate({
-                        ...parameters,
-                        frequencyPenalty: value,
-                      });
-                    }}
+                    onBlur={(e) =>
+                      applyNumber('frequencyPenalty', e.target.value)
+                    }
                     disabled={parameters.enableFrequencyPenalty === false}
                   />
                 </div>
@@ -1377,13 +1360,9 @@ export function SessionParametersDialog({
                         presencePenalty: parseFloat(e.target.value),
                       }))
                     }
-                    onMouseUp={(e) => {
-                      const value = parseFloat(e.currentTarget.value);
-                      handleApplyImmediate({
-                        ...parameters,
-                        presencePenalty: value,
-                      });
-                    }}
+                    onMouseUp={(e) =>
+                      applyNumber('presencePenalty', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enablePresencePenalty === false
@@ -1406,13 +1385,9 @@ export function SessionParametersDialog({
                         presencePenalty: parseFloat(e.target.value) || 0,
                       }))
                     }
-                    onBlur={(e) => {
-                      const value = parseFloat(e.target.value) || 0;
-                      handleApplyImmediate({
-                        ...parameters,
-                        presencePenalty: value,
-                      });
-                    }}
+                    onBlur={(e) =>
+                      applyNumber('presencePenalty', e.target.value)
+                    }
                     disabled={parameters.enablePresencePenalty === false}
                   />
                 </div>
@@ -1471,10 +1446,9 @@ export function SessionParametersDialog({
                           topK: parseInt(e.target.value),
                         }))
                       }
-                      onMouseUp={(e) => {
-                        const value = parseInt(e.currentTarget.value, 10) || 0;
-                        handleApplyImmediate({ ...parameters, topK: value });
-                      }}
+                      onMouseUp={(e) =>
+                        applyNumber('topK', e.currentTarget.value, true)
+                      }
                       style={{
                         background:
                           parameters.enableTopK === false
@@ -1497,10 +1471,7 @@ export function SessionParametersDialog({
                           topK: parseInt(e.target.value) || 0,
                         }))
                       }
-                      onBlur={(e) => {
-                        const value = parseInt(e.target.value, 10) || 0;
-                        handleApplyImmediate({ ...parameters, topK: value });
-                      }}
+                      onBlur={(e) => applyNumber('topK', e.target.value, true)}
                       disabled={parameters.enableTopK === false}
                     />
                   </div>
@@ -1560,10 +1531,9 @@ export function SessionParametersDialog({
                           minP: parseFloat(e.target.value),
                         }))
                       }
-                      onMouseUp={(e) => {
-                        const value = parseFloat(e.currentTarget.value);
-                        handleApplyImmediate({ ...parameters, minP: value });
-                      }}
+                      onMouseUp={(e) =>
+                        applyNumber('minP', e.currentTarget.value)
+                      }
                       style={{
                         background:
                           parameters.enableMinP === false
@@ -1586,10 +1556,7 @@ export function SessionParametersDialog({
                           minP: parseFloat(e.target.value) || 0,
                         }))
                       }
-                      onBlur={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        handleApplyImmediate({ ...parameters, minP: value });
-                      }}
+                      onBlur={(e) => applyNumber('minP', e.target.value)}
                       disabled={parameters.enableMinP === false}
                     />
                   </div>
@@ -1630,7 +1597,7 @@ export function SessionParametersDialog({
                         const next = withSessionThinkingChoice(
                           parameters,
                           e.target.value as SessionThinkingChoice,
-                        ) as ModelParameters;
+                        );
                         setParameters(next);
                         handleApplyImmediate(next);
                       }}
@@ -1756,12 +1723,11 @@ export function SessionParametersDialog({
                       <select
                         value={parameters.format || 'none'}
                         onChange={(e) => {
+                          const value = e.target.value;
                           const newParams = {
                             ...parameters,
-                            format:
-                              e.target.value === 'none'
-                                ? undefined
-                                : e.target.value,
+                            format: value === 'none' ? undefined : value,
+                            enableFormat: value !== 'none',
                           };
                           setParameters(newParams);
                           handleApplyImmediate(newParams);

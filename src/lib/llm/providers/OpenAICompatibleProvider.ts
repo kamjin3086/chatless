@@ -172,8 +172,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
       mapped.presence_penalty = o.presencePenalty;
     if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
     // OpenAI-compatible means the OpenAI chat fields, not a superset. top_k/min_p and
-    // the app's thinking/format names are not in that protocol. Other native fields from
-    // advancedOptions (reasoning_effort, response_format, ...) still pass as written.
+    // the app's thinking/format names are not in that protocol. Native fields under other
+    // names (reasoning_effort, response_format, ...) still pass as written.
     delete mapped.thinking;
     delete mapped.format;
     // No default `stop` list. It used to carry the chat-template boundary tokens, on top

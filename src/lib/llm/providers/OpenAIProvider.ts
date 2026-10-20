@@ -75,8 +75,8 @@ export class OpenAIProvider extends BaseProvider {
     if (o.presencePenalty !== undefined && mapped.presence_penalty === undefined) mapped.presence_penalty = o.presencePenalty;
     if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
     // OpenAI's chat protocol has no top_k/min_p, and the app's `thinking`/`format`
-    // names are not its fields. Other native fields from advancedOptions (for example
-    // `reasoning_effort`) still pass under their own names via toWireOptions.
+    // names are not its fields. Native fields under other names (for example
+    // `reasoning_effort`) still pass through toWireOptions.
     delete mapped.thinking;
     delete mapped.format;
 
