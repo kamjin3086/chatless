@@ -79,11 +79,12 @@ Two things here are **required**, not preference:
   ```
 
   The translation for an English thread is `> AI-generated, human-reviewed.`
-- **A reply is written as the owner's own reply.** It posts under the owner's name, so it reads
-  as the maintainer speaking to a user: first person, plain language, thanks, what is known,
-  what to do meanwhile, what happens next. Never the internal analysis, never a request for the
-  reporter to make a decision, never a worklog. `docs/agents/maintenance.md` - "Replying to a
-  reporter" - carries the forbidden list; #156 is the example of how not to do it.
+- **A reply is written as the owner's own reply**, in the maintainer's voice: short and factual,
+  no apology or gratitude padding, no hand-holding. Never the internal analysis, never a request
+  for the reporter to decide, never a worklog. **Ask the owner how to put it before posting**
+  unless it is a one-line status - the owner's preference is the rule, not the agent's taste.
+  `docs/agents/maintenance.md` - "Replying to a reporter" - has the list; #156 is the example of
+  getting it wrong.
 
 ## Subsystem notes
 

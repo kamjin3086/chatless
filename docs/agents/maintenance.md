@@ -49,39 +49,26 @@ a cost, not a contribution.
 ## Replying to a reporter
 
 **A reply is written as the owner's own reply.** The account that posts is the owner's, so the
-text is read as the maintainer speaking to one of their users - first person, plain language,
-and nothing the maintainer would not say to a user's face. The owner's name is what is on it.
+text is read as the maintainer speaking to one of their users. That sets the voice:
+
+- **The maintainer, not a supplicant.** No apology theatre ("抱歉给你添了麻烦"), no gratitude
+  padding, no self-deprecation, no "you don't have to do anything" hand-holding. A bug report is
+  normal business; the owner owes the reporter a correct answer, not an apology.
+- **Short and factual.** What is confirmed, the cause in one or two sentences, what to do
+  meanwhile when there is a workaround, what will change. Two to four short paragraphs.
+- **The reporter's own language**, opening with the disclosure blockquote.
+
 Anything that reads like an agent's worklog is forbidden, not merely discouraged: code paths,
-file names, capability tables, option lists, "which direction should we take", a diary of what
-was tried, or an analysis the reader did not ask for. **This rule has no exception and no
-"unless the issue is interesting enough" case.** The first #156 reply broke it - a two-defect
-breakdown, a capability table and four options, ending in a request for the reporter to pick a
-direction - and the owner read it as something that must never be posted again.
+file names, capability tables, option lists, a diary of what was tried, or an analysis the reader
+did not ask for. **Asking the reporter to choose a fix direction is forbidden** - that decision
+belongs to the owner.
 
-A reply to the person who filed an issue is a **courtesy and a status**, not a design
-discussion. It costs them nothing to read and tells them what to expect:
-
-- What is known: confirmed or not, and whether it is their configuration or the product.
-- What they can do meanwhile (a workaround, if one exists), in as many steps as they need.
-- What will happen next: fixing, needs a decision, cannot reproduce - and that progress is
-  posted in this thread.
-- One optional, specific request for information. Not a list of questions.
-
-What it is not:
-
-- **Never a decision request.** The reporter is not the maintainer and cannot choose the fix
-  direction. "Which option do you want: 1 or 3?" is a question for the owner, asked on the
-  maintainer side.
-- **Never the internal analysis.** Code paths, capability tables, file names and rolled-up
-  options belong in an owner-facing issue (English, `ready-for-human`) or an ADR. The reporter
-  gets the outcome, not the archaeology - and one screen, not three.
-- **Never a dump of what was tried.** "I looked at X, then Y, then Z" is a diary; the reader
-  wants the answer.
-
-Precedent worth remembering: #156 was first answered with a two-defect breakdown, a capability
-table and four options, ending with "tell me which direction to take". The reporter is the one
-person who cannot do that. The technical record moved to #160 and the thread was rewritten to
-thank them, name the cause in one paragraph, give the workaround, and promise an update.
+**Ask the owner before posting, unless it is a one-line status.** A reply that explains a cause,
+offers a workaround, makes a promise, or says anything about priority is not the agent's call:
+put the draft in front of the owner (or ask how they want it put) and post after they confirm.
+"Fixed in `<sha>`, thanks for the report" needs no review. The owner's preference about tone is
+the rule, not the agent's taste - #156 is the worked example of getting this wrong twice, first
+with an analysis dump, then with a reply that apologised for the product.
 
 ## Agent-authored PRs
 
