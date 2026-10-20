@@ -36,6 +36,23 @@ describe('looking up a provider by the name the app uses', () => {
       'stop_sequences',
     );
   });
+
+  it('does not offer chat-only controls to the Responses endpoint', () => {
+    const responses = resolveProviderConfig('OpenAI (Responses)');
+    expect(responses.row).toBe('openai-responses');
+    expect(responses.config.support.temperature).toBe(true);
+    expect(responses.config.support.maxTokens).toBe(true);
+    for (const field of [
+      'frequencyPenalty',
+      'presencePenalty',
+      'stopSequences',
+      'topK',
+      'minP',
+      'format',
+    ] as const) {
+      expect(responses.config.support[field]).toBeUndefined();
+    }
+  });
 });
 
 /**

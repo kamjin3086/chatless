@@ -635,8 +635,10 @@ export const useChatActions = (
           });
           let sessionOpts: Record<string, any> = {};
           if (resolvedSession) {
-            sessionOpts =
-              ModelParametersService.convertToChatOptions(resolvedSession);
+            sessionOpts = ModelParametersService.convertToChatOptions(
+              resolvedSession,
+              'session',
+            );
           }
 
           // 3) A conversation may explicitly switch off something the model default set;
@@ -1147,8 +1149,10 @@ export const useChatActions = (
         });
         let sessionOpts: Record<string, any> = {};
         if (resolvedSession) {
-          sessionOpts =
-            ModelParametersService.convertToChatOptions(resolvedSession);
+          sessionOpts = ModelParametersService.convertToChatOptions(
+            resolvedSession,
+            'session',
+          );
         }
         const filteredModelOpts: Record<string, any> =
           dropInheritedThatSessionDisabled(modelOpts, resolvedSession);

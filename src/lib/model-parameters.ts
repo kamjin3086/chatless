@@ -344,16 +344,27 @@ export class ModelParametersService {
   }
 
   /**
-   * 将模型参数转换为聊天选项格式
+   * 将模型参数转换为聊天选项格式。
+   *
+   * `scope` says what the bag is, because the same `undefined` means two different
+   * things. A model bag is complete: every value is present, so only an explicit
+   * `enableX: true` is a choice - a value alone is the stored default and must not be
+   * sent. A session/message bag is a patch: a present value is an override the user
+   * wrote, and `enableX: false` is the one thing that removes the inherited value.
+   * Either way a default with no explicit switch stays off the wire.
    */
-  static convertToChatOptions(input: ModelParameterPatch): Record<string, any> {
+  static convertToChatOptions(
+    input: ModelParameterPatch,
+    scope: 'model' | 'session' = 'model',
+  ): Record<string, any> {
     // A conversation or a message hands this a patch - only what the user touched - so it
     // is cleaned here rather than trusted. Absence is preserved on purpose; a wrong type is
     // dropped as if the value had never been chosen.
     const parameters: ModelParameters = sanitizeParameterPatch(
       input,
     ) as ModelParameters;
-    // 仅当用户"启用"某参数或者值与默认不同，才传给 Provider
+    // App-side payloads (advancedOptions) are explicit user input and travel as written;
+    // every named parameter below has to earn its way onto the wire.
     const opts: Record<string, any> = { ...(parameters.advancedOptions || {}) };
     const def = DEFAULT_MODEL_PARAMETERS;
 
@@ -362,10 +373,14 @@ export class ModelParametersService {
       value: any,
       defValue: any,
     ) => {
-      // 若显式关闭则不传；若与默认相同且未显式开启也不传
+      if (value === undefined) return false;
+      // An explicit off is an off everywhere: never read it as "inherit" or "default".
       if (enabledFlag === false) return false;
       if (enabledFlag === true) return true;
-      return value !== defValue;
+      // No switch at all. In a complete model bag that is "not chosen" - the value is
+      // just the stored default. In a patch, a value that differs from the default is
+      // the older way of saying "send this", so keep that meaning for sessions only.
+      return scope === 'session' && value !== defValue;
     };
 
     if (
@@ -453,6 +468,14 @@ export class ModelParametersService {
       shouldSet(parameters.enableStreaming, parameters.streaming, def.streaming)
     ) {
       opts.streaming = parameters.streaming;
+    }
+    // Format is a generic app name; each provider that understands it puts it on the
+    // wire in its own shape. It used to be previewed but never assembled.
+    if (
+      shouldSet(parameters.enableFormat, parameters.format, def.format) &&
+      parameters.format !== 'none'
+    ) {
+      opts.format = parameters.format;
     }
 
     return opts;

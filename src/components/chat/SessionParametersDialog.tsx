@@ -411,64 +411,31 @@ export function SessionParametersDialog({
     return value;
   };
 
-  // 生成预览JSON
+  // 生成预览JSON。The same two conversions the send path runs: a strict model bag,
+  // then this conversation's patch, with the shared "switch this off" table on top.
   const generatePreviewJson = () => {
-    // 会话级选项
-    const sessionOpt: any = {};
-    if (parameters.enableTemperature !== false)
-      sessionOpt.temperature = parameters.temperature;
-    if (parameters.enableMaxTokens !== false)
-      sessionOpt.maxTokens = parameters.maxTokens;
-    if (parameters.enableTopP !== false) sessionOpt.topP = parameters.topP;
-    if (parameters.enableTopK !== false) sessionOpt.topK = parameters.topK;
-    if (parameters.enableMinP !== false) sessionOpt.minP = parameters.minP;
-    if (parameters.enableFrequencyPenalty !== false)
-      sessionOpt.frequencyPenalty = parameters.frequencyPenalty;
-    if (parameters.enablePresencePenalty !== false)
-      sessionOpt.presencePenalty = parameters.presencePenalty;
-    if (parameters.enableStopSequences !== false && stopSequences.length > 0)
-      sessionOpt.stop = stopSequences;
-
-    // 思考、流式响应和格式参数
-    // thinking: 只有明确启用时才传递（避免不兼容的模型报错）
-    if (parameters.enableThinking === true && parameters.thinking !== undefined)
-      sessionOpt.thinking = parameters.thinking;
-    // A thinking level reaches the wire only as an explicit, non-auto choice.
-    if (
-      parameters.enableThinkingLevel === true &&
-      parameters.thinkingLevel &&
-      parameters.thinkingLevel !== 'auto'
-    ) {
-      sessionOpt.thinkingLevel = parameters.thinkingLevel;
-    }
-    // streaming: 默认启用，只有明确禁用时才不传递
-    if (
-      parameters.enableStreaming !== false &&
-      parameters.streaming !== undefined
-    )
-      sessionOpt.streaming = parameters.streaming;
-    // format: 只有明确启用时才传递
-    if (
-      parameters.enableFormat === true &&
-      parameters.format &&
-      parameters.format !== 'none'
-    )
-      sessionOpt.format = parameters.format;
-
+    const custom: Record<string, any> = {};
     customParameters.forEach((param) => {
       if (param.key && param.value !== '') {
-        sessionOpt[param.key] = convertValue(param.value, param.asString);
+        custom[param.key] = convertValue(param.value, param.asString);
       }
     });
 
-    // 模型级选项（若已加载）
-    let modelOpt: any = {};
-    if (modelParamsState) {
-      // 使用与发送路径一致的规则
-      const { ModelParametersService } = require('@/lib/model-parameters');
-      modelOpt = ModelParametersService.convertToChatOptions(modelParamsState);
+    const sessionOpt = ModelParametersService.convertToChatOptions(
+      {
+        ...parameters,
+        stopSequences,
+        advancedOptions: {
+          ...((parameters as any).advancedOptions || {}),
+          ...custom,
+        },
+      } as ModelParameters,
+      'session',
+    );
 
-      // What an explicitly disabled session switch removes lives in one shared table.
+    let modelOpt: Record<string, any> = {};
+    if (modelParamsState) {
+      modelOpt = ModelParametersService.convertToChatOptions(modelParamsState);
       modelOpt = dropInheritedThatSessionDisabled(modelOpt, parameters as any);
     }
 
@@ -614,7 +581,10 @@ export function SessionParametersDialog({
   };
 
   // 即时应用参数（不关闭对话框）
-  const handleApplyImmediate = async (params: ModelParameters) => {
+  const handleApplyImmediate = async (
+    params: ModelParameters,
+    stopOverride?: string[],
+  ) => {
     try {
       // 处理自定义参数
       const customOptions: Record<string, any> = {};
@@ -626,7 +596,7 @@ export function SessionParametersDialog({
 
       const sessionParams = {
         ...params,
-        stopSequences,
+        stopSequences: stopOverride ?? stopSequences,
         advancedOptions: customOptions,
       };
 
@@ -1141,6 +1111,12 @@ export function SessionParametersDialog({
                         maxTokens: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) => {
+                      const value = Math.round(
+                        parseFloat(e.currentTarget.value),
+                      );
+                      handleApplyImmediate({ ...parameters, maxTokens: value });
+                    }}
                     style={{
                       background:
                         parameters.enableMaxTokens === false
@@ -1163,6 +1139,10 @@ export function SessionParametersDialog({
                         maxTokens: parseInt(e.target.value) || 0,
                       }))
                     }
+                    onBlur={(e) => {
+                      const value = parseInt(e.target.value, 10) || 0;
+                      handleApplyImmediate({ ...parameters, maxTokens: value });
+                    }}
                     disabled={parameters.enableMaxTokens === false}
                   />
                 </div>
@@ -1218,6 +1198,10 @@ export function SessionParametersDialog({
                         topP: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) => {
+                      const value = parseFloat(e.currentTarget.value);
+                      handleApplyImmediate({ ...parameters, topP: value });
+                    }}
                     style={{
                       background:
                         parameters.enableTopP === false
@@ -1240,6 +1224,10 @@ export function SessionParametersDialog({
                         topP: parseFloat(e.target.value) || 0,
                       }))
                     }
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      handleApplyImmediate({ ...parameters, topP: value });
+                    }}
                     disabled={parameters.enableTopP === false}
                   />
                 </div>
@@ -1298,6 +1286,13 @@ export function SessionParametersDialog({
                         frequencyPenalty: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) => {
+                      const value = parseFloat(e.currentTarget.value);
+                      handleApplyImmediate({
+                        ...parameters,
+                        frequencyPenalty: value,
+                      });
+                    }}
                     style={{
                       background:
                         parameters.enableFrequencyPenalty === false
@@ -1320,6 +1315,13 @@ export function SessionParametersDialog({
                         frequencyPenalty: parseFloat(e.target.value) || 0,
                       }))
                     }
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      handleApplyImmediate({
+                        ...parameters,
+                        frequencyPenalty: value,
+                      });
+                    }}
                     disabled={parameters.enableFrequencyPenalty === false}
                   />
                 </div>
@@ -1375,6 +1377,13 @@ export function SessionParametersDialog({
                         presencePenalty: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) => {
+                      const value = parseFloat(e.currentTarget.value);
+                      handleApplyImmediate({
+                        ...parameters,
+                        presencePenalty: value,
+                      });
+                    }}
                     style={{
                       background:
                         parameters.enablePresencePenalty === false
@@ -1397,6 +1406,13 @@ export function SessionParametersDialog({
                         presencePenalty: parseFloat(e.target.value) || 0,
                       }))
                     }
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      handleApplyImmediate({
+                        ...parameters,
+                        presencePenalty: value,
+                      });
+                    }}
                     disabled={parameters.enablePresencePenalty === false}
                   />
                 </div>
@@ -1455,6 +1471,10 @@ export function SessionParametersDialog({
                           topK: parseInt(e.target.value),
                         }))
                       }
+                      onMouseUp={(e) => {
+                        const value = parseInt(e.currentTarget.value, 10) || 0;
+                        handleApplyImmediate({ ...parameters, topK: value });
+                      }}
                       style={{
                         background:
                           parameters.enableTopK === false
@@ -1477,6 +1497,10 @@ export function SessionParametersDialog({
                           topK: parseInt(e.target.value) || 0,
                         }))
                       }
+                      onBlur={(e) => {
+                        const value = parseInt(e.target.value, 10) || 0;
+                        handleApplyImmediate({ ...parameters, topK: value });
+                      }}
                       disabled={parameters.enableTopK === false}
                     />
                   </div>
@@ -1536,6 +1560,10 @@ export function SessionParametersDialog({
                           minP: parseFloat(e.target.value),
                         }))
                       }
+                      onMouseUp={(e) => {
+                        const value = parseFloat(e.currentTarget.value);
+                        handleApplyImmediate({ ...parameters, minP: value });
+                      }}
                       style={{
                         background:
                           parameters.enableMinP === false
@@ -1558,6 +1586,10 @@ export function SessionParametersDialog({
                           minP: parseFloat(e.target.value) || 0,
                         }))
                       }
+                      onBlur={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        handleApplyImmediate({ ...parameters, minP: value });
+                      }}
                       disabled={parameters.enableMinP === false}
                     />
                   </div>

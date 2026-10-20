@@ -201,6 +201,15 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     streaming: 'stream',
   }),
 
+  // OpenAI Responses - /responses endpoint: its own token field, and it has no
+  // chat-style penalties or stop sequences.
+  'openai-responses': defineProvider({
+    temperature: 'temperature',
+    maxTokens: 'max_output_tokens',
+    topP: 'top_p',
+    streaming: 'stream',
+  }),
+
   // DeepSeek - 类OpenAI，使用snake_case
   deepseek: defineProvider({
     temperature: 'temperature',
