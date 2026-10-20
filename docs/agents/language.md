@@ -82,6 +82,34 @@ Do not force English onto these; the cost is real and the benefit is zero.
   disposition *document* - triage summary, ADR, acceptance report - is still Tier 2
   English, and it quotes the thread rather than replacing it.
 
+## Required: the thread's language, and the disclosure line
+
+Two rules on this page are not preferences, and they do not bend to the "follow it because it
+is free" logic above. Both exist because the reader of a thread is the reporter, not the owner.
+
+**1. Answer in the thread's language.** A Chinese issue gets a Chinese reply - the triage
+comment, the fix report, and the comment that closes it. A disposition *document* (ADR,
+acceptance report, triage summary) is still Tier 2 English and quotes the thread instead of
+replacing it; the thread itself stays in the reporter's language. This was already Tier 3 below
+and got ignored in practice (a Chinese bug report answered in English), which is why it is
+stated here as a requirement rather than a habit.
+
+**2. Disclose that the text came from an agent and needs human review.** Every issue, pull
+request and comment an agent writes ends with this block, in the thread's language:
+
+```markdown
+---
+由 AI 生成，需人工审核。 / AI-generated; requires human review.
+```
+
+- It is a footer, not a preamble: the reader should reach the content first.
+- One line, identical every time - it has to be greppable (`grep -c "AI 生成"`), because a
+  disclosure that changes shape cannot be audited.
+- It applies to agent-authored *text*: issue bodies, comments, PR bodies and review comments.
+  Commit messages are Tier 1 and do not carry it (the log would fill with noise).
+- It is not a disclaimer of the work: the evidence in the text is still expected to be real.
+  It tells the reader that a human has not yet verified it.
+
 ## Intake recipe: normalizing a Chinese report
 
 The reporter keeps their words; the canonical record is English. When triaging a

@@ -64,6 +64,19 @@ bar: mixed-language content does not make agent maintenance harder. Follow it be
 costs nothing, and never spend work enforcing it - existing content is not translated and
 no contribution is rejected over prose language.
 
+Two things here are **required**, not preference:
+
+- **An issue thread is answered in the thread's own language.** A Chinese report gets a
+  Chinese reply, including the comment that reports the fix or closes the issue; the
+  reporter is the reader of that thread.
+- **Every issue, pull request and comment an agent writes ends with the disclosure line**,
+  in the thread's language:
+
+  ```
+  ---
+  由 AI 生成，需人工审核。 / AI-generated; requires human review.
+  ```
+
 ## Subsystem notes
 
 - `docs/prompt-language.md` - every model-facing prompt is English; the answer language follows the user

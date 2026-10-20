@@ -41,6 +41,10 @@ a cost, not a contribution.
   `ready-for-agent` only when it is fully specified: a reader with no context
   could finish it without asking anything.
 - Write it as a ticket, not a diary: no running commentary, no "I will now...".
+- **Language and disclosure**: an issue thread is answered in the thread's own language, and
+  every issue, PR and comment an agent writes ends with
+  `由 AI 生成，需人工审核。 / AI-generated; requires human review.`
+  (`docs/agents/language.md`). Both are required, not preference.
 
 ## Agent-authored PRs
 
@@ -53,9 +57,10 @@ Required in the body (the template enforces the shape):
 3. **Merge danger** - `Door:` one-way (hard to undo: data format, permission
    default, public behaviour) or two-way (revert is enough); `Blast Radius:`
    which subsystems can feel this.
-4. **Agent-authored** - tick the checkbox. The owner treats an unclaimed agent PR
-   as untrusted and re-derives everything; a claimed one gets its evidence checked
-   instead of the whole diff re-read. That is the difference between "no burden"
+4. **Agent-authored** - tick the checkbox, and close the body with the disclosure line
+   (`由 AI 生成，需人工审核。 / AI-generated; requires human review.`). The owner treats an
+   unclaimed agent PR as untrusted and re-derives everything; a claimed one gets its evidence
+   checked instead of the whole diff re-read. That is the difference between "no burden"
    and "twice the work".
 
 Scope rules: no unrelated cleanup, no drive-by formatting, generated files
