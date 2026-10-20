@@ -21,6 +21,17 @@ export interface ToolCardSegment {
   errorMessage?: string;
   schemaHint?: string;
   messageId: string;
+  /**
+   * When the call started, in epoch milliseconds. Absent on cards stored before this field
+   * existed, and on cards rebuilt from an event log - both render without a duration.
+   */
+  startTime?: number;
+  /**
+   * How long the call took, in seconds with one decimal (the `think` segment unit). Only set
+   * when a result came back: a stopped or awaiting-approval card must not claim a duration
+   * that is really "we never got a reply".
+   */
+  duration?: number;
 }
 
 export type MessageSegment = TextSegment | ThinkSegment | ImageSegment | ToolCardSegment;
@@ -176,7 +187,7 @@ export function finishLastThink(segments: MessageSegment[]): MessageSegment[] {
 
 export function insertRunningCard(
   segments: MessageSegment[],
-  card: Omit<ToolCardSegment, 'status'> & { status?: ToolCallStatus }
+  card: Omit<ToolCardSegment, 'status' | 'kind'> & { status?: ToolCallStatus }
 ): MessageSegment[] {
   const out = [...segments];
   
@@ -193,6 +204,10 @@ export function insertRunningCard(
       ...existing,
       ...card,
       status: 'running',
+      // A card that was waiting for approval starts its clock when the run resumes, unless it
+      // already carries one; either way the old duration is not the new call's.
+      startTime: typeof existing.startTime === 'number' ? existing.startTime : Date.now(),
+      duration: undefined,
       // 清理旧态，避免仍显示审批/错误
       errorMessage: undefined,
       schemaHint: undefined,
@@ -218,15 +233,36 @@ export function insertRunningCard(
   }
   
   // 关键修复：必须带上 kind: 'toolCard'，否则上层统计与渲染将无法识别为卡片
-  //@ts-expect-error  必须忽略ts的类型检查，否则会报错
-  out.push({ kind: 'toolCard', ...card, status: 'running' } as ToolCardSegment);
+  out.push({
+    ...card,
+    kind: 'toolCard',
+    status: 'running',
+    startTime: Date.now(),
+    duration: undefined,
+  } as ToolCardSegment);
   return out;
+}
+
+/**
+ * Seconds between `startTime` and `finishedAt`, one decimal, never zero for a real call: a
+ * 40 ms tool is `0.4`, not `0`. Returns undefined when the card carries no start stamp, so a
+ * row stored before this field existed simply has no suffix.
+ */
+export function cardDurationSeconds(
+  startTime: number | undefined,
+  finishedAt: number
+): number | undefined {
+  if (typeof startTime !== 'number' || !Number.isFinite(startTime)) return undefined;
+  const elapsed = Math.max(0, finishedAt - startTime);
+  return Math.max(0.1, Math.round(elapsed / 100) / 10);
 }
 
 export function updateCardStatus(
   segments: MessageSegment[],
   match: { id?: string; server: string; tool: string },
-  to: Partial<Pick<ToolCardSegment, 'status' | 'resultPreview' | 'errorMessage' | 'schemaHint'>>
+  to: Partial<Pick<ToolCardSegment, 'status' | 'resultPreview' | 'errorMessage' | 'schemaHint'>>,
+  /** When the result arrived. Injected by tests; production uses the clock. */
+  finishedAt: number = Date.now()
 ): MessageSegment[] {
   return segments.map((s) => {
     if (s.kind !== 'toolCard') return s;
@@ -239,15 +275,25 @@ export function updateCardStatus(
       // 特殊处理：如果 errorMessage 是 'pending_auth'，状态应该是 'pending_auth' 而不是 'error'
       if (to.errorMessage === 'pending_auth') {
         // 进入审批态：清理旧结果/提示，避免看起来像“错误卡片”
-        return { ...s, status: 'pending_auth', errorMessage: to.errorMessage, resultPreview: undefined, schemaHint: undefined } as ToolCardSegment;
+        return { ...s, status: 'pending_auth', errorMessage: to.errorMessage, resultPreview: undefined, schemaHint: undefined, duration: undefined } as ToolCardSegment;
       }
       // 用户主动停止/跳过：用中性 stopped 状态
       if (to.status === 'stopped') {
-        return { ...s, status: 'stopped', errorMessage: to.errorMessage, resultPreview: undefined, schemaHint: undefined } as ToolCardSegment;
+        // No duration: the call never produced a reply, and a number here would be a lie.
+        return { ...s, status: 'stopped', errorMessage: to.errorMessage, resultPreview: undefined, schemaHint: undefined, duration: undefined } as ToolCardSegment;
       }
       // 成功：清理 errorMessage/schemaHint，避免 UI 仍按 pending/error 渲染
       if (to.status === 'success') {
-        return { ...s, ...to, errorMessage: undefined, schemaHint: undefined } as ToolCardSegment;
+        return {
+          ...s,
+          ...to,
+          errorMessage: undefined,
+          schemaHint: undefined,
+          duration: cardDurationSeconds(s.startTime, finishedAt),
+        } as ToolCardSegment;
+      }
+      if (to.status === 'error') {
+        return { ...s, ...to, duration: cardDurationSeconds(s.startTime, finishedAt) } as ToolCardSegment;
       }
       return { ...s, ...to } as ToolCardSegment;
     }

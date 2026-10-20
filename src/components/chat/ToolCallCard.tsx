@@ -7,7 +7,7 @@ import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { useChatStore } from '@/store/chatStore';
 import { toast } from '@/components/ui/sonner';
-import { presentToolCard, previewResult } from './toolCardPresentation';
+import { formatToolDuration, presentToolCard, previewResult } from './toolCardPresentation';
 
 type ToolCallStatus = 'success' | 'error' | 'running' | 'pending_auth' | 'stopped';
 
@@ -21,10 +21,13 @@ interface ToolCallCardProps {
   schemaHint?: string;
   messageId?: string;
   cardId?: string;
+  /** Seconds the call took, when a result came back. Absent rows render as they always did. */
+  duration?: number;
 }
 
-export function ToolCallCard({ server, tool, status, args, resultPreview, errorMessage, schemaHint, messageId, cardId }: ToolCallCardProps) {
+export function ToolCallCard({ server, tool, status, args, resultPreview, errorMessage, schemaHint, messageId, cardId, duration }: ToolCallCardProps) {
   const presentation = React.useMemo(() => presentToolCard({ server, tool, args }), [server, tool, args]);
+  const durationLabel = formatToolDuration(duration);
   const { approveAuthorization, rejectAuthorization, hasPendingAuthorization } = useAuthorizationStore();
   
   // 展开/折叠状态 - 默认折叠（预览模式）
@@ -185,6 +188,15 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
             </>
           )}
           
+          {durationLabel && (
+            <span
+              className="shrink-0 text-slate-400 dark:text-slate-500 tabular-nums"
+              title={`用时 ${durationLabel}`}
+            >
+              · {durationLabel}
+            </span>
+          )}
+
           {/* 错误简要提示 */}
           {status === 'error' && !expanded && (
             <span className="text-red-500 truncate ml-1">

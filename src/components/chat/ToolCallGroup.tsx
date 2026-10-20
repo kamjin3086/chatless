@@ -15,6 +15,8 @@ interface ToolCardData {
   errorMessage?: string;
   schemaHint?: string;
   messageId: string;
+  /** Seconds the call took, when it finished; absent on rows stored before timings existed. */
+  duration?: number;
 }
 
 interface ToolCallGroupProps {
@@ -45,6 +47,7 @@ export function ToolCallGroup({ cards, isStreaming: _isStreaming }: ToolCallGrou
           errorMessage={card.errorMessage}
           schemaHint={card.schemaHint}
           messageId={card.messageId}
+          duration={card.duration}
           cardId={card.id}
         />
       ))}

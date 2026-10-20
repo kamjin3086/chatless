@@ -462,3 +462,19 @@ export function presentToolCard(params: {
   };
 }
 
+
+/**
+ * The duration suffix for a tool row: `1.2s`.
+ *
+ * One decimal below ten seconds, because the point of the column is spotting the call that took
+ * 40 seconds and 0.4 s is materially different from 0. Above ten seconds the tenth does not
+ * inform anything, so it rounds. A missing, zero or negative value renders nothing - an old row
+ * must look exactly as it did before the field existed.
+ */
+export function formatToolDuration(seconds?: number | null): string | null {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return null;
+  if (seconds < 10) {
+    return `${Math.max(0.1, Math.round(seconds * 10) / 10).toFixed(1)}s`;
+  }
+  return `${Math.round(seconds)}s`;
+}
