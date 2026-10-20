@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * A comment that names a symbol is a promise that the symbol exists.
  *

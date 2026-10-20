@@ -1,0 +1,38 @@
+
+[2026-10-09T17:47:30.1238447+08:00][INFO][ort] Loaded ONNX Runtime dylib with version '1.22.0'
+[2026-10-09T17:47:30.2645805+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x0, vendor:GenuineIntel, type:0, metadata: [Description=Intel(R) Core(TM) i5-9400 CPU @ 2.90GHz, ]}
+
+[2026-10-09T17:47:30.2647217+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x3e92, vendor:Intel Corporation, type:1, metadata: [DxgiAdapterNumber=0, Description=Intel(R) UHD Graphics 630, DxgiHighPerformanceIndex=0, DxgiVideoMemory=128 MB, Discrete=0, ]}
+
+[2026-10-09T17:47:30.2647837+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x3e92, vendor:Intel Corporation, type:1, metadata: [DxgiAdapterNumber=1, Description=Intel(R) UHD Graphics 630, DxgiHighPerformanceIndex=2, DxgiVideoMemory=128 MB, ]}
+
+[2026-10-09T17:47:30.2648497+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x3e92, vendor:Intel Corporation, type:1, metadata: [DxgiAdapterNumber=2, Description=Intel(R) UHD Graphics 630, DxgiHighPerformanceIndex=3, DxgiVideoMemory=128 MB, ]}
+
+[2026-10-09T17:47:37.5039971+08:00][INFO][chatless_lib::mcp::commands] [MCP] Starting connection to server: filesystem_external with type: stdio
+[2026-10-09T17:47:37.5041092+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Initializing stdio connection for server: filesystem_external
+[2026-10-09T17:47:37.5041469+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command name: npx
+[2026-10-09T17:47:37.5044373+08:00][INFO][chatless_lib::mcp::commands] [MCP] Starting connection to server: git with type: stdio
+[2026-10-09T17:47:37.5044834+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Initializing stdio connection for server: git
+[2026-10-09T17:47:37.5045131+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command name: uvx
+[2026-10-09T17:47:37.506571+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command validation passed, resolving runner
+[2026-10-09T17:47:37.5067648+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+[2026-10-09T17:47:37.5075664+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+[2026-10-09T17:47:37.5148242+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command validation passed, resolving runner
+[2026-10-09T17:47:37.5150019+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+[2026-10-09T17:47:37.5167603+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+[2026-10-09T17:47:37.5180715+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Resolved program: C:\Users\User/.local/bin\uvx.exe runner=Uvx package=Some("mcp-server-git") repaired=false
+[2026-10-09T17:47:37.5181847+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Starting first connection attempt with 30s timeout
+[2026-10-09T17:47:37.5182663+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+[2026-10-09T17:47:37.5190774+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+[2026-10-09T17:47:37.5218425+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Resolved program: C:\Users\User\AppData\Roaming\npm\npx.cmd runner=Npx package=Some("@modelcontextprotocol/server-filesystem") repaired=false
+[2026-10-09T17:47:37.5220368+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Starting first connection attempt with 30s timeout
+[2026-10-09T17:47:37.5221235+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+[2026-10-09T17:47:37.5228999+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+[2026-10-09T17:47:41.0677058+08:00][INFO][tracing::span] serve_inner;
+[2026-10-09T17:47:41.0678407+08:00][INFO][rmcp::service] Service initialized as client peer_info=Some(InitializeResult { protocol_version: ProtocolVersion("2025-03-26"), capabilities: ServerCapabilities { experimental: Some({}), logging: None, completions: None, prompts: None, resources: None, tools: Some(ToolsCapability { list_changed: Some(false) }) }, server_info: Implementation { name: "mcp-git", version: "1.30.0" }, instructions: None })
+[2026-10-09T17:47:41.0682664+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] MCP service created successfully
+[2026-10-09T17:47:41.0683312+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] First connection attempt successful for server: git
+[2026-10-09T17:47:54.8831729+08:00][INFO][tracing::span] serve_inner;
+[2026-10-09T17:47:54.8832727+08:00][INFO][rmcp::service] Service initialized as client peer_info=Some(InitializeResult { protocol_version: ProtocolVersion("2024-11-05"), capabilities: ServerCapabilities { experimental: None, logging: None, completions: None, prompts: None, resources: None, tools: Some(ToolsCapability { list_changed: None }) }, server_info: Implementation { name: "secure-filesystem-server", version: "0.2.0" }, instructions: None })
+[2026-10-09T17:47:54.8833558+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] MCP service created successfully
+[2026-10-09T17:47:54.8833954+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] First connection attempt successful for server: filesystem_external

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Create a worktree you can actually run tests in.
  *

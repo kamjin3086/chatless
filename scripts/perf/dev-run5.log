@@ -1,0 +1,720 @@
+(node:18608) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+   1030| > chatless@0.7.1 pretauri D:\aicodeWorkspace\chatless
+   1030| > pnpm run generate:settings-index && pnpm run update:app-info
+   1474| > chatless@0.7.1 generate:settings-index D:\aicodeWorkspace\chatless
+   1474| > node scripts/generate-settings-index.cjs
+   1474| 生成 settingsIndex.ts 成功
+   2096| > chatless@0.7.1 update:app-info D:\aicodeWorkspace\chatless
+   2096| > node scripts/update-app-info.js
+   2096| 🔄 开始更新应用信息...
+   2096| 📦 读取 package.json: D:\aicodeWorkspace\chatless\package.json
+   2096| Package.json 版本: 0.7.1
+   2097| ⚙️  读取 tauri.conf.json: D:\aicodeWorkspace\chatless\src-tauri\tauri.conf.json
+   2097| Tauri 版本: 0.7.1
+   2097| 📋 最终版本信息:
+   2097| 应用名称: Chatless
+   2097| 版本号: 0.7.1
+   2097| 📝 读取应用信息配置: D:\aicodeWorkspace\chatless\src\config\app-info.ts
+   2097| 原名称: name: "Chatless"
+   2097| ℹ️ 应用信息无变化，跳过写入
+   2097| ✅ 应用信息更新完成: Chatless v0.7.1
+   2097| > chatless@0.7.1 tauri D:\aicodeWorkspace\chatless
+   2097| > tauri "dev"
+   4383| Running BeforeDevCommand (`pnpm dev`)
+   5010| > chatless@0.7.1 predev D:\aicodeWorkspace\chatless
+   5010| > pnpm run icons:index
+   5440| > chatless@0.7.1 icons:index D:\aicodeWorkspace\chatless
+   5441| > node scripts/generate-icons-index.cjs
+   5441| [generate-icons-index] wrote 58 entries to public\llm-provider-icon\_index.json
+   5650| > chatless@0.7.1 dev D:\aicodeWorkspace\chatless
+   5650| > node scripts/warm-dev.mjs
+   7625| ▲ Next.js 15.3.1 (Turbopack)
+   7625| - Local:        http://localhost:3000
+   7625| - Network:      http://10.126.126.3:3000
+   7625| ✓ Starting...
+   8252| Slow filesystem detected. If D:\aicodeWorkspace\chatless\dist is a network drive, consider moving it to a local folder. If you have an antivirus enabled, consider excluding your project directory.
+   8509| ✓ Ready in 1174ms
+   8509| Running DevCommand (`cargo  run --no-default-features --color always --`)
+   8890| Info Watching D:\aicodeWorkspace\chatless\src-tauri for changes...
+   8890| ○ Compiling / ...
+   9542| [1m[32m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1.01s
+   9937| [1m[32m     Running[0m `target\debug\chatless.exe`
+  12894| >>> WINDOW created (hwnd=9440060)
+  14036| [ORT] Background init: attempting to load onnxruntime.dll from: "\\\\?\\D:\\aicodeWorkspace\\chatless\\src-tauri\\target\\debug\\onnxruntime.dll"
+  14036| [2026-10-09T17:51:56.7899351+08:00][INFO][ort] Loaded ONNX Runtime dylib with version '1.22.0'
+  14036| [2026-10-09T17:51:56.8410308+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x0, vendor:GenuineIntel, type:0, metadata: [Description=Intel(R) Core(TM) i5-9400 CPU @ 2
+  14036| [2026-10-09T17:51:56.8411778+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x3e92, vendor:Intel Corporation, type:1, metadata: [DxgiAdapterNumber=0, Description=Inte
+  14036| [2026-10-09T17:51:56.841234+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x3e92, vendor:Intel Corporation, type:1, metadata: [DxgiAdapterNumber=1, Description=Intel
+  14036| [2026-10-09T17:51:56.8412903+08:00][INFO][ort::logging] Adding OrtHardwareDevice {vendor_id:0x8086, device_id:0x3e92, vendor:Intel Corporation, type:1, metadata: [DxgiAdapterNumber=2, Description=Inte
+  14036| [ORT] Background init succeeded
+  18990| ✓ Compiled / in 10.6s
+  19305| GET / 200 in 747ms
+  19305| GET / 200 in 985ms
+  19754| GET / 200 in 841ms
+  19754| GET / 200 in 1090ms
+  19754| [Storage] 服务端上下文，存储操作已跳过
+  19993| [warm-dev] / 预热完成
+  21741| ○ Compiling /chat ...
+  22124| GET / 200 in 8084ms
+  22124| GET / 200 in 13796ms
+  23621| GET / 200 in 1276ms
+  23621| GET / 200 in 1441ms
+  24137| GET / 200 in 1093ms
+  24137| GET / 200 in 418ms
+  24137| GET / 200 in 713ms
+  24147| >>> NEXT dev server answering (HTTP 200)
+  24482| GET / 200 in 128ms
+  24789| GET / 200 in 122ms
+  25228| GET / 200 in 119ms
+  25565| GET / 200 in 151ms
+  25835| GET / 200 in 151ms
+  26169| GET / 200 in 128ms
+  26169| [2026-10-09T17:52:08.9231034+08:00][INFO][chatless_lib::mcp::commands] [MCP] Starting connection to server: filesystem_external with type: stdio
+  26170| [2026-10-09T17:52:08.9232064+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Initializing stdio connection for server: filesystem_external
+  26170| [2026-10-09T17:52:08.9232496+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command name: npx
+  26170| [2026-10-09T17:52:08.9237569+08:00][INFO][chatless_lib::mcp::commands] [MCP] Starting connection to server: git with type: stdio
+  26170| [2026-10-09T17:52:08.9238305+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Initializing stdio connection for server: git
+  26170| [2026-10-09T17:52:08.923869+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command name: uvx
+  26170| [2026-10-09T17:52:08.9238794+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command validation passed, resolving runner
+  26170| [2026-10-09T17:52:08.924+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+  26170| [2026-10-09T17:52:08.9244208+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Command validation passed, resolving runner
+  26170| [2026-10-09T17:52:08.924598+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+  26170| [2026-10-09T17:52:08.9248361+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+  26170| [2026-10-09T17:52:08.9255891+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+  26170| [2026-10-09T17:52:08.9264343+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Resolved program: C:\Users\User/.local/bin\uvx.exe runner=Uvx package=Some("mcp-server-git") repaired=false
+  26170| [2026-10-09T17:52:08.9265039+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Starting first connection attempt with 30s timeout
+  26170| [2026-10-09T17:52:08.9265697+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+  26170| [2026-10-09T17:52:08.9273008+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+  26170| [2026-10-09T17:52:08.9385131+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Resolved program: C:\Users\User\AppData\Roaming\npm\npx.cmd runner=Npx package=Some("@modelcontextprotocol/server-fil
+  26170| [2026-10-09T17:52:08.9386276+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] Starting first connection attempt with 30s timeout
+  26170| [2026-10-09T17:52:08.9386963+08:00][INFO][chatless_lib::env_setup] [ENV] Starting environment setup...
+  26170| [2026-10-09T17:52:08.9394319+08:00][INFO][chatless_lib::env_setup] [ENV] Environment setup completed successfully
+  26651| INFO add_decision: Id::<PubGrubPackage>(0) @ 0a0.dev0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(1) @ 2026.8.18 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(2) @ 8.5.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(3) @ 3.2.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(4) @ 1.30.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(5) @ 2.14.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(22) @ 2.50.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(12) @ 2.14.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(23) @ 2.14.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(6) @ 4.0.12 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(7) @ 4.15.1 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(8) @ 0.4.3 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(9) @ 0.28.1 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(10) @ 4.26.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(11) @ 2.15.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(13) @ 2.15.1 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(34) @ 2.15.1 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(35) @ 2.15.1 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(14) @ 0.0.32 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(15) @ 312 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(37) @ 312 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(38) @ 312 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(16) @ 3.5.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(17) @ 1.7.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(39) @ 1.7.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(40) @ 1.7.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(18) @ 4.16.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(26) @ 4.16.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(41) @ 4.16.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(19) @ 0.4.4 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(20) @ 0.54.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(42) @ 0.54.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(43) @ 0.54.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(21) @ 0.8.0 without checking dependencies
+  26651| INFO add_decision: Id::<PubGrubPackage>(24) @ 5.0.3 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(25) @ 3.20 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(27) @ 2026.7.22 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(28) @ 1.0.9 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(29) @ 26.1.0 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(30) @ 2025.9.1 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(31) @ 0.37.0 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(32) @ 2026.9.1 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(33) @ 1.2.4 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(36) @ 50.0.2 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(44) @ 0.16.0 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(45) @ 2.1.1 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(46) @ 2.1.1 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(47) @ 2.1.1 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(48) @ 3.1 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(49) @ 3.1 without checking dependencies
+  26652| INFO add_decision: Id::<PubGrubPackage>(50) @ 3.1 without checking dependencies
+  26652| GET / 200 in 190ms
+  27276| GET / 200 in 160ms
+  28096| GET / 200 in 345ms
+  28096| [2026-10-09T17:52:10.8051458+08:00][INFO][tracing::span] serve_inner;
+  28096| [2026-10-09T17:52:10.805262+08:00][INFO][rmcp::service] Service initialized as client peer_info=Some(InitializeResult { protocol_version: ProtocolVersion("2025-03-26"), capabilities: ServerCapabilitie
+  28096| [2026-10-09T17:52:10.8053799+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] MCP service created successfully
+  28096| [2026-10-09T17:52:10.8054819+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] First connection attempt successful for server: git
+  28450| GET / 200 in 132ms
+  28848| GET / 200 in 126ms
+  29182| GET / 200 in 149ms
+  29502| GET / 200 in 184ms
+  29827| GET / 200 in 123ms
+  30147| GET / 200 in 296ms
+  30395| GET / 200 in 103ms
+  30765| GET / 200 in 128ms
+  31148| GET / 200 in 134ms
+  31481| GET / 200 in 158ms
+  31929| GET / 200 in 125ms
+  32358| GET / 200 in 171ms
+  32644| GET / 200 in 104ms
+  32994| GET / 200 in 100ms
+  33440| GET / 200 in 389ms
+  34174| GET / 200 in 433ms
+  34174| GET / 200 in 216ms
+  34453| GET / 200 in 121ms
+  34791| GET / 200 in 127ms
+  35502| GET / 200 in 562ms
+  35821| GET / 200 in 579ms
+  35821| [2026-10-09T17:52:18.4868703+08:00][INFO][tracing::span] serve_inner;
+  35821| [2026-10-09T17:52:18.4869666+08:00][INFO][rmcp::service] Service initialized as client peer_info=Some(InitializeResult { protocol_version: ProtocolVersion("2024-11-05"), capabilities: ServerCapabiliti
+  35821| [2026-10-09T17:52:18.4870515+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] MCP service created successfully
+  35821| [2026-10-09T17:52:18.4870959+08:00][INFO][chatless_lib::mcp::commands] [MCP/stdio] First connection attempt successful for server: filesystem_external
+  35821| GET / 200 in 218ms
+  35821| Secure MCP Filesystem Server running on stdio
+  35821| Allowed directories: [
+  35821| 'C:\\Users\\User\\Documents',
+  35821| 'C:\\Users\\User\\AppData\\Roaming\\com.kamjin.chatless\\skills\\docx'
+  35821| ]
+  36131| GET / 200 in 114ms
+  36355| GET / 200 in 91ms
+  36691| GET / 200 in 94ms
+  37730| GET / 200 in 767ms
+  37730| GET / 200 in 539ms
+  37730| GET / 200 in 223ms
+  37980| GET / 200 in 96ms
+  38286| GET / 200 in 108ms
+  38533| GET / 200 in 125ms
+  38792| GET / 200 in 123ms
+  39078| GET / 200 in 121ms
+  39078| ✓ Compiled /chat in 18s
+  39078| [warm-dev] /chat 预热完成
+  39078| ⚠ ./node_modules/.pnpm/shiki@3.13.0/node_modules/shiki/dist
+  39078| Package shiki can't be external
+  39078| The request shiki/wasm matches serverExternalPackages (or the default list).
+  39078| The request could not be resolved by Node.js from the project directory.
+  39078| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39078| Try to install it into the project directory by running npm install shiki from the project directory.
+  39078| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39078| Package shiki can't be external
+  39078| The request shiki matches serverExternalPackages (or the default list).
+  39078| The request could not be resolved by Node.js from the project directory.
+  39078| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39078| Try to install it into the project directory by running npm install shiki from the project directory.
+  39078| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39078| Package shiki can't be external
+  39078| The request shiki/engine/javascript matches serverExternalPackages (or the default list).
+  39078| The request could not be resolved by Node.js from the project directory.
+  39078| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39078| Try to install it into the project directory by running npm install shiki from the project directory.
+  39331| ⚠ ./node_modules/.pnpm/shiki@3.13.0/node_modules/shiki/dist
+  39332| Package shiki can't be external
+  39332| The request shiki/wasm matches serverExternalPackages (or the default list).
+  39332| The request could not be resolved by Node.js from the project directory.
+  39332| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39332| Try to install it into the project directory by running npm install shiki from the project directory.
+  39332| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39332| Package shiki can't be external
+  39332| The request shiki matches serverExternalPackages (or the default list).
+  39332| The request could not be resolved by Node.js from the project directory.
+  39332| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39332| Try to install it into the project directory by running npm install shiki from the project directory.
+  39332| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39332| Package shiki can't be external
+  39332| The request shiki/engine/javascript matches serverExternalPackages (or the default list).
+  39332| The request could not be resolved by Node.js from the project directory.
+  39332| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39332| Try to install it into the project directory by running npm install shiki from the project directory.
+  39550| [llm/index] 开始按顺序注册所有providers...
+  39550| [llm/index] 1. LMStudioProvider 已注册
+  39550| [llm/index] 2. OllamaProvider 已注册
+  39550| [llm/index] 3. DeepSeekProvider 已注册
+  39550| [llm/index] 4. GoogleAIProvider 已注册
+  39550| [llm/index] 5. AnthropicProvider 已注册
+  39550| [llm/index] 6. OpenAIProvider 已注册
+  39550| [llm/index] 所有providers注册完成，共 6 个
+  39550| [ModelConfigService] 已加载 5 个模型配置
+  39550| [providerMetaStore] 从ProviderRegistry获取到 6 个providers: [
+  39550| 'LM Studio',
+  39550| 'Ollama',
+  39550| 'DeepSeek',
+  39550| 'Google AI',
+  39550| 'Anthropic',
+  39550| 'OpenAI'
+  39550| ]
+  39550| ⚠ ./node_modules/.pnpm/shiki@3.13.0/node_modules/shiki/dist
+  39550| Package shiki can't be external
+  39550| The request shiki/wasm matches serverExternalPackages (or the default list).
+  39550| The request could not be resolved by Node.js from the project directory.
+  39550| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39550| Try to install it into the project directory by running npm install shiki from the project directory.
+  39550| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39550| Package shiki can't be external
+  39550| The request shiki matches serverExternalPackages (or the default list).
+  39550| The request could not be resolved by Node.js from the project directory.
+  39550| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39550| Try to install it into the project directory by running npm install shiki from the project directory.
+  39550| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39550| Package shiki can't be external
+  39550| The request shiki/engine/javascript matches serverExternalPackages (or the default list).
+  39550| The request could not be resolved by Node.js from the project directory.
+  39550| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39550| Try to install it into the project directory by running npm install shiki from the project directory.
+  39902| GET /chat 200 in 19322ms
+  39902| GET /chat 200 in 16909ms
+  39902| GET /chat 200 in 16460ms
+  39902| ⚠ ./node_modules/.pnpm/shiki@3.13.0/node_modules/shiki/dist
+  39902| Package shiki can't be external
+  39902| The request shiki/wasm matches serverExternalPackages (or the default list).
+  39902| The request could not be resolved by Node.js from the project directory.
+  39902| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39902| Try to install it into the project directory by running npm install shiki from the project directory.
+  39902| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39902| Package shiki can't be external
+  39902| The request shiki matches serverExternalPackages (or the default list).
+  39902| The request could not be resolved by Node.js from the project directory.
+  39902| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39902| Try to install it into the project directory by running npm install shiki from the project directory.
+  39902| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39902| Package shiki can't be external
+  39902| The request shiki/engine/javascript matches serverExternalPackages (or the default list).
+  39902| The request could not be resolved by Node.js from the project directory.
+  39902| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39902| Try to install it into the project directory by running npm install shiki from the project directory.
+  39902| ⚠ ./node_modules/.pnpm/shiki@3.13.0/node_modules/shiki/dist
+  39902| Package shiki can't be external
+  39902| The request shiki/wasm matches serverExternalPackages (or the default list).
+  39902| The request could not be resolved by Node.js from the project directory.
+  39902| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39902| Try to install it into the project directory by running npm install shiki from the project directory.
+  39902| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39902| Package shiki can't be external
+  39902| The request shiki matches serverExternalPackages (or the default list).
+  39902| The request could not be resolved by Node.js from the project directory.
+  39902| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39902| Try to install it into the project directory by running npm install shiki from the project directory.
+  39902| ⚠ ./node_modules/.pnpm/streamdown@1.4.0_@types+react@19.1.2_react@19.1.0/node_modules/streamdown/dist
+  39902| Package shiki can't be external
+  39902| The request shiki/engine/javascript matches serverExternalPackages (or the default list).
+  39902| The request could not be resolved by Node.js from the project directory.
+  39902| Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+  39902| Try to install it into the project directory by running npm install shiki from the project directory.
+  40328| GET /chat 200 in 512ms
+  40328| GET / 200 in 446ms
+  40328| GET / 200 in 521ms
+  40328| GET / 200 in 708ms
+  40328| GET / 200 in 268ms
+  40819| GET / 200 in 185ms
+  41238| GET / 200 in 191ms
+  41238| ○ Compiling /_not-found/page ...
+  41579| GET / 200 in 109ms
+  41903| GET / 200 in 139ms
+  42135| GET / 200 in 115ms
+  42360| GET / 200 in 94ms
+  42626| GET / 200 in 145ms
+  42864| GET / 200 in 124ms
+  42864| ✓ Compiled /_not-found/page in 2.1s
+  43076| GET / 200 in 89ms
+  43295| GET / 200 in 93ms
+  43538| GET / 200 in 119ms
+  43765| GET / 200 in 110ms
+  43971| GET / 200 in 96ms
+  44190| GET / 200 in 103ms
+  44414| GET / 200 in 131ms
+  44625| GET / 200 in 101ms
+  44848| GET / 200 in 127ms
+  45057| GET / 200 in 99ms
+  45271| GET / 200 in 95ms
+  45479| GET / 200 in 99ms
+  45698| GET / 200 in 124ms
+  45923| GET / 200 in 100ms
+  46145| GET / 200 in 103ms
+  46360| GET / 200 in 97ms
+  46585| GET / 200 in 107ms
+  46798| GET / 200 in 102ms
+  47006| GET / 200 in 99ms
+  47217| GET / 200 in 103ms
+  47425| GET / 200 in 102ms
+  47640| GET / 200 in 98ms
+  47869| GET / 200 in 102ms
+  48073| GET / 200 in 96ms
+  48298| GET / 200 in 95ms
+  48514| GET / 200 in 118ms
+  48732| GET / 200 in 104ms
+  48967| GET / 200 in 112ms
+  49186| GET / 200 in 99ms
+  49399| GET / 200 in 106ms
+  49609| GET / 200 in 96ms
+  49819| GET / 200 in 100ms
+  50040| GET / 200 in 125ms
+  50262| GET / 200 in 128ms
+  50474| GET / 200 in 118ms
+  50687| GET / 200 in 102ms
+  50902| GET / 200 in 108ms
+  51111| GET / 200 in 94ms
+  51330| GET / 200 in 104ms
+  51536| GET / 200 in 94ms
+  51748| GET / 200 in 98ms
+  51956| GET / 200 in 96ms
+  52175| GET / 200 in 100ms
+  52389| GET / 200 in 100ms
+  52604| GET / 200 in 103ms
+  52822| GET / 200 in 104ms
+  53028| GET / 200 in 94ms
+  53251| GET / 200 in 101ms
+  53459| GET / 200 in 92ms
+  53684| GET / 200 in 105ms
+  53897| GET / 200 in 95ms
+  54107| GET / 200 in 94ms
+  54359| GET / 200 in 116ms
+  54569| GET / 200 in 94ms
+  54787| GET / 200 in 104ms
+  54993| GET / 200 in 97ms
+  55201| GET / 200 in 98ms
+  55412| GET / 200 in 98ms
+  55621| GET / 200 in 99ms
+  55834| GET / 200 in 100ms
+  56046| GET / 200 in 99ms
+  56255| GET / 200 in 97ms
+  56465| GET / 200 in 101ms
+  56675| GET / 200 in 105ms
+  56884| GET / 200 in 96ms
+  57119| GET / 200 in 101ms
+  57332| GET / 200 in 100ms
+  57549| GET / 200 in 104ms
+  57758| GET / 200 in 102ms
+  57975| GET / 200 in 99ms
+  58187| GET / 200 in 101ms
+  58402| GET / 200 in 106ms
+  58622| GET / 200 in 127ms
+  58832| GET / 200 in 102ms
+  59041| GET / 200 in 99ms
+  59259| GET / 200 in 98ms
+  59498| GET / 200 in 109ms
+  59708| GET / 200 in 102ms
+  59925| GET / 200 in 96ms
+  60145| GET / 200 in 96ms
+  60362| GET / 200 in 98ms
+  60573| GET / 200 in 98ms
+  60792| GET / 200 in 105ms
+  60999| GET / 200 in 99ms
+  61224| GET / 200 in 108ms
+  61431| GET / 200 in 97ms
+  61650| GET / 200 in 109ms
+  61864| GET / 200 in 97ms
+  62071| GET / 200 in 95ms
+  62286| GET / 200 in 104ms
+  62493| GET / 200 in 97ms
+  62704| GET / 200 in 105ms
+  62916| GET / 200 in 97ms
+  63141| GET / 200 in 105ms
+  63349| GET / 200 in 96ms
+  63567| GET / 200 in 96ms
+  63780| GET / 200 in 98ms
+  63995| GET / 200 in 102ms
+  64217| GET / 200 in 101ms
+  64425| GET / 200 in 109ms
+  64637| GET / 200 in 99ms
+  64855| GET / 200 in 99ms
+  65062| GET / 200 in 95ms
+  65276| GET / 200 in 97ms
+  65493| GET / 200 in 105ms
+  65711| GET / 200 in 100ms
+  65961| GET / 200 in 101ms
+  66172| GET / 200 in 101ms
+  66386| GET / 200 in 118ms
+  66603| GET / 200 in 99ms
+  66815| GET / 200 in 98ms
+  67020| GET / 200 in 94ms
+  67228| GET / 200 in 99ms
+  67435| GET / 200 in 98ms
+  67685| GET / 200 in 128ms
+  67911| GET / 200 in 97ms
+  68122| GET / 200 in 104ms
+  68333| GET / 200 in 99ms
+  68541| GET / 200 in 99ms
+  68752| GET / 200 in 106ms
+  68969| GET / 200 in 102ms
+  69178| GET / 200 in 96ms
+  69386| GET / 200 in 101ms
+  69622| GET / 200 in 102ms
+  69835| GET / 200 in 115ms
+  70071| GET / 200 in 119ms
+  70318| GET / 200 in 106ms
+  70543| GET / 200 in 107ms
+  70761| GET / 200 in 108ms
+  70983| GET / 200 in 99ms
+  71202| GET / 200 in 106ms
+  71449| GET / 200 in 127ms
+  71677| GET / 200 in 108ms
+  71930| GET / 200 in 116ms
+  72143| GET / 200 in 103ms
+  72352| GET / 200 in 96ms
+  72584| GET / 200 in 108ms
+  72800| GET / 200 in 96ms
+  73015| GET / 200 in 105ms
+  73227| GET / 200 in 100ms
+  73447| GET / 200 in 122ms
+  73672| GET / 200 in 98ms
+  73882| GET / 200 in 100ms
+  74113| GET / 200 in 107ms
+  74320| GET / 200 in 97ms
+  74525| GET / 200 in 98ms
+  74733| GET / 200 in 98ms
+  74962| GET / 200 in 114ms
+  75170| GET / 200 in 96ms
+  75386| GET / 200 in 106ms
+  75595| GET / 200 in 97ms
+  75798| GET / 200 in 95ms
+  76011| GET / 200 in 99ms
+  76226| GET / 200 in 106ms
+  76433| GET / 200 in 97ms
+  76641| GET / 200 in 100ms
+  76849| GET / 200 in 105ms
+  77054| GET / 200 in 98ms
+  77293| GET / 200 in 100ms
+  77499| GET / 200 in 96ms
+  77706| GET / 200 in 99ms
+  77932| GET / 200 in 98ms
+  78143| GET / 200 in 94ms
+  78368| GET / 200 in 101ms
+  78577| GET / 200 in 98ms
+  78788| GET / 200 in 114ms
+  78996| GET / 200 in 100ms
+  79204| GET / 200 in 97ms
+  79411| GET / 200 in 97ms
+  79675| GET / 200 in 119ms
+  79886| GET / 200 in 113ms
+  80092| GET / 200 in 98ms
+  80299| GET / 200 in 101ms
+  80512| GET / 200 in 99ms
+  80747| GET / 200 in 102ms
+  80959| GET / 200 in 98ms
+  81171| GET / 200 in 101ms
+  81377| GET / 200 in 97ms
+  81584| GET / 200 in 99ms
+  81789| GET / 200 in 135ms
+  82033| GET / 200 in 133ms
+  82242| GET / 200 in 98ms
+  82454| GET / 200 in 99ms
+  82669| GET / 200 in 103ms
+  82876| GET / 200 in 101ms
+  83092| GET / 200 in 97ms
+  83301| GET / 200 in 103ms
+  83518| GET / 200 in 137ms
+  83725| GET / 200 in 100ms
+  83933| GET / 200 in 99ms
+  84142| GET / 200 in 100ms
+  84355| GET / 200 in 98ms
+  84564| GET / 200 in 93ms
+  84800| GET / 200 in 138ms
+  85038| GET / 200 in 111ms
+  85253| GET / 200 in 108ms
+  85464| GET / 200 in 97ms
+  85696| GET / 200 in 104ms
+  85932| GET / 200 in 99ms
+  86143| GET / 200 in 102ms
+  86358| GET / 200 in 107ms
+  86570| GET / 200 in 97ms
+  86792| GET / 200 in 101ms
+  86999| GET / 200 in 98ms
+  87216| GET / 200 in 104ms
+  87436| GET / 200 in 99ms
+  87645| GET / 200 in 100ms
+  87864| GET / 200 in 117ms
+  88083| GET / 200 in 96ms
+  88291| GET / 200 in 100ms
+  88501| GET / 200 in 97ms
+  88714| GET / 200 in 118ms
+  88920| GET / 200 in 100ms
+  89148| GET / 200 in 105ms
+  89352| GET / 200 in 96ms
+  89561| GET / 200 in 98ms
+  89765| GET / 200 in 97ms
+  89974| GET / 200 in 101ms
+  90194| GET / 200 in 99ms
+  90422| GET / 200 in 133ms
+  90631| GET / 200 in 98ms
+  90841| GET / 200 in 99ms
+  91056| GET / 200 in 102ms
+  91275| GET / 200 in 107ms
+  91496| GET / 200 in 106ms
+  91705| GET / 200 in 96ms
+  91928| GET / 200 in 136ms
+  92134| GET / 200 in 98ms
+  92350| GET / 200 in 119ms
+  92570| GET / 200 in 96ms
+  92789| GET / 200 in 104ms
+  93002| GET / 200 in 100ms
+  93224| GET / 200 in 102ms
+  93434| GET / 200 in 103ms
+  93642| GET / 200 in 102ms
+  93867| GET / 200 in 110ms
+  94075| GET / 200 in 99ms
+  94281| GET / 200 in 99ms
+  94486| GET / 200 in 97ms
+  94712| GET / 200 in 133ms
+  94921| GET / 200 in 98ms
+  95157| GET / 200 in 110ms
+  95361| GET / 200 in 94ms
+  95573| GET / 200 in 96ms
+  95778| GET / 200 in 97ms
+  95986| GET / 200 in 98ms
+  96211| GET / 200 in 102ms
+  96457| GET / 200 in 97ms
+  96682| GET / 200 in 126ms
+  96898| GET / 200 in 110ms
+  97106| GET / 200 in 103ms
+  97319| GET / 200 in 100ms
+  97540| GET / 200 in 98ms
+  97768| GET / 200 in 121ms
+  97983| GET / 200 in 127ms
+  98200| GET / 200 in 108ms
+  98413| GET / 200 in 98ms
+  98628| GET / 200 in 102ms
+  98851| GET / 200 in 108ms
+  99071| GET / 200 in 104ms
+  99285| GET / 200 in 96ms
+  99491| GET / 200 in 95ms
+  99737| GET / 200 in 116ms
+  99958| GET / 200 in 98ms
+ 100182| GET / 200 in 97ms
+ 100428| GET / 200 in 105ms
+ 100673| GET / 200 in 99ms
+ 100928| GET / 200 in 153ms
+ 101148| GET / 200 in 106ms
+ 101360| GET / 200 in 96ms
+ 101567| GET / 200 in 97ms
+ 101794| GET / 200 in 100ms
+ 102051| GET / 200 in 132ms
+ 102265| GET / 200 in 101ms
+ 102500| GET / 200 in 114ms
+ 102725| GET / 200 in 101ms
+ 102939| GET / 200 in 105ms
+ 103168| GET / 200 in 100ms
+ 103442| GET / 200 in 118ms
+ 103660| GET / 200 in 97ms
+ 103884| GET / 200 in 98ms
+ 104120| GET / 200 in 106ms
+ 104380| GET / 200 in 106ms
+ 104642| GET / 200 in 114ms
+ 104882| GET / 200 in 109ms
+ 105104| GET / 200 in 119ms
+ 105323| GET / 200 in 94ms
+ 105536| GET / 200 in 104ms
+ 105758| GET / 200 in 99ms
+ 105972| GET / 200 in 133ms
+ 106182| GET / 200 in 102ms
+ 106399| GET / 200 in 99ms
+ 106614| GET / 200 in 99ms
+ 106827| GET / 200 in 104ms
+ 107043| GET / 200 in 104ms
+ 107265| GET / 200 in 120ms
+ 107474| GET / 200 in 95ms
+ 107692| GET / 200 in 110ms
+ 107901| GET / 200 in 97ms
+ 108129| GET / 200 in 102ms
+ 108342| GET / 200 in 101ms
+ 108557| GET / 200 in 123ms
+ 108770| GET / 200 in 97ms
+ 108992| GET / 200 in 95ms
+ 109234| GET / 200 in 105ms
+ 109442| GET / 200 in 94ms
+ 109879| GET / 200 in 271ms
+ 109879| GET / 200 in 114ms
+ 110094| GET / 200 in 93ms
+ 110321| GET / 200 in 103ms
+ 110566| GET / 200 in 106ms
+ 110782| GET / 200 in 96ms
+ 110993| GET / 200 in 98ms
+ 111235| GET / 200 in 100ms
+ 111457| GET / 200 in 106ms
+ 111680| GET / 200 in 99ms
+ 111894| GET / 200 in 101ms
+ 112109| GET / 200 in 105ms
+ 112328| GET / 200 in 101ms
+ 112536| GET / 200 in 99ms
+ 112750| GET / 200 in 98ms
+ 112962| GET / 200 in 117ms
+ 113174| GET / 200 in 110ms
+ 113389| GET / 200 in 117ms
+ 113597| GET / 200 in 95ms
+ 113807| GET / 200 in 100ms
+ 114018| GET / 200 in 103ms
+ 114238| GET / 200 in 95ms
+ 114449| GET / 200 in 104ms
+ 114668| GET / 200 in 109ms
+ 114886| GET / 200 in 96ms
+ 115101| GET / 200 in 101ms
+ 115306| GET / 200 in 97ms
+ 115529| GET / 200 in 96ms
+ 115756| GET / 200 in 108ms
+ 115980| GET / 200 in 103ms
+ 116192| GET / 200 in 97ms
+ 116439| GET / 200 in 108ms
+ 116670| GET / 200 in 110ms
+ 116888| GET / 200 in 99ms
+ 117103| GET / 200 in 99ms
+ 117308| GET / 200 in 96ms
+ 117569| GET / 200 in 115ms
+ 117791| GET / 200 in 95ms
+ 118014| GET / 200 in 103ms
+ 118227| GET / 200 in 104ms
+ 118433| GET / 200 in 99ms
+ 118661| GET / 200 in 100ms
+ 118865| GET / 200 in 92ms
+ 119073| GET / 200 in 94ms
+ 119292| GET / 200 in 99ms
+ 119498| GET / 200 in 96ms
+ 119732| GET / 200 in 126ms
+ 119943| GET / 200 in 97ms
+ 120160| GET / 200 in 108ms
+ 120368| GET / 200 in 98ms
+ 120577| GET / 200 in 96ms
+ 120786| GET / 200 in 98ms
+ 121045| GET / 200 in 97ms
+ 121257| GET / 200 in 118ms
+ 121464| GET / 200 in 95ms
+ 121673| GET / 200 in 100ms
+ 121880| GET / 200 in 99ms
+ 122095| GET / 200 in 102ms
+ 122353| GET / 200 in 110ms
+ 122580| GET / 200 in 101ms
+ 122810| GET / 200 in 96ms
+ 123063| GET / 200 in 107ms
+ 123291| GET / 200 in 99ms
+ 123524| GET / 200 in 109ms
+ 123745| GET / 200 in 124ms
+ 123981| GET / 200 in 105ms
+ 124199| GET / 200 in 107ms
+ 124423| GET / 200 in 108ms
+ 124674| GET / 200 in 106ms
+ 124897| GET / 200 in 105ms
+ 125123| GET / 200 in 123ms
+ 125340| GET / 200 in 96ms
+ 125555| GET / 200 in 96ms
+ 125822| GET / 200 in 100ms
+ 126047| GET / 200 in 99ms
+ 126268| GET / 200 in 97ms
+ 126485| GET / 200 in 101ms
+ 126710| GET / 200 in 144ms
+ 126940| GET / 200 in 103ms
+ 127165| GET / 200 in 95ms
+ 127396| GET / 200 in 97ms
+ 127619| GET / 200 in 97ms
+ 127850| GET / 200 in 105ms
+ 128135| GET / 200 in 170ms
+ 128360| GET / 200 in 106ms
+ 128577| GET / 200 in 106ms
+ 128785| GET / 200 in 106ms
+ 128992| GET / 200 in 98ms
+ 129221| GET / 200 in 101ms
+ 129436| GET / 200 in 107ms
+ 129642| GET / 200 in 96ms
+ 129848| GET / 200 in 97ms
+ 130057| GET / 200 in 99ms
+ 130265| GET / 200 in 97ms
+ 130270| === settle reached, killing tree ===

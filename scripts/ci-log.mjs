@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Read what CI actually executed, without re-deriving the gh incantation each time.
  *

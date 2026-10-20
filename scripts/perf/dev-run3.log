@@ -1,0 +1,600 @@
+(node:28624) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+   1065| > chatless@0.7.1 pretauri D:\aicodeWorkspace\chatless
+   1065| > pnpm run generate:settings-index && pnpm run update:app-info
+   1488| > chatless@0.7.1 generate:settings-index D:\aicodeWorkspace\chatless
+   1488| > node scripts/generate-settings-index.cjs
+   1693| 生成 settingsIndex.ts 成功
+   2125| > chatless@0.7.1 update:app-info D:\aicodeWorkspace\chatless
+   2125| > node scripts/update-app-info.js
+   2125| 🔄 开始更新应用信息...
+   2125| 📦 读取 package.json: D:\aicodeWorkspace\chatless\package.json
+   2125| Package.json 版本: 0.7.1
+   2125| ⚙️  读取 tauri.conf.json: D:\aicodeWorkspace\chatless\src-tauri\tauri.conf.json
+   2125| Tauri 版本: 0.7.1
+   2125| 📋 最终版本信息:
+   2125| 应用名称: Chatless
+   2125| 版本号: 0.7.1
+   2125| 📝 读取应用信息配置: D:\aicodeWorkspace\chatless\src\config\app-info.ts
+   2125| 原名称: name: "Chatless"
+   2125| ℹ️ 应用信息无变化，跳过写入
+   2125| ✅ 应用信息更新完成: Chatless v0.7.1
+   2348| > chatless@0.7.1 tauri D:\aicodeWorkspace\chatless
+   2348| > tauri "dev"
+   4633| Running BeforeDevCommand (`pnpm dev`)
+   5039| > chatless@0.7.1 predev D:\aicodeWorkspace\chatless
+   5040| > pnpm run icons:index
+   5669| > chatless@0.7.1 icons:index D:\aicodeWorkspace\chatless
+   5669| > node scripts/generate-icons-index.cjs
+   5669| [generate-icons-index] wrote 58 entries to public\llm-provider-icon\_index.json
+   5669| > chatless@0.7.1 dev D:\aicodeWorkspace\chatless
+   5669| > node scripts/warm-dev.mjs
+   7587| ▲ Next.js 15.3.1 (Turbopack)
+   7588| - Local:        http://localhost:3000
+   7588| - Network:      http://10.126.126.3:3000
+   7588| ✓ Starting...
+   8200| Slow filesystem detected. If D:\aicodeWorkspace\chatless\dist is a network drive, consider moving it to a local folder. If you have an antivirus enabled, consider excluding your project directory.
+   8417| ✓ Ready in 1165ms
+   8619| Running DevCommand (`cargo  run --no-default-features --color always --`)
+   8828| Info Watching D:\aicodeWorkspace\chatless\src-tauri for changes...
+   9044| ○ Compiling / ...
+   9700| [1m[32m   Compiling[0m chatless v0.1.0 (D:\aicodeWorkspace\chatless\src-tauri)
+  62954| [1m[36m    Building[0m [=======================> ] 836/839: chatl...[1m[36m    Building[0m [=======================> ] 837/839: chatless ✓ Compiled / in 54s
+  70896| [Storage] 服务端上下文，存储操作已跳过
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  71943| [warm-dev] / 预热完成
+  72380| [warm-dev] / 预热完成
+  72380| [warm-dev] / 预热完成
+  72380| [warm-dev] / 预热完成
+  73040| [warm-dev] / 预热完成
+  73040| [warm-dev] / 预热完成
+  73040| [warm-dev] / 预热完成
+  73040| [warm-dev] / 预热完成
+  73040| [warm-dev] / 预热完成
+  73040| [warm-dev] / 预热完成
+  73040| [warm-dev] / 预热完成
+  73541| [warm-dev] / 预热完成
+  73541| [warm-dev] / 预热完成
+  73541| [warm-dev] / 预热完成
+  74207| [warm-dev] / 预热完成
+  74207| [warm-dev] / 预热完成
+  74207| [warm-dev] / 预热完成
+  74207| [warm-dev] / 预热完成
+  75107| [warm-dev] / 预热完成
+  75107| [warm-dev] / 预热完成
+  75107| [warm-dev] / 预热完成
+  75107| [warm-dev] / 预热完成
+  75108| [warm-dev] / 预热完成
+  75108| [warm-dev] / 预热完成
+  75108| [warm-dev] / 预热完成
+  75108| [warm-dev] / 预热完成
+  76041| [warm-dev] / 预热完成
+  76041| [warm-dev] / 预热完成
+  76041| [warm-dev] / 预热完成
+  76041| [warm-dev] / 预热完成
+  76041| [warm-dev] / 预热完成
+  76041| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  76909| [warm-dev] / 预热完成
+  77369| GET / 200 in 66358ms
+  77369| GET / 200 in 39985ms
+  77369| GET / 200 in 32624ms
+  77369| GET / 200 in 43665ms
+  77369| GET / 200 in 57782ms
+  77369| GET / 200 in 63295ms
+  77369| GET / 200 in 58701ms
+  77369| GET / 200 in 41215ms
+  77370| GET / 200 in 48882ms
+  77370| GET / 200 in 46125ms
+  77370| GET / 200 in 57167ms
+  77370| GET / 200 in 31099ms
+  77370| GET / 200 in 50414ms
+  77370| GET / 200 in 62067ms
+  77370| GET / 200 in 37842ms
+  77370| GET / 200 in 68514ms
+  77370| GET / 200 in 44280ms
+  77370| GET / 200 in 68822ms
+  77370| GET / 200 in 36310ms
+  77370| GET / 200 in 60844ms
+  77370| GET / 200 in 64832ms
+  77370| GET / 200 in 30490ms
+  77370| GET / 200 in 64526ms
+  77370| GET / 200 in 29567ms
+  77370| GET / 200 in 24974ms
+  77370| GET / 200 in 67289ms
+  77370| GET / 200 in 61457ms
+  77370| GET / 200 in 45204ms
+  77370| GET / 200 in 20674ms
+  77370| GET / 200 in 32317ms
+  77370| GET / 200 in 55027ms
+  77370| GET / 200 in 24668ms
+  77370| GET / 200 in 63912ms
+  77370| GET / 200 in 41525ms
+  77370| GET / 200 in 43976ms
+  77370| GET / 200 in 52260ms
+  77370| GET / 200 in 68210ms
+  77370| GET / 200 in 39068ms
+  77370| GET / 200 in 42444ms
+  77370| GET / 200 in 65138ms
+  77370| GET / 200 in 37233ms
+  77370| GET / 200 in 40912ms
+  77370| GET / 200 in 60540ms
+  78119| [warm-dev] / 预热完成
+  78119| [warm-dev] / 预热完成
+  78119| [warm-dev] / 预热完成
+  78119| [warm-dev] / 预热完成
+  79211| [warm-dev] / 预热完成
+  79211| [warm-dev] / 预热完成
+  79211| [warm-dev] / 预热完成
+  79211| [warm-dev] / 预热完成
+  79211| [warm-dev] / 预热完成
+  79211| [warm-dev] / 预热完成
+  79211| [warm-dev] / 预热完成
+  80187| [warm-dev] / 预热完成
+  80187| [warm-dev] / 预热完成
+  80187| [warm-dev] / 预热完成
+  80187| [warm-dev] / 预热完成
+  80187| [warm-dev] / 预热完成
+  80187| [warm-dev] / 预热完成
+  80187| [warm-dev] / 预热完成
+  81815| ○ Compiling /chat ...
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  82062| [warm-dev] / 预热完成
+  83769| [warm-dev] / 预热完成
+  83769| [warm-dev] / 预热完成
+  83769| [warm-dev] / 预热完成
+  83769| [warm-dev] / 预热完成
+  83769| [warm-dev] / 预热完成
+  83769| [warm-dev] / 预热完成
+  83769| [warm-dev] / 预热完成
+  84962| [warm-dev] / 预热完成
+  84962| [warm-dev] / 预热完成
+  84962| [warm-dev] / 预热完成
+  84962| [warm-dev] / 预热完成
+  84962| [warm-dev] / 预热完成
+  84962| [warm-dev] / 预热完成
+  84962| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  88769| [warm-dev] / 预热完成
+  89587| [warm-dev] / 预热完成
+  89587| [warm-dev] / 预热完成
+  89587| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  90815| [warm-dev] / 预热完成
+  95404| [warm-dev] / 预热完成
+  95404| [warm-dev] / 预热完成
+  95404| [warm-dev] / 预热完成
+  95404| [warm-dev] / 预热完成
+  95404| [warm-dev] / 预热完成
+  95404| [warm-dev] / 预热完成
+  96222| GET / 200 in 60714ms
+  96222| GET / 200 in 42932ms
+  96222| GET / 200 in 84327ms
+  96222| GET / 200 in 57643ms
+  96222| GET / 200 in 46310ms
+  96222| GET / 200 in 42320ms
+  96222| GET / 200 in 66540ms
+  96222| GET / 200 in 75745ms
+  96222| GET / 200 in 69605ms
+  96222| GET / 200 in 71760ms
+  96222| GET / 200 in 53039ms
+  96222| GET / 200 in 72066ms
+  96222| GET / 200 in 40788ms
+  96222| GET / 200 in 85549ms
+  96222| GET / 200 in 87755ms
+  96222| GET / 200 in 61940ms
+  96222| GET / 200 in 38281ms
+  96222| GET / 200 in 49679ms
+  96222| GET / 200 in 47227ms
+  96222| GET / 200 in 44470ms
+  96222| GET / 200 in 59180ms
+  96222| GET / 200 in 75132ms
+  96222| GET / 200 in 76359ms
+  96222| GET / 200 in 73297ms
+  96222| GET / 200 in 80651ms
+  96222| GET / 200 in 48143ms
+  96222| GET / 200 in 52125ms
+  96222| GET / 200 in 46616ms
+  96222| GET / 200 in 70838ms
+  96222| GET / 200 in 47840ms
+  96222| GET / 200 in 58261ms
+  96222| GET / 200 in 74218ms
+  96223| GET / 200 in 78204ms
+  96223| GET / 200 in 45085ms
+  96223| GET / 200 in 78503ms
+  96223| GET / 200 in 77285ms
+  96223| GET / 200 in 39256ms
+  96223| GET / 200 in 53968ms
+  96223| GET / 200 in 71454ms
+  96223| GET / 200 in 54893ms
+  96223| GET / 200 in 39865ms
+  96223| GET / 200 in 38947ms
+  96223| GET / 200 in 69000ms
+  96223| GET / 200 in 74830ms
+  96223| GET / 200 in 77899ms
+  96223| GET / 200 in 74525ms
+  96223| GET / 200 in 65628ms
+  96223| GET / 200 in 86483ms
+  96223| GET / 200 in 70224ms
+  96223| GET / 200 in 46923ms
+  96223| GET / 200 in 49071ms
+  96223| GET / 200 in 61027ms
+  96223| GET / 200 in 50900ms
+  96223| GET / 200 in 53665ms
+  96223| GET / 200 in 65322ms
+  96223| GET / 200 in 72994ms
+  96223| GET / 200 in 45394ms
+  96223| GET / 200 in 52744ms
+  96223| GET / 200 in 81572ms
+  96223| GET / 200 in 68696ms
+  96223| GET / 200 in 62253ms
+  96223| GET / 200 in 40484ms
+  96223| GET / 200 in 75445ms
+  96223| GET / 200 in 87767ms
+  96223| GET / 200 in 41407ms
+  96223| GET / 200 in 70530ms
+  96223| GET / 200 in 52438ms
+  96223| GET / 200 in 38247ms
+  96223| GET / 200 in 67164ms
+  96553| [warm-dev] / 预热完成
+  96553| [warm-dev] / 预热完成
+  96553| [warm-dev] / 预热完成
+  96553| [warm-dev] / 预热完成
+  96553| [warm-dev] / 预热完成
+  96553| [warm-dev] / 预热完成
+  96553| [warm-dev] / 预热完成
+  96553| [warm-dev] / 预热完成
+  97399| [warm-dev] / 预热完成
+  97399| [warm-dev] / 预热完成
+  97399| [warm-dev] / 预热完成
+  97399| [warm-dev] / 预热完成
+  97399| [warm-dev] / 预热完成
+  98496| [warm-dev] / 预热完成
+  98496| [warm-dev] / 预热完成
+  98496| [warm-dev] / 预热完成
+  98496| [warm-dev] / 预热完成
+  98496| [warm-dev] / 预热完成
+  98496| [warm-dev] / 预热完成
+  99723| [warm-dev] / 预热完成
+  99723| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100437| [warm-dev] / 预热完成
+ 100983| [warm-dev] / 预热完成
+ 100983| [warm-dev] / 预热完成
+ 100983| [warm-dev] / 预热完成
+ 101829| [warm-dev] / 预热完成
+ 101830| [warm-dev] / 预热完成
+ 101830| [warm-dev] / 预热完成
+ 101830| [warm-dev] / 预热完成
+ 101830| [warm-dev] / 预热完成
+ 101830| [warm-dev] / 预热完成
+ 101830| [warm-dev] / 预热完成
+ 102359| [warm-dev] / 预热完成
+ 102359| [warm-dev] / 预热完成
+ 102359| [warm-dev] / 预热完成
+ 102822| [warm-dev] / 预热完成
+ 102822| GET / 200 in 47549ms
+ 102822| GET / 200 in 65017ms
+ 102822| GET / 200 in 60730ms
+ 102822| GET / 200 in 88941ms
+ 102822| GET / 200 in 79143ms
+ 102822| GET / 200 in 63496ms
+ 102822| GET / 200 in 62273ms
+ 102822| GET / 200 in 49708ms
+ 102822| [warm-dev] / 预热完成
+ 102822| GET / 200 in 78850ms
+ 102822| GET / 200 in 70261ms
+ 102822| GET / 200 in 54009ms
+ 102822| GET / 200 in 50644ms
+ 102822| GET / 200 in 91419ms
+ 102822| GET / 200 in 59829ms
+ 102822| GET / 200 in 61990ms
+ 102822| GET / 200 in 89592ms
+ 102822| GET / 200 in 72418ms
+ 102822| GET / 200 in 65973ms
+ 102822| GET / 200 in 74564ms
+ 102822| GET / 200 in 61071ms
+ 102822| GET / 200 in 94244ms
+ 102822| GET / 200 in 85603ms
+ 102822| GET / 200 in 83463ms
+ 102822| GET / 200 in 68121ms
+ 102822| GET / 200 in 56778ms
+ 102822| GET / 200 in 88363ms
+ 102822| GET / 200 in 80095ms
+ 102822| GET / 200 in 48504ms
+ 102822| GET / 200 in 69963ms
+ 102822| GET / 200 in 63829ms
+ 102822| GET / 200 in 55249ms
+ 102822| GET / 200 in 72726ms
+ 102822| GET / 200 in 73340ms
+ 102822| GET / 200 in 48199ms
+ 102822| GET / 200 in 91124ms
+ 102822| GET / 200 in 85301ms
+ 102822| GET / 200 in 93278ms
+ 102822| GET / 200 in 87752ms
+ 102822| GET / 200 in 62912ms
+ 102822| GET / 200 in 74872ms
+ 102822| GET / 200 in 86527ms
+ 102822| GET / 200 in 52190ms
+ 102822| GET / 200 in 51261ms
+ 102822| GET / 200 in 76404ms
+ 102822| GET / 200 in 57081ms
+ 102822| GET / 200 in 49120ms
+ 102822| GET / 200 in 46662ms
+ 102822| GET / 200 in 71195ms
+ 102822| GET / 200 in 52497ms
+ 102822| GET / 200 in 73951ms
+ 102822| GET / 200 in 58309ms
+ 102822| GET / 200 in 92352ms
+ 102822| GET / 200 in 70888ms
+ 102822| GET / 200 in 43998ms
+ 102822| GET / 200 in 43962ms
+ 102822| GET / 200 in 43806ms
+ 102822| GET / 200 in 43399ms
+ 103183| [warm-dev] / 预热完成
+ 103183| [warm-dev] / 预热完成
+ 103776| [warm-dev] / 预热完成
+ 103776| [warm-dev] / 预热完成
+ 103776| [warm-dev] / 预热完成
+ 103776| [warm-dev] / 预热完成
+ 104085| GET / 200 in 44285ms
+ 104085| [warm-dev] / 预热完成
+ 104085| GET / 200 in 43691ms
+ 104312| GET / 200 in 43420ms
+ 104312| GET / 200 in 43781ms
+ 104312| [warm-dev] / 预热完成
+ 104312| GET / 200 in 43352ms
+ 104312| [warm-dev] / 预热完成
+ 104312| GET / 200 in 43261ms
+ 104517| GET / 200 in 42891ms
+ 104732| GET / 200 in 43124ms
+ 104957| [warm-dev] / 预热完成
+ 104957| [warm-dev] / 预热完成
+ 104966| GET / 200 in 43024ms
+ 105172| GET / 200 in 42818ms
+ 105173| [warm-dev] / 预热完成
+ 105397| [warm-dev] / 预热完成
+ 105397| [warm-dev] / 预热完成
+ 105606| [warm-dev] / 预热完成
+ 105606| [warm-dev] / 预热完成
+ 105841| [warm-dev] / 预热完成
+ 105841| GET / 200 in 42826ms
+ 105841| GET / 200 in 42826ms
+ 105841| [warm-dev] / 预热完成
+ 106077| GET / 200 in 41953ms
+ 106077| [warm-dev] / 预热完成
+ 106077| GET / 200 in 41519ms
+ 106077| GET / 200 in 42035ms
+ 106077| GET / 200 in 42268ms
+ 106077| GET / 200 in 41887ms
+ 106077| GET / 200 in 41326ms
+ 106077| GET / 200 in 41132ms
+ 106302| [warm-dev] / 预热完成
+ 106524| [warm-dev] / 预热完成
+ 106524| [warm-dev] / 预热完成
+ 106524| GET / 200 in 41067ms
+ 106728| [warm-dev] / 预热完成
+ 106728| [warm-dev] / 预热完成
+ 106943| [warm-dev] / 预热完成
+ 107371| [warm-dev] / 预热完成
+ 107371| [warm-dev] / 预热完成
+ 107371| [warm-dev] / 预热完成
+ 107371| [warm-dev] / 预热完成
+ 107371| [warm-dev] / 预热完成
+ 107599| GET / 200 in 40558ms
+ 107599| GET / 200 in 39827ms
+ 107599| GET / 200 in 40724ms
+ 107599| [warm-dev] / 预热完成
+ 107869| GET / 200 in 40096ms
+ 107869| GET / 200 in 39831ms
+ 107869| GET / 200 in 39651ms
+ 107869| [warm-dev] / 预热完成
+ 107869| [warm-dev] / 预热完成
+ 108086| GET / 200 in 40979ms
+ 108086| [warm-dev] / 预热完成
+ 108086| GET / 200 in 41123ms
+ 108086| GET / 200 in 41123ms
+ 108086| [warm-dev] / 预热完成
+ 108293| [warm-dev] / 预热完成
+ 108293| GET / 200 in 39821ms
+ 108293| [warm-dev] / 预热完成
+ 108511| [warm-dev] / 预热完成
+ 108511| [warm-dev] / 预热完成
+ 108715| GET / 200 in 39937ms
+ 108919| [warm-dev] / 预热完成
+ 109125| GET / 200 in 38929ms
+ 109125| GET / 200 in 38740ms
+ 109125| GET / 200 in 38833ms
+ 109125| GET / 200 in 38752ms
+ 109345| GET / 200 in 37233ms
+ 109345| GET / 200 in 39002ms
+ 109345| GET / 200 in 36474ms
+ 109574| GET / 200 in 36524ms
+ 109574| GET / 200 in 36532ms
+ 109574| GET / 200 in 36703ms
+ 110700| GET / 200 in 902ms
+ 111142| GET / 200 in 885ms
+ 111802| GET / 200 in 849ms
+ 112036| GET / 200 in 860ms
+ 112036| GET / 200 in 772ms
+ 112044| >>> NEXT dev server answering (HTTP 200)
+ 112266| GET / 200 in 652ms
+ 112266| GET / 200 in 528ms
+ 112266| GET / 200 in 349ms
+ 112266| GET / 200 in 220ms
+ 112530| GET / 200 in 92ms
+ 112954| GET / 200 in 220ms
+ 112954| GET / 200 in 420ms
+ 115045| GET / 200 in 1671ms
+ 115045| GET / 200 in 1885ms
+ 115045| GET / 200 in 111ms
+ 115260| GET / 200 in 100ms
+ 115473| GET / 200 in 100ms
+ 115689| GET / 200 in 93ms
+ 115908| GET / 200 in 97ms
+ 116125| GET / 200 in 94ms
+ 116336| GET / 200 in 121ms
+ 116571| GET / 200 in 100ms
+ 116793| GET / 200 in 193ms
+ 117001| GET / 200 in 96ms
+ 117211| GET / 200 in 97ms
+ 117412| GET / 200 in 97ms
+ 117646| GET / 200 in 94ms
+ 117862| GET / 200 in 104ms
+ 118066| GET / 200 in 99ms
+ 118306| GET / 200 in 101ms
+ 118536| GET / 200 in 102ms
+ 118745| GET / 200 in 96ms
+ 118957| GET / 200 in 98ms
+ 119163| GET / 200 in 98ms
+ 119366| GET / 200 in 95ms
+ 119595| GET / 200 in 99ms
+ 119834| GET / 200 in 95ms
+ 120049| GET / 200 in 96ms
+ 120266| GET / 200 in 99ms
+ 120474| GET / 200 in 96ms
+ 120679| GET / 200 in 94ms
+ 120881| GET / 200 in 94ms
+ 121082| GET / 200 in 95ms
+ 121315| GET / 200 in 99ms
+ 121515| GET / 200 in 92ms
+ 121725| GET / 200 in 94ms
+ 121934| GET / 200 in 103ms
+ 122137| GET / 200 in 91ms
+ 122352| GET / 200 in 110ms
+ 122562| GET / 200 in 97ms
+ 122766| GET / 200 in 93ms
+ 122971| GET / 200 in 96ms
+ 123176| GET / 200 in 94ms
+ 123393| GET / 200 in 97ms
+ 123851| GET / 200 in 222ms
+ 124063| GET / 200 in 493ms
+ 124063| GET / 200 in 111ms
+ 124271| GET / 200 in 159ms
+ 124473| GET / 200 in 96ms
+ 124686| GET / 200 in 138ms
+ 124895| GET / 200 in 99ms
+ 125101| GET / 200 in 92ms
+ 125303| GET / 200 in 96ms
+ 125524| GET / 200 in 104ms
+ 125726| GET / 200 in 94ms
+ 125930| GET / 200 in 96ms
+ 126149| GET / 200 in 97ms
+ 126350| GET / 200 in 96ms
+ 126550| GET / 200 in 95ms
+ 126752| GET / 200 in 95ms
+ 126953| GET / 200 in 96ms
+ 127158| GET / 200 in 100ms
+ 127370| GET / 200 in 100ms
+ 127583| GET / 200 in 95ms
+ 127788| GET / 200 in 95ms
+ 128002| GET / 200 in 107ms
+ 128205| GET / 200 in 95ms
+ 128417| GET / 200 in 100ms
+ 128618| GET / 200 in 94ms
+ 128838| GET / 200 in 103ms
+ 129049| GET / 200 in 120ms
+ 129256| GET / 200 in 96ms
+ 129479| GET / 200 in 94ms
+ 129682| GET / 200 in 97ms
+ 129887| GET / 200 in 94ms
+ 130086| GET / 200 in 93ms
+ 130292| GET / 200 in 95ms
+ 130505| GET / 200 in 102ms
+ 130724| GET / 200 in 102ms
+ 130932| GET / 200 in 95ms
+ 131144| GET / 200 in 97ms
+ 131353| GET / 200 in 104ms
+ 131578| GET / 200 in 104ms
+ 131790| GET / 200 in 93ms
+ 132010| GET / 200 in 106ms
+ 132219| GET / 200 in 111ms
+ 132427| GET / 200 in 95ms
+ 132632| GET / 200 in 96ms
+ 132835| GET / 200 in 95ms
+ 133047| GET / 200 in 98ms
+ 133250| GET / 200 in 95ms
+ 133455| GET / 200 in 96ms
+ 133660| GET / 200 in 98ms
+ 133876| GET / 200 in 100ms
+ 134093| GET / 200 in 99ms
+ 134416| GET / 200 in 163ms
+ 134620| GET / 200 in 106ms
+ 134823| GET / 200 in 96ms
+ 135025| GET / 200 in 94ms
+ 135226| GET / 200 in 94ms
+ 135429| GET / 200 in 95ms
+ 135637| GET / 200 in 102ms
+ 135847| GET / 200 in 98ms
+ 136051| GET / 200 in 96ms
+ 136272| GET / 200 in 100ms
+ 136474| GET / 200 in 97ms
+ 136690| GET / 200 in 103ms
+ 136893| GET / 200 in 93ms
+ 137095| GET / 200 in 98ms
+ 137313| GET / 200 in 118ms
+ 137522| GET / 200 in 102ms
+ 137727| GET / 200 in 94ms
+ 137941| GET / 200 in 97ms
+ 138159| GET / 200 in 95ms
+ 138375| GET / 200 in 93ms
+ 139006| GET / 200 in 455ms
+ 139006| GET / 200 in 261ms
+ 139006| GET / 200 in 112ms
+ 139210| GET / 200 in 94ms
+ 139424| GET / 200 in 96ms
+ 139632| GET / 200 in 99ms
+ 139856| GET / 200 in 98ms
+ 140068| GET / 200 in 99ms
+ 140273| GET / 200 in 100ms
+ 140273| === settle reached, killing tree ===

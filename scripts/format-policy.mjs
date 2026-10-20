@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * When formatting is enforced, and when it is not.
  *
