@@ -1204,7 +1204,7 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
 .glass-ui.dark {
   /* 浅色霜面叠在深色壁纸上，才能透出色相；深蓝填充会把毛玻璃糊成整块海军蓝 */
   --glass-base-fill: rgba(255, 255, 255, 0.08);
-  --glass-surface-fill: rgba(255, 255, 255, 0.12);
+  --glass-surface-fill: rgba(255, 255, 255, 0.06);
   --glass-overlay-fill: rgba(17, 20, 27, 0.95);
   --glass-fill: var(--glass-base-fill);
   --glass-fill-strong: var(--glass-surface-fill);
@@ -1217,8 +1217,11 @@ html:not(.glass-ui).dark.simple-ui:not(.page-paper) [class~="bg-white/90"] {
     rgba(255, 255, 255, 0) 44%
   );
   --glass-divider: rgba(255, 255, 255, 0.08);
-  /* Sized by measurement: the dimmest muted text still clears 3:1 over a white photograph. */
-  --glass-veil: rgba(5, 8, 13, 0.75);
+  /* Sized by measurement: the dimmest muted text still clears 3:1 over a white photograph,
+     on every fill the theme ships - the sheet, a card, a control. The first pass measured the
+     veil alone with a stale fill, so a bright wallpaper put muted text at 2.75:1 in the
+     rendered window; see lib/glass/__tests__/contrast.test.ts. */
+  --glass-veil: rgba(5, 8, 13, 0.82);
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.14);
   --glass-control-fill: rgba(255, 255, 255, 0.06);

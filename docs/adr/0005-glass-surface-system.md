@@ -32,8 +32,11 @@ values and the theme's own numbers.
 
 | theme | veil | primary | secondary | muted |
 |---|---|---|---|---|
-| dark (over `#ffffff`) | `rgba(5,8,13,0.75)` | 7.04 | 5.19 | 3.01 |
-| light (over `#000000`) | `rgba(248,250,252,0.76)` | 9.36 | 4.85 | 3.04 |
+| dark (over `#ffffff`) | `rgba(5,8,13,0.82)` | 8.90 | 6.56 | 3.80 |
+| light (over `#000000`) | `rgba(248,250,252,0.76)` | 12.46 | 6.46 | 4.05 |
+
+Each number is the text token composited over the sheet fill over the veiled photograph, and the
+test now derives it from the tokens the stylesheet actually ships - see the revision below.
 
 **Reduced motion means no live blur.** `--glass-blur: 0` and a more solid sheet, rather than a
 smaller radius, which costs the same and looks worse.
@@ -79,8 +82,18 @@ wrong, and each was a consequence of over-applying "the sheet is the only surfac
    scroller hides it - by name, because the sheet sets `thin` on every element and Chromium
    prefers that property over `::-webkit-scrollbar` when both apply.
 
+7. **The veil was measured against a stale fill.** The test that pins the floor restated the
+   veil and fill values it was written against instead of reading the stylesheet, so when the
+   fills moved the check kept passing while the window drifted. The acceptance screenshots found
+   it: dark theme over a near-white wallpaper put muted text at **2.75:1** in the rendered
+   window (modelled 2.92:1 with the shipped 0.08 sheet fill), under the 3:1 floor. Two things
+   changed - the check now reads `globals.css` and walks every fill the theme paints text on
+   (base, surface, control), and the dark veil went 0.75 to 0.82 while the dark surface fill
+   came down to 0.06 so a card no longer lightens the backdrop past the floor. Measured again on
+   the same backdrop: muted 3.48:1, secondary 5.24:1, primary 6.32:1.
+
 Light and dark are tuned separately because the physics differ: in dark the sheet *lifts* off a
-near-black field (0.08 white), in light it is a bright pane on a cool field (0.82 of near-white),
+near-black field (0.08 white), in light it is a bright pane on a cool field (0.74 of near-white),
 and the field itself is what makes light mode read as glass rather than as a white page.
 
 The controls, the rail tint and the active mark are fills. The blur count is still one; the
