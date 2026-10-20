@@ -321,7 +321,11 @@ still works (`docs/tauri-window-pitfalls.md`).
     the export wrote half a directory over its state. Stop the dev server first; deleting `dist`
     recovers dev. Separately, `next build` on this machine takes ~17 minutes of real compile time
     (recorded in `scripts/perf/build-frontend.log`), so budget for it rather than calling it hung.
-  - **Frontend-only iteration does not need `cargo`.** `src-tauri/target/debug/chatless.exe`
+  - **The first page load is the slowest thing in a dev session.** `pnpm dev:warm` is `pnpm dev` plus
+  a warm-up: it requests `/` then `/chat` as soon as the server answers, so turbopack compiles while
+  the cargo build runs instead of while the window sits blank (cold `/` ~11 s, `/chat` longer).
+  Opt-in; plain `pnpm dev` is unchanged.
+- **Frontend-only iteration does not need `cargo`.** `src-tauri/target/debug/chatless.exe`
     loads `http://localhost:3000` directly; run it next to `pnpm dev` instead of `pnpm tauri dev`
     when only CSS or TSX changed (a Rust rebuild is minutes, a restart is seconds).
   - `pnpm test` reports six `scripts/__tests__/*.mjs` files as load failures on Windows

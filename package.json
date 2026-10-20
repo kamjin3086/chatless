@@ -44,7 +44,8 @@
     "verify:fast": "pnpm lint:ci && pnpm typecheck && pnpm typecheck:tests && pnpm test",
     "shot": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shot/capture.ps1",
     "click": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shot/click.ps1",
-    "check:reply": "node scripts/check-reply.mjs"
+    "check:reply": "node scripts/check-reply.mjs",
+    "dev:warm": "node scripts/dev-warm.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.0.8",
