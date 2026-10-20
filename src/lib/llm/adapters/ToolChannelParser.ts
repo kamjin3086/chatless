@@ -33,6 +33,22 @@ function containsToolStart(text: string): boolean {
   return TOOL_START_PATTERNS.some((p) => text.includes(p));
 }
 
+/**
+ * Where the first call marker starts, or -1 when the text holds none.
+ *
+ * Exported for the not-executed card (#166): when nothing parsed, the turn's text
+ * from this index on is what the model wrote instead of a call, and the card
+ * shows it verbatim.
+ */
+export function indexOfToolCallMarker(text: string): number {
+  let found = -1;
+  for (const pattern of TOOL_START_PATTERNS) {
+    const index = text.indexOf(pattern);
+    if (index >= 0 && (found < 0 || index < found)) found = index;
+  }
+  return found;
+}
+
 export class ToolChannelParser {
   private contentBuffer = '';
   private suppressing = false;

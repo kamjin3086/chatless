@@ -19,6 +19,7 @@ import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import type { EventHandler, StreamContext } from '../types';
 import { useChatStore } from '@/store/chatStore';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
+import { notExecutedCardState } from '@/lib/chat/notExecutedCard';
 
 
 const coordinator = ToolCallCoordinator.getInstance();
@@ -31,6 +32,35 @@ export class ToolCallEventHandler implements EventHandler {
   async handle(event: StreamEvent, context: StreamContext): Promise<void> {
     // 类型窄化
     if (event.type !== 'tool_call') {
+      return;
+    }
+
+    if (event.notExecuted) {
+      // Look-alike markup nothing could read: show what the model wrote, name
+      // the fix, and run nothing. No approval (nothing ran), no coordinator lock
+      // (there is no call to deduplicate), no pipeline.
+      try {
+        const store = useChatStore.getState();
+        const state = notExecutedCardState(String(event.toolCall || ''));
+        const cardId = `not_executed_${crypto.randomUUID()}`;
+        store.dispatchMessageAction(context.messageId, {
+          type: 'TOOL_HIT',
+          server: state.server,
+          tool: state.tool,
+          args: {},
+          cardId,
+        });
+        store.dispatchMessageAction(context.messageId, {
+          type: 'TOOL_RESULT',
+          server: state.server,
+          tool: state.tool,
+          ok: false,
+          errorMessage: state.errorMessage,
+          cardId,
+        });
+      } catch {
+        // A card that cannot be shown must not take the answer with it.
+      }
       return;
     }
 

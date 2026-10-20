@@ -509,7 +509,10 @@ export class AgentLoopRunner {
         }
 
         const content = orchestrator.getContext().content;
-        if (content?.trim()) producedVisibleContent = true;
+        // A turn can produce a card without text: an unreadable call on the prompt
+        // track is shown as a not-executed card (#166), which is output, not an
+        // empty answer.
+        if (content?.trim() || promptToolTrack.producedOutput()) producedVisibleContent = true;
         const modelEvents: import('@/lib/mcp/pipeline/context/ConversationEventLog').ConversationEvent[] = [];
         if (content?.trim()) modelEvents.push({ type: 'assistant_message', content });
         for (const [key, req] of requests) {

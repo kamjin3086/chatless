@@ -73,6 +73,12 @@ export interface ToolCallEvent extends BaseStreamEvent {
   };
   /** Lossless provider payload needed when replaying this tool turn. */
   providerData?: Record<string, unknown>;
+  /**
+   * True when this event carries look-alike markup nothing could read: the card
+   * shows what the model wrote and what to change, and nothing runs (#166).
+   * `toolCall` holds the raw text.
+   */
+  notExecuted?: boolean;
 }
 
 /**
@@ -133,12 +139,14 @@ export const createStreamEvent = {
   toolCall: (
     toolCall: string,
     parsed?: ToolCallEvent['parsed'],
-    providerData?: ToolCallEvent['providerData']
+    providerData?: ToolCallEvent['providerData'],
+    notExecuted?: boolean
   ): ToolCallEvent => ({
     type: 'tool_call',
     toolCall,
     parsed,
     providerData,
+    notExecuted,
     timestamp: Date.now()
   }),
   

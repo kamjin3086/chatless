@@ -14,7 +14,7 @@
  * question. So the decision is the run's track, resolved once, not a heuristic.
  */
 
-import { ToolChannelParser } from '@/lib/llm/adapters/ToolChannelParser';
+import { ToolChannelParser, indexOfToolCallMarker } from '@/lib/llm/adapters/ToolChannelParser';
 import type { StreamEvent } from '@/lib/llm/types/stream-events';
 import { createStreamEvent } from '@/lib/llm/types/stream-events';
 import type { ToolTrack } from '@/lib/llm/types/tool-capability';
@@ -28,6 +28,12 @@ export interface PromptToolTrack {
    * is finalised.
    */
   flush(): Promise<void>;
+  /**
+   * True when this turn produced something the user can see: surviving text, a
+   * read call, or the not-executed card. The agent loop uses it so a card-only
+   * turn is not reported as an empty answer.
+   */
+  producedOutput(): boolean;
 }
 
 export function createPromptToolTrack(input: {
@@ -45,25 +51,40 @@ export function createPromptToolTrack(input: {
   const parseText = input.track === 'prompt' && input.allowTextCalls !== false;
 
   if (!parseText) {
+    let forwardedContent = false;
     return {
       onEvent: async (event) => {
+        if (event.type === 'content_token' && event.content) forwardedContent = true;
         await input.dispatch(event);
       },
       flush: async () => {},
+      producedOutput: () => forwardedContent,
     };
   }
 
   const parser = new ToolChannelParser();
+  // The whole turn's visible text, for the one case the parser cannot resolve:
+  // markup it suppressed but could not read becomes a "not executed" card (#166).
+  let turnText = '';
+  let dispatchedToolCall = false;
+  let dispatchedNotExecuted = false;
+  let forwardedContent = false;
 
   const forward = async (events: StreamEvent[], toolCallsOnly: boolean) => {
     for (const event of events) {
       if (toolCallsOnly && event.type !== 'tool_call') continue;
+      if (event.type === 'content_token') forwardedContent = true;
+      if (event.type === 'tool_call') {
+        if (event.notExecuted) dispatchedNotExecuted = true;
+        else dispatchedToolCall = true;
+      }
       await input.dispatch(event);
     }
   };
 
   return {
     async onEvent(event) {
+      if (event.type === 'content_token') turnText += event.content || '';
       // The parser buffers content and suppresses it from the first look-alike
       // marker on, so the markup never reaches the visible answer. Any
       // `stream_complete` it sees flushes the buffer itself and resets.
@@ -72,10 +93,18 @@ export function createPromptToolTrack(input: {
     async flush() {
       // Only the synthesised calls; the synthetic completion is not a provider
       // event and must not reach the handlers.
-      await forward(
-        parser.rewriteEvents([createStreamEvent.streamComplete()]),
-        true,
-      );
+      const events = parser.rewriteEvents([createStreamEvent.streamComplete()]);
+      await forward(events, true);
+
+      if (dispatchedToolCall) return;
+      // A look-alike that nothing could read: say the model tried and the app
+      // did not act, instead of leaving the markup to vanish into nothing.
+      const marker = indexOfToolCallMarker(turnText);
+      if (marker < 0) return;
+      const rawText = turnText.slice(marker).trim();
+      if (!rawText) return;
+      await input.dispatch(createStreamEvent.toolCall(rawText, undefined, undefined, true));
     },
+    producedOutput: () => forwardedContent || dispatchedToolCall || dispatchedNotExecuted,
   };
 }

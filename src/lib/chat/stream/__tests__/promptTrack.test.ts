@@ -48,6 +48,7 @@ describe('createPromptToolTrack', () => {
       parsed: { serverName: 'mcp', toolName: 'search' },
     });
     expect(JSON.parse((calls[0] as any).parsed.arguments)).toEqual({ q: 'x' });
+    expect((calls[0] as any).notExecuted).toBeUndefined();
   });
 
   test('a native run forwards the same text and executes nothing extra', async () => {
@@ -98,6 +99,35 @@ describe('createPromptToolTrack', () => {
     await track.flush();
 
     expect(seen.filter((event) => event.type === 'tool_call')).toHaveLength(1);
+  });
+
+  test('a look-alike nothing can read becomes a not-executed call, not silent prose', async () => {
+    const { seen, dispatch } = sink();
+    const track = createPromptToolTrack({ track: 'prompt', dispatch });
+
+    // An opener without its closer: the stream must stop showing it, and no
+    // handler can read a call out of it.
+    await track.onEvent(createStreamEvent.contentToken('先列出文档。'));
+    await track.onEvent(createStreamEvent.contentToken('<|tool_call>call:knowledge__list{}'));
+    await track.flush();
+
+    expect(visibleText(seen)).toBe('先列出文档。');
+    const notExecuted = seen.filter(
+      (event) => event.type === 'tool_call' && (event as any).notExecuted,
+    );
+    expect(notExecuted).toHaveLength(1);
+    expect((notExecuted[0] as any).toolCall).toBe('<|tool_call>call:knowledge__list{}');
+    // The card is the turn's output; the loop must not call it an empty answer.
+    expect(track.producedOutput()).toBe(true);
+  });
+
+  test('an empty turn reports no output', async () => {
+    const { dispatch } = sink();
+    const track = createPromptToolTrack({ track: 'prompt', dispatch });
+
+    await track.flush();
+
+    expect(track.producedOutput()).toBe(false);
   });
 
   test('a regeneration is told not to call tools, so its text is not parsed either', async () => {
