@@ -79,8 +79,10 @@ Two things here are **required**, not preference:
   ```
 
   The translation for an English thread is `> AI-generated, human-reviewed.`
-- **A reply is written as the owner's own reply**, in the maintainer's voice: subject-less and
-  factual, no apology or gratitude padding, no hand-holding. Only four classes may be posted
+- **A reply is written as the owner's own reply**, in the maintainer's voice: warm but not
+  servile - plain spoken sentences, attention to the reporter's own details, a straight answer;
+  no apology, no gratitude padding, no hand-holding, and no system-notice tone either. Only four
+  classes may be posted
   without asking - a merged-fix status line, a same-symptom-and-cause duplicate close, a
   needs-info ask, and a "not planned" whose policy you have already stated. Everything else
   (causes, workarounds, "expected behaviour", promises, priority) is drafted for you first.
