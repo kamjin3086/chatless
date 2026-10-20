@@ -201,6 +201,40 @@ still works (`docs/tauri-window-pitfalls.md`).
     component test, or a real build. `google-chrome --headless=new --dump-dom <url> | ...`
     dumps the hydrated DOM; on a cold dev server give it ~30s, because initialization's
     network probes have to time out first.
+  - **The glass theme is reachable in the browser too** (measured 2026-10-20). The store starts
+    empty, so `?devStore=1` alone renders the plain theme; enable 玻璃主题 in 设置 → 外观与体验 and
+    the theme is on for that tab. It survives client-side navigation, not a reload. A wallpaper
+    can be set through the hidden `input[type=file]` in the same card (`agent-browser upload`),
+    which in the non-Tauri runtime is stored as a data URL. Theme: `agent-browser set media
+    dark|light` changes `prefers-color-scheme`, which the app's own `ThemeInitializer` follows -
+    toggling the `dark` class by hand is undone by that listener.
+  - **A globals.css edit needs a page reload in that tab.** The injected sheet updates through
+    HMR (`GLASS_FROST_CSS` is re-applied by its effect), but a token change in `globals.css` does
+    not reach an already-loaded document, and rewriting the file twice in quick succession can
+    leave the dev server serving the intermediate value (observed: the veil stayed at 0.75 while
+    `surface-fill` from the same edit applied). Reload, and if the value still disagrees with the
+    file, restart `pnpm dev`.
+  - **Screenshotting the real window (Windows).** The webview is not capturable through
+    `PrintWindow` (accelerated layers come back black); capture the screen rect instead. Declare
+    DPI awareness first (`SetProcessDPIAware`) or every coordinate is scaled by the display
+    factor - this desktop is 1536x864 at 125 %, and an unaware `GetWindowRect` reports 0.8x the
+    real size and silently clips the right edge. Resize with `MoveWindow` in *physical* pixels.
+  - **A window preset can be larger than the desktop.** 1024x768 logical is 1280x960 physical at
+    125 %, while the logical work area here is 1228x691: the app's right and bottom edges sit
+    off-screen, which looks exactly like a layout bug in a screenshot. Resize to the work area
+    before judging any layout, and do not report the clipping as a defect.
+  - **`next dev` and `next build` share `distDir: dist`.** Running `pnpm build` (or `pnpm verify`)
+    while a dev server is up leaves both stuck - the build prints "Creating an optimized
+    production build ..." for a quarter of an hour and the dev server then serves 500s because
+    the export wrote half a directory over its state. Stop the dev server first; deleting `dist`
+    recovers dev. Separately, `next build` on this machine takes ~17 minutes of real compile time
+    (recorded in `scripts/perf/build-frontend.log`), so budget for it rather than calling it hung.
+  - **Frontend-only iteration does not need `cargo`.** `src-tauri/target/debug/chatless.exe`
+    loads `http://localhost:3000` directly; run it next to `pnpm dev` instead of `pnpm tauri dev`
+    when only CSS or TSX changed (a Rust rebuild is minutes, a restart is seconds).
+  - `pnpm test` reports six `scripts/__tests__/*.mjs` files as load failures on Windows
+    (`SyntaxError: Invalid or unexpected token` at the first line). They fail identically on a
+    clean tree; the `src` suite is what the gate is.
 - **`pnpm typecheck` never looks at a test file.** That is where a test could pass a field
   production code had deleted. `pnpm typecheck:tests` covers `src` tests plus the
   `docs/acceptance` audits `pnpm test` runs, and is part of `pnpm verify` and CI; the

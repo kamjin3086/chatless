@@ -5,6 +5,10 @@ runtime for files, knowledge and light coding tasks.
 
 ## Before changing anything
 
+If `git status` is not clean, say whose work the dirty files are before touching them. Another
+session can be mid-edit in the same tree, and `pnpm repo:state` reports branches and worktrees,
+not the tree's own dirt. (Two sessions have already edited the glass files minutes apart.)
+
 Adding or narrowing a feature, touching default permissions, the agent harness, or a
 dependency: read `docs/agents/constraints.md` first (product identity, feature
 admission, capability layers, harness evolution, Coding Pack boundaries, quality

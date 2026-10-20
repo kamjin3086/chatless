@@ -4,6 +4,12 @@
  * sheet is where they are spent, injected at runtime because the theme is toggled on the root
  * element. The two must not disagree - `__tests__/frostContract.test.ts` reads both.
  *
+ * **Everything below is one CSS template literal.** A backtick anywhere inside it - including
+ * in a comment quoting a CSS property - ends the string and the build fails with
+ * "Parsing ecmascript source code failed" pointing at a comment. Avoid backticks and template
+ * placeholders in the CSS and in its comments; use plain quotes. This has already cost one
+ * build error and one revert.
+ *
  * The old note here said the build stripped `.glass-ui` backdrop-filter, which is measurably
  * false: the built CSS carried `.glass-ui .glass-nav { backdrop-filter: blur(28px) }`. The
  * sheet stays because folding it into the Tailwind sheet is its own change, not because of
