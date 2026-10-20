@@ -399,18 +399,22 @@ export function AIMessageBlock({
       {/* 思考进度条：仅在没有结构化segments时显示全局思考栏（兼容旧消息） */}
       {/* 修复：只有在真正有思考内容时才显示思考栏，避免误将普通消息识别为思考过程 */}
       <AnimatePresence initial={false}>
+        {/*
+         * Opacity only. An animated height (or `layout`) on this wrapper re-measures the bar on
+         * every streamed token, so each growth became a 180 ms bounce - the "it jumps while
+         * thinking" report. The preview row keeps a stable line; nothing here animates height.
+         */}
         {(mixedSegments.length === 0) && (
           (!!viewModel && viewModel.flags?.isThinking) || 
           (!!thinkTextFromSegments && thinkTextFromSegments.trim().length > 0) || 
           (!!state && !!state.thinkingContent && state.thinkingContent.trim().length > 0)
         ) && (
           <motion.div
-            layout
             key="global-thinking"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
           >
             <ThinkingBar
               thinkingContent={thinkTextFromSegments || state?.thinkingContent || ''}

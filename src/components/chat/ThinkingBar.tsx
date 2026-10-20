@@ -39,14 +39,25 @@ export const ThinkingBar = ({
   // 内容由父级按帧推入；这里不再自己跑 rAF 二次节流（那是多余的重复渲染）。
   const hasContent = thinkingContent.trim().length > 0;
 
-  const getLastLine = (text: string): string => {
+  /**
+   * The last line that has something in it, not simply the text after the final newline.
+   *
+   * A streamed thinking block ends on a newline constantly, and taking the tail literally made
+   * the preview row empty at those moments - it unmounted, the content below jumped up, and
+   * the next token brought it back. Holding the last non-empty line keeps one stable line
+   * under the header instead.
+   */
+  const getLastVisibleLine = (text: string): string => {
     if (!text) return '';
-    const lastIndex = text.lastIndexOf('\n');
-    if (lastIndex === -1) return text;
-    return text.substring(lastIndex + 1);
+    const lines = text.split('\n');
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index].trim();
+      if (line) return line;
+    }
+    return '';
   };
 
-  const displayText = isActive ? getLastLine(thinkingContent) : thinkingContent;
+  const displayText = isActive ? getLastVisibleLine(thinkingContent) : thinkingContent;
 
   if (isActive) {
     return (
@@ -69,8 +80,11 @@ export const ThinkingBar = ({
             <ChevronRight className={cn("w-3 h-3 shrink-0 transition-transform", isExpanded && "rotate-90")} />
           )}
         </button>
-        {!isExpanded && hasContent && displayText.trim() && (
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 truncate pl-4">
+        {!isExpanded && hasContent && (
+          <p
+            data-thinking-preview
+            className="mt-1 text-xs text-slate-500 dark:text-slate-400 truncate pl-4"
+          >
             {displayText}
             <span className="inline-block w-1 h-3 bg-blue-400/50 ml-0.5 animate-pulse align-middle rounded-sm" />
           </p>
