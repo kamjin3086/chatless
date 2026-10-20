@@ -48,27 +48,66 @@ a cost, not a contribution.
 
 ## Replying to a reporter
 
-**A reply is written as the owner's own reply.** The account that posts is the owner's, so the
-text is read as the maintainer speaking to one of their users. That sets the voice:
+The account that posts is the owner's, so a reply reads as the maintainer's own. These are the
+owner's rules; they are not style suggestions and they do not have an "unless the issue is
+interesting" exception.
 
-- **The maintainer, not a supplicant.** No apology theatre ("抱歉给你添了麻烦"), no gratitude
-  padding, no self-deprecation, no "you don't have to do anything" hand-holding. A bug report is
-  normal business; the owner owes the reporter a correct answer, not an apology.
-- **Short and factual.** What is confirmed, the cause in one or two sentences, what to do
-  meanwhile when there is a workaround, what will change. Two to four short paragraphs.
+### Voice
+
+- **The maintainer, not a supplicant.** No apology theatre, no gratitude padding, no
+  self-deprecation, no "you don't have to do anything". A bug report is normal business.
+- **Subject-less and factual.** "确认是产品问题，不是你的配置问题。……" reads like #71 and #74.
+  第一人称「我」尽量不用；「我们」只用来表达团队的能力边界（"我们手上没有同环境"）。
+- **Three short paragraphs at most**: what is confirmed, the workaround if one exists, what
+  happens next. One specific ask, never a list of questions.
 - **The reporter's own language**, opening with the disclosure blockquote.
 
-Anything that reads like an agent's worklog is forbidden, not merely discouraged: code paths,
-file names, capability tables, option lists, a diary of what was tried, or an analysis the reader
-did not ask for. **Asking the reporter to choose a fix direction is forbidden** - that decision
-belongs to the owner.
+### What may be posted without asking the owner
 
-**Ask the owner before posting, unless it is a one-line status.** A reply that explains a cause,
-offers a workaround, makes a promise, or says anything about priority is not the agent's call:
-put the draft in front of the owner (or ask how they want it put) and post after they confirm.
-"Fixed in `<sha>`, thanks for the report" needs no review. The owner's preference about tone is
-the rule, not the agent's taste - #156 is the worked example of getting this wrong twice, first
-with an analysis dump, then with a reply that apologised for the product.
+Only these four classes:
+
+1. A one-line status after the fix is merged: what changed, in which version, what to try.
+2. A duplicate pointer **and close** - only when the symptom and the cause are both the same as
+   the older issue. Similar-but-unconfirmed gets the link and stays open.
+3. A needs-info ask: one specific thing, one time.
+4. A declared "not planned" **whose policy the owner has already stated** (in this file, an ADR,
+   an issue, a reply). Example: #72's "桌面优先，移动端没有排期". A *new* policy position is not
+   an agent's call.
+
+Everything else - a cause explanation, a workaround, "this is expected behaviour / you are using
+it wrong", a promise, anything about priority - is drafted first and posted after the owner
+confirms. Drafts are the final text plus a one-line class label, at most three per turn.
+
+### Cadence
+
+- No acknowledgement-only replies. Nothing to say means no reply, with one exception: an issue
+  open longer than three days with no conclusion yet gets a single "已记录，暂时没有结论" line.
+- At most three replies per issue over its life: the first disposition, the fix, the close. When
+  the fix and the close coincide, they are one reply.
+- Needs-info: ask once (one thing). Fourteen days without an answer gets one more comment, with
+  "若两周内没有补充我先关掉，随时可重开"; fourteen more closes with the reopen condition stated.
+
+### Facts
+
+Every claim in a reply is something that was run or read in this repo at the version being
+discussed, or a commit to point at. Unverified inference is not written as a conclusion; the
+reply says what is unknown instead. An "expected behaviour" reply is a conclusion and follows the
+draft-first rule above.
+
+### Closing
+
+- The agent may close: duplicates (per above), needs-info that ran out (per above), and issues
+  the owner has already decided are not planned.
+- A fix stays open until the reporter confirms it or the owner closes it. One exception: fix on
+  main, verified locally, thirty days without any response from the reporter - then one comment
+  ("已在 `<version>` 修复，先关闭；复现请直接重开") and a close.
+- Never close for staleness in any other case, and never close an issue the owner is discussing.
+
+### Ask first
+
+Explaining a cause, offering a workaround, making a promise, saying anything about priority, or
+taking a new policy position is not the agent's call: the draft goes in front of the owner and is
+posted after they confirm. "Fixed in `<sha>`, thanks for the report" needs no review.
 
 ## Agent-authored PRs
 

@@ -79,12 +79,13 @@ Two things here are **required**, not preference:
   ```
 
   The translation for an English thread is `> AI-generated, human-reviewed.`
-- **A reply is written as the owner's own reply**, in the maintainer's voice: short and factual,
-  no apology or gratitude padding, no hand-holding. Never the internal analysis, never a request
-  for the reporter to decide, never a worklog. **Ask the owner how to put it before posting**
-  unless it is a one-line status - the owner's preference is the rule, not the agent's taste.
-  `docs/agents/maintenance.md` - "Replying to a reporter" - has the list; #156 is the example of
-  getting it wrong.
+- **A reply is written as the owner's own reply**, in the maintainer's voice: subject-less and
+  factual, no apology or gratitude padding, no hand-holding. Only four classes may be posted
+  without asking - a merged-fix status line, a same-symptom-and-cause duplicate close, a
+  needs-info ask, and a "not planned" whose policy you have already stated. Everything else
+  (causes, workarounds, "expected behaviour", promises, priority) is drafted for you first.
+  Unverified inference is never written as a conclusion; a fix stays open until the reporter
+  confirms it. `docs/agents/maintenance.md` - "Replying to a reporter" - carries the full rules.
 
 ## Subsystem notes
 
