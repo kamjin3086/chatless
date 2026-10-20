@@ -95,16 +95,25 @@ and got ignored in practice (a Chinese bug report answered in English), which is
 stated here as a requirement rather than a habit.
 
 **2. Disclose that the text came from an agent and needs human review.** Every issue, pull
-request and comment an agent writes ends with this block, in the thread's language:
+request and comment an agent writes **opens** with this line, in the thread's language:
 
 ```markdown
----
-由 AI 生成，需人工审核。 / AI-generated; requires human review.
+> AI生成，人工审核。
+
+正文从这里开始。
 ```
 
-- It is a footer, not a preamble: the reader should reach the content first.
-- One line, identical every time - it has to be greppable (`grep -c "AI 生成"`), because a
-  disclosure that changes shape cannot be audited.
+```markdown
+> AI-generated, human-reviewed.
+
+The body starts here.
+```
+
+- It is the first line, as a blockquote: the reader sees what they are reading before they read
+  it. (An earlier version put a footer at the bottom; it was moved to the top on the owner's
+  request, which is also where the reader looks first.)
+- One fixed line, identical every time - it has to be greppable (`grep -c "AI生成，人工审核。"`),
+  because a disclosure that changes shape cannot be audited.
 - It applies to agent-authored *text*: issue bodies, comments, PR bodies and review comments.
   Commit messages are Tier 1 and do not carry it (the log would fill with noise).
 - It is not a disclaimer of the work: the evidence in the text is still expected to be real.

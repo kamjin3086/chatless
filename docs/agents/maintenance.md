@@ -42,9 +42,46 @@ a cost, not a contribution.
   could finish it without asking anything.
 - Write it as a ticket, not a diary: no running commentary, no "I will now...".
 - **Language and disclosure**: an issue thread is answered in the thread's own language, and
-  every issue, PR and comment an agent writes ends with
-  `由 AI 生成，需人工审核。 / AI-generated; requires human review.`
-  (`docs/agents/language.md`). Both are required, not preference.
+  every issue, PR and comment an agent writes opens with `> AI生成，人工审核。`
+  (`> AI-generated, human-reviewed.` in an English thread). Both are required, not preference
+  (`docs/agents/language.md`).
+
+## Replying to a reporter
+
+**A reply is written as the owner's own reply.** The account that posts is the owner's, so the
+text is read as the maintainer speaking to one of their users - first person, plain language,
+and nothing the maintainer would not say to a user's face. The owner's name is what is on it.
+Anything that reads like an agent's worklog is forbidden, not merely discouraged: code paths,
+file names, capability tables, option lists, "which direction should we take", a diary of what
+was tried, or an analysis the reader did not ask for. **This rule has no exception and no
+"unless the issue is interesting enough" case.** The first #156 reply broke it - a two-defect
+breakdown, a capability table and four options, ending in a request for the reporter to pick a
+direction - and the owner read it as something that must never be posted again.
+
+A reply to the person who filed an issue is a **courtesy and a status**, not a design
+discussion. It costs them nothing to read and tells them what to expect:
+
+- What is known: confirmed or not, and whether it is their configuration or the product.
+- What they can do meanwhile (a workaround, if one exists), in as many steps as they need.
+- What will happen next: fixing, needs a decision, cannot reproduce - and that progress is
+  posted in this thread.
+- One optional, specific request for information. Not a list of questions.
+
+What it is not:
+
+- **Never a decision request.** The reporter is not the maintainer and cannot choose the fix
+  direction. "Which option do you want: 1 or 3?" is a question for the owner, asked on the
+  maintainer side.
+- **Never the internal analysis.** Code paths, capability tables, file names and rolled-up
+  options belong in an owner-facing issue (English, `ready-for-human`) or an ADR. The reporter
+  gets the outcome, not the archaeology - and one screen, not three.
+- **Never a dump of what was tried.** "I looked at X, then Y, then Z" is a diary; the reader
+  wants the answer.
+
+Precedent worth remembering: #156 was first answered with a two-defect breakdown, a capability
+table and four options, ending with "tell me which direction to take". The reporter is the one
+person who cannot do that. The technical record moved to #160 and the thread was rewritten to
+thank them, name the cause in one paragraph, give the workaround, and promise an update.
 
 ## Agent-authored PRs
 
@@ -57,8 +94,8 @@ Required in the body (the template enforces the shape):
 3. **Merge danger** - `Door:` one-way (hard to undo: data format, permission
    default, public behaviour) or two-way (revert is enough); `Blast Radius:`
    which subsystems can feel this.
-4. **Agent-authored** - tick the checkbox, and close the body with the disclosure line
-   (`由 AI 生成，需人工审核。 / AI-generated; requires human review.`). The owner treats an
+4. **Agent-authored** - tick the checkbox, and open the body with the disclosure line
+   (`> AI-generated, human-reviewed.`). The owner treats an
    unclaimed agent PR as untrusted and re-derives everything; a claimed one gets its evidence
    checked instead of the whole diff re-read. That is the difference between "no burden"
    and "twice the work".

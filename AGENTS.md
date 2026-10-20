@@ -69,13 +69,21 @@ Two things here are **required**, not preference:
 - **An issue thread is answered in the thread's own language.** A Chinese report gets a
   Chinese reply, including the comment that reports the fix or closes the issue; the
   reporter is the reader of that thread.
-- **Every issue, pull request and comment an agent writes ends with the disclosure line**,
-  in the thread's language:
+- **Every issue, pull request and comment an agent writes opens with the disclosure line**,
+  in the thread's language, as a blockquote on its own line:
 
   ```
-  ---
-  由 AI 生成，需人工审核。 / AI-generated; requires human review.
+  > AI生成，人工审核。
+
+  正文从这里开始。
   ```
+
+  The translation for an English thread is `> AI-generated, human-reviewed.`
+- **A reply is written as the owner's own reply.** It posts under the owner's name, so it reads
+  as the maintainer speaking to a user: first person, plain language, thanks, what is known,
+  what to do meanwhile, what happens next. Never the internal analysis, never a request for the
+  reporter to make a decision, never a worklog. `docs/agents/maintenance.md` - "Replying to a
+  reporter" - carries the forbidden list; #156 is the example of how not to do it.
 
 ## Subsystem notes
 
