@@ -118,6 +118,14 @@ draft-first rule above.
   ("已在 `<version>` 修复，先关闭；复现请直接重开") and a close.
 - Never close for staleness in any other case, and never close an issue the owner is discussing.
 
+### Before posting a draft
+
+`pnpm check:reply <draft.md>` (or pipe it on stdin) checks the mechanical half of the rules above:
+the disclosure blockquote first, three paragraphs at most, no apology or gratitude padding, no
+exclamation marks, no fenced blocks or backticked paths/functions, and no sentence that hands the
+reporter a decision. It cannot judge whether the reply is in the right class, whether the thank-you
+was earned, or whether a fact was actually verified - that is the owner's read.
+
 ### Ask first
 
 Explaining a cause, offering a workaround, making a promise, saying anything about priority, or
