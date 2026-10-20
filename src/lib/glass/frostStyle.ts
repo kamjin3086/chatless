@@ -19,6 +19,25 @@
  * the rail is a flat region of that sheet; surfaces spend fill; overlays carry text at ~95%
  * opacity and never blur.
  */
+/**
+ * Where things are in the sheet below (a pointer, not a rule; anchor on the selector, not a line
+ * number, which drifts):
+ *
+ *   chrome clearing      `html.glass-ui .bg-white` / `bg-slate-*` resets - the classes that must not
+ *                        paint over the sheet
+ *   overlays             `.glass-float-dialog` (dialogs), `.glass-float-menu` (menus, popovers,
+ *                        selects), `.glass-float-tip` (tooltips), `[data-sonner-toast]` - the one
+ *                        group that leaves the glass channel and stays ~95% opaque
+ *   panels               `.glass-panel`, `.knowledge-card`, `.chart-card`, `.settings-card`
+ *   controls             `[data-slot="select-trigger"]`, `.prompt-chip`, the composer, inputs,
+ *                        the ghost model-selector trigger (declared last on purpose, see there)
+ *   rail                 `html.glass-ui .glass-nav` (tint lives in globals.css) and its active mark
+ *   shell                `html.glass-ui .glass-shell` - the only live `backdrop-filter` in the app
+ *   content rails        `.chat-rail`, `.settings-rail`, `.provider-rail` (transparent + divider)
+ *   semantics            chips, tags, error/success/warning colours, switch and checkbox shapes
+ *   settings page        `.settings-main` scroll behaviour, the not-executed card's vocabulary
+ *   scrollbars           the last block
+ */
 export const GLASS_FROST_STYLE_ID = 'chatless-glass-frost';
 
 export const GLASS_FROST_CSS = `

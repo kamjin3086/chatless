@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Gate: a pull request title has to be Conventional Commits shaped and ASCII.
  *

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * One read-only answer to "what is the actual state here".
  *

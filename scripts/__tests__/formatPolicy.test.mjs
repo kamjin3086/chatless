@@ -366,6 +366,18 @@ describe('a reflow is not a free change', () => {
     );
   });
 
+  it('says a skip-only exit is not about your change, and says nothing otherwise', async () => {
+    // #158: `--write` exits 1 when it skipped a file HEAD had already left unformatted. The code
+    // is right; the silence was not. A real write failure keeps its own message and no trailer.
+    const { describeSkipOnly } = await import('../format-policy.mjs');
+    expect(describeSkipOnly(1, 0)).toBe(
+      'nothing is wrong with your change - 1 file was already unformatted at HEAD and was skipped',
+    );
+    expect(describeSkipOnly(2, 0)).toContain('2 files were already unformatted');
+    expect(describeSkipOnly(2, 1)).toBeNull();
+    expect(describeSkipOnly(0, 0)).toBeNull();
+  });
+
   it('is reported as something to split, not as clean', async () => {
     const { describeReflow } = await import('../format-policy.mjs');
     const line = describeReflow(['src/a.ts']);

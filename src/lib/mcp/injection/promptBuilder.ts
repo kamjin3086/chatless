@@ -72,6 +72,21 @@ export function buildToolChannelBlock(servers: readonly string[]): string {
  *    回流文本由 ToolChannelParser 变成调用；
  * 3. `disabled`：既不传工具、也不注入协议，并且**不再**告诉模型它能检索（那正是 #160 的死路）。
  */
+/**
+ * Where the prompt is assembled, in the order the blocks are pushed (anchor on the comment ids or
+ * the block `order`, not on line numbers):
+ *
+ *   time / runtime       `runtime-environment` then the per-turn time block - the only block that
+ *                        changes every turn
+ *   session prompt       a prompt the user applied to this conversation (`system_prompt_applied`)
+ *   agent contract       `buildAgentContractBlock()` - the stable, small contract
+ *   native tool defs     `buildNativeToolDefinitions` - only on the native track
+ *   attachments          working directory, then the retrieval rules (only when tools are callable)
+ *   capabilities         the enabled-server line
+ *   tool channel         the prompt-track protocol block - only on that track, once
+ *   web search / skills  policy block, then the skills index
+ *   plan-only            a per-turn block, added last
+ */
 export async function buildInitialPrompt(
   context: InjectionContext,
   signals: InjectionSignals

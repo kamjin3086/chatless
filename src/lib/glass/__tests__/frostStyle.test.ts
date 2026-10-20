@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { GLASS_FROST_CSS } from '../frostStyle';
 
@@ -181,3 +183,18 @@ describe('glass frost runtime css', () => {
     );
   });
 });
+
+  test('the sheet is one template literal, so no backtick or placeholder may hide in it', () => {
+    // A CSS comment quoting a CSS property - `scrollbar-width` between backticks - closed the
+    // template early and the build failed with "Parsing ecmascript source code failed" pointing at
+    // a comment. The header warns; this is the check, because a warning is a thing to remember.
+    const raw = readFileSync(path.join(__dirname, '../frostStyle.ts'), 'utf8');
+    // From the template's opening backtick to its closing one - the header's own prose uses
+    // backticks for token names, so counting from the first backtick in the file would not do.
+    const marker = 'export const GLASS_FROST_CSS = `';
+    const open = raw.indexOf(marker);
+    expect(open, marker).toBeGreaterThanOrEqual(0);
+    const body = raw.slice(open + marker.length, raw.lastIndexOf('`'));
+    expect(body).not.toContain('`');
+    expect(body).not.toContain('${');
+  });

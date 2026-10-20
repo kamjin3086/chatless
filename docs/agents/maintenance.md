@@ -119,6 +119,14 @@ draft-first rule above.
   ("已在 `<version>` 修复，先关闭；复现请直接重开") and a close.
 - Never close for staleness in any other case, and never close an issue the owner is discussing.
 
+### Before posting a draft
+
+`pnpm check:reply <draft.md>` (or pipe it on stdin) checks the mechanical half of the rules above:
+the disclosure blockquote first, three paragraphs at most, no apology or gratitude padding, no
+exclamation marks, no fenced blocks or backticked paths/functions, and no sentence that hands the
+reporter a decision. It cannot judge whether the reply is in the right class, whether the thank-you
+was earned, or whether a fact was actually verified - that is the owner's read.
+
 ### Ask first
 
 Explaining a cause, offering a workaround, making a promise, saying anything about priority, or
@@ -160,7 +168,8 @@ one to run.
 |--------|-----|
 | Any TypeScript | `pnpm test` and `pnpm typecheck` |
 | TypeScript that only tests use | `pnpm typecheck:tests` - the root `typecheck` excludes every test file |
-| Before pushing any code | `pnpm verify` (lint:ci + typecheck + typecheck:tests + build) |
+| Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + test) - seconds to a couple of minutes |
+| Before pushing a build-affecting change, or when CI is the only gate | `pnpm verify` (= `verify:fast` + `next build`); the build takes ~18 minutes here and refuses to start while a dev server holds `dist` |
 | PR title | `pnpm check:pr-title "<title>"` |
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
@@ -298,12 +307,12 @@ still works (`docs/tauri-window-pitfalls.md`).
     leave the dev server serving the intermediate value (observed: the veil stayed at 0.75 while
     `surface-fill` from the same edit applied). Reload, and if the value still disagrees with the
     file, restart `pnpm dev`.
-  - **Screenshotting the real window (Windows).** The webview is not capturable through
-    `PrintWindow` (accelerated layers come back black); capture the screen rect instead. Declare
-    DPI awareness first (`SetProcessDPIAware`) or every coordinate is scaled by the display
-    factor - this desktop is 1536x864 at 125 %, and an unaware `GetWindowRect` reports 0.8x the
-    real size and silently clips the right edge. Resize with `MoveWindow` in *physical* pixels.
-  - **A window preset can be larger than the desktop.** 1024x768 logical is 1280x960 physical at
+  - **Screenshotting the real window (Windows).** `pnpm shot` / `pnpm click` (`scripts/shot/`) do
+  the two things that are easy to get wrong: they capture the screen rect rather than calling
+  `PrintWindow` (which returns a black content area for a WebView2 window), and they declare DPI
+  awareness first (without it, at 125 % every coordinate is 0.8x and the right edge is silently
+  lost). Read the `FG=` it prints: an unfocused capture shows whatever was on top.
+- **A window preset can be larger than the desktop.** 1024x768 logical is 1280x960 physical at
     125 %, while the logical work area here is 1228x691: the app's right and bottom edges sit
     off-screen, which looks exactly like a layout bug in a screenshot. Resize to the work area
     before judging any layout, and do not report the clipping as a defect.
@@ -313,7 +322,11 @@ still works (`docs/tauri-window-pitfalls.md`).
     the export wrote half a directory over its state. Stop the dev server first; deleting `dist`
     recovers dev. Separately, `next build` on this machine takes ~17 minutes of real compile time
     (recorded in `scripts/perf/build-frontend.log`), so budget for it rather than calling it hung.
-  - **Frontend-only iteration does not need `cargo`.** `src-tauri/target/debug/chatless.exe`
+  - **The first page load is the slowest thing in a dev session.** `pnpm dev:warm` is `pnpm dev` plus
+  a warm-up: it requests `/` then `/chat` as soon as the server answers, so turbopack compiles while
+  the cargo build runs instead of while the window sits blank (cold `/` ~11 s, `/chat` longer).
+  Opt-in; plain `pnpm dev` is unchanged.
+- **Frontend-only iteration does not need `cargo`.** `src-tauri/target/debug/chatless.exe`
     loads `http://localhost:3000` directly; run it next to `pnpm dev` instead of `pnpm tauri dev`
     when only CSS or TSX changed (a Rust rebuild is minutes, a restart is seconds).
   - `pnpm test` reports six `scripts/__tests__/*.mjs` files as load failures on Windows
