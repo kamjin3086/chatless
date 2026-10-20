@@ -60,7 +60,7 @@ import { getToolDoc } from './toolDocLoader';
  *   native tool defs     `buildNativeToolDefinitions` - only on the native track
  *   attachments          working directory, then the retrieval rules (only when tools are callable)
  *   capabilities         the enabled-server line
- *   tool channel         `buildToolChannelBlock` - only on the prompt track, once
+ *   tool channel         the prompt-track protocol block - only on that track, once
  *   web search / skills  policy block, then the skills index
  *   plan-only            a per-turn block, added last
  */
