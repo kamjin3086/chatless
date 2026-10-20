@@ -50,11 +50,18 @@ fi
 # check - so read the names here and keep the exit code the script actually returned.
 staged_files=()
 while IFS= read -r -d '' f; do staged_files+=("$f"); done < <(git diff --cached --name-only --diff-filter=ACM -z)
-if [ ${#staged_files[@]} -gt 0 ] && ! node scripts/comment-symbols.mjs "${staged_files[@]}"; then
-  case $? in
-    1) report "a comment names a symbol that no longer exists - fix the comment or restore the symbol"; fail=1 ;;
-    *) report "comment symbol check could not run; nothing was concluded" ;;
-  esac
+if [ ${#staged_files[@]} -gt 0 ]; then
+  # Read the status here, not after a `!` negation: `! cmd` makes $? the negation's own status
+  # (always 0), so the `case` below used to fall through to "could not run" for a real finding
+  # and let the commit through. Observed 2026-10-20 on a stale `buildToolChannelBlock` reference.
+  node scripts/comment-symbols.mjs "${staged_files[@]}"
+  symbols_status=$?
+  if [ "$symbols_status" -ne 0 ]; then
+    case $symbols_status in
+      1) report "a comment names a symbol that no longer exists - fix the comment or restore the symbol"; fail=1 ;;
+      *) report "comment symbol check could not run; nothing was concluded" ;;
+    esac
+  fi
 fi
 
 # 2. formatting, judged per file: a file already unformatted at HEAD is not this change's
