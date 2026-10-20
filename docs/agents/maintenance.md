@@ -298,12 +298,12 @@ still works (`docs/tauri-window-pitfalls.md`).
     leave the dev server serving the intermediate value (observed: the veil stayed at 0.75 while
     `surface-fill` from the same edit applied). Reload, and if the value still disagrees with the
     file, restart `pnpm dev`.
-  - **Screenshotting the real window (Windows).** The webview is not capturable through
-    `PrintWindow` (accelerated layers come back black); capture the screen rect instead. Declare
-    DPI awareness first (`SetProcessDPIAware`) or every coordinate is scaled by the display
-    factor - this desktop is 1536x864 at 125 %, and an unaware `GetWindowRect` reports 0.8x the
-    real size and silently clips the right edge. Resize with `MoveWindow` in *physical* pixels.
-  - **A window preset can be larger than the desktop.** 1024x768 logical is 1280x960 physical at
+  - **Screenshotting the real window (Windows).** `pnpm shot` / `pnpm click` (`scripts/shot/`) do
+  the two things that are easy to get wrong: they capture the screen rect rather than calling
+  `PrintWindow` (which returns a black content area for a WebView2 window), and they declare DPI
+  awareness first (without it, at 125 % every coordinate is 0.8x and the right edge is silently
+  lost). Read the `FG=` it prints: an unfocused capture shows whatever was on top.
+- **A window preset can be larger than the desktop.** 1024x768 logical is 1280x960 physical at
     125 %, while the logical work area here is 1228x691: the app's right and bottom edges sit
     off-screen, which looks exactly like a layout bug in a screenshot. Resize to the work area
     before judging any layout, and do not report the clipping as a defect.
