@@ -4,7 +4,7 @@ import { AgentLoopRunner, EMPTY_MODEL_OUTPUT_NOTICE } from '../AgentLoopRunner';
 
 const mocks = vi.hoisted(() => ({
   stream: vi.fn(), execute: vi.fn(), append: vi.fn(), status: vi.fn(),
-  loadEvents: vi.fn(),
+  loadEvents: vi.fn(), capability: vi.fn(),
   store: { conversations: [], setAgentRunState: vi.fn(), updateMessage: vi.fn(), dispatchMessageAction: vi.fn() },
 }));
 vi.mock('@/lib/llm', () => ({ streamChat: mocks.stream, cancelStream: vi.fn(), chat: vi.fn() }));
@@ -28,7 +28,7 @@ vi.mock('@/lib/mcp/promptInjector', () => ({ buildMcpSystemInjections: async () 
 vi.mock('../buildAgentPromptEnvelope', () => ({
   buildAgentPromptEnvelope: () => ({ prefixMessages: [], tools: [{ name: 'fs__write' }] }),
 }));
-vi.mock('../resolveAgentToolCapability', () => ({ resolveAgentToolCapability: () => ({ useNativeTools: true, renderMode: 'tool_role' }) }));
+vi.mock('../resolveAgentToolCapability', () => ({ resolveAgentToolCapability: mocks.capability }));
 vi.mock('../AgentRunEventStore', () => ({ AgentRunEventStore: {
   ensureRun: vi.fn(), loadEvents: mocks.loadEvents, appendEvent: mocks.append, setRunStatus: mocks.status,
 } }));
@@ -40,7 +40,18 @@ vi.mock('@/lib/chat/stream/StreamOrchestrator', () => ({ StreamOrchestrator: cla
     return {
       onEvent: async (event: any) => {
         await Promise.resolve(); // Exercise providers that do not await callbacks.
-        if (event.type === 'tool_call') await this.config.onToolCall(event.request);
+        if (event.type === 'tool_call') {
+          // A native event carries `request`; the prompt track's synthesised
+          // event carries the parsed call and the handler mints the ids.
+          await this.config.onToolCall(event.request ?? {
+            server: event.parsed?.serverName,
+            tool: event.parsed?.toolName,
+            args: event.parsed?.arguments ? JSON.parse(event.parsed.arguments) : {},
+            callId: event.toolCall,
+            cardId: 'card',
+            lockKey: event.toolCall,
+          });
+        }
         if (event.type === 'content_token') this.content += event.content;
       },
       onComplete: vi.fn(), onError: this.config.onError,
@@ -63,6 +74,7 @@ beforeEach(() => {
   // Reset queued one-shot implementations as well as call history. A test
   // may fail at a durable boundary before consuming its prepared transport.
   vi.resetAllMocks();
+  mocks.capability.mockReturnValue({ track: 'native', useNativeTools: true, renderMode: 'tool_role' });
   mocks.append.mockResolvedValue(undefined);
   mocks.status.mockResolvedValue(undefined);
   mocks.loadEvents.mockResolvedValue([]);
@@ -280,5 +292,38 @@ describe('AgentLoopRunner execution boundaries', () => {
     expect(mocks.store.updateMessage).toHaveBeenCalledWith('run', { status: 'sent' });
     const recorded = mocks.append.mock.calls.map(([p]) => p.event);
     expect(recorded.some((event) => String(event?.content || '').startsWith('agent_run_empty_output'))).toBe(false);
+  });
+
+  // #164: on a prompt-track run the model writes its call as text, because the
+  // request carries no `tools`. The text must become a real tool call, and the
+  // markup must never reach the answer that is shown and carried into round two.
+  const TEXT_CALL = '<use_mcp_tool><server_name>mcp</server_name><tool_name>search</tool_name><arguments>{"q":"x"}</arguments></use_mcp_tool>';
+
+  it('runs a text call on the prompt track and keeps its markup out of the answer', async () => {
+    mocks.capability.mockReturnValueOnce({ track: 'prompt', useNativeTools: false, renderMode: 'text_wrapper' });
+    mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => {
+      cb.onEvent({ type: 'content_token', content: '我先查一下。\n' });
+      cb.onEvent({ type: 'content_token', content: TEXT_CALL });
+      finish(cb);
+    });
+
+    await AgentLoopRunner.run(params);
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(mocks.execute.mock.calls[0][0]).toMatchObject({ server: 'mcp', tool: 'search', args: { q: 'x' } });
+    const secondRound = mocks.stream.mock.calls[1][2] as Message[];
+    expect(JSON.stringify(secondRound)).not.toContain('use_mcp_tool');
+    expect(JSON.stringify(secondRound)).toContain('我先查一下。');
+  });
+
+  it('does not run a text call on the native track', async () => {
+    mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => {
+      cb.onEvent({ type: 'content_token', content: TEXT_CALL });
+      finish(cb);
+    });
+
+    await AgentLoopRunner.run(params);
+
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 });
