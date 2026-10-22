@@ -166,13 +166,16 @@ export class OpenAICompatibleProvider extends BaseProvider {
     if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
     if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;
     if (o.topP !== undefined && mapped.top_p === undefined) mapped.top_p = o.topP;
-    if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;
-    if (o.minP !== undefined && mapped.min_p === undefined) mapped.min_p = o.minP;
     if (o.frequencyPenalty !== undefined && mapped.frequency_penalty === undefined)
       mapped.frequency_penalty = o.frequencyPenalty;
     if (o.presencePenalty !== undefined && mapped.presence_penalty === undefined)
       mapped.presence_penalty = o.presencePenalty;
     if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
+    // OpenAI-compatible means the OpenAI chat fields, not a superset. top_k/min_p and
+    // the app's thinking/format names are not in that protocol. Native fields under other
+    // names (reasoning_effort, response_format, ...) still pass as written.
+    delete mapped.thinking;
+    delete mapped.format;
     // No default `stop` list. It used to carry the chat-template boundary tokens, on top
     // of the client-side cut that fixed the invented-turn bug; a sampling parameter the
     // user never set is not this app's to invent, and it shows up in every request they

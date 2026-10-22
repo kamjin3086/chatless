@@ -1,6 +1,7 @@
 import { migrateLegacyThinkingBoolean } from '@/lib/chat/thinkingScope';
 import {
   DEFAULT_MODEL_PARAMETERS,
+  MODEL_PARAMETER_FLAGS,
   MODEL_PARAMETER_LIMITS,
 } from '@/types/model-params';
 import type {
@@ -61,6 +62,45 @@ const PARAM_FIELDS: Record<keyof ModelParameters, FieldShape> = {
   enableStreaming: { kind: 'boolean' },
   enableFormat: { kind: 'boolean' },
 };
+
+/**
+ * A bag stored before the switches existed has a value but no `enableX`. The old send path
+ * read that value as a choice when it differed from the default; the strict model rule
+ * requires the switch, so infer it here rather than silently dropping a setting the user
+ * once made. Equal-to-default values stay switch-less: the old path did not send those and
+ * the new path must not start.
+ *
+ * `thinking`/`thinkingLevel` are deliberately skipped: `migrateLegacyThinkingBoolean` owns
+ * their translation, and a second opinion here would compete with it.
+ */
+function normalizeLegacyModelFlags(params: ModelParameters): ModelParameters {
+  const next = { ...params } as unknown as Record<string, unknown>;
+  const source = params as unknown as Record<string, unknown>;
+  for (const { flag, value: key } of MODEL_PARAMETER_FLAGS) {
+    if (flag in source) continue;
+    if (flag === 'enableThinking' || flag === 'enableThinkingLevel') continue;
+    const value = source[key];
+    if (value === undefined) continue;
+
+    if (key === 'maxTokens') {
+      if (value !== DEFAULT_MODEL_PARAMETERS.maxTokens) next[flag] = true;
+      continue;
+    }
+    if (key === 'format') {
+      // format was previewed but never assembled before this change; a stored format is
+      // a value the user set, and the new assembly is what lets it travel. Only a provider
+      // whose row declares format uses it; the others drop it at the wire boundary.
+      if (typeof value === 'string' && value !== 'none') next[flag] = true;
+      continue;
+    }
+    if (key === 'stopSequences') {
+      if (Array.isArray(value) && value.length > 0) next[flag] = true;
+      continue;
+    }
+    if (value !== DEFAULT_MODEL_PARAMETERS[key]) next[flag] = true;
+  }
+  return next as unknown as ModelParameters;
+}
 
 function cleanNumber(raw: number, key: string): number {
   const limits = (
@@ -164,11 +204,12 @@ export class ModelParametersService {
     // stays available for the one thing that must know a migration happened: the control's
     // explanation. Defaults are not migrated - they are this code's own baseline, not a
     // user's old choice.
-    return migrateLegacyThinkingBoolean({
+    const migrated = migrateLegacyThinkingBoolean({
       provider: providerName,
       modelId,
       params: saved,
     }).params;
+    return normalizeLegacyModelFlags(migrated);
   }
 
   /**
@@ -344,16 +385,27 @@ export class ModelParametersService {
   }
 
   /**
-   * 将模型参数转换为聊天选项格式
+   * 将模型参数转换为聊天选项格式。
+   *
+   * `scope` says what the bag is, because the same `undefined` means two different
+   * things. A model bag is complete: every value is present, so only an explicit
+   * `enableX: true` is a choice - a value alone is the stored default and must not be
+   * sent. A session/message bag is a patch: a present value is an override the user
+   * wrote, and `enableX: false` is the one thing that removes the inherited value.
+   * Either way a default with no explicit switch stays off the wire.
    */
-  static convertToChatOptions(input: ModelParameterPatch): Record<string, any> {
+  static convertToChatOptions(
+    input: ModelParameterPatch,
+    scope: 'model' | 'session' = 'model',
+  ): Record<string, any> {
     // A conversation or a message hands this a patch - only what the user touched - so it
     // is cleaned here rather than trusted. Absence is preserved on purpose; a wrong type is
     // dropped as if the value had never been chosen.
     const parameters: ModelParameters = sanitizeParameterPatch(
       input,
     ) as ModelParameters;
-    // 仅当用户"启用"某参数或者值与默认不同，才传给 Provider
+    // App-side payloads (advancedOptions) are explicit user input and travel as written;
+    // every named parameter below has to earn its way onto the wire.
     const opts: Record<string, any> = { ...(parameters.advancedOptions || {}) };
     const def = DEFAULT_MODEL_PARAMETERS;
 
@@ -362,10 +414,14 @@ export class ModelParametersService {
       value: any,
       defValue: any,
     ) => {
-      // 若显式关闭则不传；若与默认相同且未显式开启也不传
+      if (value === undefined) return false;
+      // An explicit off is an off everywhere: never read it as "inherit" or "default".
       if (enabledFlag === false) return false;
       if (enabledFlag === true) return true;
-      return value !== defValue;
+      // No switch at all. In a complete model bag that is "not chosen" - the value is
+      // just the stored default. In a patch, a value that differs from the default is
+      // the older way of saying "send this", so keep that meaning for sessions only.
+      return scope === 'session' && value !== defValue;
     };
 
     if (
@@ -453,6 +509,14 @@ export class ModelParametersService {
       shouldSet(parameters.enableStreaming, parameters.streaming, def.streaming)
     ) {
       opts.streaming = parameters.streaming;
+    }
+    // Format is a generic app name; each provider that understands it puts it on the
+    // wire in its own shape. It used to be previewed but never assembled.
+    if (
+      shouldSet(parameters.enableFormat, parameters.format, def.format) &&
+      parameters.format !== 'none'
+    ) {
+      opts.format = parameters.format;
     }
 
     return opts;

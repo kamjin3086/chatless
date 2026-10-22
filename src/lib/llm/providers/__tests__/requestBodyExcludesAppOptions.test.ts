@@ -21,6 +21,8 @@ import { OllamaProvider } from '../OllamaProvider';
 import { OpenAICompatibleProvider } from '../OpenAICompatibleProvider';
 import { OpenAIProvider } from '../OpenAIProvider';
 import { OpenAIResponsesProvider } from '../OpenAIResponsesProvider';
+import { ModelParametersService } from '@/lib/model-parameters';
+import { DEFAULT_MODEL_PARAMETERS } from '@/types/model-params';
 
 const mocks = vi.hoisted(() => ({
   tauriFetch: vi.fn(),
@@ -242,4 +244,170 @@ describe('a tool definition still arrives in the provider’s own shape', () => 
     expect(body.tools?.[0]?.function?.name).toBe('read_file');
     expect(body.tool_choice).toBe('auto');
   });
+});
+
+/**
+ * The other half of #151: a field this provider's protocol does not have must not be
+ * renamed into it. `top_k`/`min_p` are Ollama/Google words, not OpenAI ones, and the
+ * generic `thinking` boolean / `format` string are app-side names. A clean OpenAI bag
+ * carries none of them, even when a stale bag or an advanced-JSON row still holds them.
+ */
+describe('parameters a provider does not have are not invented', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.tauriFetch.mockResolvedValue(rejected());
+    mocks.browserFetch.mockResolvedValue(rejected());
+    vi.stubGlobal('fetch', mocks.browserFetch);
+  });
+
+  const invented = {
+    ...appOptions,
+    topK: 40,
+    minP: 0.05,
+    thinking: true,
+    format: 'json',
+  };
+
+  it.each(['OpenAI-compatible', 'OpenAI', 'DeepSeek', 'OpenAI Responses'])(
+    '%s drops top_k/min_p/thinking/format',
+    async (name) => {
+      const testCase = cases.find((c) => c.name === name)!;
+      const body = await bodyFor(testCase.make, invented);
+      const wire = JSON.stringify(body);
+      for (const key of ['top_k', 'min_p', 'thinking', 'format']) {
+        expect(wire, `${name} sent ${key}`).not.toContain(`"${key}"`);
+      }
+    },
+  );
+
+  it('Ollama maps the fields it does have and keeps them out of the wrong shape', async () => {
+    const body = await bodyFor(
+      () => new OllamaProvider('http://localhost:11434'),
+      invented,
+    );
+    expect(body.options.top_k).toBe(40);
+    expect(body.options.min_p).toBe(0.05);
+    expect(body.options).not.toHaveProperty('thinking');
+    expect(body.options).not.toHaveProperty('format');
+    expect(body.think).toBe(true);
+    expect(body.format).toBe('json');
+  });
+
+  it('OpenAI Responses keeps its own token field and drops chat-only fields', async () => {
+    const body = await bodyFor(
+      () => new OpenAIResponsesProvider('https://example.test/v1'),
+      {
+        ...appOptions,
+        maxOutputTokens: 300,
+        maxTokens: 999,
+        stop: ['END'],
+        frequencyPenalty: 0.1,
+        presencePenalty: 0.2,
+        topK: 40,
+        minP: 0.05,
+        thinking: true,
+        format: 'json',
+      },
+    );
+    expect(body.max_output_tokens).toBe(300);
+    for (const key of [
+      'max_tokens',
+      'stop',
+      'frequency_penalty',
+      'presence_penalty',
+      'top_k',
+      'min_p',
+      'thinking',
+      'format',
+    ]) {
+      expect(body, `Responses sent ${key}`).not.toHaveProperty(key);
+    }
+  });
+
+  it('the generic format never reaches the frozen Anthropic adapter', async () => {
+    const body = await bodyFor(
+      () => new AnthropicProvider('https://example.test/v1'),
+      { ...appOptions, format: 'json' },
+    );
+    expect(body).not.toHaveProperty('format');
+  });
+
+  it.each(['OpenAI-compatible', 'OpenAI', 'DeepSeek'])(
+    '%s carries the supported stop sequences and penalties',
+    async (name) => {
+      const testCase = cases.find((c) => c.name === name)!;
+      const body = await bodyFor(testCase.make, {
+        ...appOptions,
+        frequencyPenalty: 0.1,
+        presencePenalty: 0.2,
+        stop: ['END'],
+      });
+      expect(body.frequency_penalty).toBe(0.1);
+      expect(body.presence_penalty).toBe(0.2);
+      expect(body.stop).toEqual(['END']);
+    },
+  );
+
+  it('Ollama carries stop sequences under its options object', async () => {
+    const body = await bodyFor(
+      () => new OllamaProvider('http://localhost:11434'),
+      { ...appOptions, stop: ['END'] },
+    );
+    expect(body.options.stop).toEqual(['END']);
+  });
+
+  it('maps Ollama penalties that used to be skipped without a mapping', async () => {
+    const body = await bodyFor(
+      () => new OllamaProvider('http://localhost:11434'),
+      { ...appOptions, frequencyPenalty: 0.1, presencePenalty: 0.2 },
+    );
+    expect(body.options.frequency_penalty).toBe(0.1);
+    expect(body.options.presence_penalty).toBe(0.2);
+  });
+});
+
+/**
+ * A default bag is the strongest form of "nothing was chosen": the body must carry no
+ * sampling parameter at all. Anthropic is the documented exception - its protocol
+ * requires max_tokens, so the adapter supplies one.
+ */
+describe('a default bag sends no sampling parameter', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.tauriFetch.mockResolvedValue(rejected());
+    mocks.browserFetch.mockResolvedValue(rejected());
+    vi.stubGlobal('fetch', mocks.browserFetch);
+  });
+
+  const samplingKeys = [
+    'temperature',
+    'max_tokens',
+    'max_output_tokens',
+    'top_p',
+    'top_k',
+    'min_p',
+    'frequency_penalty',
+    'presence_penalty',
+    'stop',
+    'stop_sequences',
+    'thinking',
+    'format',
+  ];
+
+  it.each(cases.filter((c) => c.name !== 'Anthropic'))(
+    '$name sends none of them',
+    async ({ make, name }) => {
+      const options = ModelParametersService.convertToChatOptions(
+        DEFAULT_MODEL_PARAMETERS,
+      );
+      const body = await bodyFor(make, options);
+      const found = keysIn(body)
+        .map(({ key }) => key)
+        .filter((key) => samplingKeys.includes(key));
+      expect(found, `${name}: ${JSON.stringify(body)}`).toEqual([]);
+      if (name === 'Ollama') {
+        expect(body.options).toEqual({});
+      }
+    },
+  );
 });

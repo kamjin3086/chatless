@@ -138,8 +138,9 @@ export class OllamaProvider extends BaseProvider {
       // those describe the request to this app and must not land in the options object.
       if (isAppOnlyOption(key)) continue;
       // 跳过已处理的标准参数和内部字段
-      if (!['options', 'temperature', 'topP', 'topK', 'minP', 'stop', 'maxTokens', 'maxOutputTokens', 
-           'numPredict', 'numCtx', 'repeatLastN', 'repeatPenalty', 'seed', 'frequencyPenalty', 'presencePenalty'].includes(key)) {
+      if (!['options', 'temperature', 'topP', 'topK', 'minP', 'stop', 'maxTokens', 'maxOutputTokens',
+           'numPredict', 'numCtx', 'repeatLastN', 'repeatPenalty', 'seed', 'frequencyPenalty',
+           'presencePenalty', 'thinking', 'format'].includes(key)) {
         ollamaOptions[key] = value;
       }
     }
@@ -156,6 +157,8 @@ export class OllamaProvider extends BaseProvider {
     if (typeof (opts as any).topP === 'number') ollamaOptions.top_p = (opts as any).topP;
     if (typeof (opts as any).topK === 'number') ollamaOptions.top_k = (opts as any).topK;
     if (typeof (opts as any).minP === 'number') ollamaOptions.min_p = (opts as any).minP;
+    if (typeof (opts as any).frequencyPenalty === 'number') ollamaOptions.frequency_penalty = (opts as any).frequencyPenalty;
+    if (typeof (opts as any).presencePenalty === 'number') ollamaOptions.presence_penalty = (opts as any).presencePenalty;
     if (typeof (opts as any).stop !== 'undefined') ollamaOptions.stop = (opts as any).stop;
     
     // Ollama 专有参数
@@ -187,6 +190,10 @@ export class OllamaProvider extends BaseProvider {
     // 只有在明确提供了think参数时才添加到body（避免不支持的模型报错）
     if (hasThinkingParam && typeof thinkParam === 'boolean') {
       body.think = thinkParam;
+    }
+    // Ollama's output format is a top-level body field, not an entry in `options`.
+    if (typeof (opts as any).format === 'string' && (opts as any).format !== 'none') {
+      body.format = (opts as any).format;
     }
 
     try {

@@ -1,16 +1,14 @@
 /**
- * Provider字段支持配置与适配器
- *
- * One table answers both questions the parameter dialogs and the request path ask: which
- * fields a provider accepts, and what each one is called on the wire.
+ * Provider field support: one table for the parameter dialogs and, after #177, the
+ * request path.
  *
  * A provider row is written one field at a time - `minP: 'min_p'` - and nothing else:
  * presence is the "supported" answer, the value is the wire spelling. `support` (which
- * dialog controls exist) and `fieldMapping` (generic name -> different wire name) are
- * derived from those rows, so adding a field is one row and the two answers cannot
- * disagree. `null` marks a field the provider accepts but does not carry under a single
- * key (the thinking carrier; Gemini streams by endpoint), which is the provider file's
- * shape to keep.
+ * dialog controls exist) and `fieldMapping` (generic/alias name -> wire name, identity
+ * entries included) are derived from those rows, so adding a field is one row and the two
+ * answers cannot disagree. `null` marks a field the provider accepts but does not carry
+ * under a single key (the thinking carrier; Gemini streams by endpoint), which is the
+ * provider file's shape to keep.
  *
  * Looking a provider up goes through `resolveProviderConfig`, which normalizes the label
  * the app shows ('Google AI') to the row key ('google-ai') and reports whether a row
@@ -18,9 +16,10 @@
  * read `source` / `row` instead of inferring it from an object shape.
  *
  * What this table governs today: the two parameter dialogs and the drift test. The
- * request path still re-derives the same names per provider; #142's second child (#177)
- * is what makes the request path read this table. Until then, reading this as the map of
- * outgoing requests is a wrong map. Do not add a third local answer here.
+ * request path still re-derives the same names per provider (`grep -rn PROVIDER_CONFIGS
+ * src/lib/llm/providers` finds nothing today); #177 is what makes the request path read
+ * this table. Until then, reading this as the map of outgoing requests is a wrong map.
+ * Keep one answer in this file.
  */
 
 /**
@@ -69,7 +68,7 @@ export type ProviderFieldRows = Partial<
 >;
 
 /**
- * Provider完整配置（支持+映射+转换）
+ * Provider完整配置（支持 + 映射）
  */
 export interface ProviderConfig {
   /** The rows this configuration was defined from. */
@@ -78,14 +77,8 @@ export interface ProviderConfig {
   /** 支持的字段 - derived from `fields`. */
   support: ProviderFieldSupport;
 
-  /** 字段名称映射：通用名 -> Provider特定名 - derived from `fields`. */
+  /** Generic/alias name -> wire name - derived from `fields`, identities included. */
   fieldMapping: Record<string, string>;
-
-  /** 特殊字段转换规则 */
-  transformers?: Record<
-    string,
-    (value: any, allOpts: Record<string, any>) => any
-  >;
 }
 
 /**
@@ -119,10 +112,7 @@ const FIELD_ALIASES: Partial<Record<ProviderFieldName, readonly string[]>> = {
   stop: ['stopSequences'],
 };
 
-function defineProvider(
-  fields: ProviderFieldRows,
-  transformers?: ProviderConfig['transformers'],
-): ProviderConfig {
+function defineProvider(fields: ProviderFieldRows): ProviderConfig {
   const support: ProviderFieldSupport = {};
   const fieldMapping: Record<string, string> = {};
 
@@ -133,18 +123,20 @@ function defineProvider(
     support[SUPPORT_KEY_BY_FIELD[field]] = true;
     if (wire === null) continue;
 
-    // Identity mappings are not renames: the request path already uses that name.
-    if (wire !== field) fieldMapping[field] = wire;
+    // Every name a caller may pass, including the identity spelling. Keeping identity
+    // entries means the wire-options drift check can see an app-side name like `format`
+    // without a provider having to invent a different spelling for it.
+    fieldMapping[field] = wire;
     for (const alias of FIELD_ALIASES[field] ?? []) {
-      if (wire !== alias) fieldMapping[alias] = wire;
+      fieldMapping[alias] = wire;
     }
   }
 
-  return { fields, support, fieldMapping, transformers };
+  return { fields, support, fieldMapping };
 }
 
 /**
- * 各Provider的完整配置（支持字段 + 字段映射 + 转换规则）
+ * 各Provider的完整配置（支持字段 + 字段映射）
  */
 export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
   // Ollama - 支持最全面，使用snake_case
@@ -201,6 +193,15 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     streaming: 'stream',
   }),
 
+  // OpenAI Responses - /responses endpoint: its own token field, and it has no
+  // chat-style penalties or stop sequences.
+  'openai-responses': defineProvider({
+    temperature: 'temperature',
+    maxTokens: 'max_output_tokens',
+    topP: 'top_p',
+    streaming: 'stream',
+  }),
+
   // DeepSeek - 类OpenAI，使用snake_case
   deepseek: defineProvider({
     temperature: 'temperature',
@@ -247,7 +248,7 @@ export interface ProviderResolution {
 }
 
 /**
- * 获取Provider完整配置，并说明是哪一行（或默认行）回答的。
+ * The provider's configuration, plus which row (or the default) answered.
  *
  * A label/row mismatch is not an error - the UI passes labels while rows are keyed with
  * the API's spelling - but it must be observable: `source: 'default'` says no row claimed
@@ -280,155 +281,3 @@ export function resolveProviderConfig(
     config: DEFAULT_PROVIDER_CONFIG,
   };
 }
-
-/**
- * 获取Provider完整配置
- */
-export function getProviderConfig(providerName: string): ProviderConfig {
-  return resolveProviderConfig(providerName).config;
-}
-
-/**
- * 获取Provider支持的字段配置（兼容旧接口）
- * @deprecated Use `resolveProviderConfig(name).config.support` so the row that answered
- * is visible; this wrapper hides the fallback.
- */
-export function getProviderFieldSupport(
-  providerName: string,
-): ProviderFieldSupport {
-  return getProviderConfig(providerName).support;
-}
-
-/**
- * Provider字段适配器 - 核心适配函数
- *
- * 功能：
- * 1. 过滤不支持的字段
- * 2. 映射字段名称（通用名 -> Provider特定名）
- * 3. 应用特殊转换规则
- *
- * @deprecated The dialogs and (after #177) the request path read the table directly;
- * grep finds no caller outside this file.
- *
- * @param providerName Provider名称
- * @param options 通用选项对象
- * @returns 适配后的Provider特定选项对象
- */
-export function adaptFieldsForProvider(
-  providerName: string,
-  options: Record<string, any>,
-): Record<string, any> {
-  const config = getProviderConfig(providerName);
-  const result: Record<string, any> = {};
-
-  // 字段映射（通用字段名 -> 支持配置key）
-  const supportKeyMapping: Record<string, keyof ProviderFieldSupport> = {
-    temperature: 'temperature',
-    maxTokens: 'maxTokens',
-    maxOutputTokens: 'maxTokens',
-    topP: 'topP',
-    topK: 'topK',
-    minP: 'minP',
-    frequencyPenalty: 'frequencyPenalty',
-    presencePenalty: 'presencePenalty',
-    stop: 'stopSequences',
-    stopSequences: 'stopSequences',
-    thinking: 'thinking',
-    streaming: 'streaming',
-    format: 'format',
-  };
-
-  // 遍历所有选项
-  for (const [key, value] of Object.entries(options)) {
-    // 跳过内部/扩展字段
-    if (key === 'extensions' || key === 'mcpServers') {
-      continue;
-    }
-
-    const supportKey = supportKeyMapping[key];
-
-    // 检查是否支持
-    if (supportKey && !config.support[supportKey]) {
-      console.log(
-        `[ProviderFieldAdapter] 过滤不支持的字段: ${key} (Provider: ${providerName})`,
-      );
-      continue;
-    }
-
-    // 映射字段名
-    const targetKey = config.fieldMapping?.[key] || key;
-
-    // 应用转换器（如果有）
-    let targetValue = value;
-    const transformer = config.transformers?.[key];
-    if (transformer) {
-      try {
-        targetValue = transformer(value, options);
-      } catch (error) {
-        console.warn(`[ProviderFieldAdapter] 字段转换失败: ${key}`, error);
-        targetValue = value; // 降级使用原值
-      }
-    }
-
-    result[targetKey] = targetValue;
-  }
-
-  return result;
-}
-
-/**
- * 过滤不支持的字段（简化版，不做字段映射）
- * @deprecated 使用 adaptFieldsForProvider 替代，获得完整的适配功能
- */
-export function filterUnsupportedFields(
-  providerName: string,
-  options: Record<string, any>,
-): Record<string, any> {
-  const support = getProviderFieldSupport(providerName);
-  const filtered: Record<string, any> = {};
-
-  // 字段映射（参数名 -> 支持配置key）
-  const fieldMapping: Record<string, keyof ProviderFieldSupport> = {
-    temperature: 'temperature',
-    maxTokens: 'maxTokens',
-    topP: 'topP',
-    topK: 'topK',
-    minP: 'minP',
-    frequencyPenalty: 'frequencyPenalty',
-    presencePenalty: 'presencePenalty',
-    stop: 'stopSequences',
-    thinking: 'thinking',
-    streaming: 'streaming',
-    format: 'format',
-  };
-
-  // 遍历所有选项
-  for (const [key, value] of Object.entries(options)) {
-    const supportKey = fieldMapping[key];
-
-    // 如果字段在映射中且不被支持，则跳过
-    if (supportKey && !support[supportKey]) {
-      console.log(
-        `[ProviderFieldSupport] 过滤不支持的字段: ${key} (Provider: ${providerName})`,
-      );
-      continue;
-    }
-
-    // 保留字段
-    filtered[key] = value;
-  }
-
-  return filtered;
-}
-
-/**
- * 兼容性：保留旧的PROVIDER_FIELD_SUPPORT导出
- * @deprecated 使用 PROVIDER_CONFIGS 替代
- */
-export const PROVIDER_FIELD_SUPPORT: Record<string, ProviderFieldSupport> =
-  Object.fromEntries(
-    Object.entries(PROVIDER_CONFIGS).map(([key, config]) => [
-      key,
-      config.support,
-    ]),
-  );

@@ -63,12 +63,66 @@ export interface ModelParameters {
  *
  * Nothing on the read path produces a complete bag from a stored one, on purpose: defaults
  * would erase the difference between "the user chose this" and "nothing was ever chosen".
+ * A legacy model bag may gain its `enableX` switches on read (`normalizeLegacyModelFlags`);
+ * that records an intent the old value-vs-default rule already acted on, and adds no
+ * values or defaults.
  * `sanitizeParameterPatch` is the closest thing - it drops values it cannot trust and keeps
  * every absence - so a consumer treats a patch as "trustworthy where present", never as
  * whole. `DEFAULT_MODEL_PARAMETERS` spread under a bag is the way to get a complete object,
  * and only where the user is about to be shown a control with no stored value behind it.
  */
 export type ModelParameterPatch = Partial<ModelParameters>;
+
+/**
+ * The twelve value/switch pairs, in the order a bag writes them.
+ *
+ * One table for the model bag's legacy-switch migration, the conversation
+ * "switch this off" merge, and the session panel's edit helper. `option` is the key the
+ * request path uses when it differs from the stored value name (`stopSequences` -> `stop`).
+ */
+export interface ModelParameterFlagRow {
+  flag: keyof ModelParameters;
+  value: keyof ModelParameters;
+  option: string;
+}
+
+export const MODEL_PARAMETER_FLAGS: readonly ModelParameterFlagRow[] = [
+  { flag: 'enableTemperature', value: 'temperature', option: 'temperature' },
+  { flag: 'enableMaxTokens', value: 'maxTokens', option: 'maxTokens' },
+  { flag: 'enableTopP', value: 'topP', option: 'topP' },
+  { flag: 'enableTopK', value: 'topK', option: 'topK' },
+  { flag: 'enableMinP', value: 'minP', option: 'minP' },
+  {
+    flag: 'enableFrequencyPenalty',
+    value: 'frequencyPenalty',
+    option: 'frequencyPenalty',
+  },
+  {
+    flag: 'enablePresencePenalty',
+    value: 'presencePenalty',
+    option: 'presencePenalty',
+  },
+  {
+    flag: 'enableStopSequences',
+    value: 'stopSequences',
+    option: 'stop',
+  },
+  { flag: 'enableThinking', value: 'thinking', option: 'thinking' },
+  {
+    flag: 'enableThinkingLevel',
+    value: 'thinkingLevel',
+    option: 'thinkingLevel',
+  },
+  { flag: 'enableStreaming', value: 'streaming', option: 'streaming' },
+  { flag: 'enableFormat', value: 'format', option: 'format' },
+];
+
+/** Value name -> its switch, for a UI that edits a value and must pin the choice. */
+export const MODEL_FLAG_BY_VALUE: Partial<
+  Record<keyof ModelParameters, keyof ModelParameters>
+> = Object.fromEntries(
+  MODEL_PARAMETER_FLAGS.map(({ flag, value }) => [value, flag]),
+);
 
 export interface ModelConfig {
   providerName: string;

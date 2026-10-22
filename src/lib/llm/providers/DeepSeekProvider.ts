@@ -55,11 +55,13 @@ export class DeepSeekProvider extends BaseProvider {
     if (opts.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxTokens;
     if (opts.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxOutputTokens;
     if (opts.topP !== undefined && mapped.top_p === undefined) mapped.top_p = opts.topP;
-    if (opts.topK !== undefined && mapped.top_k === undefined) mapped.top_k = opts.topK;
-    if (opts.minP !== undefined && mapped.min_p === undefined) mapped.min_p = opts.minP;
     if (opts.frequencyPenalty !== undefined && mapped.frequency_penalty === undefined) mapped.frequency_penalty = opts.frequencyPenalty;
     if (opts.presencePenalty !== undefined && mapped.presence_penalty === undefined) mapped.presence_penalty = opts.presencePenalty;
     if (opts.stop !== undefined && mapped.stop === undefined) mapped.stop = opts.stop;
+    // DeepSeek's chat protocol does not take top_k/min_p; the app's `thinking` boolean
+    // and `format` are not its fields either. Native fields under other names still pass.
+    delete mapped.thinking;
+    delete mapped.format;
 
     const body = {
       model,

@@ -32,6 +32,7 @@ import { ModelParametersService } from '@/lib/model-parameters';
 import type { ModelParameters } from '@/types/model-params';
 import {
   DEFAULT_MODEL_PARAMETERS,
+  MODEL_FLAG_BY_VALUE,
   MODEL_PARAMETER_LIMITS,
 } from '@/types/model-params';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -47,11 +48,11 @@ import {
   type ThinkingLevel,
 } from '@/lib/llm/thinkingLevels';
 import {
-  dropInheritedThatSessionDisabled,
   readSessionThinkingChoice,
   withSessionThinkingChoice,
   type SessionThinkingChoice,
 } from '@/lib/chat/sessionParameterMerge';
+import { mergeSessionParameterOptions } from '@/lib/chat/sendParameterMerge';
 import { useLocaleStore } from '@/store/localeStore';
 import type { TranslationKey } from '@/i18n/types';
 
@@ -411,68 +412,28 @@ export function SessionParametersDialog({
     return value;
   };
 
-  // 生成预览JSON
+  // 生成预览JSON。The same two conversions the send path runs: a strict model bag,
+  // then this conversation's patch, with the shared "switch this off" table on top.
   const generatePreviewJson = () => {
-    // 会话级选项
-    const sessionOpt: any = {};
-    if (parameters.enableTemperature !== false)
-      sessionOpt.temperature = parameters.temperature;
-    if (parameters.enableMaxTokens !== false)
-      sessionOpt.maxTokens = parameters.maxTokens;
-    if (parameters.enableTopP !== false) sessionOpt.topP = parameters.topP;
-    if (parameters.enableTopK !== false) sessionOpt.topK = parameters.topK;
-    if (parameters.enableMinP !== false) sessionOpt.minP = parameters.minP;
-    if (parameters.enableFrequencyPenalty !== false)
-      sessionOpt.frequencyPenalty = parameters.frequencyPenalty;
-    if (parameters.enablePresencePenalty !== false)
-      sessionOpt.presencePenalty = parameters.presencePenalty;
-    if (parameters.enableStopSequences !== false && stopSequences.length > 0)
-      sessionOpt.stop = stopSequences;
-
-    // 思考、流式响应和格式参数
-    // thinking: 只有明确启用时才传递（避免不兼容的模型报错）
-    if (parameters.enableThinking === true && parameters.thinking !== undefined)
-      sessionOpt.thinking = parameters.thinking;
-    // A thinking level reaches the wire only as an explicit, non-auto choice.
-    if (
-      parameters.enableThinkingLevel === true &&
-      parameters.thinkingLevel &&
-      parameters.thinkingLevel !== 'auto'
-    ) {
-      sessionOpt.thinkingLevel = parameters.thinkingLevel;
-    }
-    // streaming: 默认启用，只有明确禁用时才不传递
-    if (
-      parameters.enableStreaming !== false &&
-      parameters.streaming !== undefined
-    )
-      sessionOpt.streaming = parameters.streaming;
-    // format: 只有明确启用时才传递
-    if (
-      parameters.enableFormat === true &&
-      parameters.format &&
-      parameters.format !== 'none'
-    )
-      sessionOpt.format = parameters.format;
-
+    const custom: Record<string, any> = {};
     customParameters.forEach((param) => {
       if (param.key && param.value !== '') {
-        sessionOpt[param.key] = convertValue(param.value, param.asString);
+        custom[param.key] = convertValue(param.value, param.asString);
       }
     });
 
-    // 模型级选项（若已加载）
-    let modelOpt: any = {};
-    if (modelParamsState) {
-      // 使用与发送路径一致的规则
-      const { ModelParametersService } = require('@/lib/model-parameters');
-      modelOpt = ModelParametersService.convertToChatOptions(modelParamsState);
+    const sessionPatch = {
+      ...parameters,
+      stopSequences,
+      advancedOptions: {
+        ...((parameters as any).advancedOptions || {}),
+        ...custom,
+      },
+    };
 
-      // What an explicitly disabled session switch removes lives in one shared table.
-      modelOpt = dropInheritedThatSessionDisabled(modelOpt, parameters as any);
-    }
-
-    const merged = { ...modelOpt, ...sessionOpt };
+    const merged = modelParamsState
+      ? mergeSessionParameterOptions(modelParamsState, sessionPatch)
+      : ModelParametersService.convertToChatOptions(sessionPatch, 'session');
     return JSON.stringify(merged, null, 2);
   };
 
@@ -648,6 +609,26 @@ export function SessionParametersDialog({
     const newParams = { ...parameters, [key]: value };
     setParameters(newParams);
     handleApplyImmediate(newParams);
+  };
+
+  const flagFor = (key: keyof ModelParameters) => MODEL_FLAG_BY_VALUE[key];
+
+  /**
+   * A slider or number field is a value the user chose: turning the value must also turn
+   * the switch explicit, otherwise a session value equal to the default would be read as
+   * "no opinion" and dropped while the control looks on.
+   */
+  const applyNumber = (
+    key: keyof ModelParameters,
+    raw: string,
+    integer = false,
+  ) => {
+    const value = integer ? parseInt(raw, 10) || 0 : parseFloat(raw) || 0;
+    const flag = flagFor(key);
+    const next = Object.assign({}, parameters, { [key]: value });
+    if (flag) Object.assign(next, { [flag]: true });
+    setParameters(next);
+    handleApplyImmediate(next);
   };
 
   const handleResetToModelDefault = async () => {
@@ -1047,15 +1028,9 @@ export function SessionParametersDialog({
                       };
                       setParameters(newParams);
                     }}
-                    onMouseUp={(e) => {
-                      const newParams = {
-                        ...parameters,
-                        temperature: parseFloat(
-                          (e.target as HTMLInputElement).value,
-                        ),
-                      };
-                      handleApplyImmediate(newParams);
-                    }}
+                    onMouseUp={(e) =>
+                      applyNumber('temperature', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enableTemperature === false
@@ -1079,13 +1054,7 @@ export function SessionParametersDialog({
                       };
                       setParameters(newParams);
                     }}
-                    onBlur={(e) => {
-                      const newParams = {
-                        ...parameters,
-                        temperature: parseFloat(e.target.value) || 0,
-                      };
-                      handleApplyImmediate(newParams);
-                    }}
+                    onBlur={(e) => applyNumber('temperature', e.target.value)}
                     disabled={parameters.enableTemperature === false}
                   />
                 </div>
@@ -1141,6 +1110,9 @@ export function SessionParametersDialog({
                         maxTokens: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) =>
+                      applyNumber('maxTokens', e.currentTarget.value, true)
+                    }
                     style={{
                       background:
                         parameters.enableMaxTokens === false
@@ -1162,6 +1134,9 @@ export function SessionParametersDialog({
                         ...prev,
                         maxTokens: parseInt(e.target.value) || 0,
                       }))
+                    }
+                    onBlur={(e) =>
+                      applyNumber('maxTokens', e.target.value, true)
                     }
                     disabled={parameters.enableMaxTokens === false}
                   />
@@ -1218,6 +1193,9 @@ export function SessionParametersDialog({
                         topP: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) =>
+                      applyNumber('topP', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enableTopP === false
@@ -1240,6 +1218,7 @@ export function SessionParametersDialog({
                         topP: parseFloat(e.target.value) || 0,
                       }))
                     }
+                    onBlur={(e) => applyNumber('topP', e.target.value)}
                     disabled={parameters.enableTopP === false}
                   />
                 </div>
@@ -1298,6 +1277,9 @@ export function SessionParametersDialog({
                         frequencyPenalty: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) =>
+                      applyNumber('frequencyPenalty', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enableFrequencyPenalty === false
@@ -1319,6 +1301,9 @@ export function SessionParametersDialog({
                         ...prev,
                         frequencyPenalty: parseFloat(e.target.value) || 0,
                       }))
+                    }
+                    onBlur={(e) =>
+                      applyNumber('frequencyPenalty', e.target.value)
                     }
                     disabled={parameters.enableFrequencyPenalty === false}
                   />
@@ -1375,6 +1360,9 @@ export function SessionParametersDialog({
                         presencePenalty: parseFloat(e.target.value),
                       }))
                     }
+                    onMouseUp={(e) =>
+                      applyNumber('presencePenalty', e.currentTarget.value)
+                    }
                     style={{
                       background:
                         parameters.enablePresencePenalty === false
@@ -1396,6 +1384,9 @@ export function SessionParametersDialog({
                         ...prev,
                         presencePenalty: parseFloat(e.target.value) || 0,
                       }))
+                    }
+                    onBlur={(e) =>
+                      applyNumber('presencePenalty', e.target.value)
                     }
                     disabled={parameters.enablePresencePenalty === false}
                   />
@@ -1455,6 +1446,9 @@ export function SessionParametersDialog({
                           topK: parseInt(e.target.value),
                         }))
                       }
+                      onMouseUp={(e) =>
+                        applyNumber('topK', e.currentTarget.value, true)
+                      }
                       style={{
                         background:
                           parameters.enableTopK === false
@@ -1477,6 +1471,7 @@ export function SessionParametersDialog({
                           topK: parseInt(e.target.value) || 0,
                         }))
                       }
+                      onBlur={(e) => applyNumber('topK', e.target.value, true)}
                       disabled={parameters.enableTopK === false}
                     />
                   </div>
@@ -1536,6 +1531,9 @@ export function SessionParametersDialog({
                           minP: parseFloat(e.target.value),
                         }))
                       }
+                      onMouseUp={(e) =>
+                        applyNumber('minP', e.currentTarget.value)
+                      }
                       style={{
                         background:
                           parameters.enableMinP === false
@@ -1558,6 +1556,7 @@ export function SessionParametersDialog({
                           minP: parseFloat(e.target.value) || 0,
                         }))
                       }
+                      onBlur={(e) => applyNumber('minP', e.target.value)}
                       disabled={parameters.enableMinP === false}
                     />
                   </div>
@@ -1598,7 +1597,7 @@ export function SessionParametersDialog({
                         const next = withSessionThinkingChoice(
                           parameters,
                           e.target.value as SessionThinkingChoice,
-                        ) as ModelParameters;
+                        );
                         setParameters(next);
                         handleApplyImmediate(next);
                       }}
@@ -1724,12 +1723,11 @@ export function SessionParametersDialog({
                       <select
                         value={parameters.format || 'none'}
                         onChange={(e) => {
+                          const value = e.target.value;
                           const newParams = {
                             ...parameters,
-                            format:
-                              e.target.value === 'none'
-                                ? undefined
-                                : e.target.value,
+                            format: value === 'none' ? undefined : value,
+                            enableFormat: value !== 'none',
                           };
                           setParameters(newParams);
                           handleApplyImmediate(newParams);

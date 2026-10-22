@@ -27,8 +27,8 @@
  * request path share one table for it). The rule here is narrower and answers a different
  * question: which names belong to this app, and therefore never reach a server.
  *
- * Three of the names below are also a wire field in some protocol - `stop` for OpenAI,
- * `tools` for OpenAI, `options` for Ollama. They stay on the list on purpose: the provider
+ * Four of the names below are also a wire field in some protocol - `stop` and `tools` for
+ * OpenAI, `options` and `format` for Ollama. They stay on the list on purpose: the provider
  * writes that field itself, from the original bag, and the app's copy must still not
  * travel, or a server that spells it differently sees both.
  */
@@ -59,6 +59,9 @@ const APP_ONLY_KEYS: ReadonlySet<string> = new Set([
   'presencePenalty',
   'stop',
   'stopSequences',
+  // The generic output format. Ollama reads it from the original bag and writes the
+  // top-level `format` field itself; every other provider must not forward the app name.
+  'format',
   'numPredict',
   'numCtx',
   'repeatLastN',

@@ -91,6 +91,9 @@ export class OpenAIResponsesProvider extends BaseProvider {
     if (opts.maxTokens !== undefined && mapped.max_output_tokens === undefined) mapped.max_output_tokens = opts.maxTokens;
     if (opts.topP !== undefined && mapped.top_p === undefined) mapped.top_p = opts.topP;
     if (opts.temperature !== undefined && mapped.temperature === undefined) mapped.temperature = opts.temperature;
+    // The Responses API has no chat-style top_k/min_p, thinking boolean or format field.
+    delete mapped.thinking;
+    delete mapped.format;
 
     const body = {
       model,
