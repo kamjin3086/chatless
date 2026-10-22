@@ -293,13 +293,18 @@ still works (`docs/tauri-window-pitfalls.md`).
     component test, or a real build. `google-chrome --headless=new --dump-dom <url> | ...`
     dumps the hydrated DOM; on a cold dev server give it ~30s, because initialization's
     network probes have to time out first.
-  - **The glass theme is reachable in the browser too** (measured 2026-10-20). The store starts
-    empty, so `?devStore=1` alone renders the plain theme; enable 玻璃主题 in 设置 → 外观与体验 and
-    the theme is on for that tab. It survives client-side navigation, not a reload. A wallpaper
-    can be set through the hidden `input[type=file]` in the same card (`agent-browser upload`),
-    which in the non-Tauri runtime is stored as a data URL. Theme: `agent-browser set media
-    dark|light` changes `prefers-color-scheme`, which the app's own `ThemeInitializer` follows -
-    toggling the `dark` class by hand is undone by that listener.
+  - **The glass theme is reachable in the browser too** (measured 2026-10-20; seed measured
+    2026-10-22). A URL seeds the theme, glass switch and wallpaper before initialization reads
+    them: `?devStore=1&theme=dark&glass=1&wallpaper=none` (or `theme=light|system`, a
+    `data:image/...` wallpaper, and `none` to clear). The seed applies on the page load; an
+    in-app navigation that adds the parameters later cannot re-theme a store that has already
+    initialized. Without those parameters the stub still starts empty and `?devStore=1` alone
+    renders the plain theme; enabling 玻璃主题 in 设置 → 外观与体验 also works and survives
+    client-side navigation, not a reload. A wallpaper can be set through the hidden
+    `input[type=file]` in the same card (`agent-browser upload`), which in the non-Tauri runtime
+    is stored as a data URL. Theme: `agent-browser set media dark|light` changes
+    `prefers-color-scheme`, which the app's own `ThemeInitializer` follows - toggling the `dark`
+    class by hand is undone by that listener.
   - **A globals.css edit needs a page reload in that tab.** The injected sheet updates through
     HMR (`GLASS_FROST_CSS` is re-applied by its effect), but a token change in `globals.css` does
     not reach an already-loaded document, and rewriting the file twice in quick succession can

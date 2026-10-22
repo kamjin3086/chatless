@@ -23,6 +23,13 @@ const enUS: TranslationDict = {
   'tray.quit': 'Quit',
   'common.cancel': 'Cancel',
   'common.confirm': 'Confirm',
+  'error.title': 'This page hit an error',
+  'error.description':
+    'This page could not finish rendering. Your conversation is still here - retry or go back to chats.',
+  'error.route': 'Failed route: {0}',
+  'error.details': 'Error details',
+  'error.retry': 'Retry',
+  'error.backToChat': 'Back to chats',
   'dialog.closeApp.title': 'Confirm Close',
   'dialog.closeApp.message': 'Are you sure you want to close the application?',
   'window.minimize': 'Minimize',

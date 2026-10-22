@@ -21,6 +21,13 @@ const zhCN: TranslationDict = {
   'tray.quit': '退出',
   'common.cancel': '取消',
   'common.confirm': '确认',
+  'error.title': '页面出错了',
+  'error.description':
+    '这一页没能完成渲染。你的会话还在，可以重试或回到聊天列表。',
+  'error.route': '出错的页面：{0}',
+  'error.details': '错误详情',
+  'error.retry': '重试',
+  'error.backToChat': '返回聊天',
   'dialog.closeApp.title': '确认关闭',
   'dialog.closeApp.message': '确定要关闭应用吗？',
   'window.minimize': '最小化',

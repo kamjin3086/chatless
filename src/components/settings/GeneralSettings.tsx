@@ -15,8 +15,8 @@ import { useUiPreferences } from '@/store/uiPreferences';
 import { ThemeInitializer } from "@/lib/utils/themeInitializer";
 import { useLocaleStore } from '@/store/localeStore';
 import type { Locale } from '@/i18n/types';
+import { THEME_KEY } from '@/lib/preferences/keys';
 
-const THEME_KEY = "app_theme";
 
 export function GeneralSettings() {
   const [theme, setTheme] = useState<string>("system");
