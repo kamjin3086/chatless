@@ -10,6 +10,10 @@ import {
   toOpenAIToolChoice,
 } from '../types/tool-schema';
 import { toWireOptions } from '../wireOptions';
+import {
+  PROVIDER_CONFIGS,
+  mapProviderFields,
+} from '../provider-field-support';
 
 export class OpenAIProvider extends BaseProvider {
   private sseClient: SSEClient;
@@ -66,19 +70,16 @@ export class OpenAIProvider extends BaseProvider {
       ...restOpts 
     } = (opts as any) || {};
     // #151: only wire fields continue; the mapping below reads the original `opts`.
-    const mapped: any = toWireOptions(restOpts);
-    const o: any = opts as any;
-    if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
-    if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;
-    if (o.topP !== undefined && mapped.top_p === undefined) mapped.top_p = o.topP;
-    if (o.frequencyPenalty !== undefined && mapped.frequency_penalty === undefined) mapped.frequency_penalty = o.frequencyPenalty;
-    if (o.presencePenalty !== undefined && mapped.presence_penalty === undefined) mapped.presence_penalty = o.presencePenalty;
-    if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
-    // OpenAI's chat protocol has no top_k/min_p, and the app's `thinking`/`format`
-    // names are not its fields. Native fields under other names (for example
-    // `reasoning_effort`) still pass through toWireOptions.
+    // The row owns the names. toWireOptions has already removed the app-side names and
+    // kept native fields; the row's map fills only the wire keys it declares, so an
+    // advanced native field keeps precedence.
+    const mapped: any = mapProviderFields(
+      PROVIDER_CONFIGS.openai,
+      opts,
+      toWireOptions(restOpts),
+    );
+    // A native `thinking` object is not an OpenAI chat field.
     delete mapped.thinking;
-    delete mapped.format;
 
     // 构建请求体
     const body: Record<string, unknown> = {

@@ -21,8 +21,11 @@ import { OllamaProvider } from '../OllamaProvider';
 import { OpenAICompatibleProvider } from '../OpenAICompatibleProvider';
 import { OpenAIProvider } from '../OpenAIProvider';
 import { OpenAIResponsesProvider } from '../OpenAIResponsesProvider';
+import { buildAnthropicRequestOptions } from '../AnthropicProvider';
+import { buildGeminiGenerationConfig } from '../GoogleAIProvider';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { DEFAULT_MODEL_PARAMETERS } from '@/types/model-params';
+import { PROVIDER_CONFIGS } from '@/lib/llm/provider-field-support';
 
 const mocks = vi.hoisted(() => ({
   tauriFetch: vi.fn(),
@@ -299,6 +302,8 @@ describe('parameters a provider does not have are not invented', () => {
       {
         ...appOptions,
         maxOutputTokens: 300,
+        // Both are aliases for the same wire field; the row's canonical `maxTokens`
+        // wins over `maxOutputTokens`, which is the one documented precedence rule.
         maxTokens: 999,
         stop: ['END'],
         frequencyPenalty: 0.1,
@@ -309,7 +314,7 @@ describe('parameters a provider does not have are not invented', () => {
         format: 'json',
       },
     );
-    expect(body.max_output_tokens).toBe(300);
+    expect(body.max_output_tokens).toBe(999);
     for (const key of [
       'max_tokens',
       'stop',
@@ -410,4 +415,206 @@ describe('a default bag sends no sampling parameter', () => {
       }
     },
   );
+});
+
+/**
+ * #178: the table is the single answer only if a rename in a row and the wire cannot
+ * disagree. Every provider with a row is built here with every generic field set, then
+ * asserted field by field against the row: supported fields arrive under the row's wire
+ * name at the provider's documented shape, unsupported fields do not arrive at all.
+ *
+ * A hardcoded provider rename fails the first half (the row says `max`, the body says
+ * `max_tokens`); a hardcoded unsupported field fails the second half (the row dropped it,
+ * the body still carries it). OpenAICompatibleProvider has no row of its own and is covered
+ * through the default/openai row; MultiStrategyProvider is a facade and must stay out of
+ * this table entirely.
+ */
+type WireShape = 'flat' | 'options' | 'generationConfig';
+
+const driftValues = {
+  temperature: 0.31,
+  maxTokens: 321,
+  topP: 0.41,
+  topK: 41,
+  minP: 0.051,
+  frequencyPenalty: 0.11,
+  presencePenalty: 0.21,
+  stop: ['DRIFT_STOP'],
+  thinking: true,
+  format: 'json',
+} as const;
+
+const driftCases: Array<{
+  /** The case name in `cases` above. */
+  caseName: string;
+  /** The PROVIDER_CONFIGS row this provider reads. */
+  row: string;
+  shape: WireShape;
+}> = [
+  { caseName: 'OpenAI', row: 'openai', shape: 'flat' },
+  { caseName: 'OpenAI-compatible', row: 'openai', shape: 'flat' },
+  { caseName: 'DeepSeek', row: 'deepseek', shape: 'flat' },
+  { caseName: 'OpenAI Responses', row: 'openai-responses', shape: 'flat' },
+  { caseName: 'Anthropic', row: 'anthropic', shape: 'flat' },
+  { caseName: 'Ollama', row: 'ollama', shape: 'options' },
+  { caseName: 'Google AI', row: 'google-ai', shape: 'generationConfig' },
+];
+
+/** Every spelling a generic field has taken in any provider protocol. */
+const knownWireNames: Record<string, string[]> = {
+  temperature: ['temperature'],
+  maxTokens: [
+    'max_tokens',
+    'max_output_tokens',
+    'maxOutputTokens',
+    'num_predict',
+  ],
+  topP: ['top_p', 'topP'],
+  topK: ['top_k', 'topK'],
+  minP: ['min_p', 'minP'],
+  frequencyPenalty: ['frequency_penalty'],
+  presencePenalty: ['presence_penalty'],
+  stop: ['stop', 'stop_sequences', 'stopSequences'],
+  thinking: ['thinking', 'think'],
+  format: ['format'],
+};
+
+function wireValue(
+  body: Record<string, any>,
+  shape: WireShape,
+  field: string,
+  wireName: string,
+): unknown {
+  if (shape === 'flat') return body[wireName];
+  if (shape === 'generationConfig') return body.generationConfig?.[wireName];
+  // Ollama: most parameters live under `options`; format is a top-level body field,
+  // which is exactly the shape the table cannot express.
+  if (field === 'format') return body.format;
+  return body.options?.[wireName];
+}
+
+describe.each(driftCases)(
+  'the table and the wire agree for $caseName',
+  ({ caseName, row, shape }) => {
+    const testCase = cases.find((candidate) => candidate.name === caseName);
+    if (!testCase) throw new Error(`no request builder named ${caseName}`);
+    const config = PROVIDER_CONFIGS[row];
+    if (!config) throw new Error(`no PROVIDER_CONFIGS row named ${row}`);
+
+    beforeEach(() => {
+      vi.resetAllMocks();
+      mocks.tauriFetch.mockResolvedValue(rejected());
+      mocks.browserFetch.mockResolvedValue(rejected());
+      vi.stubGlobal('fetch', mocks.browserFetch);
+    });
+
+    it('sends every supported field under the row spelling, and no unsupported one', async () => {
+      const options = { ...appOptions, ...driftValues };
+      // Anthropic and Gemini expose their body builders; use them directly instead of
+      // going through chatStream's transport seam.
+      const body =
+        caseName === 'Anthropic'
+          ? buildAnthropicRequestOptions(options)
+          : caseName === 'Google AI'
+            ? { generationConfig: buildGeminiGenerationConfig(options) }
+            : await bodyFor(testCase.make, options);
+      const allKeys = keysIn(body).map(({ key }) => key);
+
+      for (const [field, wireName] of Object.entries(config.fields)) {
+        if (wireName === null) {
+          // Fields the row accepts but a flat key cannot spell keep their shape in the
+          // provider. These are the two documented ones today; a new one must be named
+          // here instead of silently skipped.
+          if (row === 'ollama' && field === 'thinking') {
+            expect(body.think).toBe(driftValues.thinking);
+            continue;
+          }
+          // `stream` is transport: providers set it themselves and `wireOptions` keeps
+          // `streaming` app-side. It is deliberately not a table row.
+          throw new Error(
+            `${row}.${field} is supported but has no asserted wire shape`,
+          );
+        }
+
+        expect(
+          wireValue(body, shape, field, wireName),
+          `${caseName}.${field} should arrive as ${wireName}`,
+        ).toEqual(driftValues[field as keyof typeof driftValues]);
+      }
+
+      const supported = new Set(Object.keys(config.fields));
+      for (const field of Object.keys(driftValues)) {
+        if (supported.has(field)) continue;
+        for (const wireName of knownWireNames[field] ?? [field]) {
+          expect(
+            allKeys,
+            `${caseName} sent unsupported ${field} as ${wireName}`,
+          ).not.toContain(wireName);
+        }
+      }
+
+      // The sets, not just presence: an extra `max_tokens` left behind by a renamed row
+      // is exactly the rename/fallback disagreement this test exists to catch.
+      const expectedWire = new Set(
+        Object.values(config.fields).filter(
+          (wire): wire is string => wire !== null,
+        ),
+      );
+      if (row === 'ollama') expectedWire.add('think'); // the documented null shape
+      const known = new Set(Object.values(knownWireNames).flat());
+      const actualWire = [
+        ...new Set(allKeys.filter((key) => known.has(key))),
+      ].sort();
+      expect(actualWire).toEqual([...expectedWire].sort());
+    });
+  },
+);
+
+describe('a native wire field wins over the generic option', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.tauriFetch.mockResolvedValue(rejected());
+    mocks.browserFetch.mockResolvedValue(rejected());
+    vi.stubGlobal('fetch', mocks.browserFetch);
+  });
+
+  it.each(['OpenAI', 'OpenAI-compatible', 'DeepSeek', 'Anthropic'])(
+    '%s keeps an advanced native max_tokens over maxTokens',
+    async (name) => {
+      const testCase = cases.find((candidate) => candidate.name === name)!;
+      const body = await bodyFor(testCase.make, {
+        ...appOptions,
+        maxTokens: 999,
+        max_tokens: 500,
+      });
+      expect(body.max_tokens).toBe(500);
+    },
+  );
+
+  it('OpenAI Responses keeps an advanced native max_output_tokens', async () => {
+    const body = await bodyFor(
+      () => new OpenAIResponsesProvider('https://example.test/v1'),
+      { ...appOptions, maxTokens: 999, max_output_tokens: 500 },
+    );
+    expect(body.max_output_tokens).toBe(500);
+    expect(body).not.toHaveProperty('max_tokens');
+  });
+});
+
+describe('the drift test covers the table, not just the builders', () => {
+  it('has a case for every row and every request builder', () => {
+    const coveredRows = [...new Set(driftCases.map(({ row }) => row))].sort();
+    expect(coveredRows).toEqual(Object.keys(PROVIDER_CONFIGS).sort());
+
+    const builders = cases.map(({ name }) => name).sort();
+    const coveredBuilders = driftCases.map(({ caseName }) => caseName).sort();
+    expect(coveredBuilders).toEqual(builders);
+
+    // OpenAICompatibleProvider has no row of its own; it is covered against the
+    // documented default (the openai row). MultiStrategyProvider is a facade with no
+    // request-body builder and no row, by design. Neither is silently skipped.
+    expect(
+      driftCases.find(({ caseName }) => caseName === 'OpenAI-compatible')?.row,
+    ).toBe('openai');
+  });
 });

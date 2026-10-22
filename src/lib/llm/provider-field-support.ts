@@ -1,25 +1,23 @@
 /**
- * Provider field support: one table for the parameter dialogs and, after #177, the
- * request path.
+ * Provider field support: one table for the parameter dialogs and the request path.
  *
  * A provider row is written one field at a time - `minP: 'min_p'` - and nothing else:
  * presence is the "supported" answer, the value is the wire spelling. `support` (which
  * dialog controls exist) and `fieldMapping` (generic/alias name -> wire name, identity
  * entries included) are derived from those rows, so adding a field is one row and the two
  * answers cannot disagree. `null` marks a field the provider accepts but does not carry
- * under a single key (the thinking carrier; Gemini streams by endpoint), which is the
- * provider file's shape to keep.
+ * under a single key (the thinking carrier), which is the provider file's shape to keep.
+ * Streaming is transport, not a table field; `wireOptions` keeps it app-side.
  *
  * Looking a provider up goes through `resolveProviderConfig`, which normalizes the label
  * the app shows ('Google AI') to the row key ('google-ai') and reports whether a row
  * answered or the documented default did. Callers that need the fallback to be visible
  * read `source` / `row` instead of inferring it from an object shape.
  *
- * What this table governs today: the two parameter dialogs and the drift test. The
- * request path still re-derives the same names per provider (`grep -rn PROVIDER_CONFIGS
- * src/lib/llm/providers` finds nothing today); #177 is what makes the request path read
- * this table. Until then, reading this as the map of outgoing requests is a wrong map.
- * Keep one answer in this file.
+ * What this table governs: the parameter dialogs, every provider request body, and the
+ * drift test. A provider reads its own stable row key (`openai`, `ollama`, ...) through
+ * `mapProviderFields`; a dialog resolves the display label through
+ * `resolveProviderConfig`. Keep one answer in this file.
  */
 
 /**
@@ -38,7 +36,6 @@ export interface ProviderFieldSupport {
 
   // 扩展参数
   thinking?: boolean; // Ollama等支持thinking模式
-  streaming?: boolean; // 大多数支持流式响应
   format?: boolean; // Ollama支持format参数
 }
 
@@ -53,7 +50,6 @@ export type ProviderFieldName =
   | 'presencePenalty'
   | 'stop'
   | 'thinking'
-  | 'streaming'
   | 'format';
 
 /**
@@ -98,7 +94,6 @@ const SUPPORT_KEY_BY_FIELD: Record<
   presencePenalty: 'presencePenalty',
   stop: 'stopSequences',
   thinking: 'thinking',
-  streaming: 'streaming',
   format: 'format',
 };
 
@@ -153,7 +148,6 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     // generic parameter name; `null` keeps the support answer without pretending the
     // wire key is `thinking`.
     thinking: null,
-    streaming: 'stream',
     format: 'format',
   }),
 
@@ -165,7 +159,6 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     frequencyPenalty: 'frequency_penalty',
     presencePenalty: 'presence_penalty',
     stop: 'stop',
-    streaming: 'stream',
   }),
 
   // Google AI - 使用generationConfig嵌套结构
@@ -179,8 +172,6 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     // option the provider has always supported.
     minP: 'minP',
     stop: 'stopSequences',
-    // Streaming is the endpoint (`:streamGenerateContent`), not a body field.
-    streaming: null,
   }),
 
   // Anthropic - 使用snake_case
@@ -190,7 +181,6 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     topP: 'top_p',
     topK: 'top_k',
     stop: 'stop_sequences',
-    streaming: 'stream',
   }),
 
   // OpenAI Responses - /responses endpoint: its own token field, and it has no
@@ -199,7 +189,6 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     temperature: 'temperature',
     maxTokens: 'max_output_tokens',
     topP: 'top_p',
-    streaming: 'stream',
   }),
 
   // DeepSeek - 类OpenAI，使用snake_case
@@ -210,7 +199,6 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     frequencyPenalty: 'frequency_penalty',
     presencePenalty: 'presence_penalty',
     stop: 'stop',
-    streaming: 'stream',
   }),
 };
 
@@ -245,6 +233,39 @@ export interface ProviderResolution {
   /** How it was found. `default` is the visible "nothing claims this name" answer. */
   source: ProviderLookupSource;
   config: ProviderConfig;
+}
+
+/**
+ * Map the generic/alias names this provider's row declares onto the wire names the row
+ * gives them. Unsupported names are not in `fieldMapping` and therefore do not appear.
+ *
+ * Flat providers start from `toWireOptions` (app-side names removed, provider-native
+ * fields kept) and merge this over it; providers with a nested shape place the result in
+ * their own object. The function does not decide nesting: `generationConfig` and Ollama's
+ * `options` are shape rules a table row cannot express.
+ *
+ * Precedence: a native wire field already in `target` wins, and the canonical field wins
+ * over its alias (`maxTokens` over `maxOutputTokens`). The canonical-over-alias order is a
+ * deliberate change from the two older per-provider orders (Google and Responses preferred
+ * the alias); one table now has one order. `streaming` is not a row: it is transport, and
+ * `wireOptions` keeps it app-side.
+ */
+export function mapProviderFields(
+  config: ProviderConfig,
+  options: Record<string, unknown> | undefined | null,
+  target: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const source = options ?? {};
+  for (const [field, wireName] of Object.entries(config.fieldMapping)) {
+    const value = source[field];
+    if (value === undefined) continue;
+    // A native field already in the target (an advanced-JSON `max_tokens`, say) wins over
+    // the generic option, and a canonical name wins over its alias. That is the same
+    // precedence the hand-written `if (mapped.x === undefined)` checks had.
+    if (target[wireName] !== undefined) continue;
+    target[wireName] = value;
+  }
+  return target;
 }
 
 /**

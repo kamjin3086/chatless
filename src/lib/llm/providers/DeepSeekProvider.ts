@@ -9,6 +9,10 @@ import { toOpenAIMessage } from './messageMapping';
 import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { toOpenAITools, toOpenAIToolChoice, type ToolDefinition } from '../types/tool-schema';
 import { toWireOptions } from '../wireOptions';
+import {
+  PROVIDER_CONFIGS,
+  mapProviderFields,
+} from '../provider-field-support';
 
 /**
  * DeepSeek（深度寻求）模型服务 Provider
@@ -51,17 +55,14 @@ export class DeepSeekProvider extends BaseProvider {
     // 过滤扩展字段，避免把 mcpServers/extensions 传入
     const { extensions, mcpServers, tools: toolDefs, toolChoice, parallelToolCalls, ...restOpts } = (opts as any) || {};
     // #151: only wire fields continue; the mapping below reads the original `opts`.
-    const mapped: any = toWireOptions(restOpts);
-    if (opts.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxTokens;
-    if (opts.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = opts.maxOutputTokens;
-    if (opts.topP !== undefined && mapped.top_p === undefined) mapped.top_p = opts.topP;
-    if (opts.frequencyPenalty !== undefined && mapped.frequency_penalty === undefined) mapped.frequency_penalty = opts.frequencyPenalty;
-    if (opts.presencePenalty !== undefined && mapped.presence_penalty === undefined) mapped.presence_penalty = opts.presencePenalty;
-    if (opts.stop !== undefined && mapped.stop === undefined) mapped.stop = opts.stop;
-    // DeepSeek's chat protocol does not take top_k/min_p; the app's `thinking` boolean
-    // and `format` are not its fields either. Native fields under other names still pass.
+    // The row owns the names; native fields keep precedence over the generic options.
+    const mapped: any = mapProviderFields(
+      PROVIDER_CONFIGS.deepseek,
+      opts,
+      toWireOptions(restOpts),
+    );
+    // DeepSeek has no native `thinking` object in this protocol.
     delete mapped.thinking;
-    delete mapped.format;
 
     const body = {
       model,

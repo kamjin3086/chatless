@@ -23,9 +23,8 @@
  * box - and passes through untouched.
  *
  * This file does not say which fields a provider supports or what each one is called; that
- * is still each provider's own business (and #142 is about making the dialogs and the
- * request path share one table for it). The rule here is narrower and answers a different
- * question: which names belong to this app, and therefore never reach a server.
+ * is `provider-field-support.ts`'s table. The rule here is narrower and answers a
+ * different question: which names belong to this app, and therefore never reach a server.
  *
  * Four of the names below are also a wire field in some protocol - `stop` and `tools` for
  * OpenAI, `options` and `format` for Ollama. They stay on the list on purpose: the provider
