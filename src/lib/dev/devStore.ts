@@ -125,38 +125,28 @@ const SEED_RULES: Record<string, readonly SeedRule[]> = {
   ],
 };
 
-/** Keys this URL put there, so a later URL can update/clear a seed, not a page write. */
-const seededValues = new Map<string, Set<string>>();
-
-function seededFor(name: string): Set<string> {
-  let keys = seededValues.get(name);
-  if (!keys) {
-    keys = new Set();
-    seededValues.set(name, keys);
-  }
-  return keys;
+interface StoreState {
+  rows: Map<string, unknown>;
+  /** Keys this URL put there, so a later URL can update/clear a seed, not a page write. */
+  seeded: Set<string>;
 }
 
 /**
  * Apply the URL's seed to one store. A key this URL put there may be updated or cleared by
  * a later URL; a key the page/test wrote is not in the mark set and wins.
  */
-function seedRows(
-  name: string,
-  rows: Map<string, unknown>,
-  seed: DevStoreSeed,
-): void {
-  const seeded = seededFor(name);
-  const canWrite = (key: string) => !rows.has(key) || seeded.has(key);
+function seedRows(name: string, state: StoreState, seed: DevStoreSeed): void {
+  const canWrite = (key: string) =>
+    !state.rows.has(key) || state.seeded.has(key);
   const write = (key: string, value: unknown) => {
     if (!canWrite(key)) return;
-    rows.set(key, copy(value));
-    seeded.add(key);
+    state.rows.set(key, copy(value));
+    state.seeded.add(key);
   };
   const clear = (key: string) => {
     if (!canWrite(key)) return;
-    rows.delete(key);
-    seeded.delete(key);
+    state.rows.delete(key);
+    state.seeded.delete(key);
   };
 
   for (const rule of SEED_RULES[name] ?? []) {
@@ -244,7 +234,7 @@ export interface DevStore {
   save(): Promise<void>;
 }
 
-const stores = new Map<string, Map<string, unknown>>();
+const stores = new Map<string, StoreState>();
 
 /**
  * One store per file name, the way the Tauri plugin has one per file - so `model-parameters
@@ -257,24 +247,24 @@ const stores = new Map<string, Map<string, unknown>>();
  * would stay hidden in the stub.
  */
 export function devStore(name: string): DevStore {
-  let rows = stores.get(name);
-  if (!rows) {
-    rows = new Map<string, unknown>();
-    stores.set(name, rows);
+  let state = stores.get(name);
+  if (!state) {
+    state = { rows: new Map<string, unknown>(), seeded: new Set<string>() };
+    stores.set(name, state);
   }
-  const data = rows;
+  const data = state.rows;
 
   // Seed on every touch, before that store answers. The app reads theme/glass during
   // initialization, so the URL belongs on the page load; rows this URL seeded may still be
   // updated by a later URL, while a value the page/test wrote removes its mark and wins.
   if (devStoreEnabled()) {
-    seedRows(name, data, parseSeedQuery(window.location?.search ?? ''));
+    seedRows(name, state, parseSeedQuery(window.location?.search ?? ''));
   }
 
   return {
     async set(key, value) {
       data.set(key, copy(value));
-      seededFor(name).delete(key);
+      state.seeded.delete(key);
     },
     async get<T = unknown>(key: string) {
       return copy(data.get(key)) as T | undefined;
@@ -283,12 +273,12 @@ export function devStore(name: string): DevStore {
       return data.has(key);
     },
     async delete(key) {
-      seededFor(name).delete(key);
+      state.seeded.delete(key);
       return data.delete(key);
     },
     async clear() {
       data.clear();
-      seededValues.delete(name);
+      state.seeded.clear();
     },
     async keys() {
       return [...data.keys()];

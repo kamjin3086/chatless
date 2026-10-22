@@ -13,6 +13,7 @@ import { Message, Conversation } from "@/types/chat";
 import { SidebarContext } from "@/contexts/SidebarContext";
 import { SearchInput } from '@/components/ui/search-input';
 import { FloatingSkillApprovalPanel } from '@/components/skills/SkillApprovalPanel';
+import { RouteErrorBoundary } from '@/components/errors/RouteErrorBoundary';
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -372,7 +373,9 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         <main className="flex-1 flex flex-col min-h-0 glass-surface">
           {/* 聊天内容区域 - 使用flex-1和min-h-0确保正确滚动 */}
           <div className="flex-1 min-h-0 overflow-auto">
-            {children}
+            {/* Keep the conversation list outside this boundary: a chat-page failure
+                must not replace the list that is the way back to another conversation. */}
+            <RouteErrorBoundary>{children}</RouteErrorBoundary>
           </div>
         </main>
 

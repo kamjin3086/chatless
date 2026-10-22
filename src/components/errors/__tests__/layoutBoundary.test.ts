@@ -12,4 +12,16 @@ describe('the root layout', () => {
       /<RouteErrorBoundary>\s*\{children\}\s*<\/RouteErrorBoundary>/,
     );
   });
+
+  it('keeps the chat list outside a nested boundary around the chat page', () => {
+    const chatLayout = readFileSync(
+      fileURLToPath(
+        new URL('../../../components/layout/ChatLayout.tsx', import.meta.url),
+      ),
+      'utf8',
+    );
+    expect(chatLayout).toMatch(
+      /<RouteErrorBoundary>\s*\{children\}\s*<\/RouteErrorBoundary>/,
+    );
+  });
 });

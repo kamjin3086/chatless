@@ -12,6 +12,12 @@ interface BoundaryState {
   componentStack: string | null;
 }
 
+interface BoundaryProps {
+  children: ReactNode;
+  /** A route change clears a failure in place instead of remounting the routed subtree. */
+  resetKey: string;
+}
+
 /**
  * A render failure on a route must not take the window with it. The boundary sits around
  * routed content only: the app shell, the stores and an in-flight conversation are outside
@@ -20,7 +26,7 @@ interface BoundaryState {
  * The error is shown, not swallowed: the fallback carries the route and the message, and
  * the boundary also writes the full error to the console for the developer.
  */
-class RouteBoundary extends Component<{ children: ReactNode }, BoundaryState> {
+class RouteBoundary extends Component<BoundaryProps, BoundaryState> {
   state: BoundaryState = {
     failed: false,
     error: null,
@@ -38,6 +44,12 @@ class RouteBoundary extends Component<{ children: ReactNode }, BoundaryState> {
       error,
       info.componentStack,
     );
+  }
+
+  componentDidUpdate(previous: BoundaryProps): void {
+    if (previous.resetKey !== this.props.resetKey && this.state.failed) {
+      this.reset();
+    }
   }
 
   private reset = (): void => {
@@ -58,10 +70,9 @@ class RouteBoundary extends Component<{ children: ReactNode }, BoundaryState> {
 
 export function RouteErrorBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  // A route change remounts the boundary, so navigating away from a failed page cannot
-  // leave the old failure surface in place. The conversation stores are module-level and
-  // outside this subtree, so their state survives the remount.
-  return <RouteBoundary key={pathname}>{children}</RouteBoundary>;
+  // A route change clears a failure in place. Keeping the same boundary (no key) lets
+  // Next preserve layouts such as the chat list instead of remounting the routed subtree.
+  return <RouteBoundary resetKey={pathname}>{children}</RouteBoundary>;
 }
 
 function RouteFailureContainer({
