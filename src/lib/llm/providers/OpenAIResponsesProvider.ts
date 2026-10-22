@@ -3,6 +3,10 @@ import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
 import { toWireOptions } from '../wireOptions';
+import {
+  PROVIDER_CONFIGS,
+  mapProviderFields,
+} from '../provider-field-support';
 
 /**
  * OpenAI Responses Provider
@@ -84,16 +88,15 @@ export class OpenAIResponsesProvider extends BaseProvider {
 
     const url = `${this.baseUrl.replace(/\/$/, '')}/responses`;
 
-    // 选项映射：Responses 使用 max_output_tokens / temperature / top_p 等
-    // #151: only wire fields continue; the mapping below reads the original `opts`.
-    const mapped: any = toWireOptions(opts);
-    if (opts.maxOutputTokens !== undefined && mapped.max_output_tokens === undefined) mapped.max_output_tokens = opts.maxOutputTokens;
-    if (opts.maxTokens !== undefined && mapped.max_output_tokens === undefined) mapped.max_output_tokens = opts.maxTokens;
-    if (opts.topP !== undefined && mapped.top_p === undefined) mapped.top_p = opts.topP;
-    if (opts.temperature !== undefined && mapped.temperature === undefined) mapped.temperature = opts.temperature;
-    // The Responses API has no chat-style top_k/min_p, thinking boolean or format field.
+    // The Responses row owns the names (its token field is max_output_tokens); the
+    // provider only supplies the /responses shape. Native fields keep precedence.
+    const mapped: any = mapProviderFields(
+      PROVIDER_CONFIGS['openai-responses'],
+      opts,
+      toWireOptions(opts),
+    );
+    // The Responses API has no chat-style thinking field.
     delete mapped.thinking;
-    delete mapped.format;
 
     const body = {
       model,

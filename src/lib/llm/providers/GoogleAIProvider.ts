@@ -9,6 +9,10 @@ import {
 import { getStaticModels } from '../../provider/staticModels';
 import { SSEClient } from '@/lib/sse-client';
 import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
+import {
+  PROVIDER_CONFIGS,
+  mapProviderFields,
+} from '../provider-field-support';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
 import { createStreamEvent } from '../types/stream-events';
 
@@ -26,34 +30,14 @@ import { createStreamEvent } from '../types/stream-events';
 export function buildGeminiGenerationConfig(
   opts: Record<string, any> = {},
 ): Record<string, any> {
+  // The row owns the names. `generationConfig` is the shape a row cannot express, and an
+  // explicitly supplied nested field wins over the flat option of the same name.
   const generationConfig: any = {
     ...(opts.generationConfig || {}),
   };
-  // 仅当未在 generationConfig 中出现时才从扁平字段映射
-  if (
-    generationConfig.temperature === undefined &&
-    opts.temperature !== undefined
-  ) {
-    generationConfig.temperature = opts.temperature;
-  }
-  if (generationConfig.topP === undefined && opts.topP !== undefined) {
-    generationConfig.topP = opts.topP;
-  }
-  // 自定义扩展：允许 topK/minP 透传到 generationConfig
-  const o: any = opts as any;
-  if (generationConfig.topK === undefined && o.topK !== undefined) {
-    generationConfig.topK = o.topK;
-  }
-  if (generationConfig.minP === undefined && o.minP !== undefined) {
-    generationConfig.minP = o.minP;
-  }
-  // OpenAI 风格的 maxTokens → Gemini 的 maxOutputTokens
-  if (generationConfig.maxOutputTokens === undefined) {
-    const flatMax = (opts as any).maxOutputTokens ?? (opts as any).maxTokens;
-    if (flatMax !== undefined) generationConfig.maxOutputTokens = flatMax;
-  }
-  if (generationConfig.stopSequences === undefined && (opts as any).stop) {
-    generationConfig.stopSequences = (opts as any).stop;
+  const fromRow = mapProviderFields(PROVIDER_CONFIGS['google-ai'], opts);
+  for (const [key, value] of Object.entries(fromRow)) {
+    if (generationConfig[key] === undefined) generationConfig[key] = value;
   }
   return generationConfig;
 }

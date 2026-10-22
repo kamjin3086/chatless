@@ -4,6 +4,10 @@ import { ThinkingStrategyFactory, type ThinkingModeStrategy } from './thinking';
 import { StreamEventAdapter } from '@/lib/llm/adapters/StreamEventAdapter';
 import { classifyNetworkError, judgeApiReachable } from './healthcheck';
 import { isAppOnlyOption } from '../wireOptions';
+import {
+  PROVIDER_CONFIGS,
+  mapProviderFields,
+} from '../provider-field-support';
 
 export class OllamaProvider extends BaseProvider {
   private sseClient: SSEClient;
@@ -133,16 +137,17 @@ export class OllamaProvider extends BaseProvider {
     // 2. 添加opts顶层的所有自定义参数（但过滤掉扩展字段，如 mcpServers/extensions）
     const o: any = opts || {};
     const { extensions, mcpServers: _mcpServers, ...restOpts } = o;
+    // The table names every generic field; `numPredict`/`numCtx`/`repeatLastN`/
+    // `repeatPenalty` are app-side advanced names and are skipped by isAppOnlyOption.
+    // `seed` is a native option, and `thinking`'s carrier is the top-level `think` body
+    // field written below, so neither belongs in `options`.
+    const tableNames = new Set(Object.keys(PROVIDER_CONFIGS.ollama.fieldMapping));
     for (const [key, value] of Object.entries(restOpts)) {
       // #151: the bag also carries the scheduler lease, the request id and `streaming`;
       // those describe the request to this app and must not land in the options object.
       if (isAppOnlyOption(key)) continue;
-      // 跳过已处理的标准参数和内部字段
-      if (!['options', 'temperature', 'topP', 'topK', 'minP', 'stop', 'maxTokens', 'maxOutputTokens',
-           'numPredict', 'numCtx', 'repeatLastN', 'repeatPenalty', 'seed', 'frequencyPenalty',
-           'presencePenalty', 'thinking', 'format'].includes(key)) {
-        ollamaOptions[key] = value;
-      }
+      if (tableNames.has(key) || key === 'seed' || key === 'thinking') continue;
+      ollamaOptions[key] = value;
     }
 
     // 3.1 若有 MCP 配置（extensions.mcpServers 或顶层 mcpServers），允许以 Ollama 自定义选项透传（留口子，不强制字段定义）
@@ -152,20 +157,17 @@ export class OllamaProvider extends BaseProvider {
       ollamaOptions.mcpServers = mcpList;
     }
     
-    // 3. 最后添加标准参数映射（确保正确的格式）
-    if (typeof (opts as any).temperature === 'number') ollamaOptions.temperature = (opts as any).temperature;
-    if (typeof (opts as any).topP === 'number') ollamaOptions.top_p = (opts as any).topP;
-    if (typeof (opts as any).topK === 'number') ollamaOptions.top_k = (opts as any).topK;
-    if (typeof (opts as any).minP === 'number') ollamaOptions.min_p = (opts as any).minP;
-    if (typeof (opts as any).frequencyPenalty === 'number') ollamaOptions.frequency_penalty = (opts as any).frequencyPenalty;
-    if (typeof (opts as any).presencePenalty === 'number') ollamaOptions.presence_penalty = (opts as any).presencePenalty;
-    if (typeof (opts as any).stop !== 'undefined') ollamaOptions.stop = (opts as any).stop;
-    
-    // Ollama 专有参数
+    // 3. The row owns the parameter names. `options` is the shape a row cannot express;
+    // everything the row maps goes there, except `stream` and `format`, which Ollama reads
+    // from the body. `thinking` is null in the row and has its own top-level carrier below.
+    const mapped = mapProviderFields(PROVIDER_CONFIGS.ollama, opts);
+    const { format, ...tableOptions } = mapped;
+    Object.assign(ollamaOptions, tableOptions);
+
+    // Advanced native Ollama fields outside ModelParameters. `numPredict` is an input
+    // alias of the row's num_predict and, like a native wire field, wins over the row;
+    // the other three are raw API options with no table row.
     if (typeof (opts as any).numPredict === 'number') ollamaOptions.num_predict = (opts as any).numPredict;
-    else if (typeof (opts as any).maxTokens === 'number') ollamaOptions.num_predict = (opts as any).maxTokens;
-    else if (typeof (opts as any).maxOutputTokens === 'number') ollamaOptions.num_predict = (opts as any).maxOutputTokens;
-    
     if (typeof (opts as any).numCtx === 'number') ollamaOptions.num_ctx = (opts as any).numCtx;
     if (typeof (opts as any).repeatLastN === 'number') ollamaOptions.repeat_last_n = (opts as any).repeatLastN;
     if (typeof (opts as any).repeatPenalty === 'number') ollamaOptions.repeat_penalty = (opts as any).repeatPenalty;
@@ -177,8 +179,10 @@ export class OllamaProvider extends BaseProvider {
     const thinkParam = hasThinkingParam ? (opts as any).thinking : undefined;
     
     // 处理stream参数 - 只有在opts中明确提供了streaming参数时才使用，否则默认true（大多数情况下需要流式）
-    const hasStreamingParam = typeof (opts as any).streaming === 'boolean';
-    const streamParam = hasStreamingParam ? (opts as any).streaming : true;
+    const streamParam =
+      typeof (opts as any).streaming === 'boolean'
+        ? (opts as any).streaming
+        : true;
     
     const body: Record<string, any> = {
       model,
@@ -192,8 +196,8 @@ export class OllamaProvider extends BaseProvider {
       body.think = thinkParam;
     }
     // Ollama's output format is a top-level body field, not an entry in `options`.
-    if (typeof (opts as any).format === 'string' && (opts as any).format !== 'none') {
-      body.format = (opts as any).format;
+    if (typeof format === 'string' && format !== 'none') {
+      body.format = format;
     }
 
     try {
