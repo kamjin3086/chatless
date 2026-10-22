@@ -4,7 +4,11 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLocaleStore } from '@/store/localeStore';
 import { RouteFailureView } from './RouteFailureView';
-import { canReturnToChat, describeRouteFailure } from './routeFailure';
+import {
+  canReturnToChat,
+  describeRouteFailure,
+  shouldClearFailure,
+} from './routeFailure';
 
 interface BoundaryState {
   failed: boolean;
@@ -47,7 +51,13 @@ class RouteBoundary extends Component<BoundaryProps, BoundaryState> {
   }
 
   componentDidUpdate(previous: BoundaryProps): void {
-    if (previous.resetKey !== this.props.resetKey && this.state.failed) {
+    if (
+      shouldClearFailure(
+        previous.resetKey,
+        this.props.resetKey,
+        this.state.failed,
+      )
+    ) {
       this.reset();
     }
   }
@@ -68,11 +78,23 @@ class RouteBoundary extends Component<BoundaryProps, BoundaryState> {
   }
 }
 
-export function RouteErrorBoundary({ children }: { children: ReactNode }) {
+export function RouteErrorBoundary({
+  children,
+  resetKey,
+}: {
+  children: ReactNode;
+  /** Extra state that should clear a failure, e.g. the selected chat conversation. */
+  resetKey?: string;
+}) {
   const pathname = usePathname();
-  // A route change clears a failure in place. Keeping the same boundary (no key) lets
-  // Next preserve layouts such as the chat list instead of remounting the routed subtree.
-  return <RouteBoundary resetKey={pathname}>{children}</RouteBoundary>;
+  // A route or conversation change clears a failure in place. Keeping the same boundary
+  // (no key) lets Next preserve layouts such as the chat list instead of remounting the
+  // routed subtree.
+  return (
+    <RouteBoundary resetKey={`${pathname}:${resetKey ?? ''}`}>
+      {children}
+    </RouteBoundary>
+  );
 }
 
 function RouteFailureContainer({
@@ -107,8 +129,8 @@ function RouteFailureContainer({
       onRetry={onRetry}
       onBack={() => {
         // Do not reset the boundary first: that re-renders the failing route and can abort
-        // the navigation before it commits. A route change remounts the keyed boundary,
-        // which clears the failure once the chat route is actually rendered.
+        // the navigation before it commits. The pathname change clears the failure in
+        // componentDidUpdate once the chat route is actually rendering.
         router.push('/chat');
       }}
     />

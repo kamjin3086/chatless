@@ -28,3 +28,15 @@ export function describeRouteFailure(
 export function canReturnToChat(pathname: string): boolean {
   return pathname !== '/chat';
 }
+
+/**
+ * A failed boundary clears when its reset key changes (a route change, or another chat
+ * conversation). A successful boundary has nothing to clear.
+ */
+export function shouldClearFailure(
+  previousKey: string,
+  nextKey: string,
+  failed: boolean,
+): boolean {
+  return failed && previousKey !== nextKey;
+}

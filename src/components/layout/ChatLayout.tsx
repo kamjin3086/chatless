@@ -166,6 +166,9 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   
   const createConversation = useChatStore((state) => state.createConversation);
   const conversations = useChatStore((state) => state.conversations);
+  const currentConversationId = useChatStore(
+    (state) => state.currentConversationId,
+  );
   
   const toggleSidebar = () => {
     const nextOpen = !isSidebarOpen;
@@ -375,7 +378,9 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           <div className="flex-1 min-h-0 overflow-auto">
             {/* Keep the conversation list outside this boundary: a chat-page failure
                 must not replace the list that is the way back to another conversation. */}
-            <RouteErrorBoundary>{children}</RouteErrorBoundary>
+            <RouteErrorBoundary resetKey={currentConversationId ?? ''}>
+              {children}
+            </RouteErrorBoundary>
           </div>
         </main>
 

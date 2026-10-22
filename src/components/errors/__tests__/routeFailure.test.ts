@@ -2,7 +2,11 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { RouteFailureView } from '../RouteFailureView';
-import { canReturnToChat, describeRouteFailure } from '../routeFailure';
+import {
+  canReturnToChat,
+  describeRouteFailure,
+  shouldClearFailure,
+} from '../routeFailure';
 
 describe('what a failed route keeps visible', () => {
   it('carries the message, route and stack', () => {
@@ -41,6 +45,15 @@ describe('the way back', () => {
   it('is offered away from /chat and omitted on /chat itself', () => {
     expect(canReturnToChat('/knowledge')).toBe(true);
     expect(canReturnToChat('/chat')).toBe(false);
+  });
+});
+
+describe('clearing a failure', () => {
+  it('clears only a failed boundary whose reset key moved', () => {
+    expect(shouldClearFailure('/settings', '/chat', true)).toBe(true);
+    expect(shouldClearFailure('/chat:c1', '/chat:c2', true)).toBe(true);
+    expect(shouldClearFailure('/chat:c1', '/chat:c1', true)).toBe(false);
+    expect(shouldClearFailure('/settings', '/chat', false)).toBe(false);
   });
 });
 

@@ -252,7 +252,7 @@ export function devStore(name: string): DevStore {
     state = { rows: new Map<string, unknown>(), seeded: new Set<string>() };
     stores.set(name, state);
   }
-  const data = state.rows;
+  const { rows, seeded } = state;
 
   // Seed on every touch, before that store answers. The app reads theme/glass during
   // initialization, so the URL belongs on the page load; rows this URL seeded may still be
@@ -263,28 +263,28 @@ export function devStore(name: string): DevStore {
 
   return {
     async set(key, value) {
-      data.set(key, copy(value));
-      state.seeded.delete(key);
+      rows.set(key, copy(value));
+      seeded.delete(key);
     },
     async get<T = unknown>(key: string) {
-      return copy(data.get(key)) as T | undefined;
+      return copy(rows.get(key)) as T | undefined;
     },
     async has(key) {
-      return data.has(key);
+      return rows.has(key);
     },
     async delete(key) {
-      state.seeded.delete(key);
-      return data.delete(key);
+      seeded.delete(key);
+      return rows.delete(key);
     },
     async clear() {
-      data.clear();
-      state.seeded.clear();
+      rows.clear();
+      seeded.clear();
     },
     async keys() {
-      return [...data.keys()];
+      return [...rows.keys()];
     },
     async length() {
-      return data.size;
+      return rows.size;
     },
     async save() {
       /* there is no file to flush */
