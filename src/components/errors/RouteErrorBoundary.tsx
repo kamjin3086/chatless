@@ -18,7 +18,7 @@ interface BoundaryState {
 
 interface BoundaryProps {
   children: ReactNode;
-  /** A route change clears a failure in place instead of remounting the routed subtree. */
+  /** A route or conversation change clears a failure in place instead of remounting. */
   resetKey: string;
 }
 

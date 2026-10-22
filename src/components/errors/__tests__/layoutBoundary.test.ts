@@ -16,7 +16,7 @@ describe('route boundary wiring', () => {
     );
   });
 
-  it('keeps the chat list outside a nested boundary around the chat page', () => {
+  it('wires a nested chat boundary with the conversation reset key', () => {
     const chatLayout = source('../../../components/layout/ChatLayout.tsx');
     expect(chatLayout).toMatch(
       /<RouteErrorBoundary resetKey=\{currentConversationId \?\? ''\}>\s*\{children\}\s*<\/RouteErrorBoundary>/,
