@@ -30,7 +30,7 @@ import {
   MODEL_PARAMETER_LIMITS,
 } from '@/types/model-params';
 import {
-  getProviderFieldSupport,
+  resolveProviderConfig,
   type ProviderFieldSupport,
 } from '@/lib/llm/provider-field-support';
 import {
@@ -316,13 +316,13 @@ export function ModelParametersDialog({
 
   // Provider字段支持信息
   const [providerSupport, setProviderSupport] = useState<ProviderFieldSupport>(
-    () => getProviderFieldSupport(providerName),
+    () => resolveProviderConfig(providerName).config.support,
   );
 
   // 更新Provider字段支持信息
   useEffect(() => {
     if (providerName) {
-      setProviderSupport(getProviderFieldSupport(providerName));
+      setProviderSupport(resolveProviderConfig(providerName).config.support);
     }
   }, [providerName]);
 
