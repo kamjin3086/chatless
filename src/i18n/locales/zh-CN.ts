@@ -26,6 +26,8 @@ const zhCN: TranslationDict = {
     '这一页没能完成渲染。你的会话还在，可以重试或回到聊天列表。',
   'error.route': '出错的页面：{0}',
   'error.details': '错误详情',
+  'error.componentStack': '组件堆栈：',
+  'error.unknown': '未知错误',
   'error.retry': '重试',
   'error.backToChat': '返回聊天',
   'dialog.closeApp.title': '确认关闭',

@@ -6,32 +6,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseSeedQuery } from '../devStore';
-
-function memorySession(): Storage {
-  const data = new Map<string, string>();
-  return {
-    getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      data.set(key, String(value));
-    },
-    removeItem: (key: string) => {
-      data.delete(key);
-    },
-    clear: () => data.clear(),
-    key: (index: number) => [...data.keys()][index] ?? null,
-    get length() {
-      return data.size;
-    },
-  } as Storage;
-}
-
-function enterBrowser(search: string) {
-  vi.stubEnv('NODE_ENV', 'development');
-  vi.stubGlobal('window', {
-    location: { search },
-    sessionStorage: memorySession(),
-  });
-}
+import { enterBrowser } from './browserStoreHarness';
 
 async function loadDevStore() {
   vi.resetModules();
@@ -69,6 +44,12 @@ describe('parseSeedQuery', () => {
     expect(
       parseSeedQuery('?wallpaper=data:image/png;base64,abc%2Bdef').wallpaper,
     ).toBe('data:image/png;base64,abc+def');
+  });
+
+  it('keeps a data URL with a bare percent instead of dropping it', () => {
+    expect(parseSeedQuery('?wallpaper=data:image/svg+xml,100%').wallpaper).toBe(
+      'data:image/svg+xml,100%',
+    );
   });
 
   it('treats none as an explicit clear', () => {

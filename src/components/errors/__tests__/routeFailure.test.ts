@@ -48,16 +48,18 @@ describe('the failure surface', () => {
   const labels = {
     title: 'This page hit an error',
     description: 'Your conversation is still here.',
-    routeLabel: 'Failed route: {0}',
-    detailsLabel: 'Error details',
-    retryLabel: 'Retry',
-    backLabel: 'Back to chats',
+    route: 'Failed route: {0}',
+    details: 'Error details',
+    componentStack: 'Component stack:',
+    unknown: 'Unknown error',
+    retry: 'Retry',
+    backToChat: 'Back to chats',
   };
 
   it('shows the route, the message and both ways out', () => {
     const html = renderToStaticMarkup(
       React.createElement(RouteFailureView, {
-        ...labels,
+        labels,
         details: describeRouteFailure(new Error('boom'), '/knowledge'),
         canGoBack: true,
         onRetry: () => {},
@@ -73,8 +75,7 @@ describe('the failure surface', () => {
   it('still shows the route when a locale omits the placeholder', () => {
     const html = renderToStaticMarkup(
       React.createElement(RouteFailureView, {
-        ...labels,
-        routeLabel: 'Failed route:',
+        labels: { ...labels, route: 'Failed route:' },
         details: describeRouteFailure(new Error('boom'), '/knowledge'),
         canGoBack: true,
         onRetry: () => {},
@@ -87,7 +88,7 @@ describe('the failure surface', () => {
   it('omits the back button on the chat route itself', () => {
     const html = renderToStaticMarkup(
       React.createElement(RouteFailureView, {
-        ...labels,
+        labels,
         details: describeRouteFailure(new Error('boom'), '/chat'),
         canGoBack: false,
         onRetry: () => {},
@@ -96,5 +97,24 @@ describe('the failure surface', () => {
     );
     expect(html).toContain('Retry');
     expect(html).not.toContain('Back to chats');
+  });
+
+  it('labels an unnamed empty error and its component stack', () => {
+    const empty = new Error('');
+    empty.name = '';
+    const details = describeRouteFailure(empty, '/knowledge', 'at Broken');
+    expect(details.message).toBe('');
+
+    const html = renderToStaticMarkup(
+      React.createElement(RouteFailureView, {
+        labels,
+        details,
+        canGoBack: true,
+        onRetry: () => {},
+        onBack: () => {},
+      }),
+    );
+    expect(html).toContain('Unknown error');
+    expect(html).toContain('Component stack:');
   });
 });

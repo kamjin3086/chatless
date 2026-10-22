@@ -20,7 +20,7 @@ interface BoundaryState {
  * The error is shown, not swallowed: the fallback carries the route and the message, and
  * the boundary also writes the full error to the console for the developer.
  */
-class Boundary extends Component<{ children: ReactNode }, BoundaryState> {
+class RouteBoundary extends Component<{ children: ReactNode }, BoundaryState> {
   state: BoundaryState = {
     failed: false,
     error: null,
@@ -47,7 +47,7 @@ class Boundary extends Component<{ children: ReactNode }, BoundaryState> {
   render(): ReactNode {
     if (!this.state.failed) return this.props.children;
     return (
-      <RouteFailure
+      <RouteFailureContainer
         error={this.state.error}
         componentStack={this.state.componentStack}
         onRetry={this.reset}
@@ -61,10 +61,10 @@ export function RouteErrorBoundary({ children }: { children: ReactNode }) {
   // A route change remounts the boundary, so navigating away from a failed page cannot
   // leave the old failure surface in place. The conversation stores are module-level and
   // outside this subtree, so their state survives the remount.
-  return <Boundary key={pathname}>{children}</Boundary>;
+  return <RouteBoundary key={pathname}>{children}</RouteBoundary>;
 }
 
-function RouteFailure({
+function RouteFailureContainer({
   error,
   componentStack,
   onRetry,
@@ -81,12 +81,16 @@ function RouteFailure({
 
   return (
     <RouteFailureView
-      title={t('error.title')}
-      description={t('error.description')}
-      routeLabel={t('error.route')}
-      detailsLabel={t('error.details')}
-      retryLabel={t('error.retry')}
-      backLabel={t('error.backToChat')}
+      labels={{
+        title: t('error.title'),
+        description: t('error.description'),
+        route: t('error.route'),
+        details: t('error.details'),
+        componentStack: t('error.componentStack'),
+        unknown: t('error.unknown'),
+        retry: t('error.retry'),
+        backToChat: t('error.backToChat'),
+      }}
       details={details}
       canGoBack={canGoBack}
       onRetry={onRetry}

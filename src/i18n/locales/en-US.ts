@@ -28,6 +28,8 @@ const enUS: TranslationDict = {
     'This page could not finish rendering. Your conversation is still here - retry or go back to chats.',
   'error.route': 'Failed route: {0}',
   'error.details': 'Error details',
+  'error.componentStack': 'Component stack:',
+  'error.unknown': 'Unknown error',
   'error.retry': 'Retry',
   'error.backToChat': 'Back to chats',
   'dialog.closeApp.title': 'Confirm Close',

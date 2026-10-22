@@ -15,7 +15,7 @@ export function describeRouteFailure(
   componentStack?: string | null,
 ): RouteFailureDetails {
   const failure = error instanceof Error ? error : new Error(String(error));
-  const message = failure.message.trim() || failure.name || 'Unknown error';
+  const message = failure.message.trim() || failure.name;
   return {
     message,
     stack: failure.stack,

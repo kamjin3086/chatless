@@ -25,6 +25,8 @@ export type TranslationKey =
   | 'error.description'
   | 'error.route'
   | 'error.details'
+  | 'error.componentStack'
+  | 'error.unknown'
   | 'error.retry'
   | 'error.backToChat'
   | 'dialog.closeApp.title'

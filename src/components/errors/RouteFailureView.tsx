@@ -5,13 +5,19 @@ import { AlertTriangle, ArrowLeft, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { RouteFailureDetails } from './routeFailure';
 
-export interface RouteFailureViewProps {
+export interface RouteFailureLabels {
   title: string;
   description: string;
-  routeLabel: string;
-  detailsLabel: string;
-  retryLabel: string;
-  backLabel: string;
+  route: string;
+  details: string;
+  componentStack: string;
+  unknown: string;
+  retry: string;
+  backToChat: string;
+}
+
+export interface RouteFailureViewProps {
+  labels: RouteFailureLabels;
   details: RouteFailureDetails;
   canGoBack: boolean;
   onRetry: () => void;
@@ -23,12 +29,7 @@ export interface RouteFailureViewProps {
  * handlers, and this can be rendered in a test without a browser.
  */
 export function RouteFailureView({
-  title,
-  description,
-  routeLabel,
-  detailsLabel,
-  retryLabel,
-  backLabel,
+  labels,
   details,
   canGoBack,
   onRetry,
@@ -44,26 +45,26 @@ export function RouteFailureView({
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
           <div className="min-w-0 flex-1">
             <h1 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-              {title}
+              {labels.title}
             </h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              {description}
+              {labels.description}
             </p>
             <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              {routeLabel.includes('{0}')
-                ? routeLabel.replace('{0}', details.route)
-                : `${routeLabel} ${details.route}`}
+              {labels.route.includes('{0}')
+                ? labels.route.replace('{0}', details.route)
+                : `${labels.route} ${details.route}`}
             </p>
             <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-100/70 p-3 text-xs text-slate-700 dark:bg-white/5 dark:text-slate-200">
-              {details.message}
+              {details.message || labels.unknown}
             </pre>
             {(details.stack || details.componentStack) && (
               <details className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                <summary className="cursor-pointer">{detailsLabel}</summary>
+                <summary className="cursor-pointer">{labels.details}</summary>
                 <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-100/70 p-3 text-[11px] dark:bg-white/5">
                   {details.stack ?? details.message}
                   {details.componentStack
-                    ? `\n\nComponent stack:\n${details.componentStack}`
+                    ? `\n\n${labels.componentStack}\n${details.componentStack}`
                     : ''}
                 </pre>
               </details>
@@ -71,12 +72,12 @@ export function RouteFailureView({
             <div className="mt-4 flex flex-wrap gap-2">
               <Button type="button" onClick={onRetry}>
                 <RotateCcw className="h-4 w-4" />
-                {retryLabel}
+                {labels.retry}
               </Button>
               {canGoBack && (
                 <Button type="button" variant="outline" onClick={onBack}>
                   <ArrowLeft className="h-4 w-4" />
-                  {backLabel}
+                  {labels.backToChat}
                 </Button>
               )}
             </div>

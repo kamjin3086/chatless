@@ -32,8 +32,6 @@ import {
   GLASS_THEME_KEY,
   GLASS_WALLPAPER_KEY,
   THEME_KEY,
-  THEME_STORE,
-  USER_PREFERENCES_STORE,
 } from '@/lib/preferences/keys';
 
 /** Query parameter that switches the stub on for this tab. */
@@ -52,6 +50,10 @@ export interface DevStoreSeed {
   wallpaper?: string | null;
 }
 
+/** The two stores the seeded preferences live in. */
+const THEME_STORE = 'app-storage.json';
+const USER_PREFERENCES_STORE = 'user-preferences.json';
+
 /**
  * Read the seed preferences from the page query.
  *
@@ -61,15 +63,14 @@ export interface DevStoreSeed {
  * form the browser path already stores (an http URL is not a local setting).
  */
 export function parseSeedQuery(search: string): DevStoreSeed {
-  const params = new URLSearchParams(search);
   const seed: DevStoreSeed = {};
 
-  const theme = params.get('theme')?.toLowerCase();
+  const theme = rawQueryValue(search, 'theme')?.toLowerCase();
   if (theme === 'light' || theme === 'dark' || theme === 'system') {
     seed.theme = theme;
   }
 
-  const glass = params.get('glass');
+  const glass = rawQueryValue(search, 'glass');
   if (glass === '1' || glass === 'true') seed.glass = true;
   else if (glass === '0' || glass === 'false') seed.glass = false;
 
@@ -100,7 +101,9 @@ function rawQueryValue(search: string, name: string): string | null {
     try {
       return decodeURIComponent(rawValue);
     } catch {
-      return null;
+      // A bare `%` is not valid percent-encoding, but a data URL may still contain one;
+      // keep the raw value instead of dropping the wallpaper.
+      return rawValue;
     }
   }
   return null;
