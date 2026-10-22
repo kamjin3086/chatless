@@ -3,9 +3,9 @@
 A map for the seams that cost exploration to find. Not a tour of `src` - one line per
 place where two subsystems have to agree, because that is where a change starts.
 
-Paths and symbols here were checked against the branch this file landed on. Work that is in
-flight is named by issue/PR instead of by path, so the map stays true until it lands and gets
-its row.
+Paths here exist on the branch this file landed on, and each symbol is named with the file
+that defines it. Work that is in flight is named by issue/PR instead of by path, so the map
+stays true until it lands and gets its row.
 
 ## Tool calls (native track and prompt track)
 
