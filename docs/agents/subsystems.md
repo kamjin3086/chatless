@@ -3,8 +3,9 @@
 A map for the seams that cost exploration to find. Not a tour of `src` - one line per
 place where two subsystems have to agree, because that is where a change starts.
 
-Paths here were checked against the branch this file landed on. Work that is in flight is
-named by issue/PR instead of by path, so the map stays true until it lands and gets its row.
+Paths and symbols here were checked against the branch this file landed on. Work that is in
+flight is named by issue/PR instead of by path, so the map stays true until it lands and gets
+its row.
 
 ## Tool calls (native track and prompt track)
 
@@ -17,7 +18,7 @@ The chain, in order, for a single turn:
 | What the request carries | `src/lib/mcp/agentLoop/AgentLoopRunner.ts` - `tools` for the native track, none for the prompt track |
 | Turning answer text back into calls | in flight in #161 / #167, in `src/lib/chat/stream/`, over `src/lib/llm/adapters/ToolChannelParser.ts` |
 | The formats it reads | `src/lib/mcp/toolInstruction/formats/pipeline.ts` and `handlers/` - a format is a handler, not a branch |
-| What the UI gets | `src/lib/chat/stream/handlers/ToolCallEventHandler.ts` → `src/lib/chat/segments.ts` → `src/components/chat/ToolCallCard.tsx` (`presentToolCard` owns the wording) |
+| What the UI gets | `src/lib/chat/stream/handlers/ToolCallEventHandler.ts` → `src/lib/chat/segments.ts` → `src/components/chat/ToolCallCard.tsx`; the wording is `presentToolCard` in `src/components/chat/toolCardPresentation.ts` |
 
 A card state is a value in `segments.ts`'s `ToolCallStatus`; wording lives beside the card, not
 in the stream layer.

@@ -62,8 +62,12 @@ export function linkedNodeModules(absPath) {
   }
 }
 
-/** @param {string} linkPath @returns {'unlink'|'rmdir'} */
-export function unlinkNodeModulesLink(linkPath) {
+/**
+ * @param {string} linkPath @returns {'unlink'|'rmdir'}
+ * Not exported: the CLI is its only caller, and the `rmdir` case is the one no test
+ * here has executed (plain `unlink` answered on this platform), which the PR states.
+ */
+function unlinkNodeModulesLink(linkPath) {
   try {
     fs.unlinkSync(linkPath);
     return 'unlink';

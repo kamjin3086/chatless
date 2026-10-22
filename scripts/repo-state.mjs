@@ -12,7 +12,9 @@
  * cause that was actually observed, never a guessed one.
  *
  * Usage: pnpm repo:state
- * Exit code is 0 unless the tool itself cannot run; it reports, it does not judge.
+ * Exit code is 0 unless the tool itself cannot run. It reports what it read; the one
+ * verdict it repeats is the commit-title gate's, printed as that gate's own wording,
+ * because the gate otherwise judges a push only after it happened.
  */
 import { execFileSync } from 'node:child_process';
 import { checkPrTitle } from './check-pr-title.mjs';

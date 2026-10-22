@@ -135,10 +135,11 @@ function logFragment(line) {
  * run is the answer - reading an older one turned a green board into "not green"
  * after a retitle, and the retitle itself was what needed checking.
  *
- * Order is the API's monotonic run id, falling back to `startedAt`; without either
- * the first occurrence wins, which matches the REST endpoint's newest-first order.
+ * Order is the API's monotonic run id. A run without one keeps its position, which is
+ * the REST endpoint's newest-first order - the `--checks` projection always carries the
+ * id, so the fallback exists only for callers that hand-build the list.
  */
-export function latestCheckRuns(runs) {
+function latestCheckRuns(runs) {
   const list = Array.isArray(runs) ? runs : [];
   const byName = new Map();
   for (const run of list) {
@@ -150,9 +151,7 @@ export function latestCheckRuns(runs) {
 
 function runOrder(run) {
   const id = Number(run?.id);
-  if (Number.isFinite(id) && id > 0) return id;
-  const started = Date.parse(run?.startedAt ?? '');
-  return Number.isFinite(started) ? started : 0;
+  return Number.isFinite(id) && id > 0 ? id : 0;
 }
 
 export function summariseCheckRuns(runs) {
@@ -262,14 +261,14 @@ if (process.argv[1] && process.argv[1].endsWith('ci-log.mjs')) {
         'api',
         `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`,
         '--jq',
-        '.check_runs[] | [.id, .name, .status, .conclusion // "", .started_at // ""] | @tsv',
+        '.check_runs[] | [.id, .name, .status, .conclusion // ""] | @tsv',
       ]);
       const runs = board
         .split('\n')
         .filter(Boolean)
         .map((line) => {
-          const [id, name, status, conclusion, startedAt] = line.split('\t');
-          return { id: Number(id), name, status, conclusion: conclusion || null, startedAt };
+          const [id, name, status, conclusion] = line.split('\t');
+          return { id: Number(id), name, status, conclusion: conclusion || null };
         });
       const verdict = summariseCheckRuns(runs);
       console.log(`${isSha ? sha : `PR ${target}`} @ ${sha.slice(0, 7)}`);

@@ -170,7 +170,7 @@ one to run.
 | Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + test) - seconds to a couple of minutes |
 | Before pushing a build-affecting change, or when CI is the only gate | `pnpm verify` (= `verify:fast` + `next build`); the build takes ~18 minutes here and refuses to start while a dev server holds `dist` |
 | PR title | `pnpm check:pr-title "<title>"` - `pnpm repo:state` now flags an open PR whose title the gate would reject, so this is caught before the push; the title workflow has no `edited` trigger, so a retitle alone does not clear the red check |
-| What a PR's CI actually runs | the five steps in `.github/workflows/ci.yml`: `lint:ci`, `typecheck`, `typecheck:tests`, `test`, `cargo check`. The `test-tauri-*` jobs are `if: false`, so **no build runs on a PR**: `next build` (below) is a local-only gate and a claim that "CI covers the build" is false |
+| What a PR's CI actually runs | the five commands across the two jobs in `.github/workflows/ci.yml`: `frontend-checks` runs `lint:ci`, `typecheck`, `typecheck:tests`, `test`; `backend-check` runs `cargo check`. The `test-tauri-*` jobs are `if: false`, so **no build runs on a PR**: `next build` (below) is a local-only gate and a claim that "CI covers the build" is false |
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust unit tests | `cargo check --tests` proves they compile, never that they pass. Running them costs a full codegen + link (minutes, ~1-2 GB here); decide up front whether the evidence is worth it, or prove the arithmetic another way and say so |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
