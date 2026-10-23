@@ -9,6 +9,7 @@ import { toOpenAIMessage } from './messageMapping';
 import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptCacheMetrics';
 import { toOpenAITools, toOpenAIToolChoice, type ToolDefinition } from '../types/tool-schema';
 import { toWireOptions } from '../wireOptions';
+import { IncompleteResponseError } from './incompleteResponse';
 import {
   PROVIDER_CONFIGS,
   mapProviderFields,
@@ -173,7 +174,10 @@ export class DeepSeekProvider extends BaseProvider {
               }
               if (['length', 'content_filter'].includes(json?.choices?.[0]?.finish_reason)) {
                 toolCallState.clear();
-                cb.onError?.(new Error('DeepSeek response incomplete'));
+                const finishReason = String(json?.choices?.[0]?.finish_reason);
+                cb.onError?.(
+                  new IncompleteResponseError(finishReason, 'DeepSeek response incomplete'),
+                );
                 this.sseClient.stopConnection();
                 return;
               }

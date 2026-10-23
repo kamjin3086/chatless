@@ -11,6 +11,7 @@ import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptC
 import { readContextWindow } from '@/lib/llm/modelWindow';
 import { dumpLlmRequest, isLlmDebugEnabled, reportTurnBoundary } from '../debugLog';
 import { toWireOptions } from '../wireOptions';
+import { IncompleteResponseError } from './incompleteResponse';
 import {
   DEFAULT_PROVIDER_CONFIG,
   mapProviderFields,
@@ -310,7 +311,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const finishReason = json?.choices?.[0]?.finish_reason;
         if (finishReason === 'length' || finishReason === 'content_filter') {
           toolCallState.clear();
-          terminal.fail(new Error(`Response incomplete: ${finishReason}`));
+          terminal.fail(new IncompleteResponseError(finishReason));
           return;
         }
         // 1) 先提取内容（包含最终 message.content），避免因 finish_reason 过早 return 丢失末帧内容
@@ -559,7 +560,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         const finishReason = json?.choices?.[0]?.finish_reason;
         if (finishReason === 'length' || finishReason === 'content_filter') {
           toolCallState.clear();
-          terminal.fail(new Error(`Response incomplete: ${finishReason}`));
+          terminal.fail(new IncompleteResponseError(finishReason));
           return;
         }
 
@@ -692,7 +693,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
               const finishReason = json?.choices?.[0]?.finish_reason;
               if (finishReason === 'length' || finishReason === 'content_filter') {
                 toolCallState.clear();
-                terminal.fail(new Error(`Response incomplete: ${finishReason}`));
+                terminal.fail(new IncompleteResponseError(finishReason));
                 this.sseClient.stopConnection();
                 return;
               }

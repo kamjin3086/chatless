@@ -6,6 +6,11 @@ export interface ModelCheckResult {
   durationMs: number;
   tokenEstimate?: number;
   message?: string;
+  /**
+   * A caveat on a successful check: the endpoint answered but the probe's own
+   * output cap ended the answer before the model wrote anything (#151).
+   */
+  note?: string;
   timestamp: number; // epoch ms
 }
 
