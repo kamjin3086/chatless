@@ -11,6 +11,10 @@ import { parsePromptCacheUsage, recordPromptCacheUsage } from '@/lib/llm/promptC
 import { readContextWindow } from '@/lib/llm/modelWindow';
 import { dumpLlmRequest, isLlmDebugEnabled, reportTurnBoundary } from '../debugLog';
 import { toWireOptions } from '../wireOptions';
+import {
+  DEFAULT_PROVIDER_CONFIG,
+  mapProviderFields,
+} from '../provider-field-support';
 import { 
   type ToolDefinition, 
   toOpenAITools, 
@@ -161,18 +165,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
     } = (opts as any) || {};
     // #151: the bag also carries the scheduler lease, the request id and `streaming`.
     // Only wire fields may continue; the mapping below reads the original `opts`.
-    const mapped: any = toWireOptions(restOpts);
-    const o: any = opts as any;
-    if (o.maxTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxTokens;
-    if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined) mapped.max_tokens = o.maxOutputTokens;
-    if (o.topP !== undefined && mapped.top_p === undefined) mapped.top_p = o.topP;
-    if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;
-    if (o.minP !== undefined && mapped.min_p === undefined) mapped.min_p = o.minP;
-    if (o.frequencyPenalty !== undefined && mapped.frequency_penalty === undefined)
-      mapped.frequency_penalty = o.frequencyPenalty;
-    if (o.presencePenalty !== undefined && mapped.presence_penalty === undefined)
-      mapped.presence_penalty = o.presencePenalty;
-    if (o.stop !== undefined && mapped.stop === undefined) mapped.stop = o.stop;
+    // A compatible endpoint with no row of its own speaks the documented default (the
+    // OpenAI row). The row fills only its declared wire keys; native fields keep precedence.
+    const mapped: any = mapProviderFields(
+      DEFAULT_PROVIDER_CONFIG,
+      opts,
+      toWireOptions(restOpts),
+    );
+    // A native `thinking` object is not an OpenAI-compatible chat field.
+    delete mapped.thinking;
     // No default `stop` list. It used to carry the chat-template boundary tokens, on top
     // of the client-side cut that fixed the invented-turn bug; a sampling parameter the
     // user never set is not this app's to invent, and it shows up in every request they
