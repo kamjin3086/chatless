@@ -9,6 +9,26 @@ import { toast } from "@/components/ui/sonner";
 import { getModelCapabilities } from "@/lib/provider/staticModels";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useModelCheckStore } from '@/store/modelCheckStore';
+import { MODEL_PROBE_MAX_OUTPUT_TOKENS, MODEL_PROBE_TOKEN_BOUND, probeModel } from '@/lib/llm/modelProbe';
+
+/**
+ * Common failures get a one-line remedy; the provider's own text stays in front of
+ * it. Classification is by substring because these are HTTP/transport texts, not
+ * typed errors.
+ */
+function describeFailureHint(msg: string): string {
+  const em = (msg || '').toLowerCase();
+  if (em.includes('no_key') || em.includes('no key')) {
+    return '未配置密钥：请为该 Provider 或模型设置 API Key';
+  }
+  if (em.includes('401')) return '认证失败：请检查 API Key 是否正确/有权限';
+  if (em.includes('404')) return '未找到：请检查服务地址或模型名称是否正确';
+  if (em.includes('429')) return '限流：请稍后重试或降低频率';
+  if (em.includes('http 5') || em.includes(' 5')) {
+    return '服务异常：提供商服务暂时异常，请稍后重试';
+  }
+  return '';
+}
 
 interface ProviderModelItemProps {
   providerName: string;
@@ -111,59 +131,34 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
       <div className="ml-auto mr-2 flex items-center gap-0.5">
         {/* 健康检查：悬浮可见的小按钮 */}
         {(() => {
-          const prompt = "Respond with only the word 'OK'";
-          const inputTokenEst = Math.max(1, Math.round(prompt.length / 4));
-          const maxOut = 8;
           const [isChecking, setIsChecking] = useState(false);
           const last = useModelCheckStore(s=>s.getResult(providerName, model.name));
           const setResult = useModelCheckStore(s=>s.setResult);
           async function runHealthCheck() {
             setIsChecking(true)
-            const start = Date.now();
-            // 极小成本提示词与参数
-            const messages = [{ role: 'user', content: prompt }];
-            const opts: any = { temperature: 0, maxTokens: 8, stream: true };
-            // 简单 token 估算（英文4字符≈1token）
             try {
-              const { chat } = await import('@/lib/llm');
-              const result = await chat(providerName, model.name, messages as any, opts);
-              const content = (result?.content || '').trim();
-              const ok = !!content;
-              const duration = Date.now() - start;
-              const outputTokenEst = Math.max(1, Math.round((content || 'OK').length / 4));
-              const totalTokenEst = inputTokenEst + outputTokenEst;
-              if (ok) {
-                setResult(providerName, model.name, { ok: true, durationMs: duration, tokenEstimate: totalTokenEst, timestamp: Date.now() });
+              const verdict = await probeModel(providerName, model.name);
+              if (verdict.ok) {
+                // 截断是探测自己 8 tokens 上限造成的，端点已经回包，模型可用（#151）
+                const note = verdict.status === 'truncated'
+                  ? `回答在 ${MODEL_PROBE_MAX_OUTPUT_TOKENS} tokens 上限处截断，端点已回包`
+                  : undefined;
+                setResult(providerName, model.name, { ok: true, durationMs: verdict.durationMs, tokenEstimate: verdict.tokenEstimate, note, timestamp: Date.now() });
                 toast.success(`模型 ${model.label || model.name} 可用`, {
-                  description: `耗时 ${duration}ms · 估算Tokens≈${totalTokenEst}`,
+                  description: `耗时 ${verdict.durationMs}ms · 估算Tokens≈${verdict.tokenEstimate}${note ? ` · ${note}` : ''}`,
                 });
-              } else {
-                throw new Error('响应内容为空，可能为不兼容的返回格式');
+                return;
               }
-            } catch (err: any) {
-              const duration = Date.now() - start;
-              const msg: string = (err?.userMessage) || (typeof err?.message === 'string' ? err.message : '测试失败');
-              // 归类常见错误，给出友好指引
-              let hint = '';
-              const em = (msg || '').toLowerCase();
-              if (em.includes('no_key') || em.includes('no key')) {
-                hint = '未配置密钥：请为该 Provider 或模型设置 API Key';
-              } else if (em.includes('401')) {
-                hint = '认证失败：请检查 API Key 是否正确/有权限';
-              } else if (em.includes('404')) {
-                hint = '未找到：请检查服务地址或模型名称是否正确';
-              } else if (em.includes('429')) {
-                hint = '限流：请稍后重试或降低频率';
-              } else if (em.includes('http 5') || em.includes(' 5')) {
-                hint = '服务异常：提供商服务暂时异常，请稍后重试';
-              }
+              const msg = verdict.message || '测试失败';
+              const hint = describeFailureHint(msg);
               toast.error('模型不可用', {
-                description: `${msg}${hint ? ` · ${hint}` : ''} · ${duration}ms`,
+                description: `${msg}${hint ? ` · ${hint}` : ''} · ${verdict.durationMs}ms`,
                 duration: 6000,
               });
-              setResult(providerName, model.name, { ok: false, durationMs: duration, message: msg, timestamp: Date.now() });
+              setResult(providerName, model.name, { ok: false, durationMs: verdict.durationMs, message: msg, timestamp: Date.now() });
+            } finally {
+              setIsChecking(false)
             }
-            setIsChecking(false)
           }
           return (
             <TooltipProvider>
@@ -189,11 +184,12 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                       </div>
                       <div className="text-xs">结果：{last.ok ? '可用' : '不可用'}</div>
                       <div className="text-xs">耗时：{last.durationMs}ms{typeof last.tokenEstimate==='number' ? ` · Tokens≈${last.tokenEstimate}` : ''}</div>
+                      {last.note ? <div className="text-xs text-slate-500">{last.note}</div> : null}
                       {last.message ? <div className="text-xs text-red-500">{last.message}</div> : null}
                       <div className="text-xs text-slate-500">点击重新检查</div>
                     </div>
                   ) : (
-                    <div className="text-xs">快速健康检查 · 预计消耗 ≤ {inputTokenEst + maxOut} tokens</div>
+                    <div className="text-xs">快速健康检查 · 预计消耗 ≤ {MODEL_PROBE_TOKEN_BOUND} tokens</div>
                   )}
                 </TooltipContent>
               </Tooltip>

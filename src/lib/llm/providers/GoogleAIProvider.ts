@@ -15,6 +15,7 @@ import {
 } from '../provider-field-support';
 import { StreamEventAdapter } from '../adapters/StreamEventAdapter';
 import { createStreamEvent } from '../types/stream-events';
+import { IncompleteResponseError } from './incompleteResponse';
 
 /**
  * Google AI Provider
@@ -347,7 +348,8 @@ export class GoogleAIProvider extends BaseProvider {
                   candidate.finishReason !== 'STOP'
                 ) {
                   cb.onError?.(
-                    new Error(
+                    new IncompleteResponseError(
+                      String(candidate.finishReason),
                       `Gemini response incomplete: ${candidate.finishReason}`,
                     ),
                   );
