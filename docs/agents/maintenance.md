@@ -313,9 +313,11 @@ still works (`docs/tauri-window-pitfalls.md`).
   awareness first (without it, at 125 % every coordinate is 0.8x and the right edge is silently
   lost). Read the `FG=` it prints: an unfocused capture shows whatever was on top.
 - **A window preset can be larger than the desktop.** 1024x768 logical is 1280x960 physical at
-    125 %, while the logical work area here is 1228x691: the app's right and bottom edges sit
-    off-screen, which looks exactly like a layout bug in a screenshot. Resize to the work area
-    before judging any layout, and do not report the clipping as a defect.
+    125 %, while the logical work area here is 1228x691, so a screenshot taken without resizing
+    can show the window's edges off-screen. Resize to the work area before judging any layout.
+    Since #169 the app fits its own window into the work area at startup and when a preset is
+    applied (`src-tauri/src/window_fit.rs`), so clipping in a fresh build is a regression, not a
+    quirk of this machine.
   - **`next dev` and `next build` share `distDir: dist`.** Running `pnpm build` (or `pnpm verify`)
     while a dev server is up leaves both stuck - the build prints "Creating an optimized
     production build ..." for a quarter of an hour and the dev server then serves 500s because
