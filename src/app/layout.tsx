@@ -15,6 +15,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useRouter } from "next/navigation";
 import { preloadInitialLogos } from '@/lib/utils/logoPreloader';
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
+import { RouteErrorBoundary } from '@/components/errors/RouteErrorBoundary';
 import { isTauriEnvironment } from '@/lib/utils/environment';
 
 // The custom title bar is a platform capability, not a user setting, so the
@@ -241,7 +242,9 @@ export default function RootLayout({
       <body className={`${inter.variable} h-full bg-background text-foreground antialiased`}>
         <WindowTitleBar />
         <TauriApp>
-          {children}
+          {/* Routed content only: the shell and the stores stay outside, so a retry or
+              the way back cannot discard an in-flight conversation. */}
+          <RouteErrorBoundary>{children}</RouteErrorBoundary>
         </TauriApp>
         <CommandPalette />
         <Toaster />

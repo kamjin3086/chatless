@@ -6,13 +6,19 @@
  * works" claim about provider settings was a read-the-code claim. With this in place the
  * app's own path runs unchanged: `ProviderInitializationService` writes the catalogue here,
  * the model and provider repositories read it back, and the routes render rows, key inputs
- * and status badges. Nothing is seeded by hand, so a browser cannot disagree with the app
- * about what "a fresh install" looks like.
+ * and status badges. The stub still starts from the app's own fresh-install path; a URL may
+ * seed only the theme/glass preferences it explicitly asks for, before the app reads them.
+ * It does not invent providers, models or other data.
  *
  * Turning it on: `?devStore=1` on any URL. The choice is remembered for the tab
  * (sessionStorage), so following a provider into a dialog or another settings tab keeps it;
  * `?devStore=0` turns it off again. A query flag rather than an env var means one `next dev`
  * serves both states.
+ *
+ * Seeding is evaluated whenever a store is touched. The app reads theme/glass during
+ * initialization, so the seed URL belongs on the page load; an in-app navigation that adds
+ * seed parameters later cannot re-apply the theme. A value this URL seeded may be updated
+ * or cleared by a later URL; a value the page/test wrote is never overwritten.
  *
  * It cannot apply where it must not: inside Tauri, where a real store exists and a stub
  * would shadow the user's data, and in a production build. The build gate lives at the
@@ -22,12 +28,137 @@
  * branch is taken.
  */
 import { isTauriEnvironment } from '@/lib/utils/environment';
+import {
+  GLASS_THEME_KEY,
+  GLASS_WALLPAPER_KEY,
+  THEME_KEY,
+} from '@/lib/preferences/keys';
 
 /** Query parameter that switches the stub on for this tab. */
 export const DEV_STORE_QUERY = 'devStore';
 
 /** Remembers the choice for the tab, so navigation does not silently drop it. */
 export const DEV_STORE_SESSION_KEY = 'chatless:dev-store';
+
+export type SeedTheme = 'light' | 'dark' | 'system';
+
+/** The preferences a URL may seed into a fresh in-memory store. */
+export interface DevStoreSeed {
+  theme?: SeedTheme;
+  glass?: boolean;
+  /** A wallpaper data URL, or null for "none" (leave the key absent). */
+  wallpaper?: string | null;
+}
+
+/** The two stores the seeded preferences live in. */
+const THEME_STORE = 'app-storage.json';
+const USER_PREFERENCES_STORE = 'user-preferences.json';
+
+/**
+ * Read the seed preferences from the page query.
+ *
+ * A pure function so the parser can be tested without a browser. Unknown keys and
+ * unaccepted values are ignored rather than repaired: a URL that says `theme=blue` should
+ * leave the app's own default in place, and a wallpaper is only accepted in the data-URL
+ * form the browser path already stores (an http URL is not a local setting).
+ */
+export function parseSeedQuery(search: string): DevStoreSeed {
+  const seed: DevStoreSeed = {};
+
+  const theme = rawQueryValue(search, 'theme')?.toLowerCase();
+  if (theme === 'light' || theme === 'dark' || theme === 'system') {
+    seed.theme = theme;
+  }
+
+  const glass = rawQueryValue(search, 'glass');
+  if (glass === '1' || glass === 'true') seed.glass = true;
+  else if (glass === '0' || glass === 'false') seed.glass = false;
+
+  const wallpaper = rawQueryValue(search, 'wallpaper');
+  if (wallpaper === 'none') seed.wallpaper = null;
+  else if (wallpaper?.startsWith('data:image/')) seed.wallpaper = wallpaper;
+
+  return seed;
+}
+
+/**
+ * Read one query value without `URLSearchParams`' `+` -> space decoding. A base64 data URL
+ * commonly contains `+`; decoding it as a space silently corrupts the wallpaper.
+ */
+function rawQueryValue(search: string, name: string): string | null {
+  const query = search.startsWith('?') ? search.slice(1) : search;
+  for (const part of query.split('&')) {
+    const eq = part.indexOf('=');
+    const rawKey = eq === -1 ? part : part.slice(0, eq);
+    let key: string;
+    try {
+      key = decodeURIComponent(rawKey);
+    } catch {
+      continue;
+    }
+    if (key !== name) continue;
+    const rawValue = eq === -1 ? '' : part.slice(eq + 1);
+    try {
+      return decodeURIComponent(rawValue);
+    } catch {
+      // A bare `%` is not valid percent-encoding, but a data URL may still contain one;
+      // keep the raw value instead of dropping the wallpaper.
+      return rawValue;
+    }
+  }
+  return null;
+}
+
+interface SeedRule {
+  source: keyof DevStoreSeed;
+  key: string;
+  /** A null source value means "clear", not "write null" (only the wallpaper today). */
+  clearOnNull?: boolean;
+}
+
+/** Which store gets which seed field. Adding a seed target is one row. */
+const SEED_RULES: Record<string, readonly SeedRule[]> = {
+  [THEME_STORE]: [{ source: 'theme', key: THEME_KEY }],
+  [USER_PREFERENCES_STORE]: [
+    { source: 'glass', key: GLASS_THEME_KEY },
+    { source: 'wallpaper', key: GLASS_WALLPAPER_KEY, clearOnNull: true },
+  ],
+};
+
+interface StoreState {
+  rows: Map<string, unknown>;
+  /** Keys this URL put there, so a later URL can update/clear a seed, not a page write. */
+  seeded: Set<string>;
+}
+
+/**
+ * Apply the URL's seed to one store. A key this URL put there may be updated or cleared by
+ * a later URL; a key the page/test wrote is not in the mark set and wins.
+ */
+function seedRows(name: string, state: StoreState, seed: DevStoreSeed): void {
+  const canWrite = (key: string) =>
+    !state.rows.has(key) || state.seeded.has(key);
+  const write = (key: string, value: unknown) => {
+    if (!canWrite(key)) return;
+    state.rows.set(key, copy(value));
+    state.seeded.add(key);
+  };
+  const clear = (key: string) => {
+    if (!canWrite(key)) return;
+    state.rows.delete(key);
+    state.seeded.delete(key);
+  };
+
+  for (const rule of SEED_RULES[name] ?? []) {
+    const value = seed[rule.source];
+    if (value === undefined) continue;
+    if (value === null) {
+      if (rule.clearOnNull) clear(rule.key);
+      continue;
+    }
+    write(rule.key, value);
+  }
+}
 
 export interface DevStoreConditions {
   nodeEnv: string | undefined;
@@ -103,7 +234,7 @@ export interface DevStore {
   save(): Promise<void>;
 }
 
-const stores = new Map<string, Map<string, unknown>>();
+const stores = new Map<string, StoreState>();
 
 /**
  * One store per file name, the way the Tauri plugin has one per file - so `model-parameters
@@ -116,34 +247,42 @@ const stores = new Map<string, Map<string, unknown>>();
  * would stay hidden in the stub.
  */
 export function devStore(name: string): DevStore {
-  let rows = stores.get(name);
-  if (!rows) {
-    rows = new Map<string, unknown>();
-    stores.set(name, rows);
+  let state = stores.get(name);
+  if (!state) {
+    state = { rows: new Map<string, unknown>(), seeded: new Set<string>() };
+    stores.set(name, state);
   }
-  const data = rows;
+  // Seed on every touch, before that store answers. The app reads theme/glass during
+  // initialization, so the URL belongs on the page load; rows this URL seeded may still be
+  // updated by a later URL, while a value the page/test wrote removes its mark and wins.
+  if (devStoreEnabled()) {
+    seedRows(name, state, parseSeedQuery(window.location?.search ?? ''));
+  }
 
   return {
     async set(key, value) {
-      data.set(key, copy(value));
+      state.rows.set(key, copy(value));
+      state.seeded.delete(key);
     },
     async get<T = unknown>(key: string) {
-      return copy(data.get(key)) as T | undefined;
+      return copy(state.rows.get(key)) as T | undefined;
     },
     async has(key) {
-      return data.has(key);
+      return state.rows.has(key);
     },
     async delete(key) {
-      return data.delete(key);
+      state.seeded.delete(key);
+      return state.rows.delete(key);
     },
     async clear() {
-      data.clear();
+      state.rows.clear();
+      state.seeded.clear();
     },
     async keys() {
-      return [...data.keys()];
+      return [...state.rows.keys()];
     },
     async length() {
-      return data.size;
+      return state.rows.size;
     },
     async save() {
       /* there is no file to flush */
