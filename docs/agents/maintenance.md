@@ -170,8 +170,10 @@ one to run.
 | TypeScript that only tests use | `pnpm typecheck:tests` - the root `typecheck` excludes every test file |
 | Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + test) - seconds to a couple of minutes |
 | Before pushing a build-affecting change, or when CI is the only gate | `pnpm verify` (= `verify:fast` + `next build`); the build takes ~18 minutes here and refuses to start while a dev server holds `dist` |
-| PR title | `pnpm check:pr-title "<title>"` |
+| PR title | `pnpm check:pr-title "<title>"` - `pnpm repo:state` now flags an open PR whose title the gate would reject, so this is caught before the push; the title workflow has no `edited` trigger, so a retitle alone does not clear the red check |
+| What a PR's CI actually runs | the five commands across the two jobs in `.github/workflows/ci.yml`: `frontend-checks` runs `lint:ci`, `typecheck`, `typecheck:tests`, `test`; `backend-check` runs `cargo check`. The `test-tauri-*` jobs are `if: false`, so **no build runs on a PR**: `next build` (below) is a local-only gate and a claim that "CI covers the build" is false |
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust unit tests | `cargo check --tests` proves they compile, never that they pass. Running them costs a full codegen + link (minutes, ~1-2 GB here); decide up front whether the evidence is worth it, or prove the arithmetic another way and say so |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
 | Start-up, window, tray, macOS visuals | `scripts/verify-app-startup.sh src-tauri/target/release/chatless` - macOS only (hard-coded log path), needs a release build |
 | Search / knowledge / budget work | the wired audits in `pnpm test`, plus `pnpm test:acceptance` - see the note below |
@@ -397,6 +399,9 @@ spells it out per worktree.
   under the live session and your edits land in their next commit. Take your own
   tree: `pnpm wt:add ../wt-<topic> -b <branch>` (it links `node_modules` with an
   absolute path, which the hand-written `ln -s ../repo/node_modules` is not).
+  Remove it with `pnpm wt:remove <path>`: the link is a junction, and
+  `git worktree remove` follows it into the main checkout - one session lost
+  `node_modules/.bin` that way and had to reinstall before its tests would run.
 - Name the rev you merge: `git merge --no-edit origin/main`. A `git merge` without
   one merges the branch's own upstream and prints "Already up to date", which is
   easy to read as success. `pnpm repo:state`'s `main merged in` line is the check;

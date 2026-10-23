@@ -129,9 +129,36 @@ function logFragment(line) {
  * called out on purpose: twice a pull request had no run at all, because Actions never
  * received the event, and "no rows" reads like "still queued" to whoever is waiting.
  */
-export function summariseCheckRuns(runs) {
+/**
+ * One check name can carry more than one run on the same commit: re-running a
+ * workflow starts a new suite, and a retriggered event appends another. The newest
+ * run is the answer - reading an older one turned a green board into "not green"
+ * after a retitle, and the retitle itself was what needed checking.
+ *
+ * Order is the API's monotonic run id. A run without one keeps its position, which is
+ * the REST endpoint's newest-first order - the `--checks` projection always carries the
+ * id, so the fallback exists only for callers that hand-build the list.
+ */
+function latestCheckRuns(runs) {
   const list = Array.isArray(runs) ? runs : [];
-  if (!list.length) {
+  const byName = new Map();
+  for (const run of list) {
+    const current = byName.get(run.name);
+    if (!current || runOrder(run) > runOrder(current)) byName.set(run.name, run);
+  }
+  return [...byName.values()];
+}
+
+function runOrder(run) {
+  const id = Number(run?.id);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
+export function summariseCheckRuns(runs) {
+  const all = Array.isArray(runs) ? runs : [];
+  const list = latestCheckRuns(all);
+  const superseded = all.filter((run) => !list.includes(run));
+  if (!all.length) {
     return {
       registered: false,
       // Not "still running": a board with no rows and a board still filling up are different
@@ -158,12 +185,19 @@ export function summariseCheckRuns(runs) {
     pass: pending.length === 0 && failed.length === 0,
     failed,
     pending,
-    note: list
-      .map(
+    note: [
+      ...list.map(
         (r) =>
           `${r.name}=${r.status}${r.conclusion && r.conclusion !== 'neutral' ? `/${r.conclusion}` : ''}`,
-      )
-      .join(' '),
+      ),
+      ...(superseded.length
+        ? [
+            `(superseded: ${superseded
+              .map((r) => `${r.name}=${r.conclusion ?? r.status}`)
+              .join(', ')})`,
+          ]
+        : []),
+    ].join(' '),
   };
 }
 
@@ -227,14 +261,14 @@ if (process.argv[1] && process.argv[1].endsWith('ci-log.mjs')) {
         'api',
         `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`,
         '--jq',
-        '.check_runs[] | [.name, .status, .conclusion // ""] | @tsv',
+        '.check_runs[] | [.id, .name, .status, .conclusion // ""] | @tsv',
       ]);
       const runs = board
         .split('\n')
         .filter(Boolean)
         .map((line) => {
-          const [name, status, conclusion] = line.split('\t');
-          return { name, status, conclusion: conclusion || null };
+          const [id, name, status, conclusion] = line.split('\t');
+          return { id: Number(id), name, status, conclusion: conclusion || null };
         });
       const verdict = summariseCheckRuns(runs);
       console.log(`${isSha ? sha : `PR ${target}`} @ ${sha.slice(0, 7)}`);
