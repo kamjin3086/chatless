@@ -103,6 +103,52 @@ export function detectToolCallCapability(
 }
 
 /**
+ * 一次 run 走哪条工具通道。
+ *
+ * - `native`：请求里带 `tools`，调用从 API 的 `tool_calls` 回来；
+ * - `prompt`：请求里不带工具，提示词注入一份文本协议，回流文本由解析器变成调用；
+ * - `disabled`：用户把该 provider 的工具调用关了，什么都不跑、也不宣传。
+ *
+ * 存在的原因：此前只有 `useNativeTools: boolean`，于是“不是原生”同时被读成“没有工具”，
+ * 自定义/聚合端点整条通道被关死（#160）。通道是三档，不是一个布尔。
+ */
+export type ToolTrack = 'native' | 'prompt' | 'disabled';
+
+/** 用户在该 provider 上选的策略，或 `auto` 表示交给能力表。 */
+export function trackFor(
+  strategy: ToolCallStrategy | 'auto',
+  capability: ToolCallCapability
+): ToolTrack {
+  if (strategy === 'native') return 'native';
+  if (strategy === 'prompt') return 'prompt';
+  if (strategy === 'disabled') return 'disabled';
+  if (capability === 'none') return 'disabled';
+  // `experimental` is a usable rung - "unverified", not "dead". The source the table reports
+  // still says unverified, so the UI can keep its note.
+  if (capability === 'native' || capability === 'experimental') return 'native';
+  return 'prompt';
+}
+
+/** The track for this provider+model, honouring a user override when the store is ready. */
+export function resolveToolTrack(providerName: string, modelName?: string): ToolTrack {
+  const capability = detectToolCallCapability(providerName, modelName).capability;
+  try {
+    // 动态导入以避免循环依赖
+    const { useToolCallPreferences } = require('@/store/toolCallPreferences');
+    const state = useToolCallPreferences.getState();
+    if (state.initialized) {
+      return trackFor(
+        state.getEffectiveStrategy(inferProviderId(providerName), modelName),
+        capability
+      );
+    }
+  } catch {
+    // Store 尚未初始化，使用配置检测
+  }
+  return trackFor('auto', capability);
+}
+
+/**
  * 检查是否应该使用原生工具调用
  * 
  * 此函数会检查用户偏好设置，然后回退到配置检测
@@ -115,22 +161,8 @@ export function shouldUseNativeToolCalls(
   providerName: string,
   modelName?: string
 ): boolean {
-  // 尝试从用户偏好获取
-  try {
-    // 动态导入以避免循环依赖
-    const { useToolCallPreferences } = require('@/store/toolCallPreferences');
-    const state = useToolCallPreferences.getState();
-    
-    if (state.initialized) {
-      return state.shouldUseNativeToolCalls(inferProviderId(providerName), modelName);
-    }
-  } catch {
-    // Store 尚未初始化，使用配置检测
-  }
-  
-  // 回退到配置检测
-  const result = detectToolCallCapability(providerName, modelName);
-  return result.capability === 'native';
+  // One answer, in one place: the track decides, and native is one of its three values.
+  return resolveToolTrack(providerName, modelName) === 'native';
 }
 
 /**

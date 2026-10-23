@@ -28,7 +28,7 @@ import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
 import { getSkillManager } from '@/lib/skills';
-import { shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
+import { resolveToolTrack, shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { buildAgentContractBlock } from '@/lib/mcp/prompt/agentContract';
@@ -36,18 +36,41 @@ import type { PromptBlock } from '@/lib/mcp/prompt/composition';
 import { getToolDoc } from './toolDocLoader';
 
 /**
+ * The textual tool protocol for runs that cannot use native tools (#163, spec #161).
+ *
+ * It teaches exactly the shape the stream parser reads - `<use_mcp_tool>` with its three child
+ * tags - and one call per turn, which is what keeps the rewrite unambiguous. A protocol the
+ * parser cannot read is worse than none: the call comes back as prose.
+ */
+/**
+ * The textual tool protocol for runs that cannot use native tools (#163, spec #161).
+ */
+export function buildToolChannelBlock(servers: readonly string[]): string {
+  const list = servers.filter(Boolean);
+  if (list.length === 0) return '';
+  return [
+    '[Tool channel]',
+    'This endpoint cannot use native function calling. To call a tool, reply with one block in exactly this shape and no prose around it:',
+    '',
+    '<use_mcp_tool>',
+    '<server_name>server</server_name>',
+    '<tool_name>tool</tool_name>',
+    '<arguments>{"key": "value"}</arguments>',
+    '</use_mcp_tool>',
+    '',
+    `Call one tool per turn, then wait for its result before continuing. Available servers: ${list.join(', ')}.`,
+  ].join('\n');
+}
+
+/**
  * 构建初始调用阶段的提示词
  * 
- * ## 条件降级策略
- * 
- * 1. 如果 Provider/模型支持原生工具调用 API：
- *    - 不注入详细的工具描述到 System Prompt
- *    - 工具定义通过 API 的 tools 参数传递
- *    - 返回 useNativeTools: true
- * 
- * 2. 如果不支持原生工具调用：
- *    - 保持普通聊天，不把文本内容解释为可执行调用
- *    - 返回 useNativeTools: false
+ * ## 按通道组装（spec #161）
+ *
+ * 1. `native`：不注入工具描述，定义走 API 的 tools 参数；
+ * 2. `prompt`：不传 tools，注入一份固定文本协议（`buildToolChannelBlock`）与可用服务器列表，
+ *    回流文本由 ToolChannelParser 变成调用；
+ * 3. `disabled`：既不传工具、也不注入协议，并且**不再**告诉模型它能检索（那正是 #160 的死路）。
  */
 /**
  * Where the prompt is assembled, in the order the blocks are pushed (anchor on the comment ids or
@@ -74,7 +97,8 @@ export async function buildInitialPrompt(
   // 检测是否应该使用原生工具调用
   const providerName = context.providerName || '';
   const modelName = context.modelName || '';
-  const useNativeTools = shouldUseNativeToolCalls(providerName, modelName);
+  const track = resolveToolTrack(providerName, modelName);
+  const useNativeTools = track === 'native';
   const toolStrategy = getToolCallStrategy(providerName, modelName);
   
   // 调试日志：追踪工具调用策略决策
@@ -255,7 +279,9 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
       const attachmentRows = await DatabaseService.getInstance().getDbManager().select<{ n: number }>(
         'SELECT COUNT(*) AS n FROM conversation_document_mappings WHERE conversation_id = ?', [convId],
       );
-      if (kb?.id || Number(attachmentRows[0]?.n || 0) > 0) {
+      // A run with tools switched off must not be told it can retrieve - that is what made the
+      // model emit a call nobody would execute (#160).
+      if (track !== 'disabled' && (kb?.id || Number(attachmentRows[0]?.n || 0) > 0)) {
         blocks.push({
           id: 'knowledge-rules',
           layer: 'conversation',
@@ -287,6 +313,13 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
     const serversLine = MCPPrompts.buildEnabledServersLine(allEnabled);
     if (serversLine) {
       blocks.push({ id: 'capabilities', layer: 'conversation', order: 60, content: serversLine });
+    }
+    // One protocol block, once: the prompt track's only way to call anything.
+    if (track === 'prompt') {
+      const channel = buildToolChannelBlock(allEnabled);
+      if (channel) {
+        blocks.push({ id: 'tool-channel', layer: 'conversation', order: 65, content: channel });
+      }
     }
   }
   

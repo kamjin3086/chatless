@@ -1,6 +1,7 @@
 import type { Message as LlmMessage } from '@/lib/llm/types';
 import { cancelStream, streamChat } from '@/lib/llm';
 import { StreamOrchestrator } from '@/lib/chat/stream/StreamOrchestrator';
+import { createPromptToolTrack } from '@/lib/chat/stream/promptTrack';
 import type { OnToolCall } from '@/lib/chat/stream/types';
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { ToolExecutionPipeline, ToolInvocation } from '@/lib/mcp/pipeline';
@@ -409,23 +410,37 @@ export class AgentLoopRunner {
           }
         };
         const originalOnEvent = callbacks.onEvent;
+        const originalOnComplete = callbacks.onComplete;
+        // Prompt-track runs get no `tools` in the request, so the model writes its
+        // call as text; this turns that text into the `tool_call` events the loop
+        // already consumes. Native and disabled runs pass through untouched, so a
+        // call echoed in prose cannot execute twice (#164).
+        const promptToolTrack = createPromptToolTrack({
+          track: capability.track,
+          allowTextCalls: !regenerate,
+          dispatch: async (event) => {
+            hooks?.onStreamEvent?.(event, { assistantMessageId, conversationId, round });
+            await originalOnEvent?.(event);
+          },
+        });
         callbacks.onEvent = (event: any) => {
           if (!acceptingEvents) return;
           callbackQueue = callbackQueue.then(async () => {
             if (ctrl.signal.aborted) return;
-            hooks?.onStreamEvent?.(event, { assistantMessageId, conversationId, round });
-            await originalOnEvent?.(event);
+            await promptToolTrack.onEvent(event);
           }).catch((error) => {
             streamFailed = true;
             resolveStream();
             console.error('[AgentLoopRunner] stream event failed:', error);
           });
         };
-        const originalOnComplete = callbacks.onComplete;
         callbacks.onComplete = () => {
           if (!acceptingEvents) return;
           acceptingEvents = false;
           callbackQueue = callbackQueue.then(async () => {
+            // One pass over this turn's text, before the answer is finalised, so
+            // the synthesised calls still create their cards and land in `requests`.
+            await promptToolTrack.flush();
             await originalOnComplete?.();
             await hooks?.onStreamComplete?.({ assistantMessageId, conversationId, round });
           }).catch((error) => {
@@ -494,7 +509,10 @@ export class AgentLoopRunner {
         }
 
         const content = orchestrator.getContext().content;
-        if (content?.trim()) producedVisibleContent = true;
+        // A turn can produce a card without text: an unreadable call on the prompt
+        // track is shown as a not-executed card (#166), which is output, not an
+        // empty answer.
+        if (content?.trim() || promptToolTrack.producedOutput()) producedVisibleContent = true;
         const modelEvents: import('@/lib/mcp/pipeline/context/ConversationEventLog').ConversationEvent[] = [];
         if (content?.trim()) modelEvents.push({ type: 'assistant_message', content });
         for (const [key, req] of requests) {

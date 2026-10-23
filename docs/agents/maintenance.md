@@ -95,8 +95,9 @@ confirms. Drafts are the final text plus a one-line class label, at most three p
 
 ### Cadence
 
-- No acknowledgement-only replies. Nothing to say means no reply, with one exception: an issue
-  open longer than three days with no conclusion yet gets a single "已记录，暂时没有结论" line.
+- No acknowledgement-only replies. If there is no progress to report, say nothing at all: a
+  "已记录，暂时没有结论" line reads as odd when it carries nothing, and the owner would rather the
+  thread stay quiet until there is an answer.
 - At most three replies per issue over its life: the first disposition, the fix, the close. When
   the fix and the close coincide, they are one reply.
 - Needs-info: ask once (one thing). Fourteen days without an answer gets one more comment, with

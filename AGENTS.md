@@ -89,7 +89,8 @@ Two things here are **required**, not preference:
   needs-info ask, and a "not planned" whose policy you have already stated. Everything else
   (causes, workarounds, "expected behaviour", promises, priority) is drafted for you first.
   Unverified inference is never written as a conclusion; a fix stays open until the reporter
-  confirms it. `docs/agents/maintenance.md` - "Replying to a reporter" - carries the full rules.
+  confirms it. No acknowledgement-only replies: with no progress, say nothing.
+  `docs/agents/maintenance.md` - "Replying to a reporter" - carries the full rules.
 
 ## Subsystem notes
 
