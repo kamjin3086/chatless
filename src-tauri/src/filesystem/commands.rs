@@ -882,11 +882,12 @@ pub async fn filesystem_delete_many(
   payload: DeleteManyPayload,
 ) -> Result<serde_json::Value, String> {
   let data_dir = app_data_dir(&app)?;
+  let scope = payload.scope.as_scope();
   let mut deleted: Vec<String> = Vec::new();
   let mut failed: Vec<serde_json::Value> = Vec::new();
   for p in payload.paths.iter() {
     let input = String::from(p);
-    match delete_path_impl(&data_dir, &state, &input, payload.scope.as_scope()).await {
+    match delete_path_impl(&data_dir, &state, &input, scope).await {
       Ok(abs) => deleted.push(abs.replace('\\', "/")),
       Err(e) => failed.push(serde_json::json!({ "path": input.replace('\\', "/"), "error": e })),
     }
@@ -907,8 +908,8 @@ pub async fn filesystem_delete_by_pattern(
   payload: DeleteByPatternPayload,
 ) -> Result<serde_json::Value, String> {
   let data_dir = app_data_dir(&app)?;
-  let so_scope = payload.scope.as_scope();
-  let dir_abs = state.assert_allowed(&data_dir, &payload.dir, FsOp::Read, so_scope).await?;
+  let scope = payload.scope.as_scope();
+  let dir_abs = state.assert_allowed(&data_dir, &payload.dir, FsOp::Read, scope).await?;
   // 默认限制，防止误删/误匹配太多
   const DEFAULT_LIMIT: u32 = 200;
   const HARD_MAX_LIMIT: u32 = 2000;
@@ -951,7 +952,7 @@ pub async fn filesystem_delete_by_pattern(
   let mut deleted: Vec<String> = Vec::new();
   let mut failed: Vec<serde_json::Value> = Vec::new();
   for p in targets.iter() {
-    match delete_path_impl(&data_dir, &state, p, so_scope).await {
+    match delete_path_impl(&data_dir, &state, p, scope).await {
       Ok(abs) => deleted.push(abs.replace('\\', "/")),
       Err(e) => failed.push(serde_json::json!({ "path": p, "error": e })),
     }

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   grantCallScopedPaths: vi.fn(),
   execute: vi.fn(async () => ({ ok: true })),
   markError: vi.fn(),
+  appendWorkspaceStep: vi.fn(async () => {}),
 }));
 
 vi.mock('@/lib/filesystemAllowlist/backendSync', () => ({
@@ -44,7 +45,7 @@ vi.mock('@/lib/mcp/experience/agentExperienceConfig', () => ({
   getAgentExperienceConfig: async () => ({ maxToolRetries: 0 }),
 }));
 vi.mock('@/lib/agentWorkspace/manifestService', () => ({
-  appendWorkspaceToolStep: vi.fn(async () => {}),
+  appendWorkspaceToolStep: mocks.appendWorkspaceStep,
 }));
 vi.mock('../ToolCardUpdater', () => ({
   markError: mocks.markError,
@@ -107,10 +108,18 @@ describe('call grant registration failure', () => {
       error: { code: 'CALL_SCOPE_FAILED' },
     });
     expect(mocks.markError).toHaveBeenCalled();
+    expect(mocks.appendWorkspaceStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          error: expect.objectContaining({ code: 'CALL_SCOPE_FAILED' }),
+        }),
+      }),
+    );
   });
 
-  it('executes normally when the grant is established', async () => {
-    mocks.grantCallScopedPaths.mockResolvedValue(async () => {});
+  it('executes normally when the grant is established and revokes in finally', async () => {
+    const revoke = vi.fn(async () => {});
+    mocks.grantCallScopedPaths.mockResolvedValue(revoke);
     const pipeline = new ToolExecutionPipeline({
       adapters: [
         {
@@ -124,5 +133,6 @@ describe('call grant registration failure', () => {
     await pipeline.run(invocation());
 
     expect(mocks.execute).toHaveBeenCalledOnce();
+    expect(revoke).toHaveBeenCalledOnce();
   });
 });

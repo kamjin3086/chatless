@@ -48,8 +48,9 @@ pub struct CallScope<'a> {
 }
 
 /// A grant is usable only by the exact operation identity that registered it.
-/// A caller that has no call id (the prompt track) registers and uses `None`;
-/// it still cannot borrow a grant issued for a concrete call.
+/// The `call_id` is part of that identity: a grant registered for `None` is
+/// used only by an operation that also has no call id. An operation with no run
+/// identity at all (`assert_allowed(..., None)`) never reaches the grant scan.
 fn grant_matches_scope(grant: &CallScopedGrant, scope: CallScope<'_>) -> bool {
   grant.run_id == scope.run_id && grant.call_id.as_deref() == scope.call_id
 }

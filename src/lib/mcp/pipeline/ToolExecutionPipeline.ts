@@ -174,13 +174,28 @@ export class ToolExecutionPipeline {
         // anyway would either fail at the backend or use a grant that was only
         // partially installed; stop here and tell the model why.
         const message = `Failed to establish the call-scoped filesystem grant: ${error instanceof Error ? error.message : String(error)}`;
-        markError({ assistantMessageId, server, tool, cardId }, message);
-        this.coordinator.markToolCallComplete(callKey, 'failed');
-        return {
+        const failure = {
           ok: false,
           resultStatus: 'failed',
           error: { code: 'CALL_SCOPE_FAILED', message, server, tool },
         };
+        markError({ assistantMessageId, server, tool, cardId }, message);
+        try {
+          await appendWorkspaceToolStep({
+            conversationId: invocation.conversationId,
+            assistantMessageId,
+            cardId,
+            callId,
+            server,
+            tool,
+            args: (execInvocation.args || args || {}) as any,
+            result: failure,
+          });
+        } catch {
+          // ignore
+        }
+        this.coordinator.markToolCallComplete(callKey, 'failed');
+        return failure;
       }
     }
 

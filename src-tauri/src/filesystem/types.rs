@@ -23,7 +23,10 @@ impl CallScopePayload {
     if run_id.is_empty() {
       return None;
     }
-    Some(CallScope { run_id, call_id: self.call_id.as_deref() })
+    // Both halves of the identity are compared verbatim, so normalize the
+    // call id the same way as the run id.
+    let call_id = self.call_id.as_deref().map(str::trim).filter(|id| !id.is_empty());
+    Some(CallScope { run_id, call_id })
   }
 }
 // 规范：
