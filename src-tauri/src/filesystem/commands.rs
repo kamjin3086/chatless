@@ -1229,6 +1229,52 @@ mod tests {
     let _ = std::fs::remove_dir_all(&work_dir);
   }
 
+  /// The wire payload — not a hand-built struct — must carry the caller's
+  /// identity through serde into `assert_allowed`. Without this seam test a
+  /// flatten regression would make every agent filesystem call denied while
+  /// the state-module tests stayed green.
+  #[tokio::test]
+  async fn a_command_payload_carries_its_scope_into_the_grant_check() {
+    let data_dir = std::env::temp_dir().join(format!("chatless-scoped-payload-{}", std::process::id()));
+    let work_dir = std::env::temp_dir().join(format!("chatless-scoped-payload-work-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+    std::fs::create_dir_all(&data_dir).unwrap();
+    std::fs::create_dir_all(&work_dir).unwrap();
+
+    let state = FilesystemAllowlistState::default();
+    let target = work_dir.join("scoped.txt");
+    let path = target.to_string_lossy().replace('\\', "/");
+    state
+      .grant_call_scope(
+        "run-a",
+        Some("call-1"),
+        &work_dir.to_string_lossy(),
+        FsPermissions { read: true, write: true, create: true, delete: false },
+        CALL_SCOPE_TTL_MS,
+      )
+      .await
+      .expect("register the call grant");
+
+    let payload: WriteFilePayload = serde_json::from_value(serde_json::json!({
+      "path": path, "content": "scoped", "run_id": "run-a", "call_id": "call-1"
+    }))
+    .expect("the payload carries its scope fields");
+    write_file_inner(&data_dir, &state, payload).await.expect("a matching call may write");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "scoped");
+
+    let wrong_call: WriteFilePayload = serde_json::from_value(serde_json::json!({
+      "path": path, "content": "wrong", "run_id": "run-a", "call_id": "call-2"
+    }))
+    .unwrap();
+    let error = write_file_inner(&data_dir, &state, wrong_call).await.unwrap_err();
+    assert!(error.contains("forbidden"), "{error}");
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "scoped");
+
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&work_dir);
+  }
+
   /// The promise is "the previous content is recoverable". When the history
   /// directory cannot be written, the overwrite must be refused and the file
   /// left exactly as it was.

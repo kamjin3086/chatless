@@ -1,10 +1,31 @@
 use serde::{Deserialize, Serialize};
 
-use super::state::CallScopePayload;
+use super::state::CallScope;
 
 // ================================
 // Filesystem 类型定义
 // ================================
+
+/// Wire form of the caller identity that every filesystem payload carries.
+/// An operation without a run id may use the persisted allowlist, never a
+/// call-scoped grant.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CallScopePayload {
+  #[serde(default)]
+  pub run_id: Option<String>,
+  #[serde(default)]
+  pub call_id: Option<String>,
+}
+
+impl CallScopePayload {
+  pub fn as_scope(&self) -> Option<CallScope<'_>> {
+    let run_id = self.run_id.as_deref().unwrap_or("").trim();
+    if run_id.is_empty() {
+      return None;
+    }
+    Some(CallScope { run_id, call_id: self.call_id.as_deref() })
+  }
+}
 // 规范：
 // - Rust 端统一使用 snake_case 命名
 // - 前端负责在调用 invoke 前将 camelCase 转换为 snake_case

@@ -99,6 +99,37 @@ describe('grantCallScopedPaths', () => {
     expect(events).toEqual(['grant-a-start', 'grant-a-resolved', 'revoke']);
   });
 
+  it('fails a call whose registration never answers and revokes a late success', async () => {
+    vi.useFakeTimers();
+    try {
+      let releaseLate!: () => void;
+      io.grant.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            releaseLate = () => resolve({ ok: true });
+          }),
+      );
+      const { grantCallScopedPaths } = await load();
+
+      const pending = grantCallScopedPaths(
+        [{ path: '/fixture/slow', permissions: { read: true } }],
+        { runId: 'run-a', callId: 'call-1' },
+      );
+      pending.catch(() => {});
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      await expect(pending).rejects.toThrow(/timed out/);
+      expect(io.revoke).toHaveBeenCalledTimes(1);
+
+      // The registration still lands later; it must not outlive the failure.
+      releaseLate();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(io.revoke).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not call the backend when there is nothing to grant', async () => {
     const { grantCallScopedPaths } = await load();
     const revoke = await grantCallScopedPaths([], { runId: 'run-a' });

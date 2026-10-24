@@ -173,7 +173,7 @@ export class ToolExecutionPipeline {
         // The call needs a grant that could not be established. Running it
         // anyway would either fail at the backend or use a grant that was only
         // partially installed; stop here and tell the model why.
-        const message = `调用范围授权失败：${error instanceof Error ? error.message : String(error)}`;
+        const message = `Failed to establish the call-scoped filesystem grant: ${error instanceof Error ? error.message : String(error)}`;
         markError({ assistantMessageId, server, tool, cardId }, message);
         this.coordinator.markToolCallComplete(callKey, 'failed');
         return {
