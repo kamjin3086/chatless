@@ -27,10 +27,12 @@ function toBackendDir(d: AllowlistDirectory): BackendAllowlistDirectory {
 export async function syncFilesystemAllowlistToBackend(directories: AllowlistDirectory[]): Promise<void> {
   const backendDirs = (directories || []).map(toBackendDir);
   const key = JSON.stringify(backendDirs);
-  if (key === lastSyncedKey) return;
 
   const run = syncQueue.then(async () => {
-    // A queued update may already have been applied by the call ahead of it.
+    // The acknowledged key may have moved while this call was queued. The
+    // cache is checked here, not before enqueueing: a call made while another
+    // update is in flight must still be applied last, even when its key
+    // matches the older acknowledged state.
     if (key === lastSyncedKey) return;
     await setAllowlist({ directories: backendDirs, version: 1 });
     lastSyncedKey = key;

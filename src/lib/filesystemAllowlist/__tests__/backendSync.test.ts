@@ -152,6 +152,30 @@ describe('syncFilesystemAllowlistToBackend', () => {
     expect(io.sync.mock.calls[1][0].directories[0].path).toBe('/fixture/two');
   });
 
+  it('applies a call made while another update is in flight after that update', async () => {
+    io.sync.mockResolvedValueOnce({ ok: true });
+    const { syncFilesystemAllowlistToBackend } = await load();
+    await syncFilesystemAllowlistToBackend([dir('/fixture/a')]);
+
+    let releaseB!: () => void;
+    io.sync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseB = () => resolve({ ok: true });
+        }),
+    );
+    const b = syncFilesystemAllowlistToBackend([dir('/fixture/b')]);
+    await vi.waitFor(() => expect(io.sync).toHaveBeenCalledTimes(2));
+
+    // A is the last acknowledged state, but it is requested after B started.
+    const a = syncFilesystemAllowlistToBackend([dir('/fixture/a')]);
+    releaseB();
+    await Promise.all([b, a]);
+
+    expect(io.sync).toHaveBeenCalledTimes(3);
+    expect(io.sync.mock.calls[2][0].directories[0].path).toBe('/fixture/a');
+  });
+
   it('a newer successful update is not undone by an earlier failure', async () => {
     io.sync
       .mockRejectedValueOnce(new Error('first failed'))
