@@ -295,6 +295,13 @@ export class KnowledgeAdapter implements ToolAdapter {
       startChunkIndex = parsed.chunkIndex;
       startOffset = parsed.offset;
     } else if (prior) {
+      // The offsets belong to the batch the citation was created from. A
+      // re-index keeps the document id but replaces chunk ids and their
+      // positions, so using the old range would return different content under
+      // the old citation.
+      if (prior.range && String(prior.range.batchId || '') !== batchId) {
+        return { ok: false, error: 'CURSOR_INVALID', message: 'The document was re-indexed and this citation is stale. Search again.' };
+      }
       const anchor = anchorFromEvidence(prior);
       let anchorIndex = anchor?.chunkIndex ?? -1;
       const anchorOffset = anchor?.offset ?? 0;
