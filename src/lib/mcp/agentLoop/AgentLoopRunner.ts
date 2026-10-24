@@ -7,6 +7,7 @@ import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { ToolExecutionPipeline, ToolInvocation } from '@/lib/mcp/pipeline';
 import { createDefaultAdapters } from '@/lib/mcp/pipeline/adapters';
 import { useChatStore } from '@/store/chatStore';
+import { useAuthorizationStore } from '@/store/authorizationStore';
 
 import type { AgentLoopCancelParams, AgentLoopRunParams, RunInput } from './types';
 import { AgentRunControlPlane } from './AgentRunControlPlane';
@@ -89,6 +90,15 @@ export class AgentLoopRunner {
   static cancel(params: AgentLoopCancelParams) {
     const id = String(params.assistantMessageId || '').trim();
     if (!id) return;
+    // Stop is also the coordinator's cancellation and the approval cards'
+    // rejection: callers used to have to remember all three, and the approval
+    // waiter registered after the sweep was the one that escaped it.
+    coordinator.cancelMessage(id);
+    try {
+      useAuthorizationStore.getState().rejectAuthorizationsByMessageId(id);
+    } catch {
+      // ignore
+    }
     const active = activeLoops.get(id);
     if (active) {
       try {

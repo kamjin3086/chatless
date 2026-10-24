@@ -16,7 +16,7 @@ vi.mock('@/lib/mcp/pipeline', () => ({
 }));
 vi.mock('@/lib/mcp/pipeline/adapters', () => ({ createDefaultAdapters: () => [] }));
 vi.mock('@/lib/mcp/ToolCallCoordinator', () => ({ ToolCallCoordinator: { getInstance: () => ({
-  isMessageCancelled: () => false, markToolCallComplete: vi.fn(),
+  isMessageCancelled: () => false, cancelMessage: vi.fn(), markToolCallComplete: vi.fn(),
 }) } }));
 vi.mock('@/store/chatStore', () => ({ useChatStore: { getState: () => mocks.store } }));
 vi.mock('@/store/toolLoadRequestStore', () => ({ useToolLoadRequestStore: { getState: () => ({ reset: vi.fn() }) } }));
