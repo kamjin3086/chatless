@@ -169,8 +169,33 @@ export class ToolExecutionPipeline {
     if (callGrants.length) {
       try {
         revokeCallGrants = await grantCallScopedPaths(callGrants, { runId: assistantMessageId, callId });
-      } catch {
-        // ignore: best-effort; the backend still re-checks the persistent allowlist
+      } catch (error) {
+        // The call needs a grant that could not be established. Running it
+        // anyway would either fail at the backend or use a grant that was only
+        // partially installed; stop here and tell the model why.
+        const message = `Failed to establish the call-scoped filesystem grant: ${error instanceof Error ? error.message : String(error)}`;
+        const failure = {
+          ok: false,
+          resultStatus: 'failed',
+          error: { code: 'CALL_SCOPE_FAILED', message, server, tool },
+        };
+        markError({ assistantMessageId, server, tool, cardId }, message);
+        try {
+          await appendWorkspaceToolStep({
+            conversationId: invocation.conversationId,
+            assistantMessageId,
+            cardId,
+            callId,
+            server,
+            tool,
+            args: (execInvocation.args || args || {}) as any,
+            result: failure,
+          });
+        } catch {
+          // ignore
+        }
+        this.coordinator.markToolCallComplete(callKey, 'failed');
+        return failure;
       }
     }
 

@@ -35,6 +35,7 @@ export type CallScopedGrant = {
   permissions: { read?: boolean; write?: boolean; create?: boolean; delete?: boolean };
 };
 
+
 /**
  * Registers the grants for one executing call: the session working directory and
  * any single approval the user just gave. They live in backend memory only, are
@@ -45,7 +46,10 @@ export async function grantCallScopedPaths(
   scope: { runId: string; callId?: string },
 ): Promise<() => Promise<void>> {
   if (!grants.length) return async () => {};
-  await Promise.all(grants.map((grant) => grantCallScope({
+  const revokeScope = async (): Promise<void> => {
+    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
+  };
+  const registrations = grants.map((grant) => grantCallScope({
     runId: scope.runId,
     callId: scope.callId,
     path: grant.path,
@@ -53,9 +57,17 @@ export async function grantCallScopedPaths(
     write: !!grant.permissions.write,
     create: !!grant.permissions.create,
     delete: !!grant.permissions.delete,
-  })));
-  return async () => {
-    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
-  };
+  }));
+  // Settle every registration before deciding. A failing request must not race
+  // a still-pending grant that would otherwise outlive the failure with no
+  // revoker, so cleanup runs only after the whole scope has settled.
+  const results = await Promise.allSettled(registrations);
+  const failed = results.find((result) => result.status === 'rejected');
+  if (failed) {
+    await revokeScope();
+    const reason = (failed as PromiseRejectedResult).reason;
+    throw reason instanceof Error ? reason : new Error(String(reason));
+  }
+  return revokeScope;
 }
 

@@ -1,8 +1,34 @@
 use serde::{Deserialize, Serialize};
 
+use super::state::CallScope;
+
 // ================================
 // Filesystem 类型定义
 // ================================
+
+/// Wire form of the caller identity that every filesystem payload carries.
+/// An operation without a run id may use the persisted allowlist, never a
+/// call-scoped grant.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CallScopePayload {
+  #[serde(default)]
+  pub run_id: Option<String>,
+  #[serde(default)]
+  pub call_id: Option<String>,
+}
+
+impl CallScopePayload {
+  pub fn as_scope(&self) -> Option<CallScope<'_>> {
+    let run_id = self.run_id.as_deref().unwrap_or("").trim();
+    if run_id.is_empty() {
+      return None;
+    }
+    // Both halves of the identity are compared verbatim, so normalize the
+    // call id the same way as the run id.
+    let call_id = self.call_id.as_deref().map(str::trim).filter(|id| !id.is_empty());
+    Some(CallScope { run_id, call_id })
+  }
+}
 // 规范：
 // - Rust 端统一使用 snake_case 命名
 // - 前端负责在调用 invoke 前将 camelCase 转换为 snake_case
@@ -33,6 +59,8 @@ pub struct ListDirectoryResult {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeleteManyPayload {
   pub paths: Vec<String>,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 按模式删除 payload
@@ -43,6 +71,8 @@ pub struct DeleteByPatternPayload {
   pub limit: Option<u32>,
   pub kind: Option<String>,
   pub dry_run: Option<bool>,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 通用操作结果
@@ -66,6 +96,8 @@ pub struct ReadFilePayload {
   pub max_lines: Option<u32>,
   pub start_line: Option<u32>,
   pub end_line: Option<u32>,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 写入文件 payload
@@ -73,6 +105,8 @@ pub struct ReadFilePayload {
 pub struct WriteFilePayload {
   pub path: String,
   pub content: String,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 精确编辑 payload：把 `find` 替换为 `replace`，默认要求唯一匹配
@@ -85,6 +119,8 @@ pub struct EditFilePayload {
   /// sha256 of the file the caller read. When present, an edit refuses to touch
   /// a file that changed since, instead of overwriting someone else's work.
   pub expected_hash: Option<String>,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 精确编辑结果。匹配不唯一/未命中不是 IO 错误，因此作为结构化结果返回。
@@ -112,18 +148,24 @@ pub struct EditFileResult {
 pub struct RestoreVersionPayload {
   pub path: String,
   pub version_id: String,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 文件历史查询 payload
 #[derive(Debug, Clone, Deserialize)]
 pub struct FileHistoryPayload {
   pub path: String,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 用系统默认程序打开文件/目录 payload
 #[derive(Debug, Clone, Deserialize)]
 pub struct OpenPathPayload {
   pub path: String,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 一个历史版本的展示信息
@@ -153,6 +195,8 @@ pub struct SearchFilesPayload {
   pub regex: Option<bool>,
   /// content | filename | both (default both).
   pub mode: Option<String>,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,6 +239,8 @@ pub struct ListDirectoryPayload {
   pub limit: Option<u32>,
   pub pattern: Option<String>,
   pub kind: Option<String>,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 创建目录 payload
@@ -202,12 +248,16 @@ pub struct ListDirectoryPayload {
 pub struct CreateDirectoryPayload {
   pub path: String,
   pub recursive: Option<bool>,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 删除文件 payload
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeleteFilePayload {
   pub path: String,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 重命名文件 payload
@@ -215,6 +265,8 @@ pub struct DeleteFilePayload {
 pub struct RenameFilePayload {
   pub old_path: String,
   pub new_path: String,
+  #[serde(flatten)]
+  pub scope: CallScopePayload,
 }
 
 /// 读取文件结果
