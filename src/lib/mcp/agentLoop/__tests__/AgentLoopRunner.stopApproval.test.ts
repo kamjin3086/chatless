@@ -277,6 +277,26 @@ describe('Stop during approval persistence', () => {
     ).toBe(false);
   });
 
+  it('does not register a card for a run cancelled before the request', async () => {
+    const result = await waitForCallApproval({
+      id: 'approval-before',
+      runId: 'run',
+      conversationId: 'conversation',
+      server: 'fs',
+      tool: 'write',
+      args: {},
+      isCancelled: () => true,
+    });
+
+    expect(result).toEqual({ approved: false, decision: 'once' });
+    expect(
+      useAuthorizationStore
+        .getState()
+        .hasPendingAuthorization('approval-before'),
+    ).toBe(false);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
   it('persists a normal approval and returns its decision', async () => {
     mocks.invoke.mockResolvedValue(true);
     const waiting = waitForCallApproval({
