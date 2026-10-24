@@ -4,6 +4,9 @@ import { grantCallScope, revokeCallScope, setAllowlist, type SetAllowlistParams 
 type BackendAllowlistDirectory = SetAllowlistParams['directories'][number];
 
 let lastSyncedKey = '';
+// Serialize updates so a later request cannot be overwritten by an earlier
+// completion. The cache is only advanced after the native command acknowledges.
+let syncQueue: Promise<void> = Promise.resolve();
 
 function toBackendDir(d: AllowlistDirectory): BackendAllowlistDirectory {
   return {
@@ -24,10 +27,20 @@ function toBackendDir(d: AllowlistDirectory): BackendAllowlistDirectory {
 export async function syncFilesystemAllowlistToBackend(directories: AllowlistDirectory[]): Promise<void> {
   const backendDirs = (directories || []).map(toBackendDir);
   const key = JSON.stringify(backendDirs);
-  if (key === lastSyncedKey) return;
-  lastSyncedKey = key;
 
-  await setAllowlist({ directories: backendDirs, version: 1 });
+  const run = syncQueue.then(async () => {
+    // The acknowledged key may have moved while this call was queued. The
+    // cache is checked here, not before enqueueing: a call made while another
+    // update is in flight must still be applied last, even when its key
+    // matches the older acknowledged state.
+    if (key === lastSyncedKey) return;
+    await setAllowlist({ directories: backendDirs, version: 1 });
+    lastSyncedKey = key;
+  });
+  // Keep the chain usable after a rejection; the caller still sees its own
+  // failure, and the next identical request retries instead of being skipped.
+  syncQueue = run.catch(() => {});
+  return run;
 }
 
 export type CallScopedGrant = {
