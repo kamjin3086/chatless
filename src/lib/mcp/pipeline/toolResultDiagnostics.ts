@@ -72,6 +72,34 @@ export function buildHelpfulNonOkMessage(id: ToolId, result: any): { message: st
   return { message, hints };
 }
 
+/**
+ * The MCP protocol's own failure flag. `rmcp` serializes `CallToolResult` with
+ * camelCase fields, so a tool-level error arrives as `isError` and carries the
+ * explanation in `content`; `is_error` is accepted for clients that keep the
+ * snake_case form.
+ */
+function isMcpToolError(r: any): boolean {
+  return r?.isError === true || r?.is_error === true;
+}
+
+function mcpToolErrorText(r: any): string {
+  const content = r?.content;
+  if (Array.isArray(content)) {
+    const text = content
+      .map((item: any) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item.text === 'string') return item.text;
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    if (text) return text.slice(0, 4000);
+  }
+  if (typeof r?.message === 'string' && r.message.trim()) return r.message.trim();
+  return 'MCP tool returned isError=true';
+}
+
 export function detectFatalFailure(id: ToolId, result: unknown): string | undefined {
   if (!result || typeof result !== 'object') return undefined;
   const r: any = result as any;
@@ -93,6 +121,10 @@ export function detectFatalFailure(id: ToolId, result: unknown): string | undefi
     if (r.error && typeof r.error === 'object' && typeof r.error.message === 'string') return String(r.error.message);
     return '工具返回 ok=false（缺少详细错误信息）';
   }
+
+  // MCP tool-level error: a normal protocol result with isError=true, not an
+  // unknown transport outcome. Preserve its content in markKnownFailure.
+  if (isMcpToolError(r)) return mcpToolErrorText(r);
 
   return undefined;
 }

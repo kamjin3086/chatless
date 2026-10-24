@@ -187,6 +187,23 @@ describe('AgentLoopRunner execution boundaries', () => {
     expect(outputs[1].output.error.code).toBe('NOT_DISPATCHED');
   });
 
+  it('records an MCP isError result as a failed tool output', async () => {
+    mocks.execute.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'remote tool failed' }],
+      isError: true,
+      resultStatus: 'failed',
+      errorDetails: { code: 'TOOL_FAILED', message: 'remote tool failed' },
+    });
+    mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => { tool(cb, 'a'); finish(cb); });
+
+    await AgentLoopRunner.run(params);
+
+    const output = mocks.append.mock.calls
+      .map(([payload]) => payload.event)
+      .find((event) => event.type === 'tool_call_output');
+    expect(output.isError).toBe(true);
+  });
+
   it('propagates final status persistence failure and still releases the run', async () => {
     mocks.status.mockRejectedValueOnce(new Error('status write failed'));
     await expect(AgentLoopRunner.run(params)).rejects.toThrow('status write failed');

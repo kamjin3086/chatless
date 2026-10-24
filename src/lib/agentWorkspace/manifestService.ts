@@ -179,7 +179,12 @@ export async function appendWorkspaceToolStep(params: {
     const tool = String(params.tool || '');
     const args = (params.args && typeof params.args === 'object') ? (params.args as Record<string, unknown>) : {};
 
-    const isError = !!(params.result && typeof params.result === 'object' && ((params.result as any).error || (params.result as any).ok === false || (params.result as any).success === false));
+    const isError = !!(params.result && typeof params.result === 'object'
+      && ((params.result as any).error
+        || (params.result as any).ok === false
+        || (params.result as any).success === false
+        || (params.result as any).isError === true
+        || (params.result as any).resultStatus === 'failed'));
     const outcome: WorkspaceToolStep['outcome'] = (params.result as any)?.skipped ? 'skipped' : (isError ? 'error' : 'success');
 
     const step: WorkspaceToolStep = {
