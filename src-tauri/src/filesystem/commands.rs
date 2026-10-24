@@ -1,5 +1,6 @@
 use crate::filesystem::state::{
-  app_data_dir, AllowlistSnapshot, FilesystemAllowlistState, FsOp, FsPermissions, CALL_SCOPE_TTL_MS,
+  app_data_dir, AllowlistSnapshot, CallScope, FilesystemAllowlistState, FsOp, FsPermissions,
+  CALL_SCOPE_TTL_MS,
 };
 use crate::filesystem::types::*;
 use sha2::{Digest, Sha256};
@@ -313,7 +314,7 @@ pub async fn read_file_inner(
   payload: ReadFilePayload,
 ) -> Result<ReadFileResult, String> {
   let abs = state
-    .assert_allowed(data_dir, &payload.path, FsOp::Read)
+    .assert_allowed(data_dir, &payload.path, FsOp::Read, payload.scope.as_scope())
     .await?;
   let content = tokio::fs::read_to_string(&abs)
     .await
@@ -406,7 +407,7 @@ pub async fn edit_file_inner(
   if payload.find.is_empty() {
     return Err("find 不能为空".to_string());
   }
-  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Write).await?;
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Write, payload.scope.as_scope()).await?;
   // Read-modify-write under a per-path lock: two edits to the same file cannot
   // interleave and lose one of the changes.
   let lock = write_lock_for(&abs);
@@ -487,7 +488,7 @@ pub async fn search_files_inner(
   state: &FilesystemAllowlistState,
   payload: SearchFilesPayload,
 ) -> Result<SearchFilesResult, String> {
-  let root = state.assert_allowed(data_dir, &payload.root, FsOp::Read).await?;
+  let root = state.assert_allowed(data_dir, &payload.root, FsOp::Read, payload.scope.as_scope()).await?;
   let limit = payload
     .limit
     .unwrap_or(SEARCH_DEFAULT_LIMIT)
@@ -701,16 +702,17 @@ pub async fn write_file_inner(
   state: &FilesystemAllowlistState,
   payload: WriteFilePayload,
 ) -> Result<OkResult, String> {
+  let scope = payload.scope.as_scope();
   let path = payload.path;
   let content = payload.content;
   // write permission on target file
-  let abs = state.assert_allowed(data_dir, &path, FsOp::Write).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Write, scope).await?;
   let p = Path::new(&abs);
   if let Some(parent) = p.parent() {
     // if parent doesn't exist, require create permission (and create it)
     if tokio::fs::metadata(parent).await.is_err() {
       let parent_str = parent.to_string_lossy().to_string();
-      let parent_abs = state.assert_allowed(data_dir, &parent_str, FsOp::Create).await?;
+      let parent_abs = state.assert_allowed(data_dir, &parent_str, FsOp::Create, scope).await?;
       tokio::fs::create_dir_all(&parent_abs)
         .await
         .map_err(|e| format!("mkdir parent failed: {}", e))?;
@@ -747,11 +749,12 @@ pub async fn list_directory_inner(
   state: &FilesystemAllowlistState,
   payload: ListDirectoryPayload,
 ) -> Result<ListDirectoryResult, String> {
+  let scope = payload.scope.as_scope();
   let path = payload.path;
   let limit = payload.limit;
   let pattern = payload.pattern;
   let kind = payload.kind;
-  let abs = state.assert_allowed(data_dir, &path, FsOp::Read).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Read, scope).await?;
   let mut rd = tokio::fs::read_dir(&abs)
     .await
     .map_err(|e| format!("read_dir failed: {}", e))?;
@@ -856,8 +859,13 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
   pi == p.len()
 }
 
-async fn delete_path_impl(data_dir: &Path, state: &FilesystemAllowlistState, path: &str) -> Result<String, String> {
-  let abs = state.assert_allowed(data_dir, path, FsOp::Delete).await?;
+async fn delete_path_impl(
+  data_dir: &Path,
+  state: &FilesystemAllowlistState,
+  path: &str,
+  scope: Option<CallScope<'_>>,
+) -> Result<String, String> {
+  let abs = state.assert_allowed(data_dir, path, FsOp::Delete, scope).await?;
   let meta = tokio::fs::metadata(&abs).await.map_err(|e| format!("delete failed: {}", e))?;
   if meta.is_dir() {
     tokio::fs::remove_dir_all(&abs).await.map_err(|e| format!("delete failed: {}", e))?;
@@ -878,7 +886,7 @@ pub async fn filesystem_delete_many(
   let mut failed: Vec<serde_json::Value> = Vec::new();
   for p in payload.paths.iter() {
     let input = String::from(p);
-    match delete_path_impl(&data_dir, &state, &input).await {
+    match delete_path_impl(&data_dir, &state, &input, payload.scope.as_scope()).await {
       Ok(abs) => deleted.push(abs.replace('\\', "/")),
       Err(e) => failed.push(serde_json::json!({ "path": input.replace('\\', "/"), "error": e })),
     }
@@ -899,7 +907,8 @@ pub async fn filesystem_delete_by_pattern(
   payload: DeleteByPatternPayload,
 ) -> Result<serde_json::Value, String> {
   let data_dir = app_data_dir(&app)?;
-  let dir_abs = state.assert_allowed(&data_dir, &payload.dir, FsOp::Read).await?;
+  let so_scope = payload.scope.as_scope();
+  let dir_abs = state.assert_allowed(&data_dir, &payload.dir, FsOp::Read, so_scope).await?;
   // 默认限制，防止误删/误匹配太多
   const DEFAULT_LIMIT: u32 = 200;
   const HARD_MAX_LIMIT: u32 = 2000;
@@ -942,7 +951,7 @@ pub async fn filesystem_delete_by_pattern(
   let mut deleted: Vec<String> = Vec::new();
   let mut failed: Vec<serde_json::Value> = Vec::new();
   for p in targets.iter() {
-    match delete_path_impl(&data_dir, &state, p).await {
+    match delete_path_impl(&data_dir, &state, p, so_scope).await {
       Ok(abs) => deleted.push(abs.replace('\\', "/")),
       Err(e) => failed.push(serde_json::json!({ "path": p, "error": e })),
     }
@@ -978,9 +987,10 @@ pub async fn create_directory_inner(
   state: &FilesystemAllowlistState,
   payload: CreateDirectoryPayload,
 ) -> Result<serde_json::Value, String> {
+  let scope = payload.scope.as_scope();
   let path = payload.path;
   let recursive = payload.recursive;
-  let abs = state.assert_allowed(data_dir, &path, FsOp::Create).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Create, scope).await?;
   let rec = recursive.unwrap_or(true);
   if rec {
     tokio::fs::create_dir_all(&abs)
@@ -1008,8 +1018,9 @@ pub async fn delete_file_inner(
   state: &FilesystemAllowlistState,
   payload: DeleteFilePayload,
 ) -> Result<OkResult, String> {
+  let scope = payload.scope.as_scope();
   let path = payload.path;
-  let abs = state.assert_allowed(data_dir, &path, FsOp::Delete).await?;
+  let abs = state.assert_allowed(data_dir, &path, FsOp::Delete, scope).await?;
   let meta = tokio::fs::metadata(&abs)
     .await
     .map_err(|e| format!("delete failed: {}", e))?;
@@ -1048,11 +1059,12 @@ pub async fn rename_file_inner(
   state: &FilesystemAllowlistState,
   payload: RenameFilePayload,
 ) -> Result<serde_json::Value, String> {
+  let scope = payload.scope.as_scope();
   let old_path = payload.old_path;
   let new_path = payload.new_path;
   // rename/move is a write-like operation
-  let old_abs = state.assert_allowed(data_dir, &old_path, FsOp::Write).await?;
-  let new_abs = state.assert_allowed(data_dir, &new_path, FsOp::Write).await?;
+  let old_abs = state.assert_allowed(data_dir, &old_path, FsOp::Write, scope).await?;
+  let new_abs = state.assert_allowed(data_dir, &new_path, FsOp::Write, scope).await?;
   tokio::fs::rename(&old_abs, &new_abs)
     .await
     .map_err(|e| format!("rename failed: {}", e))?;
@@ -1074,7 +1086,7 @@ pub async fn file_history_inner(
   state: &FilesystemAllowlistState,
   payload: FileHistoryPayload,
 ) -> Result<FileHistoryResult, String> {
-  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Read).await?;
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Read, payload.scope.as_scope()).await?;
   let versions = crate::filesystem::history::list_versions(data_dir, &abs)
     .await
     .into_iter()
@@ -1104,7 +1116,7 @@ pub async fn restore_version_inner(
   state: &FilesystemAllowlistState,
   payload: RestoreVersionPayload,
 ) -> Result<OkResult, String> {
-  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Write).await?;
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Write, payload.scope.as_scope()).await?;
   let lock = write_lock_for(&abs);
   let _guard = lock.lock().await;
 
@@ -1143,7 +1155,7 @@ pub async fn open_path_inner(
   state: &FilesystemAllowlistState,
   payload: OpenPathPayload,
 ) -> Result<serde_json::Value, String> {
-  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Read).await?;
+  let abs = state.assert_allowed(data_dir, &payload.path, FsOp::Read, payload.scope.as_scope()).await?;
   let target = Path::new(&abs);
   if !target.exists() {
     return Err(format!("路径不存在: {abs}"));
@@ -1184,30 +1196,30 @@ mod tests {
 
     // First write creates the file, so there is nothing to back up yet.
     let created = write_file_inner(&data_dir, &state, WriteFilePayload {
-      path: path.clone(), content: "v1".to_string(),
+      path: path.clone(), content: "v1".to_string(), scope: Default::default(),
     }).await.expect("initial write");
     assert!(created.history_id.is_none(), "a new file has no previous version");
 
     let overwritten = write_file_inner(&data_dir, &state, WriteFilePayload {
-      path: path.clone(), content: "v2".to_string(),
+      path: path.clone(), content: "v2".to_string(), scope: Default::default(),
     }).await.expect("overwrite");
     assert!(overwritten.history_id.is_some());
     assert_eq!(overwritten.history_count, Some(1));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "v2");
 
-    let history = file_history_inner(&data_dir, &state, FileHistoryPayload { path: path.clone() })
+    let history = file_history_inner(&data_dir, &state, FileHistoryPayload { path: path.clone(), scope: Default::default() })
       .await
       .expect("read history");
     assert_eq!(history.versions.len(), 1);
     let version_id = history.versions[0].id.clone();
 
     restore_version_inner(&data_dir, &state, RestoreVersionPayload {
-      path: path.clone(), version_id,
+      path: path.clone(), version_id, scope: Default::default(),
     }).await.expect("restore");
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "v1");
 
     // The restore snapshotted v2 first, so undoing the undo is possible.
-    let after = file_history_inner(&data_dir, &state, FileHistoryPayload { path })
+    let after = file_history_inner(&data_dir, &state, FileHistoryPayload { path, scope: Default::default() })
       .await
       .expect("read history after restore");
     assert_eq!(after.versions.len(), 2);
@@ -1246,7 +1258,7 @@ mod tests {
 
     std::fs::write(&target, b"version one").unwrap();
     let error = write_file_inner(&data_dir, &state, WriteFilePayload {
-      path: path.clone(), content: "version two".to_string(),
+      path: path.clone(), content: "version two".to_string(), scope: Default::default(),
     })
     .await
     .unwrap_err();
@@ -1259,6 +1271,7 @@ mod tests {
       replace: "version two".to_string(),
       all: None,
       expected_hash: None,
+      scope: Default::default(),
     })
     .await
     .unwrap_err();
@@ -1296,16 +1309,18 @@ mod tests {
     let original: Vec<u8> = vec![0x00, 0xFF, 0xFE, 0x41, 0x0A];
     std::fs::write(&target, &original).unwrap();
     write_file_inner(&data_dir, &state, WriteFilePayload {
-      path: path.clone(), content: "text now".to_string(),
+      path: path.clone(), content: "text now".to_string(), scope: Default::default(),
     })
     .await
     .expect("overwrite");
 
-    let history = file_history_inner(&data_dir, &state, FileHistoryPayload { path: path.clone() })
+    let history = file_history_inner(&data_dir, &state, FileHistoryPayload { path: path.clone(), scope: Default::default() })
       .await
       .expect("read history");
     let version_id = history.versions[0].id.clone();
-    restore_version_inner(&data_dir, &state, RestoreVersionPayload { path, version_id })
+    restore_version_inner(&data_dir, &state, RestoreVersionPayload {
+      path, version_id, scope: Default::default(),
+    })
       .await
       .expect("restore");
     assert_eq!(std::fs::read(&target).unwrap(), original);

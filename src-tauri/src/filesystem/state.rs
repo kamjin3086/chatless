@@ -41,6 +41,46 @@ pub struct CallScopedGrant {
   pub expires_at_ms: i64,
 }
 
+/// Wire form of the caller identity that every filesystem payload carries.
+/// An operation without a run id may use the persisted allowlist, never a
+/// temporary grant.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CallScopePayload {
+  #[serde(default)]
+  pub run_id: Option<String>,
+  #[serde(default)]
+  pub call_id: Option<String>,
+}
+
+impl CallScopePayload {
+  pub fn as_scope(&self) -> Option<CallScope<'_>> {
+    let run_id = self.run_id.as_deref().unwrap_or("").trim();
+    if run_id.is_empty() {
+      return None;
+    }
+    Some(CallScope { run_id, call_id: self.call_id.as_deref() })
+  }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CallScope<'a> {
+  pub run_id: &'a str,
+  pub call_id: Option<&'a str>,
+}
+
+fn grant_matches_scope(grant: &CallScopedGrant, scope: CallScope<'_>) -> bool {
+  if grant.run_id != scope.run_id {
+    return false;
+  }
+  match (grant.call_id.as_deref(), scope.call_id) {
+    // A call-scoped grant is usable only by that call. A run-scoped grant
+    // (call_id None) is usable by any call inside its own run.
+    (Some(grant_call), Some(call)) => grant_call == call,
+    (Some(_), None) => false,
+    (None, _) => true,
+  }
+}
+
 #[derive(Default)]
 pub struct FilesystemAllowlistState {
   loaded: AtomicBool,
@@ -335,7 +375,13 @@ impl FilesystemAllowlistState {
     Ok(())
   }
 
-  pub async fn assert_allowed(&self, data_dir: &Path, input_path: &str, op: FsOp) -> Result<String, String> {
+  pub async fn assert_allowed(
+    &self,
+    data_dir: &Path,
+    input_path: &str,
+    op: FsOp,
+    scope: Option<CallScope<'_>>,
+  ) -> Result<String, String> {
     self.ensure_loaded(data_dir).await?;
     let abs = normalize_abs_path(input_path)?;
     let real = resolve_real_path(&abs).await;
@@ -349,12 +395,13 @@ impl FilesystemAllowlistState {
       }
     }
 
-    {
+    if let Some(scope) = scope {
       let mut grants = self.grants.write().await;
       let now = now_ms();
       grants.retain(|g| g.expires_at_ms > now);
       if grants.iter().any(|g| {
-        op_allowed(&g.permissions, op)
+        grant_matches_scope(g, scope)
+          && op_allowed(&g.permissions, op)
           && is_within_dir(&g.lexical_path, &abs)
           && is_within_dir(&g.real_path, &real)
       }) {
@@ -405,5 +452,66 @@ mod tests {
     assert!(!is_within_dir("C:/work", "C:/workshop/file.txt"));
     assert!(is_within_dir("C:/work", "\\\\?\\C:\\work\\sub\\file.txt"));
     assert!(is_within_dir("/", "/etc/hosts"));
+  }
+
+  fn fixture_dir(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("chatless-grant-{name}-{}", std::process::id()))
+  }
+
+  fn read_scope<'a>(run_id: &'a str, call_id: Option<&'a str>) -> CallScope<'a> {
+    CallScope { run_id, call_id }
+  }
+
+  #[tokio::test]
+  async fn a_temporary_grant_is_usable_only_by_its_own_run_and_call() {
+    let state = FilesystemAllowlistState::default();
+    let data_dir = fixture_dir("identity");
+    let granted = fixture_dir("identity/inside");
+    let target = granted.join("file.txt").to_string_lossy().to_string();
+    state
+      .grant_call_scope(
+        "run-a",
+        Some("call-1"),
+        &granted.to_string_lossy(),
+        FsPermissions { read: true, ..Default::default() },
+        CALL_SCOPE_TTL_MS,
+      )
+      .await
+      .unwrap();
+
+    assert!(state.assert_allowed(&data_dir, &target, FsOp::Read, Some(read_scope("run-a", Some("call-1")))).await.is_ok());
+    // Another call in the same run, another run, and an operation without any
+    // identity must all be refused by the temporary grant.
+    assert!(state.assert_allowed(&data_dir, &target, FsOp::Read, Some(read_scope("run-a", Some("call-2")))).await.is_err());
+    assert!(state.assert_allowed(&data_dir, &target, FsOp::Read, Some(read_scope("run-b", Some("call-1")))).await.is_err());
+    assert!(state.assert_allowed(&data_dir, &target, FsOp::Read, None).await.is_err());
+
+    // Revoking a different owner leaves A's grant alive; revoking A removes it.
+    state.revoke_call_scope("run-b", Some("call-1")).await.unwrap();
+    assert!(state.assert_allowed(&data_dir, &target, FsOp::Read, Some(read_scope("run-a", Some("call-1")))).await.is_ok());
+    state.revoke_call_scope("run-a", Some("call-1")).await.unwrap();
+    assert!(state.assert_allowed(&data_dir, &target, FsOp::Read, Some(read_scope("run-a", Some("call-1")))).await.is_err());
+  }
+
+  #[tokio::test]
+  async fn an_identity_does_not_widen_the_granted_path() {
+    let state = FilesystemAllowlistState::default();
+    let data_dir = fixture_dir("scope");
+    let granted = fixture_dir("scope/inside");
+    let sibling = fixture_dir("scope/inside-other").join("file.txt").to_string_lossy().to_string();
+    state
+      .grant_call_scope(
+        "run-a",
+        None,
+        &granted.to_string_lossy(),
+        FsPermissions { read: true, ..Default::default() },
+        CALL_SCOPE_TTL_MS,
+      )
+      .await
+      .unwrap();
+
+    assert!(state.assert_allowed(&data_dir, &sibling, FsOp::Read, Some(read_scope("run-a", Some("any")))).await.is_err());
+    let inside = granted.join("file.txt").to_string_lossy().to_string();
+    assert!(state.assert_allowed(&data_dir, &inside, FsOp::Read, Some(read_scope("run-a", Some("any")))).await.is_ok());
   }
 }

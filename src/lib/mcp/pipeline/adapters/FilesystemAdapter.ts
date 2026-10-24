@@ -57,6 +57,7 @@ export class FilesystemAdapter implements ToolAdapter {
       };
     }
 
+    const scope = { runId: invocation.assistantMessageId, callId: invocation.callId };
     const path = typeof (args as Record<string, unknown>).path === 'string'
       ? String((args as Record<string, unknown>).path)
       : '';
@@ -79,7 +80,7 @@ export class FilesystemAdapter implements ToolAdapter {
         const endLine = typeof (args as Record<string, unknown>).endLine === 'number'
           ? (args as Record<string, unknown>).endLine as number
           : undefined;
-        return await readFile({ path, maxLines, startLine, endLine });
+        return await readFile({ path, maxLines, startLine, endLine, ...scope });
       }
 
       if (tool === 'write_file' || tool === 'write') {
@@ -87,7 +88,7 @@ export class FilesystemAdapter implements ToolAdapter {
         const content = typeof (args as Record<string, unknown>).content === 'string'
           ? String((args as Record<string, unknown>).content)
           : '';
-        return await writeFile({ path, content });
+        return await writeFile({ path, content, ...scope });
       }
 
       if (tool === 'edit' || tool === 'edit_file') {
@@ -113,7 +114,7 @@ export class FilesystemAdapter implements ToolAdapter {
         const expectedHash = typeof (args as Record<string, unknown>).expectedHash === 'string'
           ? String((args as Record<string, unknown>).expectedHash)
           : undefined;
-        const result = await editFile({ path, find, replace, all, expectedHash });
+        const result = await editFile({ path, find, replace, all, expectedHash, ...scope });
         if (!result.ok) {
           const stale = result.reason === 'FILE_CHANGED';
           return {
@@ -159,7 +160,7 @@ export class FilesystemAdapter implements ToolAdapter {
           };
         }
         const mode = modeRaw as 'content' | 'filename' | 'both';
-        return await searchFiles({ root, query, glob, limit, regex, mode });
+        return await searchFiles({ root, query, glob, limit, regex, mode, ...scope });
       }
 
       if (tool === 'list_directory' || tool === 'list' || tool === 'dir' || tool === 'ls') {
@@ -173,7 +174,7 @@ export class FilesystemAdapter implements ToolAdapter {
         const kind = typeof (args as Record<string, unknown>).kind === 'string'
           ? String((args as Record<string, unknown>).kind)
           : undefined;
-        return await listDirectory({ path, limit, pattern, kind });
+        return await listDirectory({ path, limit, pattern, kind, ...scope });
       }
 
       if (tool === 'create_directory' || tool === 'mkdir' || tool === 'create') {
@@ -181,7 +182,7 @@ export class FilesystemAdapter implements ToolAdapter {
         const recursive = (args as Record<string, unknown>).recursive !== undefined
           ? !!(args as Record<string, unknown>).recursive
           : true;
-        return await createDirectory({ path, recursive });
+        return await createDirectory({ path, recursive, ...scope });
       }
 
       if (tool === 'delete_file' || tool === 'delete' || tool === 'rm') {
@@ -199,13 +200,13 @@ export class FilesystemAdapter implements ToolAdapter {
           : undefined;
 
         if (paths && paths.length > 0) {
-          return await deleteMany({ paths });
+          return await deleteMany({ paths, ...scope });
         }
         if (dir.trim() && pattern.trim()) {
-          return await deleteByPattern({ dir, pattern, limit, kind, dryRun });
+          return await deleteByPattern({ dir, pattern, limit, kind, dryRun, ...scope });
         }
         if (!path) return { ok: false, error: 'path / paths / (dir+pattern) is required' };
-        return await deleteFile({ path });
+        return await deleteFile({ path, ...scope });
       }
 
       if (tool === 'rename_file' || tool === 'rename' || tool === 'move_file' || tool === 'move' || tool === 'mv') {
@@ -218,7 +219,7 @@ export class FilesystemAdapter implements ToolAdapter {
         if (!oldPath || !newPath) {
           return { ok: false, error: 'oldPath and newPath are required' };
         }
-        return await renameFile({ oldPath, newPath });
+        return await renameFile({ oldPath, newPath, ...scope });
       }
 
       // 未支持的工具：返回可读错误，让 follow-up 纠错

@@ -169,8 +169,18 @@ export class ToolExecutionPipeline {
     if (callGrants.length) {
       try {
         revokeCallGrants = await grantCallScopedPaths(callGrants, { runId: assistantMessageId, callId });
-      } catch {
-        // ignore: best-effort; the backend still re-checks the persistent allowlist
+      } catch (error) {
+        // The call needs a grant that could not be established. Running it
+        // anyway would either fail at the backend or use a grant that was only
+        // partially installed; stop here and tell the model why.
+        const message = `调用范围授权失败：${error instanceof Error ? error.message : String(error)}`;
+        markError({ assistantMessageId, server, tool, cardId }, message);
+        this.coordinator.markToolCallComplete(callKey, 'failed');
+        return {
+          ok: false,
+          resultStatus: 'failed',
+          error: { code: 'CALL_SCOPE_FAILED', message, server, tool },
+        };
       }
     }
 

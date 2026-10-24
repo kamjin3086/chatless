@@ -4,6 +4,9 @@ import { grantCallScope, revokeCallScope, setAllowlist, type SetAllowlistParams 
 type BackendAllowlistDirectory = SetAllowlistParams['directories'][number];
 
 let lastSyncedKey = '';
+// Serialize updates so a later request cannot be overwritten by an earlier
+// completion. The cache is only advanced after the native command acknowledges.
+let syncQueue: Promise<void> = Promise.resolve();
 
 function toBackendDir(d: AllowlistDirectory): BackendAllowlistDirectory {
   return {
@@ -25,9 +28,17 @@ export async function syncFilesystemAllowlistToBackend(directories: AllowlistDir
   const backendDirs = (directories || []).map(toBackendDir);
   const key = JSON.stringify(backendDirs);
   if (key === lastSyncedKey) return;
-  lastSyncedKey = key;
 
-  await setAllowlist({ directories: backendDirs, version: 1 });
+  const run = syncQueue.then(async () => {
+    // A queued update may already have been applied by the call ahead of it.
+    if (key === lastSyncedKey) return;
+    await setAllowlist({ directories: backendDirs, version: 1 });
+    lastSyncedKey = key;
+  });
+  // Keep the chain usable after a rejection; the caller still sees its own
+  // failure, and the next identical request retries instead of being skipped.
+  syncQueue = run.catch(() => {});
+  return run;
 }
 
 export type CallScopedGrant = {
@@ -45,7 +56,10 @@ export async function grantCallScopedPaths(
   scope: { runId: string; callId?: string },
 ): Promise<() => Promise<void>> {
   if (!grants.length) return async () => {};
-  await Promise.all(grants.map((grant) => grantCallScope({
+  // Settle every registration before deciding. A failing request must not race
+  // a still-pending grant that would otherwise outlive the failure with no
+  // revoker, so cleanup runs only after the whole scope has settled.
+  const results = await Promise.allSettled(grants.map((grant) => grantCallScope({
     runId: scope.runId,
     callId: scope.callId,
     path: grant.path,
@@ -54,6 +68,12 @@ export async function grantCallScopedPaths(
     create: !!grant.permissions.create,
     delete: !!grant.permissions.delete,
   })));
+  const failed = results.find((result) => result.status === 'rejected');
+  if (failed) {
+    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
+    const reason = (failed as PromiseRejectedResult).reason;
+    throw reason instanceof Error ? reason : new Error(String(reason));
+  }
   return async () => {
     await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
   };
