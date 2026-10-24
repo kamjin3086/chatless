@@ -18,6 +18,17 @@ import type {
 import { shouldLocalWin, shouldRemoteWin } from './ConflictResolver';
 
 /**
+ * A metadata write is a compare-and-swap on the ETag we read. This many passes
+ * is enough for a device to lose a race and still land on a fresh state; more
+ * than that means something keeps changing the file and the caller must see it.
+ */
+const MAX_CONFLICT_ATTEMPTS = 3;
+
+function isPreconditionFailure(error: unknown): boolean {
+  return /412|precondition/i.test(String(error));
+}
+
+/**
  * 同步管理器配置
  */
 export interface SyncManagerConfig {
@@ -143,23 +154,6 @@ export class SyncManager {
       // 确保远端目录存在
       await transport.ensureDirectory(dataPath);
 
-      // 获取远端元数据
-      const metaResult: MetadataResult = await transport.getMetadata(metaPath);
-      const remoteMeta: SyncMetadataFile = metaResult.data ?? {
-        version: 1,
-        updated_at: Date.now(),
-        items: {},
-      };
-      const remoteMetaEtag = metaResult.etag;
-
-      if (!remoteMeta.items) {
-        remoteMeta.items = {};
-      }
-
-      if (!metaResult.data) {
-        result.remoteCreated = true;
-      }
-
       // 获取本地数据
       const localItems = await adapter.getLocalItems();
       const localById = new Map<string, T>();
@@ -167,100 +161,156 @@ export class SyncManager {
         localById.set(item.id, item);
       }
 
-      // Push: 本地 -> 远端
-      if (direction === 'both' || direction === 'push') {
-        for (const item of localItems) {
-          try {
-            const localMeta = {
-              updated_at: item.updated_at,
-              device_id: item.updated_by_device_id ?? deviceId,
-            };
-            const remoteEntry = remoteMeta.items[item.id];
+      // A metadata write is a compare-and-swap. If the ETag moved, the whole
+      // pass restarts from the freshly read metadata instead of merging the
+      // snapshot it just lost with: the snapshot is the older side of the
+      // conflict, and letting it win rolls newer remote entries backward.
+      for (let attempt = 0; attempt < MAX_CONFLICT_ATTEMPTS; attempt++) {
+        const metaResult: MetadataResult = await transport.getMetadata(metaPath);
+        const remoteMeta: SyncMetadataFile = metaResult.data ?? {
+          version: 1,
+          updated_at: Date.now(),
+          items: {},
+        };
+        const remoteMetaEtag = metaResult.etag;
 
-            if (!shouldLocalWin(localMeta, remoteEntry)) {
-              result.skipped++;
-              continue;
-            }
-
-            // 转换并推送
-            const doc = adapter.toSyncDoc(item) as SyncDoc;
-            await transport.putItem(`${dataPath}/${item.id}.json`, doc);
-
-            // 更新元数据
-            remoteMeta.items[item.id] = adapter.extractMetadata(item, deviceId);
-            result.pushed++;
-          } catch (e) {
-            result.errors.push(`Push failed for ${item.id}: ${String(e)}`);
-          }
+        if (!remoteMeta.items) {
+          remoteMeta.items = {};
         }
-      }
 
-      // Pull: 远端 -> 本地
-      if (direction === 'both' || direction === 'pull') {
-        for (const [id, entry] of Object.entries(remoteMeta.items)) {
-          try {
-            const local = localById.get(id);
-            const localMeta = local
-              ? { updated_at: local.updated_at, device_id: local.updated_by_device_id ?? null }
-              : null;
+        // Counters only describe the pass that lands. An attempt that loses the
+        // CAS changed nothing durable (its body writes were conditional), so it
+        // is not reported as progress.
+        const pass = { pushed: 0, pulled: 0, skipped: 0, remoteCreated: !metaResult.data };
 
-            if (!shouldRemoteWin(entry, localMeta)) {
-              result.skipped++;
-              continue;
-            }
+        try {
+          // Push: 本地 -> 远端
+          if (direction === 'both' || direction === 'push') {
+            for (const item of localItems) {
+              try {
+                const localMeta = {
+                  updated_at: item.updated_at,
+                  device_id: item.updated_by_device_id ?? deviceId,
+                };
+                const remoteEntry = remoteMeta.items[item.id];
 
-            // 处理删除
-            if (entry.deleted_at) {
-              if (local) {
-                await adapter.deleteLocalItem(id, entry.deleted_at, entry.device_id ?? deviceId);
+                if (!shouldLocalWin(localMeta, remoteEntry)) {
+                  pass.skipped++;
+                  continue;
+                }
+
+                const itemPath = `${dataPath}/${item.id}.json`;
+                const doc = adapter.toSyncDoc(item) as SyncDoc;
+                // Metadata can lag the body when another device crashed between
+                // the two writes. Read the body and its ETag before deciding: a
+                // newer body must not be overwritten by a stale metadata entry,
+                // and the ETag makes the write itself conditional.
+                const current = await transport.getItem<SyncDoc>(itemPath);
+                if (current.data) {
+                  const bodyDevice = (current.data.updated_by_device_id as string | null | undefined)
+                    ?? remoteEntry?.device_id
+                    ?? null;
+                  const bodyMeta = {
+                    updated_at: Number(current.data.updated_at) || 0,
+                    device_id: bodyDevice ?? undefined,
+                  };
+                  if (!shouldLocalWin(localMeta, bodyMeta)) {
+                    // A body with no device id and our own timestamp can only be
+                    // our earlier conditional write from a pass that lost its
+                    // metadata CAS. Adopt it instead of dropping our metadata.
+                    const alreadyApplied = bodyMeta.updated_at === localMeta.updated_at
+                      && (current.data.updated_by_device_id == null
+                        || String(current.data.updated_by_device_id) === String(localMeta.device_id));
+                    if (alreadyApplied) {
+                      remoteMeta.items[item.id] = adapter.extractMetadata(item, deviceId);
+                      pass.pushed++;
+                    } else {
+                      // The body is the winner. Keep its metadata so the pull
+                      // phase (when enabled) can bring the local copy forward.
+                      remoteMeta.items[item.id] = {
+                        updated_at: bodyMeta.updated_at,
+                        deleted_at: (current.data.deleted_at as number | null | undefined) ?? null,
+                        device_id: bodyMeta.device_id ?? undefined,
+                      };
+                      pass.skipped++;
+                    }
+                    continue;
+                  }
+                }
+
+                await transport.putItem(itemPath, doc, current.etag);
+                remoteMeta.items[item.id] = adapter.extractMetadata(item, deviceId);
+                pass.pushed++;
+              } catch (e) {
+                // A concurrent body write is a conflict for the whole pass, not
+                // a per-item failure: refetch the metadata and decide again.
+                if (isPreconditionFailure(e)) throw e;
+                result.errors.push(`Push failed for ${item.id}: ${String(e)}`);
               }
-              result.pulled++;
-              continue;
             }
-
-            // 获取远端数据
-            const itemResult = await transport.getItem<SyncDoc>(`${dataPath}/${id}.json`);
-            if (!itemResult.data) {
-              result.skipped++;
-              continue;
-            }
-
-            const remoteDoc = itemResult.data;
-            const exists = await adapter.localItemExists(id);
-
-            if (!exists) {
-              await adapter.createLocalItem(adapter.fromSyncDoc(remoteDoc) as T, deviceId);
-            } else {
-              await adapter.updateLocalItem(id, adapter.fromSyncDoc(remoteDoc) as T, deviceId);
-            }
-
-            result.pulled++;
-          } catch (e) {
-            result.errors.push(`Pull failed for ${id}: ${String(e)}`);
           }
-        }
-      }
 
-      // 保存更新后的元数据
-      remoteMeta.updated_at = Date.now();
-      try {
-        await transport.putMetadata(metaPath, remoteMeta, remoteMetaEtag);
-      } catch (e) {
-        // 处理 ETag 冲突 - 重新获取并合并
-        const msg = String(e);
-        if (/412|precondition/i.test(msg)) {
-          const latest = await transport.getMetadata(metaPath);
-          if (latest.data?.items) {
-            const merged: SyncMetadataFile = {
-              version: 1,
-              updated_at: Date.now(),
-              items: { ...latest.data.items, ...remoteMeta.items },
-            };
-            await transport.putMetadata(metaPath, merged);
+          // Pull: 远端 -> 本地
+          if (direction === 'both' || direction === 'pull') {
+            for (const [id, entry] of Object.entries(remoteMeta.items)) {
+              try {
+                const local = localById.get(id);
+                const localMeta = local
+                  ? { updated_at: local.updated_at, device_id: local.updated_by_device_id ?? null }
+                  : null;
+
+                if (!shouldRemoteWin(entry, localMeta)) {
+                  pass.skipped++;
+                  continue;
+                }
+
+                // 处理删除
+                if (entry.deleted_at) {
+                  if (local) {
+                    await adapter.deleteLocalItem(id, entry.deleted_at, entry.device_id ?? deviceId);
+                  }
+                  pass.pulled++;
+                  continue;
+                }
+
+                // 获取远端数据
+                const itemResult = await transport.getItem<SyncDoc>(`${dataPath}/${id}.json`);
+                if (!itemResult.data) {
+                  pass.skipped++;
+                  continue;
+                }
+
+                const remoteDoc = itemResult.data;
+                const exists = await adapter.localItemExists(id);
+
+                if (!exists) {
+                  await adapter.createLocalItem(adapter.fromSyncDoc(remoteDoc) as T, deviceId);
+                } else {
+                  await adapter.updateLocalItem(id, adapter.fromSyncDoc(remoteDoc) as T, deviceId);
+                }
+
+                pass.pulled++;
+              } catch (e) {
+                result.errors.push(`Pull failed for ${id}: ${String(e)}`);
+              }
+            }
           }
-        } else {
+
+          // 保存更新后的元数据，并带上刚读到的 ETag
+          remoteMeta.updated_at = Date.now();
+          await transport.putMetadata(metaPath, remoteMeta, remoteMetaEtag);
+        } catch (e) {
+          if (isPreconditionFailure(e) && attempt + 1 < MAX_CONFLICT_ATTEMPTS) {
+            continue;
+          }
           throw e;
         }
+
+        result.pushed += pass.pushed;
+        result.pulled += pass.pulled;
+        result.skipped += pass.skipped;
+        if (pass.remoteCreated) result.remoteCreated = true;
+        break;
       }
 
       // 同步完成回调
