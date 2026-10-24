@@ -112,10 +112,11 @@ export class WebDAVTransport implements SyncTransport {
   }
 
   /**
-   * 保存单个数据文件
+   * 保存单个数据文件。When the caller read the item first, its ETag makes the
+   * write conditional: a concurrent change is a 412, not a silent overwrite.
    */
-  async putItem(path: string, data: SyncDoc): Promise<void> {
-    await this.client.putJson(path, data);
+  async putItem(path: string, data: SyncDoc, etag?: string): Promise<void> {
+    await this.client.putJson(path, data, etag ? { ifMatch: etag } : undefined);
   }
 
   /**

@@ -81,8 +81,9 @@ export interface SyncTransport {
    * 保存单个数据文件
    * @param path 相对路径
    * @param data 数据内容
+   * @param etag 可选的 ETag，用于条件更新；缺失时由传输层决定是否无条件写入
    */
-  putItem(path: string, data: SyncDoc): Promise<void>;
+  putItem(path: string, data: SyncDoc, etag?: string): Promise<void>;
   
   /**
    * 删除单个数据文件
