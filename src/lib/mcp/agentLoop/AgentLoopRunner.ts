@@ -584,7 +584,11 @@ export class AgentLoopRunner {
             }
           }
           if ((out as any)?.resultStatus === 'unknown') terminalStatus = 'paused';
-          const toolFailed = !!(out as any)?.error || (out as any)?.ok === false;
+          const toolFailed = !!(out as any)?.error
+            || (out as any)?.ok === false
+            || (out as any)?.success === false
+            || (out as any)?.isError === true
+            || (out as any)?.resultStatus === 'failed';
           const modelOutput = await externalizeLargeToolResult({ conversationId, runId: assistantMessageId, callId, output: out });
           await controlPlane.record({
             type: 'tool_call_output', callId, cardId: req.cardId,
