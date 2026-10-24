@@ -494,6 +494,33 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn an_expired_grant_is_ignored() {
+    let state = FilesystemAllowlistState::default();
+    let data_dir = fixture_dir("expiry");
+    let granted = fixture_dir("expiry/inside");
+    let target = granted.join("file.txt").to_string_lossy().to_string();
+    state
+      .grant_call_scope(
+        "run-a",
+        Some("call-1"),
+        &granted.to_string_lossy(),
+        FsPermissions { read: true, ..Default::default() },
+        CALL_SCOPE_TTL_MS,
+      )
+      .await
+      .unwrap();
+    {
+      let mut grants = state.grants.write().await;
+      grants[0].expires_at_ms = now_ms() - 1;
+    }
+
+    assert!(state
+      .assert_allowed(&data_dir, &target, FsOp::Read, Some(read_scope("run-a", Some("call-1"))))
+      .await
+      .is_err());
+  }
+
+  #[tokio::test]
   async fn an_identity_does_not_widen_the_granted_path() {
     let state = FilesystemAllowlistState::default();
     let data_dir = fixture_dir("scope");
