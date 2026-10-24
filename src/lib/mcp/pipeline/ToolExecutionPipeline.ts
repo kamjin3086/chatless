@@ -213,6 +213,7 @@ export class ToolExecutionPipeline {
       args: params.args,
       scope: params.scope,
       approvalScope: params.approvalScope,
+      isCancelled: () => this.coordinator.isMessageCancelled(assistantMessageId),
     });
 
     if (this.coordinator.isMessageCancelled(assistantMessageId)) {
