@@ -3,7 +3,7 @@ import StorageUtil from '@/lib/storage';
 
 export type SearchProvider =
   | 'google' | 'bing' | 'ollama' | 'duckduckgo' | 'custom_scrape'
-  | 'tavily' | 'brave' | 'searxng';
+  | 'tavily' | 'brave' | 'searxng' | 'keenable';
 
 type ConversationProviderMap = Record<string, SearchProvider | undefined>;
 
@@ -17,6 +17,7 @@ export interface WebSearchConfig {
   apiKeyOllama: string;
   apiKeyTavily: string;
   apiKeyBrave: string;
+  apiKeyKeenable: string;
   searxngBaseUrl: string;
   ddgLimit: number;
   ddgKl: string;
@@ -34,6 +35,7 @@ export interface WebSearchConfig {
   braveSearchLang: string;
   braveSafeSearch: 'off' | 'moderate' | 'strict';
   braveExtraSnippets: boolean;
+  keenableMaxResults: number;
   searxngLimit: number;
   searxngLanguage: string;
   searxngCategories: string;
@@ -57,6 +59,7 @@ interface WebSearchState extends WebSearchConfig {
   setOllamaAdvanced: (opts: Partial<Pick<WebSearchConfig, 'ollamaMaxResults'>>) => void;
   setTavilyConfig: (opts: Partial<Pick<WebSearchConfig, 'apiKeyTavily'|'tavilyMaxResults'|'tavilySearchDepth'|'tavilyTopic'|'tavilyIncludeDomains'|'tavilyExcludeDomains'>>) => void;
   setBraveConfig: (opts: Partial<Pick<WebSearchConfig, 'apiKeyBrave'|'braveCount'|'braveCountry'|'braveSearchLang'|'braveSafeSearch'|'braveExtraSnippets'>>) => void;
+  setKeenableConfig: (opts: Partial<Pick<WebSearchConfig, 'apiKeyKeenable'|'keenableMaxResults'>>) => void;
   setSearxngConfig: (opts: Partial<Pick<WebSearchConfig, 'searxngBaseUrl'|'searxngLimit'|'searxngLanguage'|'searxngCategories'|'searxngSafeSearch'|'searxngTimeRange'>>) => void;
   setFetchAdvanced: (opts: Partial<Pick<WebSearchConfig, 'fetchMaxContentChars'|'fetchMaxLinks'>>) => void;
   setFetchReadability: (enabled: boolean) => void;
@@ -75,13 +78,14 @@ const defaultConfig: WebSearchConfig = {
   autoAuthorizeWebSearch: true,
   provider: 'duckduckgo',
   apiKeyGoogle: '', cseIdGoogle: '', apiKeyBing: '', apiKeyOllama: '',
-  apiKeyTavily: '', apiKeyBrave: '', searxngBaseUrl: '',
+  apiKeyTavily: '', apiKeyBrave: '', apiKeyKeenable: '', searxngBaseUrl: '',
   ddgLimit: 5, ddgKl: '', ddgAcceptLanguage: '', ddgSafe: false, ddgSite: '',
   ollamaMaxResults: 5,
   tavilyMaxResults: 5, tavilySearchDepth: 'basic', tavilyTopic: 'general',
   tavilyIncludeDomains: '', tavilyExcludeDomains: '',
   braveCount: 5, braveCountry: '', braveSearchLang: '',
   braveSafeSearch: 'moderate', braveExtraSnippets: false,
+  keenableMaxResults: 5,
   searxngLimit: 5, searxngLanguage: 'all', searxngCategories: 'general',
   searxngSafeSearch: 0, searxngTimeRange: '',
   fetchMaxContentChars: 2000, fetchMaxLinks: 50, fetchUseReadability: true,
@@ -106,6 +110,7 @@ export const useWebSearchStore = create<WebSearchState>((set, get) => {
     setOllamaAdvanced: savePatch,
     setTavilyConfig: savePatch,
     setBraveConfig: savePatch,
+    setKeenableConfig: savePatch,
     setSearxngConfig: savePatch,
     setFetchAdvanced: savePatch,
     setFetchReadability: (fetchUseReadability) => savePatch({ fetchUseReadability }),
@@ -118,7 +123,8 @@ export const useWebSearchStore = create<WebSearchState>((set, get) => {
     getConversationProvider: (conversationId) => get().conversationProviders[conversationId] || get().provider,
     getAvailableProviders: () => {
       const s = get();
-      const providers: SearchProvider[] = ['duckduckgo', 'custom_scrape'];
+      // Keenable works key-free (public endpoint); an API key is optional.
+      const providers: SearchProvider[] = ['duckduckgo', 'custom_scrape', 'keenable'];
       if (s.apiKeyGoogle && s.cseIdGoogle) providers.push('google');
       if (s.apiKeyBing) providers.push('bing');
       if (s.apiKeyOllama) providers.push('ollama');

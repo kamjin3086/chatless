@@ -34,7 +34,7 @@ export function WebSearchSettings() {
   const store = useWebSearchStore();
   const available = useMemo(() => store.getAvailableProviders(), [
     store.apiKeyGoogle, store.cseIdGoogle, store.apiKeyBing, store.apiKeyOllama,
-    store.apiKeyTavily, store.apiKeyBrave, store.searxngBaseUrl,
+    store.apiKeyTavily, store.apiKeyBrave, store.apiKeyKeenable, store.searxngBaseUrl,
   ]);
 
   return <div className="space-y-4">
@@ -100,6 +100,14 @@ export function WebSearchSettings() {
           <ToggleSwitch label="返回额外摘要" checked={store.braveExtraSnippets}
             onChange={(v) => store.setBraveConfig({ braveExtraSnippets: !!v })} />
           <DocsLink url="https://api-dashboard.search.brave.com/api-reference/web/search/get" />
+        </div>}
+
+        {store.provider === "keenable" && <div className="grid gap-2 pt-2 border-t">
+          <Field label="API Key（可选，留空使用免密钥公共接口）" type="password" value={store.apiKeyKeenable}
+            onChange={(v) => store.setKeenableConfig({ apiKeyKeenable: v })} />
+          <Field label="结果数量（1–20）" type="number" value={store.keenableMaxResults}
+            onChange={(v) => store.setKeenableConfig({ keenableMaxResults: clamp(v, 1, 20) })} />
+          <DocsLink url="https://docs.keenable.ai" />
         </div>}
 
         {store.provider === "searxng" && <div className="grid gap-2 pt-2 border-t">

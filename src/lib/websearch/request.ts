@@ -31,6 +31,8 @@ export function buildSearchRequest(
       searchLang: cfg.braveSearchLang.trim() || undefined,
       safeSearch: cfg.braveSafeSearch, extraSnippets: cfg.braveExtraSnippets,
     });
+  } else if (provider === 'keenable') {
+    request.maxResults = cfg.keenableMaxResults;
   } else if (provider === 'searxng') {
     Object.assign(request, {
       baseUrl: cfg.searxngBaseUrl.trim(), maxResults: cfg.searxngLimit,

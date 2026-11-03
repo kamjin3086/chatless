@@ -80,6 +80,7 @@ pub async fn native_web_search(request: WebSearchRequest) -> Result<Vec<WebSearc
     "ollama" => call_ollama_search(client_ref, request).await,
     "tavily" => call_tavily_search(client_ref, request).await,
     "brave" => call_brave_search(client_ref, request).await,
+    "keenable" => call_keenable_search(client_ref, request).await,
     "searxng" => call_searxng_search(client_ref, request).await,
     // DuckDuckGo：默认采用官方html端点解析（无需API Key，鲁棒性强）
     // 如未来需要，可替换为 duckduckgo crate 的实现
@@ -232,6 +233,82 @@ async fn call_brave_search(
   let results = json_results(&json, &["web", "results"], count as usize);
   if results.is_empty() {
     Err("Brave Search returned no search results".to_string())
+  } else {
+    Ok(results)
+  }
+}
+
+const KEENABLE_APP_TITLE: &str = "Chatless";
+
+/// Keenable: key-free public endpoint by default, keyed endpoint when an API key is set.
+fn keenable_request(
+  client: &Client,
+  api_key: Option<&str>,
+  query: &str,
+  max_results: i32,
+) -> reqwest::RequestBuilder {
+  let payload = serde_json::json!({ "query": query, "max_results": max_results });
+  let req = match api_key.map(str::trim).filter(|v| !v.is_empty()) {
+    Some(key) => client
+      .post("https://api.keenable.ai/v1/search")
+      .header("X-API-Key", key),
+    None => client
+      .post("https://api.keenable.ai/v1/search/public")
+      .header("X-Keenable-Title", KEENABLE_APP_TITLE),
+  };
+  req.json(&payload)
+}
+
+fn keenable_results(value: &serde_json::Value, limit: usize) -> Vec<WebSearchResult> {
+  value
+    .get("results")
+    .and_then(|v| v.as_array())
+    .map(|items| {
+      items
+        .iter()
+        .filter_map(|item| {
+          let url = item.get("url")?.as_str()?.to_string();
+          let source_title = item
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&url)
+            .to_string();
+          let snippet = ["snippet", "description"]
+            .iter()
+            .filter_map(|k| item.get(*k).and_then(|v| v.as_str()))
+            .find(|s| !s.trim().is_empty())
+            .unwrap_or("")
+            .to_string();
+          Some(WebSearchResult {
+            snippet,
+            source_title,
+            url,
+          })
+        })
+        .take(limit)
+        .collect()
+    })
+    .unwrap_or_default()
+}
+
+async fn call_keenable_search(
+  client: &Client,
+  request: WebSearchRequest,
+) -> Result<Vec<WebSearchResult>, String> {
+  let max_results = request.max_results.unwrap_or(5).clamp(1, 20);
+  let res = keenable_request(
+    client,
+    request.api_key.as_deref(),
+    &request.query,
+    max_results,
+  )
+  .send()
+  .await
+  .map_err(|e| format!("Keenable HTTP error: {}", e))?;
+  let json = response_json(res, "Keenable").await?;
+  let results = keenable_results(&json, max_results as usize);
+  if results.is_empty() {
+    Err("Keenable returned no search results".to_string())
   } else {
     Ok(results)
   }

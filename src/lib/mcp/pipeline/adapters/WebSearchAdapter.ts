@@ -48,6 +48,7 @@ export class WebSearchAdapter implements ToolAdapter {
       apiKeyOllama: (cfg as any).apiKeyOllama,
       apiKeyTavily: cfg.apiKeyTavily,
       apiKeyBrave: cfg.apiKeyBrave,
+      apiKeyKeenable: cfg.apiKeyKeenable,
       searxngBaseUrl: cfg.searxngBaseUrl,
     });
 
@@ -62,6 +63,7 @@ export class WebSearchAdapter implements ToolAdapter {
       apiKeyOllama: (cfg as any).apiKeyOllama,
       apiKeyTavily: cfg.apiKeyTavily,
       apiKeyBrave: cfg.apiKeyBrave,
+      apiKeyKeenable: cfg.apiKeyKeenable,
       searxngBaseUrl: cfg.searxngBaseUrl,
     });
 
@@ -103,6 +105,8 @@ export class WebSearchAdapter implements ToolAdapter {
         request.searchLang = cfg.braveSearchLang.trim();
         request.safeSearch = cfg.braveSafeSearch;
         request.extraSnippets = cfg.braveExtraSnippets;
+      } else if (providerToUse === 'keenable') {
+        request.maxResults = cfg.keenableMaxResults;
       } else if (providerToUse === 'searxng') {
         request.baseUrl = cfg.searxngBaseUrl.trim();
         request.maxResults = cfg.searxngLimit;

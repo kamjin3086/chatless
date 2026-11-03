@@ -13,6 +13,7 @@ const PROVIDERS: ProviderMeta[] = [
   { id: 'ollama', label: 'Ollama' },
   { id: 'tavily', label: 'Tavily' },
   { id: 'brave', label: 'Brave Search' },
+  { id: 'keenable', label: 'Keenable' },
   { id: 'searxng', label: 'SearXNG' },
   { id: 'custom_scrape', label: 'Custom Scraper' },
 ];
@@ -37,6 +38,7 @@ export type ProviderConfigKeys = {
   apiKeyOllama?: string;
   apiKeyTavily?: string;
   apiKeyBrave?: string;
+  apiKeyKeenable?: string;
   searxngBaseUrl?: string;
 };
 
@@ -49,6 +51,7 @@ export function providerConfiguredMap(keys: ProviderConfigKeys): Record<SearchPr
     custom_scrape: true,
     tavily: !!keys.apiKeyTavily,
     brave: !!keys.apiKeyBrave,
+    keenable: true, // key-free public endpoint; key optional
     searxng: !!keys.searxngBaseUrl,
   };
 }
@@ -73,6 +76,8 @@ export function getProviderCredentials(id: SearchProvider, keys: ProviderConfigK
       return { apiKey: keys.apiKeyTavily };
     case 'brave':
       return { apiKey: keys.apiKeyBrave };
+    case 'keenable':
+      return { apiKey: keys.apiKeyKeenable || undefined };
     case 'duckduckgo':
     case 'custom_scrape':
     default:
