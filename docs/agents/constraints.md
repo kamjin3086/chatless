@@ -68,6 +68,23 @@ Core。
 
 Coding Pack 证明通用 Agent 能处理代码，不是 Chatless 的身份。
 
+## Vendor-submitted provider PRs
+
+A provider whose service the PR author sells or works for does not enter a built-in
+provider list — search, models, sync, or any other — regardless of patch quality.
+
+These lists are a maintenance commitment, not a distribution slot. Every entry is an
+adapter this repo keeps working against somebody else's API, indefinitely, and result
+quality cannot be tested from CI without that vendor's own key. A vendor is also, by
+construction, the party with the least to lose from us carrying it.
+
+The supported path for a new service is unchanged and needs no core change: MCP servers
+and Skills, added by the user in their own settings.
+
+Disposition on arrival: close as not planned citing this section. Do **not** open a
+technical review round — a request-changes review promises a merge this policy has
+already ruled out, and restarts the ping cycle at our cost.
+
 ## Harness 演进
 
 Chatless 已有 Agent 骨架（StreamEvent、AgentLoop、Tool pipeline、MCP、Skills）。短板是未
