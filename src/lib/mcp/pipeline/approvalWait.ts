@@ -6,12 +6,13 @@
  */
 import { useAuthorizationStore, type ApprovalDecision } from '@/store/authorizationStore';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
+import { isConversationAutomatic, useConversationAccessStore } from '@/store/conversationAccessStore';
 
 export async function waitForCallApproval(params: {
   id: string; runId: string; conversationId: string; callId?: string; server: string; tool: string;
   args: Record<string, unknown>; scope?: Record<string, unknown>;
   approvalScope?: import('@/store/authorizationStore').PendingApprovalScope;
-}): Promise<{ approved: boolean; decision: ApprovalDecision }> {
+}): Promise<{ approved: boolean; decision: ApprovalDecision; revision: number }> {
   const db = DatabaseService.getInstance().getDbManager();
   const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   if (tauri) {
@@ -29,8 +30,14 @@ export async function waitForCallApproval(params: {
       await tx.execute("UPDATE agent_runs SET status = 'waiting_approval', ended_at = NULL WHERE id = ?", [params.runId]);
     });
   }
-  return new Promise<{ approved: boolean; decision: ApprovalDecision }>((resolve) => {
+  return new Promise<{ approved: boolean; decision: ApprovalDecision; revision: number }>((resolve) => {
+    let decided = false;
+    let unsubscribe: (() => void) | undefined;
     const decide = (approved: boolean, decision: ApprovalDecision = 'once') => {
+      if (decided) return;
+      decided = true;
+      const revision = useConversationAccessStore.getState().revisions[params.conversationId] || 0;
+      unsubscribe?.();
       void (async () => {
         if (tauri) {
           const { invoke } = await import('@tauri-apps/api/core');
@@ -45,13 +52,22 @@ export async function waitForCallApproval(params: {
         });
       })().then((changed) => resolve({
         approved: Boolean(changed) && approved,
-        decision: approved ? decision : 'once',
-      })).catch(() => resolve({ approved: false, decision: 'once' }));
+        decision: approved ? decision : 'once', revision,
+      })).catch(() => resolve({ approved: false, decision: 'once', revision }));
     };
     useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
       conversationId: params.conversationId,
       server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
       scope: params.approvalScope,
       onApprove: (decision) => decide(true, decision), onReject: () => decide(false) });
+    if (!decided && params.approvalScope?.automaticEligible) {
+      const checkAutomatic = () => {
+        if (!decided && isConversationAutomatic(params.conversationId)) {
+          useAuthorizationStore.getState().approveAuthorization(params.id);
+        }
+      };
+      unsubscribe = useConversationAccessStore.subscribe(checkAutomatic);
+      checkAutomatic();
+    }
   });
 }

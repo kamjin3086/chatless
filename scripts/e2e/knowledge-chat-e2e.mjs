@@ -30,6 +30,12 @@ const reportPath =
   process.env.CHATLESS_KB_REPORT ||
   path.join(os.tmpdir(), 'chatless-knowledge-chat-report.json');
 const expectSemantic = process.env.CHATLESS_KB_EXPECT_SEMANTIC === '1';
+const approvalChoice = process.env.CHATLESS_KB_APPROVAL_CHOICE || 'once';
+assert(
+  ['once', 'conversation'].includes(approvalChoice),
+  'Invalid approval choice',
+);
+let approvedCalls = 0;
 const expectedDimension = Number(process.env.CHATLESS_KB_EXPECT_DIMENSION || 0);
 if (process.env.CHATLESS_KB_EXPECT_DIMENSION)
   assert(
@@ -273,13 +279,22 @@ try {
           approvals.every((row) => row.server === 'knowledge'),
           'Unexpected non-knowledge approval',
         );
+        const selector = `button[data-approval-choice="${approvalChoice}"][data-approval-run="${latest.id}"]`;
         if (
           approvals.length &&
-          (await evaluate(
-            'return !!document.querySelector(\'button[title="确认"]\');',
-          ))
-        )
-          await click('button[title="确认"]');
+          (await evaluate('return !!document.querySelector(arguments[0]);', [
+            selector,
+          ]))
+        ) {
+          if (approvalChoice === 'conversation')
+            assert.equal(
+              approvedCalls,
+              0,
+              'Conversation grant still asks for another Knowledge read',
+            );
+          await click(selector);
+          approvedCalls++;
+        }
       }
       if (status === 'failed' || status === 'cancelled')
         throw new Error(`Agent run ${status}`);
@@ -358,6 +373,14 @@ try {
     record('real query embedding contributed Dense results', {
       diagnostics: searches.map((event) => event.output.diagnostics),
     });
+  }
+  if (approvalChoice === 'conversation') {
+    assert.equal(
+      approvedCalls,
+      1,
+      'Expected one explicit Knowledge conversation approval',
+    );
+    record('one conversation approval covers Knowledge search and read');
   }
   record('real model searched corpus and persisted a supported answer', {
     messageId: answer.id,
