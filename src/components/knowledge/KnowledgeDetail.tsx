@@ -46,7 +46,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
   const router = useRouter();
   const searchParams = useSearchParams();
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(propKnowledgeBase || null);
-  const [documents, setDocuments] = useState<UnifiedFile[]>([]);
+  const [documents, setDocuments] = useState<Array<UnifiedFile & Partial<Awaited<ReturnType<typeof KnowledgeService.getDocumentStats>>>>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
@@ -152,22 +152,22 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
 
     try {
       // 使用正确的方法：从数据库映射表获取知识库中的文档
+      const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
+      const progressRevision = semanticIndexQueue.getRevision();
       const documentsWithMappings = await KnowledgeService.getDocumentsInKnowledgeBase(knowledgeBase.id);
       
       // 为每个文档查询分片数量
       const docsWithChunk = await Promise.all(
         documentsWithMappings.map(async (item) => {
-          const { chunkCount, lexicalStatus, semanticStatus } = await KnowledgeService.getDocumentStats(knowledgeBase.id, item.document.id);
-          return {
-            ...item.document,
-            chunkCount,
-            lexicalStatus,
-            semanticStatus,
-          };
+          const stats = await KnowledgeService.getDocumentStats(knowledgeBase.id, item.document.id);
+          return { ...item.document, ...stats };
         })
       );
 
-      setDocuments(docsWithChunk);
+      // If progress changed while the initial list loaded, recheck those
+      // snapshots once rather than overwriting a newer completion event.
+      const changed = semanticIndexQueue.getRevision() !== progressRevision;
+      setDocuments(changed ? docsWithChunk.map((doc) => ({ ...doc, indexTaskStatus: 'pending' })) : docsWithChunk);
       const status = await KnowledgeService.getKnowledgeBaseIndexStatus(knowledgeBase.id);
       setIndexStatus(status);
       console.log(`[KnowledgeDetail] 加载到 ${docsWithChunk.length} 个文档`);
@@ -176,6 +176,37 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
       setDocuments([]);
     }
   }, [knowledgeBase]);
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    void import('@/lib/indexing/SemanticIndexQueue').then(({ semanticIndexQueue }) => {
+      if (active) unsubscribe = semanticIndexQueue.subscribe((documentId) => {
+        setDocuments((current) => documentId && !current.some((doc) => doc.id === documentId) ? current :
+          current.map((doc) => !documentId || doc.id === documentId ? { ...doc, indexTaskStatus: 'pending' } : doc));
+      });
+    });
+    return () => { active = false; unsubscribe?.(); };
+  }, []);
+
+  // Refresh only active work. Terminal/cancelled/waiting-model tasks do not
+  // keep an idle knowledge page polling, and hidden windows do no work.
+  useEffect(() => {
+    const pending = documents.filter((doc) => doc.indexTaskStatus === 'pending' || doc.indexTaskStatus === 'running');
+    if (!knowledgeBase || !pending.length) return;
+    let active = true;
+    let inFlight = false;
+    const timer = setInterval(async () => {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
+      try {
+        const updates = await Promise.all(pending.map(async (doc) => [doc.id, await KnowledgeService.getDocumentStats(knowledgeBase.id, doc.id)] as const));
+        const byId = new Map(updates);
+        if (active) setDocuments((current) => current.map((doc) => byId.has(doc.id) ? { ...doc, ...byId.get(doc.id) } : doc));
+      } finally { inFlight = false; }
+    }, 1000);
+    return () => { active = false; clearInterval(timer); };
+  }, [documents, knowledgeBase]);
 
   /**
    * Semantic indexing is optional: keyword search works without a model. These
@@ -573,7 +604,7 @@ export function KnowledgeDetail({ knowledgeBase: propKnowledgeBase, onBack, onRe
                     onView={() => handleViewDocument(doc.id)}
                     onDelete={() => handleRemoveDocument(doc.id)}
                     onRetrySemantic={handleRetrySemantic}
-                    onCancelSemantic={handleCancelSemantic}
+                    onCancelSemantic={doc.semanticTaskStatus && ['pending', 'running', 'waiting_model'].includes(doc.semanticTaskStatus) ? handleCancelSemantic : undefined}
                     hideIndexedStatus={true}
                   />
                 ))}

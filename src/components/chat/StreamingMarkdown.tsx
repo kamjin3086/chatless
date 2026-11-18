@@ -2,6 +2,9 @@
 
 import React, { useMemo } from 'react';
 import { Streamdown } from 'streamdown';
+import type { Citation } from '@/lib/rag/evidenceTypes';
+import { remarkCitations } from '@/lib/markdown/remarkCitations';
+import { CitationPopover } from './CitationPopover';
 import { cn } from '@/lib/utils';
 import { useMarkdownFontSize } from '@/hooks/useMarkdownFontSize';
 import { createMarkdownRenderers } from '@/lib/markdown/renderers';
@@ -12,6 +15,7 @@ import { convertHtmlBreaksToMd, escapeControlTags, splitOpenFence } from './stre
 
 export interface StreamingMarkdownProps {
   content: string;
+  citations?: Citation[];
   /** 流式进行中：此时不做逐行语法高亮，也不显示代码块控件。 */
   isStreaming?: boolean;
   className?: string;
@@ -49,6 +53,7 @@ function StreamingCodeBlock({ lang, code }: { lang: string; code: string }) {
  */
 export const StreamingMarkdown = React.memo(function StreamingMarkdown({
   content,
+  citations,
   isStreaming = false,
   className,
   sizeOverride,
@@ -76,6 +81,26 @@ export const StreamingMarkdown = React.memo(function StreamingMarkdown({
     [effectiveSize, themeStyles]
   );
 
+  const components = useMemo(() => {
+    if (!citations?.length) return renderers;
+    return {
+      ...renderers,
+      span: ({ node: _node, ...props }: React.HTMLAttributes<HTMLSpanElement> & {
+        node?: unknown; 'data-chatless-citation'?: string;
+      }) => {
+        const number = Number(props['data-chatless-citation']);
+        const citation = citations.find((item) => item.n === number);
+        return citation
+          ? <CitationPopover citation={citation} disabled={isStreaming} />
+          : <span {...props} />;
+      },
+    };
+  }, [renderers, citations, isStreaming]);
+
+  const remarkPlugins = useMemo(() => citations?.length
+    ? [...streamdownRemarkPlugins, remarkCitations(citations)]
+    : streamdownRemarkPlugins, [citations]);
+
   const prepared = useMemo(() => {
     let text = escapeControlTags(content);
     text = convertHtmlBreaksToMd(text);
@@ -94,9 +119,9 @@ export const StreamingMarkdown = React.memo(function StreamingMarkdown({
     <div className={cn(containerClass, className)}>
       <Streamdown
         isAnimating={isStreaming}
-        components={renderers}
+        components={components}
         controls={!isStreaming}
-        remarkPlugins={streamdownRemarkPlugins}
+        remarkPlugins={remarkPlugins}
       >
         {prepared.settled}
       </Streamdown>

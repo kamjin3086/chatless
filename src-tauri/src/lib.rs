@@ -114,7 +114,7 @@ fn can_run_mcp_services() -> bool {
 /// 应用退出时释放 ONNX 等资源
 #[tauri::command]
 fn cleanup_on_exit(state: tauri::State<onnx_logic::OnnxState>) -> Result<(), String> {
-  onnx_logic::release_onnx_session(state)
+  onnx_logic::clear_onnx_sessions(state)
 }
 
 pub fn run() {
@@ -191,7 +191,24 @@ pub fn run() {
 
       Ok(())
     })
+    .on_page_load(|webview, payload| {
+      if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+        if let Some(state) = webview.app_handle().try_state::<onnx_logic::OnnxState>() {
+          if let Err(error) = state.release_view(webview.label()) {
+            log::warn!("ONNX navigation cleanup failed: {error}");
+          }
+        }
+      }
+    })
     .on_window_event(|window, event| {
+      // Only read local labels/state here, never query platform window geometry.
+      if matches!(event, tauri::WindowEvent::Destroyed) {
+        if let Some(state) = window.app_handle().try_state::<onnx_logic::OnnxState>() {
+          if let Err(error) = state.release_window(window.label()) {
+            log::warn!("ONNX window cleanup failed: {error}");
+          }
+        }
+      }
       #[cfg(target_os = "macos")]
       {
         if matches!(event, tauri::WindowEvent::Resized(_)) {
@@ -247,11 +264,7 @@ pub fn run() {
         .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
         .build(),
     )
-    .manage(onnx_logic::OnnxState {
-      session: Default::default(),
-      attention_mask: Default::default(),
-      token_type_ids: Default::default(),
-    })
+    .manage(onnx_logic::OnnxState::default())
     .manage(sse::AppState::new())
     .manage(mcp::state::McpState::new())
     .manage(filesystem::state::FilesystemAllowlistState::default())
@@ -281,8 +294,10 @@ pub fn run() {
       document_structured::parse_document_structured,
       document_structured::tokenize_for_fts_command,
       // ONNX commands
+      onnx_logic::get_onnx_view_generation,
       onnx_logic::init_onnx_session,
       onnx_logic::tokenize_batch,
+      onnx_logic::count_embedding_tokens,
       onnx_logic::generate_embedding,
       onnx_logic::release_onnx_session,
       // —— SSE Commands ——
@@ -300,6 +315,8 @@ pub fn run() {
       agent_runtime::publish_document_batch,
       agent_runtime::delete_document_atomically,
       agent_runtime::store_document_embeddings,
+      agent_runtime::prepare_semantic_indexing,
+      agent_runtime::claim_semantic_model,
       agent_runtime::dense_search_document_chunks,
       agent_runtime::cancel_dense_search,
       // —— HTTP Client Commands ——

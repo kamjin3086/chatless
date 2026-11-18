@@ -17,6 +17,8 @@ import { migration_015 } from './scripts/015_document_index_lifecycle';
 import { migration_016 } from './scripts/016_tool_result_attachments';
 import { migration_017 } from './scripts/017_agent_approvals';
 import { migration_018 } from './scripts/018_agent_run_lineage';
+import { migration_019 } from './scripts/019_semantic_model_identity';
+import { migration_020 } from './scripts/020_delivered_evidence';
 // 合并到 v2 后，这里不再注册 v3/v4
 /**
  * 迁移注册器
@@ -54,6 +56,8 @@ export class MigrationRegistry {
     this.register(migration_016);
     this.register(migration_017);
     this.register(migration_018);
+    this.register(migration_019);
+    this.register(migration_020);
     // v3+v4 已合并到 v2，无需注册
   }
 

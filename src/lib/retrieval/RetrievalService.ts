@@ -9,16 +9,23 @@ export class RetrievalService {
   async searchByQuery(queryText: string, queryEmbedding: number[], options: {
     knowledgeBaseIds?: string[]; documentIds?: string[]; topK?: number; embeddingFingerprint?: string; requestId?: string;
   } = {}): Promise<VectorSearchResult[]> {
+    return (await this.searchByQueryWithDiagnostics(queryText, queryEmbedding, options)).results;
+  }
+
+  async searchByQueryWithDiagnostics(queryText: string, queryEmbedding: number[], options: {
+    knowledgeBaseIds?: string[]; documentIds?: string[]; topK?: number; embeddingFingerprint?: string; requestId?: string;
+  } = {}): Promise<{ results: VectorSearchResult[]; denseHits: number; lexicalHits: number }> {
     const kbIds = options.knowledgeBaseIds?.filter(Boolean);
     const [denseResults, lexicalResults] = await Promise.all([
       this.searchDense(queryEmbedding, kbIds, options.documentIds, options.embeddingFingerprint, DENSE_CANDIDATE_K, options.requestId),
       new LexicalRetriever().search(queryText, { knowledgeBaseIds: kbIds, documentIds: options.documentIds, topK: BM25_CANDIDATE_K }),
     ]);
     const fused = reciprocalRankFusion([denseResults, lexicalResults], RRF_RANK_CONSTANT);
-    return fused.slice(0, RRF_OUTPUT_K).slice(0, options.topK ?? FINAL_EVIDENCE_K).map((item) => ({
+    const results = fused.slice(0, RRF_OUTPUT_K).slice(0, options.topK ?? FINAL_EVIDENCE_K).map((item) => ({
       id: item.id, content: (item as VectorSearchResult).content, score: item.rrfScore,
       metadata: (item as VectorSearchResult).metadata,
     }));
+    return { results, denseHits: denseResults.length, lexicalHits: lexicalResults.length };
   }
 
   private async searchDense(queryEmbedding: number[], knowledgeBaseIds: string[] | undefined,

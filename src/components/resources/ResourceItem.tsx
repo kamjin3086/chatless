@@ -126,10 +126,10 @@ export function ResourceItem({
                 ? 'border-blue-200/70 bg-blue-50/70 text-blue-700 dark:text-blue-400'
                 : semanticStatus === 'failed' ? 'border-amber-200/70 bg-amber-50/70 text-amber-700 dark:text-amber-400'
                 : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
-                语义{semanticStatus === 'ready' ? '可用' : semanticStatus === 'failed' ? '不可用' : '等待'}
+                语义{semanticStatus === 'ready' ? '可用' : semanticStatus === 'failed' ? '不可用' : semanticStatus === 'cancelled' ? '已取消' : semanticStatus === 'processing' ? '处理中' : semanticStatus === 'waiting_model' ? '等待模型' : '等待'}
               </span>
             )}
-            {semanticStatus && semanticStatus !== 'ready' && onRetrySemantic && (
+            {semanticStatus && ['failed', 'cancelled', 'waiting_model'].includes(semanticStatus) && onRetrySemantic && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -144,7 +144,7 @@ export function ResourceItem({
                 <TooltipContent>重试语义索引</TooltipContent>
               </Tooltip>
             )}
-            {onCancelSemantic && (semanticStatus === 'processing' || semanticStatus === 'pending') && (
+            {onCancelSemantic && (semanticStatus === 'processing' || semanticStatus === 'pending' || semanticStatus === 'waiting_model') && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
