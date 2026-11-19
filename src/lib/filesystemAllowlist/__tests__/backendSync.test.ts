@@ -97,6 +97,29 @@ describe('syncFilesystemAllowlistToBackend', () => {
     expect(io.sync.mock.calls[2][0].directories[0].path).toBe('/fixture/a');
   });
 
+  it('resends the last acknowledged list after a failed update changed native memory', async () => {
+    let nativePath: string | undefined;
+    let failPersistence = false;
+    io.sync.mockImplementation(async ({ directories }) => {
+      nativePath = directories[0].path;
+      if (failPersistence) throw new Error('persist allowlist failed');
+      return { ok: true };
+    });
+    const { syncFilesystemAllowlistToBackend } = await load();
+    const previous = [dir('/fixture/previous')];
+    await syncFilesystemAllowlistToBackend(previous);
+
+    failPersistence = true;
+    await expect(
+      syncFilesystemAllowlistToBackend([dir('/fixture/new')]),
+    ).rejects.toThrow('persist allowlist failed');
+    expect(nativePath).toBe('/fixture/new');
+
+    failPersistence = false;
+    await syncFilesystemAllowlistToBackend(previous);
+    expect(nativePath).toBe('/fixture/previous');
+  });
+
   it('a newer successful update is not undone by an earlier failure', async () => {
     io.sync
       .mockRejectedValueOnce(new Error('first failed'))

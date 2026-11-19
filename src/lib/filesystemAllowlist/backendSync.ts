@@ -3,7 +3,7 @@ import { grantCallScope, revokeCallScope, setAllowlist, type SetAllowlistParams 
 
 type BackendAllowlistDirectory = SetAllowlistParams['directories'][number];
 
-let lastSyncedKey = '';
+let lastSyncedKey: string | undefined;
 // Serialize updates so a later request cannot be overwritten by an earlier
 // completion. The cache is only advanced after the native command acknowledges.
 let syncQueue: Promise<void> = Promise.resolve();
@@ -34,6 +34,9 @@ export async function syncFilesystemAllowlistToBackend(directories: AllowlistDir
     // update is in flight must still be applied last, even when its key
     // matches the older acknowledged state.
     if (key === lastSyncedKey) return;
+    // A failed native write can already have replaced its in-memory list.
+    // Treat the cache as unknown until the write is acknowledged.
+    lastSyncedKey = undefined;
     await setAllowlist({ directories: backendDirs, version: 1 });
     lastSyncedKey = key;
   });
