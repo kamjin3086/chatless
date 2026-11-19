@@ -19,6 +19,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const NAME = /`([a-z][A-Za-z0-9]{9,})`/g;
 const CODE_FILE = /\.(ts|tsx|mts|cts|mjs|cjs|js)$/;
@@ -138,14 +139,41 @@ export function main(
     });
   const resolves = exists ?? defaultExists(root);
 
+  const checkedPaths = new Map();
   let bad = 0;
   for (const file of files) {
+    const lines = readFile(file);
+    for (const [index, line] of lines.entries()) {
+      const text = String(line).trim();
+      if (!/^(\*|\/\/)/.test(text) || text.includes('comment-symbols:ignore'))
+        continue;
+      for (const [, reference] of text.matchAll(/`(docs\/[^`]+)`/g)) {
+        if (
+          /[*<>?]/.test(reference) ||
+          !path.posix.extname(reference) ||
+          reference.endsWith('/') ||
+          path.posix.normalize(reference) !== reference
+        )
+          continue;
+        if (!checkedPaths.has(reference)) {
+          checkedPaths.set(
+            reference,
+            fs
+              .statSync(path.join(root, reference), { throwIfNoEntry: false })
+              ?.isFile() === true,
+          );
+        }
+        if (!checkedPaths.get(reference)) {
+          bad += 1;
+          write(
+            `${file}:${index + 1}: references missing file \`${reference}\``,
+          );
+        }
+      }
+    }
     let missing;
     try {
-      missing = findMissingSymbols(
-        commentSymbolMentions(readFile(file)),
-        resolves,
-      );
+      missing = findMissingSymbols(commentSymbolMentions(lines), resolves);
     } catch (err) {
       // "cannot look" is not the same answer as "nothing defines this name".
       if (err instanceof CommentCheckUnavailable) {
@@ -163,7 +191,7 @@ export function main(
   }
   if (bad) {
     write(
-      `${bad} stale symbol reference(s) - the comment describes code that is not there; fix the comment or restore the symbol.`,
+      `${bad} stale comment reference(s) - fix the comment or restore its target.`,
     );
     return 1;
   }
