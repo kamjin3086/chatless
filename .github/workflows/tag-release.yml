@@ -170,6 +170,18 @@ jobs:
           targets: ${{ matrix.os == 'macos-15' && 'aarch64-apple-darwin' || '' }}
 
 
+      - name: Use the bundled Windows ONNX Runtime
+        if: ${{ matrix.os == 'windows-2022' }}
+        shell: pwsh
+        run: |
+          $runtime = Get-Item -LiteralPath 'src-tauri/onnxruntime.dll' -ErrorAction Stop
+          if ($runtime.PSIsContainer -or $runtime.Length -eq 0) {
+            throw 'The Windows ONNX Runtime DLL is missing or empty'
+          }
+          # ort uses dynamic loading. Supplying the library location bypasses the
+          # ort-sys rc.10 downloader and its Cargo build-directory assumptions.
+          "ORT_LIB_LOCATION=$($runtime.DirectoryName)" >> $env:GITHUB_ENV
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -263,6 +275,7 @@ jobs:
         continue-on-error: true
 
       - name: Build Tauri app
+        id: tauri-build
         run: |
           set +e  # 允许命令失败，我们手动处理错误
           echo "Starting Tauri build for ${{ matrix.os }} ${{ matrix.arch || 'unknown' }}"
@@ -457,6 +470,13 @@ jobs:
           echo "Test artifacts cleaned"
         shell: bash
       
+      - name: Require a successful Windows build
+        if: ${{ matrix.os == 'windows-2022' && steps.tauri-build.outcome != 'success' }}
+        shell: bash
+        run: |
+          echo '::error::Windows Tauri build failed; skipping portable packaging.'
+          exit 1
+
       - name: Package Windows no-install ZIP
         if: ${{ matrix.os == 'windows-2022' }}
         shell: pwsh
