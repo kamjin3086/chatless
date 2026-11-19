@@ -174,8 +174,8 @@ export class MigrationEngine {
    * 执行迁移（向前）
    */
   async migrateUp(migrations: Migration[], targetVersion?: number): Promise<MigrationResult[]> {
-    const currentVersion = await this.getCurrentVersion();
     const executedMigrations = await this.getExecutedMigrations();
+    const currentVersion = executedMigrations.reduce((latest, migration) => Math.max(latest, migration.version), 0);
     const executedVersions = new Set(executedMigrations.map(m => m.version));
 
     // 过滤需要执行的迁移

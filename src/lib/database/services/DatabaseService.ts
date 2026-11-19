@@ -9,6 +9,7 @@ import {
 import type { Conversation, Message } from '@/types/chat';
 import type { KnowledgeBase, DocKnowledgeMapping } from '../repositories/KnowledgeBaseRepository';
 import { getDefaultDatabaseConfig } from '../../config/database';
+import { startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import type { Document } from '../repositories/DocumentRepository';
 
 /**
@@ -78,12 +79,6 @@ export class DatabaseService {
       console.log('🔧 [DatabaseService] 等待数据库管理器初始化...');
       await this.dbManager.initialize();
       
-      // 验证数据库连接状态
-      const status = await this.dbManager.getStatus();
-      if (!status.isInitialized) {
-        throw new Error('数据库管理器初始化失败：数据库未就绪');
-      }
-      
       console.log('🔧 [DatabaseService] 数据库管理器初始化完成，创建Repository实例...');
 
       // 创建Repository实例
@@ -97,8 +92,13 @@ export class DatabaseService {
       // Resume durable semantic jobs only after every repository and migration
       // is ready. Published indexes reconcile their selected model in the
       // background; an empty knowledge store does not initialize a model.
-      const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
-      await semanticIndexQueue.resume();
+      const resumeStart = performance.now();
+      try {
+        const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
+        await semanticIndexQueue.resume();
+      } finally {
+        startupMonitor.addSubPhase('数据库初始化', '语义队列恢复', performance.now() - resumeStart);
+      }
 
       // 验证Repository实例创建成功
       if (!this.conversationRepo || !this.messageRepo) {
