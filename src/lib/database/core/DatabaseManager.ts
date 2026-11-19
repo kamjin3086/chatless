@@ -76,9 +76,10 @@ export class DatabaseManager {
       // 初始化迁移管理器
       this.migrationManager = new DatabaseMigrator(this.db);
 
-      // 检查迁移状态缓存，避免重复迁移检查
       startupMonitor.startPhase('迁移检查');
-      await this.checkAndRunMigrations();
+      const migrations = await this.migrationManager.migrate();
+      const failed = migrations.find((migration) => !migration.success);
+      if (failed) throw new Error(failed.error || 'Database migration failed');
       startupMonitor.endPhase('迁移检查');
 
       // 异步验证数据库健康状态，不阻塞初始化流程
@@ -104,80 +105,6 @@ export class DatabaseManager {
       throw dbError;
     } finally {
       this.connectionLock = false;
-    }
-  }
-
-  /**
-   * 检查迁移状态缓存并执行迁移
-   */
-  private async checkAndRunMigrations(): Promise<void> {
-    if (!this.migrationManager) {
-      throw new DatabaseError(
-        DatabaseErrorType.MISSING_DEPENDENCY,
-        "迁移管理器未初始化"
-      );
-    }
-
-    try {
-      // 获取当前数据库版本
-      startupMonitor.startPhase('获取数据库版本');
-      const currentVersion = await this.migrationManager.getCurrentVersion();
-      startupMonitor.endPhase('获取数据库版本');
-      
-      // 检查缓存中的版本 - 使用简单的内存缓存
-      const cacheKey = `db_migration_version_${this.config.dbPath}`;
-      const cachedVersion = this.getMigrationCache(cacheKey);
-      
-      if (cachedVersion && parseInt(cachedVersion) === currentVersion) {
-        console.debug("迁移状态缓存命中，跳过迁移检查", { 
-          cachedVersion, 
-          currentVersion 
-        });
-        return;
-      }
-
-      // 执行迁移
-      startupMonitor.startPhase('执行数据库迁移');
-      await this.migrationManager.migrate();
-      startupMonitor.endPhase('执行数据库迁移');
-      
-      // 更新缓存
-      this.setMigrationCache(cacheKey, currentVersion.toString());
-    } catch (error) {
-      console.error("迁移检查失败:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * 获取迁移缓存
-   */
-  private getMigrationCache(key: string): string | null {
-    try {
-      // 使用简单的内存缓存
-      if (typeof window !== 'undefined' && (window as any).__migrationCache) {
-        return (window as any).__migrationCache[key] || null;
-      }
-      return null;
-    } catch (error) {
-      console.warn('获取迁移缓存失败:', error);
-      return null;
-    }
-  }
-
-  /**
-   * 设置迁移缓存
-   */
-  private setMigrationCache(key: string, value: string): void {
-    try {
-      if (typeof window !== 'undefined') {
-        if (!(window as any).__migrationCache) {
-          (window as any).__migrationCache = {};
-        }
-        (window as any).__migrationCache[key] = value;
-      }
-    } catch (error) {
-      console.warn('设置迁移缓存失败:', error);
     }
   }
 
