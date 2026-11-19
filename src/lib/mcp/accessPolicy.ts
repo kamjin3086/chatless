@@ -1,4 +1,5 @@
 import { setServerAutoAuthorize, shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
+import { useConversationAccessStore } from '@/store/conversationAccessStore';
 
 /**
  * How much an agent capability may do without asking.
@@ -19,35 +20,23 @@ const SERVER_NAME: Record<AccessScope, string> = {
   shell: 'shell',
 };
 
-/** Conversation-scoped overrides, memory only: "this session" must not stick. */
-const conversationLevels = new Map<string, AccessLevel>();
-
-function keyOf(scope: AccessScope, conversationId: string): string {
-  return `${scope}:${String(conversationId || '').trim()}`;
-}
-
 export function setConversationAccess(
   scope: AccessScope,
   conversationId: string,
   level: AccessLevel,
 ): void {
-  const key = keyOf(scope, conversationId);
-  if (key.endsWith(':')) return;
-  if (level === 'ask') conversationLevels.delete(key);
-  else conversationLevels.set(key, level);
+  useConversationAccessStore.getState().setLevel(conversationId, scope, level);
 }
 
 export function getConversationAccess(
   scope: AccessScope,
   conversationId: string,
 ): AccessLevel | undefined {
-  const key = keyOf(scope, conversationId);
-  if (key.endsWith(':')) return undefined;
-  return conversationLevels.get(key);
+  return useConversationAccessStore.getState().conversations[conversationId]?.levels[scope];
 }
 
 export function clearConversationAccess(scope: AccessScope, conversationId: string): void {
-  conversationLevels.delete(keyOf(scope, conversationId));
+  useConversationAccessStore.getState().setLevel(conversationId, scope, undefined);
 }
 
 /** The persisted preference, shared with the settings page. */

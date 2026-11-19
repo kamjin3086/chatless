@@ -110,7 +110,12 @@ export interface Citation {
   documentHash?: string;
   locator: SourceLocator;
   quote: string;
+  sourceBlockIds?: string[];
+  retrievalChunkId?: string;
+  range?: DeliveredRange;
   stale?: boolean;
 }
 
-export const EVIDENCE_TAG_RE = /\[\[(E\d+)\]\]/g;
+// Single-bracket E-prefixed aliases are accepted only when registered. Bare
+// numeric references are never guessed as evidence IDs.
+export const EVIDENCE_TAG_RE = /\[\[(E\d+)\]\]|\[(E\d+)\]/g;

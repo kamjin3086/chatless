@@ -1,73 +1,57 @@
-/**
- * 等一次调用级审批：先落一条 pending 记录（Tauri 下走 invoke，浏览器下走本地库事务），
- * 把卡片交给授权 store，用户在卡片上答完才把结果交回去。
- *
- * 这里只有 IO 和等待，不参与"该不该问"的判定（那在 policy/），也不管卡片文案（那在 present/）。
- *
- * The pending card is registered before the persistence await. Stop calls
- * `rejectAuthorizationsByMessageId`, and a waiter that had not registered yet
- * used to escape that sweep: the run stayed locked and the next send in the
- * conversation was rejected. Registration also makes a late positive answer
- * observable, so it can be refused instead of executing a stopped call.
- */
-import { useAuthorizationStore, type ApprovalDecision } from '@/store/authorizationStore';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
+import {
+  useAuthorizationStore,
+  type ApprovalDecision,
+  type PendingApprovalScope,
+} from '@/store/authorizationStore';
+import { isConversationAutomatic, useConversationAccessStore } from '@/store/conversationAccessStore';
 
+type ApprovalAnswer = { approved: boolean; decision: ApprovalDecision; revision: number };
+
+/** Registers the card before writing the pending row so Stop can always reach the waiter. */
 export async function waitForCallApproval(params: {
   id: string; runId: string; conversationId: string; callId?: string; server: string; tool: string;
   args: Record<string, unknown>; scope?: Record<string, unknown>;
-  approvalScope?: import('@/store/authorizationStore').PendingApprovalScope;
-  /** True once Stop cancelled the run; a late approval must not execute. */
+  approvalScope?: PendingApprovalScope;
   isCancelled?: () => boolean;
-}): Promise<{ approved: boolean; decision: ApprovalDecision }> {
+}): Promise<ApprovalAnswer> {
+  const isCancelled = params.isCancelled ?? (() => false);
+  const revision = () => useConversationAccessStore.getState().revisions[params.conversationId] || 0;
+  const rejected = (atRevision: number): ApprovalAnswer => ({ approved: false, decision: 'once', revision: atRevision });
+  if (isCancelled()) return rejected(revision());
+
   const db = DatabaseService.getInstance().getDbManager();
   const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-  const isCancelled = params.isCancelled ?? (() => false);
-
-  if (isCancelled()) return { approved: false, decision: 'once' };
-
-  let answer: { approved: boolean; decision: ApprovalDecision } | null = null;
-  let persisted = false;
-  let resolveAnswer!: (value: { approved: boolean; decision: ApprovalDecision }) => void;
-  const settled = new Promise<{ approved: boolean; decision: ApprovalDecision }>((resolve) => {
-    resolveAnswer = resolve;
-  });
-
-  const persistDecision = async (approved: boolean) => {
-    if (tauri) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return invoke<boolean>('agent_decide_approval', { db: db.getConnectionUrl(), approvalId: params.id,
-        status: approved ? 'approved' : 'rejected', decidedAt: Date.now() });
-    }
-    return db.executeTransaction(async (tx) => {
-      await tx.execute("UPDATE agent_approvals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
-        [approved ? 'approved' : 'rejected', Date.now(), params.id]);
-      await tx.execute("UPDATE agent_runs SET status = 'running' WHERE id = ? AND status = 'waiting_approval'", [params.runId]);
-      return true;
-    });
-  };
-
-  const settle = (approved: boolean, decision: ApprovalDecision = 'once') => {
-    if (answer) return;
-    answer = { approved, decision: approved ? decision : 'once' };
-    const store = useAuthorizationStore.getState();
-    // Tests and older callers may provide only the registration side.
-    if (typeof store.removeAuthorization === 'function') store.removeAuthorization(params.id);
-    resolveAnswer(answer);
-    if (persisted) void persistDecision(approved).catch(() => {});
+  let resolveAnswer!: (answer: ApprovalAnswer) => void;
+  const answer = new Promise<ApprovalAnswer>((resolve) => { resolveAnswer = resolve; });
+  let decided = false;
+  let unsubscribe: (() => void) | undefined;
+  const decide = (approved: boolean, decision: ApprovalDecision = 'once') => {
+    if (decided) return;
+    decided = true;
+    const atRevision = revision();
+    unsubscribe?.();
+    useAuthorizationStore.getState().removeAuthorization?.(params.id);
+    resolveAnswer(approved && !isCancelled()
+      ? { approved: true, decision, revision: atRevision }
+      : rejected(atRevision));
   };
 
   useAuthorizationStore.getState().addPendingAuthorization({ id: params.id, messageId: params.runId,
     conversationId: params.conversationId,
     server: params.server, tool: params.tool, args: params.args, createdAt: Date.now(),
     scope: params.approvalScope,
-    onApprove: (decision) => {
-      // The card can still be visible for a tick after Stop; a positive answer
-      // that arrives now is a rejection of the cancelled call.
-      if (isCancelled()) settle(false);
-      else settle(true, decision);
-    },
-    onReject: () => settle(false) });
+    onApprove: (decision) => decide(true, decision), onReject: () => decide(false) });
+
+  if (!decided && params.approvalScope?.automaticEligible) {
+    const checkAutomatic = () => {
+      if (!decided && isConversationAutomatic(params.conversationId)) {
+        useAuthorizationStore.getState().approveAuthorization(params.id);
+      }
+    };
+    unsubscribe = useConversationAccessStore.subscribe(checkAutomatic);
+    checkAutomatic();
+  }
 
   try {
     if (tauri) {
@@ -86,27 +70,30 @@ export async function waitForCallApproval(params: {
       });
     }
   } catch {
-    const store = useAuthorizationStore.getState();
-    if (typeof store.removeAuthorization === 'function') store.removeAuthorization(params.id);
-    settle(false);
-    return settled;
+    decide(false);
+    return rejected((await answer).revision);
   }
 
-  // The row exists now. A decision taken while it was being written still has
-  // to reach the durable record: Stop must not leave a `pending` approval
-  // behind for a run that is already cancelled.
-  persisted = true;
-  if (isCancelled()) settle(false);
-  // `settle` mutates this through a closure, so the compiler cannot see the
-  // assignment on the direct path.
-  const decided = answer as { approved: boolean; decision: ApprovalDecision } | null;
-  if (decided) {
-    try {
-      await persistDecision(decided.approved);
-    } catch {
-      // The in-memory answer is what releases the run; a failed durable update
-      // is a stale row, not a reason to block the conversation.
-    }
+  // Record an answer only after the pending row exists. Letting the run finish
+  // earlier could let a late request mark that finished run as waiting again.
+  if (isCancelled()) decide(false);
+  const proposed = await answer;
+  const approved = proposed.approved && !isCancelled();
+  try {
+    const status = approved ? 'approved' : 'rejected';
+    const changed = tauri
+      ? await (await import('@tauri-apps/api/core')).invoke<boolean>('agent_decide_approval', {
+        db: db.getConnectionUrl(), approvalId: params.id, status, decidedAt: Date.now(),
+      })
+      : await db.executeTransaction(async (tx) => {
+        await tx.execute("UPDATE agent_approvals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
+          [status, Date.now(), params.id]);
+        await tx.execute("UPDATE agent_runs SET status = 'running' WHERE id = ? AND status = 'waiting_approval'", [params.runId]);
+        return true;
+      });
+    if (changed && approved && !isCancelled()) return proposed;
+  } catch {
+    // An unrecorded approval never enables execution.
   }
-  return settled;
+  return rejected(proposed.revision);
 }

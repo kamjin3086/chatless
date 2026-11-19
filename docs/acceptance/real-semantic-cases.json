@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "Frozen before retrieval tuning. Real TXT, Markdown, PDF and DOCX corpus from the knowledge-semantic acceptance profile. Expected documents are resolved by unique filename within the mounted library.",
+  "cases": [
+    {"id":"orion-interval-zh","query":"ORION-KB-4826 的维护周期是多少天？","document":"orion-maintenance.txt","fact":"37"},
+    {"id":"orion-owner-zh","query":"谁负责 ORION-KB-4826 设备的维护？","document":"orion-maintenance.txt","fact":"林工"},
+    {"id":"orion-secret-zh","query":"ORION-KB-4826 的授权口令是什么？","document":"orion-maintenance.txt","fact":"紫杉星河4826"},
+    {"id":"orion-paraphrase-zh","query":"那台由林工照看的设备多久保养一次？","document":"orion-maintenance.txt","fact":"37"},
+    {"id":"mira-interval-zh","query":"MIRA-KB-9318 的过滤器隔多少天需要换新？","document":"mira-filter.md","fact":"19"},
+    {"id":"mira-owner-zh","query":"谁负责 MIRA-KB-9318 过滤器更换？","document":"mira-filter.md","fact":"陈工"},
+    {"id":"mira-secret-zh","query":"MIRA-KB-9318 的核验短语是什么？","document":"mira-filter.md","fact":"银杏回声9318"},
+    {"id":"mira-paraphrase-zh","query":"陈工负责的耗材多久换一次？","document":"mira-filter.md","fact":"19"},
+    {"id":"lyra-retention-zh","query":"LYRA-DOCX-5842 的备份需要保存多久？","document":"lyra-backup.docx","fact":"61"},
+    {"id":"lyra-owner-zh","query":"LYRA-DOCX-5842 的负责人是谁？","document":"lyra-backup.docx","fact":"赵工"},
+    {"id":"lyra-secret-zh","query":"LYRA-DOCX-5842 恢复时使用什么核验短语？","document":"lyra-backup.docx","fact":"松石航线5842"},
+    {"id":"lyra-paraphrase-zh","query":"赵工负责的数据副本可以留存几天？","document":"lyra-backup.docx","fact":"61"},
+    {"id":"aster-interval-en","query":"How often is emergency inspection required for ASTER-PDF-7261?","document":"aster-inspection.pdf","fact":"43"},
+    {"id":"aster-owner-en","query":"Who is responsible for the ASTER-PDF-7261 emergency inspection?","document":"aster-inspection.pdf","fact":"Morgan"},
+    {"id":"aster-secret-en","query":"What is the authorization phrase for ASTER-PDF-7261?","document":"aster-inspection.pdf","fact":"amberharbor7261"},
+    {"id":"aster-paraphrase-en","query":"How many days between the checks supervised by Morgan?","document":"aster-inspection.pdf","fact":"43"}
+  ]
+}

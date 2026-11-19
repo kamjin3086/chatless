@@ -3,7 +3,10 @@ import { grantCallScope, revokeCallScope, setAllowlist, type SetAllowlistParams 
 
 type BackendAllowlistDirectory = SetAllowlistParams['directories'][number];
 
-let lastSyncedKey = '';
+let lastSyncedKey: string | undefined;
+// Serialize updates so a later request cannot be overwritten by an earlier
+// completion. The cache is only advanced after the native command acknowledges.
+let syncQueue: Promise<void> = Promise.resolve();
 
 function toBackendDir(d: AllowlistDirectory): BackendAllowlistDirectory {
   return {
@@ -24,15 +27,32 @@ function toBackendDir(d: AllowlistDirectory): BackendAllowlistDirectory {
 export async function syncFilesystemAllowlistToBackend(directories: AllowlistDirectory[]): Promise<void> {
   const backendDirs = (directories || []).map(toBackendDir);
   const key = JSON.stringify(backendDirs);
-  if (key === lastSyncedKey) return;
-  lastSyncedKey = key;
 
-  await setAllowlist({ directories: backendDirs, version: 1 });
+  const run = syncQueue.then(async () => {
+    // The acknowledged key may have moved while this call was queued. The
+    // cache is checked here, not before enqueueing: a call made while another
+    // update is in flight must still be applied last, even when its key
+    // matches the older acknowledged state.
+    if (key === lastSyncedKey) return;
+    // A failed native write can already have replaced its in-memory list.
+    // Treat the cache as unknown until the write is acknowledged.
+    lastSyncedKey = undefined;
+    await setAllowlist({ directories: backendDirs, version: 1 });
+    lastSyncedKey = key;
+  });
+  // Keep the chain usable after a rejection; the caller still sees its own
+  // failure, and the next identical request retries instead of being skipped.
+  syncQueue = run.catch(() => {});
+  return run;
 }
 
 export type CallScopedGrant = {
   path: string;
   permissions: { read?: boolean; write?: boolean; create?: boolean; delete?: boolean };
+  /** Reusing temporary trust must not follow a replaced directory or symlink. */
+  expectedCanonicalPath?: string;
+  /** Promote temporary UI trust only after the backend returns its canonical root. */
+  onGranted?: (canonicalPath: string) => void;
 };
 
 /**
@@ -45,7 +65,7 @@ export async function grantCallScopedPaths(
   scope: { runId: string; callId?: string },
 ): Promise<() => Promise<void>> {
   if (!grants.length) return async () => {};
-  await Promise.all(grants.map((grant) => grantCallScope({
+  const results = await Promise.allSettled(grants.map((grant) => grantCallScope({
     runId: scope.runId,
     callId: scope.callId,
     path: grant.path,
@@ -54,6 +74,18 @@ export async function grantCallScopedPaths(
     create: !!grant.permissions.create,
     delete: !!grant.permissions.delete,
   })));
+  const failed = results.some((result, index) => {
+    if (result.status === 'rejected' || !result.value.ok) return true;
+    const expected = grants[index].expectedCanonicalPath;
+    return expected !== undefined && expected !== result.value.path;
+  });
+  if (failed) {
+    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
+    throw new Error('Backend filesystem scope authorization failed');
+  }
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') grants[index].onGranted?.(result.value.path);
+  });
   return async () => {
     await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
   };

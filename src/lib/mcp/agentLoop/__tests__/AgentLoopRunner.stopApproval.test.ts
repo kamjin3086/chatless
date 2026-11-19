@@ -203,7 +203,16 @@ describe('Stop during approval persistence', () => {
       await vi.waitFor(() => expect(release).toBeDefined());
       // Stop happens while the approval row is still being written.
       AgentLoopRunner.cancel({ assistantMessageId: 'run' });
+      expect(
+        useAuthorizationStore
+          .getState()
+          .approveAuthorization('approval-native'),
+      ).toBe(false);
       release();
+      expect(mocks.invoke).not.toHaveBeenCalledWith(
+        'agent_decide_approval',
+        expect.anything(),
+      );
 
       await vi.waitFor(() => expect(ended).toBe(true));
       expect(
@@ -221,6 +230,13 @@ describe('Stop during approval persistence', () => {
       );
       expect(subsequent).toBe('started');
       await running;
+      expect(mocks.invoke).toHaveBeenCalledWith(
+        'agent_decide_approval',
+        expect.objectContaining({
+          approvalId: 'approval-native',
+          status: 'rejected',
+        }),
+      );
     } finally {
       await running;
       vi.unstubAllGlobals();
@@ -271,10 +287,58 @@ describe('Stop during approval persistence', () => {
     await expect(waiting).resolves.toEqual({
       approved: false,
       decision: 'once',
+      revision: 0,
     });
     expect(
       useAuthorizationStore.getState().hasPendingAuthorization('approval-late'),
     ).toBe(false);
+  });
+
+  it('records rejection if Stop wins after the user answered but before the pending row exists', async () => {
+    let cancelled = false;
+    let release!: () => void;
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'agent_request_approval') {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      }
+      return true;
+    });
+    const waiting = waitForCallApproval({
+      id: 'approval-answered',
+      runId: 'run',
+      conversationId: 'conversation',
+      server: 'fs',
+      tool: 'write',
+      args: {},
+      isCancelled: () => cancelled,
+    });
+    await vi.waitFor(() => expect(release).toBeDefined());
+    const answered = useAuthorizationStore
+      .getState()
+      .approveAuthorization('approval-answered', 'always');
+    cancelled = true;
+    release();
+
+    expect(answered).toBe(true);
+    await expect(waiting).resolves.toEqual({
+      approved: false,
+      decision: 'once',
+      revision: 0,
+    });
+    const decisions = mocks.invoke.mock.calls.filter(
+      ([command]) => command === 'agent_decide_approval',
+    );
+    expect(decisions).toEqual([
+      [
+        'agent_decide_approval',
+        expect.objectContaining({
+          approvalId: 'approval-answered',
+          status: 'rejected',
+        }),
+      ],
+    ]);
   });
 
   it('does not register a card for a run cancelled before the request', async () => {
@@ -288,7 +352,7 @@ describe('Stop during approval persistence', () => {
       isCancelled: () => true,
     });
 
-    expect(result).toEqual({ approved: false, decision: 'once' });
+    expect(result).toEqual({ approved: false, decision: 'once', revision: 0 });
     expect(
       useAuthorizationStore
         .getState()
@@ -322,6 +386,7 @@ describe('Stop during approval persistence', () => {
     await expect(waiting).resolves.toEqual({
       approved: true,
       decision: 'always',
+      revision: 0,
     });
     await vi.waitFor(() =>
       expect(mocks.invoke).toHaveBeenCalledWith(

@@ -10,7 +10,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SqliteBridge } from './sqliteBridge';
 
 const acceptanceDir = path.join(process.cwd(), 'docs', 'acceptance');
-const dbPath = path.join(acceptanceDir, 'retrieval-eval.sqlite');
+const dbPath =
+  process.env.CHATLESS_LEXICAL_PERF_DB ||
+  path.join(acceptanceDir, 'retrieval-eval.sqlite');
 const reportPath = path.join(acceptanceDir, 'retrieval-eval-report.json');
 const cases = JSON.parse(
   fs.readFileSync(path.join(acceptanceDir, 'retrieval-cases.json'), 'utf8'),
@@ -21,6 +23,31 @@ const fixture = JSON.parse(
 
 let bridge: SqliteBridge;
 
+async function liveTokenize(value: string): Promise<string> {
+  const session = process.env.CHATLESS_KB_SESSION_ID;
+  if (!session)
+    throw new Error(
+      'The 50K latency run requires a real desktop tokenizer session',
+    );
+  const response = await fetch(
+    `${process.env.CHATLESS_KB_DRIVER_URL || 'http://127.0.0.1:4444'}/session/${session}/execute/async`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        script: `const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke('tokenize_for_fts_command',{text:arguments[0]}).then(value=>done({result:value}),error=>done({failure:String(error)}));`,
+        args: [value],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  const result: { value: { result?: string; failure?: string } } =
+    await response.json();
+  if (!response.ok || typeof result.value.result !== 'string')
+    throw new Error(result.value.failure || 'Native tokenizer failed');
+  return result.value.result;
+}
+
 vi.mock('@/lib/retrieval/tokenizeForFts', async () => {
   const { fallbackTokenize } = await vi.importActual<
     typeof import('@/lib/retrieval/tokenizeForFts')
@@ -30,7 +57,9 @@ vi.mock('@/lib/retrieval/tokenizeForFts', async () => {
     // Production tokenization is jieba in Rust; the fixture carries its output
     // so the evaluation never substitutes a different tokenizer.
     tokenizeForFts: async (value: string) =>
-      fixture.queries[value] ?? fallbackTokenize(value),
+      process.env.CHATLESS_LEXICAL_PERF_REPORT
+        ? liveTokenize(value)
+        : (fixture.queries[value] ?? fallbackTokenize(value)),
   };
 });
 
@@ -72,6 +101,70 @@ afterAll(async () => {
 });
 
 describe.skipIf(corpusMissing)('retrieval evaluation', () => {
+  it.skipIf(!process.env.CHATLESS_LEXICAL_PERF_REPORT)(
+    'measures 50K FTS with real native query tokenization',
+    async () => {
+      const count = await bridge.select<{ count: number }>(
+        'SELECT COUNT(*) AS count FROM document_chunks',
+      );
+      expect(count[0].count).toBeGreaterThanOrEqual(50_000);
+      const attachmentDocumentIds = cases.documents
+        .filter((doc: { scope: string }) => doc.scope === 'attachment')
+        .map((doc: { id: string }) => doc.id);
+      const retriever = new LexicalRetriever();
+      const options = {
+        knowledgeBaseIds: ['kb-eval'],
+        documentIds: attachmentDocumentIds,
+        topK: RRF_SLICE,
+      };
+      await retriever.search('neutral benchmark', options);
+      const samples: Array<{
+        query: string;
+        milliseconds: number;
+        hits: number;
+      }> = [];
+      const queries: string[] = [
+        ...cases.cases.map((item: { query: string }) => item.query),
+        'neutral benchmark',
+      ];
+      for (let round = 0; round < 3; round++)
+        for (const query of queries) {
+          const started = performance.now();
+          const hits = await retriever.search(query, options);
+          samples.push({
+            query,
+            milliseconds: performance.now() - started,
+            hits: hits.length,
+          });
+        }
+      const sorted = samples
+        .map((sample) => sample.milliseconds)
+        .sort((a, b) => a - b);
+      const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1];
+      const report = {
+        timestamp: new Date().toISOString(),
+        chunks: count[0].count,
+        syntheticPadding: true,
+        scope:
+          'FTS performance only; real native jieba IPC, production LexicalRetriever and Python/SQLite bridge. No embeddings or file import are represented here.',
+        databasePath: dbPath,
+        queries: samples.length,
+        p95Ms: p95,
+        maxMs: sorted.at(-1),
+        targetMs: 500,
+        samples,
+      };
+      const output = process.env.CHATLESS_LEXICAL_PERF_REPORT;
+      if (!output) throw new Error('Missing performance report path');
+      fs.writeFileSync(output, JSON.stringify(report, null, 2));
+      console.log(
+        `50K lexical P95=${p95.toFixed(1)}ms over ${samples.length} queries, with real native tokenization`,
+      );
+      expect(p95).toBeLessThanOrEqual(500);
+    },
+    120_000,
+  );
+
   it('recalls the annotated original chunks at the agreed thresholds', async () => {
     const attachmentDocumentIds = cases.documents
       .filter((document: { scope: string }) => document.scope === 'attachment')

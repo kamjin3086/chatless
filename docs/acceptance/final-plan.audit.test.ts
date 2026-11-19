@@ -17,7 +17,8 @@ vi.mock('@/store/conversationAttachmentStore', () => ({
   useConversationAttachmentStore: { getState: () => ({ getKnowledgeBase: () => ({ id: 'kb' }) }) },
 }));
 vi.mock('@/lib/rag/ragServiceInstance', () => ({
-  getRAGService: async () => ({ getEmbeddingService: () => ({}), getRetrievalServiceInstance: () => ({}) }),
+  withRAGService: async (operation: (service: { getEmbeddingService: () => object; getRetrievalServiceInstance: () => object }) => Promise<unknown>) =>
+    operation({ getEmbeddingService: () => ({}), getRetrievalServiceInstance: () => ({}) }),
 }));
 vi.mock('@/lib/rag/retrieveEvidence', () => ({ retrieveEvidence: mocks.retrieve }));
 vi.mock('@/lib/llm', () => ({ chat: mocks.chat }));

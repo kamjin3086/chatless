@@ -19,6 +19,7 @@ export const EvidenceStore = {
     knowledgeBaseId?: string;
     chunks: RetrievalChunk[];
     expectedFileHash?: string;
+    metadata?: { fileHash: string; parserVersion: string; chunkSchemaVersion: string; semanticParentTaskId?: string };
     taskId: string;
     expectedDocumentVersion: number;
   }): Promise<string> {
@@ -49,7 +50,7 @@ export const EvidenceStore = {
       await invoke('publish_document_batch', {
         db: db.getConnectionUrl(), documentId: params.documentId, batchId,
         expectedFileHash: params.expectedFileHash, taskId: params.taskId,
-        expectedDocumentVersion: params.expectedDocumentVersion, chunks, createdAt,
+        expectedDocumentVersion: params.expectedDocumentVersion, chunks, createdAt, metadata: params.metadata,
       });
       return batchId;
     }
@@ -67,6 +68,13 @@ export const EvidenceStore = {
         WHERE t.id = ? AND t.document_id = ? AND t.task_type = 'lexical' AND t.status = 'running' AND d.index_version = ?`,
       [params.taskId, params.documentId, params.expectedDocumentVersion]);
       if (!validTask.length) throw new Error('索引任务已取消或文档版本已变化');
+      if (params.metadata?.semanticParentTaskId) {
+        const parent = await tx.select(`SELECT 1 FROM document_index_tasks p JOIN documents d ON d.id = p.document_id
+          WHERE p.id = ? AND p.document_id = ? AND p.document_version = ? AND p.task_type = 'semantic'
+          AND p.status = 'running' AND p.embedding_fingerprint = d.target_embedding_fingerprint`,
+          [params.metadata.semanticParentTaskId, params.documentId, params.expectedDocumentVersion]);
+        if (!parent.length) throw new Error('Semantic adaptation was cancelled or superseded');
+      }
       await tx.execute(`INSERT INTO document_index_batches (id, document_id, state, created_at)
         VALUES (?, ?, 'staging', ?)`, [batchId, params.documentId, createdAt]);
       for (const chunk of chunks) {
@@ -81,6 +89,11 @@ export const EvidenceStore = {
       await tx.execute(`UPDATE documents SET active_index_batch_id = ?, index_version = index_version + 1,
         lexical_status = 'ready', semantic_status = 'pending', is_indexed = 1, updated_at = ? WHERE id = ?`,
       [batchId, createdAt, params.documentId]);
+      if (params.metadata) await tx.execute('UPDATE documents SET file_hash = ?, parser_version = ?, chunk_schema_version = ?, target_embedding_fingerprint = NULL WHERE id = ?',
+        [params.metadata.fileHash, params.metadata.parserVersion, params.metadata.chunkSchemaVersion, params.documentId]);
+      await tx.execute("UPDATE document_index_tasks SET status = 'cancelled', error = 'INDEX_REPLACED', updated_at = ? WHERE document_id = ? AND task_type = 'semantic' AND status IN ('pending','running','waiting_model')", [createdAt, params.documentId]);
+      await tx.execute("INSERT INTO document_index_tasks (id, document_id, document_version, task_type, status, created_at, updated_at) VALUES (?, ?, ?, 'semantic', 'pending', ?, ?)",
+        [`semantic_${generateId()}`, params.documentId, params.expectedDocumentVersion + 1, createdAt, createdAt]);
       await tx.execute("UPDATE doc_knowledge_mappings SET status = 'indexed', indexed_at = ? WHERE document_id = ?", [createdAt, params.documentId]);
       await tx.execute("UPDATE document_index_tasks SET status = 'completed', updated_at = ?, error = NULL WHERE id = ?", [createdAt, params.taskId]);
       await tx.execute(`DELETE FROM document_chunks_fts WHERE chunk_id IN (
