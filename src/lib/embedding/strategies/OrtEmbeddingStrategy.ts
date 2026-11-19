@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { EmbeddingStrategy, EmbeddingError } from '../types';
+import { EmbeddingStrategy, EmbeddingError, EmbeddingInputError } from '../types';
 
 // NOTE: Rust 端需要实现对应的 `init_onnx_session`, `generate_embedding`, `release_onnx_session` 命令。
 // 推理失败直接抛错，由上层把语义检索标记为不可用并保留词法检索。
@@ -20,7 +20,9 @@ interface TokenizationOutput {
 
 export class OrtEmbeddingStrategy implements EmbeddingStrategy {
   private isInitialized = false;
-  private readonly dimension = 384;
+  private dimension = 384;
+  private readonly sessionId = crypto.randomUUID();
+  private modelIdentity: string | null = null;
 
   constructor(private readonly config: OrtStrategyConfig) {}
 
@@ -30,6 +32,12 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
 
   getDimension(): number {
     return this.dimension;
+  }
+
+  getModelIdentity(): string | null { return this.modelIdentity; }
+
+  async countTokens(texts: string[]): Promise<number[]> {
+    return invoke('count_embedding_tokens', { texts, tokenizerPath: this.config.tokenizerPath, sessionId: this.sessionId });
   }
 
   getMaxInputTokens(): number {
@@ -43,9 +51,20 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
-    const { modelPath } = this.config;
-    await invoke('init_onnx_session', { modelPath });
-    this.isInitialized = true;
+    const { modelPath, tokenizerPath } = this.config;
+    try {
+      const expectedGeneration = await invoke<number>('get_onnx_view_generation');
+      const info = await invoke<{ modelHash: string; tokenizerHash: string }>('init_onnx_session', { modelPath, tokenizerPath, sessionId: this.sessionId, expectedGeneration });
+      this.modelIdentity = `${info.modelHash}:${info.tokenizerHash}`;
+      this.isInitialized = true;
+      // Readiness means real inference succeeded, not merely that a file loaded.
+      const [probe] = await this.generateEmbeddings(['embedding readiness']);
+      if (!probe?.length || probe.some((value) => !Number.isFinite(value))) throw new EmbeddingError('Invalid model probe embedding');
+      this.dimension = probe.length;
+    } catch (error) {
+      await this.cleanup();
+      throw error;
+    }
   }
 
   /** 生成批量嵌入 */
@@ -61,11 +80,18 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
       const batchTexts = texts.slice(i, i + batchSize);
 
       // 1. 调用 Rust 批量分词
-      const tokenized: TokenizationOutput = await invoke('tokenize_batch', {
-        texts: batchTexts,
-        tokenizerPath: this.config.tokenizerPath,
-        maxLength: this.config.maxLength || 512,
-      });
+      let tokenized: TokenizationOutput;
+      try {
+        tokenized = await invoke('tokenize_batch', {
+          texts: batchTexts,
+          tokenizerPath: this.config.tokenizerPath,
+          maxLength: this.config.maxLength || 512,
+          sessionId: this.sessionId,
+        });
+      } catch (error) {
+        if (String(error).includes('EMBEDDING_INPUT_TOO_LONG')) throw new EmbeddingInputError(String(error));
+        throw error;
+      }
 
       // 2. 调用 Rust 生成嵌入
       const embeddings: number[][] = await invoke('generate_embedding', {
@@ -74,7 +100,7 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
           attention_mask: tokenized.attention_mask,
           token_type_ids: tokenized.token_type_ids,
         },
-        timeout: this.config.timeout || 30000,
+        sessionId: this.sessionId,
       });
 
       allEmbeddings.push(...embeddings);
@@ -86,7 +112,7 @@ export class OrtEmbeddingStrategy implements EmbeddingStrategy {
   /** 释放后端会话，防止内存泄漏 */
   async cleanup(): Promise<void> {
     try {
-      await invoke('release_onnx_session');
+      await invoke('release_onnx_session', { sessionId: this.sessionId });
     } catch (e) {
       console.warn('release_onnx_session failed', e);
     }

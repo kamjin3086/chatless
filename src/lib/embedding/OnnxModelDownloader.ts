@@ -183,7 +183,12 @@ export class OnnxModelDownloader {
 
       this.downloadedModels.add(modelId);
       await this.saveDownloadedModels();
-      
+      const { loadKnowledgeBaseConfig } = await import('@/lib/knowledgeBaseConfig');
+      const selected = (await loadKnowledgeBaseConfig()).embedding;
+      if (selected.strategy === 'local-onnx' && selected.modelName === modelId) {
+        const { refreshRAGService } = await import('@/lib/rag/ragServiceInstance');
+        await refreshRAGService();
+      }
       console.log(`模型和分词器下载完成: ${modelInfo.name}`);
       
     } catch (error) {

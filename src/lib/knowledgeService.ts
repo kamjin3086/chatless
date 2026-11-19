@@ -15,7 +15,13 @@ export interface KnowledgeChunk {
 }
 
 // 获取数据库服务实例
-const getDatabaseService = () => DatabaseService.getInstance();
+const getDatabaseService = async () => {
+  const service = DatabaseService.getInstance();
+  // Every knowledge entry point also works on a cold route/deep link.
+  // DatabaseService owns initialization deduplication and failure recovery.
+  await service.initialize();
+  return service;
+};
 let interruptedIndexingRecovered = false;
 
 /**
@@ -28,7 +34,7 @@ export const KnowledgeService = {
    */
   async initDb(): Promise<void> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       
       // 检查数据库服务是否已初始化
       try {
@@ -69,7 +75,7 @@ export const KnowledgeService = {
     try {
       console.log('[Test] 开始测试知识库数据库...');
 
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
 
       // 测试基本查询
@@ -98,7 +104,7 @@ export const KnowledgeService = {
    */
   async testDatabaseTransactions(): Promise<{ success: boolean; message: string }> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       const knowledgeBases = await knowledgeBaseRepo.getAllKnowledgeBases();
@@ -125,7 +131,7 @@ export const KnowledgeService = {
     isEncrypted: boolean = false
   ) {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.createKnowledgeBase(name, description, icon, isEncrypted);
@@ -140,7 +146,7 @@ export const KnowledgeService = {
    */
   async getAllKnowledgeBases() {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.getAllKnowledgeBases();
@@ -155,7 +161,7 @@ export const KnowledgeService = {
    */
   async getKnowledgeBase(id: string) {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.getKnowledgeBaseById(id);
@@ -175,7 +181,7 @@ export const KnowledgeService = {
     isEncrypted?: boolean;
   }) {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.updateKnowledgeBase(id, updates);
@@ -190,7 +196,7 @@ export const KnowledgeService = {
    */
   async deleteKnowledgeBase(id: string): Promise<boolean> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       console.log(`开始删除知识库: ${id}`);
@@ -240,7 +246,7 @@ export const KnowledgeService = {
    */
   async getKnowledgeBaseDocuments(knowledgeBaseId: string) {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.getKnowledgeBaseDocuments(knowledgeBaseId);
@@ -262,7 +268,7 @@ export const KnowledgeService = {
     } = {}
   ) {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       // 检查是否已存在
@@ -397,7 +403,7 @@ export const KnowledgeService = {
    */
   async removeDocumentFromKnowledgeBase(documentId: string, knowledgeBaseId: string): Promise<boolean> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       const success = await knowledgeBaseRepo.removeDocumentFromKnowledgeBase(documentId, knowledgeBaseId);
@@ -431,7 +437,7 @@ export const KnowledgeService = {
    */
   async cleanupOrphanedVectors(): Promise<number> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.cleanupOrphanedVectors();
@@ -451,7 +457,7 @@ export const KnowledgeService = {
     orphanedVectors: number;
   }> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.getVectorStats();
@@ -477,7 +483,7 @@ export const KnowledgeService = {
     } = {}
   ) {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
 
       // 1. 获取知识库中的所有文档映射
@@ -526,7 +532,7 @@ export const KnowledgeService = {
     needsRebuild: boolean;
   }> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const db = dbService.getDbManager();
       const rows = await db.select<{ status: string; chunk_count: number }>(
         `SELECT m.status, COUNT(dc.id) AS chunk_count
@@ -566,7 +572,7 @@ export const KnowledgeService = {
 
   async getKnowledgeBaseStats(knowledgeBaseId: string): Promise<{documentCount: number, chunkCount: number}> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const knowledgeBaseRepo = dbService.getKnowledgeBaseRepository();
       
       return await knowledgeBaseRepo.getKnowledgeBaseStats(knowledgeBaseId);
@@ -580,15 +586,19 @@ export const KnowledgeService = {
    * 获取指定文档在知识库中的统计信息（目前仅包含分片数量）
    */
   async getDocumentStats(knowledgeBaseId: string, documentId: string): Promise<{
-    chunkCount: number; lexicalStatus: string; semanticStatus: string;
+    chunkCount: number; lexicalStatus: string; semanticStatus: string; indexTaskStatus?: string; semanticTaskStatus?: string;
   }> {
     try {
-      const dbService = getDatabaseService();
+      const dbService = await getDatabaseService();
       const dbManager = dbService.getDbManager();
 
       const result = await dbManager.select(
         `SELECT d.lexical_status as lexicalStatus, d.semantic_status as semanticStatus,
-          COUNT(dc.id) as chunkCount FROM documents d
+          COUNT(dc.id) as chunkCount,
+          (SELECT t.status FROM document_index_tasks t WHERE t.document_id = d.id AND t.document_version = d.index_version
+            ORDER BY CASE t.status WHEN 'running' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, t.created_at DESC, t.rowid DESC LIMIT 1) as indexTaskStatus,
+          (SELECT t.status FROM document_index_tasks t WHERE t.document_id = d.id AND t.document_version = d.index_version AND t.task_type = 'semantic'
+            ORDER BY t.created_at DESC, t.rowid DESC LIMIT 1) as semanticTaskStatus FROM documents d
           LEFT JOIN document_chunks dc ON dc.document_id = d.id AND d.active_index_batch_id = dc.batch_id
           WHERE d.id = ? AND EXISTS (SELECT 1 FROM doc_knowledge_mappings m
             WHERE m.document_id = d.id AND m.knowledge_base_id = ?) GROUP BY d.id`,
@@ -597,7 +607,10 @@ export const KnowledgeService = {
 
       return { chunkCount: (result?.[0]?.chunkCount as number) || 0,
         lexicalStatus: String(result?.[0]?.lexicalStatus || 'pending'),
-        semanticStatus: String(result?.[0]?.semanticStatus || 'pending') };
+        semanticStatus: result?.[0]?.semanticTaskStatus === 'cancelled' && result?.[0]?.semanticStatus !== 'ready'
+          ? 'cancelled' : String(result?.[0]?.semanticStatus || 'pending'),
+        indexTaskStatus: result?.[0]?.indexTaskStatus ? String(result[0].indexTaskStatus) : undefined,
+        semanticTaskStatus: result?.[0]?.semanticTaskStatus ? String(result[0].semanticTaskStatus) : undefined };
     } catch (error) {
       console.error(`获取文档统计失败 (KB: ${knowledgeBaseId}, Doc: ${documentId}):`, error);
       return { chunkCount: 0, lexicalStatus: 'failed', semanticStatus: 'failed' };
@@ -638,7 +651,7 @@ export const KnowledgeService = {
             
             if (!document) {
               // 如果UnifiedFileService中没有，从数据库获取
-                             const dbService = getDatabaseService();
+                             const dbService = await getDatabaseService();
                const dbManager = dbService.getDbManager();
               
               const docResult = await dbManager.select(
@@ -748,7 +761,7 @@ export const KnowledgeService = {
       details.push(`发现 ${stats.documentCount} 个映射关系`);
       
       // 4. 测试基本操作
-      const docExists = await getDatabaseService().getKnowledgeBaseRepository()
+      const docExists = await (await getDatabaseService()).getKnowledgeBaseRepository()
         .isDocumentInKnowledgeBase(testDoc.documentId, testKb.id);
       details.push(`文档存在性检查: ${docExists ? '存在' : '不存在'}`);
       

@@ -540,7 +540,7 @@ export function AIMessageBlock({
                 const needSoftDivider = prevGroup?.type === 'cardGroup';
                 return (
                   <div key={`md-wrap-${idx}`} className={needSoftDivider ? 'pt-2 border-t border-dashed border-slate-200/50 dark:border-slate-700/50' : undefined}>
-                    <div className="markdown-content-area">
+                    <div className="markdown-content-area" data-slot="assistant-answer">
                       <MessageTextContent text={textContent} isStreaming={isStreaming} citations={citations} />
                     </div>
                   </div>
@@ -557,7 +557,7 @@ export function AIMessageBlock({
                 if (!hasTextSegment && fallbackText.length > 0) {
                   return (
                     <div key="md-fallback" className="pt-2 border-t border-dashed border-slate-200/50 dark:border-slate-700/50">
-                      <div className="markdown-content-area">
+                      <div className="markdown-content-area" data-slot="assistant-answer">
                         <MessageTextContent text={fallbackTextCleaned} isStreaming={isStreaming} citations={citations} />
                       </div>
                     </div>
@@ -597,7 +597,7 @@ export function AIMessageBlock({
 
       {/* 当没有任何结构化片段时，回退为渲染纯正文（兼容非流式RAG或历史消息） */}
       {(mixedSegments.length === 0) && !!(state?.regularContent || content) && (
-        <div className="relative min-w-0 max-w-full w-full markdown-content-area">
+        <div className="relative min-w-0 max-w-full w-full markdown-content-area" data-slot="assistant-answer">
           <MessageTextContent text={filterToolCallContent((state?.regularContent || content))} isStreaming={isStreaming} citations={citations} />
         </div>
       )}

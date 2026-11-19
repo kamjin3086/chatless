@@ -1,7 +1,8 @@
 import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { type ApprovalDecision, type PendingApprovalScope } from '@/store/authorizationStore';
 import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permissions';
-import { resolveAccess, setConversationAccess } from '@/lib/mcp/accessPolicy';
+import { resolveAccess } from '@/lib/mcp/accessPolicy';
+import { conversationToolKey, hasConversationToolGrant, getConversationDirectoryGrant, isConversationAutomatic, useConversationAccessStore } from '@/store/conversationAccessStore';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { findUnresolvedAliasInValues, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
@@ -21,7 +22,7 @@ import { filesystemOp, isPlanOnlyAllowed, isReplayableRead } from './policy/tool
 import { dirnameOf, hasFilesystemPaths, resolveFilesystemCall } from './policy/resolveCall';
 import { buildAuthDeniedResult } from './present';
 import { waitForCallApproval } from './approvalWait';
-import { decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from './policy/policy';
+import { allowsTemporaryServerApproval, decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from './policy/policy';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 
 function normalizeSlashPath(p: unknown): string {
@@ -170,14 +171,16 @@ export class ToolExecutionPipeline {
       try {
         revokeCallGrants = await grantCallScopedPaths(callGrants, { runId: assistantMessageId, callId });
       } catch (error) {
-        // The call needs a grant that could not be established. Running it
-        // anyway would either fail at the backend or use a grant that was only
-        // partially installed; stop here and tell the model why.
-        const message = `Failed to establish the call-scoped filesystem grant: ${error instanceof Error ? error.message : String(error)}`;
+        // Never execute a call when its grants were not established. Preserve
+        // the recovery action shown when a conversation grant cannot be revalidated.
+        const sessionScopeChanged = callGrants.some((grant) => grant.expectedCanonicalPath !== undefined);
+        const message = sessionScopeChanged
+          ? '已授权的目录或目标无法重新验证，请撤销本会话授权后重试。'
+          : `Failed to establish the call-scoped filesystem grant: ${error instanceof Error ? error.message : String(error)}`;
         const failure = {
           ok: false,
           resultStatus: 'failed',
-          error: { code: 'CALL_SCOPE_FAILED', message, server, tool },
+          error: { code: sessionScopeChanged ? 'SESSION_SCOPE_CHANGED' : 'CALL_SCOPE_FAILED', message, server, tool },
         };
         markError({ assistantMessageId, server, tool, cardId }, message);
         try {
@@ -225,7 +228,7 @@ export class ToolExecutionPipeline {
     approvalScope?: PendingApprovalScope
     denyMessage: string
     denyFs?: { op?: string; inputPath?: string; resolvedPath?: string; suggestDir?: string }
-  }): Promise<{ kind: 'approved'; answer: ApprovalDecision } | { kind: 'halted'; result: unknown }> {
+  }): Promise<{ kind: 'approved'; answer: ApprovalDecision; revision: number } | { kind: 'halted'; result: unknown }> {
     const { assistantMessageId, conversationId, server, tool, cardId, callKey, callId } = params;
     markPendingAuth({ assistantMessageId, server, tool, cardId });
     const approval = await waitForCallApproval({
@@ -277,13 +280,12 @@ export class ToolExecutionPipeline {
       }
       return { kind: 'halted', result: denied };
     }
-    return { kind: 'approved', answer: approval.decision };
+    return { kind: 'approved', answer: approval.decision, revision: approval.revision };
   }
 
   /**
-   * 非文件系统调用的门：shell 的信任来自访问策略（持久开关，或本会话此前在卡片上做的
-   * 选择），其余服务器看全局自动授权。要问就把卡片发出去；答完之后 shell 的全局免问
-   * 与会话免问各自落到该落的地方，下一条命令会重新走一遍策略。
+   * Non-filesystem tools use conversation approval on top of existing server
+   * policy. Administrative operations with mandatory prompts are not promoted.
    */
   private async serverGate(params: {
     invocation: ToolInvocation
@@ -305,25 +307,28 @@ export class ToolExecutionPipeline {
       ? (await resolveAccess('shell', invocation.conversationId)) === 'unrestricted'
       : await shouldAutoAuthorize(server);
     const effectiveArgs = (execInvocation.args || args || {}) as any;
-    if (decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
+    const temporaryEligible = allowsTemporaryServerApproval(server, tool);
+    const conversationApproved = temporaryEligible && (isConversationAutomatic(invocation.conversationId)
+      || hasConversationToolGrant(invocation.conversationId, server, tool));
+    if (!conversationApproved && decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
       const approval = await this.requestApproval({
         assistantMessageId, conversationId: invocation.conversationId,
         server, tool, cardId, callKey, callId,
         args: (effectiveArgs || {}) as Record<string, unknown>,
         approvalScope: isShell
-          ? { kind: 'shell', command: String(effectiveArgs?.command || '') }
-          : undefined,
+          ? { kind: 'shell', command: String(effectiveArgs?.command || ''), automaticEligible: true }
+          : { kind: 'tool', toolKey: conversationToolKey(server, tool),
+              label: conversationToolKey(server, tool) === 'knowledge:read' ? '知识库读取' : `${server}.${tool}`, automaticEligible: temporaryEligible },
         denyMessage: '用户拒绝授权此工具调用',
       });
       if (approval.kind === 'halted') return halt(approval.result);
 
-      // A shell approval can end the questions for this session or for good;
-      // the next command re-checks the policy, so nothing is bypassed.
+      if (temporaryEligible && approval.answer === 'unrestricted') {
+        useConversationAccessStore.getState().grantTool(invocation.conversationId, conversationToolKey(server, tool), approval.revision);
+      }
+      // Preserve the existing, explicitly selected persistent shell preference.
       if (isShell) {
         const promotion = planShellPromotion({ answer: approval.answer });
-        if (promotion.conversationUnrestricted) {
-          setConversationAccess('shell', invocation.conversationId, 'unrestricted');
-        }
         if (promotion.globalUnrestricted) {
           try {
             const { setGlobalAccess } = await import('@/lib/mcp/accessPolicy');
@@ -658,13 +663,17 @@ export class ToolExecutionPipeline {
         // "unrestricted" skips the prompt; the backend still validates every
         // path it receives.
         const accessLevel = await resolveAccess('fs', invocation.conversationId);
-        const unrestricted = accessLevel === 'unrestricted';
+        const sessionDirectory = getConversationDirectoryGrant(invocation.conversationId, primaryAbsolutePath, op);
+        // Allowlisted operations already skip routine prompts. Automatic mode
+        // must not convert a filesystem scope prompt into a new path grant.
+        const unrestricted = accessLevel === 'unrestricted' || !!sessionDirectory;
         const policy = decideFilesystemCall({
           op, primaryPath: primaryAbsolutePath, directory: resolution.directory, unrestricted,
         });
         const needsCallGrant = policy.needsCallGrant;
         let approved = false;
         let decision: ApprovalDecision = 'once';
+        let approvalRevision: number | undefined;
 
         if (policy.kind === 'ask') {
           // "以后都允许" is only meaningful for a folder we can grant, so a
@@ -679,19 +688,19 @@ export class ToolExecutionPipeline {
             server, tool, cardId, callKey, callId,
             args: (args || {}) as Record<string, unknown>,
             scope: { operation: op, path: primaryAbsolutePath, directory: approvableDirectory || undefined },
-            approvalScope: approvableDirectory
-              ? { kind: 'filesystem', op, path: primaryAbsolutePath, directory: approvableDirectory }
-              : undefined,
+            approvalScope: { kind: 'filesystem', op, path: primaryAbsolutePath,
+              directory: approvableDirectory },
             denyMessage: `用户拒绝授权此文件系统操作（${op}）：${suggestDir || primaryAbsolutePath}`,
             denyFs: { op, inputPath: resolution.requestedPath, resolvedPath: primaryAbsolutePath, suggestDir },
           });
           if (approval.kind === 'halted') return halt(approval.result);
           approved = true;
           decision = approval.answer;
+          approvalRevision = approval.revision;
 
           // Turn the user's choice into trust that lasts as long as they asked
           // for: "always" joins the persistent allowlist (never with delete),
-          // "unrestricted" stops the questions for the rest of the session.
+          // "unrestricted" remembers this scope until the session grant is revoked.
           const promotion = planFilesystemPromotion({
             answer: decision, approvableDirectory, isDelete: forceApproval,
           });
@@ -707,9 +716,6 @@ export class ToolExecutionPipeline {
               console.warn('[ToolExecutionPipeline] remembering directory failed:', error);
             }
           }
-          if (promotion.conversationUnrestricted) {
-            setConversationAccess('fs', invocation.conversationId, 'unrestricted');
-          }
         }
 
         // Anything the persistent allowlist does not cover needs a grant for
@@ -720,11 +726,17 @@ export class ToolExecutionPipeline {
             const dirScopedByTool = isDirectoryScopedFilesystemTool(tool);
             // A delete is bound to the exact target. Writes and creates need
             // the containing directory because the file may not exist yet.
-            const grantPath = hasDirArg || dirScopedByTool || op === 'delete'
-              ? primaryAbsolutePath
-              : dirnameOf(primaryAbsolutePath);
+            // Re-grant the original authorized root, never a symlink's new target.
+            const grantPath = sessionDirectory?.path
+              || (hasDirArg || dirScopedByTool || op === 'delete' ? primaryAbsolutePath : dirnameOf(primaryAbsolutePath));
             grants.push({
               path: grantPath,
+              expectedCanonicalPath: sessionDirectory?.path,
+              onGranted: decision === 'unrestricted' ? (canonicalPath) => {
+                if (canonicalPath) useConversationAccessStore.getState().grantDirectory(invocation.conversationId, {
+                  path: canonicalPath, operations: op === 'delete' ? ['delete'] : ['read', 'write', 'create'], recursive: op !== 'delete',
+                }, approvalRevision);
+              } : undefined,
               permissions: {
                 read: op === 'read' || op === 'delete',
                 write: op === 'write',

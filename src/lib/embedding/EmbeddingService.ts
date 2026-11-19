@@ -83,7 +83,8 @@ export class EmbeddingService {
           modelName,
           dimension,
           timeout: config.timeout || 30000,
-          maxBatchSize: config.maxBatchSize || 10
+          maxBatchSize: config.maxBatchSize || 10,
+          maxLength: config.maxLength || modelConfigService.getModelContextLength(modelName),
         });
 
       default:
@@ -95,7 +96,7 @@ export class EmbeddingService {
    * 生成单个文本的嵌入向量
    */
   async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.strategy) {
+    if (!this.strategy || this.strategy.isReady?.() === false) {
       throw new EmbeddingError('嵌入服务未初始化，请先调用 initialize()');
     }
 
@@ -139,7 +140,7 @@ export class EmbeddingService {
    * @returns 嵌入向量结果数组
    */
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
-    if (!this.strategy) {
+    if (!this.strategy || this.strategy.isReady?.() === false) {
       throw new EmbeddingError('嵌入服务未初始化');
     }
 
@@ -273,7 +274,7 @@ export class EmbeddingService {
    */
   getEmbeddingSource(): EmbeddingInferenceSource | 'ollama' | 'unknown' {
     if (!this.strategy) return 'unknown';
-    if (this.options.config.strategy === 'ollama') return 'ollama';
+    if (this.options.config.strategy === 'ollama') return this.strategy.isReady?.() === false ? 'unavailable' : 'ollama';
     const s = this.strategy as { getEmbeddingSource?: () => EmbeddingInferenceSource };
     return typeof s.getEmbeddingSource === 'function' ? s.getEmbeddingSource() : 'unknown';
   }
@@ -291,7 +292,14 @@ export class EmbeddingService {
     if (!this.strategy || !this.isUsableForRag()) return null;
     const config = this.options.config;
     const model = config.modelName || config.modelPath || 'default';
-    return `${config.strategy}:${model}:${this.getDimension()}:${this.getMaxInputTokens()}:v1`;
+    const identity = this.strategy.getModelIdentity?.() || '';
+    const endpoint = config.strategy === 'ollama' ? String(config.apiUrl || '').replace(/\/$/, '') : '';
+    return `${config.strategy}:${model}:${this.getDimension()}:${this.getMaxInputTokens()}:${endpoint}:${identity}:v2`;
+  }
+
+  getTokenCounter(): ((texts: string[]) => Promise<number[]>) | null {
+    const strategy = this.strategy;
+    return this.isUsableForRag() && strategy?.countTokens ? strategy.countTokens.bind(strategy) : null;
   }
 
   getMaxInputTokens(): number {
@@ -339,15 +347,13 @@ export class EmbeddingService {
    */
   async switchStrategy(config: EmbeddingConfig): Promise<void> {
     try {
-      // 清理当前策略
-      if (this.strategy) {
-        await this.strategy.cleanup();
-      }
-
-      // 创建新策略
+      const previous = this.strategy;
       const nextStrategy = await this.createStrategy(config);
-      await nextStrategy.initialize();
+      try { await nextStrategy.initialize(); }
+      catch (error) { await nextStrategy.cleanup().catch(() => {}); throw error; }
       this.strategy = nextStrategy;
+      this.options.config = { ...config };
+      if (previous) await previous.cleanup();
 
       // 清理缓存（因为不同策略的嵌入可能不兼容）
       this.clearCache();

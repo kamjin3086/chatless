@@ -2,9 +2,13 @@ import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Node rendering tests do not compile the application's Tailwind pipeline.
+  css: { postcss: { plugins: [] } },
   test: {
     globals: true,
     environment: 'node',
+    // Streamdown imports KaTeX CSS; transform it for server-rendered UI tests.
+    server: { deps: { inline: ['streamdown'] } },
     include: [
       'src/**/__tests__/**/*.test.ts',
       // Every acceptance audit, collected on every `pnpm test`.

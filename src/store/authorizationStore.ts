@@ -14,7 +14,11 @@ export type ApprovalDecision = 'once' | 'always' | 'unrestricted';
 
 export interface PendingApprovalScope {
   /** Which capability the user is approving. */
-  kind: 'filesystem' | 'shell';
+  kind: 'filesystem' | 'shell' | 'tool';
+  /** The already validated scope can run under conversation automatic mode. */
+  automaticEligible?: boolean;
+  toolKey?: string;
+  label?: string;
   /** filesystem: operation being approved (read / write / create / delete). */
   op?: string;
   /** filesystem: resolved absolute path of the target. */

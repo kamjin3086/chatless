@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Check, X, Globe, Loader2, ChevronRight } from 'lucide-react';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { useAuthorizationStore } from '@/store/authorizationStore';
+import { useConversationAccessStore } from '@/store/conversationAccessStore';
 import { useChatStore } from '@/store/chatStore';
 import { toast } from '@/components/ui/sonner';
 import { formatToolDuration, presentToolCard, previewResult } from './toolCardPresentation';
@@ -42,9 +43,14 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   const approvalScope = pendingAuth?.scope;
   const filesystemScope = approvalScope?.kind === 'filesystem' ? approvalScope : undefined;
   const shellScope = approvalScope?.kind === 'shell' ? approvalScope : undefined;
-  const directoryScope = filesystemScope && filesystemScope.op !== 'delete'
-    ? filesystemScope
+  const directoryScope = filesystemScope?.op !== 'delete' ? filesystemScope?.directory : undefined;
+  const sessionLabel = shellScope ? '本会话允许命令工具'
+    : filesystemScope ? (filesystemScope.op === 'delete' ? '本会话允许此目标删除' : '本会话允许此目录读写')
+    : approvalScope?.automaticEligible ? (approvalScope.toolKey === 'knowledge:read' ? '本会话允许知识库读取' : '本会话允许该工具')
     : undefined;
+  const sessionHint = shellScope ? '本会话自动批准命令；工作区与沙箱检查不变'
+    : filesystemScope ? (filesystemScope.op === 'delete' ? '只记住当前删除目标' : '只允许此目录内的读取、写入和创建，不含删除')
+    : `本会话允许${approvalScope?.label || '此工具'}；访问范围不变`;
 
   const rememberHint =
     isPendingAuth
@@ -75,17 +81,13 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
     }
     // Turning prompts off must be as easy to undo as it was to enable.
     const conversationId = pendingAuth?.conversationId;
-    toast.success('本会话内文件操作不再询问', {
+    toast.info('审批通过后将应用本会话授权', {
       action: conversationId
         ? {
-            label: '恢复询问',
+            label: '撤销会话授权',
             onClick: () => {
-              void import('@/lib/mcp/accessPolicy')
-                .then(({ setConversationAccess }) => {
-                  setConversationAccess(shellScope ? 'shell' : 'fs', conversationId, 'ask');
-                  toast.info(shellScope ? '已恢复命令询问' : '已恢复文件操作询问');
-                })
-                .catch(() => {});
+              useConversationAccessStore.getState().revoke(conversationId);
+              toast.info('已撤销本会话临时授权');
             },
           }
         : undefined,
@@ -211,63 +213,36 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
             className="shrink-0 ml-auto flex flex-wrap items-center justify-end gap-1"
             onClick={(e) => e.stopPropagation()}
           >
-            {shellScope ? (
-              <>
-                <button
-                  onClick={handleApprove}
-                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                  title={`只运行这一次：${shellScope.command || ''}`}
-                >
-                  仅本次
-                </button>
-                <button
-                  onClick={() => handleApproveWith('unrestricted')}
-                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-md transition-colors"
-                  title="本会话内所有命令都不再询问，可在设置里改回"
-                >
-                  本会话不再询问
-                </button>
-                <button
-                  onClick={() => handleApproveWith('always')}
-                  className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-                  title="以后所有命令都不再询问，可在设置里改回"
-                >
-                  始终不再询问
-                </button>
-              </>
-            ) : filesystemScope ? (
-              <>
-                <button
-                  onClick={handleApprove}
-                  className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                  title={`只允许这一次：${filesystemScope.path}`}
-                >
-                  仅本次
-                </button>
-                {directoryScope && (
-                  <button
-                    onClick={() => handleApproveWith('always')}
-                    className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-md transition-colors"
-                    title={`把该文件夹加入白名单，长期允许读写（删除仍需确认）：${directoryScope.directory}`}
-                  >
-                    以后都允许
-                  </button>
-                )}
-                <button
-                  onClick={() => handleApproveWith('unrestricted')}
-                  className="px-2 py-0.5 text-[10px] border border-amber-400/70 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-md transition-colors"
-                  title="本会话内所有文件操作（含删除）都不再询问，可在设置里改回"
-                >
-                  本会话不再询问
-                </button>
-              </>
-            ) : (
+            <button
+              type="button"
+              data-approval-choice="once"
+              data-approval-run={messageId}
+              onClick={handleApprove}
+              className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+              title={rememberHint || `只允许当前调用${filesystemScope?.path ? `：${filesystemScope.path}` : ''}`}
+            >
+              仅本次
+            </button>
+            {sessionLabel && (
               <button
-                onClick={handleApprove}
-                className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                title={rememberHint || '确认'}
+                type="button"
+                data-approval-choice="conversation"
+                data-approval-run={messageId}
+                onClick={() => handleApproveWith('unrestricted')}
+                className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-md transition-colors"
+                title={`${sessionHint}；可在聊天顶部撤销`}
               >
-                确认
+                {sessionLabel}
+              </button>
+            )}
+            {(shellScope || directoryScope) && (
+              <button
+                type="button"
+                onClick={() => handleApproveWith('always')}
+                className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+                title={shellScope ? '以后所有命令都不再询问，可在设置里改回' : `把该文件夹加入白名单（不含删除）：${directoryScope}`}
+              >
+                {shellScope ? '始终不再询问' : '以后都允许'}
               </button>
             )}
             <button

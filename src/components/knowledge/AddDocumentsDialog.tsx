@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Loader2, FileText, Database, AlertCircle, MessageSquare } from 'lucide-react';
-import { UnifiedFileService, type UnifiedFile } from '@/lib/unifiedFileService';
+import { listKnowledgeDocumentChoices, type KnowledgeDocumentChoice } from '@/lib/knowledgeDocumentChoices';
 import { KnowledgeService, type KnowledgeBase } from '@/lib/knowledgeService';
 import { toast } from '@/components/ui/sonner';
 import { truncateDisplayName } from '@/lib/filesystem/safeFileName';
@@ -16,14 +16,7 @@ interface AddDocumentsDialogProps {
   onSuccess?: () => void;
 }
 
-interface DisplayFile {
-  id: string;
-  name: string;
-  type: 'document' | 'chat';
-  source?: string;
-  conversationId?: string;
-  isAlreadyInKB?: boolean;
-}
+type DisplayFile = KnowledgeDocumentChoice;
 
 export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSuccess }: AddDocumentsDialogProps) {
   const [files, setFiles] = useState<DisplayFile[]>([]);
@@ -43,53 +36,7 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
         setLoading(true);
         setError(null);
         
-        const displayFiles: DisplayFile[] = [];
-        
-        // 1. 加载普通文档
-        try {
-          const unifiedFiles = await UnifiedFileService.getAllFiles();
-          const documentFiles = unifiedFiles
-            .filter(f => f.source !== 'chat') // 排除聊天文件
-            .filter(f => !f.knowledgeBaseId || f.knowledgeBaseId !== knowledgeBase.id); // 排除已在当前知识库的文件
-          
-          documentFiles.forEach(file => {
-            displayFiles.push({
-              id: file.id,
-              name: file.name,
-              type: 'document',
-              source: file.source,
-              isAlreadyInKB: !!file.knowledgeBaseId
-            });
-          });
-        } catch (error) {
-          console.error('加载普通文档失败:', error);
-        }
-        
-        // 2. 加载聊天文件
-        try {
-          const { DatabaseService } = await import('@/lib/database/services/DatabaseService');
-          const db = DatabaseService.getInstance();
-          await db.initialize();
-          
-          const messageRepo = db.getMessageRepository();
-          const chatFileData = await messageRepo.getChatAttachedFiles();
-          
-          // 转换聊天文件格式
-          chatFileData.forEach((file, index) => {
-            const chatFileId = `chat_${file.conversation_id}_${index}`;
-            displayFiles.push({
-              id: chatFileId,
-              name: file.fileName,
-              type: 'chat',
-              conversationId: file.conversation_id,
-              isAlreadyInKB: false // 聊天文件默认没有在知识库中
-            });
-          });
-        } catch (error) {
-          console.error('加载聊天文件失败:', error);
-        }
-        
-        setFiles(displayFiles);
+        setFiles(await listKnowledgeDocumentChoices(knowledgeBase.id));
         
       } catch (error) {
         console.error('加载文件失败:', error);
@@ -128,28 +75,15 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
         
         setProgressMessage(`正在处理: ${file.name}`);
         
-        if (file.type === 'chat') {
-          // 对于聊天文件，需要先从消息记录中提取并保存到UnifiedFileService
-          // 然后再添加到知识库
-          try {
-            // 这里需要实现聊天文件到知识库的添加逻辑
-            // 暂时跳过聊天文件，后续可以实现
-            console.log('聊天文件暂时跳过:', file.name);
-            toast.warning(`聊天文件 ${file.name} 暂时无法添加到知识库`);
-          } catch (error) {
-            console.error(`处理聊天文件失败: ${file.name}`, error);
+        // Both upload and chat choices carry durable document IDs and bytes.
+        await KnowledgeService.addDocumentToKnowledgeBase(selectedId, knowledgeBase.id, {
+          onProgress: (p, msg) => {
+            const base = (i / selectedIds.length) * 100;
+            const segment = p / selectedIds.length;
+            setProgress(Math.min(99, Math.round(base + segment)));
+            setProgressMessage(msg);
           }
-        } else {
-          // 普通文档添加到知识库
-          await KnowledgeService.addDocumentToKnowledgeBase(selectedId, knowledgeBase.id, {
-            onProgress: (p, msg) => {
-              const base = (i / selectedIds.length) * 100;
-              const segment = p / selectedIds.length;
-              setProgress(Math.min(99, Math.round(base + segment)));
-              setProgressMessage(msg);
-            }
-          });
-        }
+        });
       }
 
       setProgress(100);

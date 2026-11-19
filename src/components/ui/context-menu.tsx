@@ -57,31 +57,21 @@ export function ContextMenu({ children, menuItems, disabled = false }: ContextMe
     event.preventDefault();
     event.stopPropagation();
 
-    // 立即获取鼠标位置信息，避免异步操作后事件失效
+    // Read the cursor before any await: the synthetic event is pooled, and the
+    // native menu is built asynchronously.
     const mouseX = event.clientX;
     const mouseY = event.clientY;
 
-    // 尝试使用 Tauri Menu API（如果可用）
+    // Try the Tauri Menu API (if available)
     try {
-      const { Menu } = await import('@tauri-apps/api/menu');
-      
-      const items = menuItems
-        .filter(item => !item.separator)
-        .map(item => ({
-          id: item.id, 
-          text: item.text,
-          action: item.action
-        }));
-
-      const menu = await Menu.new({ items });
-      await menu.popup();
+      await popupNativeMenu(menuItems, mouseX, mouseY);
       return;
     } catch (error) {
-      // Tauri Menu API 不可用，使用浏览器自定义菜单
+      // Tauri Menu API not available in a plain browser tab
       console.warn('Tauri Menu API not available, using browser fallback:', error);
     }
 
-    // 浏览器 fallback 菜单 - 使用预先获取的鼠标位置
+    // Browser fallback menu - uses the cursor position captured above
     setPosition({ x: mouseX, y: mouseY });
     setIsVisible(true);
   };
@@ -137,6 +127,41 @@ export function ContextMenu({ children, menuItems, disabled = false }: ContextMe
       )}
     </>
   );
+}
+
+/**
+ * Pop the native context menu at the cursor.
+ *
+ * The position is not optional. `popup()` without it reaches muda's no-position
+ * branch, which anchors on the display's *root* window instead of ours
+ * (`muda-0.17.1/src/platform_impl/gtk/mod.rs:1385`), so under Wayland the menu
+ * opens at a spot of the compositor's choosing - in practice the middle of the
+ * screen - instead of under the pointer.
+ *
+ * Viewport coordinates are also window coordinates here: the window is
+ * `decorations: false` and the webview fills it. Logical (CSS px), because muda
+ * converts to logical itself and flips the y-axis for macOS.
+ */
+export async function popupNativeMenu(
+  menuItems: MenuItem[],
+  x: number,
+  y: number
+): Promise<void> {
+  const [{ Menu }, { LogicalPosition }] = await Promise.all([
+    import('@tauri-apps/api/menu'),
+    import('@tauri-apps/api/dpi'),
+  ]);
+
+  const items = menuItems
+    .filter(item => !item.separator)
+    .map(item => ({
+      id: item.id,
+      text: item.text,
+      action: item.action
+    }));
+
+  const menu = await Menu.new({ items });
+  await menu.popup(new LogicalPosition(x, y));
 }
 
 // 预定义的菜单项创建函数

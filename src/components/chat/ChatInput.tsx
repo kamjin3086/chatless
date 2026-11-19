@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useMemo } from "react";
+import React, { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import {
   commitHistory,
   composerHistory,
@@ -32,7 +32,8 @@ import { useChatStore } from '@/store/chatStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
 import { useUiSession } from '@/store/uiSession';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useKnowledgeBaseSelection } from '@/hooks/useKnowledgeBaseSelection';
 import { detectTauriEnvironment } from "@/lib/utils/environment";
 import { getProcessSandbox } from "@/lib/skills/sandbox";
 import {
@@ -135,7 +136,6 @@ export function ChatInput({
   } | null>(null);
 
   // 知识库选择相关状态
-  const [selectedKnowledgeBase, setSelectedKnowledgeBase] = useState<KnowledgeBase | null>(null);
   const [allKnowledgeBases, setAllKnowledgeBases] = useState<KnowledgeBase[]>([]);
 
   // 加载知识库列表
@@ -160,6 +160,14 @@ export function ChatInput({
   // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
 
   const _router = useRouter();
+  const searchParams = useSearchParams();
+  const consumeKnowledgeBaseDeepLink = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('knowledgeBase')) return;
+    params.delete('knowledgeBase');
+    const query = params.toString();
+    _router.replace(`${window.location.pathname}${query ? `?${query}` : ''}`, { scroll: false });
+  }, [_router]);
 
   // MCP 服务器状态
   const [_mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
@@ -183,7 +191,16 @@ export function ChatInput({
   }, []);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const currentConvId = conversationId || useChatStore((s)=>s.currentConversationId);
+  const storedConversationId = useChatStore((s) => s.currentConversationId);
+  const loadingConversations = useChatStore((s) => s.isLoadingConversations);
+  const currentConvId = conversationId || storedConversationId;
+  const { selectedKnowledgeBase, selectKnowledgeBase, removeSelectedKnowledgeBase } = useKnowledgeBaseSelection({
+    conversationId: currentConvId || null,
+    deepLinkId: selectedKnowledgeBaseId,
+    deepLinkConversationId: searchParams.get('conversation') || searchParams.get('conversationId') || undefined,
+    consumeDeepLink: consumeKnowledgeBaseDeepLink,
+    ready: !loadingConversations,
+  });
   // —— 输入框高度控制：默认自适应，支持顶部拖拽，最大不超过视口 40% ——
   // The drag handle's floor until the element's own metrics are read; the composer's real
   // floor is `composerFloor(...)` - two lines - measured per element in `adjustTextareaHeight`.
@@ -310,39 +327,6 @@ export function ChatInput({
       }
     }
   }, [streamStartCounter, lastStreamConvId, conversationId, manualHeight, sessionManualHeight, clearInputDraft]);
-
-  // 根据URL参数设置初始知识库
-  useEffect(() => {
-    if (selectedKnowledgeBaseId && !selectedKnowledgeBase) {
-      loadSelectedKnowledgeBase(selectedKnowledgeBaseId);
-    } else if (!selectedKnowledgeBaseId) {
-      // 如果URL参数被移除，则清空选择
-      setSelectedKnowledgeBase(null);
-    }
-  }, [selectedKnowledgeBaseId]);
-
-  // 加载指定的知识库
-  const loadSelectedKnowledgeBase = async (knowledgeBaseId: string) => {
-    try {
-      const kb = await KnowledgeService.getKnowledgeBase(knowledgeBaseId);
-      if (kb) {
-        setSelectedKnowledgeBase(kb);
-      }
-    } catch (error) {
-      console.error('加载知识库失败:', error);
-    }
-  };
-
-  // 移除知识库选择；如果知识库来自深链接，同时清掉 URL，避免参数 effect 立刻重新挂载它。
-  const removeSelectedKnowledgeBase = () => {
-    setSelectedKnowledgeBase(null);
-    if (selectedKnowledgeBaseId && typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      params.delete('knowledgeBase');
-      const query = params.toString();
-      _router.replace(`${window.location.pathname}${query ? `?${query}` : ''}`, { scroll: false });
-    }
-  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1210,7 +1194,7 @@ export function ChatInput({
             onPickDocument={() => fileInputRef.current?.click()}
             onSelectKnowledgeBase={(kb) => {
               if (kb) {
-                setSelectedKnowledgeBase(kb);
+                selectKnowledgeBase(kb);
               } else {
                 removeSelectedKnowledgeBase();
               }
@@ -1342,7 +1326,7 @@ export function ChatInput({
         onRemoveKnowledgeBase={removeSelectedKnowledgeBase}
         onSelectKnowledgeBase={(id) => {
           const kb = allKnowledgeBases.find(k => k.id === id);
-          if (kb) setSelectedKnowledgeBase(kb);
+          if (kb) selectKnowledgeBase(kb);
         }}
         workingDir={mountedDir}
         workingDirAttached={Boolean(mountedDir)}
