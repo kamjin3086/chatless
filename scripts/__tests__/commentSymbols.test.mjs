@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   CommentCheckUnavailable,
@@ -62,6 +65,31 @@ describe('what a comment promises', () => {
     expect(code).toBe(0);
     expect(written).toEqual([]);
   });
+});
+
+it('reports a missing docs file at the comment line, not globs or directories', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-docs-'));
+  try {
+    fs.mkdirSync(path.join(root, 'docs'));
+    fs.writeFileSync(path.join(root, 'docs', 'present.md'), '# Present');
+    const written = [];
+    const result = main(['src/example.ts'], {
+      root,
+      read: () => [
+        'const x = "`docs/not-a-comment.md`";',
+        '// See `docs/present.md`, `docs/*.md`, and `docs/adr/`.',
+        ' * Moved from `docs/missing.md`.',
+      ],
+      write: (line) => written.push(line),
+    });
+    expect(result).toBe(1);
+    expect(written[0]).toBe(
+      'src/example.ts:3: references missing file `docs/missing.md`',
+    );
+    expect(written).toHaveLength(2);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 describe('a check that cannot run does not get to accuse anybody', () => {
