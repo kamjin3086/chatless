@@ -28,6 +28,12 @@ function isPreconditionFailure(error: unknown): boolean {
   return /412|precondition/i.test(String(error));
 }
 
+function writePrecondition(path: string, resource: { data: unknown; etag?: string }): string | null {
+  if (resource.data === null) return null;
+  if (resource.etag && resource.etag !== '*' && !resource.etag.startsWith('W/')) return resource.etag;
+  throw new Error(`Cannot safely write WebDAV resource without a strong ETag: ${path}`);
+}
+
 /**
  * 同步管理器配置
  */
@@ -172,15 +178,14 @@ export class SyncManager {
           updated_at: Date.now(),
           items: {},
         };
-        const remoteMetaEtag = metaResult.etag;
+        const remoteMetaEtag = writePrecondition(metaPath, metaResult);
 
         if (!remoteMeta.items) {
           remoteMeta.items = {};
         }
 
-        // Counters only describe the pass that lands. An attempt that loses the
-        // CAS changed nothing durable (its body writes were conditional), so it
-        // is not reported as progress.
+        // Counters describe only the pass that commits metadata. A prior pass
+        // may already have written a body; the next pass rechecks its version.
         const pass = { pushed: 0, pulled: 0, skipped: 0, remoteCreated: !metaResult.data };
 
         try {
@@ -238,7 +243,7 @@ export class SyncManager {
                   }
                 }
 
-                await transport.putItem(itemPath, doc, current.etag);
+                await transport.putItem(itemPath, doc, writePrecondition(itemPath, current));
                 remoteMeta.items[item.id] = adapter.extractMetadata(item, deviceId);
                 pass.pushed++;
               } catch (e) {
@@ -249,6 +254,11 @@ export class SyncManager {
               }
             }
           }
+
+          // Validate the metadata snapshot before it can change local data.
+          // A losing snapshot may carry a tombstone the winning version removed.
+          remoteMeta.updated_at = Date.now();
+          await transport.putMetadata(metaPath, remoteMeta, remoteMetaEtag);
 
           // Pull: 远端 -> 本地
           if (direction === 'both' || direction === 'pull') {
@@ -295,10 +305,6 @@ export class SyncManager {
               }
             }
           }
-
-          // 保存更新后的元数据，并带上刚读到的 ETag
-          remoteMeta.updated_at = Date.now();
-          await transport.putMetadata(metaPath, remoteMeta, remoteMetaEtag);
         } catch (e) {
           if (isPreconditionFailure(e) && attempt + 1 < MAX_CONFLICT_ATTEMPTS) {
             continue;

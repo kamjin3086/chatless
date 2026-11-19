@@ -21,6 +21,8 @@ type FixtureOptions = {
   afterFirstItemPut?: () => void;
   /** Every metadata PUT reports a lost race. */
   alwaysConflict?: boolean;
+  /** The server reports an existing body without a validator. */
+  omitBodyEtag?: boolean;
 };
 
 function clone<T>(value: T): T {
@@ -71,12 +73,15 @@ function fixture(options: FixtureOptions) {
     getItem: async (path: string) => {
       const id = idFromPath(path);
       const body = bodies.get(id);
-      return { data: body ? clone(body) : null, etag: bodyEtags.get(id) };
+      return {
+        data: body ? clone(body) : null,
+        etag: options.omitBodyEtag ? undefined : bodyEtags.get(id),
+      };
     },
-    putItem: async (path: string, data: SyncDoc, etag?: string) => {
+    putItem: async (path: string, data: SyncDoc, etag: string | null) => {
       const id = idFromPath(path);
-      putItemCalls.push({ id, etag, data: clone(data) });
-      if (etag !== undefined && etag !== bodyEtags.get(id)) {
+      putItemCalls.push({ id, etag: etag ?? undefined, data: clone(data) });
+      if (etag === null ? bodies.has(id) : etag !== bodyEtags.get(id)) {
         throw new Error('412 Precondition Failed');
       }
       bodies.set(id, clone(data) as Body);
@@ -300,6 +305,49 @@ describe('SyncManager conflict recovery', () => {
       deleted_at: 25,
     });
     expect(f.putItemCalls).toEqual([]);
+  });
+
+  it('does not apply a deletion from the metadata snapshot that lost the race', async () => {
+    const f = fixture({
+      metadata: metadata({
+        B: { updated_at: 50, deleted_at: 50, device_id: 'remote' },
+      }),
+      beforeFirstMetadataPut: () => {
+        f.touchMetadata(
+          metadata({ B: { updated_at: 60, device_id: 'remote' } }),
+          {
+            id: 'B',
+            updated_at: 60,
+            text: 'restored',
+            updated_by_device_id: 'remote',
+          },
+        );
+      },
+    });
+    f.setLocals([{ id: 'B', updated_at: 40, updated_by_device_id: 'local' }]);
+    const result = await f.manager.syncDataType('prompts', 'pull');
+
+    expect(result.errors).toEqual([]);
+    expect(f.putMetadataCalls).toHaveLength(2);
+    expect(f.localDeletes).toEqual([]);
+    expect(f.localUpdates.at(-1)?.item.updated_at).toBe(60);
+  });
+
+  it('leaves an existing body untouched when its ETag is missing', async () => {
+    const f = fixture({
+      metadata: metadata({ B: { updated_at: 10, device_id: 'remote' } }),
+      bodies: { B: { id: 'B', updated_at: 10, text: 'remote' } },
+      omitBodyEtag: true,
+    });
+    f.setLocals([{ id: 'B', updated_at: 20, updated_by_device_id: 'local' }]);
+
+    const result = await f.manager.syncDataType('prompts', 'push');
+
+    expect(result.errors).toEqual([
+      expect.stringContaining('without a strong ETag'),
+    ]);
+    expect(f.putItemCalls).toEqual([]);
+    expect(f.body('B')?.text).toBe('remote');
   });
 
   it('reports repeated 412s instead of silently writing a stale snapshot', async () => {

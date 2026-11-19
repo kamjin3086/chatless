@@ -62,61 +62,42 @@ export class WebDAVTransport implements SyncTransport {
    * 获取元数据文件
    */
   async getMetadata(path: string): Promise<MetadataResult> {
-    try {
-      const result = await this.client.getJson<SyncMetadataFile>(path);
-      
-      if (result.status === 404) {
-        return { data: null, etag: undefined };
-      }
-      
-      return {
-        data: result.json ?? null,
-        etag: result.etag,
-      };
-    } catch {
-      return { data: null };
-    }
+    return this.readResource<SyncMetadataFile>(path);
   }
 
   /**
    * 保存元数据文件
    */
   async putMetadata(
-    path: string, 
-    data: SyncMetadataFile, 
-    etag?: string
+    path: string,
+    data: SyncMetadataFile,
+    etag: string | null,
   ): Promise<void> {
-    await this.client.putJson(path, data, { 
-      ifMatch: etag ?? null 
-    });
+    await this.writeResource(path, data, etag);
   }
 
   /**
    * 获取单个数据文件
    */
   async getItem<D extends SyncDoc = SyncDoc>(path: string): Promise<ItemResult<D>> {
-    try {
-      const result = await this.client.getJson<D>(path);
-      
-      if (result.status === 404) {
-        return { data: null, etag: undefined };
-      }
-      
-      return {
-        data: result.json ?? null,
-        etag: result.etag,
-      };
-    } catch {
-      return { data: null };
-    }
+    return this.readResource<D>(path);
   }
 
-  /**
-   * 保存单个数据文件。When the caller read the item first, its ETag makes the
-   * write conditional: a concurrent change is a 412, not a silent overwrite.
-   */
-  async putItem(path: string, data: SyncDoc, etag?: string): Promise<void> {
-    await this.client.putJson(path, data, etag ? { ifMatch: etag } : undefined);
+  async putItem(path: string, data: SyncDoc, etag: string | null): Promise<void> {
+    await this.writeResource(path, data, etag);
+  }
+
+  private async readResource<T>(path: string): Promise<{ data: T | null; etag?: string }> {
+    const result = await this.client.getJson<T>(path);
+    if (result.status === 404) return { data: null };
+    if (result.json == null || typeof result.json !== 'object' || Array.isArray(result.json)) {
+      throw new Error(`Invalid WebDAV JSON resource: ${path}`);
+    }
+    return { data: result.json, etag: result.etag };
+  }
+
+  private async writeResource(path: string, data: SyncDoc | SyncMetadataFile, etag: string | null): Promise<void> {
+    await this.client.putJson(path, data, etag === null ? { ifNoneMatch: '*' } : { ifMatch: etag });
   }
 
   /**
