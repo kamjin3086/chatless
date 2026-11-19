@@ -171,14 +171,34 @@ export class ToolExecutionPipeline {
       try {
         revokeCallGrants = await grantCallScopedPaths(callGrants, { runId: assistantMessageId, callId });
       } catch (error) {
-        if (callGrants.some((grant) => grant.expectedCanonicalPath !== undefined)) {
-          const message = '已授权的目录或目标无法重新验证，请撤销本会话授权后重试。';
-          markError({ assistantMessageId, server, tool, cardId }, message);
-          this.coordinator.markToolCallComplete(callKey, 'failed');
-          return { ok: false, error: { code: 'SESSION_SCOPE_CHANGED', message } };
+        // Never execute a call when its grants were not established. Preserve
+        // the recovery action shown when a conversation grant cannot be revalidated.
+        const sessionScopeChanged = callGrants.some((grant) => grant.expectedCanonicalPath !== undefined);
+        const message = sessionScopeChanged
+          ? '已授权的目录或目标无法重新验证，请撤销本会话授权后重试。'
+          : `Failed to establish the call-scoped filesystem grant: ${error instanceof Error ? error.message : String(error)}`;
+        const failure = {
+          ok: false,
+          resultStatus: 'failed',
+          error: { code: sessionScopeChanged ? 'SESSION_SCOPE_CHANGED' : 'CALL_SCOPE_FAILED', message, server, tool },
+        };
+        markError({ assistantMessageId, server, tool, cardId }, message);
+        try {
+          await appendWorkspaceToolStep({
+            conversationId: invocation.conversationId,
+            assistantMessageId,
+            cardId,
+            callId,
+            server,
+            tool,
+            args: (execInvocation.args || args || {}) as any,
+            result: failure,
+          });
+        } catch {
+          // ignore
         }
-        // The backend still re-checks the persistent allowlist for other calls.
-        console.warn('[ToolExecutionPipeline] call scope unavailable:', error);
+        this.coordinator.markToolCallComplete(callKey, 'failed');
+        return failure;
       }
     }
 

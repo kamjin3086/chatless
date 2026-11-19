@@ -33,7 +33,8 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
     setError(null);
     try {
       // 用户点了这个文件的历史按钮：给这一次读取一个最小授权，读完立即撤销。
-      const result = await withOneShotGrant({ path, scope: 'history', read: true }, () => fileHistory(path));
+      const result = await withOneShotGrant({ path, scope: 'history', read: true },
+        (scope) => fileHistory(path, scope));
       setVersions(result?.versions || []);
     } catch (e) {
       setError(describeHistoryError(e));
@@ -48,7 +49,7 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
     try {
       await withOneShotGrant(
         { path, scope: 'restore', read: true, write: true },
-        () => restoreFileVersion(path, version.id),
+        (scope) => restoreFileVersion(path, version.id, scope),
       );
       toast.success('已恢复该版本', { description: new Date(version.createdAt).toLocaleString() });
       await load();
