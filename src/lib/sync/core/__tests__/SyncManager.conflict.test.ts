@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SyncManager } from '../SyncManager';
 import type { SyncAdapter, SyncDoc } from '../SyncAdapter';
 import type { SyncTransport } from '../SyncTransport';
@@ -23,6 +23,7 @@ type FixtureOptions = {
   alwaysConflict?: boolean;
   /** The server reports an existing body without a validator. */
   omitBodyEtag?: boolean;
+  weakMetadataReads?: number;
 };
 
 function clone<T>(value: T): T {
@@ -36,6 +37,7 @@ function idFromPath(path: string): string {
 function fixture(options: FixtureOptions) {
   let metadata = clone(options.metadata);
   let metaEtag = 'm1';
+  let weakMetadataReads = options.weakMetadataReads ?? 0;
   let version = 1;
   const bodies = new Map<string, Body>(
     Object.entries(options.bodies ?? {}).map(([id, body]) => [id, clone(body)]),
@@ -50,7 +52,10 @@ function fixture(options: FixtureOptions) {
 
   const transport = {
     ensureDirectory: async () => {},
-    getMetadata: async () => ({ data: clone(metadata), etag: metaEtag }),
+    getMetadata: async () => ({
+      data: clone(metadata),
+      etag: weakMetadataReads-- > 0 ? `W/"${metaEtag}"` : metaEtag,
+    }),
     putMetadata: async (
       _path: string,
       data: SyncMetadataFile,
@@ -349,6 +354,33 @@ describe('SyncManager conflict recovery', () => {
     expect(f.putItemCalls).toEqual([]);
     expect(f.body('B')?.text).toBe('remote');
   });
+
+  it.each([1, 2])(
+    'rechecks weak metadata once (%i weak reads)',
+    async (weakMetadataReads) => {
+      vi.useFakeTimers();
+      try {
+        const f = fixture({ metadata: metadata({}), weakMetadataReads });
+        const sync = f.manager.syncDataType('prompts', 'push');
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(f.putMetadataCalls).toEqual([]);
+        await vi.advanceTimersByTimeAsync(100);
+        const result = await sync;
+
+        if (weakMetadataReads === 1) {
+          expect(result.errors).toEqual([]);
+          expect(f.putMetadataCalls).toEqual([{ etag: 'm1' }]);
+        } else {
+          expect(result.errors).toEqual([
+            expect.stringContaining('without a strong ETag'),
+          ]);
+          expect(f.putMetadataCalls).toEqual([]);
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it('reports repeated 412s instead of silently writing a stale snapshot', async () => {
     const f = fixture({

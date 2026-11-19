@@ -28,6 +28,15 @@ function isPreconditionFailure(error: unknown): boolean {
   return /412|precondition/i.test(String(error));
 }
 
+async function readForConditionalWrite<T extends { etag?: string }>(read: () => Promise<T>): Promise<T> {
+  const resource = await read();
+  if (!resource.etag?.startsWith('W/')) return resource;
+  // Apache can temporarily mark a newly modified file's ETag as weak.
+  // Re-read once after its one-second window; never use a weak If-Match.
+  await new Promise<void>((resolve) => setTimeout(resolve, 1100));
+  return read();
+}
+
 function writePrecondition(path: string, resource: { data: unknown; etag?: string }): string | null {
   if (resource.data === null) return null;
   if (resource.etag && resource.etag !== '*' && !resource.etag.startsWith('W/')) return resource.etag;
@@ -172,7 +181,7 @@ export class SyncManager {
       // snapshot it just lost with: the snapshot is the older side of the
       // conflict, and letting it win rolls newer remote entries backward.
       for (let attempt = 0; attempt < MAX_CONFLICT_ATTEMPTS; attempt++) {
-        const metaResult: MetadataResult = await transport.getMetadata(metaPath);
+        const metaResult: MetadataResult = await readForConditionalWrite(() => transport.getMetadata(metaPath));
         const remoteMeta: SyncMetadataFile = metaResult.data ?? {
           version: 1,
           updated_at: Date.now(),
@@ -210,7 +219,7 @@ export class SyncManager {
                 // the two writes. Read the body and its ETag before deciding: a
                 // newer body must not be overwritten by a stale metadata entry,
                 // and the ETag makes the write itself conditional.
-                const current = await transport.getItem<SyncDoc>(itemPath);
+                const current = await readForConditionalWrite(() => transport.getItem<SyncDoc>(itemPath));
                 if (current.data) {
                   const bodyDevice = (current.data.updated_by_device_id as string | null | undefined)
                     ?? remoteEntry?.device_id
