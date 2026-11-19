@@ -22,12 +22,13 @@ pnpm test         # unit + the gates that used to be a human habit
 pnpm typecheck
 pnpm typecheck:tests   # the root typecheck excludes every test file
 pnpm verify       # lint:ci + typecheck + test types + build, run this before pushing
-pnpm fmt <file…>   # format only the files you named (it refuses a directory)
-pnpm repo:state   # main sha, worktrees, whose branch this tree is, open PRs
+pnpm fmt <file…>   # the only formatter entry point; `biome format --write` reflows whole files
+pnpm repo:state   # main sha, worktrees, whose branch this tree is, open PRs (and a bad title)
 pnpm ci:log 94    # what CI actually printed: test counts, checks (build output when printed)
 ```
 
-Starting a separate tree for a task: `pnpm wt:add ../wt-<topic> -b <branch>`.
+Starting a separate tree for a task: `pnpm wt:add ../wt-<topic> -b <branch>`; remove it with
+`pnpm wt:remove <path>`, which unlinks the shared `node_modules` link before git sees it.
 
 A pre-commit hook runs typecheck and formatting on staged files. It is a seatbelt,
 not the bar: `pnpm verify` before pushing is still on you, and
@@ -96,5 +97,6 @@ Two things here are **required**, not preference:
 
 - `docs/prompt-language.md` - every model-facing prompt is English; the answer language follows the user
 - `docs/default-permissions.md` - default filesystem / HTTP / opener scope
+- `docs/agents/subsystems.md` - where the tool-call, parameter and window pieces meet, before grepping
 - `docs/skills-architecture.md`, `docs/sync-architecture.md`, `docs/tauri-window-pitfalls.md`,
   `docs/llm-troubleshooting.md` - per-subsystem state and known traps

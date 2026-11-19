@@ -94,6 +94,26 @@ describe('formatState', () => {
     });
     expect(out).toContain('#90 OPEN');
     expect(out).not.toContain('#90 MERGED');
+    expect(out).not.toContain('title gate');
+  });
+
+  it('flags an open PR title the CI gate would reject, before the push', () => {
+    // #167 carried `spec: knowledge tools...` through a whole session: repo:state
+    // printed it, but only CI judged it, and only after the push.
+    const out = formatState({
+      ...base,
+      prs: [{ number: 167, state: 'OPEN', title: 'spec: knowledge tools' }],
+    });
+    expect(out).toContain('title gate:');
+    expect(out).toContain('expected "type(scope): description"');
+  });
+
+  it('leaves a settled PR title alone - the squash subject is history', () => {
+    const out = formatState({
+      ...base,
+      prs: [{ number: 90, state: 'MERGED', title: 'spec: something old' }],
+    });
+    expect(out).not.toContain('title gate');
   });
 
   it('says unknown instead of none when gh could not answer', () => {
