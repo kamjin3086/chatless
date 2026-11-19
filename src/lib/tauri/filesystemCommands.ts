@@ -59,19 +59,28 @@ export interface ReadFileResult {
 // 参数类型定义
 // ============================================
 
-export interface ReadFileParams {
+/**
+ * 调用方身份。Rust 侧的一次性授权只对同 run（且同 call）的操作生效；
+ * 不带身份的请求只能使用持久 allowlist。
+ */
+export interface CallScopeIds {
+  runId?: string;
+  callId?: string;
+}
+
+export interface ReadFileParams extends CallScopeIds {
   path: string;
   maxLines?: number;
   startLine?: number;
   endLine?: number;
 }
 
-export interface WriteFileParams {
+export interface WriteFileParams extends CallScopeIds {
   path: string;
   content: string;
 }
 
-export interface EditFileParams {
+export interface EditFileParams extends CallScopeIds {
   path: string;
   find: string;
   replace: string;
@@ -106,7 +115,7 @@ export interface FileHistoryResult {
   versions: FileHistoryVersion[];
 }
 
-export interface SearchFilesParams {
+export interface SearchFilesParams extends CallScopeIds {
   root: string;
   query: string;
   glob?: string;
@@ -143,27 +152,27 @@ export interface SearchFilesResult {
   limit: number;
 }
 
-export interface ListDirectoryParams {
+export interface ListDirectoryParams extends CallScopeIds {
   path: string;
   limit?: number;
   pattern?: string;
   kind?: string;
 }
 
-export interface CreateDirectoryParams {
+export interface CreateDirectoryParams extends CallScopeIds {
   path: string;
   recursive?: boolean;
 }
 
-export interface DeleteFileParams {
+export interface DeleteFileParams extends CallScopeIds {
   path: string;
 }
 
-export interface DeleteManyParams {
+export interface DeleteManyParams extends CallScopeIds {
   paths: string[];
 }
 
-export interface DeleteByPatternParams {
+export interface DeleteByPatternParams extends CallScopeIds {
   dir: string;
   pattern: string;
   limit?: number;
@@ -171,7 +180,7 @@ export interface DeleteByPatternParams {
   dryRun?: boolean;
 }
 
-export interface RenameFileParams {
+export interface RenameFileParams extends CallScopeIds {
   oldPath: string;
   newPath: string;
 }
@@ -247,17 +256,18 @@ export async function writeFile(params: WriteFileParams): Promise<OkResult> {
  * 某个文件保留的历史版本（最近 20 版，最新在前）。
  * 覆盖/编辑前的内容会自动保存到应用数据目录，不污染用户目录。
  */
-export async function fileHistory(path: string): Promise<FileHistoryResult> {
-  return invokeFs<{ path: string }, FileHistoryResult>('filesystem_file_history', { path });
+export async function fileHistory(path: string, scope?: CallScopeIds): Promise<FileHistoryResult> {
+  return invokeFs<{ path: string } & CallScopeIds, FileHistoryResult>('filesystem_file_history', { path, ...scope });
 }
 
 /**
  * 恢复到某个历史版本。恢复前会把当前内容也记入历史，所以恢复本身可以撤销。
  */
-export async function restoreFileVersion(path: string, versionId: string): Promise<OkResult> {
-  return invokeFs<{ path: string; versionId: string }, OkResult>('filesystem_restore_file_version', {
+export async function restoreFileVersion(path: string, versionId: string, scope?: CallScopeIds): Promise<OkResult> {
+  return invokeFs<{ path: string; versionId: string } & CallScopeIds, OkResult>('filesystem_restore_file_version', {
     path,
     versionId,
+    ...scope,
   });
 }
 
@@ -265,8 +275,8 @@ export async function restoreFileVersion(path: string, versionId: string): Promi
  * Opens a path with the system default application. Goes through Rust because
  * the renderer's opener plugin cannot reach the user's own directories.
  */
-export async function openPathChecked(path: string): Promise<OkResult> {
-  return invokeFs<{ path: string }, OkResult>('filesystem_open_path', { path });
+export async function openPathChecked(path: string, scope?: CallScopeIds): Promise<OkResult> {
+  return invokeFs<{ path: string } & CallScopeIds, OkResult>('filesystem_open_path', { path, ...scope });
 }
 
 /**

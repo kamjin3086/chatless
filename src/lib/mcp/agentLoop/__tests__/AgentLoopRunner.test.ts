@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StreamCallbacks, Message } from '@/lib/llm/types';
+import type { Conversation, Message as ChatMessage } from '@/types/chat';
 import { AgentLoopRunner, EMPTY_MODEL_OUTPUT_NOTICE } from '../AgentLoopRunner';
 
-const mocks = vi.hoisted(() => ({
-  stream: vi.fn(), execute: vi.fn(), append: vi.fn(), status: vi.fn(),
-  loadEvents: vi.fn(), capability: vi.fn(),
-  store: { conversations: [], setAgentRunState: vi.fn(), updateMessage: vi.fn(), dispatchMessageAction: vi.fn() },
-}));
+const mocks = vi.hoisted(() => {
+  const conversations: Conversation[] = [];
+  return { stream: vi.fn(), execute: vi.fn(), append: vi.fn(), status: vi.fn(), cite: vi.fn(),
+    loadEvents: vi.fn(), capability: vi.fn(), evidence: vi.fn(),
+    store: { conversations, setAgentRunState: vi.fn(), updateMessage: vi.fn(), updateMessageContentInMemory: vi.fn(), dispatchMessageAction: vi.fn() },
+  };
+});
 vi.mock('@/lib/llm', () => ({ streamChat: mocks.stream, cancelStream: vi.fn(), chat: vi.fn() }));
 vi.mock('@/lib/llm/ProviderRegistry', () => ({ ProviderRegistry: { get: () => ({ cancelStream: vi.fn() }) } }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
@@ -16,13 +19,13 @@ vi.mock('@/lib/mcp/pipeline', () => ({
 }));
 vi.mock('@/lib/mcp/pipeline/adapters', () => ({ createDefaultAdapters: () => [] }));
 vi.mock('@/lib/mcp/ToolCallCoordinator', () => ({ ToolCallCoordinator: { getInstance: () => ({
-  isMessageCancelled: () => false, markToolCallComplete: vi.fn(),
+  isMessageCancelled: () => false, cancelMessage: vi.fn(), markToolCallComplete: vi.fn(),
 }) } }));
 vi.mock('@/store/chatStore', () => ({ useChatStore: { getState: () => mocks.store } }));
 vi.mock('@/store/toolLoadRequestStore', () => ({ useToolLoadRequestStore: { getState: () => ({ reset: vi.fn() }) } }));
-vi.mock('@/lib/rag/CitationService', () => ({ applyCitations: vi.fn() }));
+vi.mock('@/lib/rag/CitationService', () => ({ applyCitations: mocks.cite }));
 vi.mock('@/lib/rag/EvidenceRegistry', () => ({
-  listEvidence: () => [], clearEvidenceRegistry: vi.fn(), restoreEvidence: vi.fn(),
+  listEvidence: mocks.evidence, clearEvidenceRegistry: vi.fn(), restoreEvidence: vi.fn(),
 }));
 vi.mock('@/lib/mcp/promptInjector', () => ({ buildMcpSystemInjections: async () => ({ useNativeTools: true }) }));
 vi.mock('../buildAgentPromptEnvelope', () => ({
@@ -74,10 +77,12 @@ beforeEach(() => {
   // Reset queued one-shot implementations as well as call history. A test
   // may fail at a durable boundary before consuming its prepared transport.
   vi.resetAllMocks();
+  mocks.store.conversations = [];
   mocks.capability.mockReturnValue({ track: 'native', useNativeTools: true, renderMode: 'tool_role' });
   mocks.append.mockResolvedValue(undefined);
   mocks.status.mockResolvedValue(undefined);
   mocks.loadEvents.mockResolvedValue([]);
+  mocks.evidence.mockReturnValue([]);
   mocks.store.updateMessage.mockResolvedValue(undefined);
   mocks.execute.mockResolvedValue({ ok: true });
   mocks.stream.mockImplementation(async (_p, _m, _history, cb) => finish(cb));
@@ -204,6 +209,23 @@ describe('AgentLoopRunner execution boundaries', () => {
     expect(output.isError).toBe(true);
   });
 
+  it('does not complete successfully when source-citation persistence fails', async () => {
+    const message: ChatMessage = { id: 'run', conversation_id: 'conversation', role: 'assistant', content: 'Answer [[E1]].', status: 'sent', created_at: 1, updated_at: 1 };
+    mocks.store.conversations = [{ id: 'conversation', title: 'Test', created_at: 1, updated_at: 1, messages: [message], model_id: 'model', is_favorite: false }];
+    const citation = { id: 'E1', evidenceId: 'E1', n: 1, documentId: 'doc', documentName: 'source', sourceBlockIds: [], locator: {}, quote: 'source fact', score: 1 };
+    mocks.evidence.mockReturnValue([citation]);
+    mocks.cite.mockReturnValue({ displayAnswer: 'Answer [1].', citations: [citation] });
+    mocks.stream.mockImplementation(async (_p, _m, _history, cb) => {
+      await cb.onEvent?.({ type: 'content_token', content: 'Answer [[E1]].' }); finish(cb);
+    });
+    mocks.store.updateMessage.mockImplementation(async (_id: string, patch: Partial<ChatMessage>) => {
+      if (patch.citations) throw new Error('citation disk failure');
+    });
+    await expect(AgentLoopRunner.run(params)).rejects.toThrow('citation disk failure');
+    expect(mocks.status).toHaveBeenCalledWith('run', 'failed');
+    expect(mocks.status).not.toHaveBeenCalledWith('run', 'completed');
+  });
+
   it('propagates final status persistence failure and still releases the run', async () => {
     mocks.status.mockRejectedValueOnce(new Error('status write failed'));
     await expect(AgentLoopRunner.run(params)).rejects.toThrow('status write failed');
@@ -212,6 +234,15 @@ describe('AgentLoopRunner execution boundaries', () => {
 
   it('does not expose tools while regenerating a prior answer', async () => {
     await AgentLoopRunner.run({ ...params, assistantMessageId: 'regenerate', regenerate: true });
+    expect(mocks.stream.mock.calls[0][4]).toMatchObject({ toolChoice: 'none', __useNativeTools: false });
+  });
+
+  it('states the exact citation-marker contract for inherited evidence during regeneration', async () => {
+    mocks.evidence.mockReturnValueOnce([{ id: 'E9', documentId: 'doc', documentName: 'source.docx', sourceBlockIds: [], locator: {}, quote: 'stored fact: 61 days', score: 1 }]);
+    await AgentLoopRunner.run({ ...params, assistantMessageId: 'regen-evidence', regenerate: true, regenerationParentRunId: 'prior' });
+    const history: Message[] = mocks.stream.mock.calls[0][2];
+    expect(history.some((message) => message.role === 'user' && String(message.content).includes('stored fact: 61 days') &&
+      String(message.content).includes('[[E9]]') && String(message.content).includes('Never renumber IDs'))).toBe(true);
     expect(mocks.stream.mock.calls[0][4]).toMatchObject({ toolChoice: 'none', __useNativeTools: false });
   });
 

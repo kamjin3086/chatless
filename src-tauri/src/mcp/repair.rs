@@ -51,10 +51,19 @@ pub fn unwrap_cmd_wrapper(command: &str, args: &[String]) -> (String, Vec<String
 }
 
 pub fn classify_runner(command: &str) -> RunnerKind {
-  let name = Path::new(command)
+  // Saved MCP configurations may contain Windows paths even on Unix hosts.
+  let bytes = command.as_bytes();
+  let windows_path = (bytes.first().is_some_and(u8::is_ascii_alphabetic)
+    && bytes.get(1) == Some(&b':')) || command.starts_with(r"\\");
+  let executable = if windows_path {
+    command.rsplit(['/', '\\']).next().unwrap_or(command)
+  } else {
+    command
+  };
+  let name = Path::new(executable)
     .file_stem()
     .and_then(|s| s.to_str())
-    .unwrap_or(command)
+    .unwrap_or(executable)
     .to_ascii_lowercase();
   match name.as_str() {
     "npx" => RunnerKind::Npx,
@@ -425,6 +434,8 @@ mod tests {
       classify_runner(r"C:\Program Files\nodejs\npx.cmd"),
       RunnerKind::Npx
     );
+    assert_eq!(classify_runner(r"\\share\tools\BUNX.EXE"), RunnerKind::Bunx);
+    assert_eq!(classify_runner("/usr/local/bin/npx"), RunnerKind::Npx);
     assert_eq!(classify_runner("uvx"), RunnerKind::Uvx);
     assert_eq!(classify_runner("/usr/bin/python"), RunnerKind::Direct);
   }

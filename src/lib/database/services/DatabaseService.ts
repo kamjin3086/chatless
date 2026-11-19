@@ -95,8 +95,10 @@ export class DatabaseService {
       await this.dbManager.execute("UPDATE agent_approvals SET status = 'expired', decided_at = ? WHERE status = 'pending'", [Date.now()]);
 
       // Resume durable semantic jobs only after every repository and migration
-      // is ready. The queue itself stays lazy when no job exists.
-      void import('@/lib/indexing/SemanticIndexQueue').then(({ semanticIndexQueue }) => semanticIndexQueue.resume());
+      // is ready. Published indexes reconcile their selected model in the
+      // background; an empty knowledge store does not initialize a model.
+      const { semanticIndexQueue } = await import('@/lib/indexing/SemanticIndexQueue');
+      await semanticIndexQueue.resume();
 
       // 验证Repository实例创建成功
       if (!this.conversationRepo || !this.messageRepo) {

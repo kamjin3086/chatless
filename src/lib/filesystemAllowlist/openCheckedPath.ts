@@ -17,7 +17,8 @@ export async function openCheckedPath(path: string): Promise<boolean> {
     const { withOneShotGrant } = await import('@/lib/filesystemAllowlist/oneShotGrant');
     // The user is clicking a path this session already produced or mounted; the
     // grant is scoped to this one open and revoked immediately after.
-    await withOneShotGrant({ path: target, scope: 'open', read: true }, () => openPathChecked(target));
+    await withOneShotGrant({ path: target, scope: 'open', read: true },
+      (scope) => openPathChecked(target, scope));
     return true;
   } catch {
     return false;

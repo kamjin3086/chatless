@@ -45,6 +45,7 @@ export interface KnowledgeBaseConfig {
     batchSize: number;
     timeout?: number;
     maxBatchSize?: number;
+    maxLength?: number;
   };
   // 存储配置
   storage: {

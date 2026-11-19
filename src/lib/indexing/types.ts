@@ -44,6 +44,9 @@ export interface IndexingOptions {
   chunkOverlap?: number;
   chunkingStrategy?: string;
   embeddingModel?: string;
+  embeddingBudget?: import('./embeddingBudget').EmbeddingTextBudget;
+  /** Internal guard when re-chunking is owned by a semantic task. */
+  semanticParentTaskId?: string;
   batchSize?: number;
   maxConcurrency?: number;
   retryAttempts?: number;
