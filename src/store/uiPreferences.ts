@@ -4,6 +4,10 @@ import { create } from "zustand";
 import StorageUtil from "@/lib/storage";
 import type { SectionIconPreset } from "@/components/settings/SectionIcon";
 import { applyNightBrightnessCss, clampNightBrightness } from "@/lib/utils/nightBrightness";
+import {
+  GLASS_THEME_KEY,
+  GLASS_WALLPAPER_KEY,
+} from "@/lib/preferences/keys";
 
 const SHOW_SETTING_ICONS_KEY = "ui_show_setting_icons";
 const SIMPLE_MODE_KEY = "ui_simple_mode";
@@ -13,8 +17,6 @@ const COLLAPSE_CHAT_SIDEBAR_KEY = "ui_collapse_chat_sidebar";
 const TIMEZONE_KEY = "ui_timezone"; // e.g. 'local', 'UTC', 'UTC+8', 'America/New_York'
 const SHOW_CLOSE_CONFIRMATION_KEY = "ui_show_close_confirmation";
 const CLOSE_TO_TRAY_KEY = "ui_close_to_tray";
-const GLASS_THEME_KEY = "ui_glass_theme";
-const GLASS_WALLPAPER_KEY = "ui_glass_wallpaper_file";
 const NIGHT_BRIGHTNESS_KEY = "ui_night_brightness";
 
 type SidebarWidth = 'narrow' | 'medium' | 'wide' | 'xwide';

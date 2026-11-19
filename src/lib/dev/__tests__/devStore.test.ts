@@ -10,6 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { devStore, devStoreApplies, devStoreEnabled } from '../devStore';
+import { enterBrowser } from './browserStoreHarness';
 
 describe('when the browser store stub applies', () => {
   it('needs the flag', () => {
@@ -111,40 +112,11 @@ describe('the in-memory store', () => {
   });
 });
 
-function memorySession(): Storage {
-  const data = new Map<string, string>();
-  return {
-    getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      data.set(key, String(value));
-    },
-    removeItem: (key: string) => {
-      data.delete(key);
-    },
-    clear: () => data.clear(),
-    key: (index: number) => [...data.keys()][index] ?? null,
-    get length() {
-      return data.size;
-    },
-  } as Storage;
-}
-
 describe('on a page, with a browser around it', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
-
-  function enterBrowser(search: string) {
-    // The rule reads the build's NODE_ENV, so a test that wants the stub on has to say which
-    // build it is describing; inheriting the shell's value made these pass or fail by
-    // accident (`NODE_ENV=production npx vitest run …` failed 3 of them).
-    vi.stubEnv('NODE_ENV', 'development');
-    vi.stubGlobal('window', {
-      location: { search },
-      sessionStorage: memorySession(),
-    });
-  }
 
   it('remembers the flag for the tab, so a dialog route keeps it', () => {
     enterBrowser('?devStore=1');

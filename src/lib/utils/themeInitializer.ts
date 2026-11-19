@@ -1,6 +1,6 @@
+import { THEME_KEY } from "@/lib/preferences/keys";
 import { StorageUtil } from '../storage';
 
-const THEME_KEY = "app_theme"; // 与GeneralSettings中的键名保持一致
 
 /**
  * 主题初始化服务
