@@ -75,7 +75,11 @@ it('does not automatically authorize a pending filesystem scope expansion', asyn
 it('does not report approval when persisting the decision fails', async () => {
   const result = wait();
   await pending();
-  mocks.execute.mockRejectedValueOnce(new Error('disk failure'));
+  mocks.execute.mockImplementation(async (sql: string) => {
+    if (sql.startsWith('UPDATE agent_approvals'))
+      throw new Error('disk failure');
+    return {};
+  });
   useConversationAccessStore.getState().setAutomatic('conversation', true);
   await expect(result).resolves.toMatchObject({
     approved: false,
@@ -97,18 +101,19 @@ it('cancellation wins and removes automatic-mode listeners', async () => {
 it('a delayed decision cannot restore trust revoked while persistence was in flight', async () => {
   const result = wait();
   await pending();
-  let release: () => void = () => {};
-  mocks.execute.mockImplementationOnce(
-    () =>
-      new Promise<void>((resolve) => {
-        release = resolve;
-      }),
-  );
+  let release: (() => void) | undefined;
+  mocks.execute.mockImplementation(async (sql: string) => {
+    if (!sql.startsWith('UPDATE agent_approvals')) return {};
+    return new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  });
   useAuthorizationStore
     .getState()
     .approveAuthorization('approval', 'unrestricted');
+  await vi.waitFor(() => expect(release).toBeDefined());
   useConversationAccessStore.getState().revoke('conversation');
-  release();
+  release?.();
   const approved = await result;
   expect(approved.approved).toBe(true);
   useConversationAccessStore
