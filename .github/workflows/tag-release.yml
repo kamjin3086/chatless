@@ -111,6 +111,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Sync version from tag in the build checkout
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: pnpm run version:set
+
       - name: Cache Next.js build cache
         uses: actions/cache@v4
         with:
