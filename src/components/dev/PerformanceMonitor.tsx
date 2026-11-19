@@ -22,8 +22,7 @@ export function PerformanceMonitor() {
     return null;
   }
 
-  const totalDuration = report.totalDuration;
-  const bottlenecks = report.bottlenecks;
+  const format = (time: number | null) => time === null ? '未观测到' : `${time.toFixed(1)} ms`;
 
   return (
     <div className="fixed bottom-4 right-4 bg-white border border-slate-200 rounded-lg shadow-lg p-4 max-w-md z-50">
@@ -41,46 +40,27 @@ export function PerformanceMonitor() {
         {/* 总体统计 */}
         <div className="bg-slate-50 p-3 rounded-md">
           <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-600">总耗时:</span>
-            <span className={`text-sm font-medium ${totalDuration > 500 ? 'text-red-600' : 'text-green-600'}`}>
-              {totalDuration.toFixed(2)}ms
-            </span>
+            <span className="text-sm text-slate-600">WebView 首次内容绘制:</span>
+            <span className="text-sm font-medium">{format(report.firstContentfulPaint)}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-600">阶段数:</span>
-            <span className="text-sm font-medium">{report.phases.length}</span>
+            <span className="text-sm text-slate-600">历史列表可见:</span>
+            <span className="text-sm font-medium">{format(report.readiness.historyVisible)}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-600">瓶颈数:</span>
-            <span className={`text-sm font-medium ${bottlenecks.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {bottlenecks.length}
-            </span>
+            <span className="text-sm text-slate-600">输入框可编辑:</span>
+            <span className="text-sm font-medium">{format(report.readiness.composerEditable)}</span>
           </div>
         </div>
 
-        {/* 性能瓶颈 */}
-        {bottlenecks.length > 0 && (
-          <div>
-            <h4 className="text-xs font-medium text-red-600 mb-2">⚠️ 性能瓶颈</h4>
-            <div className="space-y-1">
-              {bottlenecks.slice(0, 3).map((bottleneck, index) => (
-                <div key={index} className="flex justify-between items-center text-xs">
-                  <span className="text-slate-700 truncate">{bottleneck.name}</span>
-                  <span className="text-red-600 font-medium">{bottleneck.duration?.toFixed(1)}ms</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* 各阶段耗时 */}
         <div>
-          <h4 className="text-xs font-medium text-slate-700 mb-2">各阶段耗时</h4>
+          <h4 className="text-xs font-medium text-slate-700 mb-2">前台阶段（不求和）</h4>
           <div className="space-y-1 max-h-32 overflow-y-auto">
             {report.phases.slice(0, 8).map((phase, index) => (
               <div key={index} className="flex justify-between items-center text-xs">
                 <span className="text-slate-600 truncate">{phase.name}</span>
-                <span className="text-slate-800 font-medium">{phase.duration?.toFixed(1)}ms</span>
+                <span className="text-slate-800 font-medium">{phase.duration === undefined ? '尚未结束' : format(phase.duration)}</span>
               </div>
             ))}
           </div>

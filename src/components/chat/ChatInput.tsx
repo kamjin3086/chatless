@@ -10,7 +10,6 @@ import {
 } from "./composerHistory";
 import { composerFloor, nextInputHeight } from "./inputHeight";
 import { ListChecks, Send, StopCircle } from "lucide-react";
-import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -29,6 +28,7 @@ import { getCurrentKnowledgeBaseConfig } from '@/lib/knowledgeBaseConfig';
 import { SlashPromptPanel } from './SlashPromptPanel';
 import { usePromptStore } from '@/store/promptStore';
 import { useChatStore } from '@/store/chatStore';
+import { afterStartupPaint, startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
 import { useUiSession } from '@/store/uiSession';
@@ -41,9 +41,6 @@ import {
   renderInlineReferencesForOverlay,
 } from './input/inlineReferenceHighlight';
 import {
-  getEnabledConfiguredServers,
-  getConnectedServers,
-  getGlobalEnabledServers,
 } from "@/lib/mcp/chatIntegration";
 import { useConversationAttachmentStore } from "@/store/conversationAttachmentStore";
 
@@ -169,30 +166,19 @@ export function ChatInput({
     _router.replace(`${window.location.pathname}${query ? `?${query}` : ''}`, { scroll: false });
   }, [_router]);
 
-  // MCP 服务器状态
-  const [_mcpServers, setMcpServers] = useState<{ all: string[]; connected: string[]; enabled: string[] }>({
-    all: [],
-    connected: [],
-    enabled: [],
-  });
-
-  // 加载 MCP 服务器状态
-  useEffect(() => {
-    (async () => {
-      try {
-        const all = await getEnabledConfiguredServers();
-        const connected = await getConnectedServers();
-        const enabled = await getGlobalEnabledServers() || all;
-        setMcpServers({ all, connected, enabled });
-      } catch {
-        // ignore
-      }
-    })();
-  }, []);
-
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const storedConversationId = useChatStore((s) => s.currentConversationId);
   const loadingConversations = useChatStore((s) => s.isLoadingConversations);
+  const hasLoadedConversations = useChatStore((s) => s.hasLoadedConversations);
+  useEffect(() => {
+    if (!hasLoadedConversations || disabled || isParsingDocument) return;
+    return afterStartupPaint(() => {
+      const input = textareaRef.current;
+      if (input && !input.disabled && input.getClientRects().length > 0) {
+        startupMonitor.markChatReady('composerEditable');
+      }
+    });
+  }, [hasLoadedConversations, disabled, isParsingDocument]);
   const currentConvId = conversationId || storedConversationId;
   const { selectedKnowledgeBase, selectKnowledgeBase, removeSelectedKnowledgeBase } = useKnowledgeBaseSelection({
     conversationId: currentConvId || null,
@@ -808,7 +794,7 @@ export function ChatInput({
     setIsParsingDocument(true);
 
     try {
-      // 使用DocumentParser解析文件
+      const { DocumentParser } = await import('@/lib/documentParser');
       const result = await DocumentParser.parseFileObject(file, { maxFileSize: 20 * 1024 * 1024, timeoutMs: 30_000 });
 
       if (result.success && result.content) {

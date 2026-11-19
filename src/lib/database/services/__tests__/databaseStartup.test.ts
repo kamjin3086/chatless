@@ -53,6 +53,17 @@ it('reads the migration ledger once before chat history can load on an up-to-dat
   expect(service.getConversationRepository()).toBeDefined();
 });
 
+it('keeps the full SQLite integrity scan out of database initialization', async () => {
+  const service = DatabaseService.getInstance();
+  await service.initialize();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(sql.select).not.toHaveBeenCalledWith('PRAGMA integrity_check');
+
+  sql.select.mockResolvedValueOnce([{ integrity_check: 'ok' }]);
+  await service.getDbManager().validateDatabaseHealth();
+  expect(sql.select).toHaveBeenCalledWith('PRAGMA integrity_check');
+});
+
 it('still applies a pending migration before resuming the semantic queue', async () => {
   installedThrough(19);
   let migrationRecorded = false;

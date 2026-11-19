@@ -82,13 +82,6 @@ export class DatabaseManager {
       if (failed) throw new Error(failed.error || 'Database migration failed');
       startupMonitor.endPhase('迁移检查');
 
-      // 异步验证数据库健康状态，不阻塞初始化流程
-      setTimeout(() => {
-        this.validateDatabaseHealth().catch((error) => {
-          console.warn("数据库健康检查失败", { error: error instanceof Error ? error.message : String(error) });
-        });
-      }, 100); // 延迟100ms执行健康检查
-
       this.isInitialized = true;
       console.info("数据库初始化完成");
 
@@ -404,7 +397,7 @@ export class DatabaseManager {
   /**
    * 验证数据库健康状态
    */
-  private async validateDatabaseHealth(): Promise<void> {
+  async validateDatabaseHealth(): Promise<void> {
     if (!this.db) return;
 
     try {

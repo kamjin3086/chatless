@@ -9,6 +9,7 @@ import { IconButton } from '@/components/ui/icon-button';
 // import { SidebarHeader } from './SidebarHeader';
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { useChatStore } from "@/store/chatStore";
+import { afterStartupPaint, startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { Message, Conversation } from "@/types/chat";
 import { SidebarContext } from "@/contexts/SidebarContext";
 import { SearchInput } from '@/components/ui/search-input';
@@ -166,6 +167,12 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   
   const createConversation = useChatStore((state) => state.createConversation);
   const conversations = useChatStore((state) => state.conversations);
+  const hasLoadedConversations = useChatStore((state) => state.hasLoadedConversations);
+
+  useEffect(() => {
+    if (!hasLoadedConversations || !isSidebarOpen) return;
+    return afterStartupPaint(() => startupMonitor.markChatReady('historyVisible'));
+  }, [hasLoadedConversations, isSidebarOpen]);
   const currentConversationId = useChatStore(
     (state) => state.currentConversationId,
   );

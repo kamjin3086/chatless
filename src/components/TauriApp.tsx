@@ -3,9 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { performEnvironmentCheck, logEnvironmentInfo, type EnvironmentDetection } from '../lib/utils/environment';
 import { useChatStore } from "@/store/chatStore";
-import { initDatabaseService } from '@/lib/db';
+import { getDatabaseService, initDatabaseService } from '@/lib/db';
 import { Sidebar } from './Sidebar';
-import { startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
+import { afterStartupPaint, startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { ThemeInitializer } from './theme/ThemeInitializer';
 import { GlassThemeApplier } from './theme/GlassThemeApplier';
 import { NightBrightnessApplier } from './theme/NightBrightnessApplier';
@@ -83,15 +83,13 @@ export function TauriApp({ children }: TauriAppProps) {
           console.warn('⚠️ [TauriApp] 非PC应用环境，日志转发可能不可用');
         }
 
-        // 初始化数据库连接
-        startupMonitor.startPhase('数据库初始化');
+        // The database service records initialization, including its nested work.
         await initDatabaseService();
-        startupMonitor.endPhase('数据库初始化');
 
         // 初始化示例数据（如果需要）
-        startupMonitor.startPhase('示例数据初始化');
-        // 异步执行示例数据初始化，不阻塞主流程
+        // Time the work itself, not the act of scheduling its timer.
         setTimeout(async () => {
+          startupMonitor.startPhase('示例数据初始化', { background: true });
           try {
             // 使用数据完整性检查来决定是否需要初始化示例数据
             const { SampleDataInitializer } = await import('@/lib/sampleDataInitializer');
@@ -116,18 +114,20 @@ export function TauriApp({ children }: TauriAppProps) {
             }
           } catch (sampleDataError) {
             console.warn('⚠️ [TauriApp] 示例数据初始化失败，但不影响应用启动:', sampleDataError);
+          } finally {
+            startupMonitor.endPhase('示例数据初始化');
           }
         }, 1000); // 延迟1秒执行，确保数据库初始化完成
-        startupMonitor.endPhase('示例数据初始化');
 
         // 延迟执行环境检查
         setTimeout(async () => {
           try {
-            startupMonitor.startPhase('环境检查');
+            startupMonitor.startPhase('环境检查', { background: true });
             await performEnvironmentCheck();
-            startupMonitor.endPhase('环境检查');
           } catch (error) {
             console.error('❌ [TauriApp] 环境检查失败:', error);
+          } finally {
+            startupMonitor.endPhase('环境检查');
           }
         }, 200);
 
@@ -140,6 +140,29 @@ export function TauriApp({ children }: TauriAppProps) {
         startupMonitor.startPhase('会话加载');
         await loadConversations();
         startupMonitor.endPhase('会话加载');
+
+        if (useChatStore.getState().hasLoadedConversations) {
+          afterStartupPaint(() => {
+            // A full SQLite integrity scan must not compete with initial chat reads.
+            setTimeout(() => {
+              const check = async () => {
+                startupMonitor.startPhase('数据库完整性检查', { background: true });
+                try {
+                  await getDatabaseService().getDbManager().validateDatabaseHealth();
+                } catch (error) {
+                  console.warn('[TauriApp] 数据库完整性检查失败:', error);
+                } finally {
+                  startupMonitor.endPhase('数据库完整性检查');
+                }
+              };
+              if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(() => void check(), { timeout: 5000 });
+              } else {
+                void check();
+              }
+            }, 5000);
+          });
+        }
 
         // 开发环境：装上流式渲染性能探针（控制台 __chatlessPerf.runFixture()）。
         // 必须挂在客户端组件里——放在 app/layout.tsx 只会跑在服务端。
@@ -173,7 +196,7 @@ export function TauriApp({ children }: TauriAppProps) {
             
             try {
               await serverManager.init();
-              console.log('[TauriApp] MCP服务启动完成');
+              console.log('[TauriApp] MCP 后台连接已调度');
             } catch (error) {
               console.warn('[TauriApp] MCP服务启动失败:', error);
             }
