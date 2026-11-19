@@ -1,6 +1,8 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   linkedNodeModules,
@@ -59,6 +61,27 @@ describe('linkedNodeModules', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+it('leaves a non-worktree dependency link intact even with --force', () => {
+  const target = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wt-remove-unregistered-'),
+  );
+  try {
+    const dependencies = path.join(target, 'dependencies');
+    const link = path.join(target, 'node_modules');
+    fs.mkdirSync(dependencies);
+    fs.symlinkSync(dependencies, link, 'junction');
+    const script = fileURLToPath(new URL('../wt-remove.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script, target, '--force'], {
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('not a linked worktree');
+    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+  } finally {
+    fs.rmSync(target, { recursive: true, force: true });
+  }
 });
 
 describe('parseArgs', () => {

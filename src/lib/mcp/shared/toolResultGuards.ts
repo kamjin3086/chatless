@@ -26,6 +26,7 @@ export function classifyToolResult(result: unknown): ToolResultKind {
       if (!hasActionableDetail) return 'tool_error';
     }
     if (typeof r.success === 'boolean' && r.success === false) return 'tool_error';
+    if (r.isError === true || r.is_error === true) return 'tool_error';
 
     if (r.title && typeof r.title === 'string') {
       const title = r.title.toLowerCase();

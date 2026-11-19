@@ -151,9 +151,10 @@ export class WebDavClient {
     return { status: r.status, etag: r.etag, json: JSON.parse(r.text) as T };
   }
 
-  async putJson(path: string, data: any, input?: { ifMatch?: string | null }): Promise<{ status: number; etag?: string }> {
+  async putJson(path: string, data: any, input?: { ifMatch?: string | null; ifNoneMatch?: '*' }): Promise<{ status: number; etag?: string }> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (input?.ifMatch !== undefined) headers['If-Match'] = input.ifMatch ?? '*';
+    if (input?.ifNoneMatch) headers['If-None-Match'] = input.ifNoneMatch;
     const r = await this.request('PUT', path, { headers, body: JSON.stringify(data) });
     if (r.status < 200 || r.status >= 300) {
       throw new Error(`PUT 失败: ${r.status} ${r.statusText || ''}`.trim());

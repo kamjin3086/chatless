@@ -7,6 +7,7 @@ use crate::http_client;
 
 // —— 默认参数常量 —— 避免散落的魔法值
 const DEFAULT_DDG_LIMIT: usize = 5;
+const MAX_SEARCH_SNIPPET_CHARS: usize = 400;
 const DEFAULT_FETCH_MAX_CONTENT_CHARS: usize = 2000;
 const DEFAULT_FETCH_MAX_LINKS: usize = 50;
 
@@ -74,7 +75,7 @@ pub async fn native_web_search(request: WebSearchRequest) -> Result<Vec<WebSearc
     .map_err(|e| format!("init http client failed: {}", e))?;
   let client_ref: &Client = &client;
 
-  match request.provider.as_str() {
+  let mut results = match request.provider.as_str() {
     "google" => call_google_search(client_ref, request).await,
     "bing" => call_bing_search(client_ref, request).await,
     "ollama" => call_ollama_search(client_ref, request).await,
@@ -86,6 +87,58 @@ pub async fn native_web_search(request: WebSearchRequest) -> Result<Vec<WebSearc
     "duckduckgo" => call_duckduckgo_search(client_ref, request).await,
     "custom_scrape" => call_custom_scraper(client_ref, request).await,
     other => Err(format!("Unsupported search provider: {}", other)),
+  }?;
+  limit_search_snippets(&mut results);
+  Ok(results)
+}
+
+fn limit_search_snippets(results: &mut [WebSearchResult]) {
+  for result in results {
+    let mut chars = result.snippet.char_indices();
+    if let Some((last_allowed_offset, _)) = chars.nth(MAX_SEARCH_SNIPPET_CHARS - 1) {
+      if chars.next().is_some() {
+        result.snippet.truncate(last_allowed_offset);
+        result.snippet.push('…');
+      }
+    }
+  }
+}
+
+#[cfg(test)]
+mod search_snippet_tests {
+  use super::{limit_search_snippets, WebSearchResult, MAX_SEARCH_SNIPPET_CHARS};
+
+  #[test]
+  fn preserves_short_and_exact_limit_snippets() {
+    for snippet in [
+      String::new(),
+      "short result".to_string(),
+      "界".repeat(MAX_SEARCH_SNIPPET_CHARS),
+    ] {
+      let mut result = WebSearchResult {
+        snippet: snippet.clone(),
+        source_title: "Title".to_string(),
+        url: "https://example.test/".to_string(),
+      };
+      limit_search_snippets(std::slice::from_mut(&mut result));
+      assert_eq!(result.snippet, snippet);
+    }
+  }
+
+  #[test]
+  fn keeps_the_ellipsis_within_the_unicode_character_budget() {
+    let mut result = WebSearchResult {
+      snippet: "界".repeat(MAX_SEARCH_SNIPPET_CHARS + 1),
+      source_title: "Title".to_string(),
+      url: "https://example.test/".to_string(),
+    };
+    limit_search_snippets(std::slice::from_mut(&mut result));
+    assert_eq!(
+      result.snippet,
+      format!("{}…", "界".repeat(MAX_SEARCH_SNIPPET_CHARS - 1))
+    );
+    assert_eq!(result.source_title, "Title");
+    assert_eq!(result.url, "https://example.test/");
   }
 }
 

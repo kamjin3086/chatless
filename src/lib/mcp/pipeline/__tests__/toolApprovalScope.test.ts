@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
+import { useConversationAccessStore } from '@/store/conversationAccessStore';
 
 /** A real invocation always carries these; they are not what the tests below are about. */
 const realInvocation = () => ({
@@ -13,7 +14,7 @@ const realInvocation = () => ({
 
 const mocks = vi.hoisted(() => ({
   setAllowlist: vi.fn(async () => ({ ok: true })),
-  grantCallScope: vi.fn(async () => ({ ok: true, path: '' })),
+  grantCallScope: vi.fn(async (params: { path: string }) => ({ ok: true, path: params.path })),
   revokeCallScope: vi.fn(async () => ({ ok: true })),
   appendWorkspaceToolStep: vi.fn(async () => {}),
   approvals: [] as Array<{ id: string; onApprove: (decision?: 'once' | 'always' | 'unrestricted') => void }>,
@@ -80,11 +81,64 @@ vi.mock('@/lib/database/services/DatabaseService', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useConversationAccessStore.setState({ conversations: {} });
   mocks.approvals.length = 0;
   mocks.addedDirectories.length = 0;
   mocks.decision = 'once';
   clearConversationAccess('fs', 'conv-1');
   clearConversationAccess('shell', 'conv-1');
+});
+
+describe('unified conversation approval', () => {
+  let sequence = 0;
+  const execute = async (pipeline: ToolExecutionPipeline, tool: string, conversationId = 'conv-1', server = 'knowledge') => pipeline.run(new ToolInvocation({
+    ...realInvocation(), server, tool, args: {}, conversationId,
+    assistantMessageId: `${conversationId}-${tool}-${++sequence}`, callId: `${conversationId}-${tool}-${sequence}`,
+  }));
+  it('grants Knowledge reads across turns only in the approved conversation and supports revocation', async () => {
+    const adapter = { server: 'knowledge', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    mocks.decision = 'unrestricted';
+    await execute(pipeline, 'search'); await execute(pipeline, 'read'); await execute(pipeline, 'list');
+    expect(mocks.approvals).toHaveLength(1);
+    await execute(pipeline, 'read', 'conv-2'); expect(mocks.approvals).toHaveLength(2);
+    useConversationAccessStore.getState().revoke('conv-1');
+    await execute(pipeline, 'read'); expect(mocks.approvals).toHaveLength(3);
+  });
+  it('automatic mode bypasses eligible prompts but never leaks to another conversation', async () => {
+    const adapter = { server: 'knowledge', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    useConversationAccessStore.getState().setAutomatic('conv-1', true);
+    await execute(pipeline, 'search'); await execute(pipeline, 'read');
+    expect(mocks.approvals).toHaveLength(0);
+    await execute(pipeline, 'read', 'conv-2'); expect(mocks.approvals).toHaveLength(1);
+    useConversationAccessStore.getState().revoke('conv-1');
+    await execute(pipeline, 'read'); expect(mocks.approvals).toHaveLength(2);
+  });
+  it('does not extend a read grant to Knowledge mutations or other tools on an MCP server', async () => {
+    const adapter = { server: 'knowledge', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    mocks.decision = 'unrestricted';
+    await execute(pipeline, 'search');
+    await execute(pipeline, 'delete_document');
+    await execute(pipeline, 'search', 'conv-1', 'calendar');
+    await execute(pipeline, 'create', 'conv-1', 'calendar');
+    expect(mocks.approvals).toHaveLength(4);
+  });
+  it('keeps mandatory administrative prompts in automatic mode', async () => {
+    const adapter = { server: 'system', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    useConversationAccessStore.getState().setAutomatic('conv-1', true);
+    await execute(pipeline, 'delete_prompt', 'conv-1', 'system');
+    expect(mocks.approvals).toHaveLength(1);
+    expect(mocks.approvals[0]).toMatchObject({ scope: { automaticEligible: false } });
+  });
+  it('automatic mode still asks for an unknown filesystem range', async () => {
+    useConversationAccessStore.getState().setAutomatic('conv-1', true);
+    const adapter = { server: 'filesystem', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    await new ToolExecutionPipeline({ adapters: [adapter as never] }).run(new ToolInvocation({ ...realInvocation(), server: 'filesystem', tool: 'write_file', args: { path: 'C:/new-scope/file.txt', content: 'test' }, conversationId: 'conv-1', assistantMessageId: 'unknown-range', callId: 'unknown-range' }));
+    expect(mocks.approvals).toHaveLength(1);
+  });
 });
 
 describe('one-time filesystem approval', () => {
@@ -165,7 +219,7 @@ describe('directory-level filesystem approval', () => {
     }),
   );
 
-  it('stops asking entirely after "本会话不再询问" is chosen', async () => {
+  it('remembers the approved directory without granting other folders or delete', async () => {
     const exec = adapter();
     const pipeline = new ToolExecutionPipeline({ adapters: [exec as never] });
     mocks.decision = 'unrestricted';
@@ -176,7 +230,9 @@ describe('directory-level filesystem approval', () => {
     expect(mocks.addedDirectories).toEqual([]);
 
     mocks.grantCallScope.mockClear();
-    // A different folder, and a delete, run without another prompt.
+    await write(pipeline, 'run-same-folder', 'C:/outside/dir/second.txt');
+    expect(mocks.approvals).toHaveLength(1);
+    // New ranges and deletion permissions still require explicit authorization.
     await write(pipeline, 'run-b', 'D:/elsewhere/second.txt');
     await pipeline.run(new ToolInvocation({
       ...realInvocation(),
@@ -188,7 +244,7 @@ describe('directory-level filesystem approval', () => {
       callId: 'run-c',
     }));
 
-    expect(mocks.approvals).toHaveLength(1);
+    expect(mocks.approvals).toHaveLength(3);
     expect(mocks.grantCallScope).toHaveBeenCalledWith({
       runId: 'run-b', callId: 'run-b', path: 'D:/elsewhere',
       read: false, write: true, create: false, delete: false,

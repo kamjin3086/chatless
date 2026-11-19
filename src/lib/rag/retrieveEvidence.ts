@@ -51,11 +51,13 @@ export async function retrieveEvidence(params: {
   /** Kept for API compatibility; RRF deliberately does not threshold raw scores. */
   similarityThreshold?: number;
   requestId?: string;
-}): Promise<{ evidence: Evidence[]; retrievalChunks: RetrievalChunk[]; mode: 'lexical' | 'hybrid' }> {
+}): Promise<{ evidence: Evidence[]; retrievalChunks: RetrievalChunk[]; mode: 'lexical' | 'hybrid'; diagnostics: {
+  denseHits: number; lexicalHits: number; embeddingFingerprint: string | null; fallbackReason?: string;
+} }> {
   const kbIds = params.knowledgeBaseIds.filter(Boolean);
   const documentIds = params.documentIds?.filter(Boolean) || [];
   if (!kbIds.length && !documentIds.length) {
-    return { evidence: [], retrievalChunks: [], mode: 'lexical' };
+    return { evidence: [], retrievalChunks: [], mode: 'lexical', diagnostics: { denseHits: 0, lexicalHits: 0, embeddingFingerprint: null } };
   }
 
   const hasIndex = await kbHasRetrievalIndex(kbIds, documentIds);
@@ -70,18 +72,26 @@ export async function retrieveEvidence(params: {
   // 有可用模型时再并行加入 dense 检索；模型失败时保留 lexical 结果。
   let searchResults: Awaited<ReturnType<RetrievalService['searchByQuery']>> = [];
   let mode: 'lexical' | 'hybrid' = 'lexical';
+  const diagnostics: { denseHits: number; lexicalHits: number; embeddingFingerprint: string | null; fallbackReason?: string } = {
+    denseHits: 0, lexicalHits: 0, embeddingFingerprint: params.embeddingService.isUsableForRag() ? params.embeddingService.getEmbeddingFingerprint() : null,
+  };
   if (params.embeddingService.isUsableForRag()) {
     try {
       const queryEmbedding = await params.embeddingService.generateEmbedding(params.query);
-      searchResults = await params.retrievalService.searchByQuery(params.query, queryEmbedding, {
+      const combined = await params.retrievalService.searchByQueryWithDiagnostics(params.query, queryEmbedding, {
         knowledgeBaseIds: kbIds,
         documentIds,
         topK: params.topK ?? FINAL_EVIDENCE_K,
         embeddingFingerprint: params.embeddingService.getEmbeddingFingerprint() || undefined,
         requestId: params.requestId,
       });
-      mode = 'hybrid';
+      searchResults = combined.results;
+      diagnostics.denseHits = combined.denseHits;
+      diagnostics.lexicalHits = combined.lexicalHits;
+      mode = combined.denseHits ? 'hybrid' : 'lexical';
+      if (!combined.denseHits) diagnostics.fallbackReason = 'NO_MATCHING_VECTORS';
     } catch (error) {
+      diagnostics.fallbackReason = 'DENSE_UNAVAILABLE';
       console.warn('[KnowledgeRetrieval] dense retrieval unavailable; falling back to lexical:', error);
       searchResults = await new LexicalRetriever().search(params.query, {
         knowledgeBaseIds: kbIds,
@@ -90,6 +100,7 @@ export async function retrieveEvidence(params: {
       });
     }
   } else {
+    diagnostics.fallbackReason = 'EMBEDDING_UNAVAILABLE';
     searchResults = await new LexicalRetriever().search(params.query, {
       knowledgeBaseIds: kbIds,
       documentIds,
@@ -97,6 +108,7 @@ export async function retrieveEvidence(params: {
     });
   }
 
+  if (mode === 'lexical') diagnostics.lexicalHits = searchResults.length;
   const chunkIds = searchResults.map((r) => r.id);
   const retrievalChunks = await EvidenceStore.getRetrievalChunks(chunkIds);
   const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
@@ -145,5 +157,5 @@ export async function retrieveEvidence(params: {
     limit: params.topK ?? FINAL_EVIDENCE_K,
   });
 
-  return { evidence, retrievalChunks: orderedChunks, mode };
+  return { evidence, retrievalChunks: orderedChunks, mode, diagnostics };
 }

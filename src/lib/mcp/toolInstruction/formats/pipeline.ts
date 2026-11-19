@@ -25,6 +25,9 @@ import {
   GptOssHandler,
   JsonHandler,
   GptOssTagHandler,
+  BracketCallingHandler,
+  GemmaToolCallHandler,
+  DeepSeekDsmlHandler,
 } from './handlers';
 
 /**
@@ -213,6 +216,8 @@ export function resetDefaultPipeline(): void {
  * 
  * - OpenAIHandler (priority=1): 处理 OpenAI 原生 function_call/tool_calls 格式
  * - XMLHandler (priority=5): 处理 MCP 标准 XML 格式 (<use_mcp_tool>, <tool_call>)
+ * - BracketCallingHandler (priority=7), GemmaToolCallHandler (8), DeepSeekDsmlHandler (9):
+ *   现场观测到的三种文本调用格式（#156/#165）
  * - GptOssHandler (priority=6): **解析** GPT-OSS commentary to= 格式
  * - JsonHandler (priority=10): 处理 JSON 格式工具调用
  * - GptOssTagHandler (priority=15): **清理** GPT-OSS 模板标签（在解析之后）
@@ -224,6 +229,12 @@ function registerBuiltinHandlers(pipeline: ToolCallPipeline): void {
   pipeline.registerAll([
     new OpenAIHandler(),
     new XMLHandler(),
+    // The field-observed text protocols run before the bare JSON scan: their
+    // payloads carry no `server`/`tool` keys, and a more specific envelope must
+    // be able to claim the match first (#165).
+    new BracketCallingHandler(),
+    new GemmaToolCallHandler(),
+    new DeepSeekDsmlHandler(),
     new GptOssHandler(),
     new JsonHandler(),
     new GptOssTagHandler(),

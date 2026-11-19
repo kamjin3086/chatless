@@ -38,7 +38,7 @@ export function VersionedAssistantGroup({ versions, onEditMessage, onRetryMessag
   if (!current) return null;
 
   return (
-    <div className="w-full">
+    <div className="w-full" data-message-id={current.id}>
       <ChatMessage
         id={current.id}
         content={current.content}
@@ -54,6 +54,7 @@ export function VersionedAssistantGroup({ versions, onEditMessage, onRetryMessag
         documentReference={current.document_reference as any}
         contextData={current.context_data}
         knowledgeBaseReference={current.knowledge_base_reference as any}
+        citations={current.citations}
         images={current.images}
         segments={current.segments}
         viewModel={current.segments_vm}

@@ -3,7 +3,11 @@ import {
   foldMessageScopeIntoSession,
   migrateLegacyThinkingBoolean,
 } from '@/lib/chat/thinkingScope';
-import { sanitizeParameterPatch } from '@/lib/model-parameters';
+import { dropInheritedThatSessionDisabled } from '@/lib/chat/sessionParameterMerge';
+import {
+  ModelParametersService,
+  sanitizeParameterPatch,
+} from '@/lib/model-parameters';
 /**
  * The one place a send's conversation-level parameters get settled.
  *
@@ -53,4 +57,23 @@ export async function resolveConversationParameters(args: {
     ? foldMessageScopeIntoSession(migrated, messageParams)
     : migrated;
   return sanitizeParameterPatch(settled);
+}
+
+/**
+ * The merged request options for one send: the model's bag, minus what the conversation
+ * switched off, plus the conversation's own overrides. Both the send path and the session
+ * dialog's preview call this, so the preview cannot drift from what is sent.
+ */
+export function mergeSessionParameterOptions(
+  model: ModelParameters,
+  session: ModelParameterPatch | null | undefined,
+): Record<string, any> {
+  const modelOptions = ModelParametersService.convertToChatOptions(model);
+  const sessionOptions = session
+    ? ModelParametersService.convertToChatOptions(session, 'session')
+    : {};
+  return {
+    ...dropInheritedThatSessionDisabled(modelOptions, session),
+    ...sessionOptions,
+  };
 }

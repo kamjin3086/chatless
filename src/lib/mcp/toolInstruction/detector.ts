@@ -54,6 +54,12 @@ function mapFormat(format: ToolCallFormat): ToolInstructionFormat {
     'gpt_oss_channel': 'gpt_oss',
     'gpt_oss_commentary': 'gpt_oss',
     'gpt_oss_tags': 'gpt_oss_tags',
+    // The field-observed protocols have no legacy counterpart; they are text
+    // shapes the legacy vocabulary never learned, so they land in its generic
+    // bucket rather than pretending to be XML (#165).
+    'bracket_calling': 'json_tool_call',
+    'gemma_tool_call': 'json_tool_call',
+    'deepseek_dsml': 'json_tool_call',
     'json_tool_call': 'json_tool_call',
     'commentary_simple': 'commentary',
     'function_like': 'function_like',

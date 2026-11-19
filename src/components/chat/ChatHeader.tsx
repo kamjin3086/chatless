@@ -29,6 +29,8 @@ import { ThinkingLevelSwitch } from './ThinkingLevelSwitch';
 import type { Message } from '@/types/chat';
 import type { ModelParameters } from '@/types/model-params';
 
+import { ConversationApprovalControl } from './ConversationApprovalControl';
+
 interface ChatHeaderProps {
   title: string;
   tags?: string[];
@@ -179,6 +181,12 @@ export function ChatHeader({
           />
 
           <PromptPill />
+          {conversationId && (
+            <ConversationApprovalControl
+              key={conversationId}
+              conversationId={conversationId}
+            />
+          )}
 
           {/* 消息导航：长会话里跳转到指定消息。放在头部而不是悬浮在消息上，避免遮挡内容 */}
           {onNavigateToMessage && (navigationMessages?.length || 0) >= 2 && (

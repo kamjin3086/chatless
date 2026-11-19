@@ -45,6 +45,7 @@ describe('app options never become wire fields', () => {
         presencePenalty: 0.2,
         stop: ['<|im_end|>'],
         stopSequences: ['<|im_end|>'],
+        format: 'json',
         numPredict: 300,
         numCtx: 8192,
         repeatLastN: 64,
@@ -96,6 +97,7 @@ describe('app options never become wire fields', () => {
   it('names the rule the providers share', () => {
     expect(isAppOnlyOption('__requestId')).toBe(true);
     expect(isAppOnlyOption('maxTokens')).toBe(true);
+    expect(isAppOnlyOption('format')).toBe(true);
     expect(isAppOnlyOption('max_tokens')).toBe(false);
     expect(isAppOnlyOption('temperature')).toBe(false);
   });
@@ -106,7 +108,13 @@ describe('app options never become wire fields', () => {
     // two drift apart silently: a name the table can map but this rule does not know is a
     // name that would travel to the server beside its translation.
     for (const [provider, config] of Object.entries(PROVIDER_CONFIGS)) {
-      for (const genericName of Object.keys(config.fieldMapping ?? {})) {
+      for (const [genericName, wireName] of Object.entries(
+        config.fieldMapping,
+      )) {
+        // An identity mapping whose name is already a wire field (`temperature`) is not
+        // the app inventing a name. An identity mapping for an app-side name (`format`)
+        // is exactly what this rule needs to see.
+        if (genericName === wireName && !isAppOnlyOption(genericName)) continue;
         expect(
           isAppOnlyOption(genericName),
           `${provider}.fieldMapping.${genericName} is not recognised as an app-side name`,

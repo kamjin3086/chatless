@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -53,6 +53,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [currentConfig, setCurrentConfig] = useState<EmbeddingConfig | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const probeVersion = useRef(0);
 
   // 安全的模型名称处理函数：确保不会泄露任何路径信息
   const getSafeModelName = (config: EmbeddingConfig): string => {
@@ -103,12 +104,11 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         apiUrl: knowledgeConfig.embedding.apiUrl,
         timeout: knowledgeConfig.embedding.timeout,
         maxBatchSize: knowledgeConfig.embedding.maxBatchSize,
+        maxLength: knowledgeConfig.embedding.maxLength,
       };
 
-      // 如果当前配置为空，设置默认配置
-      if (!currentConfig) {
-        setCurrentConfig(embeddingConfig);
-      }
+      setCurrentConfig(embeddingConfig);
+      setTestResult(null);
 
       return embeddingConfig;
     } catch (error) {
@@ -126,6 +126,8 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
 
   // 检查服务状态
   const checkServiceStatus = async (config?: EmbeddingConfig) => {
+    const version = ++probeVersion.current;
+    let embeddingService: EmbeddingService | undefined;
     setIsLoading(true);
     setStatus(prev => ({ ...prev, error: undefined }));
 
@@ -143,7 +145,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         enableCache: false // 测试时禁用缓存
       };
 
-      const embeddingService = new EmbeddingService(serviceOptions);
+      embeddingService = new EmbeddingService(serviceOptions);
 
       // 尝试初始化服务
       await embeddingService.initialize();
@@ -157,13 +159,18 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         model: getSafeModelName(testConfig)
       };
 
+      if (version !== probeVersion.current) return;
       setStatus(newStatus);
-
-      // 清理资源
-      await embeddingService.cleanup();
+      if (embeddingService.isUsableForRag()) {
+        const fingerprint = embeddingService.getEmbeddingFingerprint();
+        void import('@/lib/rag/ragServiceInstance').then(({ reconcileEmbeddingProbe }) =>
+          reconcileEmbeddingProbe(testConfig, fingerprint)
+        ).catch((error) => console.warn('[EmbeddingServiceStatus] Runtime reconciliation failed:', error));
+      }
 
     } catch (error) {
       console.error('嵌入服务状态检查失败:', error);
+      if (version !== probeVersion.current) return;
       setStatus({
         isConnected: false,
         isInitialized: false,
@@ -171,7 +178,8 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         error: error instanceof Error ? error.message : '未知错误'
       });
     } finally {
-      setIsLoading(false);
+      await embeddingService?.cleanup().catch((error) => console.warn('[EmbeddingServiceStatus] Probe cleanup failed:', error));
+      if (version === probeVersion.current) setIsLoading(false);
     }
   };
 
@@ -182,6 +190,9 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
       return;
     }
 
+    const version = ++probeVersion.current;
+    let embeddingService: EmbeddingService | undefined;
+    setIsLoading(false);
     setIsTesting(true);
     setTestResult(null);
 
@@ -191,7 +202,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         enableCache: false
       };
 
-      const embeddingService = new EmbeddingService(serviceOptions);
+      embeddingService = new EmbeddingService(serviceOptions);
 
       const startTime = Date.now();
       await embeddingService.initialize();
@@ -201,6 +212,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
 
       const result = await embeddingService.generateEmbedding(testText);
       const endTime = Date.now();
+      if (version !== probeVersion.current) return;
 
       const inferenceSource = embeddingService.getEmbeddingSource();
 
@@ -218,11 +230,14 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         dimension: result.length,
         inferenceSource,
       }));
-
-      await embeddingService.cleanup();
+      const fingerprint = embeddingService.getEmbeddingFingerprint();
+      void import('@/lib/rag/ragServiceInstance').then(({ reconcileEmbeddingProbe }) =>
+        reconcileEmbeddingProbe(currentConfig, fingerprint)
+      ).catch((error) => console.warn('[EmbeddingServiceStatus] Runtime reconciliation failed:', error));
 
     } catch (error) {
       console.error('嵌入生成测试失败:', error);
+      if (version !== probeVersion.current) return;
       setTestResult({
         success: false,
         latency: 0,
@@ -230,86 +245,43 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         error: error instanceof Error ? error.message : '测试失败'
       });
     } finally {
+      await embeddingService?.cleanup().catch((error) => console.warn('[EmbeddingServiceStatus] Test cleanup failed:', error));
       setIsTesting(false);
     }
   };
 
-  // 切换配置
-  const handleConfigChange = async (newConfig: EmbeddingConfig) => {
-    setCurrentConfig(newConfig);
-
-    await checkServiceStatus(newConfig);
-  };
-
-  // 快速策略切换函数
-  const handleQuickConfigChange = async (strategy: 'ollama' | 'local-onnx') => {
-    let newConfig: EmbeddingConfig;
-
-    if (strategy === 'ollama') {
-      const { OllamaConfigService } = await import('@/lib/config/OllamaConfigService');
-      const ollamaUrl = await OllamaConfigService.getOllamaUrl();
-
-      newConfig = {
-        strategy: 'ollama',
-        apiUrl: ollamaUrl,
-        modelName: 'nomic-embed-text',
-        timeout: 30000,
-        maxBatchSize: 10
-      };
-    } else {
-      newConfig = {
-        strategy: 'local-onnx',
-        modelPath: 'models/all-MiniLM-L6-v2.onnx',
-        tokenizerPath: 'models/tokenizer.json',
-        timeout: 10000,
-        maxBatchSize: 32
-      };
-    }
-
-    // 保存配置到配置管理器
-    const configManager = getKnowledgeBaseConfigManager();
-    await configManager.updateConfig('embedding', newConfig);
-
-    setCurrentConfig(newConfig);
-    await checkServiceStatus(newConfig);
-  };
-
   // 刷新配置和状态
   const refreshAll = async () => {
-    await loadConfigFromManager();
-    await checkServiceStatus();
+    const config = await loadConfigFromManager();
+    await checkServiceStatus(config);
   };
 
   // 初始化时加载配置和检查状态
   useEffect(() => {
-    const initialize = async () => {
-      await loadConfigFromManager();
-      // 延迟一点再检查状态，确保配置加载完成
-      setTimeout(() => {
-        checkServiceStatus();
-      }, 100);
-    };
-
-    initialize();
+    let active = true;
+    void loadConfigFromManager().then((config) => { if (active) void checkServiceStatus(config); });
+    return () => { active = false; probeVersion.current++; };
   }, []);
 
   // 监听配置管理器的变化
   useEffect(() => {
     const configManager = getKnowledgeBaseConfigManager();
 
+    let active = true;
     const handleConfigChange = () => {
-      // 配置变化时重新加载
-      loadConfigFromManager();
+      void loadConfigFromManager().then((config) => { if (active) void checkServiceStatus(config); });
     };
 
     configManager.addListener(handleConfigChange);
 
     return () => {
+      active = false;
       configManager.removeListener(handleConfigChange);
     };
   }, []);
 
   const getStatusBadge = () => {
+    if (isLoading || isTesting) return <Badge variant="outline" className="text-muted-foreground">检查中</Badge>;
     if (status.isInitialized && status.inferenceSource === 'unavailable') {
       return <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">语义不可用（词法可用）</Badge>;
     }
@@ -428,25 +400,10 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
           嵌入服务类型
         </label>
-        {/* 使用项目标准Button组件 */}
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => handleQuickConfigChange('ollama')}
-            variant={currentConfig?.strategy === 'ollama' ? 'soft' : 'outline'}
-            size="sm"
-            className="h-8"
-          >
-            Ollama 服务
-          </Button>
-          <Button
-            onClick={() => handleQuickConfigChange('local-onnx')}
-            variant={currentConfig?.strategy === 'local-onnx' ? 'soft' : 'outline'}
-            size="sm"
-            className="h-8"
-          >
-            本地模型
-          </Button>
-        </div>
+        <p className="text-sm text-slate-700 dark:text-slate-300">
+          {currentConfig?.strategy === 'local-onnx' ? '本地模型' : currentConfig?.strategy === 'ollama' ? 'Ollama 服务' : '未配置'}
+        </p>
+        <p className="text-xs text-muted-foreground">在上方模型管理器中激活模型以切换服务类型。</p>
       </div>
 
       {/* 功能测试 */}

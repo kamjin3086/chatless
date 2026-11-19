@@ -491,6 +491,16 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                  
                  // 刷新 Ollama 模型列表
                  await checkOllamaModels();
+                 const manager = getKnowledgeBaseConfigManager();
+                 await manager.ensureLoaded();
+                 const selected = manager.getConfig().embedding;
+                 if (selected.strategy === 'ollama' && selected.modelName?.replace(/:latest$/, '') === model.id.replace(/:latest$/, '')) {
+                   const endpoint = selected.apiUrl || await OllamaConfigService.getOllamaUrl();
+                   if (endpoint.replace(/\/$/, '') === ollamaUrl.replace(/\/$/, '')) {
+                     const { refreshRAGService } = await import('@/lib/rag/ragServiceInstance');
+                     await refreshRAGService();
+                   }
+                 }
                  return; // 成功完成，退出函数
                }
             } catch (parseError) {

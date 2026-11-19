@@ -1,8 +1,9 @@
 import { KNOWLEDGE_SERVER_NAME } from '@/lib/mcp/nativeTools/knowledge';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
-import { getRAGService } from '@/lib/rag/ragServiceInstance';
+import { withRAGService } from '@/lib/rag/ragServiceInstance';
 import { retrieveEvidence } from '@/lib/rag/retrieveEvidence';
 import { registerEvidence, readEvidence } from '@/lib/rag/EvidenceRegistry';
+import { persistEvidenceSnapshots } from '@/lib/rag/evidenceSnapshots';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import type { DeliveredRange, Evidence, SourceLocator } from '@/lib/rag/evidenceTypes';
 import type { ToolAdapter } from '../ToolAdapter';
@@ -13,7 +14,8 @@ const SEARCH_SNIPPET_CHARS = 400;
 const CHUNK_PAGE_SIZE = 20;
 
 type Scope = { knowledgeBaseIds: string[]; attachmentDocumentIds: string[]; documentIds: string[] };
-type Cursor = { documentId: string; batchId: string; chunkIndex: number; offset: number };
+type Cursor = { documentId: string; batchId: string; chunkIndex: number; offset: number; evidenceId?: string };
+type DocumentRead = { text: string; delivered: DeliveredChunk[]; nextCursor?: Cursor; complete: boolean };
 type DeliveredChunk = {
   chunkId: string; chunkIndex: number; startOffset: number; endOffset: number;
   locator: Record<string, any>; sourceText: string;
@@ -70,13 +72,23 @@ function parseCursor(value: unknown): Cursor | null {
     const raw = typeof value === 'string' ? JSON.parse(value) : value;
     if (!raw || typeof raw !== 'object') return null;
     const parsed = raw as Cursor;
-    if (!parsed.documentId || !parsed.batchId) return null;
-    if (!Number.isFinite(Number(parsed.chunkIndex)) || Number(parsed.chunkIndex) < 0) return null;
+    if (typeof parsed.documentId !== 'string' || !parsed.documentId.trim() || typeof parsed.batchId !== 'string' || !parsed.batchId.trim()) return null;
+    if (!Number.isSafeInteger(parsed.chunkIndex) || parsed.chunkIndex < 0 || !Number.isSafeInteger(parsed.offset) || parsed.offset < 0) return null;
+    if (parsed.evidenceId != null && (typeof parsed.evidenceId !== 'string' || !parsed.evidenceId.trim())) return null;
     return { documentId: String(parsed.documentId), batchId: String(parsed.batchId),
-      chunkIndex: int(parsed.chunkIndex), offset: int(parsed.offset) };
+      chunkIndex: int(parsed.chunkIndex), offset: int(parsed.offset), evidenceId: parsed.evidenceId };
   } catch {
     return null;
   }
+}
+
+function sourceEnd(source: string, start: number, desiredEnd: number): number | null {
+  const insideScalar = (offset: number) => offset > 0 && offset < source.length &&
+    source.charCodeAt(offset - 1) >= 0xD800 && source.charCodeAt(offset - 1) <= 0xDBFF &&
+    source.charCodeAt(offset) >= 0xDC00 && source.charCodeAt(offset) <= 0xDFFF;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(desiredEnd) || desiredEnd < start || start < 0 || start > source.length || insideScalar(start)) return null;
+  const end = Math.min(source.length, desiredEnd);
+  return insideScalar(end) ? end - 1 : end;
 }
 
 /** The anchor a citation reopens at: the first character actually delivered. */
@@ -140,7 +152,7 @@ async function readBounded(params: {
   charLimit: number;
   endChunkIndex?: number;
   page?: number;
-}): Promise<{ text: string; delivered: DeliveredChunk[]; nextCursor?: Cursor; complete: boolean }> {
+}): Promise<DocumentRead | null> {
   const delivered: DeliveredChunk[] = [];
   const parts: string[] = [];
   let remaining = params.charLimit;
@@ -167,12 +179,15 @@ async function readBounded(params: {
         if (Number(locator.page) !== params.page && Number(locator.pageEnd) !== params.page) continue;
       }
       const source = String(row.source_text || '');
-      const slice = source.slice(scanOffset, scanOffset + Math.max(0, remaining));
+      const separator = parts.length ? 2 : 0;
+      const end = sourceEnd(source, scanOffset, scanOffset + Math.max(0, remaining - separator));
+      if (end == null) return null;
+      const slice = source.slice(scanOffset, end);
       if (slice) {
         parts.push(slice);
         delivered.push({ chunkId: String(row.id), chunkIndex, startOffset: scanOffset,
           endOffset: scanOffset + slice.length, locator: object(row.locator), sourceText: source });
-        remaining -= slice.length;
+        remaining -= slice.length + separator;
       }
       const consumedTo = scanOffset + slice.length;
       if (consumedTo < source.length) {
@@ -206,8 +221,64 @@ async function readBounded(params: {
   return { text: parts.join('\n\n'), delivered, nextCursor, complete };
 }
 
+/** Exact citation reads visit only recorded chunks and offsets. Continuations
+ * retain the original evidence ID so they cannot turn into unbounded doc reads.
+ */
+async function readExactRange(db: { select<T = any>(sql: string, params?: unknown[]): Promise<T[]> }, prior: Evidence,
+  limit: number, cursor: Cursor | null): Promise<DocumentRead | null> {
+  const range = prior.range;
+  if (!range?.chunks.length) return null;
+  const first = cursor ? range.chunks.findIndex((chunk) => chunk.chunkIndex === cursor.chunkIndex &&
+    cursor.offset >= chunk.startOffset && cursor.offset < chunk.endOffset) : 0;
+  if (first < 0) return null;
+  const delivered: DeliveredChunk[] = [];
+  const parts: string[] = [];
+  let remaining = limit;
+  let nextCursor: Cursor | undefined;
+  for (let pageStart = first; pageStart < range.chunks.length; pageStart += CHUNK_PAGE_SIZE) {
+    const page = range.chunks.slice(pageStart, pageStart + CHUNK_PAGE_SIZE);
+    const rows = await db.select<any>(`SELECT id, chunk_index, source_text, locator FROM document_chunks
+      WHERE document_id = ? AND batch_id = ? AND id IN (${page.map(() => '?').join(',')})`,
+      [range.documentId, range.batchId, ...page.map((chunk) => chunk.chunkId)]);
+    const byId = new Map(rows.map((row) => [String(row.id), row]));
+    for (let index = 0; index < page.length; index++) {
+      const chunk = page[index];
+      const row = byId.get(chunk.chunkId);
+      const source = String(row?.source_text || '');
+      if (!row || Number(row.chunk_index) !== chunk.chunkIndex || chunk.startOffset < 0 ||
+        chunk.endOffset <= chunk.startOffset || chunk.endOffset > source.length) return null;
+      const startOffset = cursor && pageStart + index === first ? cursor.offset : chunk.startOffset;
+      if (sourceEnd(source, chunk.startOffset, chunk.endOffset) !== chunk.endOffset) return null;
+      const separator = parts.length ? 2 : 0;
+      const endOffset = sourceEnd(source, startOffset, Math.min(chunk.endOffset, startOffset + Math.max(0, remaining - separator)));
+      if (endOffset == null) return null;
+      if (endOffset === startOffset) {
+        nextCursor = { documentId: range.documentId, batchId: range.batchId, chunkIndex: chunk.chunkIndex, offset: startOffset, evidenceId: prior.id };
+        return { text: parts.join('\n\n'), delivered, nextCursor, complete: false };
+      }
+      const text = source.slice(startOffset, endOffset);
+      parts.push(text);
+      delivered.push({ chunkId: chunk.chunkId, chunkIndex: chunk.chunkIndex, startOffset, endOffset,
+        locator: object(row.locator), sourceText: source });
+      remaining -= text.length + separator;
+      if (remaining <= 0 || endOffset < chunk.endOffset) {
+        const next = endOffset < chunk.endOffset ? { chunkIndex: chunk.chunkIndex, offset: endOffset }
+          : range.chunks[pageStart + index + 1] ? {
+            chunkIndex: range.chunks[pageStart + index + 1].chunkIndex,
+            offset: range.chunks[pageStart + index + 1].startOffset,
+          } : undefined;
+        if (next) nextCursor = { documentId: range.documentId, batchId: range.batchId, ...next, evidenceId: prior.id };
+        return { text: parts.join('\n\n'), delivered, nextCursor, complete: !nextCursor };
+      }
+    }
+  }
+  return { text: parts.join('\n\n'), delivered, nextCursor, complete: true };
+}
+
 export class KnowledgeAdapter implements ToolAdapter {
   readonly server = KNOWLEDGE_SERVER_NAME;
+
+  constructor(private readonly options: { persistDeliveries?: boolean } = {}) {}
 
   canHandle(invocation: ToolInvocation): boolean {
     return String(invocation.server || '').toLowerCase() === KNOWLEDGE_SERVER_NAME;
@@ -247,26 +318,32 @@ export class KnowledgeAdapter implements ToolAdapter {
     if (tool === 'search') {
       const query = String(args.query || '').trim();
       if (!query) return { ok: false, error: 'QUERY_REQUIRED', message: 'query is required' };
-      const rag = await getRAGService();
-      // Every retrieval path receives the same document scope: mounted library
-      // documents plus session attachments, narrowed by the model's selection.
-      const result = await retrieveEvidence({ query, knowledgeBaseIds: [],
+      // Hold one immutable model for query embedding and its matching dense scan.
+      const result = await withRAGService((rag) => retrieveEvidence({ query, knowledgeBaseIds: [],
         documentIds: scope.documentIds, embeddingService: rag.getEmbeddingService(),
         retrievalService: rag.getRetrievalServiceInstance(), topK: Math.min(100, Math.max(1, int(args.limit, 8))),
-        requestId: runId });
+        requestId: runId }));
       // Only the bounded snippet is delivered to the model, so only that range
       // becomes citable.
       const delivered = registerEvidence(runId, await this.buildSearchDeliveries(result.evidence));
-      return { ok: true, mode: result.mode, results: delivered.map((ev) => ({ evidenceId: ev.id,
+      if (this.options.persistDeliveries !== false) await persistEvidenceSnapshots(runId, delivered);
+      return { ok: true, mode: result.mode, diagnostics: result.diagnostics,
+        citationInstruction: 'For citations, copy the returned citationMarker exactly. Never reuse [1]-style display numbers from earlier messages.',
+        results: delivered.map((ev) => ({ evidenceId: ev.id, citationMarker: `[[${ev.id}]]`,
         document: ev.documentName, documentId: ev.documentId, page: ev.locator.page,
         section: ev.locator.sectionPath?.join(' > '), score: ev.score, snippet: ev.quote })) };
     }
 
     if (tool !== 'read') return { ok: false, error: `Unknown tool: ${tool}` };
-    const evidenceId = String(args.evidenceId || '').trim();
+    const parsedCursor = hasCursorArg(args.cursor) ? parseCursor(args.cursor) : null;
+    const evidenceId = String(args.evidenceId || parsedCursor?.evidenceId || '').trim();
+    if (parsedCursor?.evidenceId && parsedCursor.evidenceId !== evidenceId) {
+      return { ok: false, error: 'CURSOR_INVALID', message: 'The cursor belongs to a different citation. Read again.' };
+    }
     const prior = evidenceId ? readEvidence(runId, evidenceId) : undefined;
     if (evidenceId && !prior) {
-      return { ok: false, error: 'EVIDENCE_NOT_FOUND', message: 'That citation does not exist or does not belong to this run. Search again.' };
+      return { ok: false, error: parsedCursor?.evidenceId ? 'CURSOR_INVALID' : 'EVIDENCE_NOT_FOUND',
+        message: 'That citation does not exist or does not belong to this run. Search again.' };
     }
     const documentId = String(args.documentId || prior?.documentId || '').trim();
     if (!documentId || !scope.documentIds.includes(documentId)) {
@@ -276,6 +353,13 @@ export class KnowledgeAdapter implements ToolAdapter {
     const document = docs[0];
     if (!document?.active_index_batch_id) return { ok: false, error: 'INDEX_NOT_READY', message: 'The document has no keyword index yet.' };
     const batchId = String(document.active_index_batch_id);
+    // Validate citation identity before either cursor or range offsets are used.
+    // A numeric offset is meaningful only in the batch that delivered it.
+    if (prior && (prior.documentId !== documentId ||
+      (prior.range && (prior.range.documentId !== documentId || prior.range.batchId !== batchId)) ||
+      (prior.documentHash && prior.documentHash !== document.file_hash))) {
+      return { ok: false, error: 'CURSOR_INVALID', message: 'The citation belongs to another document or an older index. Search again.' };
+    }
     const pageArg = args.page == null ? undefined : Number(args.page);
 
     let startChunkIndex = 0;
@@ -284,13 +368,20 @@ export class KnowledgeAdapter implements ToolAdapter {
     let anchorChunkId: string | undefined;
 
     if (hasCursorArg(args.cursor)) {
-      const parsed = parseCursor(args.cursor);
+      const parsed = parsedCursor;
       if (!parsed) return { ok: false, error: 'CURSOR_INVALID', message: 'The read cursor is malformed. Read again.' };
       if (parsed.documentId !== documentId) {
         return { ok: false, error: 'CURSOR_INVALID', message: 'The read cursor does not belong to this document. Read again.' };
       }
       if (parsed.batchId !== batchId) {
         return { ok: false, error: 'CURSOR_INVALID', message: 'The document was re-indexed and this cursor is stale. Search again or read from the start.' };
+      }
+      const bounds = await db.select<{ chunk_index: number; source_text: string }>(
+        'SELECT chunk_index, source_text FROM document_chunks WHERE document_id = ? AND batch_id = ? AND chunk_index = ? LIMIT 1',
+        [documentId, batchId, parsed.chunkIndex]);
+      if (!bounds.length || Number(bounds[0].chunk_index) !== parsed.chunkIndex ||
+        sourceEnd(bounds[0].source_text, parsed.offset, parsed.offset) !== parsed.offset) {
+        return { ok: false, error: 'CURSOR_INVALID', message: 'The cursor is outside a valid source character boundary.' };
       }
       startChunkIndex = parsed.chunkIndex;
       startOffset = parsed.offset;
@@ -320,8 +411,13 @@ export class KnowledgeAdapter implements ToolAdapter {
       anchorChunkId = prior.retrievalChunkId;
     }
 
-    const read = await readBounded({ db, documentId, batchId, startChunkIndex, startOffset,
-      charLimit: charLimit(args.limit), endChunkIndex, page: pageArg });
+    const exact = prior && (parsedCursor?.evidenceId ||
+      (args.before != null && args.after != null && int(args.before) === 0 && int(args.after) === 0));
+    const read = exact
+      ? await readExactRange(db, prior, charLimit(args.limit), parsedCursor)
+      : await readBounded({ db, documentId, batchId, startChunkIndex, startOffset,
+          charLimit: charLimit(args.limit), endChunkIndex, page: pageArg });
+    if (!read) return { ok: false, error: 'CURSOR_INVALID', message: 'That citation no longer has a valid delivered range. Search again.' };
     if (!read.delivered.length) {
       return { ok: true, documentId, document: document.title, text: '', complete: true,
         message: pageArg != null ? `Nothing matched page ${pageArg}.` : 'There is nothing to read.' };
@@ -331,7 +427,9 @@ export class KnowledgeAdapter implements ToolAdapter {
       delivered: read.delivered, locator: locatorFor(read.delivered, startChunkIndex),
       quote: read.text, retrievalChunkId: anchorChunkId,
     });
-    return { ok: true, documentId, document: document.title, evidenceId: delivered.id, text: read.text,
+    if (this.options.persistDeliveries !== false) await persistEvidenceSnapshots(runId, [delivered]);
+    return { ok: true, documentId, document: document.title, evidenceId: delivered.id, citationMarker: `[[${delivered.id}]]`,
+      citationInstruction: `Cite this source with [[${delivered.id}]] exactly. Do not replace it with a display number such as [1] or reuse historical citation numbers.`, text: read.text,
       page: pageArg, nextCursor: read.nextCursor ? JSON.stringify(read.nextCursor) : undefined,
       complete: read.complete };
   }
@@ -345,17 +443,22 @@ export class KnowledgeAdapter implements ToolAdapter {
     const chunkIds = evidence.map((item) => item.retrievalChunkId).filter(Boolean) as string[];
     const db = DatabaseService.getInstance().getDbManager();
     const rows = chunkIds.length
-      ? await db.select<{ id: string; chunk_index: number; batch_id: string }>(
-          `SELECT id, chunk_index, batch_id FROM document_chunks WHERE id IN (${chunkIds.map(() => '?').join(',')})`,
+      ? await db.select<{ id: string; document_id: string; chunk_index: number; batch_id: string; source_text: string; file_hash: string }>(
+          `SELECT c.id, c.document_id, c.chunk_index, c.batch_id, c.source_text, d.file_hash FROM document_chunks c
+            JOIN documents d ON d.id = c.document_id AND d.active_index_batch_id = c.batch_id
+            WHERE c.id IN (${chunkIds.map(() => '?').join(',')})`,
           chunkIds)
       : [];
     const byId = new Map(rows.map((row) => [String(row.id), row]));
-    return evidence.map((item) => {
-      const quote = item.quote.slice(0, SEARCH_SNIPPET_CHARS);
+    return evidence.flatMap((item) => {
       const meta = item.retrievalChunkId ? byId.get(item.retrievalChunkId) : undefined;
-      if (!meta) return { ...item, quote };
-      return {
+      if (!meta || meta.document_id !== item.documentId) return [];
+      const end = sourceEnd(meta.source_text, 0, SEARCH_SNIPPET_CHARS);
+      if (!end) return [];
+      const quote = meta.source_text.slice(0, end);
+      return [{
         ...item,
+        documentHash: meta.file_hash,
         quote,
         range: {
           documentId: item.documentId,
@@ -363,7 +466,7 @@ export class KnowledgeAdapter implements ToolAdapter {
           chunks: [{ chunkId: String(meta.id), chunkIndex: Number(meta.chunk_index),
             startOffset: 0, endOffset: quote.length }],
         },
-      };
+      }];
     });
   }
 }

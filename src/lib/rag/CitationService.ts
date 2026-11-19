@@ -1,5 +1,6 @@
 import type { Citation, Evidence } from './evidenceTypes';
 import { EVIDENCE_TAG_RE } from './evidenceTypes';
+import { mapOutsideMarkdownCode } from './markdownEvidence';
 
 export function applyCitations(answer: string, evidence: Evidence[]): {
   displayAnswer: string;
@@ -9,9 +10,15 @@ export function applyCitations(answer: string, evidence: Evidence[]): {
   const used: Citation[] = [];
   const seen = new Set<string>();
 
-  const replaceOutsideCode = (segment: string) => segment.replace(EVIDENCE_TAG_RE, (_m, id: string) => {
+  const replaceOutsideCode = (segment: string) => segment.replace(EVIDENCE_TAG_RE, (marker, canonical: string | undefined, alias: string | undefined, offset: number) => {
+    const id = canonical || alias;
+    if (!id || (alias && ['(', '['].includes(segment.charAt(offset + marker.length)))) return marker;
+    let slashes = 0;
+    for (let index = offset - 1; index >= 0 && segment[index] === '\\'; index--) slashes++;
+    if (slashes % 2) return marker;
     const ev = byId.get(id);
     if (!ev) {
+      if (alias) return marker;
       console.warn(`[CitationService] unknown evidence id: ${id}`);
       return '';
     }
@@ -27,6 +34,9 @@ export function applyCitations(answer: string, evidence: Evidence[]): {
         documentHash: ev.documentHash,
         locator: ev.locator,
         quote: ev.quote,
+        sourceBlockIds: ev.sourceBlockIds,
+        retrievalChunkId: ev.retrievalChunkId,
+        range: ev.range,
       });
     }
     const n = used.find((c) => c.evidenceId === id)?.n ?? used.length;
@@ -34,10 +44,7 @@ export function applyCitations(answer: string, evidence: Evidence[]): {
   });
 
   // Citation markers inside code samples are code, not claims. Preserve them.
-  const displayAnswer = answer
-    .split(/(```[\s\S]*?```)/g)
-    .map((segment, index) => (index % 2 === 1 ? segment : replaceOutsideCode(segment)))
-    .join('');
+  const displayAnswer = mapOutsideMarkdownCode(answer, replaceOutsideCode);
 
   return { displayAnswer, citations: used };
 }

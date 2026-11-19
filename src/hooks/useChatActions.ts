@@ -13,8 +13,10 @@ import { exportConversationMarkdown } from '@/lib/chat/actions/download';
 // import { retryAssistantMessage } from '@/lib/chat/actions/retry';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { composeChatOptions } from '@/lib/chat/OptionComposer';
-import { dropInheritedThatSessionDisabled } from '@/lib/chat/sessionParameterMerge';
-import { resolveConversationParameters } from '@/lib/chat/sendParameterMerge';
+import {
+  mergeSessionParameterOptions,
+  resolveConversationParameters,
+} from '@/lib/chat/sendParameterMerge';
 import { usePromptStore } from '@/store/promptStore';
 import { renderPromptContent } from '@/lib/prompt/render';
 import { performanceMonitor } from '@/lib/performance/PerformanceMonitor';
@@ -491,6 +493,18 @@ export const useChatActions = (
 
       void setLastUsedModelForChat(finalConversationId, modelToUse);
 
+      const { useConversationAttachmentStore } = await import(
+        '@/store/conversationAttachmentStore'
+      );
+      // A restored mount remains active even while the composer is loading its
+      // display metadata, or when retry sends without an explicit selection.
+      // Explicit removal clears the conversation store at the UI boundary.
+      const effectiveKnowledgeBase =
+        knowledgeBase ??
+        useConversationAttachmentStore
+          .getState()
+          .getKnowledgeBase(finalConversationId);
+
       const now = Date.now();
       const userMessageId = uuidv4();
       const newMessage: Message = {
@@ -504,7 +518,7 @@ export const useChatActions = (
         model: modelToUse,
         document_reference: documentData?.documentReference,
         context_data: documentData?.contextData,
-        knowledge_base_reference: knowledgeBase,
+        knowledge_base_reference: effectiveKnowledgeBase,
         images: options?.images,
       };
       let attachmentDocumentIds: string[] | undefined;
@@ -575,15 +589,12 @@ export const useChatActions = (
 
       if (finalConversationId) {
         try {
-          const { useConversationAttachmentStore } = await import(
-            '@/store/conversationAttachmentStore'
-          );
-          if (knowledgeBase) {
+          if (effectiveKnowledgeBase) {
             useConversationAttachmentStore
               .getState()
               .setKnowledgeBase(finalConversationId, {
-                id: knowledgeBase.id,
-                name: knowledgeBase.name,
+                id: effectiveKnowledgeBase.id,
+                name: effectiveKnowledgeBase.name,
               });
           } else {
             useConversationAttachmentStore
@@ -622,9 +633,6 @@ export const useChatActions = (
             effectiveProvider,
             modelToUse,
           );
-          const modelOpts =
-            ModelParametersService.convertToChatOptions(modelParams);
-
           // 2) 会话级参数：先落定"仅本条消息"的一次性选择与旧布尔迁移，再转换为聊天选项。
           //    发送与重新生成走同一个解析，两条路径的参数必须一致。
           const resolvedSession = await resolveConversationParameters({
@@ -633,19 +641,12 @@ export const useChatActions = (
             modelId: modelToUse,
             sessionParams: sessionParameters,
           });
-          let sessionOpts: Record<string, any> = {};
-          if (resolvedSession) {
-            sessionOpts =
-              ModelParametersService.convertToChatOptions(resolvedSession);
-          }
 
-          // 3) A conversation may explicitly switch off something the model default set;
-          //    the shared table in sessionParameterMerge decides what that removes.
-          const filteredModelOpts: Record<string, any> =
-            dropInheritedThatSessionDisabled(modelOpts, resolvedSession);
-
-          // 4) 合并，确保会话级覆盖模型级
-          baseOptions = { ...filteredModelOpts, ...sessionOpts };
+          // 3) 合并，确保会话级覆盖模型级；会话显式关闭的项由共享表移除。
+          baseOptions = mergeSessionParameterOptions(
+            modelParams,
+            resolvedSession,
+          );
           // 输出预算：关闭 / 手动 / 自动三态在这里收敛，窗口取用户填写与服务商上报的较小值。
           baseOptions = ModelParametersService.applyOutputBudget(
             baseOptions,
@@ -1131,8 +1132,6 @@ export const useChatActions = (
           effectiveProvider,
           modelToUse,
         );
-        const modelOpts =
-          ModelParametersService.convertToChatOptions(modelParams);
         // Same resolution as a normal send, and the same shared table for what a
         // conversation's "switch this off" removes. This path used to carry a shorter list
         // of its own that never learned about thinking, so a conversation could turn
@@ -1145,18 +1144,11 @@ export const useChatActions = (
           // Revising an older answer is not the message a one-shot choice was made for.
           applyMessageScope: false,
         });
-        let sessionOpts: Record<string, any> = {};
-        if (resolvedSession) {
-          sessionOpts =
-            ModelParametersService.convertToChatOptions(resolvedSession);
-        }
-        const filteredModelOpts: Record<string, any> =
-          dropInheritedThatSessionDisabled(modelOpts, resolvedSession);
         const composed = await composeChatOptions(
           effectiveProvider,
           modelToUse,
           ModelParametersService.applyOutputBudget(
-            { ...filteredModelOpts, ...sessionOpts },
+            mergeSessionParameterOptions(modelParams, resolvedSession),
             ModelParametersService.resolveBudgetParameters(
               modelParams,
               resolvedSession,

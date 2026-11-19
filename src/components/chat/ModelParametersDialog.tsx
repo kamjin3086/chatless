@@ -30,7 +30,7 @@ import {
   MODEL_PARAMETER_LIMITS,
 } from '@/types/model-params';
 import {
-  getProviderFieldSupport,
+  resolveProviderConfig,
   type ProviderFieldSupport,
 } from '@/lib/llm/provider-field-support';
 import {
@@ -113,7 +113,9 @@ function ParamSliderRow({
   inputMin: number;
   inputMax: number;
 }) {
-  const on = enabled !== false;
+  // Only an explicit switch is on. A stored bag with no switch is "not chosen", and
+  // showing it as on made the dialog look like it would send a default it would not.
+  const on = onEnabledChange ? enabled === true : true;
   return (
     <div className="flex items-center gap-2.5 min-w-0">
       {onEnabledChange ? (
@@ -316,13 +318,13 @@ export function ModelParametersDialog({
 
   // Provider字段支持信息
   const [providerSupport, setProviderSupport] = useState<ProviderFieldSupport>(
-    () => getProviderFieldSupport(providerName),
+    () => resolveProviderConfig(providerName).config.support,
   );
 
   // 更新Provider字段支持信息
   useEffect(() => {
     if (providerName) {
-      setProviderSupport(getProviderFieldSupport(providerName));
+      setProviderSupport(resolveProviderConfig(providerName).config.support);
     }
   }, [providerName]);
 
@@ -526,6 +528,7 @@ export function ModelParametersDialog({
       !stopSequences.includes(newStopSequence.trim())
     ) {
       setStopSequences([...stopSequences, newStopSequence.trim()]);
+      setParameters((prev) => ({ ...prev, enableStopSequences: true }));
       setNewStopSequence('');
     }
   };
@@ -615,80 +618,23 @@ export function ModelParametersDialog({
     setCustomParameters((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // 生成预览JSON
+  // 生成预览JSON。Use the same assembly the send path uses, so an unset switch cannot
+  // look enabled here, and a field cannot be previewed but never sent.
   const generatePreviewJson = () => {
-    const result: any = {};
-
-    // 标准参数
-    if (parameters.enableTemperature && parameters.temperature !== undefined) {
-      result.temperature = parameters.temperature;
-    }
-    if (parameters.enableMaxTokens && parameters.maxTokens !== undefined) {
-      result.maxTokens = parameters.maxTokens;
-    }
-    if (parameters.enableTopP && parameters.topP !== undefined) {
-      result.topP = parameters.topP;
-    }
-    if (parameters.enableTopK && parameters.topK !== undefined) {
-      result.topK = parameters.topK;
-    }
-    if (parameters.enableMinP && parameters.minP !== undefined) {
-      result.minP = parameters.minP;
-    }
-    if (
-      parameters.enableFrequencyPenalty &&
-      parameters.frequencyPenalty !== undefined
-    ) {
-      result.frequencyPenalty = parameters.frequencyPenalty;
-    }
-    if (
-      parameters.enablePresencePenalty &&
-      parameters.presencePenalty !== undefined
-    ) {
-      result.presencePenalty = parameters.presencePenalty;
-    }
-    if (stopSequences.length > 0) {
-      result.stopSequences = stopSequences;
-    }
-
-    // 思考和流式响应参数
-    if (
-      (parameters as any).enableThinking &&
-      (parameters as any).thinking !== undefined
-    ) {
-      result.thinking = (parameters as any).thinking;
-    }
-    if (
-      parameters.enableThinkingLevel &&
-      parameters.thinkingLevel &&
-      parameters.thinkingLevel !== 'auto'
-    ) {
-      result.thinkingLevel = parameters.thinkingLevel;
-    }
-    if (
-      (parameters as any).enableStreaming &&
-      (parameters as any).streaming !== undefined
-    ) {
-      result.streaming = (parameters as any).streaming;
-    }
-
-    // Format参数
-    if (
-      (parameters as any).enableFormat &&
-      (parameters as any).format &&
-      (parameters as any).format !== 'none'
-    ) {
-      result.format = (parameters as any).format;
-    }
-
-    // 自定义参数
+    const custom: Record<string, any> = {};
     customParameters.forEach((param) => {
       if (param.key.trim()) {
-        result[param.key] = convertValue(param.value, param.asString);
+        custom[param.key] = convertValue(param.value, param.asString);
       }
     });
-
-    return result;
+    return ModelParametersService.convertToChatOptions({
+      ...parameters,
+      stopSequences,
+      advancedOptions: {
+        ...((parameters as any).advancedOptions || {}),
+        ...custom,
+      },
+    });
   };
 
   const previewJson = generatePreviewJson();
@@ -739,7 +685,7 @@ export function ModelParametersDialog({
         <TooltipProvider delayDuration={200}>
           <div className="px-5 py-3 space-y-2.5 max-h-[60vh] overflow-y-auto">
             <ParamSliderRow
-              enabled={parameters.enableTemperature !== false}
+              enabled={parameters.enableTemperature === true}
               onEnabledChange={(v) =>
                 setParameters((prev) => ({ ...prev, enableTemperature: v }))
               }
@@ -756,7 +702,7 @@ export function ModelParametersDialog({
               inputMax={MODEL_PARAMETER_LIMITS.temperature.inputMax}
             />
             <ParamSliderRow
-              enabled={parameters.enableMaxTokens !== false}
+              enabled={parameters.enableMaxTokens === true}
               onEnabledChange={(v) =>
                 setParameters((prev) => ({ ...prev, enableMaxTokens: v }))
               }
@@ -800,7 +746,7 @@ export function ModelParametersDialog({
                 </div>
               )}
             <ParamSliderRow
-              enabled={parameters.enableTopP !== false}
+              enabled={parameters.enableTopP === true}
               onEnabledChange={(v) =>
                 setParameters((prev) => ({ ...prev, enableTopP: v }))
               }
@@ -816,7 +762,7 @@ export function ModelParametersDialog({
             />
             {providerSupport.topK && (
               <ParamSliderRow
-                enabled={(parameters as any).enableTopK !== false}
+                enabled={(parameters as any).enableTopK === true}
                 onEnabledChange={(v) =>
                   setParameters((prev) => ({ ...prev, enableTopK: v }) as any)
                 }
@@ -837,7 +783,7 @@ export function ModelParametersDialog({
             )}
             {providerSupport.minP && (
               <ParamSliderRow
-                enabled={(parameters as any).enableMinP !== false}
+                enabled={(parameters as any).enableMinP === true}
                 onEnabledChange={(v) =>
                   setParameters((prev) => ({ ...prev, enableMinP: v }) as any)
                 }
@@ -855,7 +801,7 @@ export function ModelParametersDialog({
               />
             )}
             <ParamSliderRow
-              enabled={parameters.enableFrequencyPenalty !== false}
+              enabled={parameters.enableFrequencyPenalty === true}
               onEnabledChange={(v) =>
                 setParameters((prev) => ({
                   ...prev,
@@ -875,7 +821,7 @@ export function ModelParametersDialog({
               inputMax={MODEL_PARAMETER_LIMITS.frequencyPenalty.inputMax}
             />
             <ParamSliderRow
-              enabled={parameters.enablePresencePenalty !== false}
+              enabled={parameters.enablePresencePenalty === true}
               onEnabledChange={(v) =>
                 setParameters((prev) => ({ ...prev, enablePresencePenalty: v }))
               }
@@ -961,7 +907,7 @@ export function ModelParametersDialog({
             {providerSupport.format && (
               <div className="flex items-center gap-2.5 min-w-0">
                 <Checkbox
-                  checked={(parameters as any).enableFormat !== false}
+                  checked={(parameters as any).enableFormat === true}
                   onCheckedChange={(checked) =>
                     setParameters(
                       (prev) =>
@@ -990,7 +936,7 @@ export function ModelParametersDialog({
                         }) as any,
                     )
                   }
-                  disabled={(parameters as any).enableFormat === false}
+                  disabled={(parameters as any).enableFormat !== true}
                   className="h-7 px-2 text-xs rounded-md border border-slate-200/70 dark:border-slate-600/50 bg-transparent text-slate-700 dark:text-slate-200 disabled:opacity-40"
                 >
                   <option value="none">无限制</option>
@@ -1001,7 +947,7 @@ export function ModelParametersDialog({
 
             <div className="flex items-center gap-2.5 min-w-0">
               <Checkbox
-                checked={parameters.enableStopSequences !== false}
+                checked={parameters.enableStopSequences === true}
                 onCheckedChange={(checked) =>
                   setParameters((prev) => ({
                     ...prev,
@@ -1021,7 +967,7 @@ export function ModelParametersDialog({
                 onKeyPress={handleKeyPress}
                 placeholder="输入停止序列…"
                 className="flex-1 h-7 min-w-0 text-xs"
-                disabled={parameters.enableStopSequences === false}
+                disabled={parameters.enableStopSequences !== true}
               />
               <Button
                 type="button"
@@ -1029,7 +975,7 @@ export function ModelParametersDialog({
                 size="sm"
                 onClick={addStopSequence}
                 disabled={
-                  parameters.enableStopSequences === false ||
+                  parameters.enableStopSequences !== true ||
                   !newStopSequence.trim()
                 }
                 className="h-7 w-7 p-0 shrink-0"

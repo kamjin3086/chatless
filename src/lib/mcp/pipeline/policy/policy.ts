@@ -96,6 +96,14 @@ export function planShellPromotion(params: { answer: ApprovalDecision }): Promot
  * 非文件系统作用域要不要问。shell 另有例外：读取自己起进程的输出、列出它们、
  * 停掉它们都不算新的副作用。
  */
+export function allowsTemporaryServerApproval(server: string, tool: string): boolean {
+  const name = normalizeServerName(server);
+  const operation = tool.trim().toLowerCase();
+  // Administrative mutations have an explicit per-call gate, not a preference.
+  return !['skills_fs', 'skills', 'skill', 'system', 'user_fs'].includes(name)
+    && operation !== 'apply_patch';
+}
+
 export function decideServerCall(params: {
   server: string;
   tool: string;

@@ -118,6 +118,18 @@ if (process.argv[1] && process.argv[1].endsWith('wt-remove.mjs')) {
     process.exit(1);
   }
 
+  const entries = execFileSync('git', ['worktree', 'list', '--porcelain', '-z'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  }).split('\0').filter((field) => field.startsWith('worktree '));
+  // The first entry is the main checkout. Reject aliases and worktree paths
+  // replaced with a symlink before looking at anything inside them.
+  if (!entries.slice(1).some((entry) => path.resolve(entry.slice(9)) === plan.absPath)
+    || fs.realpathSync(plan.absPath) !== plan.absPath) {
+    console.error(`wt-remove: not a linked worktree of this repository: ${plan.absPath}`);
+    process.exit(1);
+  }
+
   const link = linkedNodeModules(plan.absPath);
   const gitArgs = cli.force ? [...plan.gitArgs, '--force'] : plan.gitArgs;
 

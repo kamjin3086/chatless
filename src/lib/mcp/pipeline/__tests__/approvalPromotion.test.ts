@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
-import { clearConversationAccess, getConversationAccess } from '@/lib/mcp/accessPolicy';
+import { getConversationDirectoryGrant, hasConversationToolGrant, useConversationAccessStore } from '@/store/conversationAccessStore';
 
 /** A real invocation always carries these; they are not what the tests below are about. */
 const realInvocation = () => ({
@@ -19,7 +19,7 @@ const realInvocation = () => ({
  */
 const mocks = vi.hoisted(() => ({
   setAllowlist: vi.fn(async () => ({ ok: true })),
-  grantCallScope: vi.fn(async () => ({ ok: true, path: '' })),
+  grantCallScope: vi.fn(async ({ path }: { path: string }) => ({ ok: true, path })),
   revokeCallScope: vi.fn(async () => ({ ok: true })),
   ensureAllowlistedDirectory: vi.fn(async () => {}),
   setServerAutoAuthorize: vi.fn(async () => {}),
@@ -103,8 +103,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.approvals.length = 0;
   mocks.decision = 'once';
-  clearConversationAccess('fs', CONVERSATION);
-  clearConversationAccess('shell', CONVERSATION);
+  useConversationAccessStore.setState({ conversations: {}, revisions: {} });
 });
 
 describe('fs promotion: what each answer changes', () => {
@@ -114,7 +113,7 @@ describe('fs promotion: what each answer changes', () => {
     expect(mocks.grantCallScope).toHaveBeenCalledOnce();
     expect(mocks.revokeCallScope).toHaveBeenCalledOnce();
     expect(mocks.ensureAllowlistedDirectory).not.toHaveBeenCalled();
-    expect(getConversationAccess('fs', CONVERSATION)).toBeUndefined();
+    expect(useConversationAccessStore.getState().conversations[CONVERSATION]).toBeUndefined();
     expect(mocks.setServerAutoAuthorize).not.toHaveBeenCalled();
   });
 
@@ -125,7 +124,7 @@ describe('fs promotion: what each answer changes', () => {
     expect(mocks.ensureAllowlistedDirectory).toHaveBeenCalledWith(expect.objectContaining({
       path: 'C:/outside/dir', source: 'manual',
     }));
-    expect(getConversationAccess('fs', CONVERSATION)).toBeUndefined();
+    expect(useConversationAccessStore.getState().conversations[CONVERSATION]).toBeUndefined();
   });
 
   it('always on a delete still does not remember the directory', async () => {
@@ -136,16 +135,16 @@ describe('fs promotion: what each answer changes', () => {
     expect(mocks.ensureAllowlistedDirectory).not.toHaveBeenCalled();
   });
 
-  it('unrestricted silences the rest of the conversation and still grants the call', async () => {
+  it('unrestricted remembers only the approved canonical directory and grants the call', async () => {
     mocks.decision = 'unrestricted';
     await pipelineThatExecutes().run(fsCall('write_file', 'C:/outside/dir/file.txt', 'p-unr'));
 
-    expect(getConversationAccess('fs', CONVERSATION)).toBe('unrestricted');
+    expect(getConversationDirectoryGrant(CONVERSATION, 'C:/outside/dir/file.txt', 'write')?.path).toBe('C:/outside/dir');
     expect(mocks.ensureAllowlistedDirectory).not.toHaveBeenCalled();
     expect(mocks.grantCallScope).toHaveBeenCalledOnce();
   });
 
-  it('stops asking after unrestricted, and never persisted anything to do with shell', async () => {
+  it('still asks about a different directory after temporary approval', async () => {
     mocks.decision = 'unrestricted';
     const pipeline = pipelineThatExecutes();
     await pipeline.run(fsCall('write_file', 'C:/outside/a/f.txt', 'p-first'));
@@ -153,7 +152,18 @@ describe('fs promotion: what each answer changes', () => {
 
     await pipeline.run(fsCall('write_file', 'C:/outside/b/f.txt', 'p-second'));
 
-    expect(mocks.approvals.length).toBe(0);
+    expect(mocks.approvals.length).toBe(1);
+  });
+
+  it('does not reuse an approved root that now resolves to a different location', async () => {
+    mocks.decision = 'unrestricted';
+    const pipeline = pipelineThatExecutes();
+    await pipeline.run(fsCall('write_file', 'C:/outside/a/file.txt', 'p-anchor'));
+    mocks.grantCallScope.mockResolvedValueOnce({ ok: true, path: 'D:/different-root' });
+    await expect(pipeline.run(fsCall('write_file', 'C:/outside/a/next.txt', 'p-rebound'))).resolves.toMatchObject({
+      ok: false, error: { code: 'SESSION_SCOPE_CHANGED' },
+    });
+    expect(mocks.revokeCallScope).toHaveBeenCalledWith({ runId: 'run-p-rebound', callId: 'p-rebound' });
   });
 });
 
@@ -163,7 +173,7 @@ describe('shell promotion: the same word means something else', () => {
 
     expect(mocks.approvals.length).toBe(1);
     expect(mocks.setServerAutoAuthorize).not.toHaveBeenCalled();
-    expect(getConversationAccess('shell', CONVERSATION)).toBeUndefined();
+    expect(hasConversationToolGrant(CONVERSATION, 'shell', 'run')).toBe(false);
   });
 
   it('always turns shell prompts off globally, not just for this conversation', async () => {
@@ -171,14 +181,14 @@ describe('shell promotion: the same word means something else', () => {
     await pipelineThatExecutes().run(shellCall('s-always'));
 
     expect(mocks.setServerAutoAuthorize).toHaveBeenCalledWith('shell', true);
-    expect(getConversationAccess('shell', CONVERSATION)).toBeUndefined();
+    expect(hasConversationToolGrant(CONVERSATION, 'shell', 'run')).toBe(false);
   });
 
   it('unrestricted is scoped to the conversation and touches no persisted switch', async () => {
     mocks.decision = 'unrestricted';
     await pipelineThatExecutes().run(shellCall('s-unr'));
 
-    expect(getConversationAccess('shell', CONVERSATION)).toBe('unrestricted');
+    expect(hasConversationToolGrant(CONVERSATION, 'shell', 'run')).toBe(true);
     expect(mocks.setServerAutoAuthorize).not.toHaveBeenCalled();
   });
 

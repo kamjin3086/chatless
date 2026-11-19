@@ -36,6 +36,7 @@ describe('fs__edit adapter', () => {
 
     expect(mocks.editFile).toHaveBeenCalledWith({
       path: 'D:/site/a.ts', find: 'old', replace: 'new', all: false, expectedHash: undefined,
+      runId: 'run-1', callId: 'call-1',
     });
     expect(result).toMatchObject({ ok: true, replacements: 1 });
   });
@@ -61,6 +62,7 @@ describe('fs__edit adapter', () => {
 
     expect(mocks.editFile).toHaveBeenCalledWith({
       path: 'D:/site/a.ts', find: 'a', replace: 'b', all: false, expectedHash: 'abc',
+      runId: 'run-1', callId: 'call-1',
     });
     expect(result.error.code).toBe('FILE_CHANGED');
     expect(String(result.error.message)).toContain('changed after it was read');
@@ -109,6 +111,7 @@ describe('fs__search adapter', () => {
 
     expect(mocks.searchFiles).toHaveBeenCalledWith({
       root: 'D:/site', query: 'port\\s+\\d+', glob: '*.ts', limit: 20, regex: true, mode: 'both',
+      runId: 'run-1', callId: 'call-1',
     });
     expect(result.matches).toHaveLength(1);
   });
@@ -136,6 +139,7 @@ describe('fs__search adapter', () => {
     await new FilesystemAdapter().execute(invocation('search', { root: 'D:/site', query: 'checkout', mode: 'filename' }));
     expect(mocks.searchFiles).toHaveBeenCalledWith({
       root: 'D:/site', query: 'checkout', glob: undefined, limit: undefined, regex: false, mode: 'filename',
+      runId: 'run-1', callId: 'call-1',
     });
   });
 });

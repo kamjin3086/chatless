@@ -34,6 +34,21 @@ describe('Gemini request body carries the choice', () => {
     ).toEqual({ thinkingBudget: 1024 });
   });
 
+  it('lets the canonical maxTokens beat its alias, and the nested config beat both', () => {
+    // Both flat names are aliases for maxOutputTokens; the row's canonical field wins.
+    expect(
+      bodyFor('gemini-2.5-flash', { maxTokens: 999, maxOutputTokens: 300 })
+        .maxOutputTokens,
+    ).toBe(999);
+    // An explicit nested value is a hand-written request, so it wins over flat options.
+    expect(
+      bodyFor('gemini-2.5-flash', {
+        maxTokens: 999,
+        generationConfig: { maxOutputTokens: 300 },
+      }).maxOutputTokens,
+    ).toBe(300);
+  });
+
   it('leaves thinking alone entirely when no level was chosen', () => {
     expect(
       bodyFor('gemini-2.5-flash', { temperature: 0.5 }).thinkingConfig,

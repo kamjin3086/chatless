@@ -19,6 +19,7 @@ import {
   toAnthropicToolChoice,
 } from '../types/tool-schema';
 import { toWireOptions } from '../wireOptions';
+import { PROVIDER_CONFIGS, mapProviderFields } from '../provider-field-support';
 
 /**
  * Anthropic Claude Provider (v1 REST API)
@@ -44,12 +45,16 @@ export function buildAnthropicRequestOptions(
     toolChoice: _toolChoice,
     ...restOpts
   } = o;
-  const mapped: any = toWireOptions(restOpts);
-  if (o.maxTokens !== undefined && mapped.max_tokens === undefined)
-    mapped.max_tokens = o.maxTokens;
-  if (o.maxOutputTokens !== undefined && mapped.max_tokens === undefined)
-    mapped.max_tokens = o.maxOutputTokens;
+  // The row owns the names; native fields keep precedence. toWireOptions has already
+  // removed app-side names and kept a thinking object, which this API reads.
+  const mapped: any = mapProviderFields(
+    PROVIDER_CONFIGS.anthropic,
+    o,
+    toWireOptions(restOpts),
+  );
   // Anthropic 的 max_tokens 是必填字段：自动模式下我们没有下发值，这里必须补一个。
+  // This literal is the protocol's field name; the row must keep maxTokens -> max_tokens.
+  // The drift test's exact key set fails if a row rename leaves this fallback behind.
   // 窗口已知时取窗口的 1/8（夹在 1024 与 8192 之间），否则用手动滑块的默认值。
   if (mapped.max_tokens === undefined) {
     const window = Number((o as any).contextWindowTokens);
@@ -61,11 +66,6 @@ export function buildAnthropicRequestOptions(
           )
         : DEFAULT_MAX_OUTPUT_TOKENS;
   }
-  if (o.stop !== undefined && mapped.stop_sequences === undefined)
-    mapped.stop_sequences = o.stop;
-  if (o.topP !== undefined && mapped.top_p === undefined) mapped.top_p = o.topP;
-  if (o.topK !== undefined && mapped.top_k === undefined) mapped.top_k = o.topK;
-  if (o.minP !== undefined && mapped.min_p === undefined) mapped.min_p = o.minP;
   // The older "does it think" switch is a boolean on Ollama-shaped providers. This API
   // has never accepted `thinking: true` - a thinking configuration is an object with a
   // `type` - so a bare boolean here would have been a 400 on every request that carried

@@ -124,8 +124,34 @@ describe('native provider stream contracts', () => {
       expect(onEvent).toHaveBeenCalledTimes(reason === 'tool_calls' ? 1 : 0);
       expect(onComplete).toHaveBeenCalledTimes(reason === 'tool_calls' ? 1 : 0);
       expect(onError).toHaveBeenCalledTimes(reason === 'length' ? 1 : 0);
+      if (reason === 'length') {
+        // #151: the settings probe has to tell "the endpoint answered and stopped
+        // early" apart from "the request failed", so truncation is a typed error.
+        expect((onError.mock.calls[0][0] as any).code).toBe(
+          'INCOMPLETE_RESPONSE',
+        );
+        expect((onError.mock.calls[0][0] as any).finishReason).toBe('length');
+      }
     },
   );
+
+  it('reports DeepSeek truncation as the same typed incomplete response', async () => {
+    mock.connect.mockImplementation(async (_config, cb) => {
+      cb.onData(delta({ content: 'part' }));
+      cb.onData(delta({}, 'length'));
+    });
+    const provider = new DeepSeekProvider('https://example.test', 'fixture');
+    vi.spyOn(provider as any, 'getApiKey').mockResolvedValue('fixture');
+    const onEvent = vi.fn(),
+      onError = vi.fn();
+
+    await provider.chatStream('test', [], { onEvent, onError } as any);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    const error = onError.mock.calls[0][0] as any;
+    expect(error.code).toBe('INCOMPLETE_RESPONSE');
+    expect(error.finishReason).toBe('length');
+  });
 
   it('reports the HTTP error body instead of re-sending the request on another transport', async () => {
     // Regression: a non-OK response used to trigger a full second request over

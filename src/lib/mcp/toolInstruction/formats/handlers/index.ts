@@ -18,6 +18,11 @@ export { OpenAIHandler } from './openai';
 export { XMLHandler } from './xml';
 export { JsonHandler } from './json';
 export { GptOssTagHandler } from './gptoss-tags';
+export {
+  BracketCallingHandler,
+  DeepSeekDsmlHandler,
+  GemmaToolCallHandler,
+} from './field';
 
 // 已弃用，保留向后兼容
 export { GptOssHandler } from './gptoss';

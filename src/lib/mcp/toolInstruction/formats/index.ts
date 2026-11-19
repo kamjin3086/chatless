@@ -59,6 +59,10 @@ export {
   XMLHandler,
   JsonHandler,
   GptOssTagHandler,
+  // Field-observed text protocols (#165)
+  BracketCallingHandler,
+  GemmaToolCallHandler,
+  DeepSeekDsmlHandler,
   // 已弃用，保留向后兼容
   GptOssHandler,
   SimpleHandler,
