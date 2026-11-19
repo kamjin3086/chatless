@@ -55,6 +55,7 @@ export type CallScopedGrant = {
   onGranted?: (canonicalPath: string) => void;
 };
 
+
 /**
  * Registers the grants for one executing call: the session working directory and
  * any single approval the user just gave. They live in backend memory only, are
@@ -65,7 +66,10 @@ export async function grantCallScopedPaths(
   scope: { runId: string; callId?: string },
 ): Promise<() => Promise<void>> {
   if (!grants.length) return async () => {};
-  const results = await Promise.allSettled(grants.map((grant) => grantCallScope({
+  const revokeScope = async (): Promise<void> => {
+    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
+  };
+  const registrations = grants.map((grant) => grantCallScope({
     runId: scope.runId,
     callId: scope.callId,
     path: grant.path,
@@ -73,21 +77,23 @@ export async function grantCallScopedPaths(
     write: !!grant.permissions.write,
     create: !!grant.permissions.create,
     delete: !!grant.permissions.delete,
-  })));
-  const failed = results.some((result, index) => {
-    if (result.status === 'rejected' || !result.value.ok) return true;
-    const expected = grants[index].expectedCanonicalPath;
-    return expected !== undefined && expected !== result.value.path;
-  });
-  if (failed) {
-    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
-    throw new Error('Backend filesystem scope authorization failed');
+  }));
+  // Wait for late registrations before revoking any partially installed scope.
+  const results = await Promise.allSettled(registrations);
+  try {
+    const failed = results.some((result, index) => {
+      if (result.status === 'rejected' || !result.value.ok) return true;
+      const expected = grants[index].expectedCanonicalPath;
+      return expected !== undefined && expected !== result.value.path;
+    });
+    if (failed) throw new Error('Backend filesystem scope authorization failed');
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') grants[index].onGranted?.(result.value.path);
+    });
+    return revokeScope;
+  } catch (error) {
+    await revokeScope();
+    throw error;
   }
-  results.forEach((result, index) => {
-    if (result.status === 'fulfilled') grants[index].onGranted?.(result.value.path);
-  });
-  return async () => {
-    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
-  };
 }
 

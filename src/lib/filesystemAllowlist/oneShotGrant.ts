@@ -8,7 +8,7 @@
 
 export async function withOneShotGrant<T>(
   params: { path: string; scope: string; read?: boolean; write?: boolean },
-  work: () => Promise<T>,
+  work: (scope: { runId: string; callId: string }) => Promise<T>,
 ): Promise<T> {
   const path = String(params.path || '').trim();
   if (!path) throw new Error('path is required');
@@ -28,7 +28,9 @@ export async function withOneShotGrant<T>(
       write: !!params.write,
     });
     granted = true;
-    return await work();
+    // The command must present the same owner identity; a grant alone is not a
+    // capability the backend accepts from an unidentified caller.
+    return await work({ runId, callId });
   } finally {
     if (granted) {
       try {
