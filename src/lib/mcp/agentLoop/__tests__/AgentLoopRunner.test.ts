@@ -192,6 +192,23 @@ describe('AgentLoopRunner execution boundaries', () => {
     expect(outputs[1].output.error.code).toBe('NOT_DISPATCHED');
   });
 
+  it('records an MCP isError result as a failed tool output', async () => {
+    mocks.execute.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'remote tool failed' }],
+      isError: true,
+      resultStatus: 'failed',
+      errorDetails: { code: 'TOOL_FAILED', message: 'remote tool failed' },
+    });
+    mocks.stream.mockImplementationOnce(async (_p, _m, _history, cb) => { tool(cb, 'a'); finish(cb); });
+
+    await AgentLoopRunner.run(params);
+
+    const output = mocks.append.mock.calls
+      .map(([payload]) => payload.event)
+      .find((event) => event.type === 'tool_call_output');
+    expect(output.isError).toBe(true);
+  });
+
   it('does not complete successfully when source-citation persistence fails', async () => {
     const message: ChatMessage = { id: 'run', conversation_id: 'conversation', role: 'assistant', content: 'Answer [[E1]].', status: 'sent', created_at: 1, updated_at: 1 };
     mocks.store.conversations = [{ id: 'conversation', title: 'Test', created_at: 1, updated_at: 1, messages: [message], model_id: 'model', is_favorite: false }];
