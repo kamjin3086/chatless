@@ -115,7 +115,7 @@ export class DocumentIndexer {
       const { mergeSourceBlocksToChunks } = await import('../chunking/strategies/StructuredBlockMerger');
       const { PARSER_VERSION, CHUNK_SCHEMA_VERSION } = await import('../rag/constants');
       const chunkMaxTokens = 800;
-      const retrievalChunks = mergeSourceBlocksToChunks(
+      let retrievalChunks = mergeSourceBlocksToChunks(
         parsed,
         documentId,
         chunkMaxTokens
@@ -125,6 +125,17 @@ export class DocumentIndexer {
             }
           : undefined,
       );
+      const { configuredEmbeddingBudget, fitChunksToEmbeddingBudget } = await import('./embeddingBudget');
+      const budget = options.embeddingBudget ?? await configuredEmbeddingBudget().catch(() => null);
+      if (budget) {
+        // Lexical availability is independent of a missing/broken tokenizer.
+        // Semantic workers report input failures separately and can reindex later.
+        try { retrievalChunks = await fitChunksToEmbeddingBudget(retrievalChunks, budget); }
+        catch (error) {
+          if (options.embeddingBudget) throw error;
+          console.warn('[DocumentIndexer] Model input adaptation unavailable; publishing lexical baseline:', error);
+        }
+      }
       if (retrievalChunks.length === 0) {
         throw new IndexingError('结构化分块结果为空', task.id, documentId);
       }
@@ -152,25 +163,18 @@ export class DocumentIndexer {
           chunks: retrievalChunks,
           taskId: task.id,
           expectedDocumentVersion,
+          metadata: { fileHash: parsed.metadata.fileHash, parserVersion: PARSER_VERSION, chunkSchemaVersion: CHUNK_SCHEMA_VERSION,
+            semanticParentTaskId: options.semanticParentTaskId },
         });
       }
 
       try {
-        const dbService = (await import('../database/services/DatabaseService')).DatabaseService.getInstance();
-        await dbService.getDbManager().execute(
-          `UPDATE documents SET is_indexed = 1, file_hash = ?, parser_version = ?, chunk_schema_version = ?, updated_at = ? WHERE id = ?`,
-          [
-            parsed.metadata.fileHash,
-            PARSER_VERSION,
-            CHUNK_SCHEMA_VERSION,
-            Date.now(),
-            documentId,
-          ]
-        );
+        // The publication transaction already persisted the semantic job. This
+        // call only ensures legacy jobs exist and wakes the worker.
         const { semanticIndexQueue } = await import('./SemanticIndexQueue');
         await semanticIndexQueue.enqueue(documentId);
       } catch (e) {
-        console.warn('[DocumentIndexer] 更新 documents 版本字段失败:', e);
+        console.warn('[DocumentIndexer] Semantic worker wake failed; durable job retained:', e);
       }
 
       const chunkData: ChunkData[] = retrievalChunks.map((chunk, index) => ({

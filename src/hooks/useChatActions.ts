@@ -493,6 +493,18 @@ export const useChatActions = (
 
       void setLastUsedModelForChat(finalConversationId, modelToUse);
 
+      const { useConversationAttachmentStore } = await import(
+        '@/store/conversationAttachmentStore'
+      );
+      // A restored mount remains active even while the composer is loading its
+      // display metadata, or when retry sends without an explicit selection.
+      // Explicit removal clears the conversation store at the UI boundary.
+      const effectiveKnowledgeBase =
+        knowledgeBase ??
+        useConversationAttachmentStore
+          .getState()
+          .getKnowledgeBase(finalConversationId);
+
       const now = Date.now();
       const userMessageId = uuidv4();
       const newMessage: Message = {
@@ -506,7 +518,7 @@ export const useChatActions = (
         model: modelToUse,
         document_reference: documentData?.documentReference,
         context_data: documentData?.contextData,
-        knowledge_base_reference: knowledgeBase,
+        knowledge_base_reference: effectiveKnowledgeBase,
         images: options?.images,
       };
       let attachmentDocumentIds: string[] | undefined;
@@ -577,15 +589,12 @@ export const useChatActions = (
 
       if (finalConversationId) {
         try {
-          const { useConversationAttachmentStore } = await import(
-            '@/store/conversationAttachmentStore'
-          );
-          if (knowledgeBase) {
+          if (effectiveKnowledgeBase) {
             useConversationAttachmentStore
               .getState()
               .setKnowledgeBase(finalConversationId, {
-                id: knowledgeBase.id,
-                name: knowledgeBase.name,
+                id: effectiveKnowledgeBase.id,
+                name: effectiveKnowledgeBase.name,
               });
           } else {
             useConversationAttachmentStore

@@ -28,6 +28,10 @@ export interface EmbeddingStrategy {
    * 策略名称
    */
   getName(): string;
+  getModelIdentity?(): string | null;
+  isReady?(): boolean;
+  getMaxInputTokens?(): number;
+  countTokens?(texts: string[]): Promise<number[]>;
   
   /**
    * 初始化策略
@@ -94,6 +98,8 @@ export class ModelLoadError extends EmbeddingError {
     this.name = 'ModelLoadError';
   }
 }
+
+export class EmbeddingInputError extends EmbeddingError {}
 
 export class EmbeddingGenerationError extends EmbeddingError {
   constructor(message: string, public inputTexts?: string[]) {

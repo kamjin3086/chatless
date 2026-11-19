@@ -1,5 +1,5 @@
 import { exists } from '@tauri-apps/plugin-fs';
-import { EmbeddingStrategy, EmbeddingConfig, EmbeddingError } from '../types';
+import { EmbeddingStrategy, EmbeddingConfig, EmbeddingError, EmbeddingInputError } from '../types';
 import { OrtEmbeddingStrategy } from './OrtEmbeddingStrategy';
 import { OnnxModelDownloader } from '../OnnxModelDownloader';
 import { modelConfigService } from '../ModelConfigService';
@@ -48,10 +48,11 @@ export class LocalOnnxEmbeddingStrategy implements EmbeddingStrategy {
           modelPath: paths.model,
           tokenizerPath: paths.tokenizer,
           maxBatchSize: this.config.maxBatchSize,
-          maxLength: this.config.maxLength || modelConfigService.getModelContextLength(this.modelId),
+          maxLength: this.getMaxInputTokens(),
           timeout: this.config.timeout,
         });
         await this.ortStrategy.initialize();
+        this.dimension = this.ortStrategy.getDimension();
         this.source = 'real';
         console.info(`[LocalOnnx] 已加载真实 ONNX 模型: ${paths.model}`);
       } catch (error) {
@@ -67,8 +68,15 @@ export class LocalOnnxEmbeddingStrategy implements EmbeddingStrategy {
     this.isInitialized = true;
   }
 
+  getModelIdentity(): string | null { return this.ortStrategy?.getModelIdentity() || null; }
+
   getMaxInputTokens(): number {
-    return this.config.maxLength || modelConfigService.getModelContextLength(this.modelId) || 512;
+    return Math.min(this.config.maxLength || Infinity, modelConfigService.getModelContextLength(this.modelId) || 512);
+  }
+
+  async countTokens(texts: string[]): Promise<number[]> {
+    if (!this.ortStrategy) throw new EmbeddingError('Tokenizer is unavailable');
+    return this.ortStrategy.countTokens(texts);
   }
 
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
@@ -81,6 +89,7 @@ export class LocalOnnxEmbeddingStrategy implements EmbeddingStrategy {
       try {
         return await this.ortStrategy.generateEmbeddings(texts);
       } catch (error) {
+        if (error instanceof EmbeddingInputError) throw error;
         console.warn('[LocalOnnx] 真实推理失败:', error);
         this.source = 'unavailable';
         await this.ortStrategy.cleanup().catch(() => {});
@@ -110,7 +119,7 @@ function resolveModelId(config: EmbeddingConfig): string {
   return base.replace(/\.onnx$/i, '');
 }
 
-async function resolveOnnxModelPaths(
+export async function resolveOnnxModelPaths(
   config: EmbeddingConfig,
   modelId: string,
 ): Promise<{ model: string; tokenizer: string } | null> {

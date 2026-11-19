@@ -33,6 +33,10 @@ export async function syncFilesystemAllowlistToBackend(directories: AllowlistDir
 export type CallScopedGrant = {
   path: string;
   permissions: { read?: boolean; write?: boolean; create?: boolean; delete?: boolean };
+  /** Reusing temporary trust must not follow a replaced directory or symlink. */
+  expectedCanonicalPath?: string;
+  /** Promote temporary UI trust only after the backend returns its canonical root. */
+  onGranted?: (canonicalPath: string) => void;
 };
 
 /**
@@ -45,7 +49,7 @@ export async function grantCallScopedPaths(
   scope: { runId: string; callId?: string },
 ): Promise<() => Promise<void>> {
   if (!grants.length) return async () => {};
-  await Promise.all(grants.map((grant) => grantCallScope({
+  const results = await Promise.allSettled(grants.map((grant) => grantCallScope({
     runId: scope.runId,
     callId: scope.callId,
     path: grant.path,
@@ -54,6 +58,18 @@ export async function grantCallScopedPaths(
     create: !!grant.permissions.create,
     delete: !!grant.permissions.delete,
   })));
+  const failed = results.some((result, index) => {
+    if (result.status === 'rejected' || !result.value.ok) return true;
+    const expected = grants[index].expectedCanonicalPath;
+    return expected !== undefined && expected !== result.value.path;
+  });
+  if (failed) {
+    await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
+    throw new Error('Backend filesystem scope authorization failed');
+  }
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') grants[index].onGranted?.(result.value.path);
+  });
   return async () => {
     await revokeCallScope({ runId: scope.runId, callId: scope.callId }).catch(() => {});
   };
