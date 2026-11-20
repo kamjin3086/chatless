@@ -262,8 +262,8 @@ export function WorkspaceSettings() {
       <SettingsSectionHeader icon={HardDrive} title="会话产物" />
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-        每个会话的工作目录是「文档/Chatless/&lt;标题&gt;-&lt;会话摘要&gt;」，Agent 的产物就落在那里。
-        它在这个会话第一次真正用到文件或命令时才会创建，纯聊天不会留下空文件夹。
+        未绑定工作区的会话默认将文件写到「文档/Chatless/&lt;标题&gt;-&lt;会话摘要&gt;」，此目录按需创建。
+        绑定工作区的会话在所选项目目录中工作，文件访问仍按原规则审批。
         打开、导出和清理只针对会话产物，不会改动侧栏工作区的目录或会话归属。清理会将产物移入系统回收站。
       </p>
 

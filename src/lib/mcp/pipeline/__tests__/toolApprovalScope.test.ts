@@ -144,7 +144,7 @@ describe('unified conversation approval', () => {
 });
 
 describe('one-time filesystem approval', () => {
-  it('requires approval for project files even in automatic mode', async () => {
+  it('resolves project aliases and relative paths without treating membership as approval', async () => {
     const store = useConversationAttachmentStore.getState();
     store.setMountedDir('conv-1', 'C:/project');
     store.setWorkingDir('conv-1', 'C:/Chatless/session');
@@ -157,17 +157,52 @@ describe('one-time filesystem approval', () => {
       server: 'filesystem', tool: 'write_file', args: { path, content: 'test' },
     }));
 
-    await write('@WorkDir/output.txt', 'session-output');
-    expect(adapter.execute).toHaveBeenCalledOnce();
-    expect(mocks.grantCallScope).toHaveBeenCalledWith(expect.objectContaining({ path: 'C:/Chatless/session' }));
-    expect(mocks.approvals).toHaveLength(0);
-
-    await write('C:/project/draft.txt', 'project-file');
-    expect(mocks.approvals).toHaveLength(1);
-    expect(mocks.grantCallScope).toHaveBeenCalledWith(expect.objectContaining({
-      callId: 'project-file', path: 'C:/project', read: false, write: true, create: false, delete: false,
-    }));
+    await write('@WorkDir/output.txt', 'project-alias');
+    expect(adapter.execute).toHaveBeenCalledWith(expect.objectContaining({ args: expect.objectContaining({ path: 'C:/project/output.txt' }) }));
+    await write('draft.txt', 'project-relative');
+    expect(adapter.execute).toHaveBeenCalledWith(expect.objectContaining({ args: expect.objectContaining({ path: 'C:/project/draft.txt' }) }));
+    expect(mocks.approvals).toHaveLength(2);
+    for (const callId of ['project-alias', 'project-relative']) {
+      expect(mocks.grantCallScope).toHaveBeenCalledWith(expect.objectContaining({
+        callId, path: 'C:/project', read: false, write: true, create: false, delete: false,
+      }));
+    }
+    expect(mocks.grantCallScope).toHaveBeenCalledTimes(2);
     expect(mocks.addedDirectories).toEqual([]);
+  });
+
+  it('lists a bound project at @WorkDir instead of its generated session folder', async () => {
+    const store = useConversationAttachmentStore.getState();
+    store.setMountedDir('conv-1', '/projects/llm-bench-starter');
+    store.setWorkingDir('conv-1', '/documents/Chatless/session');
+    const adapter = { server: 'filesystem', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    await new ToolExecutionPipeline({ adapters: [adapter as never] }).run(new ToolInvocation({
+      ...realInvocation(), conversationId: 'conv-1', assistantMessageId: 'project-list', callId: 'project-list',
+      server: 'filesystem', tool: 'list_directory', args: { path: '@WorkDir' },
+    }));
+    expect(adapter.execute).toHaveBeenCalledWith(expect.objectContaining({ args: { path: '/projects/llm-bench-starter' } }));
+    expect(mocks.approvals).toHaveLength(1);
+    expect(mocks.grantCallScope).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      path: '/projects/llm-bench-starter', read: true, write: false, create: false, delete: false,
+    }));
+  });
+
+  it('uses the bound project as the default command cwd without granting filesystem access', async () => {
+    const store = useConversationAttachmentStore.getState();
+    store.setMountedDir('conv-1', '/projects/first');
+    store.setMountedDir('conv-2', '/projects/second');
+    store.setWorkingDir('conv-1', '/documents/Chatless/session');
+    const adapter = { server: 'shell', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    for (const [id, path] of [['conv-1', '/projects/first'], ['conv-2', '/projects/second']]) {
+      await pipeline.run(new ToolInvocation({
+        ...realInvocation(), conversationId: id, assistantMessageId: id, callId: id,
+        server: 'shell', tool: 'run', args: { command: 'pwd' },
+      }));
+      expect(adapter.execute).toHaveBeenLastCalledWith(expect.objectContaining({ args: expect.objectContaining({ workingDir: path }) }));
+    }
+    expect(mocks.approvals).toHaveLength(2);
+    expect(mocks.grantCallScope).not.toHaveBeenCalled();
   });
 
   it('grants the approved call without writing the persistent allowlist', async () => {

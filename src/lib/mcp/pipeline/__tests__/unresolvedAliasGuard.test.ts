@@ -49,6 +49,7 @@ vi.mock('@/store/conversationAttachmentStore', () => ({
     getState: () => ({
       getWorkingDir: () => mocks.sessionWorkDir,
       getMountedDir: () => undefined,
+      isSessionDirInUse: () => false,
     }),
   },
 }));

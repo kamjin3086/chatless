@@ -149,8 +149,8 @@ export class ToolExecutionPipeline {
       // touch files or run a command with this directory as its cwd, so it has to
       // exist now - a chat that never gets here leaves no folder behind.
       //
-      // When the user mounted their own directory, @WorkDir is that directory and
-      // the session folder stays uncreated: no second folder next to their project.
+      // Only an app-managed @WorkDir reaches this block. A project folder is
+      // resolved separately and never receives the default session grant.
       try {
         const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
         const attachments = useConversationAttachmentStore.getState();
@@ -568,38 +568,34 @@ export class ToolExecutionPipeline {
    * 不把异常吞成"没这回事"。
    */
   /**
-   * 解析用的目录集合：持久 allowlist，加上会话附件目录作为 @WorkDir 插在队首。
-   * 会话目录只在这一次调用里当作目录别名，绝不写进持久 allowlist；读附件失败
-   * 也不牵动持久目录（best-effort）。两个门共用这一份，避免别名注入各写各的。
+   * Resolve the conversation's working directory independently from permission.
+   * Only an app-managed session folder contributes an implicit scoped grant.
    */
   private async resolveResolveDirs(invocation: ToolInvocation): Promise<{
     directories: AllowlistDirectory[]
     dirs: AllowlistDirectory[]
+    workingDir?: string
     sessionWorkDir?: string
   }> {
     const allowlist = useFilesystemAllowlistStore.getState();
     await allowlist.load();
     const dirsForResolve = [...allowlist.directories] as AllowlistDirectory[];
-    let sessionWorkDir: string | undefined;
-    try {
-      const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-      const wd = useConversationAttachmentStore.getState().getWorkingDir(invocation.conversationId);
-      if (wd) {
-        sessionWorkDir = String(wd).replace(/\\/g, '/');
-        dirsForResolve.unshift({
-          id: `session:${invocation.conversationId}:workdir`,
-          path: sessionWorkDir,
-          alias: 'WorkDir',
-          permissions: { read: true, write: true, create: true, delete: false },
-          source: 'workdir',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        } as AllowlistDirectory);
-      }
-    } catch {
-      // ignore
+    const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+    const attachments = useConversationAttachmentStore.getState();
+    const workingDir = attachments.getWorkingDir(invocation.conversationId);
+    const sessionWorkDir = workingDir && !attachments.getMountedDir(invocation.conversationId) ? workingDir : undefined;
+    if (sessionWorkDir) {
+      dirsForResolve.unshift({
+        id: `session:${invocation.conversationId}:workdir`,
+        path: sessionWorkDir,
+        alias: 'WorkDir',
+        permissions: { read: true, write: true, create: true, delete: false },
+        source: 'workdir',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
     }
-    return { directories: allowlist.directories as unknown as AllowlistDirectory[], dirs: dirsForResolve, sessionWorkDir };
+    return { directories: allowlist.directories, dirs: dirsForResolve, workingDir, sessionWorkDir };
   }
 
   private async filesystemGate(params: {
@@ -627,8 +623,8 @@ export class ToolExecutionPipeline {
       try {
         const resolvedDirs = await this.resolveResolveDirs(invocation);
         const dirsForResolve = resolvedDirs.dirs;
-        const workingDir = resolvedDirs.sessionWorkDir;
-        sessionWorkDir = workingDir;
+        const { workingDir } = resolvedDirs;
+        sessionWorkDir = resolvedDirs.sessionWorkDir;
 
         // Keep the backend in step with the user's persistent settings only.
         // The session working directory travels as a call-scoped grant below,
@@ -807,8 +803,8 @@ export class ToolExecutionPipeline {
     try {
       const resolvedDirs = await this.resolveResolveDirs(invocation);
       const dirsForResolve = resolvedDirs.dirs;
-      const shellWorkDir = resolvedDirs.sessionWorkDir;
-      sessionWorkDir = shellWorkDir;
+      const shellWorkDir = resolvedDirs.workingDir;
+      sessionWorkDir = resolvedDirs.sessionWorkDir;
 
       const execArgs: Record<string, unknown> = { ...(args || {}) };
 
@@ -831,7 +827,7 @@ export class ToolExecutionPipeline {
         // 替换 @WorkDir 别名（支持 @WorkDir、@WorkDir/、@WorkDir\）
         if (shellWorkDir) {
           // 使用全局替换，支持多种后缀形式
-          resolvedCommand = resolvedCommand.replace(/@WorkDir(?=[\/\\]|$|\s|"|')/g, shellWorkDir);
+          resolvedCommand = resolvedCommand.replace(/@WorkDir(?=[\/\\]|$|\s|"|')/gi, () => shellWorkDir);
         }
         // 替换其他 @Alias 别名（格式：@AliasName 或 @AliasName/path）
         for (const dir of dirsForResolve) {
@@ -876,8 +872,13 @@ export class ToolExecutionPipeline {
         providerData: invocation.providerData,
         planOnly: invocation.planOnly,
       });
-    } catch {
-      // ignore: best-effort（解析失败则保持原参数，让后续校验/授权处理）
+    } catch (error) {
+      // Never execute with a fallback cwd when the requested directory failed to resolve.
+      return { kind: 'halted', result: await this.rejectUnresolvedAlias({
+        assistantMessageId, conversationId: invocation.conversationId,
+        server, tool, cardId, callKey, callId, args: args ?? {}, alias: '',
+        reason: error instanceof Error ? error.message : String(error),
+      }) };
     }
 
     return { kind: 'ready', invocation: nextInvocation, sessionWorkDir };

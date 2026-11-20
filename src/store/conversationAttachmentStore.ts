@@ -1,7 +1,7 @@
 /**
  * Conversation attachments and workspace membership.
- * The project folder organizes conversations and lets the user browse files.
- * It is not an agent working directory or a source of filesystem permissions.
+ * A project folder sets the conversation's working directory, but does not
+ * grant access. Agent filesystem permissions are checked separately.
  */
 
 import { create } from 'zustand';
@@ -13,7 +13,7 @@ type ConversationId = string;
 interface ConversationAttachmentState {
   /**
    * 会话自带的产物目录（文档/Chatless/<标题>-<会话 ID 摘要>；旧会话沿用原应用数据目录）。
-   * This app-managed directory is the only source of @WorkDir.
+   * This app-managed directory is @WorkDir only for chats without a project.
    */
   sessionDirByConversation: Record<ConversationId, string | undefined>;
 
@@ -52,14 +52,14 @@ interface ConversationAttachmentState {
   /** 记录会话自带的产物目录（系统自动解析，不作为用户授权） */
   setWorkingDir: (conversationId: string, absolutePath: string, exists?: boolean) => void;
   clearWorkingDir: (conversationId: string) => void;
-  /** Agent @WorkDir, independent of the conversation's project membership. */
+  /** Agent @WorkDir: the bound project, or the app-managed folder for a default chat. */
   getWorkingDir: (conversationId: string) => string | undefined;
   /** 仅会话自带产物目录（不返回挂载目录）——应用元数据只写这里 */
   getSessionDir: (conversationId: string) => string | undefined;
   /** 会话目录是否已经存在于磁盘上。 */
   isWorkspaceMaterialized: (conversationId: string) => boolean;
   markWorkspaceMaterialized: (conversationId: string) => void;
-  /** Whether an app-managed @WorkDir has been resolved for this conversation. */
+  /** Whether the app-managed folder is the active @WorkDir. */
   isSessionDirInUse: (conversationId: string) => boolean;
 
   setWorkspaceError: (conversationId: string, message: string) => void;
@@ -153,7 +153,7 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     });
   },
 
-  getWorkingDir: (conversationId) => get().getSessionDir(conversationId),
+  getWorkingDir: (conversationId) => get().getMountedDir(conversationId) ?? get().getSessionDir(conversationId),
 
   getSessionDir: (conversationId) => {
     const cid = String(conversationId || '').trim();
@@ -175,7 +175,7 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     }));
   },
 
-  isSessionDirInUse: (conversationId) => Boolean(get().getSessionDir(conversationId)),
+  isSessionDirInUse: (conversationId) => !get().getMountedDir(conversationId) && Boolean(get().getSessionDir(conversationId)),
 
   setMountedDir: (conversationId, absolutePath) => {
     const cid = String(conversationId || '').trim();

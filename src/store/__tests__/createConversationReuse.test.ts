@@ -122,8 +122,11 @@ describe('creating a conversation', () => {
     const id = await useChatStore.getState().createConversation('Project', 'model-x', undefined, '/test/workspace');
     expect(id).not.toBe('default');
     expect(attachments.getMountedDir(id)).toBe('/test/workspace');
+    expect(attachments.getWorkingDir(id)).toBe('/test/workspace');
     expect(await useChatStore.getState().createConversation('Reuse', 'model-x')).toBe(id);
+    expect(attachments.getWorkingDir(id)).toBe('/test/workspace');
     expect(await useChatStore.getState().createConversation('Default', 'model-x', undefined, null)).toBe('default');
+    expect(attachments.getWorkingDir('default')).not.toBe('/test/workspace');
     expect(db.deleteConversation).not.toHaveBeenCalled();
   });
 

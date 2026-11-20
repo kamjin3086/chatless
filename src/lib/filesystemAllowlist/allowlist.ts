@@ -70,7 +70,8 @@ export function joinAbsoluteAndRelative(dirPath: string, relative: string): stri
   const rel = normalizeSlashes(relative);
   assertSafeRelativePath(rel);
   if (!rel) return base;
-  return normalizeAbsolutePath(`${base}/${rel}`) || `${base}/${rel}`.replace(/\/+/g, '/');
+  const joined = `${base}${base.endsWith('/') ? '' : '/'}${rel}`;
+  return normalizeAbsolutePath(joined) || joined;
 }
 
 function buildComparable(p: string, caseInsensitive: boolean): string {
@@ -153,6 +154,17 @@ export function resolveAllowlistPath(params: {
   const aliasParsed = parseAliasPath(raw);
   if (aliasParsed) {
     const alias = aliasParsed.alias;
+    // The conversation selects the target; only the allowlist can authorize it.
+    if (alias.toLowerCase() === 'workdir' && params.workingDir) {
+      const absolutePath = joinAbsoluteAndRelative(params.workingDir, aliasParsed.relative);
+      const directory = findBestMatchingDirectory(absolutePath, params.directories);
+      return {
+        absolutePath,
+        directory,
+        relativePath: directory && computeRelativePath({ absolutePath, directoryPath: directory.path }),
+        viaAlias: true,
+      };
+    }
     const dir = (params.directories || []).find((d) => (d.alias || '').toLowerCase() === alias.toLowerCase());
     if (!dir) {
       throw new Error(`Alias "@${alias}" is not authorized. Please authorize it in Security settings.`);

@@ -95,6 +95,23 @@ describe('resolveFilesystemCall', () => {
     expect(result.primaryPath).toBe('/tmp/session-work/notes.md');
   });
 
+  it('resolves @WorkDir to the selected root and uses existing allowlist permissions for the target', () => {
+    const existing = DIRECTORIES[0];
+    const result = resolveFilesystemCall({
+      invocation: call({ path: '@WorkDir/README.md' }), cardId: 'card-1',
+      directories: [{ ...existing, path: '/different/project', alias: 'WorkDir' }, existing],
+      workingDir: existing.path,
+    });
+    expect(result).toMatchObject({ kind: 'resolved', primaryPath: `${existing.path}/README.md`, directory: existing });
+  });
+
+  it('does not insert a duplicate separator for a root working directory', () => {
+    const result = resolveFilesystemCall({
+      invocation: call({ path: '@WorkDir/README.md' }), cardId: 'card-1', directories: [], workingDir: '/',
+    });
+    expect(result).toMatchObject({ kind: 'resolved', primaryPath: '/README.md' });
+  });
+
   it('says nothing needs doing when no argument carries a path', () => {
     expect(hasFilesystemPaths({ command: 'ls' })).toBe(false);
     expect(hasFilesystemPaths({ paths: ['  '] })).toBe(false);

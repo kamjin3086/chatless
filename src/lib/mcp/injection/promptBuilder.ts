@@ -264,8 +264,11 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
           content:
             '[Working directory for this session]\n' +
             `- @WorkDir -> ${wd}\n` +
-            '- This is the session output directory: relative paths and new files land here by default.\n' +
-            '- Use a relative path or @WorkDir/...; anything outside this directory needs the user to authorize it.',
+            (attachment.getMountedDir(convId)
+              ? '- This is the selected project folder. For questions about the current project, start here, not in Chatless session artifacts. Relative file paths and command working directories start here by default.\n' +
+                '- Use @WorkDir or a relative path. Selecting the project does not authorize access; file operations still follow the existing file permissions and approval rules.'
+              : '- This is the session output directory: relative paths and new files land here by default.\n' +
+                '- Use a relative path or @WorkDir/...; paths outside this directory are subject to file permissions and approval.'),
         });
       }
       // The current mount is the authority. Historic messages and prior
@@ -295,8 +298,6 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
     // ignore
   }
 
-  // 不再自动引导/默认写入 Documents：默认更安全，输出留在 @WorkDir（AppData 工作区）。
-  
   // 6. 启用服务器声明
   const allEnabled = [
     ...enabled,

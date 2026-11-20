@@ -28,6 +28,7 @@ vi.mock('@/store/conversationAttachmentStore', () => ({
   useConversationAttachmentStore: {
     getState: () => ({
       getWorkingDir: () => '/fixture/work',
+      getMountedDir: () => undefined,
       isSessionDirInUse: () => false,
       isWorkspaceMaterialized: () => true,
     }),

@@ -35,20 +35,21 @@ describe('@WorkDir resolution', () => {
       .toBe('C:/Users/x/Documents/Chatless/线缆整改-3f9a21');
   });
 
-  it('never derives @WorkDir from project membership', () => {
+  it('keeps the selected project as @WorkDir even when the session folder resolves later', () => {
     const store = useConversationAttachmentStore.getState();
     const sessionFolder = 'C:/Users/x/Documents/Chatless/session-3f9a21';
     store.setMountedDir(CONVERSATION, 'D:/projects/site');
-    expect(store.getWorkingDir(CONVERSATION)).toBeUndefined();
+    expect(store.getWorkingDir(CONVERSATION)).toBe('D:/projects/site');
     expect(store.isSessionDirInUse(CONVERSATION)).toBe(false);
 
     store.setWorkingDir(CONVERSATION, sessionFolder);
+    expect(store.getWorkingDir(CONVERSATION)).toBe('D:/projects/site');
+    expect(store.getSessionDir(CONVERSATION)).toBe(sessionFolder);
+    expect(store.isSessionDirInUse(CONVERSATION)).toBe(false);
+
+    store.clearMountedDir(CONVERSATION);
     expect(store.getWorkingDir(CONVERSATION)).toBe(sessionFolder);
     expect(store.isSessionDirInUse(CONVERSATION)).toBe(true);
-
-    store.clearWorkingDir(CONVERSATION);
-    expect(store.getWorkingDir(CONVERSATION)).toBeUndefined();
-    expect(store.getMountedDir(CONVERSATION)).toBe('D:/projects/site');
   });
 });
 
@@ -73,7 +74,7 @@ describe('attachment persistence', () => {
     store.archiveWorkspace('D:/projects/site', false);
     expect(useConversationAttachmentStore.getState().archivedConversations[CONVERSATION]).toBe(true);
   });
-  it('restores legacy attached directories as membership, not agent access', async () => {
+  it('restores the bound project as @WorkDir after restarting', async () => {
     localStorage.setItem('conversation-knowledge-mounts', JSON.stringify({
       state: { mountedDirByConversation: { [CONVERSATION]: 'D:/projects/site' } },
       version: 0,
@@ -81,7 +82,7 @@ describe('attachment persistence', () => {
     await useConversationAttachmentStore.persist.rehydrate();
     const store = useConversationAttachmentStore.getState();
     expect(store.getMountedDir(CONVERSATION)).toBe('D:/projects/site');
-    expect(store.getWorkingDir(CONVERSATION)).toBeUndefined();
+    expect(store.getWorkingDir(CONVERSATION)).toBe('D:/projects/site');
   });
 
   it('records why a workspace could not be prepared, so the UI can offer a retry', () => {
