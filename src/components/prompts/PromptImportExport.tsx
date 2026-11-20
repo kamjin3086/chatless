@@ -85,7 +85,7 @@ export function PromptImportExport() {
       // 规范化 shortcuts
       arr.forEach((it:any)=>{ 
         if (Array.isArray(it?.shortcuts)) {
-          it.shortcuts = Array.from(new Set(it.shortcuts.map((s:any)=>String(s).replace(/^\//,'').toLowerCase()).filter(Boolean))); 
+          it.shortcuts = Array.from(new Set(it.shortcuts.map((s:any)=>String(s).replace(/^[#/]/,'').toLowerCase()).filter(Boolean)));
         }
       });
       

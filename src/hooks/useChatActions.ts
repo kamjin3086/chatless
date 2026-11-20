@@ -1021,7 +1021,9 @@ export const useChatActions = (
 
   const handleDeleteConversation = useCallback(() => {
     if (currentConversationId) {
-      void deleteConversation(currentConversationId);
+      void deleteConversation(currentConversationId).catch(() => {
+        toast.error('删除会话未完成，请重试。');
+      });
     }
   }, [currentConversationId, deleteConversation]);
 

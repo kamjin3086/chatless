@@ -1,5 +1,5 @@
 import { registerCommand } from './commandRegistry';
-import { Home, MessageSquare, Database, History, Settings, PlusCircle, Bookmark } from 'lucide-react';
+import { Home, MessageSquare, Database, History, Settings, MessageSquarePlus, Bookmark } from 'lucide-react';
 
 // 引入设置相关命令注册（侧效果）
 import './settingsCommands';
@@ -75,7 +75,7 @@ registerCommand({
   titleI18n: 'command.newChat',
   section: 'action',
   hint: '新建对话',
-  icon: PlusCircle,
+  icon: MessageSquarePlus,
   keywords: ['新建', '对话', 'chat', 'create', 'new', 'conversation', 'add'],
   action: async () => {
     const { useChatStore } = await import('@/store/chatStore');

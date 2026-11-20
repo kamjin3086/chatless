@@ -257,7 +257,6 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
       const attachment = useConversationAttachmentStore.getState();
       const wd = attachment.getWorkingDir(convId);
       if (wd) {
-        const attached = attachment.getMountedDir(convId);
         blocks.push({
           id: 'session-workspace',
           layer: 'conversation',
@@ -265,9 +264,7 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
           content:
             '[Working directory for this session]\n' +
             `- @WorkDir -> ${wd}\n` +
-            (attached
-              ? '- The user attached this directory: read and write here by default, and look at the existing contents before overwriting.\n'
-              : '- This is the session scratch directory: relative paths and new files land here by default.\n') +
+            '- This is the session output directory: relative paths and new files land here by default.\n' +
             '- Use a relative path or @WorkDir/...; anything outside this directory needs the user to authorize it.',
         });
       }

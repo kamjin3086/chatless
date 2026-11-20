@@ -19,6 +19,9 @@ beforeEach(() => {
   useConversationAttachmentStore.setState({
     sessionDirByConversation: {},
     mountedDirByConversation: {},
+    openedWorkspaces: [],
+    archivedWorkspaces: {},
+    archivedConversations: {},
     workspaceErrorByConversation: {},
     knowledgeBaseByConversation: {},
   } as never);
@@ -32,33 +35,53 @@ describe('@WorkDir resolution', () => {
       .toBe('C:/Users/x/Documents/Chatless/线缆整改-3f9a21');
   });
 
-  it('lets an attached directory become @WorkDir, and restores the session folder on detach', () => {
+  it('never derives @WorkDir from project membership', () => {
     const store = useConversationAttachmentStore.getState();
-    store.setWorkingDir(CONVERSATION, 'C:/Users/x/Documents/Chatless/线缆整改-3f9a21');
+    const sessionFolder = 'C:/Users/x/Documents/Chatless/session-3f9a21';
     store.setMountedDir(CONVERSATION, 'D:/projects/site');
+    expect(store.getWorkingDir(CONVERSATION)).toBeUndefined();
+    expect(store.isSessionDirInUse(CONVERSATION)).toBe(false);
 
-    expect(useConversationAttachmentStore.getState().getWorkingDir(CONVERSATION)).toBe('D:/projects/site');
-    expect(useConversationAttachmentStore.getState().getSessionDir(CONVERSATION))
-      .toBe('C:/Users/x/Documents/Chatless/线缆整改-3f9a21');
+    store.setWorkingDir(CONVERSATION, sessionFolder);
+    expect(store.getWorkingDir(CONVERSATION)).toBe(sessionFolder);
+    expect(store.isSessionDirInUse(CONVERSATION)).toBe(true);
 
-    useConversationAttachmentStore.getState().clearMountedDir(CONVERSATION);
-    expect(useConversationAttachmentStore.getState().getWorkingDir(CONVERSATION))
-      .toBe('C:/Users/x/Documents/Chatless/线缆整改-3f9a21');
+    store.clearWorkingDir(CONVERSATION);
+    expect(store.getWorkingDir(CONVERSATION)).toBeUndefined();
+    expect(store.getMountedDir(CONVERSATION)).toBe('D:/projects/site');
   });
 });
 
 describe('attachment persistence', () => {
-  it('keeps an attached directory across restarts, scoped to its conversation', () => {
-    // "附加目录" is a conversation-scoped grant the user asked for: it must survive
-    // a restart and disappear when the user detaches it.
-    useConversationAttachmentStore.getState().setMountedDir(CONVERSATION, 'D:/projects/site');
-    const persisted = useConversationAttachmentStore.persist.getOptions().partialize!({
-      ...useConversationAttachmentStore.getState(),
-      mountedDirByConversation: { [CONVERSATION]: 'D:/projects/site' },
-    }) as Record<string, unknown>;
-    expect(persisted.mountedDirByConversation).toEqual({ [CONVERSATION]: 'D:/projects/site' });
-    // The session folder is owned by the backend mapping, not localStorage.
-    expect(persisted.sessionDirByConversation).toBeUndefined();
+  it('persists workspace registration and archive flags without attaching a directory', async () => {
+    const store = useConversationAttachmentStore.getState();
+    store.registerWorkspace('D:\\projects\\site\\');
+    store.registerWorkspace('D:/projects/site');
+    store.archiveWorkspace('D:/projects/site', true);
+    store.archiveConversation(CONVERSATION, true);
+    const saved = localStorage.getItem('conversation-knowledge-mounts');
+    expect(saved).toBeTruthy();
+    useConversationAttachmentStore.setState({ openedWorkspaces: [], archivedWorkspaces: {}, archivedConversations: {} });
+    localStorage.setItem('conversation-knowledge-mounts', saved ?? '');
+    await useConversationAttachmentStore.persist.rehydrate();
+    expect(useConversationAttachmentStore.getState()).toMatchObject({
+      openedWorkspaces: ['D:/projects/site'],
+      archivedWorkspaces: { 'D:/projects/site': true },
+      archivedConversations: { [CONVERSATION]: true },
+      mountedDirByConversation: {},
+    });
+    store.archiveWorkspace('D:/projects/site', false);
+    expect(useConversationAttachmentStore.getState().archivedConversations[CONVERSATION]).toBe(true);
+  });
+  it('restores legacy attached directories as membership, not agent access', async () => {
+    localStorage.setItem('conversation-knowledge-mounts', JSON.stringify({
+      state: { mountedDirByConversation: { [CONVERSATION]: 'D:/projects/site' } },
+      version: 0,
+    }));
+    await useConversationAttachmentStore.persist.rehydrate();
+    const store = useConversationAttachmentStore.getState();
+    expect(store.getMountedDir(CONVERSATION)).toBe('D:/projects/site');
+    expect(store.getWorkingDir(CONVERSATION)).toBeUndefined();
   });
 
   it('records why a workspace could not be prepared, so the UI can offer a retry', () => {
@@ -77,15 +100,6 @@ describe('attachment persistence', () => {
     store.setWorkingDir(CONVERSATION, 'C:/Users/x/Documents/Chatless/新对话-ab12cd', false);
     expect(useConversationAttachmentStore.getState().isSessionDirInUse(CONVERSATION)).toBe(true);
     expect(useConversationAttachmentStore.getState().isWorkspaceMaterialized(CONVERSATION)).toBe(false);
-
-    // The user picked their own folder: the session folder is out of the picture.
-    store.setMountedDir(CONVERSATION, 'D:/projects/site');
-    expect(useConversationAttachmentStore.getState().isSessionDirInUse(CONVERSATION)).toBe(false);
-    // The mounted folder is what the agent works in.
-    expect(useConversationAttachmentStore.getState().getWorkingDir(CONVERSATION)).toBe('D:/projects/site');
-
-    useConversationAttachmentStore.getState().clearMountedDir(CONVERSATION);
-    expect(useConversationAttachmentStore.getState().isSessionDirInUse(CONVERSATION)).toBe(true);
 
     useConversationAttachmentStore.getState().markWorkspaceMaterialized(CONVERSATION);
     expect(useConversationAttachmentStore.getState().isWorkspaceMaterialized(CONVERSATION)).toBe(true);

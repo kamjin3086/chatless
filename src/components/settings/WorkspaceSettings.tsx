@@ -44,7 +44,6 @@ export function WorkspaceSettings() {
   const isGenerating = useChatStore((s) => s.isGenerating);
   const agentRuns = useChatStore((s) => s.agentRuns);
   const clearWorkingDir = useConversationAttachmentStore((s) => s.clearWorkingDir);
-  const clearMountedDir = useConversationAttachmentStore((s) => s.clearMountedDir);
   const clearWorkspaceError = useConversationAttachmentStore((s) => s.clearWorkspaceError);
   const workspaceErrors = useConversationAttachmentStore((s) => s.workspaceErrorByConversation);
 
@@ -159,7 +158,6 @@ export function WorkspaceSettings() {
       const outcome = await trashConversationWorkspaces(ids, (id) => {
         // 只有真的移入回收站后才丢掉记录；失败时记录必须留着，才能重试。
         clearWorkingDir(id);
-        clearMountedDir(id);
       });
       if (outcome.failed.length > 0) {
         toast.error(`${outcome.failed.length} 个工作区清理失败`, {
@@ -167,7 +165,7 @@ export function WorkspaceSettings() {
         });
       }
       if (outcome.removed.length > 0) {
-        toast.success(`已移入回收站：${outcome.removed.length} 个会话的工作区`);
+        toast.success(`已移入回收站：${outcome.removed.length} 个会话的产物`);
       }
       setSelectedIds(new Set(outcome.failed.map((f) => f.conversationId)));
     } catch (e) {
@@ -176,29 +174,26 @@ export function WorkspaceSettings() {
     } finally {
       setLoading(false);
     }
-  }, [selectedIds, currentConversationId, clearWorkingDir, clearMountedDir, conversations, runningConversationIds]);
+  }, [selectedIds, currentConversationId, clearWorkingDir, conversations, runningConversationIds]);
 
   // 清理全部工作区
   const onClearAll = useCallback(async () => {
     if (runningConversationIds.size > 0) {
-      toast.error("有会话正在运行，先停止再清理全部工作区");
+      toast.error("有会话正在运行，先停止再清理全部会话产物");
       return;
     }
-    if (!window.confirm("确定要清理全部工作区吗？文件夹会被移入系统回收站。")) return;
+    if (!window.confirm("将所有会话的产物移入系统回收站？侧栏工作区和会话不受影响。")) return;
     
     setLoading(true);
     try {
       const outcome = await trashEveryConversationWorkspace();
-      for (const id of outcome.removed) {
-        clearWorkingDir(id);
-        clearMountedDir(id);
-      }
+      for (const id of outcome.removed) clearWorkingDir(id);
       if (outcome.failed.length > 0) {
         toast.error(`${outcome.failed.length} 个工作区清理失败`, {
           description: outcome.failed[0].error,
         });
       } else {
-        toast.success(`已清理全部工作区（${outcome.removed.length} 个，均在回收站）`);
+        toast.success(`已清理全部会话产物（${outcome.removed.length} 个目录，均在回收站）`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -206,19 +201,12 @@ export function WorkspaceSettings() {
     } finally {
       setLoading(false);
     }
-  }, [clearWorkingDir, clearMountedDir, runningConversationIds]);
+  }, [clearWorkingDir, runningConversationIds]);
 
   // 在文件管理器中定位当前会话的工作目录
   const onReveal = useCallback(async () => {
     if (!currentConversationId) return;
     try {
-      // Open what @WorkDir actually points at: an attached project folder wins
-      // over the session's own output folder.
-      const mounted = useConversationAttachmentStore.getState().getMountedDir(currentConversationId);
-      if (mounted) {
-        const { openCheckedPath } = await import('@/lib/filesystemAllowlist/openCheckedPath');
-        if (await openCheckedPath(mounted)) return;
-      }
       await revealConversationWorkspace(currentConversationId);
     } catch (e) {
       toast.error("打开工作目录失败", {
@@ -271,12 +259,12 @@ export function WorkspaceSettings() {
 
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={HardDrive} title="工作区管理" />
+      <SettingsSectionHeader icon={HardDrive} title="会话产物" />
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
         每个会话的工作目录是「文档/Chatless/&lt;标题&gt;-&lt;会话摘要&gt;」，Agent 的产物就落在那里。
         它在这个会话第一次真正用到文件或命令时才会创建，纯聊天不会留下空文件夹。
-        导出只复制这个自带目录（附加的项目目录属于你，不会被打包）；清理是移入系统回收站。
+        打开、导出和清理只针对会话产物，不会改动侧栏工作区的目录或会话归属。清理会将产物移入系统回收站。
       </p>
 
       {/* 当前会话显示 */}
@@ -421,7 +409,7 @@ export function WorkspaceSettings() {
           disabled={loading || runningConversationIds.size > 0}
         >
           <Trash2 className="h-3.5 w-3.5" />
-          清理全部工作区
+          清理全部会话产物
         </Button>
       </div>
     </SettingsCard>

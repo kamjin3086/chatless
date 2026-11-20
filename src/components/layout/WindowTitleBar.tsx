@@ -7,6 +7,8 @@ import { APP_INFO } from '@/config/app-info';
 import { isTauriEnvironment } from '@/lib/utils/environment';
 import { windowControlsOnLeft } from '@/lib/window/windowControls';
 import { useLocaleStore } from '@/store/localeStore';
+import { useUiPreferences } from '@/store/uiPreferences';
+import { AppPageSwitcher } from '@/components/Sidebar';
 
 function RestoreIcon({ className }: { className?: string }) {
   return (
@@ -39,6 +41,7 @@ function TitleBarBrand() {
 
 export function WindowTitleBar() {
   const { t } = useLocaleStore();
+  const appNavCollapsed = useUiPreferences((state) => state.appNavCollapsed);
   const [active, setActive] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [onLeft, setOnLeft] = useState(false);
@@ -173,12 +176,13 @@ export function WindowTitleBar() {
 
   return (
     <header className="window-titlebar">
-      <div className="window-titlebar-slot window-titlebar-slot-start">
-        {onLeft ? controls : <TitleBarBrand />}
+      <div className={cn('window-titlebar-slot window-titlebar-slot-start', appNavCollapsed && 'window-titlebar-slot-compact')}>
+        {onLeft && controls}
+        {appNavCollapsed ? <AppPageSwitcher /> : !onLeft && <TitleBarBrand />}
       </div>
       <div className="window-titlebar-drag" data-tauri-drag-region />
       <div className="window-titlebar-slot window-titlebar-slot-end">
-        {onLeft ? <TitleBarBrand /> : controls}
+        {onLeft ? !appNavCollapsed && <TitleBarBrand /> : controls}
       </div>
     </header>
   );

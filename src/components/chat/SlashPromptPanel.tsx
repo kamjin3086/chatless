@@ -57,8 +57,8 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
 
   // 解析变量
   useEffect(() => {
-    const q = (queryText || '').trim().toLowerCase();
-    if (!q.startsWith('/')) { setPendingVars({}); return; }
+    const q = (queryText || '').trim();
+    if (!q.startsWith('#')) { setPendingVars({}); return; }
     
     const parts = q.split(/\s+/);
     const rest = q.slice(parts[0].length).trim();
@@ -82,7 +82,8 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
   // 过滤提示词
   const filtered = useMemo(() => {
     const q = (queryText || '').trim().toLowerCase();
-    if (q === '/' || !q.startsWith('/')) return [];
+    if (!q.startsWith('#')) return [];
+    if (q === '#') return prompts.slice(0, 20);
     
     let tagFilter: string | null = null;
     let text = q;
@@ -93,7 +94,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
     }
     
       const parts = text.split(/\s+/);
-    const token = parts[0].replace(/^\//, '');
+    const token = parts[0].slice(1);
     
     const list = prompts
       .filter((p) => {
@@ -114,11 +115,9 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
   // 键盘导航
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!open) return;
-      
+      if (!open || e.isComposing || e.target !== anchorRef?.current) return;
       if (e.key === 'Escape') { onOpenChange(false); return; }
-      
-      const list = filtered.length > 0 ? filtered : prompts.slice(0, 20);
+      const list = filtered;
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -134,7 +133,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
         setActiveIndex(prev);
       }
       
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && (!e.shiftKey || e.altKey || e.metaKey)) {
         e.preventDefault();
         const p = list[activeIndexRef.current];
         if (!p) return;
@@ -155,7 +154,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
     
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, filtered, prompts, onSelect, onOpenChange]);
+  }, [open, filtered, anchorRef, onSelect, onOpenChange]);
 
   // 重置索引
   useEffect(() => {
@@ -165,7 +164,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
 
   if (!open || !pos) return null;
 
-  const displayList = filtered.length > 0 ? filtered : (queryText === '/' ? prompts.slice(0, 20) : []);
+  const displayList = filtered;
   const selectedId = displayList[activeIndex]?.id;
 
   // 变量值计算
@@ -223,7 +222,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
       {/* 头部 */}
       <div className={panelHeaderClass}>
         <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
-          / 提示词
+          # 提示词
         </span>
         <button
           className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
@@ -260,7 +259,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
                   {p.name}
                 </span>
                 <span className="shrink-0 px-1.5 py-0.5 rounded-md text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50">
-                  /{(p as any).shortcuts?.[0] || p.name[0]?.toLowerCase() || ''}
+                  #{(p as any).shortcuts?.[0] || p.name[0]?.toLowerCase() || ''}
                   </span>
                 </div>
               
@@ -285,7 +284,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
           );
         })}
         
-        {displayList.length === 0 && queryText !== '/' && (
+        {displayList.length === 0 && (
           <li className="px-3 py-4 text-center text-sm text-slate-500">
             没有匹配的提示词
           </li>

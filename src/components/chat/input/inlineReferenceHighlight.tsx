@@ -3,14 +3,14 @@ import React from 'react';
 export type InlineReferenceKind = 'mcp' | 'skill';
 
 const MCP_RE = /@([a-zA-Z0-9_-]{1,64})/g;
-const SKILL_RE = /#([a-zA-Z0-9_-]{1,64})/g;
+const SKILL_RE = /(?<!\S)\/[\p{L}\p{N}_-]{1,64}(?![\p{L}\p{N}_/.-])/gu;
 
 export function hasInlineReferences(text: string): { mcp: boolean; skill: boolean } {
   if (!text) return { mcp: false, skill: false };
   // 不使用 /g 以避免 lastIndex 副作用
   return {
     mcp: /@([a-zA-Z0-9_-]{1,64})/.test(text),
-    skill: /#([a-zA-Z0-9_-]{1,64})/.test(text),
+    skill: /(?<!\S)\/[\p{L}\p{N}_-]{1,64}(?![\p{L}\p{N}_/.-])/u.test(text),
   };
 }
 

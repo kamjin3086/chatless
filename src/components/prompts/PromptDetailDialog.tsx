@@ -91,7 +91,7 @@ export function PromptDetailDialog({
                 key={s}
                 className="text-[10px] px-1.5 py-0.5 rounded-md border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono"
               >
-                /{s}
+                #{s}
               </span>
             ))}
             {prompt.tags?.map((tag) => (

@@ -2,7 +2,20 @@
 
 import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
-import { Ellipsis, PanelLeft, PenLine, Settings } from 'lucide-react';
+import {
+  Ellipsis,
+  FolderOpen,
+  MessageSquarePlus,
+  PanelLeft,
+  Settings,
+} from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
+import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
+import { useLocaleStore } from '@/store/localeStore';
+import { workspaceGroupName } from '@/lib/chat/conversationGroups';
+import { FileOpener } from '@/lib/utils/fileOpener';
+import { revealConversationWorkspace } from '@/lib/agentWorkspace/workspaceService';
+import { toast } from '@/components/ui/sonner';
 import { ModelSelector } from './ModelSelector';
 import { ProviderMetadata } from '@/lib/metadata/types';
 import { DeleteConversationDialog } from './DeleteConversationDialog';
@@ -79,17 +92,28 @@ export function ChatHeader({
   const [_mcpAll, setMcpAll] = useState<string[]>([]);
   const [_mcpConnected, setMcpConnected] = useState<string[]>([]);
   const conversationId = useChatStore((s) => s.currentConversationId);
+  const directory = useConversationAttachmentStore((s) =>
+    conversationId ? s.mountedDirByConversation[conversationId] : undefined,
+  );
+  const t = useLocaleStore((s) => s.t);
+  useLocaleStore((s) => s.locale);
+  const workspaceName = directory
+    ? workspaceGroupName(directory)
+    : t('chatSidebar.defaultWorkspace');
+  const revealWorkspace = async () => {
+    if (!conversationId) return;
+    try {
+      if (directory) {
+        if (!(await FileOpener.openDirectory(directory)))
+          throw new Error('Could not reveal directory');
+      } else await revealConversationWorkspace(conversationId);
+    } catch {
+      toast.error(t('chatSidebar.openWorkspaceFailed'));
+    }
+  };
   const [enabledForConv, setEnabledForConv] = useState<string[]>([]);
 
-  const createConversation = useChatStore((state) => state.createConversation);
-  const { toggleSidebar, isSidebarOpen } = useSidebar();
-
-  const handleNewChat = async () => {
-    const defaultModelId = 'default-model';
-    const now = new Date();
-    const newTitle = `新对话 ${now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
-    await createConversation(newTitle, defaultModelId);
-  };
+  const { toggleSidebar, isSidebarOpen, newConversation } = useSidebar();
 
   const handleConfirmDelete = () => {
     onDelete();
@@ -133,16 +157,35 @@ export function ChatHeader({
           </button>
 
           {!isSidebarOpen && (
-            <button
-              onClick={handleNewChat}
-              className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-              title="新建对话"
-              aria-label="新建对话"
-            >
-              <PenLine className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-            </button>
+            <IconButton
+              onClick={() => void newConversation()}
+              title={t('chatSidebar.newConversation')}
+              aria-label={t('chatSidebar.newConversation')}
+              icon={MessageSquarePlus}
+              size="sm"
+            />
           )}
 
+          {conversationId && (
+            <>
+              <button
+                type="button"
+                title={directory ?? t('chatSidebar.revealWorkspace')}
+                aria-label={`${t('chatSidebar.currentWorkspace')}: ${workspaceName} · ${t('chatSidebar.revealWorkspace')}`}
+                className="flex h-7 min-w-0 max-w-[min(24vw,10rem)] shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs text-slate-600 hover:bg-slate-500/10 focus-visible:outline-2 focus-visible:outline-sky-600 dark:text-slate-300 dark:focus-visible:outline-sky-400"
+                onClick={() => void revealWorkspace()}
+              >
+                <FolderOpen aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="truncate">{workspaceName}</span>
+              </button>
+              <span
+                aria-hidden="true"
+                className="text-xs text-slate-500 dark:text-slate-400"
+              >
+                /
+              </span>
+            </>
+          )}
           <EditableTitle
             initialTitle={title}
             onTitleChange={onTitleChange}
@@ -219,8 +262,11 @@ export function ChatHeader({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-36 text-xs">
-              <DropdownMenuItem onSelect={handleNewChat} className="text-xs">
-                新建对话
+              <DropdownMenuItem
+                onSelect={() => void newConversation()}
+                className="text-xs"
+              >
+                {t('chatSidebar.newConversation')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={onShare} className="text-xs">
                 分享

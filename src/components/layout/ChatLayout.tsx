@@ -4,10 +4,15 @@ import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } f
 import StorageUtil from '@/lib/storage';
 import { useUiPreferences } from '@/store/uiPreferences';
 import { cn } from "@/lib/utils";
-import {  X, Clock, Star, RotateCcw, ListPlus } from 'lucide-react';
+import { X, Archive, Clock, FolderPlus, Star, RotateCcw, MessageSquarePlus } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 // import { SidebarHeader } from './SidebarHeader';
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
+import { ConversationViewMenu } from '@/components/chat/ConversationViewMenu';
+import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
+import { useLocaleStore } from '@/store/localeStore';
+import { workspacePath } from '@/lib/chat/conversationGroups';
+import { toast } from '@/components/ui/sonner';
 import { useChatStore } from "@/store/chatStore";
 import { Message, Conversation } from "@/types/chat";
 import { SidebarContext } from "@/contexts/SidebarContext";
@@ -162,7 +167,15 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
   const [isSearching, setIsSearching] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite'>('recent');
+  const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite' | 'archived'>('recent');
+  const [openingWorkspace, setOpeningWorkspace] = useState(false);
+  const [openedPath, setOpenedPath] = useState<{ path: string } | null>(null);
+  const setGrouping = useUiPreferences((state) => state.setConversationGrouping);
+  const directories = useConversationAttachmentStore((state) => state.mountedDirByConversation);
+  const archivedWorkspaces = useConversationAttachmentStore((state) => state.archivedWorkspaces);
+  const archivedConversations = useConversationAttachmentStore((state) => state.archivedConversations);
+  const t = useLocaleStore((state) => state.t);
+  useLocaleStore((state) => state.locale);
   
   const createConversation = useChatStore((state) => state.createConversation);
   const conversations = useChatStore((state) => state.conversations);
@@ -194,7 +207,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   }, []);
 
   // 处理分类筛选
-  const handleFilterChange = (filter: 'recent' | 'favorite') => {
+  const handleFilterChange = (filter: 'recent' | 'favorite' | 'archived') => {
     setActiveFilter(filter);
     // 如果在搜索模式，清除搜索
     if (isSearching) {
@@ -204,17 +217,21 @@ export function ChatLayout({ children }: ChatLayoutProps) {
 
   // 过滤会话根据搜索关键词和分类筛选
   const filteredConversations = useMemo(() => {
-    let result = conversations;
+    let result = conversations.filter((conversation) => {
+      const path = workspacePath(directories[conversation.id]);
+      const archived = Boolean(archivedConversations[conversation.id] || (path && archivedWorkspaces[path]));
+      return archived === (activeFilter === 'archived');
+    });
     
     // 首先应用分类筛选
     if (!isSearching) {
       switch (activeFilter) {
         case 'favorite':
-          result = conversations.filter((conv: Conversation) => (conv as any)['is_favorite']);
+          result = result.filter((conv) => conv.is_favorite);
           break;
         case 'recent':
         default:
-          result = conversations; // 显示所有会话，已经按更新时间排序
+          // The archive filter is already applied.
           break;
       }
     }
@@ -239,17 +256,43 @@ export function ChatLayout({ children }: ChatLayoutProps) {
     }
     
     return result;
-  }, [conversations, deferredQuery, isSearching, activeFilter]);
+  }, [conversations, deferredQuery, isSearching, activeFilter, directories, archivedWorkspaces, archivedConversations]);
 
-  const handleNewChat = async () => {
+  const handleNewChat = async (path?: string | null) => {
     const defaultModelId = "default-model";
     const now = new Date();
     const newTitle = `新对话 ${now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute:'2-digit' })}`;
-    await createConversation(newTitle, defaultModelId);
+    try {
+      await createConversation(newTitle, defaultModelId, undefined, path);
+      if (activeFilter !== 'recent') setActiveFilter('recent');
+    } catch {
+      toast.error(t('chatSidebar.newConversationFailed'));
+      return;
+    }
     
     // 创建新对话后清除搜索
     if (isSearching) {
       handleClearSearch();
+    }
+  };
+
+  const handleOpenWorkspace = async () => {
+    setOpeningWorkspace(true);
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({ directory: true, multiple: false, title: t('chatSidebar.openWorkspace') });
+      const path = typeof selected === 'string' ? workspacePath(selected) : null;
+      if (!path) return;
+      const store = useConversationAttachmentStore.getState();
+      store.registerWorkspace(path);
+      setGrouping('workspace');
+      setActiveFilter(store.archivedWorkspaces[path] ? 'archived' : 'recent');
+      handleClearSearch();
+      setOpenedPath({ path });
+    } catch {
+      toast.error(t('chatSidebar.openWorkspaceFailed'));
+    } finally {
+      setOpeningWorkspace(false);
     }
   };
 
@@ -261,7 +304,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   }, []);
 
   return (
-    <SidebarContext.Provider value={{ isSidebarOpen, toggleSidebar }}>
+    <SidebarContext.Provider value={{ isSidebarOpen, toggleSidebar, newConversation: handleNewChat }}>
       <div className="flex min-h-0 h-full relative">
         {/* 左侧会话列表侧边栏 */}
         <aside
@@ -277,14 +320,14 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           {/* 侧边栏头部已隐藏 */}
 
           {/* 搜索框 + 新建按钮 */}
-          <div className="flex-shrink-0 px-2.5 py-2">
-            <div className="flex items-center gap-1 min-w-0">
+          <div className="flex h-9 shrink-0 items-center px-2.5" data-chat-search-row>
+            <div className="flex w-full min-w-0 items-center gap-1">
               <div className="relative flex-1 min-w-0">
                 <SearchInput
                   placeholder="搜索对话..."
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  className="h-8 w-full pr-6 text-xs"
+                  className="h-8 w-full pr-6 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-300"
                 />
                 {isSearching && (
                   <button
@@ -296,43 +339,61 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                   </button>
                 )}
               </div>
+              <ConversationViewMenu
+                archiveVisible={activeFilter === 'archived'}
+                onArchiveVisibleChange={(visible) => handleFilterChange(visible ? 'archived' : 'recent')}
+              />
               <IconButton
-                onClick={handleNewChat}
-                title="新建"
-                icon={ListPlus}
+                onClick={handleOpenWorkspace}
+                disabled={openingWorkspace}
+                title={t('chatSidebar.openWorkspace')}
+                icon={FolderPlus}
                 className="h-7 w-7 shrink-0 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              />
+              <IconButton
+                onClick={() => void handleNewChat()}
+                title={t('chatSidebar.newConversation')}
+                aria-label={t('chatSidebar.newConversation')}
+                icon={MessageSquarePlus}
+                size="sm"
               />
             </div>
           </div>
 
           {/* 对话分类 */}
-          {!isSearching && (
-            <div className="flex-shrink-0 px-2 pb-1">
-              <div className="flex items-center gap-0.5 text-[11px]">
-                <button 
-                  className={cn(
-                    "px-2 py-1 rounded-md transition-colors flex items-center gap-1",
-                    activeFilter === 'recent' 
-                      ? "text-sky-700 dark:text-sky-300" 
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                  )} 
-                  onClick={() => handleFilterChange('recent')}
-                >
-                  <Clock className="w-3 h-3" />
-                  <span>最近</span>
-                </button>
-                <button 
-                  className={cn(
-                    "px-2 py-1 rounded-md transition-colors flex items-center gap-1",
-                    activeFilter === 'favorite' 
-                      ? "text-sky-700 dark:text-sky-300" 
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                  )} 
-                  onClick={() => handleFilterChange('favorite')}
-                >
-                  <Star className={cn("w-3 h-3", activeFilter === 'favorite' && "fill-current")} />
-                  <span>收藏</span>
-                </button>
+          {(!isSearching || activeFilter === 'archived') && (
+            <div className="shrink-0 px-2 pt-1 pb-1">
+              <div className="flex flex-wrap items-center gap-0.5 text-xs">
+                {!isSearching && ([
+                  ['recent', '最近', Clock],
+                  ['favorite', '收藏', Star],
+                ] as const).map(([filter, label, Icon]) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    aria-pressed={activeFilter === filter}
+                    onClick={() => handleFilterChange(filter)}
+                    className={cn(
+                      'flex min-h-7 items-center gap-1.5 rounded-md px-2 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-sky-600 motion-reduce:transition-none dark:focus-visible:outline-sky-400',
+                      activeFilter === filter
+                        ? 'bg-sky-600/10 text-sky-800 dark:bg-sky-400/12 dark:text-sky-200'
+                        : 'text-slate-700 hover:bg-slate-500/10 dark:text-slate-300',
+                    )}
+                  >
+                    <Icon aria-hidden="true" className={cn('size-3.5 shrink-0', filter === 'favorite' && activeFilter === filter && 'fill-current')} />
+                    {label}
+                  </button>
+                ))}
+                {activeFilter === 'archived' && (
+                  <button type="button" onClick={() => handleFilterChange('recent')}
+                    title={t('chatSidebar.exitArchive')}
+                    aria-label={t('chatSidebar.exitArchive')}
+                    className="flex min-h-7 items-center gap-1.5 rounded-md bg-sky-600/10 px-2 font-medium text-sky-800 focus-visible:outline-2 focus-visible:outline-sky-600 dark:bg-sky-400/12 dark:text-sky-200 dark:focus-visible:outline-sky-400">
+                    <Archive aria-hidden="true" className="size-3.5" />
+                    {t('chatSidebar.archived')}
+                    <X aria-hidden="true" className="size-3" />
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -343,6 +404,9 @@ export function ChatLayout({ children }: ChatLayoutProps) {
               filteredConversations={filteredConversations}
               isSearching={isSearching}
               searchQuery={searchQuery}
+              filter={activeFilter}
+              openedPath={openedPath}
+              onCreateInWorkspace={handleNewChat}
             />
           </div>
         </aside>

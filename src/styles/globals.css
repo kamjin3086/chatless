@@ -1390,6 +1390,19 @@ html.glass-ui.dark {
   box-sizing: border-box;
 }
 
+.glass-ui .glass-shell[data-app-nav-collapsed] {
+  padding-left: 0;
+}
+
+/* Page switching overlaps the workspaces rail; its text needs a solid backdrop. */
+.glass-ui [data-app-page-menu] {
+  --glass-overlay-fill: rgb(250, 252, 255);
+}
+
+.glass-ui.dark [data-app-page-menu] {
+  --glass-overlay-fill: rgb(17, 20, 27);
+}
+
 .glass-ui .glass-shell-inner {
   height: 100%;
   min-height: 0;
@@ -1412,7 +1425,8 @@ html.glass-ui.simple-ui .glass-nav {
   height: 100% !important;
 }
 
-.glass-ui .glass-shell-inner > .glass-surface {
+.glass-ui .glass-shell-inner > .glass-surface,
+.glass-ui .glass-shell-content > .glass-surface {
   border-width: 0 !important;
   box-shadow: none !important;
 }
@@ -1816,6 +1830,22 @@ html.custom-titlebar:not(.glass-ui) .glass-nav {
 
 .window-titlebar-slot-start {
   justify-content: flex-start;
+}
+
+.window-titlebar-slot-start.window-titlebar-slot-compact {
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 0.5rem;
+  padding-inline-start: 0.75rem;
+}
+
+.window-titlebar-slot-compact .window-controls {
+  flex-shrink: 0;
+}
+
+/* The browser fallback owns a row only when there is no desktop title bar. */
+html:has(.window-titlebar [data-app-page-switcher]) .app-page-switcher-fallback {
+  display: none;
 }
 
 .window-titlebar-slot-end {
