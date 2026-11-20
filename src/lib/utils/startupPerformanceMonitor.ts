@@ -3,6 +3,27 @@
  * 用于跟踪应用启动过程中各个阶段的耗时
  */
 
+import { getVersionInfo } from '@/config/app-info';
+
+export type ChatReadinessMilestone = 'historyVisible' | 'composerEditable';
+
+const readinessLabels: Record<ChatReadinessMilestone, string> = {
+  historyVisible: '历史列表可见',
+  composerEditable: '输入框可编辑',
+};
+
+/** Observe the change after the browser has had a frame to present it. */
+export function afterStartupPaint(callback: () => void): () => void {
+  let secondFrame: number | undefined;
+  const firstFrame = requestAnimationFrame(() => {
+    secondFrame = requestAnimationFrame(callback);
+  });
+  return () => {
+    cancelAnimationFrame(firstFrame);
+    if (secondFrame !== undefined) cancelAnimationFrame(secondFrame);
+  };
+}
+
 export interface PerformanceMetric {
   name: string;
   startTime: number;
@@ -13,15 +34,16 @@ export interface PerformanceMetric {
 }
 
 export interface StartupPerformanceReport {
-  totalDuration: number;
+  firstContentfulPaint: number | null;
+  readiness: Record<ChatReadinessMilestone, number | null>;
   phases: PerformanceMetric[];
-  bottlenecks: PerformanceMetric[];
-  recommendations: string[];
+  backgroundPhases: PerformanceMetric[];
   timestamp: number;
 }
 
 class StartupPerformanceMonitor {
   private metrics: Map<string, PerformanceMetric> = new Map();
+  private readiness: StartupPerformanceReport['readiness'] = { historyVisible: null, composerEditable: null };
   private currentPhase: string | null = null;
   private phaseStack: string[] = [];
   // 在生产环境也启用监控；仅在开发环境输出控制台日志
@@ -120,58 +142,55 @@ class StartupPerformanceMonitor {
     }
   }
 
+  markChatReady(milestone: ChatReadinessMilestone): void {
+    if (!this.isEnabled || this.readiness[milestone] !== null) return;
+    const elapsed = performance.now();
+    this.readiness[milestone] = elapsed;
+    this.mark(readinessLabels[milestone]);
+  }
+
   /**
    * 生成性能报告
    */
   generateReport(): StartupPerformanceReport {
-    const phases = Array.from(this.metrics.values())
-      .filter(metric => metric.duration !== undefined)
-      .sort((a, b) => (b.duration || 0) - (a.duration || 0));
-
-    const totalDuration = phases.reduce((sum, phase) => sum + (phase.duration || 0), 0);
-    
-    // 识别瓶颈（耗时超过100ms的阶段）
-    const bottlenecks = phases.filter(phase => (phase.duration || 0) > 100);
-
-    // 生成建议
-    const recommendations = this.generateRecommendations(phases, bottlenecks, totalDuration);
-
-    const report: StartupPerformanceReport = {
-      totalDuration,
-      phases,
-      bottlenecks,
-      recommendations,
-      timestamp: Date.now()
+    const phases = [...this.metrics.values()].sort((a, b) => a.startTime - b.startTime);
+    return {
+      firstContentfulPaint: performance.getEntriesByName('first-contentful-paint', 'paint')[0]?.startTime ?? null,
+      readiness: { ...this.readiness },
+      phases: phases.filter((phase) => !phase.metadata?.background),
+      backgroundPhases: phases.filter((phase) => phase.metadata?.background),
+      timestamp: Date.now(),
     };
-
-    return report;
   }
 
-  /**
-   * 生成优化建议
-   */
-  private generateRecommendations(phases: PerformanceMetric[], bottlenecks: PerformanceMetric[], totalDuration: number): string[] {
-    const recommendations: string[] = [];
-
-    if (bottlenecks.length > 0) {
-      recommendations.push(`发现 ${bottlenecks.length} 个性能瓶颈，建议优先优化`);
-      
-      bottlenecks.forEach(bottleneck => {
-        if (bottleneck.name.includes('数据库')) {
-          recommendations.push(`- ${bottleneck.name}: 考虑异步化或缓存优化`);
-        } else if (bottleneck.name.includes('加载')) {
-          recommendations.push(`- ${bottleneck.name}: 考虑并行加载或懒加载`);
-        } else if (bottleneck.name.includes('初始化')) {
-          recommendations.push(`- ${bottleneck.name}: 考虑延迟初始化`);
+  private formatTimings(report: StartupPerformanceReport): string {
+    const ms = (value: number) => `${value.toFixed(2)} ms`;
+    const firstPaint = report.firstContentfulPaint;
+    const lines = [
+      '首屏就绪（WebView 计时，不含原生窗口创建）',
+      `WebView 首次内容绘制: ${firstPaint === null ? '未测得' : ms(firstPaint)}`,
+    ];
+    for (const milestone of ['historyVisible', 'composerEditable'] as const) {
+      const time = report.readiness[milestone];
+      const sincePaint = time !== null && firstPaint !== null && time >= firstPaint ? ms(time - firstPaint) : '未测得';
+      lines.push(`${readinessLabels[milestone]}: ${time === null ? '未观测到' : `${ms(time)}（距首次内容绘制 ${sincePaint}）`}`);
+    }
+    lines.push('以上记录此 WebView 中首次观测到的状态；若稍后才进入聊天页，时间包含导航等待。');
+    const sections = [
+      ['前台初始化阶段（可能嵌套，不求和）', report.phases],
+      ['后台或辅助阶段（不计入首屏就绪）', report.backgroundPhases],
+    ] as const;
+    for (const [label, phases] of sections) {
+      lines.push('', label);
+      for (const phase of phases) {
+        lines.push(`- ${phase.name}: ${phase.duration === undefined ? '尚未结束' : ms(phase.duration)}（起于 ${ms(phase.startTime)}）`);
+        for (const child of phase.children ?? []) {
+          if (child.duration !== undefined) lines.push(`  - ${child.name}: ${ms(child.duration)}`);
         }
-      });
+      }
+      if (!phases.length) lines.push('- 无记录');
     }
-
-    if (totalDuration > 500) {
-      recommendations.push('总启动时间超过500ms，建议进一步优化');
-    }
-
-    return recommendations;
+    return lines.join('\n');
   }
 
   /**
@@ -184,27 +203,7 @@ class StartupPerformanceMonitor {
     
     if (!this.shouldLog()) return;
 
-    console.group('📊 启动性能报告');
-    console.log(`总耗时: ${report.totalDuration.toFixed(2)}ms`);
-    console.log(`阶段数: ${report.phases.length}`);
-    console.log(`瓶颈数: ${report.bottlenecks.length}`);
-    
-    if (report.phases.length > 0) {
-      console.group('各阶段耗时:');
-      report.phases.forEach(phase => {
-        const percentage = ((phase.duration || 0) / report.totalDuration * 100).toFixed(1);
-        console.log(`${phase.name}: ${phase.duration?.toFixed(2)}ms (${percentage}%)`);
-      });
-      console.groupEnd();
-    }
-
-    if (report.recommendations.length > 0) {
-      console.group('优化建议:');
-      report.recommendations.forEach(rec => console.log(`- ${rec}`));
-      console.groupEnd();
-    }
-
-    console.groupEnd();
+    console.log(this.formatTimings(report));
   }
 
   /**
@@ -218,44 +217,7 @@ class StartupPerformanceMonitor {
     output += '🚀 应用启动性能报告\n';
     output += '='.repeat(60) + '\n';
     output += `生成时间: ${new Date(report.timestamp).toLocaleString()}\n`;
-    output += `总耗时: ${report.totalDuration.toFixed(2)}ms\n`;
-    output += `阶段数: ${report.phases.length}\n`;
-    output += `瓶颈数: ${report.bottlenecks.length}\n\n`;
-    
-    if (report.bottlenecks.length > 0) {
-      output += '⚠️ 性能瓶颈:\n';
-      output += '-'.repeat(30) + '\n';
-      report.bottlenecks.forEach((bottleneck, index) => {
-        const percentage = ((bottleneck.duration || 0) / report.totalDuration * 100).toFixed(1);
-        output += `${index + 1}. ${bottleneck.name}: ${bottleneck.duration?.toFixed(2)}ms (${percentage}%)\n`;
-      });
-      output += '\n';
-    }
-    
-    output += '📊 各阶段耗时详情:\n';
-    output += '-'.repeat(30) + '\n';
-    report.phases.forEach((phase, index) => {
-      const percentage = ((phase.duration || 0) / report.totalDuration * 100).toFixed(1);
-      output += `${index + 1}. ${phase.name}: ${phase.duration?.toFixed(2)}ms (${percentage}%)\n`;
-      
-      // 如果有子阶段，也显示出来
-      if (phase.children && phase.children.length > 0) {
-        phase.children.forEach((child, childIndex) => {
-          const childPercentage = ((child.duration || 0) / report.totalDuration * 100).toFixed(1);
-          output += `   ${index + 1}.${childIndex + 1}. ${child.name}: ${child.duration?.toFixed(2)}ms (${childPercentage}%)\n`;
-        });
-      }
-    });
-    output += '\n';
-    
-    if (report.recommendations.length > 0) {
-      output += '💡 优化建议:\n';
-      output += '-'.repeat(30) + '\n';
-      report.recommendations.forEach((rec, index) => {
-        output += `${index + 1}. ${rec}\n`;
-      });
-      output += '\n';
-    }
+    output += `\n${this.formatTimings(report)}\n\n`;
     
     output += '📋 系统信息:\n';
     output += '-'.repeat(30) + '\n';
@@ -353,7 +315,8 @@ class StartupPerformanceMonitor {
     
     output += '\n🔧 应用信息:\n';
     output += '-'.repeat(30) + '\n';
-    output += `应用版本: ${process.env.NODE_ENV || '未知'}\n`;
+    const { version, build } = getVersionInfo();
+    output += `应用版本: ${version}（构建 ${build}）\n`;
     output += `构建模式: ${process.env.NODE_ENV === 'development' ? '开发模式' : '生产模式'}\n`;
     output += `页面URL: ${window.location.href}\n`;
     output += `页面标题: ${document.title}\n`;
@@ -408,6 +371,7 @@ class StartupPerformanceMonitor {
    */
   reset(): void {
     this.metrics.clear();
+    this.readiness = { historyVisible: null, composerEditable: null };
     this.currentPhase = null;
     this.phaseStack = [];
   }

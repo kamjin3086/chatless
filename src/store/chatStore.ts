@@ -68,6 +68,7 @@ interface ChatState {
   conversations: Conversation[];
   currentConversationId: string | null;
   isLoadingConversations: boolean;
+  hasLoadedConversations: boolean;
   isGenerating: boolean;
   /**
    * Agent 运行态（用于 Stop 按钮稳定显示）
@@ -172,6 +173,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
       conversations: [],
       currentConversationId: null,
       isLoadingConversations: false,
+      hasLoadedConversations: false,
       isGenerating: false,
       agentRuns: {},
       lastUsedModelPerChat: {},
@@ -242,8 +244,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
           }
 
           set({ 
-            conversations: loadedConversations, 
+            conversations: loadedConversations,
             isLoadingConversations: false,
+            hasLoadedConversations: true,
             agentRuns: {},
           });
 

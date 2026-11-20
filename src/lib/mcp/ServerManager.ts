@@ -37,15 +37,14 @@ class ServerManager {
         ? MCP_STDIO_CONNECT_TIMEOUT_MS
         : MCP_CONNECT_TIMEOUT_MS;
     const initTimeout = isStartup ? Math.min(MCP_INIT_TIMEOUT_MS, 5000) : MCP_INIT_TIMEOUT_MS;
-    
+    const startupMonitor = options.isStartup === true
+      ? (await import('@/lib/utils/startupPerformanceMonitor')).startupMonitor
+      : undefined;
+
     try {
       this.updateStatus(name, "connecting");
 
-      const { startupMonitor } = await import('@/lib/utils/startupPerformanceMonitor');
-      startupMonitor.startPhase(`MCP连接-${name}`, {
-        description: `连接MCP服务器: ${name}`,
-        serverName: name
-      });
+      startupMonitor?.startPhase(`MCP连接-${name}`, { background: true });
 
       const client = new McpClient(name, config);
       this.clients.set(name, client);
@@ -60,24 +59,19 @@ class ServerManager {
 
       // 验证连接并预热缓存
       await Promise.race([
-        this.validateConnectionAndWarmCache(client, name, silent),
+        this.validateConnectionAndWarmCache(client, name, silent, startupMonitor),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error(`初始化超时: ${name} (${initTimeout}ms)`)), initTimeout)
         )
       ]);
 
-      startupMonitor.endPhase(`MCP连接-${name}`);
+      startupMonitor?.endPhase(`MCP连接-${name}`);
       
       // 连接成功，更新状态
       this.updateStatus(name, "connected");
       
     } catch (error) {
-      try {
-        const { startupMonitor } = await import('@/lib/utils/startupPerformanceMonitor');
-        startupMonitor.endPhase(`MCP连接-${name}`);
-      } catch {
-        // 忽略 endPhase 错误
-      }
+      startupMonitor?.endPhase(`MCP连接-${name}`);
       
       // 清理失败的客户端
       this.clients.delete(name);
@@ -101,13 +95,12 @@ class ServerManager {
     await this.startServer(name, config, { isStartup: false });
   }
 
-  private async validateConnectionAndWarmCache(client: McpClient, name: string, silent = false): Promise<void> {
+  private async validateConnectionAndWarmCache(
+    client: McpClient, name: string, silent: boolean,
+    startupMonitor?: typeof import('@/lib/utils/startupPerformanceMonitor').startupMonitor,
+  ): Promise<void> {
     try {
-      const { startupMonitor } = await import('@/lib/utils/startupPerformanceMonitor');
-      startupMonitor.startPhase(`MCP验证-${name}`, {
-        description: `验证MCP服务器连接: ${name}`,
-        serverName: name
-      });
+      startupMonitor?.startPhase(`MCP验证-${name}`, { background: true });
 
       // 验证连接
       if (!silent) console.log(`🔍 [MCP] 正在验证服务器 ${name} 的连接...`);
@@ -124,12 +117,9 @@ class ServerManager {
       store.updateToolsCache(name, tools);
       if (!silent) console.log(`💾 [MCP] 已缓存服务器 ${name} 的 ${tools.length} 个工具`);
 
-      startupMonitor.endPhase(`MCP验证-${name}`);
+      startupMonitor?.endPhase(`MCP验证-${name}`);
     } catch (error) {
-      try {
-        const { startupMonitor } = await import('@/lib/utils/startupPerformanceMonitor');
-        startupMonitor.endPhase(`MCP验证-${name}`);
-      } catch { /* noop during endPhase */ }
+      startupMonitor?.endPhase(`MCP验证-${name}`);
       
       console.error(`❌ [MCP] 验证服务器 ${name} 失败:`, error);
       // 自愈策略：会话失效/400/解码错误时，尝试一次强制重连后重试 listTools
@@ -287,7 +277,7 @@ class ServerManager {
     try {
       const { Store } = await import('@tauri-apps/plugin-store');
       const { startupMonitor } = await import('@/lib/utils/startupPerformanceMonitor');
-      startupMonitor.startPhase('MCP服务器连接', { description: '应用启动连接MCP服务器' });
+      startupMonitor.startPhase('MCP后台调度', { background: true });
 
       const storeFile = 'mcp_servers.json';
       const cfgStore = await Store.load(storeFile);
@@ -296,7 +286,7 @@ class ServerManager {
       // 如果没有配置，记录日志但不自动创建
       if (servers.length === 0) {
         console.log('[MCP] 未找到MCP服务配置，请手动配置MCP服务');
-        startupMonitor.endPhase('MCP服务器连接');
+        startupMonitor.endPhase('MCP后台调度');
         this.endStartupPhase();
         return;
       }
@@ -337,8 +327,8 @@ class ServerManager {
         }
       }, 15000); // 15秒后强制结束启动阶段
 
-      // 立即结束此阶段，不等待所有服务启动完成
-      startupMonitor.endPhase('MCP服务器连接');
+      // This phase covers scheduling only; each server has its own span.
+      startupMonitor.endPhase('MCP后台调度');
       console.log('[MCP] MCP服务正在后台启动中...');
     } catch (e) {
       console.error('[MCP] 初始化失败:', e);
