@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { preloadInitialLogos } from '@/lib/utils/logoPreloader';
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
 import { RouteErrorBoundary } from '@/components/errors/RouteErrorBoundary';
+import { AppShellErrorBoundary } from '@/components/errors/AppShellErrorBoundary';
 import { isTauriEnvironment } from '@/lib/utils/environment';
 
 // The custom title bar is a platform capability, not a user setting, so the
@@ -240,14 +241,15 @@ export default function RootLayout({
   return (
     <html lang={getHtmlLang(locale)} className="h-full" suppressHydrationWarning>
       <body className={`${inter.variable} h-full bg-background text-foreground antialiased`}>
-        <WindowTitleBar />
-        <TauriApp>
-          {/* Routed content only: the shell and the stores stay outside, so a retry or
-              the way back cannot discard an in-flight conversation. */}
-          <RouteErrorBoundary>{children}</RouteErrorBoundary>
-        </TauriApp>
-        <CommandPalette />
-        <Toaster />
+        <AppShellErrorBoundary>
+          <WindowTitleBar />
+          <TauriApp>
+            {/* The inner boundary preserves the shell and in-flight work on route errors. */}
+            <RouteErrorBoundary>{children}</RouteErrorBoundary>
+          </TauriApp>
+          <CommandPalette />
+          <Toaster />
+        </AppShellErrorBoundary>
       </body>
     </html>
   );

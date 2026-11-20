@@ -5,8 +5,6 @@ import { ContextCompactionNotice } from './ContextCompactionNotice';
 import { VersionedAssistantGroup } from './VersionedAssistantGroup';
 import { Message } from '@/types/chat';
 import FoldingLoader from '@/components/ui/FoldingLoader';
-import { ChatEmptyState } from './ChatEmptyState';
-import type { ChatSetupState } from './ChatEmptyState';
 
 interface ChatMessageListProps {
   chatId?: string;
@@ -36,8 +34,6 @@ interface ChatMessageListProps {
   initialTopMostItemIndex?: number;
   /** 是否应该自动滚动到底部（由父组件的滚动管理逻辑控制） */
   shouldFollowOutput?: boolean;
-  onPromptClick?: (prompt: string) => void;
-  setupState?: ChatSetupState;
 }
 
 export function ChatMessageList({
@@ -55,8 +51,6 @@ export function ChatMessageList({
   onRegisterScrollToMessage,
   initialTopMostItemIndex,
   shouldFollowOutput = false,
-  onPromptClick,
-  setupState = 'ready',
 }: ChatMessageListProps) {
 
   // 预处理：将版本化消息分组，生成渲染项
@@ -103,16 +97,7 @@ export function ChatMessageList({
     return items;
   }, [messages]);
 
-  if (messages.length === 0 && !isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full px-4">
-        <ChatEmptyState
-          onPromptClick={onPromptClick || (() => {})}
-          setupState={setupState}
-        />
-      </div>
-    );
-  }
+  if (messages.length === 0 && !isLoading) return null;
 
   return (
     <div className="flex-1 custom-scrollbar" style={{ overscrollBehavior: 'contain' }}>

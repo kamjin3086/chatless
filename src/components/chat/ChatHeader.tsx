@@ -56,6 +56,7 @@ interface ChatHeaderProps {
   currentProviderName?: string;
   onModelChange: (newModelId: string) => void;
   isModelSelectorDisabled?: boolean;
+  hideModelSelector?: boolean;
   tokenCount?: number;
   /** 会话参数：入口从输入框迁移到右上角三点菜单 */
   hasSessionParameters?: boolean;
@@ -80,6 +81,7 @@ export function ChatHeader({
   currentProviderName,
   onModelChange: handleModelChange,
   isModelSelectorDisabled = false,
+  hideModelSelector = false,
   tokenCount: _tokenCount = 0,
   hasSessionParameters,
   onOpenSessionParameters,
@@ -206,13 +208,15 @@ export function ChatHeader({
 
         {/* 右侧：模型选择为主控件，按名称向左撑开 */}
         <div className="flex items-center gap-0.5 shrink-0">
-          <ModelSelector
-            allMetadata={allMetadata}
-            currentModelId={currentModelId}
-            currentProviderName={currentProviderName}
-            onModelChange={handleModelChange}
-            disabled={isModelSelectorDisabled}
-          />
+          {!hideModelSelector && (
+            <ModelSelector
+              allMetadata={allMetadata}
+              currentModelId={currentModelId}
+              currentProviderName={currentProviderName}
+              onModelChange={handleModelChange}
+              disabled={isModelSelectorDisabled}
+            />
+          )}
 
           <ThinkingLevelSwitch
             provider={currentProviderName || ''}

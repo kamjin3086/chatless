@@ -9,7 +9,7 @@ import {
   undoHistory,
 } from "./composerHistory";
 import { composerFloor, nextInputHeight } from "./inputHeight";
-import { ListChecks, Send, StopCircle } from "lucide-react";
+import { Bookmark, FolderOpen, ListChecks, Paperclip, Send, StopCircle } from "lucide-react";
 import { DocumentParser } from '@/lib/documentParser';
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { AttachmentMenu } from './input/AttachmentMenu';
 import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
+import { useLocaleStore } from '@/store/localeStore';
 import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
 import { WebSearchToggle } from './input/WebSearchToggle';
 import { McpQuickToggle } from './input/McpQuickToggle';
@@ -100,6 +101,7 @@ interface ChatInputProps {
   modelId?: string;
   modelLabel?: string;
   conversationId?: string; // 添加会话ID参数
+  showStarterActions?: boolean;
   onSessionParametersChange?: (parameters: ModelParameters) => void;
 }
 
@@ -120,7 +122,8 @@ export function ChatInput({
   modelId: _modelId,
   modelLabel: _modelLabel,
   onSessionParametersChange: _onSessionParametersChange,
-  conversationId
+  conversationId,
+  showStarterActions = false,
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [composerSelection, setComposerSelection] = useState<{ text: string; caret: number } | null>(null);
@@ -161,6 +164,9 @@ export function ChatInput({
   // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
 
   const _router = useRouter();
+  const t = useLocaleStore((state) => state.t);
+  useLocaleStore((state) => state.locale);
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const searchParams = useSearchParams();
   const consumeKnowledgeBaseDeepLink = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1159,6 +1165,8 @@ export function ChatInput({
 
           {/* 附件菜单 */}
           <AttachmentMenu
+            open={attachmentMenuOpen}
+            onOpenChange={setAttachmentMenuOpen}
             disabled={disabled || effectiveLoading}
             isParsingDocument={isParsingDocument}
             hasDocument={!!attachedDocument}
@@ -1306,7 +1314,24 @@ export function ChatInput({
         enabledMcpServers={[]}
       />
 
-      {/* 会话参数弹窗已迁移到上层 Chat 页面统一挂载 */}
+      {showStarterActions && !disabled && !effectiveLoading && (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5" data-chat-starter-actions>
+          <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
+            className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => workspaceDirectory ? openComposerPanel('@') : setAttachmentMenuOpen(true)}>
+            {workspaceDirectory ? <FolderOpen aria-hidden="true" className="size-3.5" /> : <Paperclip aria-hidden="true" className="size-3.5" />}
+            {t(workspaceDirectory ? 'chatStarter.workspaceFiles' : 'chatStarter.attach')}
+            {workspaceDirectory && <kbd className="rounded border border-border px-1 text-[11px] leading-4">@</kbd>}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
+            className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => openComposerPanel('#')}>
+            <Bookmark aria-hidden="true" className="size-3.5" />
+            {t('chatStarter.prompts')}
+            <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

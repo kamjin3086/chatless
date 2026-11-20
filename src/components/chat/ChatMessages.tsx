@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { ChatMessage as ChatMessageComponent } from '@/components/chat/ChatMessage';
-import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
 import type { Message as OriginalMessage, Conversation } from '@/types/chat';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -37,7 +36,6 @@ interface ChatMessagesProps {
   maxVisibleMessages: number;
   onRetry: (messageId: string) => void;
   onSaveThinkingDuration: (messageId: string, duration: number) => void;
-  onEmptyStatePromptClick: (prompt: string) => void;
 }
 
 export const ChatMessages: React.FC<ChatMessagesProps> = ({
@@ -47,7 +45,6 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   maxVisibleMessages,
   onRetry,
   onSaveThinkingDuration,
-  onEmptyStatePromptClick,
 }) => {
   const visibleMessages = useMemo(() => {
     if (!conversation?.messages) return [];
@@ -86,10 +83,6 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   }, [visibleMessages, conversation?.id]);
 
   const messageList = useMemo(() => {
-    if (!processedMessages || processedMessages.length === 0) {
-        return <ChatEmptyState onPromptClick={onEmptyStatePromptClick} />;
-    }
-
     return (
       <>
         {processedMessages.map((message) => (
@@ -123,7 +116,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
         ))}
       </>
     );
-  }, [processedMessages, messageRefs, onRetry, onSaveThinkingDuration, onEmptyStatePromptClick]);
+  }, [processedMessages, messageRefs, onRetry, onSaveThinkingDuration]);
 
   return (
     <div className="w-full max-w-full min-w-0 flex flex-col items-stretch">

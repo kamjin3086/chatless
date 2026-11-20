@@ -765,43 +765,6 @@ export const useChatActions = (
     ],
   );
 
-  const handleEmptyStatePromptClick = useCallback(
-    async (prompt: string) => {
-      if (!selectedModelId) {
-        toast.error('请先选择一个模型', {
-          description: '点击此处前往设置页面选择模型',
-          action: {
-            label: '前往设置',
-            onClick: () => navigateToSettings('localModels'),
-          },
-        });
-        return;
-      }
-      const apiKeyValid = await checkApiKeyValidity(
-        currentProviderName,
-        selectedModelId,
-      );
-      if (!apiKeyValid) {
-        toast.error('API密钥无效', {
-          description: '请前往设置页面配置有效的API密钥',
-          action: {
-            label: '前往设置',
-            onClick: () => navigateToSettings('localModels'),
-          },
-        });
-        return;
-      }
-      await handleSendMessage(prompt);
-    },
-    [
-      selectedModelId,
-      currentProviderName,
-      handleSendMessage,
-      checkApiKeyValidity,
-      navigateToSettings,
-    ],
-  );
-
   const handleStopGeneration = useCallback(() => {
     setStopGenerationHint('正在停止生成…');
     stopGenerationIdleWatch();
@@ -1244,7 +1207,6 @@ export const useChatActions = (
     isGenerating,
     handleSendMessage,
     handleStopGeneration,
-    handleEmptyStatePromptClick,
     stopGenerationHint,
     handleTitleChange,
     handleDeleteConversation,

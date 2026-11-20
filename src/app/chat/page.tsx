@@ -11,6 +11,8 @@ import { useChatStore } from '@/store/chatStore';
 import { useSearchParams } from 'next/navigation';
 
 import { ChatInitializing } from '@/components/chat/ChatInitializing';
+import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
+import { cn } from '@/lib/utils';
 import { EmptyChatView } from '@/components/chat/EmptyChatView';
 import { ChatMessageList } from '@/components/chat/ChatMessageList';
 import { FloatingSkillApprovalPanel } from '@/components/skills/SkillApprovalPanel';
@@ -100,7 +102,6 @@ export default function ChatPage() {
     isLoading,
     handleSendMessage,
     handleStopGeneration,
-    handleEmptyStatePromptClick,
     stopGenerationHint,
     handleTitleChange,
     handleDeleteConversation,
@@ -289,6 +290,12 @@ export default function ChatPage() {
   // 实时渲染：直接使用会话消息，确保流式更新不被延迟
   const liveMessages =
     (currentConversation?.messages as Message[] | undefined) || [];
+  const messagesLoaded = useChatStore((state) =>
+    Boolean(
+      currentConversationId && state._messagesLoaded[currentConversationId],
+    ),
+  );
+  const showStarter = messagesLoaded && liveMessages.length === 0 && !isLoading;
 
   const handleEditMessage = (messageId: string, _content: string) => {
     if (!currentConversation) return;
@@ -347,7 +354,6 @@ export default function ChatPage() {
         llmInitialized={llmInitialized}
         onSendMessage={handleSendMessage}
         onStopGeneration={handleStopGeneration}
-        onPromptClick={handleEmptyStatePromptClick}
         selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}
         onImageUpload={handleImageUpload}
         onFileUpload={handleFileUpload}
@@ -375,6 +381,7 @@ export default function ChatPage() {
         currentProviderName={currentProviderName}
         onModelChange={handleModelChange}
         isModelSelectorDisabled={isLoading}
+        hideModelSelector={showStarter && !canSend}
         tokenCount={tokenCount}
         hasSessionParameters={!!currentSessionParameters}
         onOpenSessionParameters={() => setSessionParametersDialogOpen(true)}
@@ -386,7 +393,7 @@ export default function ChatPage() {
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 flex flex-col min-h-0">
           {/* 消息区单独定位：悬浮导航条锚在“消息区”底部，而不是整个面板底部（否则会压住输入框） */}
-          <div className="relative flex-1 min-h-0">
+          <div className="relative flex-1 min-h-0" hidden={showStarter}>
             <div
               className="absolute inset-0 custom-scrollbar"
               ref={attachScrollContainer}
@@ -400,7 +407,7 @@ export default function ChatPage() {
               }}
               style={{ overflowY: 'hidden', scrollbarGutter: 'stable' }}
             >
-              {scrollParent && (
+              {scrollParent && !showStarter && (
                 <ChatMessageList
                   chatId={currentConversationId}
                   messages={liveMessages}
@@ -414,8 +421,6 @@ export default function ChatPage() {
                   scrollParent={scrollParent}
                   onRegisterScrollToMessage={registerScrollToMessage}
                   shouldFollowOutput={shouldFollowOutput}
-                  onPromptClick={handleEmptyStatePromptClick}
-                  setupState={setupState}
                   initialTopMostItemIndex={(() => {
                     const msgs = liveMessages;
                     const idx = [...msgs]
@@ -452,36 +457,56 @@ export default function ChatPage() {
             </div>
           </div>
           <div
-            className="bg-transparent"
+            className={cn(
+              'bg-transparent',
+              showStarter &&
+                'flex min-h-0 flex-1 flex-col justify-center-safe overflow-y-auto',
+            )}
             onMouseEnter={() => setIsInputAreaHovered(true)}
             onMouseLeave={() => setIsInputAreaHovered(false)}
           >
-            <div className="mx-auto w-full">
-              <ChatInput
-                isLoading={isLoading}
-                disabled={!canSend}
-                onSendMessage={handleSendMessage}
-                onStopGeneration={handleStopGeneration}
-                stopGenerationHint={stopGenerationHint}
-                onImageUpload={handleImageUpload}
-                onFileUpload={handleFileUpload}
-                selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}
-                tokenCount={tokenCount}
-                editingMessage={editingMessage}
-                onCancelEdit={handleCancelEdit}
-                // 会话参数相关
-                providerName={currentProviderName}
-                modelId={selectedModelId || undefined}
-                modelLabel={
-                  allMetadata
-                    ?.find((p) =>
-                      p.models?.some((m) => m.name === selectedModelId),
-                    )
-                    ?.models?.find((m) => m.name === selectedModelId)?.label
-                }
-                onSessionParametersChange={handleSessionParametersChange}
-                conversationId={currentConversationId}
-              />
+            <div
+              className={cn('mx-auto w-full', showStarter && 'max-w-3xl py-6')}
+            >
+              {showStarter && (
+                <ChatEmptyState
+                  setupState={setupState}
+                  modelPicker={{
+                    allMetadata,
+                    currentModelId: selectedModelId,
+                    currentProviderName,
+                    onModelChange: handleModelChange,
+                  }}
+                />
+              )}
+              <div hidden={showStarter && !canSend}>
+                <ChatInput
+                  isLoading={isLoading}
+                  disabled={!canSend}
+                  onSendMessage={handleSendMessage}
+                  onStopGeneration={handleStopGeneration}
+                  stopGenerationHint={stopGenerationHint}
+                  onImageUpload={handleImageUpload}
+                  onFileUpload={handleFileUpload}
+                  selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}
+                  tokenCount={tokenCount}
+                  editingMessage={editingMessage}
+                  onCancelEdit={handleCancelEdit}
+                  // 会话参数相关
+                  providerName={currentProviderName}
+                  modelId={selectedModelId || undefined}
+                  modelLabel={
+                    allMetadata
+                      ?.find((p) =>
+                        p.models?.some((m) => m.name === selectedModelId),
+                      )
+                      ?.models?.find((m) => m.name === selectedModelId)?.label
+                  }
+                  onSessionParametersChange={handleSessionParametersChange}
+                  conversationId={currentConversationId}
+                  showStarterActions={showStarter}
+                />
+              </div>
             </div>
           </div>
         </main>

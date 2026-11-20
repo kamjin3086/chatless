@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const renderContent = () => {
     switch (activeTab) {
       case "localModels":
-        return <AiModelSettings />;
+        return <AiModelSettings startWithProviderPicker={searchParams.get('action') === 'addProvider'} />;
       case "knowledgeBase":
         return <KnowledgeBaseSettings />;
       case "general":

@@ -29,7 +29,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
   const prompts = usePromptStore((s) => s.prompts);
   const loadFromDatabase = usePromptStore((s) => (s as any).loadFromDatabase);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [pos, setPos] = useState<{ left: number; bottom: number; width: number } | null>(null);
+  const [pos, setPos] = useState<ReturnType<typeof calcPanelPosition>>(null);
   const [pendingVars, setPendingVars] = useState<Record<string, any>>({});
   const [hoverId, setHoverId] = useState<string | null>(null);
 
@@ -215,7 +215,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
 
   const panel = (
     <div
-      style={{ position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, zIndex: 9999 }}
+      style={{ position: 'fixed', ...pos, zIndex: 9999 }}
       className={panelContainerClass}
       onMouseDown={(e) => e.stopPropagation()}
     >

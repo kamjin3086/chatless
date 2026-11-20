@@ -190,7 +190,7 @@ export function McpMentionPanel({ anchorRef, workspaceDirectory, onSelect, onSel
           : <div className={message}>{t('chatComposer.noFiles')}</div>}
         {visibleListing?.truncated && <div className={message}>{t('chatComposer.filesTruncated')}</div>}
       </div>
-      {workspaceDirectory && <p className={cn(message, 'border-t border-border')}>{t('chatComposer.filePermissionNote')}</p>}
+      {workspaceDirectory && <p className={cn(message, 'shrink-0 border-t border-border')}>{t('chatComposer.filePermissionNote')}</p>}
     </div>,
     document.body,
   );

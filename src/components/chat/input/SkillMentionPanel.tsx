@@ -33,7 +33,7 @@ export function SkillMentionPanel({
   filterQuery = '' 
 }: SkillMentionPanelProps) {
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [pos, setPos] = useState<{ left: number; bottom: number; width: number } | null>(null);
+  const [pos, setPos] = useState<ReturnType<typeof calcPanelPosition>>(null);
   const activeRef = useRef(0);
   const [, forceUpdate] = useState({});
 
@@ -115,7 +115,7 @@ export function SkillMentionPanel({
 
   const panel = (
     <div
-      style={{ position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, zIndex: 9999 }}
+      style={{ position: 'fixed', ...pos, zIndex: 9999 }}
       className={panelContainerClass}
     >
       {/* 头部 */}

@@ -5,15 +5,26 @@ const enUS: TranslationDict = {
   'nav.switchPage': 'Switch page',
   'nav.collapse': 'Hide app navigation',
   'nav.expand': 'Show app navigation',
+  'chatStarter.title': 'Start a conversation',
+  'chatStarter.initializing': 'Getting models ready…',
+  'chatStarter.noProvider': 'Add a provider to start chatting',
+  'chatStarter.noSelection': 'Choose a model for this conversation',
+  'chatStarter.noModels': 'No models available',
+  'chatStarter.addProvider': 'Add provider',
+  'chatStarter.chooseModel': 'Choose model',
+  'chatStarter.manageModels': 'Manage models',
+  'chatStarter.workspaceFiles': 'Pick workspace files',
+  'chatStarter.attach': 'Add attachment',
+  'chatStarter.prompts': 'Use a prompt',
   'toolApproval.title': 'Tool approvals',
   'toolApproval.scope':
-    'Choose when the AI must ask before running tools in this conversation.',
+    'Choose when Chatless must ask before running tools in this conversation.',
   'toolApproval.defaultMode': 'Follow settings',
   'toolApproval.defaultDetails':
-    'Already allowed actions run immediately. When approval is required, the AI waits for you to confirm.',
+    'Already allowed actions run immediately. When approval is required, Chatless waits for you to confirm.',
   'toolApproval.automaticMode': 'Automatic approval',
   'toolApproval.automaticDetails':
-    'The AI can run commands, read knowledge bases, or call enabled external tools (MCP) without asking each time.',
+    'Chatless can run commands, read knowledge bases, or call enabled external tools (MCP) without asking each time.',
   'toolApproval.automaticLimits':
     'This does not expand file access. Unapproved folders, file deletion, and administrative actions still follow the existing approval rules.',
   'toolApproval.current': 'Current mode',
@@ -31,7 +42,7 @@ const enUS: TranslationDict = {
   'chatComposer.parentFolder': 'Back to parent folder',
   'chatComposer.workspaceFiles': 'Workspace files',
   'chatComposer.filePermissionNote':
-    'Selecting a file inserts its path without granting AI access.',
+    'Selecting a file inserts its path without giving Chatless access to it.',
   'chatComposer.noWorkspace': 'This conversation has no workspace directory.',
   'chatComposer.loadingFiles': 'Loading workspace files…',
   'chatComposer.filesUnavailable': 'Could not list this directory.',

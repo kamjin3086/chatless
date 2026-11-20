@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/action-panel";
 
 interface AttachmentMenuProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   disabled?: boolean;
   isParsingDocument?: boolean;
   hasDocument?: boolean;
@@ -39,6 +41,8 @@ interface AttachmentMenuProps {
 }
 
 export function AttachmentMenu({
+  open,
+  onOpenChange: setOpen,
   disabled = false,
   isParsingDocument = false,
   hasDocument = false,
@@ -50,7 +54,6 @@ export function AttachmentMenu({
 }: AttachmentMenuProps) {
   const t = useLocaleStore((s) => s.t);
   useLocaleStore((s) => s.locale);
-  const [open, setOpen] = useState(false);
   const focusComposerOnClose = useRef(false);
   const [view, setView] = useState<"main" | "knowledge-base">("main");
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
