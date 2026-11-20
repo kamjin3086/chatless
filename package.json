@@ -38,6 +38,7 @@
     "check:pr-title": "node scripts/check-pr-title.mjs",
     "check:comments": "node scripts/comment-symbols.mjs",
     "repo:state": "node scripts/repo-state.mjs",
+    "review:snapshot": "node scripts/review-snapshot.mjs",
     "ci:log": "node scripts/ci-log.mjs",
     "wt:add": "node scripts/wt-add.mjs",
     "wt:remove": "node scripts/wt-remove.mjs",

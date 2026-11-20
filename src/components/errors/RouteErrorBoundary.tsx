@@ -3,6 +3,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLocaleStore } from '@/store/localeStore';
+import { reportClientFailure } from '@/lib/dev/reportClientFailure';
 import { RouteFailureView } from './RouteFailureView';
 import {
   canReturnToChat,
@@ -42,6 +43,7 @@ class RouteBoundary extends Component<BoundaryProps, BoundaryState> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    reportClientFailure(error, 'render');
     this.setState({ componentStack: info.componentStack ?? null });
     console.error(
       '[RouteErrorBoundary] route content failed to render',

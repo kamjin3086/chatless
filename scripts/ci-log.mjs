@@ -167,7 +167,7 @@ export function summariseCheckRuns(runs) {
       pass: false,
       failed: [],
       pending: [],
-      note: 'no workflow run is registered for this commit. That is not the paths filter skipping a build - Actions never took the event. Push again (any commit, or --force-with-lease) to re-trigger it.',
+      note: 'no workflow run is visible for this commit. The check board alone cannot distinguish an unmatched trigger, a delayed event, or an unregistered run. Verify the workflow triggers for this SHA or dispatch it explicitly.',
     };
   }
   // Anything that is not success, skip or neutral is a red board, whatever it is called:

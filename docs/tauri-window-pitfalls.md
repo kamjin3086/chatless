@@ -37,6 +37,29 @@ configured `StateFlags`, so hiding the window to the tray and quitting left a
 later launch running with no window at all. Show the window explicitly at
 start-up (`lib.rs`) and do not persist the visible flag.
 
+## Client-side exceptions in dev
+
+Before reloading a failed window, copy the first `[dev-client-failure]` line from the
+Tauri dev terminal or the app's `logs.log` (Linux: `$XDG_DATA_HOME/com.kamjin.chatless/logs`,
+defaulting to `~/.local/share`). The frontend reports once per page load, including errors
+caught by Chatless's route and shell boundaries. The line carries an error category, known
+route and source positions when available, not error messages or a full stack. Existing
+application logs are not sanitized by this reporter; do not share the entire file.
+
+Check `agent-browser` compatibility with `pi-agent-browser-doctor` before a UI verification
+batch. If unavailable, use an isolated browser/WebKit profile to verify routing, and keep the
+actual Tauri window's diagnostic separate. A fresh browser succeeding does not explain a
+crash seen in the existing desktop window. For an isolated dev server on another port,
+point `next.config.ts`'s dev `assetPrefix` at that port in the scratch checkout as well;
+HTTP 200 on the page is not proof that its JavaScript loaded from the same server.
+
+To smoke-test capture, open a fresh dev page and run
+`setTimeout(() => { throw new TypeError('recovery smoke marker'); }, 0)` in DevTools.
+Expect one `[dev-client-failure]` line with the current route and `TypeError`, but no marker
+text. Throw a second error without reloading and check that it does not emit a second line.
+This checks capture, not native close IPC. To verify recovery separately, throw from the
+custom title-bar component in a scratch checkout, then remove the throw before using Reload.
+
 ## Checking this class of bug
 
 `scripts/verify-app-startup.sh` starts the built app and asserts that

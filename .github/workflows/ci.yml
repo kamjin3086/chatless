@@ -7,18 +7,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# CI runs once per pull request and on demand. There is deliberately no `push`
-# trigger: a merge push used to replay the exact same checks the PR had just ran,
-# and on this plan every merge bought two full runs for one change.
-#
-# What that trades away is post-merge verification, and it rests on a convention -
-# main moves by pull request - which is not enforced: `gh api
-# repos/kamjin3086/chatless/branches/main/protection` answers 404 "Branch not
-# protected". A direct push to main therefore gets no run at all, and nothing will
-# notice. If that ever stops being acceptable, add branch protection requiring a PR
-# - which is what would make the missing trigger safe - rather than trusting the
-# convention to hold on its own.
+# Verify the exact commit on main even after a direct push. Only replay the
+# frontend checks there; the expensive Rust check stays on PRs and manual runs.
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [ main ]
     # Prose is not compiled, so it does not get a build. `**` takes everything in and
@@ -106,7 +99,7 @@ jobs:
 
   # 作业2：后端快速检查 (cargo check)
   backend-check:
-    if: github.event_name != 'workflow_dispatch' || (github.event.inputs.test_type == 'basic' || github.event.inputs.test_type == 'full')
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.test_type == 'basic' || github.event.inputs.test_type == 'full'))
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code

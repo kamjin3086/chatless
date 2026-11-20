@@ -56,6 +56,29 @@ export function mergedInFromError(status) {
   return status === 1 ? false : null;
 }
 
+export function countWorktreeChanges(porcelain) {
+  const records = porcelain.split('\0');
+  const result = { staged: 0, unstaged: 0, untracked: 0 };
+  for (let i = 0; i < records.length; i++) {
+    const entry = records[i];
+    if (!entry) continue;
+    const [index, worktree] = entry;
+    if (index === '?') result.untracked++;
+    else {
+      if (index !== ' ') result.staged++;
+      if (worktree !== ' ') result.unstaged++;
+      if (
+        index === 'R' ||
+        index === 'C' ||
+        worktree === 'R' ||
+        worktree === 'C'
+      )
+        i++;
+    }
+  }
+  return result;
+}
+
 /**
  * @param {{main: {shortSha: string, source: string, sourceKind: string}, branch: string,
  *   dirty: number, ahead: number|null, mainMergedIn: boolean|null, worktrees: Array<object>,
@@ -94,8 +117,11 @@ export function formatState(state) {
           (Number(wt.behindMain) > 0
             ? ` (a soft reset here reverts ${wt.behindMain})`
             : '');
+    const counts = wt.changes
+      ? ` staged=${wt.changes.staged} unstaged=${wt.changes.unstaged} untracked=${wt.changes.untracked}`
+      : ' changes=unknown';
     lines.push(
-      `  ${wt.path} ${branch} ${String(wt.head).slice(0, 7)}${behind}`,
+      `  ${wt.path} ${branch} ${String(wt.head).slice(0, 7)}${behind}${counts} committed=${wt.integration ?? 'unknown'}`,
     );
   }
 
@@ -125,13 +151,15 @@ export function formatState(state) {
   return lines.join('\n');
 }
 
-function git(args, cwd) {
-  return execFileSync('git', args, {
+function git(args, cwd, { raw = false } = {}) {
+  const output = execFileSync('git', args, {
     encoding: 'utf8',
     cwd,
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
     timeout: 15000,
     stdio: ['ignore', 'pipe', 'ignore'],
-  }).trim();
+  });
+  return raw ? output : output.trim();
 }
 
 /** Run git, answering `fallback` where this repository simply has no answer. */
@@ -301,7 +329,36 @@ function collect() {
     } catch {
       behindMain = null;
     }
-    return { ...wt, behindMain };
+    let changes = null;
+    try {
+      changes = countWorktreeChanges(
+        git(
+          ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+          wt.path,
+          { raw: true },
+        ),
+      );
+    } catch {
+      /* Missing or inaccessible checkout. */
+    }
+    let integration = 'unknown';
+    try {
+      git(['merge-base', '--is-ancestor', wt.head, mainSha]);
+      integration = 'merged';
+    } catch (error) {
+      if (error?.status === 1 && process.argv.includes('--closeout')) {
+        try {
+          const tipTree = git(['rev-parse', `${mainSha}^{tree}`]);
+          integration =
+            git(['merge-tree', '--write-tree', mainSha, wt.head]) === tipTree
+              ? 'same-tree'
+              : 'different-tree';
+        } catch (failure) {
+          if (failure?.status === 1) integration = 'conflict';
+        }
+      } else if (error?.status === 1) integration = 'not-ancestor';
+    }
+    return { ...wt, behindMain, changes, integration };
   });
 
   // An unborn HEAD (fresh init, --orphan) makes `rev-parse --abbrev-ref HEAD` exit 128,

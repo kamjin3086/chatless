@@ -244,13 +244,10 @@ still works (`docs/tauri-window-pitfalls.md`).
   rides the same GraphQL path that dies first, and `pnpm ci:log <pr>` answers a different
   question (what a finished run printed). `--checks` reads REST `commits/:sha/check-runs` and
   prints a verdict: `green`, `still running (…)`, `not green (…)`, exit 0 / 3 / 1.
-  **An empty board is not "queued" and not "the paths filter skipped it"**: it means Actions
-  never took the event, which happened to two PRs while the link was bad, and the fix is to
-  push again (any commit, or `--force-with-lease`). On #141 the board stayed empty for two
-  hours while `gh api "repos/<owner>/<repo>/actions/runs?per_page=5" --jq '.workflow_runs[].head_branch'`
-  showed no run for the branch at all; closing and reopening the PR changed nothing, and the
-  force-push started CI within seconds. Exit codes: 0 green, 1 not green, 3 still running, 4
-  no run registered.
+  An empty board does not identify the cause. Check the workflow triggers at that SHA and the
+  Actions runs before retrying; older direct pushes to `main` did not match any trigger. The
+  current `main` push trigger runs frontend checks, while PRs also run the Rust check. Exit
+  codes: 0 green, 1 not green, 3 still running, 4 no check runs visible.
 - **A merge command's failure can be about your worktree, not about the merge.** With `main`
   checked out in another worktree, `gh pr merge --squash --delete-branch` exits non-zero
   (`致命错误：'main' 已经被工作区 … 使用`) *after* the merge succeeded on the server. Ask the
@@ -391,8 +388,8 @@ This repo can have several writers at once: a human, another agent session, a
 worktree left open from a previous run. One command answers all three probes:
 
 ```bash
-pnpm repo:state   # main sha, your branch + dirty/ahead, every worktree and how far
-                  # behind main it is, whether main is merged into HEAD, open PRs
+pnpm repo:state             # main SHA, PRs, per-worktree staged/unstaged/untracked counts
+pnpm repo:state --closeout  # also compare committed merge-result trees for divergent tips
 
 `behind-main=N` is not trivia. Rewriting history (`git reset --soft origin/main`, a rebase onto
 a ref you fetched but did not merge) in a tree that is behind stages the reversal of those N
@@ -432,6 +429,17 @@ spells it out per worktree.
   is refused.
 - `gh pr view` with no arguments happily returns *some* other PR when the current
   branch has none; it is not a branch lookup. Compare `headRefName` with the branch.
+
+**Review uncommitted work:** from the source worktree, run `pnpm review:snapshot HEAD ../wt-review-snapshot`.
+Use the intended fixed point in place of `HEAD` to include earlier commits. Inspect untracked files first;
+pass `--include-untracked` only if every one belongs in the review. The command returns a local detached
+checkout and pinned base SHA. Give both reviewers that checkout and `git diff <base>...HEAD`. The snapshot
+contains on-disk content, not a separate staged variant of a partially staged file. Do not push it;
+remove it with `pnpm wt:remove` after the review.
+
+**Before removing a worktree:** `committed=merged` proves ancestry; `same-tree` proves a simulated
+merge adds no content. Neither covers staged, unstaged, untracked, or ignored files. Preserve those
+separately before removal, and check for a terminal or dev process using the directory.
 
 ## Act, or ask
 

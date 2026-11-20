@@ -1,6 +1,7 @@
 'use client';
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportClientFailure } from '@/lib/dev/reportClientFailure';
 import { AppRecoveryView } from './AppRecoveryView';
 
 export class AppShellErrorBoundary extends Component<
@@ -14,6 +15,7 @@ export class AppShellErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    reportClientFailure(error, 'render');
     console.error(
       '[AppShell] The application shell failed to render',
       error,
