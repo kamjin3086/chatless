@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { Conversation } from "@/types/chat";
 import { useChatStore } from "@/store/chatStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Virtuoso } from 'react-virtuoso';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ChevronRight, Folder, FolderOpen, SearchIcon, MessageSquare } from "lucide-react";
 import { ContextMenu } from '@/components/ui/context-menu';
@@ -24,7 +24,6 @@ interface ConversationSidebarProps {
   isSearching?: boolean;
   searchQuery?: string;
   filter: 'recent' | 'favorite' | 'archived';
-  openedPath: { path: string } | null;
   onCreateInWorkspace: (path: string | null) => Promise<void>;
 }
 
@@ -33,11 +32,11 @@ export function ConversationSidebar({
   isSearching = false,
   searchQuery = '',
   filter,
-  openedPath,
   onCreateInWorkspace,
 }: ConversationSidebarProps) {
   const storeConversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore((state) => state.currentConversationId);
+  const pendingWorkspace = useChatStore((state) => state.pendingWorkspace);
   const setCurrentConversation = useChatStore((state) => state.setCurrentConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
@@ -56,14 +55,14 @@ export function ConversationSidebar({
   const [collapsed, setCollapsed] = useState<Set<string | null>>(() => new Set());
   const currentPath = workspacePath(currentConversationId ? mountedDirectories[currentConversationId] : null);
   useEffect(() => {
-    const path = openedPath?.path;
+    const path = pendingWorkspace?.path;
     if (path === undefined) return;
     setCollapsed((previous) => {
       const next = new Set(previous);
       next.delete(path);
       return next;
     });
-  }, [openedPath]);
+  }, [pendingWorkspace]);
   useEffect(() => {
     if (!currentConversationId) return;
     setCollapsed((previous) => {
@@ -83,6 +82,15 @@ export function ConversationSidebar({
     const result = conversationSidebarRows(conversationsToShow, grouping, mountedDirectories, undefined, registered ?? archivedEmpty, isSearching ? undefined : collapsed);
     return archivedEmpty ? result.filter((row) => row.kind !== 'heading' || row.group.kind !== 'workspace' || row.group.path !== null || conversationsToShow.some((chat) => !mountedDirectories[chat.id])) : result;
   }, [conversationsToShow, grouping, mountedDirectories, openedWorkspaces, archivedWorkspaces, filter, isSearching, collapsed]);
+  const listRef = useRef<VirtuosoHandle>(null);
+  const lastRevealed = useRef<typeof pendingWorkspace>(null);
+  useEffect(() => {
+    if (!pendingWorkspace || lastRevealed.current === pendingWorkspace) return;
+    const index = rows.findIndex((row) => row.kind === 'heading' && row.group.kind === 'workspace' && row.group.path === pendingWorkspace.path);
+    if (index < 0 || !listRef.current) return;
+    listRef.current.scrollIntoView({ index });
+    lastRevealed.current = pendingWorkspace;
+  }, [pendingWorkspace, rows]);
   const workspaceNames = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of rows) {
@@ -204,6 +212,7 @@ export function ConversationSidebar({
     <TooltipProvider>
       <div className="flex-1 px-2 pt-1.5 pb-2 h-full">
         <Virtuoso
+          ref={listRef}
           key={grouping}
           data={rows}
           useWindowScroll={false}
@@ -219,7 +228,7 @@ export function ConversationSidebar({
               const parent = path && (workspaceNames.get(title) ?? 0) > 1 ? workspaceGroupParent(path) : null;
               if (group.kind === 'workspace') {
                 const expanded = isSearching || !collapsed.has(path);
-                const active = Boolean(currentConversationId) && path === currentPath;
+                const active = pendingWorkspace ? path === pendingWorkspace.path : Boolean(currentConversationId) && path === currentPath;
                 const Icon = active ? FolderOpen : Folder;
                 const archived = Boolean(path && archivedWorkspaces[path]);
                 const createAction = !archived && filter !== 'archived' ? [{
@@ -248,7 +257,7 @@ export function ConversationSidebar({
                 const header = (
                   <div className="flex min-w-0 items-center gap-1 px-1">
                     <button type="button" aria-expanded={expanded} aria-current={active ? 'true' : undefined} title={path ?? title}
-                      className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left text-sm font-semibold leading-5 text-slate-900 hover:bg-slate-500/10 focus-visible:outline-2 focus-visible:outline-sky-600 dark:text-slate-100 dark:focus-visible:outline-sky-400"
+                      className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left text-sm font-semibold leading-5 text-slate-900 hover:bg-slate-500/10 focus-visible:outline-2 focus-visible:outline-sky-600 dark:text-slate-100 dark:focus-visible:outline-sky-400 ${active && pendingWorkspace ? 'bg-sky-600/10 dark:bg-sky-400/12' : ''}`}
                       onClick={() => !isSearching && setCollapsed((previous) => {
                         const next = new Set(previous);
                         if (next.has(path)) next.delete(path);

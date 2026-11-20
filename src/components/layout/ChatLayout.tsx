@@ -4,14 +4,15 @@ import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } f
 import StorageUtil from '@/lib/storage';
 import { useUiPreferences } from '@/store/uiPreferences';
 import { cn } from "@/lib/utils";
-import { X, Archive, Clock, FolderPlus, Star, RotateCcw, MessageSquarePlus } from 'lucide-react';
+import { X, Archive, Clock, FolderPlus, Star, RotateCcw, Plus } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 // import { SidebarHeader } from './SidebarHeader';
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ConversationViewMenu } from '@/components/chat/ConversationViewMenu';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
 import { useLocaleStore } from '@/store/localeStore';
-import { workspacePath } from '@/lib/chat/conversationGroups';
+import { workspaceGroupName, workspacePath } from '@/lib/chat/conversationGroups';
+import { NEW_CONVERSATION_TITLE } from '@/lib/chat/TitleGenerator';
 import { toast } from '@/components/ui/sonner';
 import { useChatStore } from "@/store/chatStore";
 import { afterStartupPaint, startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
@@ -170,10 +171,11 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite' | 'archived'>('recent');
   const [openingWorkspace, setOpeningWorkspace] = useState(false);
-  const [openedPath, setOpenedPath] = useState<{ path: string } | null>(null);
+  const pendingWorkspace = useChatStore((state) => state.pendingWorkspace);
   const setGrouping = useUiPreferences((state) => state.setConversationGrouping);
   const directories = useConversationAttachmentStore((state) => state.mountedDirByConversation);
   const archivedWorkspaces = useConversationAttachmentStore((state) => state.archivedWorkspaces);
+  const archivedTarget = pendingWorkspace && archivedWorkspaces[pendingWorkspace.path];
   const archivedConversations = useConversationAttachmentStore((state) => state.archivedConversations);
   const t = useLocaleStore((state) => state.t);
   useLocaleStore((state) => state.locale);
@@ -267,10 +269,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
 
   const handleNewChat = async (path?: string | null) => {
     const defaultModelId = "default-model";
-    const now = new Date();
-    const newTitle = `新对话 ${now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute:'2-digit' })}`;
     try {
-      await createConversation(newTitle, defaultModelId, undefined, path);
+      await createConversation(NEW_CONVERSATION_TITLE, defaultModelId, undefined, path);
       if (activeFilter !== 'recent') setActiveFilter('recent');
     } catch {
       toast.error(t('chatSidebar.newConversationFailed'));
@@ -295,7 +295,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       setGrouping('workspace');
       setActiveFilter(store.archivedWorkspaces[path] ? 'archived' : 'recent');
       handleClearSearch();
-      setOpenedPath({ path });
+      useChatStore.getState().selectWorkspaceForNewConversation(path);
     } catch {
       toast.error(t('chatSidebar.openWorkspaceFailed'));
     } finally {
@@ -326,7 +326,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         >
           {/* 侧边栏头部已隐藏 */}
 
-          {/* 搜索框 + 新建按钮 */}
+          {/* Search and sidebar tools */}
           <div className="flex h-9 shrink-0 items-center px-2.5" data-chat-search-row>
             <div className="flex w-full min-w-0 items-center gap-1">
               <div className="relative flex-1 min-w-0">
@@ -357,14 +357,25 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                 icon={FolderPlus}
                 className="h-7 w-7 shrink-0 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               />
-              <IconButton
-                onClick={() => void handleNewChat()}
-                title={t('chatSidebar.newConversation')}
-                aria-label={t('chatSidebar.newConversation')}
-                icon={MessageSquarePlus}
-                size="sm"
-              />
             </div>
+          </div>
+
+          <div className="shrink-0 px-2.5 py-1.5">
+            <button
+              type="button"
+              disabled={Boolean(archivedTarget)}
+              title={archivedTarget ? t('chatSidebar.restoreWorkspace') : pendingWorkspace?.path}
+              onClick={() => void handleNewChat()}
+              className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-lg border border-slate-500/20 bg-slate-500/8 px-2.5 text-left text-sm font-medium text-slate-900 hover:bg-slate-500/15 focus-visible:outline-2 focus-visible:outline-sky-600 disabled:opacity-50 dark:text-slate-100 dark:focus-visible:outline-sky-400"
+            >
+              <Plus aria-hidden="true" className="size-4 shrink-0" />
+              <span className="shrink-0">{t('chatSidebar.newConversation')}</span>
+              {pendingWorkspace && (
+                <span className="ml-auto truncate text-xs text-slate-600 dark:text-slate-300">
+                  {workspaceGroupName(pendingWorkspace.path)}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* 对话分类 */}
@@ -412,7 +423,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
               isSearching={isSearching}
               searchQuery={searchQuery}
               filter={activeFilter}
-              openedPath={openedPath}
               onCreateInWorkspace={handleNewChat}
             />
           </div>

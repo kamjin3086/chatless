@@ -1,5 +1,12 @@
 import type { Conversation } from '@/types/chat';
 
+export const NEW_CONVERSATION_TITLE = '新对话';
+
+/** Titles assigned by the old new-conversation controls, not user-named chats. */
+export function hasLegacyNewConversationTime(title: string): boolean {
+  return /^新对话\s+(?:上午|下午)?\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?$/iu.test(title);
+}
+
 export interface TitleGeneratorOptions {
   maxLength?: number; // 期望的最大长度（字符）
   language?: 'zh' | 'en';
@@ -65,7 +72,7 @@ export function normalizeTitle(raw: string, maxLength: number): string {
 export function isDefaultTitle(title: string | undefined | null): boolean {
   const t = (title || '').trim();
   // 注意：JS 的 \b 对中文不友好，使用 startsWith 判断更稳健
-  return t.startsWith('新对话');
+  return t.startsWith(NEW_CONVERSATION_TITLE);
 }
 
 /**

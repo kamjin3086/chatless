@@ -8,6 +8,7 @@ import { startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { AgentRunEventStore } from '@/lib/mcp/agentLoop/AgentRunEventStore';
 import { planEmptyConversationReuse } from '@/lib/chat/emptyConversationReuse';
 import { workspacePath } from '@/lib/chat/conversationGroups';
+import { hasLegacyNewConversationTime, NEW_CONVERSATION_TITLE } from '@/lib/chat/TitleGenerator';
 import { initModel, reduce } from '@/lib/chat/messageFsm';
 
 const getDatabaseService = () => {
@@ -68,6 +69,7 @@ async function listConversationIdsWithoutMessages(conversationIds: string[]): Pr
 interface ChatState {
   conversations: Conversation[];
   currentConversationId: string | null;
+  pendingWorkspace: { path: string } | null;
   isLoadingConversations: boolean;
   hasLoadedConversations: boolean;
   isGenerating: boolean;
@@ -101,6 +103,7 @@ interface ChatActions {
   createConversation: (title: string, modelId: string, providerName?: string, directory?: string | null) => Promise<string>;
   deleteConversation: (conversationId: string) => Promise<void>;
   setCurrentConversation: (conversationId: string) => void;
+  selectWorkspaceForNewConversation: (directory: string) => void;
   addMessage: (message: Message) => Promise<Message | null>;
   /** 在指定消息之后插入一条新消息（用于重试版本插入） */
   insertMessageAfter: (afterMessageId: string, message: Message) => Promise<Message | null>;
@@ -173,6 +176,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
     immer((set, get) => ({
       conversations: [],
       currentConversationId: null,
+      pendingWorkspace: null,
       isLoadingConversations: false,
       hasLoadedConversations: false,
       isGenerating: false,
@@ -447,10 +451,11 @@ export const useChatStore = create<ChatState & ChatActions>()(
       createConversation: async (title, modelId, providerName, directory) => {
         const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
         const attachments = useConversationAttachmentStore.getState();
-        const previousId = get().currentConversationId;
-        const requestedPath = workspacePath(directory === undefined && previousId ? attachments.getMountedDir(previousId) : directory);
+        const { currentConversationId: previousId, pendingWorkspace } = get();
+        const inheritedPath = previousId ? attachments.getMountedDir(previousId) : undefined;
+        const requestedPath = workspacePath(directory === undefined ? pendingWorkspace?.path ?? inheritedPath : directory);
         const archived = requestedPath !== null && attachments.archivedWorkspaces[requestedPath];
-        if (archived && directory !== undefined) {
+        if (archived && (directory !== undefined || pendingWorkspace)) {
           throw new Error('Restore the workspace before creating a conversation in it');
         }
         // Global creation falls back to Default rather than creating a hidden chat.
@@ -466,9 +471,12 @@ export const useChatStore = create<ChatState & ChatActions>()(
           if (plan.reuse) {
             // Reuse does not implicitly delete other conversations.
             set({ currentConversationId: plan.reuse });
+            if (get().pendingWorkspace === pendingWorkspace) set({ pendingWorkspace: null });
             // 复用已有会话时也要保证它的 @WorkDir 已解析（重启后内存里没有缓存）。
             const reused = get().conversations.find((c: Conversation) => c.id === plan.reuse);
-            await resolveConversationWorkspace(plan.reuse, reused?.title);
+            const legacyTitle = reused && title === NEW_CONVERSATION_TITLE && hasLegacyNewConversationTime(reused.title);
+            if (legacyTitle) await get().renameConversation(plan.reuse, NEW_CONVERSATION_TITLE);
+            await resolveConversationWorkspace(plan.reuse, legacyTitle ? NEW_CONVERSATION_TITLE : reused?.title);
             return plan.reuse;
           }
         } catch (error) {
@@ -522,12 +530,18 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
         // 解析会话工作目录并注入 @WorkDir（文档/Chatless/<标题>-<摘要>）
         await resolveConversationWorkspace(newConversation.id, newConversation.title);
+        if (get().pendingWorkspace === pendingWorkspace) set({ pendingWorkspace: null });
 
         return newConversation.id;
       },
 
+      selectWorkspaceForNewConversation: (directory) => {
+        const path = workspacePath(directory);
+        if (path) set({ pendingWorkspace: { path } });
+      },
+
       setCurrentConversation: (id) => {
-        set({ currentConversationId: id });
+        set({ currentConversationId: id, pendingWorkspace: null });
         // 切换会话时解析 @WorkDir（映射由 Rust 持有，这里只刷新内存缓存）
         void (async () => {
           const cid = String(id || '').trim();
@@ -562,7 +576,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
             console.log(`[DEBUG] 未找到会话 ${conversation_id}，自动创建基本会话结构`);
             conversation = {
               id: conversation_id,
-              title: `新对话 ${new Date().toLocaleDateString()}`,
+              title: NEW_CONVERSATION_TITLE,
               created_at: now,
               updated_at: now,
               messages: [],
@@ -1132,7 +1146,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
       },
 
       clearCurrentConversation: () => {
-        set({ currentConversationId: null });
+        set({ currentConversationId: null, pendingWorkspace: null });
       },
 
       updateConversationTitle: (conversationId: string, title: string) => {

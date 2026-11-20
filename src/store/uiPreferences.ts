@@ -99,7 +99,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
 
   sidebarWidth: 'narrow',
   collapseChatSidebar: true,
-  conversationGrouping: 'time',
+  conversationGrouping: 'workspace',
   appNavCollapsed: false,
 
   sidebarIconSize: 'small',
@@ -232,7 +232,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     StorageUtil.getItem<string | null>(GLASS_WALLPAPER_KEY, null, 'user-preferences.json'),
     StorageUtil.getItem<number>(NIGHT_BRIGHTNESS_KEY, 100, 'user-preferences.json'),
     StorageUtil.getItem<boolean>(CLOSE_TO_TRAY_KEY, false, 'user-preferences.json'),
-    StorageUtil.getItem<ConversationGrouping>(CONVERSATION_GROUPING_KEY, 'time', 'user-preferences.json'),
+    StorageUtil.getItem<ConversationGrouping>(CONVERSATION_GROUPING_KEY, 'workspace', 'user-preferences.json'),
     StorageUtil.getItem<boolean>(APP_NAV_COLLAPSED_KEY, false, 'user-preferences.json'),
   ]);
 
@@ -242,7 +242,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     lowAnimationMode: lowAnim ?? false,
     sidebarWidth: (width as SidebarWidth) ?? 'medium',
     collapseChatSidebar: collapse ?? false,
-    conversationGrouping: conversationGrouping === 'workspace' ? 'workspace' : 'time',
+    conversationGrouping: conversationGrouping === 'time' ? 'time' : 'workspace',
     appNavCollapsed: appNavCollapsed === true,
     sidebarIconSize: (iconSize as IconSize) ?? 'small',
     timezone: tz || 'local',

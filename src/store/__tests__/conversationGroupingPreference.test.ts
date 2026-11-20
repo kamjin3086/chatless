@@ -22,14 +22,14 @@ it('restores the selected view when preferences initialize again', async () => {
   await vi.waitFor(() =>
     expect(useUiPreferences.getState().initialized).toBe(true),
   );
-  expect(useUiPreferences.getState().conversationGrouping).toBe('time');
-  useUiPreferences.getState().setConversationGrouping('workspace');
   expect(useUiPreferences.getState().conversationGrouping).toBe('workspace');
+  useUiPreferences.getState().setConversationGrouping('time');
+  expect(useUiPreferences.getState().conversationGrouping).toBe('time');
 
   vi.resetModules();
   const reloaded = (await import('../uiPreferences')).useUiPreferences;
   await vi.waitFor(() => expect(reloaded.getState().initialized).toBe(true));
-  expect(reloaded.getState().conversationGrouping).toBe('workspace');
+  expect(reloaded.getState().conversationGrouping).toBe('time');
 });
 
 it('restores the compact app navigation independently from the conversation sidebar', async () => {
@@ -49,11 +49,11 @@ it('restores the compact app navigation independently from the conversation side
   expect(reloaded.getState().collapseChatSidebar).toBe(sidebar);
 });
 
-it('falls back to the time view when a saved value is not recognized', async () => {
+it('falls back to workspace grouping when a saved value is not recognized', async () => {
   storage.set('user-preferences.json:ui_conversation_grouping', 'unsupported');
   const { useUiPreferences } = await import('../uiPreferences');
   await vi.waitFor(() =>
     expect(useUiPreferences.getState().initialized).toBe(true),
   );
-  expect(useUiPreferences.getState().conversationGrouping).toBe('time');
+  expect(useUiPreferences.getState().conversationGrouping).toBe('workspace');
 });

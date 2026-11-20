@@ -62,7 +62,7 @@ const enUS: TranslationDict = {
   'chatSidebar.newConversationInWorkspace': 'New conversation here',
   'chatSidebar.newConversationFailed':
     'Could not create the conversation. Try again.',
-  'chatSidebar.emptyWorkspace': 'No conversations yet. Use + to start one.',
+  'chatSidebar.emptyWorkspace': 'No conversations yet',
   'chatSidebar.currentWorkspace': 'Current workspace',
   'chatSidebar.revealWorkspace': 'Open in file manager',
   'chatSidebar.archive': 'Archive',

@@ -19,6 +19,7 @@ const db = vi.hoisted(() => ({
   select: vi.fn(),
   createConversation: vi.fn(async () => {}),
   deleteConversation: vi.fn(async () => true),
+  updateConversation: vi.fn(async () => {}),
 }));
 
 vi.mock('@/lib/database/services/DatabaseService', () => ({
@@ -28,6 +29,7 @@ vi.mock('@/lib/database/services/DatabaseService', () => ({
       getConversationRepository: () => ({
         create: db.createConversation,
         delete: db.deleteConversation,
+        update: db.updateConversation,
       }),
       getMessageRepository: () => ({}),
     }),
@@ -37,10 +39,10 @@ vi.mock('@/lib/database/services/DatabaseService', () => ({
 import { useChatStore } from '../chatStore';
 import { useConversationAttachmentStore } from '../conversationAttachmentStore';
 
-function conversation(id: string) {
+function conversation(id: string, title = `新对话 ${id}`) {
   return {
     id,
-    title: `新对话 ${id}`,
+    title,
     created_at: 1,
     updated_at: 1,
     messages: [],
@@ -58,10 +60,12 @@ beforeEach(() => {
   db.select.mockReset();
   db.createConversation.mockClear();
   db.deleteConversation.mockClear();
+  db.updateConversation.mockClear();
   useConversationAttachmentStore.setState({ mountedDirByConversation: {}, archivedConversations: {}, archivedWorkspaces: {}, openedWorkspaces: [] });
   useChatStore.setState({
     conversations: [],
     currentConversationId: null,
+    pendingWorkspace: null,
     inputDrafts: {},
     lastUsedModelPerChat: {},
     _messagesLoaded: {},
@@ -128,6 +132,46 @@ describe('creating a conversation', () => {
     expect(await useChatStore.getState().createConversation('Default', 'model-x', undefined, null)).toBe('default');
     expect(attachments.getWorkingDir('default')).not.toBe('/test/workspace');
     expect(db.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('targets the newly opened empty workspace without remounting or reusing the old conversation', async () => {
+    useChatStore.setState({ conversations: [conversation('old')], currentConversationId: 'old' });
+    withMessages();
+    const store = useChatStore.getState();
+    const attachments = useConversationAttachmentStore.getState();
+    attachments.setMountedDir('old', '/projects/previous');
+    attachments.registerWorkspace('/projects/opened');
+    store.selectWorkspaceForNewConversation('/projects/opened');
+    expect(useChatStore.getState().currentConversationId).toBe('old');
+
+    const id = await store.createConversation('新对话', 'model-x');
+    expect(id).not.toBe('old');
+    expect(attachments.getWorkingDir(id)).toBe('/projects/opened');
+    expect(attachments.getMountedDir('old')).toBe('/projects/previous');
+    expect(useChatStore.getState().pendingWorkspace).toBeNull();
+    expect(await store.createConversation('新对话', 'model-x')).toBe(id);
+    expect(db.createConversation).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ title: '新对话' }));
+  });
+
+  it('cancels the opened workspace target when selecting an existing conversation', async () => {
+    useChatStore.setState({ conversations: [conversation('old')], currentConversationId: 'old' });
+    const store = useChatStore.getState();
+    useConversationAttachmentStore.getState().setMountedDir('old', '/projects/previous');
+    store.selectWorkspaceForNewConversation('/projects/opened');
+    store.setCurrentConversation('old');
+    expect(useChatStore.getState().pendingWorkspace).toBeNull();
+    withMessages();
+    expect(await store.createConversation('新对话', 'model-x')).toBe('old');
+  });
+
+  it('drops the old timestamp only when reusing a blank default-titled conversation', async () => {
+    useChatStore.setState({ conversations: [conversation('old', '新对话 10:31')], currentConversationId: 'old' });
+    withMessages();
+    const store = useChatStore.getState();
+    expect(await store.createConversation('新对话', 'model-x')).toBe('old');
+    expect(useChatStore.getState().conversations[0].title).toBe('新对话');
+    expect(db.updateConversation).toHaveBeenCalledWith('old', expect.objectContaining({ title: '新对话' }));
+    expect(db.createConversation).not.toHaveBeenCalled();
   });
 
   it('does not reuse an archived blank conversation', async () => {

@@ -80,8 +80,8 @@ registerCommand({
   action: async () => {
     const { useChatStore } = await import('@/store/chatStore');
     const create = useChatStore.getState().createConversation;
-    const now = new Date();
-    await create(`新对话 ${now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`, 'default-model');
+    const { NEW_CONVERSATION_TITLE } = await import('@/lib/chat/TitleGenerator');
+    await create(NEW_CONVERSATION_TITLE, 'default-model');
     navigate('/chat');
   },
 }); 

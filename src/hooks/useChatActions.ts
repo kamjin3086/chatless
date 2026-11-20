@@ -3,6 +3,7 @@
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
+import { NEW_CONVERSATION_TITLE } from '@/lib/chat/TitleGenerator';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useChatStore } from '@/store/chatStore';
@@ -473,7 +474,7 @@ export const useChatActions = (
       if (!conversationId) {
         try {
           conversationId = await createConversation(
-            `新对话 ${new Date().toLocaleTimeString()}`,
+            NEW_CONVERSATION_TITLE,
             modelToUse,
             effectiveProvider,
           );
