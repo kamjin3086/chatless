@@ -167,7 +167,8 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
   (prev.provider.models?.length ?? 0) === (next.provider.models?.length ?? 0)
 ));
 
-export function AiModelSettings() {
+export function AiModelSettings({ startWithProviderPicker = false }: { startWithProviderPicker?: boolean } = {}) {
+  const [providerPickerOpen, setProviderPickerOpen] = useState(startWithProviderPicker);
   // 使用自定义 Hook 获取状态和处理函数
   const {
     providers,
@@ -351,6 +352,8 @@ export function AiModelSettings() {
           </DropdownMenu>
 
           <AddProvidersDialog
+            open={providerPickerOpen}
+            onOpenChange={setProviderPickerOpen}
             trigger={
               <button
                 className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-500/[0.08] dark:hover:bg-white/[0.06] focus:outline-none transition-colors"

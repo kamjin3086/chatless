@@ -9,7 +9,7 @@ import {
   undoHistory,
 } from "./composerHistory";
 import { composerFloor, nextInputHeight } from "./inputHeight";
-import { ListChecks, Send, StopCircle } from "lucide-react";
+import { Bookmark, FolderOpen, ListChecks, Paperclip, Send, StopCircle } from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,9 @@ import { toast } from '@/components/ui/sonner';
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { AttachmentMenu } from './input/AttachmentMenu';
+import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
+import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
+import { useLocaleStore } from '@/store/localeStore';
 import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
 import { WebSearchToggle } from './input/WebSearchToggle';
 import { McpQuickToggle } from './input/McpQuickToggle';
@@ -42,7 +45,6 @@ import {
 } from './input/inlineReferenceHighlight';
 import {
 } from "@/lib/mcp/chatIntegration";
-import { useConversationAttachmentStore } from "@/store/conversationAttachmentStore";
 
 interface EditingMessageData {
   content: string;
@@ -96,6 +98,7 @@ interface ChatInputProps {
   modelId?: string;
   modelLabel?: string;
   conversationId?: string; // 添加会话ID参数
+  showStarterActions?: boolean;
   onSessionParametersChange?: (parameters: ModelParameters) => void;
 }
 
@@ -116,10 +119,11 @@ export function ChatInput({
   modelId: _modelId,
   modelLabel: _modelLabel,
   onSessionParametersChange: _onSessionParametersChange,
-  conversationId
+  conversationId,
+  showStarterActions = false,
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState("");
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [composerSelection, setComposerSelection] = useState<{ text: string; caret: number } | null>(null);
   // 直接应用提示词，无需弹窗
   const inlineVarsRef = useRef<Record<string,string>>({});
   const [isParsingDocument, setIsParsingDocument] = useState(false);
@@ -157,6 +161,9 @@ export function ChatInput({
   // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
 
   const _router = useRouter();
+  const t = useLocaleStore((state) => state.t);
+  useLocaleStore((state) => state.locale);
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const searchParams = useSearchParams();
   const consumeKnowledgeBaseDeepLink = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
@@ -180,6 +187,12 @@ export function ChatInput({
     });
   }, [hasLoadedConversations, disabled, isParsingDocument]);
   const currentConvId = conversationId || storedConversationId;
+  const workspaceDirectory = useConversationAttachmentStore((s) => {
+    if (!currentConvId) return undefined;
+    return s.mountedDirByConversation[currentConvId] ?? (s.workspaceExistsByConversation[currentConvId]
+      ? s.sessionDirByConversation[currentConvId]
+      : undefined);
+  });
   const { selectedKnowledgeBase, selectKnowledgeBase, removeSelectedKnowledgeBase } = useKnowledgeBaseSelection({
     conversationId: currentConvId || null,
     deepLinkId: selectedKnowledgeBaseId,
@@ -230,9 +243,6 @@ export function ChatInput({
     return Boolean(lastAssistant?.id && s.agentRuns?.[lastAssistant.id]?.running);
   });
   const effectiveLoading = isLoading || storeAgentRunning;
-  const { getMountedDir, clearMountedDir } = useConversationAttachmentStore();
-  // 输入栏只展示用户**选定**的工作目录；会话默认目录在 + 菜单里说明，不作为标签出现。
-  const mountedDir = currentConvId ? getMountedDir(String(currentConvId)) : undefined;
   const clearInputDraft = useChatStore((s)=>s.clearInputDraft);
   const setInputDraft = useChatStore((s)=>s.setInputDraft);
   const prevConvRef = useRef<string | null>(null);
@@ -258,6 +268,7 @@ export function ChatInput({
       setInputValue('');
     }
     prevConvRef.current = currentConvId || null;
+    setComposerSelection(null);
   }, [currentConvId]);
 
   // 组件卸载时：提交当前草稿
@@ -405,19 +416,11 @@ export function ChatInput({
     return () => window.removeEventListener('prompt-inline-vars', handler as any);
   }, []);
 
-  // 保留：如需联想 /token 列表可启用
-  // const slashTokens = useMemo(() => { return []; }, [inputValue]);
-
-  const stripFirstSlashToken = (text: string): string => {
-    // 去除首个 /token（支持中文）
-    return text.replace(/(^|\s)\/[^\s]+/u, (match) => (match.startsWith(' ') ? ' ' : ''));
-  };
-
-  // 解析起始的 /指令 及其参数与可选分隔符与后续文本（分隔符支持半/全角 |，后随可选空格）
-  const parseLeadingSlash = (text: string):
+  // Parse a leading prompt and its optional prose delimiter.
+  const parseLeadingPrompt = (text: string):
     | { leadingSpace: string; token: string; varPart: string; postText: string; hasDelimiter: boolean; prefixRaw: string; postRaw: string; delimiterRaw: string }
     | null => {
-    const m = text.match(/^(\s*)\/([^\s]+)(.*)$/u);
+    const m = text.match(/^(\s*)#([^\s#|｜]+)([\s\S]*)$/u);
     if (!m) return null;
     const leadingSpace = m[1] || '';
     const token = m[2];
@@ -442,8 +445,33 @@ export function ChatInput({
   const [overlayFont, setOverlayFont] = useState<string>('');
   const [overlayFontSize, setOverlayFontSize] = useState<string>('');
   const [overlayLineHeight, setOverlayLineHeight] = useState<string>('');
-  const [mentionOpen, setMentionOpen] = useState<boolean>(false);
-  const [skillMentionOpen, setSkillMentionOpen] = useState<boolean>(false);
+  const composerQuery = !disabled && !isParsingDocument && composerSelection?.text === inputValue
+    ? findComposerQuery(inputValue, composerSelection.caret)
+    : null;
+  const closeComposerPanel = () => setComposerSelection(null);
+  const setComposerText = (text: string, caret: number) => {
+    setInputValue(text);
+    const el = textareaRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      if (!el.isConnected || el.value !== text) return;
+      el.setSelectionRange(caret, caret);
+      el.focus();
+    });
+  };
+  const openComposerPanel = (trigger: ComposerTrigger) => {
+    const el = textareaRef.current;
+    if (!el || el.disabled) return;
+    const next = insertComposerTrigger(inputValue, el.selectionStart, el.selectionEnd, trigger);
+    setComposerText(next.text, next.caret);
+    setComposerSelection(next);
+  };
+  const pickComposerItem = (replacement: string) => {
+    if (!composerQuery) return;
+    const next = replaceComposerQuery(inputValue, composerQuery, replacement);
+    closeComposerPanel();
+    setComposerText(next.text, next.caret);
+  };
   const [textareaScroll, setTextareaScroll] = useState<number>(0);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -485,49 +513,12 @@ export function ChatInput({
     };
   }, [resizing]);
 
-  // 是否需要覆盖层渲染（/ 指令、@ 提示或 # 技能引用）
-  const hasSlashOverlay = useMemo(() => !!parseLeadingSlash(inputValue), [inputValue]);
+  // Keep the textarea overlay aligned with prompt and mention syntax.
+  const parsedPrompt = parseLeadingPrompt(inputValue);
   const { mcp: hasMentionOverlay, skill: hasSkillMentionOverlay } = useMemo(
     () => hasInlineReferences(inputValue),
     [inputValue]
   );
-
-  // 用渲染结果替换 /指令与其变量片段；若存在 “| ”，会将其后的内容以换行附加在渲染结果后
-  const replaceSlashWithRendered = (text: string, rendered: string): string => {
-    const parsed = parseLeadingSlash(text);
-    if (!parsed) {
-      // 兼容：只有一个斜线，或以空格+斜线结尾的情况
-      // 保留前导空白，将末尾的单个 '/' 替换为渲染内容
-      if (/^\s*\/$/u.test(text)) return text.replace(/\//u, rendered);
-      if (/(^|\s)\/$/u.test(text)) return text.replace(/(^|\s)\/$/u, `$1${rendered}`);
-      return text;
-    }
-    const { leadingSpace, varPart, postText, hasDelimiter } = parsed;
-    const after = hasDelimiter && postText ? `\n${postText}` : '';
-    // 构造要替换的前缀（/token + 可选空格 + varPart，不包含分隔符）
-    const prefix = new RegExp(`^${leadingSpace.replace(/[-\/\\^$*+?.()|[\]{}]/g,'\\$&')}\\/[^\s]+(?:\\s+[^|｜]*)?`, 'u');
-    return text.replace(prefix, `${leadingSpace}${rendered}${after}`);
-  };
-
-  // 从输入中移除 /指令与变量片段；若存在 “| ” 则保留其后的普通文本
-  // const stripSlashTokenAndVars = (text: string): string => {
-  //   const parsed = parseLeadingSlash(text);
-  //   if (!parsed) return stripFirstSlashToken(text);
-  //   const { leadingSpace, postText, hasDelimiter } = parsed;
-  //   return hasDelimiter ? `${leadingSpace}${postText}` : leadingSpace;
-  // };
-
-  // 斜杠面板开关逻辑：当输入框以 / 开头或包含以空格分隔的 /token 时打开
-  useEffect(() => {
-    const val = inputValue;
-    // 以 / 开头 或 光标前为 / 时唤起，但不改变输入框焦点
-    const open = val.startsWith('/') || /\s\/$/.test(val);
-    setIsPanelOpen(open);
-    // @ 提示：当末尾形如 @xxx 时打开 MCP 引用面板（允许字母数字和 - _）
-    setMentionOpen(/@([a-zA-Z0-9_-]*)$/.test(val));
-    // # 提示：当末尾形如 #xxx 时打开技能引用面板
-    setSkillMentionOpen(/#([a-zA-Z0-9_-]*)$/.test(val));
-  }, [inputValue]);
 
   // 当进入编辑模式时，预填充内容
   useEffect(() => {
@@ -568,27 +559,17 @@ export function ChatInput({
 
     let userMessage = inputValue.trim();
 
-    // 兜底：若以 / 指令开头但未通过面板选择，尝试在发送前渲染提示词
-    if (userMessage.startsWith('/')) {
+    // Render an exact saved shortcut when submitted without choosing from the panel.
+    if (userMessage.startsWith('#')) {
       try {
-        const prompts = usePromptStore.getState().prompts as any[];
-        const parts = userMessage.split(/\s+/);
-        const token = parts[0].replace(/^\//, '').toLowerCase();
-        const rest = userMessage.slice(parts[0].length).trim();
-        // 若用户使用了“| ”或“｜ ”分隔的后续文本（例如：/trans 英文 | 你好），兜底时也需要保留
-        const parsedForAfter = parseLeadingSlash(userMessage);
+        const prompts = usePromptStore.getState().prompts;
+        const parsedForAfter = parseLeadingPrompt(userMessage);
+        const token = parsedForAfter?.token.toLowerCase();
+        const rest = parsedForAfter?.varPart ?? '';
         const afterTail = parsedForAfter && parsedForAfter.hasDelimiter && parsedForAfter.postText
           ? `\n${parsedForAfter.postText}`
           : '';
-        // 精确匹配已保存的快捷词
-        let matched = prompts.find((p:any)=> (p.shortcuts||[]).some((s:string)=> s.toLowerCase()===token));
-        if (!matched) {
-          // 回退：根据名称/标签生成候选，选择第一个以 token 开头的项
-          matched = prompts.find((p:any)=> {
-            const hay = `${p.name} ${(p.tags||[]).join(' ')} ${(p.languages||[]).join(' ')}`.toLowerCase();
-            return hay.includes(token);
-          });
-        }
+        const matched = token && prompts.find((p) => p.shortcuts?.some((s) => s.toLowerCase() === token));
         if (matched) {
           // 解析变量：key=value 或 位置参数（支持 | 与 ｜）
           const inline: Record<string,string> = {};
@@ -725,14 +706,8 @@ export function ChatInput({
       });
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey) {
-      // 1) 若 @ 面板打开，回车只代入选择，不发送（由面板自身处理 onSelect）
-      if (mentionOpen) { e.preventDefault(); return; }
-      // 2) 若 # 技能面板打开，回车只代入选择，不发送
-      if (skillMentionOpen) { e.preventDefault(); return; }
-      // 3) 若 / 面板打开，也不直接发送
-      if (isPanelOpen) { e.preventDefault(); return; }
-      // 4) 正常发送
+    if (!isComposing && e.key === "Enter" && !e.shiftKey) {
+      if (composerQuery) { e.preventDefault(); return; }
       e.preventDefault();
       handleSend();
     }
@@ -957,10 +932,9 @@ export function ChatInput({
           onDoubleClick={() => { setManualHeight(null); setSessionManualHeight(null); setResizing(null); setTimeout(adjustTextareaHeight, 0); }}
         />
         <SlashPromptPanel
-          open={isPanelOpen}
-          onOpenChange={setIsPanelOpen}
+          open={composerQuery?.trigger === '#'}
+          onOpenChange={closeComposerPanel}
           onSelect={(id, opts) => {
-            if (!conversationId) { setIsPanelOpen(false); return; }
             const merged = { ...(inlineVarsRef.current||{}) };
             inlineVarsRef.current = {};
             const action = opts?.action || 'apply';
@@ -983,13 +957,12 @@ export function ChatInput({
                 }
                 const rendered = (renderPromptContent as any)(prompt.content, variableValues);
                 if (rendered && rendered.trim()) {
-                  // 用渲染结果替换 /指令+变量 片段（支持 | 分隔后文本拼接）
-                  setInputValue(v => replaceSlashWithRendered(v, rendered));
+                  pickComposerItem(rendered);
                   // 计数一次使用（代入即视为使用）
                   try { usePromptStore.getState().touchUsage(id); } catch {}
                 }
               }
-              setIsPanelOpen(false);
+              closeComposerPanel();
               return;
             }
             if (action === 'send') {
@@ -1013,7 +986,7 @@ export function ChatInput({
                 const rendered = (renderPromptContent as any)(prompt.content, variableValues);
                 if (rendered && rendered.trim()) {
                   // 组装：若存在 "| " 分隔的后续文本，将其按换行拼接
-                  const parsed = parseLeadingSlash(inputValue);
+                  const parsed = parseLeadingPrompt(inputValue);
                   const after = parsed && parsed.hasDelimiter && parsed.postText ? `\n${parsed.postText}` : '';
                   // 只设置一次，避免随后 strip 再次覆盖导致丢失后续文本
                   setInputValue(`${rendered}${after}`);
@@ -1023,10 +996,11 @@ export function ChatInput({
                   setTimeout(() => { handleSend(); }, 0);
                 }
               }
-              setIsPanelOpen(false);
+              closeComposerPanel();
               return;
             }
-            // 应用为 system：支持 permanent / oneOff
+            // Applying a system prompt requires an existing conversation.
+            if (!currentConvId) { closeComposerPanel(); return; }
             const mode = opts?.mode || 'permanent';
             try {
               const prompt = usePromptStore.getState().prompts.find(p=>p.id===id);
@@ -1043,22 +1017,22 @@ export function ChatInput({
                   variableValues = Object.fromEntries((prompt.variables||[]).map((v:any, idx:number)=> [v.key, pos[idx] ?? v.defaultValue ?? '']));
                 }
               }
-              useChatStore.getState().updateConversation(conversationId, { system_prompt_applied: { promptId: id, variableValues, mode } as any });
-              setInputValue(v => stripFirstSlashToken(v));
+              useChatStore.getState().updateConversation(currentConvId, { system_prompt_applied: { promptId: id, variableValues, mode } as any });
+              pickComposerItem('');
               toast.success(mode === 'oneOff' ? '已作为一次性系统提示词应用' : '已应用到当前会话');
             } catch {}
-            setIsPanelOpen(false);
+            closeComposerPanel();
           }}
           anchorRef={textareaRef as any}
-          queryText={inputValue}
+          queryText={composerQuery?.trigger === '#' ? `#${composerQuery.query}` : ''}
         />
-        {/* 高亮覆盖层：与 textarea 完全重叠，渲染 "/指令 + 变量 + (可选) | + 后续文本"。
-            为避免重影，textarea 在有 /指令 时使用 text-transparent，仅显示插入符。 */}
+        {/* 高亮覆盖层：与 textarea 完全重叠，渲染 "#指令 + 变量 + (可选) | + 后续文本"。
+            为避免重影，textarea 在有 #指令 时使用 text-transparent，仅显示插入符。 */}
         {(() => {
-          const parsed = parseLeadingSlash(inputValue);
+          const parsed = parsedPrompt;
           const overlayNeedsTailNewline = /\r?\n$/.test(inputValue);
           if (!parsed && (hasMentionOverlay || hasSkillMentionOverlay)) {
-            // 无 / 指令时，仅做 @ 提示的淡绿色高亮（严格对齐：不添加任何额外字符/空格）
+            // 无 # 指令时，仅做 @ 提示的淡绿色高亮（严格对齐：不添加任何额外字符/空格）
             return (
               <div ref={overlayRef} className="absolute inset-0 pointer-events-none select-none overflow-hidden">
                 <div
@@ -1084,7 +1058,7 @@ export function ChatInput({
           }
           if (!parsed) return null;
           const { leadingSpace, token, prefixRaw, hasDelimiter, postRaw, delimiterRaw } = parsed;
-          const prefixText = `/${token}${prefixRaw}${hasDelimiter ? delimiterRaw : ''}`;
+          const prefixText = `#${token}${prefixRaw}${hasDelimiter ? delimiterRaw : ''}`;
           return (
             <div ref={overlayRef} className="absolute inset-0 pointer-events-none select-none overflow-hidden">
               <div
@@ -1103,7 +1077,7 @@ export function ChatInput({
               >
                 {/* 保留前导空格 */}
                 {leadingSpace}
-                {/* 高亮整段 /token + 变量 + 可选" | "，保持与原文本完全一致，避免光标错位 */}
+                {/* 高亮整段 #token + 变量 + 可选" | "，保持与原文本完全一致，避免光标错位 */}
                 <span className="bg-amber-100/90 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200" style={{ fontFeatureSettings: '"liga" 0, "clig" 0', fontFamily: overlayFont || undefined, fontSize: overlayFontSize || undefined, lineHeight: overlayLineHeight || undefined, display: 'inline', boxShadow: '0 0 0 3px rgba(251, 191, 36, 0.2)', borderRadius: '2px' }}>{prefixText}</span>
                 {/* 竖线后的普通文本按原样展示（不高亮）*/}
                 {hasDelimiter && postRaw ? <>{renderInlineReferencesForOverlay(postRaw)}</> : null}
@@ -1114,43 +1088,48 @@ export function ChatInput({
         <textarea
           ref={textareaRef}
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            const { value: text, selectionStart: caret } = e.currentTarget;
+            setInputValue(text);
+            setComposerSelection({ text, caret });
+          }}
+          onSelect={(e) => {
+            if (composerSelection?.text === e.currentTarget.value && e.currentTarget.selectionStart !== composerSelection.caret) {
+              closeComposerPanel();
+            }
+          }}
           onKeyDown={handleKeyDown}
           placeholder={disabled ? "请先选择模型" : "发送消息"}
           className={cn(
             "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
-            (hasSlashOverlay || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-slate-900 dark:caret-slate-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-slate-900 dark:text-slate-100 tabular-nums"
+            (parsedPrompt || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-slate-900 dark:caret-slate-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-slate-900 dark:text-slate-100 tabular-nums"
           )}
           style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }} // adjustTextareaHeight owns the real limit
           rows={1}
           disabled={disabled || isParsingDocument}
         />
-        <McpMentionPanel
-          open={mentionOpen}
-          anchorRef={textareaRef as any}
-          filterQuery={(inputValue.match(/@([a-zA-Z0-9_-]*)$/)?.[1] || '')}
-          onSelect={(name)=>{
-            const el = textareaRef.current; if (!el) return;
-            const next = inputValue.replace(/@([a-zA-Z0-9_-]*)$/, `@${name} `);
-            setInputValue(next);
-            setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
-            setMentionOpen(false);
-          }}
-          onClose={()=>setMentionOpen(false)}
-        />
+        {composerQuery?.trigger === '@' && (
+          <McpMentionPanel
+            key={workspaceDirectory}
+            anchorRef={textareaRef}
+            filterQuery={composerQuery.query}
+            workspaceDirectory={workspaceDirectory}
+            onSelect={(name) => pickComposerItem(`@${name} `)}
+            onSelectFile={(path) => pickComposerItem(`${JSON.stringify(path)} `)}
+            onBrowse={() => {
+              const next = replaceComposerQuery(inputValue, composerQuery, '@');
+              setComposerText(next.text, next.caret);
+              setComposerSelection(next);
+            }}
+            onClose={closeComposerPanel}
+          />
+        )}
         <SkillMentionPanel
-          open={skillMentionOpen}
+          open={composerQuery?.trigger === '/'}
           anchorRef={textareaRef as any}
-          filterQuery={(inputValue.match(/#([a-zA-Z0-9_-]*)$/)?.[1] || '')}
-          onSelect={(skill: Skill)=>{
-            const el = textareaRef.current; if (!el) return;
-            // 将 #query 替换为 #skill-id，保留技能引用
-            const next = inputValue.replace(/#([a-zA-Z0-9_-]*)$/, `#${skill.id} `);
-            setInputValue(next);
-            setTimeout(()=>{ el.selectionStart = el.selectionEnd = next.length; el.focus(); },0);
-            setSkillMentionOpen(false);
-          }}
-          onClose={()=>setSkillMentionOpen(false)}
+          filterQuery={composerQuery?.trigger === '/' ? composerQuery.query : ''}
+          onSelect={(skill: Skill) => pickComposerItem(`/${skill.id} `)}
+          onClose={closeComposerPanel}
         />
         {/* 左下角工具栏：次要能力统一弱图标 */}
         <div className="absolute left-2 sm:left-3 bottom-2.5 z-[2] flex items-center gap-0.5">
@@ -1172,10 +1151,13 @@ export function ChatInput({
 
           {/* 附件菜单 */}
           <AttachmentMenu
+            open={attachmentMenuOpen}
+            onOpenChange={setAttachmentMenuOpen}
             disabled={disabled || effectiveLoading}
             isParsingDocument={isParsingDocument}
             hasDocument={!!attachedDocument}
             selectedKnowledgeBase={selectedKnowledgeBase}
+            onOpenComposerPanel={openComposerPanel}
             onPickImage={() => imageInputRef.current?.click()}
             onPickDocument={() => fileInputRef.current?.click()}
             onSelectKnowledgeBase={(kb) => {
@@ -1185,7 +1167,6 @@ export function ChatInput({
                 removeSelectedKnowledgeBase();
               }
             }}
-            conversationId={conversationId}
           />
 
           {/* 网络搜索 */}
@@ -1314,21 +1295,29 @@ export function ChatInput({
           const kb = allKnowledgeBases.find(k => k.id === id);
           if (kb) selectKnowledgeBase(kb);
         }}
-        workingDir={mountedDir}
-        workingDirAttached={Boolean(mountedDir)}
-        onRemoveWorkingDir={mountedDir ? () => {
-          try {
-            if (currentConvId) clearMountedDir(String(currentConvId));
-          } catch {
-            // ignore
-          }
-        } : undefined}
         attachedDocument={attachedDocument ? { name: attachedDocument.name, fileSize: attachedDocument.fileSize } : undefined}
         onRemoveDocument={() => removeAttachedDocument()}
         enabledMcpServers={[]}
       />
 
-      {/* 会话参数弹窗已迁移到上层 Chat 页面统一挂载 */}
+      {showStarterActions && !disabled && !effectiveLoading && (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5" data-chat-starter-actions>
+          <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
+            className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => workspaceDirectory ? openComposerPanel('@') : setAttachmentMenuOpen(true)}>
+            {workspaceDirectory ? <FolderOpen aria-hidden="true" className="size-3.5" /> : <Paperclip aria-hidden="true" className="size-3.5" />}
+            {t(workspaceDirectory ? 'chatStarter.workspaceFiles' : 'chatStarter.attach')}
+            {workspaceDirectory && <kbd className="rounded border border-border px-1 text-[11px] leading-4">@</kbd>}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
+            className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => openComposerPanel('#')}>
+            <Bookmark aria-hidden="true" className="size-3.5" />
+            {t('chatStarter.prompts')}
+            <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

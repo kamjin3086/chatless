@@ -3,6 +3,11 @@ import { ToolExecutionPipeline } from '../ToolExecutionPipeline';
 import { ToolInvocation } from '../ToolInvocation';
 import { clearConversationAccess } from '@/lib/mcp/accessPolicy';
 import { useConversationAccessStore } from '@/store/conversationAccessStore';
+import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
+
+vi.hoisted(() => {
+  vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+});
 
 /** A real invocation always carries these; they are not what the tests below are about. */
 const realInvocation = () => ({
@@ -54,10 +59,6 @@ vi.mock('@/store/filesystemAllowlistStore', () => ({
   }) },
 }));
 
-vi.mock('@/store/conversationAttachmentStore', () => ({
-  useConversationAttachmentStore: { getState: () => ({ getWorkingDir: () => undefined }) },
-}));
-
 vi.mock('@/lib/mcp/authorizationConfig', () => ({ shouldAutoAuthorize: async () => false }));
 vi.mock('@/lib/mcp/experience/agentExperienceConfig', () => ({
   getAgentExperienceConfig: async () => ({ maxToolRetries: 0 }),
@@ -82,6 +83,7 @@ vi.mock('@/lib/database/services/DatabaseService', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   useConversationAccessStore.setState({ conversations: {} });
+  useConversationAttachmentStore.setState({ mountedDirByConversation: {}, sessionDirByConversation: {} });
   mocks.approvals.length = 0;
   mocks.addedDirectories.length = 0;
   mocks.decision = 'once';
@@ -142,6 +144,32 @@ describe('unified conversation approval', () => {
 });
 
 describe('one-time filesystem approval', () => {
+  it('requires approval for project files even in automatic mode', async () => {
+    const store = useConversationAttachmentStore.getState();
+    store.setMountedDir('conv-1', 'C:/project');
+    store.setWorkingDir('conv-1', 'C:/Chatless/session');
+    useConversationAccessStore.getState().setAutomatic('conv-1', true);
+
+    const adapter = { server: 'filesystem', canHandle: () => true, execute: vi.fn(async () => ({ ok: true })) };
+    const pipeline = new ToolExecutionPipeline({ adapters: [adapter as never] });
+    const write = (path: string, callId: string) => pipeline.run(new ToolInvocation({
+      ...realInvocation(), conversationId: 'conv-1', assistantMessageId: 'project-membership', callId,
+      server: 'filesystem', tool: 'write_file', args: { path, content: 'test' },
+    }));
+
+    await write('@WorkDir/output.txt', 'session-output');
+    expect(adapter.execute).toHaveBeenCalledOnce();
+    expect(mocks.grantCallScope).toHaveBeenCalledWith(expect.objectContaining({ path: 'C:/Chatless/session' }));
+    expect(mocks.approvals).toHaveLength(0);
+
+    await write('C:/project/draft.txt', 'project-file');
+    expect(mocks.approvals).toHaveLength(1);
+    expect(mocks.grantCallScope).toHaveBeenCalledWith(expect.objectContaining({
+      callId: 'project-file', path: 'C:/project', read: false, write: true, create: false, delete: false,
+    }));
+    expect(mocks.addedDirectories).toEqual([]);
+  });
+
   it('grants the approved call without writing the persistent allowlist', async () => {
     const adapter = {
       server: 'filesystem',

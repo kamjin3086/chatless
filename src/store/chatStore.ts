@@ -7,6 +7,7 @@ import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import { startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { AgentRunEventStore } from '@/lib/mcp/agentLoop/AgentRunEventStore';
 import { planEmptyConversationReuse } from '@/lib/chat/emptyConversationReuse';
+import { workspacePath } from '@/lib/chat/conversationGroups';
 import { initModel, reduce } from '@/lib/chat/messageFsm';
 
 const getDatabaseService = () => {
@@ -97,7 +98,7 @@ interface ChatActions {
   loadConversations: () => Promise<void>;
   /** 确保指定会话的消息已加载（惰性加载） */
   ensureMessagesLoaded: (conversationId: string) => Promise<void>;
-  createConversation: (title: string, modelId: string, providerName?: string) => Promise<string>;
+  createConversation: (title: string, modelId: string, providerName?: string, directory?: string | null) => Promise<string>;
   deleteConversation: (conversationId: string) => Promise<void>;
   setCurrentConversation: (conversationId: string) => void;
   addMessage: (message: Message) => Promise<Message | null>;
@@ -443,36 +444,28 @@ export const useChatStore = create<ChatState & ChatActions>()(
         }
       },
 
-      createConversation: async (title, modelId, providerName) => {
-        // 空白会话有且仅有一个：连点"+"只切换/清理，不再堆空壳。
+      createConversation: async (title, modelId, providerName, directory) => {
+        const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
+        const attachments = useConversationAttachmentStore.getState();
+        const previousId = get().currentConversationId;
+        const requestedPath = workspacePath(directory === undefined && previousId ? attachments.getMountedDir(previousId) : directory);
+        const archived = requestedPath !== null && attachments.archivedWorkspaces[requestedPath];
+        if (archived && directory !== undefined) {
+          throw new Error('Restore the workspace before creating a conversation in it');
+        }
+        // Global creation falls back to Default rather than creating a hidden chat.
+        const target = archived ? null : requestedPath;
+        // Reuse empty chats only within the requested workspace.
+        const conversationIds = get().conversations.filter((chat) => !attachments.archivedConversations[chat.id] && workspacePath(attachments.getMountedDir(chat.id)) === target).map((chat) => chat.id);
         try {
           const plan = planEmptyConversationReuse({
-            conversationIds: get().conversations.map((c: Conversation) => c.id),
-            withoutMessages: await listConversationIdsWithoutMessages(
-              get().conversations.map((c: Conversation) => c.id),
-            ),
+            conversationIds,
+            withoutMessages: await listConversationIdsWithoutMessages(conversationIds),
             drafts: get().inputDrafts,
           });
           if (plan.reuse) {
-            // 先清理多余空壳（走既有的删除路径，附件的会话状态也一并收掉）。
-            for (const staleId of plan.remove) {
-              try {
-                await get().deleteConversation(staleId);
-              } catch (error) {
-                console.warn('[CREATE-CONVERSATION] 清理多余的空会话失败:', staleId, error);
-              }
-            }
+            // Reuse does not implicitly delete other conversations.
             set({ currentConversationId: plan.reuse });
-            if (plan.remove.length > 0) {
-              try {
-                const { toast } = await import('@/components/ui/sonner');
-                toast.info('已回到空白会话', {
-                  description: `顺手清理了 ${plan.remove.length} 个多余的空会话`,
-                });
-              } catch {
-                // 提示失败不影响会话
-              }
-            }
             // 复用已有会话时也要保证它的 @WorkDir 已解析（重启后内存里没有缓存）。
             const reused = get().conversations.find((c: Conversation) => c.id === plan.reuse);
             await resolveConversationWorkspace(plan.reuse, reused?.title);
@@ -495,10 +488,11 @@ export const useChatStore = create<ChatState & ChatActions>()(
           is_favorite: false,
         };
 
+        if (target) attachments.setMountedDir(newConversation.id, target);
         set((state) => {
           state.conversations.unshift(newConversation);
+          state.currentConversationId = newConversation.id;
         });
-        set({ currentConversationId: newConversation.id });
 
         try {
           const dbService = getDatabaseService();
@@ -520,7 +514,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
           console.error("❌ [CREATE-CONVERSATION] 保存新对话失败:", error);
           set((state) => {
             state.conversations = state.conversations.filter(c => c.id !== newConversation.id);
+            if (state.currentConversationId === newConversation.id) state.currentConversationId = previousId;
           });
+          if (target) attachments.clearMountedDir(newConversation.id);
           throw error;
         }
 
@@ -1277,6 +1273,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
       },
 
       deleteConversation: async (id) => {
+        await getDatabaseService().getConversationRepository().delete(id);
         set((state) => {
           state.conversations = state.conversations.filter((c: Conversation) => c.id !== id);
           if (state.currentConversationId === id) {
@@ -1291,6 +1288,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
           const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
           const attachments = useConversationAttachmentStore.getState();
           attachments.clearMountedDir(id);
+          attachments.archiveConversation(id, false);
           attachments.clearWorkingDir(id);
           attachments.clearWorkspaceError(id);
         } catch {
@@ -1311,11 +1309,6 @@ export const useChatStore = create<ChatState & ChatActions>()(
         }
 
         try {
-          const dbService = getDatabaseService();
-          const conversationRepo = dbService.getConversationRepository();
-
-          await conversationRepo.delete(id);
-          
           // 清理会话参数
           try {
             const { ModelParametersService } = await import('@/lib/model-parameters');

@@ -33,7 +33,7 @@ export function SkillMentionPanel({
   filterQuery = '' 
 }: SkillMentionPanelProps) {
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [pos, setPos] = useState<{ left: number; bottom: number; width: number } | null>(null);
+  const [pos, setPos] = useState<ReturnType<typeof calcPanelPosition>>(null);
   const activeRef = useRef(0);
   const [, forceUpdate] = useState({});
 
@@ -79,9 +79,9 @@ export function SkillMentionPanel({
     setPos(calcPanelPosition(el, panelWidth.md));
     
     const onKey = (e: KeyboardEvent) => {
-      if (!open || filteredSkills.length === 0) return;
-      
+      if (!open || e.isComposing || e.target !== anchorRef.current) return;
       if (e.key === 'Escape') { onClose(); return; }
+      if (filteredSkills.length === 0) return;
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -95,7 +95,7 @@ export function SkillMentionPanel({
         forceUpdate({});
       }
       
-      if (e.key === 'Enter' || e.key === 'Tab') {
+      if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
         e.preventDefault();
         const skill = filteredSkills[activeRef.current];
         if (skill) onSelect(skill);
@@ -115,13 +115,13 @@ export function SkillMentionPanel({
 
   const panel = (
     <div
-      style={{ position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, zIndex: 9999 }}
+      style={{ position: 'fixed', ...pos, zIndex: 9999 }}
       className={panelContainerClass}
     >
       {/* 头部 */}
       <div className={panelHeaderClass}>
         <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
-          # 技能
+          / 技能
         </span>
         <button
           className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
@@ -151,7 +151,7 @@ export function SkillMentionPanel({
                   <span className="font-medium text-sm text-slate-700 dark:text-slate-200 truncate">
                     {skill.name}
                   </span>
-                  <span className="text-xs text-violet-400 font-mono">#{skill.id}</span>
+                  <span className="text-xs text-violet-400 font-mono">/{skill.id}</span>
                 </div>
                 {skill.description && (
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">

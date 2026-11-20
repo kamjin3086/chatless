@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import StorageUtil from "@/lib/storage";
+import type { ConversationGrouping } from '@/lib/chat/conversationGroups';
 import type { SectionIconPreset } from "@/components/settings/SectionIcon";
 import { applyNightBrightnessCss, clampNightBrightness } from "@/lib/utils/nightBrightness";
 import {
@@ -14,6 +15,8 @@ const SIMPLE_MODE_KEY = "ui_simple_mode";
 const LOW_ANIMATION_KEY = "ui_low_animation";
 const SIDEBAR_WIDTH_KEY = "ui_sidebar_width"; // 'narrow' | 'medium' | 'wide'
 const COLLAPSE_CHAT_SIDEBAR_KEY = "ui_collapse_chat_sidebar";
+const CONVERSATION_GROUPING_KEY = 'ui_conversation_grouping';
+const APP_NAV_COLLAPSED_KEY = 'ui_app_nav_collapsed';
 const TIMEZONE_KEY = "ui_timezone"; // e.g. 'local', 'UTC', 'UTC+8', 'America/New_York'
 const SHOW_CLOSE_CONFIRMATION_KEY = "ui_show_close_confirmation";
 const CLOSE_TO_TRAY_KEY = "ui_close_to_tray";
@@ -41,6 +44,8 @@ interface UiPreferencesState {
   // 布局
   sidebarWidth: SidebarWidth;
   collapseChatSidebar: boolean;
+  conversationGrouping: ConversationGrouping;
+  appNavCollapsed: boolean;
 
   sidebarIconSize: IconSize;
 
@@ -68,6 +73,8 @@ interface UiPreferencesState {
   setSidebarWidth: (w: SidebarWidth) => void;
   setSidebarIconSize: (s: IconSize) => void;
   setCollapseChatSidebar: (flag: boolean) => void;
+  setConversationGrouping: (grouping: ConversationGrouping) => void;
+  setAppNavCollapsed: (collapsed: boolean) => void;
   setTimezone: (tz: string) => void;
   setCmdPaletteEnabled: (flag: boolean) => void;
   setCmdPaletteShortcut: (sc: string) => void;
@@ -92,6 +99,8 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
 
   sidebarWidth: 'narrow',
   collapseChatSidebar: true,
+  conversationGrouping: 'time',
+  appNavCollapsed: false,
 
   sidebarIconSize: 'small',
 
@@ -141,6 +150,16 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
   setCollapseChatSidebar: (flag) => {
     set({ collapseChatSidebar: flag });
     StorageUtil.setItem<boolean>(COLLAPSE_CHAT_SIDEBAR_KEY, flag, 'user-preferences.json');
+  },
+
+  setConversationGrouping: (grouping) => {
+    set({ conversationGrouping: grouping });
+    void StorageUtil.setItem(CONVERSATION_GROUPING_KEY, grouping, 'user-preferences.json');
+  },
+
+  setAppNavCollapsed: (collapsed) => {
+    set({ appNavCollapsed: collapsed });
+    void StorageUtil.setItem(APP_NAV_COLLAPSED_KEY, collapsed, 'user-preferences.json');
   },
 
   setTimezone: (tz) => {
@@ -195,7 +214,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
 
 // 异步初始化首选项
 (async () => {
-  const [showIcon, simple, lowAnim, width, collapse, tz, iconSize, cpEnabled, cpShortcut, showCloseConfirm, charFadeIntensity, iconPreset, windowSizePreset, glassTheme, glassWallpaperFile, nightBrightness, closeToTray] = await Promise.all([
+  const [showIcon, simple, lowAnim, width, collapse, tz, iconSize, cpEnabled, cpShortcut, showCloseConfirm, charFadeIntensity, iconPreset, windowSizePreset, glassTheme, glassWallpaperFile, nightBrightness, closeToTray, conversationGrouping, appNavCollapsed] = await Promise.all([
     StorageUtil.getItem<boolean>(SHOW_SETTING_ICONS_KEY, true, 'user-preferences.json'),
     StorageUtil.getItem<boolean>(SIMPLE_MODE_KEY, true, 'user-preferences.json'),
     StorageUtil.getItem<boolean>(LOW_ANIMATION_KEY, false, 'user-preferences.json'),
@@ -213,6 +232,8 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     StorageUtil.getItem<string | null>(GLASS_WALLPAPER_KEY, null, 'user-preferences.json'),
     StorageUtil.getItem<number>(NIGHT_BRIGHTNESS_KEY, 100, 'user-preferences.json'),
     StorageUtil.getItem<boolean>(CLOSE_TO_TRAY_KEY, false, 'user-preferences.json'),
+    StorageUtil.getItem<ConversationGrouping>(CONVERSATION_GROUPING_KEY, 'time', 'user-preferences.json'),
+    StorageUtil.getItem<boolean>(APP_NAV_COLLAPSED_KEY, false, 'user-preferences.json'),
   ]);
 
   useUiPreferences.setState({
@@ -221,6 +242,8 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     lowAnimationMode: lowAnim ?? false,
     sidebarWidth: (width as SidebarWidth) ?? 'medium',
     collapseChatSidebar: collapse ?? false,
+    conversationGrouping: conversationGrouping === 'workspace' ? 'workspace' : 'time',
+    appNavCollapsed: appNavCollapsed === true,
     sidebarIconSize: (iconSize as IconSize) ?? 'small',
     timezone: tz || 'local',
     cmdPaletteEnabled: cpEnabled ?? true,

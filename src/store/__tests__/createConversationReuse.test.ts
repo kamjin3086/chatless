@@ -35,6 +35,7 @@ vi.mock('@/lib/database/services/DatabaseService', () => ({
 }));
 
 import { useChatStore } from '../chatStore';
+import { useConversationAttachmentStore } from '../conversationAttachmentStore';
 
 function conversation(id: string) {
   return {
@@ -57,6 +58,7 @@ beforeEach(() => {
   db.select.mockReset();
   db.createConversation.mockClear();
   db.deleteConversation.mockClear();
+  useConversationAttachmentStore.setState({ mountedDirByConversation: {}, archivedConversations: {}, archivedWorkspaces: {}, openedWorkspaces: [] });
   useChatStore.setState({
     conversations: [],
     currentConversationId: null,
@@ -78,9 +80,9 @@ describe('creating a conversation', () => {
 
     expect(id).toBe('newest');
     expect(useChatStore.getState().currentConversationId).toBe('newest');
-    // The extra blank shells are gone; the one with messages is untouched.
-    expect(useChatStore.getState().conversations.map((c) => c.id)).toEqual(['newest', 'chatted']);
-    expect(db.deleteConversation).toHaveBeenCalledWith('older');
+    // Reusing a blank chat is not permission to delete another chat.
+    expect(useChatStore.getState().conversations.map((c) => c.id)).toEqual(['newest', 'older', 'chatted']);
+    expect(db.deleteConversation).not.toHaveBeenCalled();
     expect(db.createConversation).not.toHaveBeenCalled();
   });
 
@@ -106,8 +108,60 @@ describe('creating a conversation', () => {
     const id = await useChatStore.getState().createConversation('新对话 16:00', 'model-x');
 
     expect(id).toBe('kept');
-    expect(useChatStore.getState().conversations.map((c) => c.id)).toEqual(['kept', 'drafted']);
-    expect(db.deleteConversation).toHaveBeenCalledWith('extra');
+    expect(useChatStore.getState().conversations.map((c) => c.id)).toEqual(['kept', 'drafted', 'extra']);
+    expect(db.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('creates in the requested directory without reusing another workspace’s blank chat', async () => {
+    useChatStore.setState({ conversations: [conversation('default')], currentConversationId: 'default' });
+    withMessages();
+    const attachments = useConversationAttachmentStore.getState();
+    attachments.registerWorkspace('/test/workspace');
+    expect(attachments.getMountedDir('default')).toBeUndefined();
+
+    const id = await useChatStore.getState().createConversation('Project', 'model-x', undefined, '/test/workspace');
+    expect(id).not.toBe('default');
+    expect(attachments.getMountedDir(id)).toBe('/test/workspace');
+    expect(await useChatStore.getState().createConversation('Reuse', 'model-x')).toBe(id);
+    expect(await useChatStore.getState().createConversation('Default', 'model-x', undefined, null)).toBe('default');
+    expect(db.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse an archived blank conversation', async () => {
+    useChatStore.setState({ conversations: [conversation('archived')] });
+    useConversationAttachmentStore.getState().archiveConversation('archived', true);
+    withMessages();
+    const id = await useChatStore.getState().createConversation('New', 'model-x');
+    expect(id).not.toBe('archived');
+    expect(db.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('falls back to Default when global creation would inherit an archived workspace', async () => {
+    const path = '/test/archived';
+    useChatStore.setState({ conversations: [conversation('project'), conversation('default')], currentConversationId: 'project' });
+    const attachments = useConversationAttachmentStore.getState();
+    attachments.setMountedDir('project', path);
+    attachments.archiveWorkspace(path, true);
+    withMessages();
+
+    const create = useChatStore.getState().createConversation;
+    await expect(create('Project', 'model-x', undefined, path)).rejects.toThrow('Restore the workspace');
+    expect(await create('New', 'model-x')).toBe('default');
+    expect(attachments.getMountedDir('project')).toBe(path);
+    expect(db.createConversation).not.toHaveBeenCalled();
+    expect(db.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('retains the conversation and its workspace when deletion cannot be written', async () => {
+    useChatStore.setState({ conversations: [conversation('keep')], currentConversationId: 'keep' });
+    const attachments = useConversationAttachmentStore.getState();
+    attachments.setMountedDir('keep', '/test/workspace');
+    db.deleteConversation.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(useChatStore.getState().deleteConversation('keep')).rejects.toThrow('database unavailable');
+    expect(useChatStore.getState().currentConversationId).toBe('keep');
+    expect(useChatStore.getState().conversations.map((chat) => chat.id)).toEqual(['keep']);
+    expect(attachments.getMountedDir('keep')).toBe('/test/workspace');
   });
 
   it('falls back to creating when the emptiness check fails', async () => {

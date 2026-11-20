@@ -6,14 +6,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ContextMenu, createConversationMenuItems } from "@/components/ui/context-menu";
 import { Star } from "lucide-react";
 import { formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { enUS, zhCN } from 'date-fns/locale';
+import type { Locale } from '@/i18n/types';
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/types/chat";
-import { useProviderMetaStore } from '@/store/providerMetaStore';
-import type { ProviderMetadata } from '@/lib/metadata/types';
 
 interface ConversationItemProps {
   conversation: Conversation;
+  locale: Locale;
   isCurrent: boolean;
   isRenaming: boolean;
   renameInputValue: string;
@@ -28,10 +28,13 @@ interface ConversationItemProps {
   onStar: (id: string) => void;
   onDuplicate: (id: string) => void;
   onExport: (id: string) => void;
+  archiveLabel: string;
+  onArchive: () => void;
 }
 
 function ConversationItemImpl({
   conversation,
+  locale,
   isCurrent,
   isRenaming,
   renameInputValue,
@@ -46,19 +49,21 @@ function ConversationItemImpl({
   onStar,
   onDuplicate,
   onExport,
+  archiveLabel,
+  onArchive,
 }: ConversationItemProps) {
   // 使用固定的时间戳数字作为依赖，避免对象引用变化导致的重新计算
   // 但在格式化时仍然使用Date对象
   const updatedAtTimestamp = new Date(conversation.updated_at).getTime();
   
   const compactTime = useMemo(() => {
-    // formatDistanceToNow需要Date对象，而不是时间戳数字
+    if (!Number.isFinite(updatedAtTimestamp)) return '';
     const formattedTime = formatDistanceToNow(new Date(updatedAtTimestamp), {
       addSuffix: true,
-      locale: zhCN,
+      locale: locale === 'zh' ? zhCN : enUS,
     });
-    return formattedTime.replace(/^大约\s*/, '约 ');
-  }, [updatedAtTimestamp]);
+    return locale === 'zh' ? formattedTime.replace(/^大约\s*/, '约 ') : formattedTime;
+  }, [updatedAtTimestamp, locale]);
 
   return (
     <ContextMenu
@@ -69,30 +74,38 @@ function ConversationItemImpl({
         (_id) => onDelete({ stopPropagation: () => {} } as React.MouseEvent, conversation),
         onStar,
         onDuplicate,
-        onExport
+        onExport,
+        { text: archiveLabel, action: onArchive },
       )}
     >
       <li
         className={cn(
-          "group relative flex flex-col gap-0 px-2 py-1.5 rounded-md transition-colors duration-150 cursor-pointer",
+          "group relative flex min-h-9 min-w-0 items-center rounded-md px-2 py-1.5 transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-600 dark:focus-visible:outline-sky-400 motion-reduce:transition-none",
           isCurrent
-            ? "text-slate-800 dark:text-slate-100"
-            : "text-slate-600 dark:text-slate-400 hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.04] hover:text-slate-800 dark:hover:text-slate-200"
+            ? "bg-sky-600/10 text-slate-950 dark:bg-sky-400/12 dark:text-slate-50"
+            : "text-slate-800 hover:bg-slate-500/[0.07] dark:text-slate-200 dark:hover:bg-white/[0.07]"
         )}
+        tabIndex={isRenaming ? -1 : 0}
+        aria-current={isCurrent ? 'true' : undefined}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          onSelect(conversation.id);
+        }}
         onClick={() => onSelect(conversation.id)}
       >
-        {/* 选中态：细线提示，不抢背景 */}
+        {/* Keep the selection marker visible in addition to the row fill. */}
         {isCurrent && (
-          <div className="absolute left-0 top-1.5 bottom-1.5 w-px bg-sky-500/70 dark:bg-sky-400/60 rounded-r-full" />
+          <div className="absolute left-0 top-2 bottom-2 w-px bg-sky-600 dark:bg-sky-400 rounded-r-full" />
         )}
-        <div className="flex items-center gap-1.5 min-w-0 ml-1">
+        <div className="ml-1 flex min-w-0 flex-1 items-center gap-1.5">
           {isRenaming ? (
             <Input
               value={renameInputValue}
               onChange={(e) => onRenameChange(e.target.value)}
               onBlur={onRenameBlur}
               onKeyDown={onRenameKeyDown}
-              className="inline-edit h-6 w-full min-w-0 px-0 py-0 text-[13px] bg-transparent border-0 border-b border-slate-300/60 dark:border-slate-600/50 rounded-none shadow-none focus-visible:ring-0"
+              className="inline-edit h-6 w-full min-w-0 px-0 py-0 text-sm bg-transparent border-0 border-b border-slate-300/60 dark:border-slate-600/50 rounded-none shadow-none focus-visible:ring-0"
               autoFocus
             />
           ) : (
@@ -110,65 +123,23 @@ function ConversationItemImpl({
                 </div>
               )}
               <div
-                className="flex-1 text-[13px] font-medium truncate cursor-pointer leading-tight"
+                className={cn('min-w-0 flex-1 truncate text-sm leading-5', isCurrent ? 'font-semibold' : 'font-medium')}
+                title={[conversation.title, conversation.model_full_id || conversation.model_id].filter(Boolean).join('\n')}
                 onClick={(e) => onTitleClick(e, conversation)}
                 onDoubleClick={(e) => onRenameStart(e, conversation)}
               >
                 {conversation.title}
               </div>
+              {compactTime && (
+                <span className="pointer-events-none hidden max-w-[50%] shrink-0 truncate text-xs leading-5 text-slate-600 group-hover:block group-focus-visible:block dark:text-slate-300">
+                  {compactTime}
+                </span>
+              )}
             </div>
           )}
         </div>
-
-        <div className="flex items-center justify-between text-xs mt-0 ml-1 min-h-[12px]">
-          <div className="flex-1 min-w-0 flex items-center gap-1.5 pr-1">
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{compactTime}</span>
-            {/* 模型名：使用opacity控制显示，min-h保证高度不跳动 */}
-            <span className="text-slate-300 dark:text-slate-600 transition-opacity duration-200 group-hover:opacity-100 opacity-0 pointer-events-none">·</span>
-            <div className="flex items-center min-w-0 flex-1 transition-opacity duration-200 group-hover:opacity-100 opacity-0 pointer-events-none">
-              <ModelLabelSpan conversation={conversation} />
-            </div>
-          </div>
-        </div>
       </li>
     </ContextMenu>
-  );
-}
-
-function ModelLabelSpan({ conversation }: { conversation: Conversation }) {
-  const metadata = useProviderMetaStore((s)=> s.list as unknown as ProviderMetadata[]);
-  const maps = useMemo(() => {
-    const byModel = new Map<string, string>();
-    const byProvModel = new Map<string, string>();
-    for (const p of (metadata || [])) {
-      const provName = (p as any).name as string;
-      const models = (p as any).models || [];
-      for (const m of models) {
-        const id = m?.name as string;
-        const label = (m?.label as string) || '';
-        if (id && label) {
-          if (!byModel.has(id)) byModel.set(id, label);
-          byProvModel.set(`${provName}::${id}`, label);
-        }
-      }
-    }
-    return { byModel, byProvModel };
-  }, [metadata]);
-
-  const prov = (conversation as any).model_provider as string | undefined;
-  const id = conversation.model_id;
-  const key = prov ? `${prov}::${id}` : '';
-  const label = (prov && maps.byProvModel.get(key)) || maps.byModel.get(id);
-  const display = label || conversation.model_id;
-  return (
-    <span
-      // No fixed rem width: the label truncates to whatever room the row has left,
-      // instead of widening the row past the sidebar.
-      className="text-[10px] text-slate-500 dark:text-slate-400 min-w-0 max-w-full truncate"
-      title={(conversation as any).model_full_id || conversation.model_id}
-    >
-      {display}
-    </span>
   );
 }
 
@@ -180,10 +151,13 @@ export const ConversationItem = React.memo(ConversationItemImpl, (prev, next) =>
     && a.title === b.title
     && a.updated_at === b.updated_at
     && a.model_id === b.model_id
+    && a.model_full_id === b.model_full_id
     && (a as any).model_provider === (b as any).model_provider
     && (a as any).is_favorite === (b as any).is_favorite;
   return (
     sameConv
+    && prev.locale === next.locale
+    && prev.archiveLabel === next.archiveLabel
     && prev.isCurrent === next.isCurrent
     && prev.isRenaming === next.isRenaming
     && prev.renameInputValue === next.renameInputValue

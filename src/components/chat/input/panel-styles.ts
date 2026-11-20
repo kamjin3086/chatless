@@ -1,14 +1,14 @@
 /**
  * 统一面板样式配置
  * 
- * 所有输入提及面板（/提示词、@MCP、#技能）共用的样式常量
+ * 所有输入提及面板（#提示词、@MCP 和工作区文件、/技能）共用的样式常量
  * 每种面板有独特的颜色主题
  */
 
 // 面板容器样式
 export const panelContainerClass = [
   // 基础
-  "glass-overlay rounded-xl border overflow-hidden",
+  "glass-overlay flex flex-col rounded-xl border overflow-hidden",
   // 背景
   "bg-white/100 dark:bg-slate-900/95 backdrop-blur-sm",
   // 边框和阴影
@@ -20,7 +20,7 @@ export const panelContainerClass = [
 
 // 面板头部样式
 export const panelHeaderClass = [
-  "flex items-center justify-between",
+  "flex shrink-0 items-center justify-between",
   "px-3 py-2.5",
   "border-b border-slate-100 dark:border-slate-800",
 ].join(" ");
@@ -44,7 +44,7 @@ export const panelTitleThemes = {
 
 // 面板列表容器样式
 export const panelListClass = [
-  "max-h-72 overflow-y-auto",
+  "min-h-0 flex-1 max-h-72 overflow-y-auto",
   "py-1",
 ].join(" ");
 
@@ -62,7 +62,7 @@ export const panelItemActiveClass = [
 
 // 面板底部样式
 export const panelFooterClass = [
-  "px-3 py-2",
+  "shrink-0 px-3 py-2",
   "border-t border-slate-100 dark:border-slate-800",
   "text-[11px] text-slate-500 dark:text-slate-400",
 ].join(" ");
@@ -74,24 +74,26 @@ export const panelWidth = {
   lg: 440,
 };
 
-// 计算面板位置（基于 textarea 锚点）
-export function calcPanelPosition(
-  anchorEl: HTMLElement | null,
-  panelWidthPx: number = panelWidth.md
-): { left: number; bottom: number; width: number } | null {
-  if (!anchorEl) return null;
-  
-  const rect = anchorEl.getBoundingClientRect();
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  
-  // 水平居中于锚点，但不超出视口
-  let left = rect.left + rect.width / 2 - panelWidthPx / 2;
-  left = Math.max(8, Math.min(left, viewportWidth - panelWidthPx - 8));
-  
-  // 底部对齐到锚点上方
-  const bottom = viewportHeight - rect.top + 8;
-  
-  return { left, bottom, width: panelWidthPx };
+export function composerPanelPosition(
+  anchor: Pick<DOMRectReadOnly, 'left' | 'width' | 'top' | 'bottom'>,
+  viewportWidth: number,
+  viewportHeight: number,
+  preferredWidth: number,
+) {
+  const gap = 8;
+  const width = Math.max(0, Math.min(preferredWidth, viewportWidth - 2 * gap));
+  const left = Math.max(gap, Math.min(anchor.left + (anchor.width - width) / 2, viewportWidth - width - gap));
+  const above = anchor.top - 2 * gap;
+  const below = viewportHeight - anchor.bottom - 2 * gap;
+  const openAbove = above >= 360 || above >= below;
+  return {
+    left, width,
+    ...(openAbove ? { bottom: viewportHeight - anchor.top + gap } : { top: anchor.bottom + gap }),
+    maxHeight: Math.max(0, openAbove ? above : below),
+  };
+}
+
+export function calcPanelPosition(anchor: HTMLElement | null, preferredWidth = panelWidth.md) {
+  return anchor ? composerPanelPosition(anchor.getBoundingClientRect(), window.innerWidth, window.innerHeight, preferredWidth) : null;
 }
 

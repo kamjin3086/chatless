@@ -4,7 +4,8 @@ import { useEffect, useRef } from 'react';
 import { performEnvironmentCheck, logEnvironmentInfo, type EnvironmentDetection } from '../lib/utils/environment';
 import { useChatStore } from "@/store/chatStore";
 import { getDatabaseService, initDatabaseService } from '@/lib/db';
-import { Sidebar } from './Sidebar';
+import { AppPageSwitcher, Sidebar } from './Sidebar';
+import { useUiPreferences } from '@/store/uiPreferences';
 import { afterStartupPaint, startupMonitor } from '@/lib/utils/startupPerformanceMonitor';
 import { ThemeInitializer } from './theme/ThemeInitializer';
 import { GlassThemeApplier } from './theme/GlassThemeApplier';
@@ -23,6 +24,7 @@ interface TauriAppProps {
 
 export function TauriApp({ children }: TauriAppProps) {
   const loadConversations = useChatStore((state) => state.loadConversations);
+  const appNavCollapsed = useUiPreferences((state) => state.appNavCollapsed);
   // 使用 ref 来防止重复初始化
   const hasInitializedRef = useRef(false);
   const initializationPromiseRef = useRef<Promise<void> | null>(null);
@@ -280,13 +282,19 @@ export function TauriApp({ children }: TauriAppProps) {
       <NightBrightnessApplier />
       <StartupUpdateToast />
       <div className="relative flex h-full custom-titlebar-content">
-        <Sidebar />
+        {!appNavCollapsed && <Sidebar />}
         <div
           className="glass-shell flex-1 relative"
-          style={{ marginLeft: 'var(--sidebar-width, 4.5rem)' }}
+          data-app-nav-collapsed={appNavCollapsed || undefined}
+          style={{ marginLeft: appNavCollapsed ? 0 : 'var(--sidebar-width, 4.5rem)' }}
         >
-          <div className="glass-shell-inner relative h-full min-h-0 overflow-x-hidden">
-            {children}
+          <div className="glass-shell-inner relative flex h-full min-h-0 flex-col overflow-x-hidden">
+            {appNavCollapsed && (
+              <div className="app-page-switcher-fallback glass-surface flex h-9 shrink-0 items-center border-b border-slate-300/60 px-2 dark:border-white/10">
+                <AppPageSwitcher />
+              </div>
+            )}
+            <div className="glass-shell-content relative min-h-0 flex-1">{children}</div>
           </div>
         </div>
       </div>

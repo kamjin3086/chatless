@@ -21,6 +21,7 @@ interface ModelSelectorProps {
   onModelChange: (newModelId: string) => void;
   disabled?: boolean;
   currentProviderName?: string;
+  setupLabel?: string;
 }
 
 export function ModelSelector({ 
@@ -28,7 +29,8 @@ export function ModelSelector({
   allMetadata,
   onModelChange, 
   disabled = false,
-  currentProviderName
+  currentProviderName,
+  setupLabel,
 }: ModelSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [recentModels, setRecentModels] = useState<Array<{provider: string; modelId: string}>>([]);
@@ -327,9 +329,10 @@ export function ModelSelector({
         onOpenChange={handleOpenChange}
       >
         <SelectTrigger
-          variant="ghost"
+          variant={setupLabel ? 'default' : 'ghost'}
           title={triggerTitle}
-          className="h-7 max-w-[50vw] min-w-0 overflow-hidden rounded-lg border border-slate-200/70 bg-white/60 px-2 text-xs font-medium text-slate-600 shadow-none hover:border-slate-300/80 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10"
+          aria-label={setupLabel}
+          className={setupLabel ? undefined : 'h-7 max-w-[50vw] min-w-0 overflow-hidden rounded-lg border border-slate-200/70 bg-white/60 px-2 text-xs font-medium text-slate-600 shadow-none hover:border-slate-300/80 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10'}
         >
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             {currentProvider && currentModelId ? (
@@ -383,7 +386,7 @@ export function ModelSelector({
                 ) : null}
               </>
             ) : (
-              <span>{triggerPlaceholder}</span>
+              <span>{setupLabel ?? triggerPlaceholder}</span>
             )}
           </span>
         </SelectTrigger>

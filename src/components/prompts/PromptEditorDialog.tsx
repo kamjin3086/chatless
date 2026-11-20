@@ -128,7 +128,7 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
     const target = e.currentTarget;
     if (e.key === 'Enter' && target.value.trim()) {
       e.preventDefault();
-      const val = target.value.trim().replace(/^\//,'').toLowerCase();
+      const val = target.value.trim().replace(/^[#/]/,'').toLowerCase();
       setShortcuts((prev) => Array.from(new Set([...prev, val])));
       target.value = '';
     }
@@ -287,14 +287,14 @@ export function PromptEditorDialog({ open, onOpenChange, initial, onSubmit, onDe
               <label className="text-xs text-slate-600 dark:text-slate-400">快捷指令</label>
               <input
                 onKeyDown={handleShortcutInput}
-                placeholder="/指令名"
+                placeholder="#指令名"
                 className="glass-field w-full h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
               />
               {shortcuts.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {shortcuts.map((s) => (
                     <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded-md border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300 font-mono">
-                      /{s}
+                      #{s}
                       <button onClick={() => removeShortcut(s)} className="hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
                     </span>
                   ))}

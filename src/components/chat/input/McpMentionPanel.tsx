@@ -1,247 +1,197 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { getEnabledConfiguredServers, getConnectedServers, getGlobalEnabledServers } from '@/lib/mcp/chatIntegration';
-import { Settings, Loader2 } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
-import { mcpPreheater } from '@/lib/mcp/mcpPreheater';
+import { ArrowLeft, FileText, Folder, Settings } from 'lucide-react';
+import { getConnectedServers, getEnabledConfiguredServers, getGlobalEnabledServers } from '@/lib/mcp/chatIntegration';
+import { withOneShotGrant } from '@/lib/filesystemAllowlist/oneShotGrant';
+import { listDirectory, type FsEntry } from '@/lib/tauri/filesystemCommands';
+import { useLocaleStore } from '@/store/localeStore';
 import { cn } from '@/lib/utils';
 import {
+  calcPanelPosition,
   panelContainerClass,
   panelHeaderClass,
-  panelListClass,
-  panelItemClass,
   panelItemActiveClass,
-  panelFooterClass,
-  calcPanelPosition,
+  panelItemClass,
+  panelListClass,
   panelWidth,
 } from './panel-styles';
 
 interface McpMentionPanelProps {
-  open: boolean;
-  anchorRef: React.RefObject<HTMLTextAreaElement>;
+  anchorRef: React.RefObject<HTMLTextAreaElement | null>;
+  workspaceDirectory?: string;
   onSelect: (name: string) => void;
+  onSelectFile: (path: string) => void;
+  onBrowse: () => void;
   onClose: () => void;
   filterQuery?: string;
 }
 
-export function McpMentionPanel({ open, anchorRef, onSelect, onClose, filterQuery = '' }: McpMentionPanelProps) {
-  const [items, setItems] = useState<Array<{ name: string; connected: boolean; allowed: boolean }>>([]);
-  const [pos, setPos] = useState<{ left: number; bottom: number; width: number } | null>(null);
-  const activeRef = useRef(0);
-  const [, forceUpdate] = useState({});
-  const [toolsPreview, setToolsPreview] = useState<Record<string, string[]>>({});
+type MentionItem =
+  | { kind: 'server'; name: string; allowed: boolean; connected: boolean }
+  | { kind: 'entry'; entry: FsEntry };
 
-  // 预热服务器
-  const preheatServer = async (name: string) => {
-      try {
-        const { serverManager } = await import('@/lib/mcp/ServerManager');
-        if (serverManager.isServerConnected(name)) return;
-      
-      toast.info(`正在连接 ${name}…`, { duration: 1200 });
-      const { getAllConfiguredServersWithStatus } = await import('@/lib/mcp/chatIntegration');
-      const list = await getAllConfiguredServersWithStatus();
-      const item = list.find(s => s.name === name);
-      if (!item) return;
-      
-      try {
-        await Promise.race([
-          serverManager.startServer(name, (item as any).config),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
-        ]);
-      } catch {
-        toast.error(`连接 ${name} 失败`, { duration: 2000 });
+export function McpMentionPanel({ anchorRef, workspaceDirectory, onSelect, onSelectFile, onBrowse, onClose, filterQuery = '' }: McpMentionPanelProps) {
+  const t = useLocaleStore((s) => s.t);
+  useLocaleStore((s) => s.locale);
+  const [servers, setServers] = useState<Extract<MentionItem, { kind: 'server' }>[]>([]);
+  const [folders, setFolders] = useState<FsEntry[]>([]);
+  const [listing, setListing] = useState<{ path: string; entries: FsEntry[]; truncated?: boolean; failed?: boolean } | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [pos, setPos] = useState<ReturnType<typeof calcPanelPosition>>(null);
+  const currentFolder = folders.at(-1);
+  const path = currentFolder?.path ?? workspaceDirectory;
+
+  useEffect(() => {
+    let stale = false;
+    setPos(calcPanelPosition(anchorRef.current, panelWidth.md));
+    Promise.all([getEnabledConfiguredServers(), getConnectedServers(), getGlobalEnabledServers()])
+      .then(([configured, connected, enabled]) => {
+        if (!stale) setServers(configured.map((name) => ({ kind: 'server', name, connected: connected.includes(name), allowed: enabled.includes(name) })));
+      })
+      .catch(() => { if (!stale) setServers([]); });
+    return () => { stale = true; };
+  }, [anchorRef]);
+
+  useEffect(() => {
+    if (!workspaceDirectory || !path) return;
+    let stale = false;
+    setListing(null);
+    void withOneShotGrant({ path: workspaceDirectory, scope: 'composer-directory', read: true },
+      (scope) => listDirectory({ ...scope, path }),
+    ).then(({ entries, truncated }) => {
+      if (!stale) setListing({ path, entries: entries.filter((entry) => entry.isFile || entry.isDirectory), truncated });
+    }).catch(() => {
+      if (!stale) setListing({ path, entries: [], failed: true });
+    });
+    return () => { stale = true; };
+  }, [path, workspaceDirectory]);
+
+  const visibleListing = listing?.path === path ? listing : null;
+  const items = useMemo<MentionItem[]>(() => {
+    const q = filterQuery.toLowerCase();
+    const matches = (name: string) => name.toLowerCase().includes(q);
+    return [
+      ...servers.filter(({ name }) => matches(name)),
+      ...(visibleListing?.entries ?? [])
+        .filter(({ name }) => matches(name))
+        .sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name))
+        .map((entry) => ({ kind: 'entry' as const, entry })),
+    ];
+  }, [servers, visibleListing, filterQuery]);
+  const isSelectable = (item: MentionItem) => item.kind === 'entry' || item.allowed;
+  useEffect(() => {
+    const firstFile = currentFolder ? items.findIndex((item) => item.kind === 'entry') : -1;
+    setActiveIndex(firstFile >= 0 ? firstFile : Math.max(0, items.findIndex(isSelectable)));
+  }, [items, currentFolder]);
+
+  const select = (item: MentionItem) => {
+    if (item.kind === 'entry') {
+      if (item.entry.isDirectory) {
+        setFolders((previous) => [...previous, item.entry]);
+        onBrowse();
+      } else {
+        onSelectFile(item.entry.path);
       }
-    } catch {
-      toast.error(`连接失败`, { duration: 2000 });
+    } else if (item.allowed) {
+      if (!item.connected) {
+        void (async () => {
+          const { getAllConfiguredServersWithStatus } = await import('@/lib/mcp/chatIntegration');
+          const { serverManager } = await import('@/lib/mcp/ServerManager');
+          const server = (await getAllConfiguredServersWithStatus()).find(({ name }) => name === item.name);
+          if (server && !serverManager.isServerConnected(item.name)) await serverManager.startServer(item.name, server.config);
+        })().catch(() => {});
+      }
+      onSelect(item.name);
     }
   };
 
-  // 加载服务器列表
   useEffect(() => {
-    if (!open) return;
-    (async () => {
-      const all = await getEnabledConfiguredServers();
-      const connected = new Set(await getConnectedServers());
-      const globallyEnabled = new Set(await getGlobalEnabledServers());
-      
-      const q = (filterQuery || '').toLowerCase();
-      let list = all.map(n => ({ name: n, connected: connected.has(n), allowed: globallyEnabled.has(n) }));
-      
-      if (q) {
-        const prefix = list.filter(it => it.name.toLowerCase().startsWith(q));
-        const contains = list.filter(it => it.name.toLowerCase().includes(q) && !it.name.toLowerCase().startsWith(q));
-        list = [...prefix, ...contains];
-      }
-      
-      setItems(list);
-      const firstIdx = list.findIndex((it) => it.allowed);
-      activeRef.current = firstIdx >= 0 ? firstIdx : 0;
-    })();
-  }, [open, filterQuery]);
-
-  // 位置计算和键盘导航
-  useEffect(() => {
-    if (!open) return;
-    
-    const el = anchorRef.current;
-    setPos(calcPanelPosition(el, panelWidth.md));
-    
-    const onKey = (e: KeyboardEvent) => {
-      if (!open) return;
-      
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target !== anchorRef.current || e.isComposing) return;
       if (e.key === 'Escape') { onClose(); return; }
-      
-      if (e.key === 'ArrowDown') {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        let i = activeRef.current;
-        for (let step = 0; step < items.length; step++) {
-          i = (i + 1) % items.length;
-          if (items[i]?.allowed) { activeRef.current = i; break; }
-        }
-        forceUpdate({});
+        const item = items[activeIndex];
+        if (item) select(item);
       }
-      
-      if (e.key === 'ArrowUp') {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        let i = activeRef.current;
-        for (let step = 0; step < items.length; step++) {
-          i = (i - 1 + items.length) % items.length;
-          if (items[i]?.allowed) { activeRef.current = i; break; }
-        }
-        forceUpdate({});
-      }
-      
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const it = items[activeRef.current];
-        if (it?.allowed) {
-          preheatServer(it.name);
-          onSelect(it.name);
-        }
-      }
-    };
-    
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, items, anchorRef, onSelect, onClose]);
-
-  // 预取工具列表
-  useEffect(() => {
-    if (!open) return;
-    
-    const fetchTools = async () => {
-      for (const it of items) {
-        if (!it.allowed || !it.connected || toolsPreview[it.name]) continue;
-        
-        try {
-          const { serverManager } = await import('@/lib/mcp/ServerManager');
-          const tools: any[] | null = await Promise.race([
-            serverManager.listTools(it.name),
-            new Promise<null>(resolve => setTimeout(() => resolve(null), 800))
-          ]) as any;
-          
-          if (tools) {
-            setToolsPreview(prev => ({
-              ...prev,
-              [it.name]: tools.slice(0, 4).map((t: any) => t?.name || 'tool')
-            }));
+        const step = e.key === 'ArrowUp' ? -1 : 1;
+        for (let i = 1; i <= items.length; i++) {
+          const next = (activeIndex + step * i + items.length) % items.length;
+          if (isSelectable(items[next])) {
+            setActiveIndex(next);
+            break;
           }
-        } catch { /* ignore */ }
+        }
       }
     };
-    
-    fetchTools();
-  }, [open, items]);
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  });
 
-  if (!open || !pos) return null;
+  if (!pos) return null;
 
-  const panel = (
-    <div 
-      style={{ position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, zIndex: 9999 }}
-      className={panelContainerClass}
-    >
-      {/* 头部 */}
-      <div className={panelHeaderClass}>
-        <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-          @ MCP 服务器
-        </span>
-        <button 
-          className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-          onMouseDown={(e) => { e.preventDefault(); window.location.assign('/settings?tab=mcpServers'); }}
-          title="管理 MCP"
+  const renderRow = (item: MentionItem, index: number) => {
+    const name = item.kind === 'server' ? item.name : item.entry.name;
+    const Icon = item.kind === 'entry' ? (item.entry.isDirectory ? Folder : FileText) : null;
+    return (
+      <li key={item.kind === 'entry' ? item.entry.path : `server:${name}`}>
+        <button
+          type="button"
+          disabled={!isSelectable(item)}
+          className={cn(panelItemClass, 'flex w-full items-center gap-2 text-left disabled:opacity-50', index === activeIndex && panelItemActiveClass)}
+          onMouseDown={(e) => e.preventDefault()}
+          onMouseEnter={() => { if (isSelectable(item)) setActiveIndex(index); }}
+          onClick={() => select(item)}
+          title={name}
         >
-          <Settings className="w-3.5 h-3.5" />
+          {Icon ? <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /> : <span className="font-mono text-emerald-600" aria-hidden>@</span>}
+          <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+          {item.kind === 'server' && (!item.allowed || !item.connected) && (
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              {t(item.allowed ? 'chatComposer.mcpDisconnected' : 'chatComposer.mcpDisabled')}
+            </span>
+          )}
+        </button>
+      </li>
+    );
+  };
+
+  const sectionLabel = 'px-2.5 py-1 text-xs font-medium text-muted-foreground';
+  const message = 'px-2.5 py-2 text-xs text-muted-foreground';
+  const serverRows = items.map((item, index) => item.kind === 'server' ? renderRow(item, index) : null).filter(Boolean);
+  const fileRows = items.map((item, index) => item.kind === 'entry' ? renderRow(item, index) : null).filter(Boolean);
+  return createPortal(
+    <div style={{ position: 'fixed', ...pos, zIndex: 9999 }} className={panelContainerClass} aria-label={t('chatComposer.mentions')}>
+      <div className={panelHeaderClass}>
+        <span className="text-xs font-medium text-foreground">@ {t('chatComposer.mentions')}</span>
+        <button type="button" aria-label={t('chatComposer.manageMcp')} className="rounded p-1 hover:bg-muted" onMouseDown={(e) => e.preventDefault()} onClick={() => window.location.assign('/settings?tab=mcpServers')}>
+          <Settings className="size-3.5" />
         </button>
       </div>
-
-      {/* 列表 */}
-      <ul className={panelListClass}>
-        {items.map((it, idx) => (
-          <li 
-            key={it.name} 
-            onMouseDown={(e) => {
-              e.preventDefault();
-              if (it.allowed) {
-                preheatServer(it.name);
-                onSelect(it.name);
-              }
-            }}
-            onMouseEnter={() => {
-              if (it.allowed) {
-                activeRef.current = idx;
-                forceUpdate({});
-              }
-            }}
-            className={cn(
-              panelItemClass,
-              idx === activeRef.current && panelItemActiveClass,
-              !it.allowed && "opacity-40 cursor-not-allowed"
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-emerald-500">@</span>
-              <span className="flex-1 truncate text-sm font-medium text-slate-700 dark:text-slate-200">
-                {it.name}
-              </span>
-              {!it.connected && it.allowed && (
-                <span className="text-[10px] text-slate-400">未连接</span>
-                )}
-                {!it.allowed && (
-                <span className="text-[10px] text-slate-400">未启用</span>
-                )}
-            </div>
-            
-            {/* 工具预览 */}
-            {toolsPreview[it.name] && toolsPreview[it.name].length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {toolsPreview[it.name].map((tool, i) => (
-                  <span 
-                    key={i} 
-                    className="px-1.5 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono"
-                  >
-                    {tool}
-                  </span>
-                ))}
-              </div>
-            )}
-          </li>
-        ))}
-        
-        {items.length === 0 && (
-          <li className="px-3 py-4 text-center text-sm text-slate-500">
-            暂无已启用的 MCP 服务器
-          </li>
-        )}
-      </ul>
-
-      {/* 底部 */}
-      <div className={panelFooterClass}>
-        <span>↑↓ 导航 · Enter 选择 · Esc 关闭</span>
+      <div className={panelListClass}>
+        <div className={sectionLabel}>MCP</div>
+        {serverRows.length ? <ul>{serverRows}</ul> : <div className={message}>{t('chatComposer.noMcp')}</div>}
+        <div className={cn(sectionLabel, 'mt-1 flex items-center gap-1 border-t border-border')}>
+          {currentFolder && (
+            <button type="button" aria-label={t('chatComposer.parentFolder')} className="rounded p-0.5 hover:bg-muted" onMouseDown={(e) => e.preventDefault()} onClick={() => { setFolders((previous) => previous.slice(0, -1)); onBrowse(); }}>
+              <ArrowLeft className="size-3.5" />
+            </button>
+          )}
+          <span className="truncate">{currentFolder?.name ?? t('chatComposer.workspaceFiles')}</span>
+        </div>
+        {!workspaceDirectory ? <div className={message}>{t('chatComposer.noWorkspace')}</div>
+          : !visibleListing ? <div className={message}>{t('chatComposer.loadingFiles')}</div>
+          : visibleListing.failed ? <div className={message}>{t('chatComposer.filesUnavailable')}</div>
+          : fileRows.length ? <ul>{fileRows}</ul>
+          : <div className={message}>{t('chatComposer.noFiles')}</div>}
+        {visibleListing?.truncated && <div className={message}>{t('chatComposer.filesTruncated')}</div>}
       </div>
-    </div>
+      {workspaceDirectory && <p className={cn(message, 'shrink-0 border-t border-border')}>{t('chatComposer.filePermissionNote')}</p>}
+    </div>,
+    document.body,
   );
-
-  return typeof window !== 'undefined' ? createPortal(panel, document.body) : panel;
 }

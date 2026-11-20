@@ -1,22 +1,19 @@
 /**
- * 会话级“附加内容”状态。
- *
- * 用于提升 Agent 体验：例如“附加工作目录”，让当前会话的 Agent 可以在该目录及子目录工作。
- *
- * 挂载目录的作用域是**这个会话**：勾选后重启仍然有效，卸载即撤销。它不会被写进
- * 全局文件白名单——那会让"选一个工作目录"变成一条永久授权，安全设置里很快就会
- * 堆满无法人工审计的条目。真正的访问校验仍在执行时按调用授予。
+ * Conversation attachments and workspace membership.
+ * The project folder organizes conversations and lets the user browse files.
+ * It is not an agent working directory or a source of filesystem permissions.
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { workspacePath } from '@/lib/chat/conversationGroups';
 
 type ConversationId = string;
 
 interface ConversationAttachmentState {
   /**
    * 会话自带的产物目录（文档/Chatless/<标题>-<会话 ID 摘要>；旧会话沿用原应用数据目录）。
-   * 没有挂载目录时它就是 @WorkDir。
+   * This app-managed directory is the only source of @WorkDir.
    */
   sessionDirByConversation: Record<ConversationId, string | undefined>;
 
@@ -30,10 +27,17 @@ interface ConversationAttachmentState {
   workspaceExistsByConversation: Record<ConversationId, boolean | undefined>;
 
   /**
-   * 用户手动挂载目录（通过 + 号选择）。
-   * 一旦挂载，它就是该会话的 @WorkDir：相对路径与默认落点都指向这里。
+   * Project folder membership. Keep the persisted key so existing chats stay
+   * grouped with their project when upgrading from the old attachment UI.
    */
   mountedDirByConversation: Record<ConversationId, string | undefined>;
+  /** Sidebar registration only; this does not attach the directory to any conversation. */
+  openedWorkspaces: string[];
+  registerWorkspace: (path: string) => void;
+  archivedWorkspaces: Record<string, boolean>;
+  archivedConversations: Record<string, boolean>;
+  archiveWorkspace: (path: string, archived: boolean) => void;
+  archiveConversation: (id: string, archived: boolean) => void;
 
   /** 会话工作目录解析失败的原因（不持久化；用于界面提示与重试）。 */
   workspaceErrorByConversation: Record<ConversationId, string | undefined>;
@@ -48,27 +52,31 @@ interface ConversationAttachmentState {
   /** 记录会话自带的产物目录（系统自动解析，不作为用户授权） */
   setWorkingDir: (conversationId: string, absolutePath: string, exists?: boolean) => void;
   clearWorkingDir: (conversationId: string) => void;
-  /** 实际生效的 @WorkDir：挂载目录优先，否则会话产物目录 */
+  /** Agent @WorkDir, independent of the conversation's project membership. */
   getWorkingDir: (conversationId: string) => string | undefined;
   /** 仅会话自带产物目录（不返回挂载目录）——应用元数据只写这里 */
   getSessionDir: (conversationId: string) => string | undefined;
   /** 会话目录是否已经存在于磁盘上。 */
   isWorkspaceMaterialized: (conversationId: string) => boolean;
   markWorkspaceMaterialized: (conversationId: string) => void;
-  /**
-   * 会话自带的产物目录是否正在被这个会话当作 @WorkDir 使用。
-   * 用户挂载了自己的目录之后就是 false：应用不该在用户的项目旁边再建一个文件夹。
-   */
+  /** Whether an app-managed @WorkDir has been resolved for this conversation. */
   isSessionDirInUse: (conversationId: string) => boolean;
 
   setWorkspaceError: (conversationId: string, message: string) => void;
   clearWorkspaceError: (conversationId: string) => void;
   getWorkspaceError: (conversationId: string) => string | undefined;
 
-  /** 设置用户手动挂载目录（显示在输入框下方） */
+  /** Set the conversation's project folder without changing agent access. */
   setMountedDir: (conversationId: string, absolutePath: string) => void;
   clearMountedDir: (conversationId: string) => void;
   getMountedDir: (conversationId: string) => string | undefined;
+}
+
+function updateArchive(entries: Record<string, boolean>, key: string, archived: boolean): Record<string, boolean> {
+  const next = { ...entries };
+  if (archived) next[key] = true;
+  else delete next[key];
+  return next;
 }
 
 function normalizePath(p: string): string {
@@ -79,6 +87,19 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
   sessionDirByConversation: {},
   workspaceExistsByConversation: {},
   mountedDirByConversation: {},
+  openedWorkspaces: [],
+  archivedWorkspaces: {},
+  archivedConversations: {},
+  archiveWorkspace: (directory, archived) => {
+    const path = workspacePath(directory);
+    if (path) set((state) => ({ archivedWorkspaces: updateArchive(state.archivedWorkspaces, path, archived) }));
+  },
+  archiveConversation: (id, archived) => set((state) => ({ archivedConversations: updateArchive(state.archivedConversations, id, archived) })),
+  registerWorkspace: (absolutePath) => {
+    const path = workspacePath(absolutePath);
+    if (!path) return;
+    set((state) => ({ openedWorkspaces: [path, ...state.openedWorkspaces.filter((item) => item !== path)] }));
+  },
   workspaceErrorByConversation: {},
   knowledgeBaseByConversation: {},
 
@@ -132,13 +153,7 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     });
   },
 
-  getWorkingDir: (conversationId) => {
-    const cid = String(conversationId || '').trim();
-    if (!cid) return undefined;
-    const mounted = get().mountedDirByConversation[cid];
-    if (mounted) return mounted;
-    return get().sessionDirByConversation[cid];
-  },
+  getWorkingDir: (conversationId) => get().getSessionDir(conversationId),
 
   getSessionDir: (conversationId) => {
     const cid = String(conversationId || '').trim();
@@ -160,12 +175,7 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
     }));
   },
 
-  isSessionDirInUse: (conversationId) => {
-    const cid = String(conversationId || '').trim();
-    if (!cid) return false;
-    const state = get();
-    return !!state.sessionDirByConversation[cid] && !state.mountedDirByConversation[cid];
-  },
+  isSessionDirInUse: (conversationId) => Boolean(get().getSessionDir(conversationId)),
 
   setMountedDir: (conversationId, absolutePath) => {
     const cid = String(conversationId || '').trim();
@@ -222,6 +232,9 @@ export const useConversationAttachmentStore = create<ConversationAttachmentState
   partialize: (state) => ({
     knowledgeBaseByConversation: state.knowledgeBaseByConversation,
     mountedDirByConversation: state.mountedDirByConversation,
+    openedWorkspaces: state.openedWorkspaces,
+    archivedWorkspaces: state.archivedWorkspaces,
+    archivedConversations: state.archivedConversations,
   }),
 }));
 

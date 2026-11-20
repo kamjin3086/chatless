@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react';
 interface SidebarContextValue {
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
+  newConversation: () => Promise<void>;
 }
 
 export const SidebarContext = createContext<SidebarContextValue | undefined>(undefined);

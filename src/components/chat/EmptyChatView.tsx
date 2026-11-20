@@ -13,7 +13,6 @@ interface EmptyChatViewProps {
   onSendMessage: (content: string, documentData?: any, knowledgeBase?: any) => Promise<void>;
   onStopGeneration: () => void;
   tokenCount?: number;
-  onPromptClick: (prompt: string) => void;
   selectedKnowledgeBaseId?: string;
   onImageUpload: (file: File) => void;
   onFileUpload: (file: File) => void;
@@ -27,7 +26,6 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
   llmInitialized,
   onSendMessage,
   onStopGeneration,
-  onPromptClick,
   selectedKnowledgeBaseId,
   onImageUpload,
   onFileUpload,
@@ -39,11 +37,12 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
   return (
     <div className="flex flex-col h-full min-w-0 glass-surface">
       <ChatHeader
-        title="AI Chat"
+        title="Chatless"
         allMetadata={allMetadata}
         currentModelId={selectedModelId}
         onModelChange={onModelChange}
         isModelSelectorDisabled={isLoading || !llmInitialized}
+        hideModelSelector={!canSend}
         onTitleChange={() => {}} 
         onDelete={() => {}} 
         onShare={() => {}}
@@ -51,20 +50,26 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
         tokenCount={tokenCount}
       />
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 flex items-center justify-center px-4">
-        <ChatEmptyState onPromptClick={onPromptClick} setupState={setupState} />
-      </div>
-
-      <ChatInput
-        onSendMessage={onSendMessage}
-        onImageUpload={onImageUpload}
-        onFileUpload={onFileUpload}
-        isLoading={isLoading}
-        disabled={!canSend}
-        onStopGeneration={onStopGeneration}
-        selectedKnowledgeBaseId={selectedKnowledgeBaseId}
-        tokenCount={tokenCount}
-      />
+      <main className="flex min-h-0 flex-1 flex-col justify-center-safe overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl py-6">
+          <ChatEmptyState setupState={setupState} modelPicker={{
+            allMetadata, currentModelId: selectedModelId, onModelChange, disabled: isLoading,
+          }} />
+          <div hidden={!canSend}>
+            <ChatInput
+              onSendMessage={onSendMessage}
+              onImageUpload={onImageUpload}
+              onFileUpload={onFileUpload}
+              isLoading={isLoading}
+              disabled={!canSend}
+              onStopGeneration={onStopGeneration}
+              selectedKnowledgeBaseId={selectedKnowledgeBaseId}
+              tokenCount={tokenCount}
+              showStarterActions
+            />
+          </div>
+        </div>
+      </main>
     </div>
   );
 };

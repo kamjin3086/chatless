@@ -75,7 +75,7 @@ export const usePromptStore = create<PromptState & PromptActions>()(
       },
 
       createPrompt: (data) => {
-        const normalizeShortcuts = (arr?: string[]) => Array.from(new Set((arr || []).map((s) => String(s).trim().replace(/^\//, '').toLowerCase()).filter(Boolean)));
+        const normalizeShortcuts = (arr?: string[]) => Array.from(new Set((arr || []).map((s) => String(s).trim().replace(/^[#/]/, '').toLowerCase()).filter(Boolean)));
         const now = Date.now();
         const id = data.id || uuidv4();
         const prompt: PromptItem = {
@@ -159,7 +159,7 @@ export const usePromptStore = create<PromptState & PromptActions>()(
         }));
         try {
           const repo = DatabaseService.getInstance().getPromptRepository();
-          const normalizeShortcuts = (arr?: string[]) => Array.from(new Set((arr || []).map((s) => String(s).trim().replace(/^\//, '').toLowerCase()).filter(Boolean)));
+          const normalizeShortcuts = (arr?: string[]) => Array.from(new Set((arr || []).map((s) => String(s).trim().replace(/^[#/]/, '').toLowerCase()).filter(Boolean)));
           const toUpdate: any = { ...updates };
           // 注意：必须使用 `in` 判断并删除驼峰字段，避免生成无效列名
           if ('tags' in toUpdate) { toUpdate.tags = JSON.stringify(toUpdate.tags || []); }
