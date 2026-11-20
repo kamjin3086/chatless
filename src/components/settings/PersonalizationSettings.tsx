@@ -12,12 +12,29 @@ import {
   loadGlassWallpaperUrl,
   saveGlassWallpaper,
 } from "@/lib/glass/wallpaper";
+import {
+  applyWindowSizePreset,
+  readWindowWorkArea,
+  type WindowSize,
+} from "@/lib/window/windowFit";
 
 export function PersonalizationSettings() {
   const ui = useUiPreferences();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  // Logical pixels the desktop actually offers; null outside the desktop app.
+  const [workArea, setWorkArea] = useState<WindowSize | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readWindowWorkArea().then((area) => {
+      if (!cancelled) setWorkArea(area);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,33 +169,42 @@ export function PersonalizationSettings() {
            onChange={ui.setShowSettingIcons}
          />
 
-        <SelectField
-          label="应用窗口尺寸"
-          options={[
-            { value: '900x700', label: '900 × 700' },
-            { value: '1024x768', label: '1024 × 768（默认）' },
-            { value: '1280x800', label: '1280 × 800' },
-            { value: '1366x768', label: '1366 × 768' },
-            { value: '1440x900', label: '1440 × 900' },
-            { value: '1600x900', label: '1600 × 900' },
-          ]}
-          value={ui.windowSizePreset as any}
-          onChange={async (v) => {
-            ui.setWindowSizePreset(v as any);
-            const [w,h] = String(v).split('x').map((n)=>parseInt(n,10));
-            if (Number.isFinite(w) && Number.isFinite(h)) {
+        <div>
+          <SelectField
+            label="应用窗口尺寸"
+            options={[
+              { value: '900x700', label: '900 × 700' },
+              { value: '1024x768', label: '1024 × 768（默认）' },
+              { value: '1280x800', label: '1280 × 800' },
+              { value: '1366x768', label: '1366 × 768' },
+              { value: '1440x900', label: '1440 × 900' },
+              { value: '1600x900', label: '1600 × 900' },
+            ]}
+            value={ui.windowSizePreset as any}
+            onChange={async (v) => {
+              ui.setWindowSizePreset(v as any);
               try {
-                const { getCurrentWindow, LogicalSize } = await import('@tauri-apps/api/window');
-                const win = getCurrentWindow();
-                await win.setSize(new LogicalSize(w, h));
+                const applied = await applyWindowSizePreset(v);
+                if (!applied) return;
+                setWorkArea(applied.workArea);
                 const { savePersistedWindowState } = await import('@/lib/window/windowState');
                 await savePersistedWindowState();
+                if (applied.reduced) {
+                  toast.info(
+                    `当前显示器可用 ${Math.round(applied.workArea.width)} × ${Math.round(applied.workArea.height)}，窗口已缩到 ${applied.applied.width} × ${applied.applied.height}`,
+                  );
+                }
               } catch (err) {
                 console.warn('设置窗口尺寸失败:', err);
               }
-            }
-          }}
-        />
+            }}
+          />
+          {workArea && (
+            <div className="text-[10px] text-slate-400 text-right mt-0.5">
+              当前显示器可用 {Math.round(workArea.width)} × {Math.round(workArea.height)}，超出时按可用区域缩小
+            </div>
+          )}
+        </div>
 
         <SelectField
            label="主侧边栏宽度"
