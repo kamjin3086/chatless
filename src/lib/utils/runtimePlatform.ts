@@ -1,3 +1,15 @@
+import { platform } from '@tauri-apps/plugin-os';
+
+export function isMobileRuntime(): boolean {
+  try {
+    const os = platform();
+    return os === 'android' || os === 'ios';
+  } catch {
+    // The OS plugin is not injected outside the Tauri WebView.
+    return typeof navigator !== 'undefined' && /android|iphone|ipad/i.test(navigator.userAgent);
+  }
+}
+
 export type RuntimePlatform = 'windows' | 'macos' | 'linux' | 'unknown';
 
 /**

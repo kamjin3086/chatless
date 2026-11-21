@@ -2,14 +2,17 @@
 #[cfg(target_os = "macos")]
 mod macos_window;
 
+#[cfg(desktop)]
 mod window_fit;
 
 use anyhow::Result;
 use log::LevelFilter;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::path::BaseDirectory;
-use tauri::Manager;
+#[cfg(desktop)]
+use tauri::{path::BaseDirectory, Manager};
+#[cfg(desktop)]
 use tauri_plugin_log::{Target, TargetKind};
+#[cfg(desktop)]
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 #[path = "env_setup.rs"]
@@ -27,16 +30,15 @@ pub mod sandbox;
 #[path = "filesystem/mod.rs"]
 pub mod filesystem;
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[path = "workspace/mod.rs"]
 pub mod workspace;
 
+#[cfg(desktop)]
 #[tauri::command]
 fn exit(app: tauri::AppHandle, code: i32) {
-  #[cfg(not(any(target_os = "android", target_os = "ios")))]
-  {
-    use tauri_plugin_window_state::AppHandleExt;
-    let _ = app.save_window_state(persisted_window_state_flags());
-  }
+  use tauri_plugin_window_state::AppHandleExt;
+  let _ = app.save_window_state(persisted_window_state_flags());
   std::process::exit(code);
 }
 
@@ -56,6 +58,7 @@ fn persisted_window_state_flags() -> tauri_plugin_window_state::StateFlags {
     | StateFlags::FULLSCREEN
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[path = "lib/onnx_logic.rs"]
 pub mod onnx_logic;
 
@@ -75,7 +78,7 @@ pub mod agent_runtime;
 #[path = "lib/retrieval_bench.rs"]
 mod retrieval_bench;
 
-#[cfg(test)]
+#[cfg(all(test, desktop))]
 #[path = "lib/dense_bench.rs"]
 mod dense_bench;
 
@@ -96,29 +99,43 @@ fn greet() -> String {
 }
 
 /// 检查 npx 是否可用
+#[cfg(desktop)]
 #[tauri::command]
 fn check_npx_availability() -> env_setup::ToolAvailability {
   env_setup::check_npx_availability()
 }
 
 /// 获取完整的环境健康状态
+#[cfg(desktop)]
 #[tauri::command]
 fn get_environment_health() -> env_setup::EnvironmentHealth {
   env_setup::get_environment_health()
 }
 
 /// 检查 MCP 服务是否可以正常运行
+#[cfg(desktop)]
 #[tauri::command]
 fn can_run_mcp_services() -> bool {
   env_setup::can_run_mcp_services()
 }
 
 /// 应用退出时释放 ONNX 等资源
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn cleanup_on_exit(state: tauri::State<onnx_logic::OnnxState>) -> Result<(), String> {
   onnx_logic::clear_onnx_sessions(state)
 }
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+mod mobile;
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::mobile_entry_point]
+pub fn run() {
+  mobile::run();
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn run() {
   let _builder = tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())

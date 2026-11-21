@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [{"label": "main", "title": "Chatless Android Experiment", "backgroundColor": "#0f172a", "transparent": false}],
+    "security": {"capabilities": ["mobile-capability"]}
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "icon": ["icons-windows/128x128.png"]
+  }
+}
