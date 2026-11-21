@@ -10,6 +10,8 @@
  */
 
 import type { McpTool } from '@/lib/mcp/McpClient';
+import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
+import { ANDROID_COUNTDOWN_SERVER, ANDROID_COUNTDOWN_TOOL } from './androidCountdown';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from './filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecutor';
 import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
@@ -110,8 +112,10 @@ export const TOOLS_REGISTRY_TOOLS: McpTool[] = [
  * 获取指定组的工具列表
  */
 export function getToolsForGroup(groupId: ToolGroupId): Array<{ server: string; tool: McpTool }> {
-  const group = TOOL_GROUPS.find(g => g.id === groupId);
-  return group?.tools || [];
+  const tools = TOOL_GROUPS.find(g => g.id === groupId)?.tools || [];
+  return groupId === 'core' && isAndroidTauri()
+    ? [...tools, { server: ANDROID_COUNTDOWN_SERVER, tool: ANDROID_COUNTDOWN_TOOL }]
+    : tools;
 }
 
 /**

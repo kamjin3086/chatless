@@ -1,10 +1,14 @@
-export const RESERVED_MCP_SERVER_NAMES = new Set(['filesystem', 'skills', 'web_search', 'shell_executor']);
+import { ANDROID_COUNTDOWN_SERVER } from './nativeTools/androidCountdown';
+import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
+
+const RESERVED_MCP_SERVER_NAMES = new Set(['filesystem', 'skills', 'web_search', 'shell_executor']);
 
 export type ServerRename = { from: string; to: string; reason: 'reserved' | 'duplicate' };
 
-function isReserved(name: string): boolean {
-  const n = String(name || '').trim().toLowerCase();
-  return RESERVED_MCP_SERVER_NAMES.has(n);
+export function isReservedMcpServerName(name: string): boolean {
+  const normalizedName = String(name || '').toLowerCase();
+  return RESERVED_MCP_SERVER_NAMES.has(normalizedName)
+    || (normalizedName === ANDROID_COUNTDOWN_SERVER && isAndroidTauri());
 }
 
 function candidateExternalName(base: string): string {
@@ -22,7 +26,7 @@ export function resolveNonConflictingServerName(params: {
   if (!desired) return { name: '', renames };
 
   let name = desired;
-  if (isReserved(name)) {
+  if (isReservedMcpServerName(name)) {
     const base = String(name).trim();
     name = candidateExternalName(base);
     renames.push({ from: desired, to: name, reason: 'reserved' });

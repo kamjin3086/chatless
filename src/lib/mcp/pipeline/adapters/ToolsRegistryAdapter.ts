@@ -4,11 +4,11 @@
  */
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
-import { TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
+import { getToolsForGroup, TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { getEnabledConfiguredServers } from '@/lib/mcp/chatIntegration';
 import { persistentCache } from '@/lib/mcp/persistentCache';
-import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
+import { isReservedMcpServerName } from '@/lib/mcp/serverNamePolicy';
 
 interface CatalogItem {
   source: 'builtin' | 'mcp';
@@ -38,7 +38,7 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
     if (!query) return { ok: false, error: 'query is required' };
 
-    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => group.tools.map(({ server, tool }) => ({
+    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => getToolsForGroup(group.id).map(({ server, tool }) => ({
       source: 'builtin' as const,
       group: group.id,
       server,
@@ -49,7 +49,7 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     // A failing remote server only omits its own entries. Local discovery must
     // remain usable when a configured MCP endpoint is unavailable.
     const enabledServers = (await getEnabledConfiguredServers())
-      .filter((server) => !RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase()));
+      .filter((server) => !isReservedMcpServerName(server));
     const external = await Promise.all(enabledServers.map(async (server): Promise<CatalogItem[]> => {
       try {
         const tools = await persistentCache.getToolsWithCache(server);

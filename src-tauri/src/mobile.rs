@@ -2,8 +2,15 @@
 //! commands are deliberately not registered until their mobile boundaries exist.
 use crate::{agent_runtime, http_client, http_request, mcp, sse};
 
+#[cfg(target_os = "android")]
+mod android_countdown;
+
 pub fn run() {
-  tauri::Builder::default()
+  let builder = tauri::Builder::default();
+  #[cfg(target_os = "android")]
+  let builder = builder.plugin(android_countdown::init());
+
+  builder
     .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_http::init())
@@ -17,6 +24,8 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       crate::greet,
       crate::set_log_level,
+      #[cfg(target_os = "android")]
+      android_countdown::start_android_countdown,
       sse::start_sse,
       sse::stop_sse,
       http_client::get_http_client_info,

@@ -1,6 +1,7 @@
 import type { ApprovalDecision } from '@/store/authorizationStore';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { dirnameOf } from './resolveCall';
+import { isAndroidCountdownTool } from '@/lib/mcp/nativeTools/androidCountdown';
 import { isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 
 /**
@@ -108,7 +109,10 @@ export function decideServerCall(params: {
   server: string;
   tool: string;
   autoAuthorize: boolean;
+  androidCountdownAvailable?: boolean;
 }): 'allow' | 'ask' {
+  if (params.androidCountdownAvailable && isAndroidCountdownTool(params.server, params.tool)) return 'allow';
+
   // 先归一：main 上的原实现就是拿 normalizeServerName 做比对的，
   // 不归一则 'System' / 'User_FS' 这类写法会落到兜底分支，把原本不问的变成问。
   const srv = normalizeServerName(params.server);

@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
 
 export function isAndroidRuntime(): boolean {
@@ -5,6 +6,14 @@ export function isAndroidRuntime(): boolean {
     return platform() === 'android';
   } catch {
     return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+  }
+}
+
+export function isAndroidTauri(): boolean {
+  try {
+    return isTauri() && platform() === 'android';
+  } catch {
+    return false;
   }
 }
 

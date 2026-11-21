@@ -1,7 +1,7 @@
 import { McpClient } from "./McpClient";
 import { MCP_CONNECT_TIMEOUT_MS, MCP_STDIO_CONNECT_TIMEOUT_MS, MCP_STARTUP_CONNECT_TIMEOUT_MS, MCP_INIT_TIMEOUT_MS } from "./constants";
 import { useMcpStore } from "@/store/mcpStore";
-import { RESERVED_MCP_SERVER_NAMES } from "./serverNamePolicy";
+import { isReservedMcpServerName } from "./serverNamePolicy";
 
 interface StartServerOptions {
   /** 是否为启动阶段的连接（使用较短超时） */
@@ -25,7 +25,7 @@ class ServerManager {
 
   async startServer(name: string, config: any, options: StartServerOptions = {}): Promise<void> {
     const { isStartup = this.isStartupPhase, silent = false } = options;
-    if (RESERVED_MCP_SERVER_NAMES.has(String(name || '').toLowerCase())) {
+    if (isReservedMcpServerName(name)) {
       throw new Error(`MCP server name "${name}" is reserved by built-in tools. Please rename it (e.g. "${name}_external").`);
     }
     
