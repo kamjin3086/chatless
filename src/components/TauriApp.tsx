@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useChatStore } from "@/store/chatStore";
 import { AppPageSwitcher, Sidebar } from './Sidebar';
 import { useUiPreferences } from '@/store/uiPreferences';
-import { isMobileRuntime } from '@/lib/utils/runtimePlatform';
+import { isAndroidRuntime, isMobileRuntime } from '@/lib/utils/runtimePlatform';
 import { ThemeInitializer } from './theme/ThemeInitializer';
 import { GlassThemeApplier } from './theme/GlassThemeApplier';
 import { NightBrightnessApplier } from './theme/NightBrightnessApplier';
@@ -68,6 +68,9 @@ export function TauriApp({ children }: TauriAppProps) {
       <GlassThemeApplier />
       <NightBrightnessApplier />
       {!isMobileRuntime() && <StartupUpdateToast />}
+      {isAndroidRuntime() ? (
+        <div className="relative h-full min-w-0 overflow-hidden glass-surface">{children}</div>
+      ) : (
       <div className="relative flex h-full custom-titlebar-content">
         {!appNavCollapsed && <Sidebar />}
         <div
@@ -85,6 +88,7 @@ export function TauriApp({ children }: TauriAppProps) {
           </div>
         </div>
       </div>
+      )}
     </>
   );
 }

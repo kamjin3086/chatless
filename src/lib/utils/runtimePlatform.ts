@@ -1,5 +1,13 @@
 import { platform } from '@tauri-apps/plugin-os';
 
+export function isAndroidRuntime(): boolean {
+  try {
+    return platform() === 'android';
+  } catch {
+    return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+  }
+}
+
 export function isMobileRuntime(): boolean {
   try {
     const os = platform();

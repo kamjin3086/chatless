@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { useAndroidChatNavigation } from '@/components/chat/androidChatNavigation';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
 import { ScrollToBottomButton } from '@/components/chat/ScrollToBottomButton';
@@ -37,6 +38,7 @@ interface Conversation {
 }
 
 export default function ChatPage() {
+  const android = Boolean(useAndroidChatNavigation());
   const [isClient, setIsClient] = useState(false);
   const [isInputAreaHovered, setIsInputAreaHovered] = useState(false);
   const ensureMessagesLoaded = useChatStore(
@@ -398,14 +400,17 @@ export default function ChatPage() {
               className="absolute inset-0 custom-scrollbar"
               ref={attachScrollContainer}
               onMouseEnter={() => {
-                if (scrollContainerRef.current)
+                if (!android && scrollContainerRef.current)
                   scrollContainerRef.current.style.overflowY = 'auto';
               }}
               onMouseLeave={() => {
-                if (scrollContainerRef.current)
+                if (!android && scrollContainerRef.current)
                   scrollContainerRef.current.style.overflowY = 'hidden';
               }}
-              style={{ overflowY: 'hidden', scrollbarGutter: 'stable' }}
+              style={{
+                overflowY: android ? 'auto' : 'hidden',
+                scrollbarGutter: android ? undefined : 'stable',
+              }}
             >
               {scrollParent && !showStarter && (
                 <ChatMessageList

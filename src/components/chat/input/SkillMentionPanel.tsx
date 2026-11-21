@@ -80,7 +80,7 @@ export function SkillMentionPanel({
     
     const onKey = (e: KeyboardEvent) => {
       if (!open || e.isComposing || e.target !== anchorRef.current) return;
-      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'Escape') { if (!e.defaultPrevented) { e.preventDefault(); onClose(); } return; }
       if (filteredSkills.length === 0) return;
       
       if (e.key === 'ArrowDown') {

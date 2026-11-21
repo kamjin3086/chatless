@@ -18,6 +18,7 @@ import { toast } from '@/components/ui/sonner';
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { AttachmentMenu } from './input/AttachmentMenu';
+import { useAndroidChatNavigation } from './androidChatNavigation';
 import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
 import { useLocaleStore } from '@/store/localeStore';
@@ -122,6 +123,7 @@ export function ChatInput({
   conversationId,
   showStarterActions = false,
 }: ChatInputProps) {
+  const android = Boolean(useAndroidChatNavigation());
   const [inputValue, setInputValue] = useState("");
   const [composerSelection, setComposerSelection] = useState<{ text: string; caret: number } | null>(null);
   // 直接应用提示词，无需弹窗
@@ -188,6 +190,7 @@ export function ChatInput({
   }, [hasLoadedConversations, disabled, isParsingDocument]);
   const currentConvId = conversationId || storedConversationId;
   const workspaceDirectory = useConversationAttachmentStore((s) => {
+    if (android) return undefined;
     if (!currentConvId) return undefined;
     return s.mountedDirByConversation[currentConvId] ?? (s.workspaceExistsByConversation[currentConvId]
       ? s.sessionDirByConversation[currentConvId]
@@ -706,7 +709,7 @@ export function ChatInput({
       });
       return;
     }
-    if (!isComposing && e.key === "Enter" && !e.shiftKey) {
+    if (!android && !isComposing && e.key === "Enter" && !e.shiftKey) {
       if (composerQuery) { e.preventDefault(); return; }
       e.preventDefault();
       handleSend();
@@ -922,7 +925,7 @@ export function ChatInput({
       >
         {/* 顶部拖拽手柄：按住可向上/下调整高度，封顶 60vh */}
         <div
-          className="absolute top-0 left-0 right-0 h-2 cursor-n-resize z-[3]"
+          className={cn("absolute top-0 left-0 right-0 h-2 cursor-n-resize z-[3]", android && "hidden")}
           onMouseDown={(e) => {
             if (disabled) return;
             const el = textareaRef.current; if (!el) return;
@@ -1099,6 +1102,7 @@ export function ChatInput({
             }
           }}
           onKeyDown={handleKeyDown}
+          enterKeyHint={android ? "enter" : undefined}
           placeholder={disabled ? "请先选择模型" : "发送消息"}
           className={cn(
             "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
@@ -1209,7 +1213,7 @@ export function ChatInput({
             disabled={disabled}
           />
         </div>
-        <div className="absolute right-2 sm:right-3 bottom-2.5 z-[2] flex items-center gap-1.5 sm:gap-2">
+        <div className={cn("absolute right-2 sm:right-3 z-[2] flex items-center gap-1.5 sm:gap-2", android ? "bottom-1" : "bottom-2.5")}>
             {tokenCount > 0 && (
               <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-1 select-none font-mono tabular-nums hidden sm:inline">
                 T:{tokenCount}
@@ -1234,7 +1238,7 @@ export function ChatInput({
                     variant="ghost"
                     size="icon"
                     onClick={handleSend}
-                    className="composer-tool h-8 w-8 rounded-md border-0 bg-transparent text-slate-600 shadow-none hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className={cn("composer-tool rounded-md border-0 bg-transparent text-slate-600 shadow-none hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800", android ? "size-10" : "size-8")}
                     title="排队补充"
                     aria-label="排队补充"
                   >
@@ -1246,7 +1250,8 @@ export function ChatInput({
                   size="icon"
                   onClick={onStopGeneration}
                   className={cn(
-                    "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                    "composer-tool rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                    android ? "size-10" : "size-8",
                     "text-slate-600 dark:text-slate-300"
                   )}
                   title={stopGenerationHint || "停止（停止生成/停止工具链路）"}
@@ -1269,12 +1274,13 @@ export function ChatInput({
                 onClick={handleSend}
                 disabled={!inputValue.trim() && !attachedDocument}
                 className={cn(
-                  "composer-tool composer-send h-8 w-8 rounded-md border-0 shadow-none transition-colors",
+                  "composer-tool composer-send rounded-md border-0 shadow-none transition-colors",
+                  android ? "size-10" : "size-8",
                   (!inputValue.trim() && !attachedDocument)
                     ? "pointer-events-none bg-transparent text-slate-300 dark:text-slate-600"
                     : "bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-white"
                 )}
-                title="发送 (Enter)"
+                title={android ? "发送" : "发送 (Enter)"}
                 aria-label="发送消息"
               >
                 <Send className="w-4 h-4" />
@@ -1314,7 +1320,7 @@ export function ChatInput({
             onClick={() => openComposerPanel('#')}>
             <Bookmark aria-hidden="true" className="size-3.5" />
             {t('chatStarter.prompts')}
-            <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>
+            {!android && <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>}
           </Button>
         </div>
       )}

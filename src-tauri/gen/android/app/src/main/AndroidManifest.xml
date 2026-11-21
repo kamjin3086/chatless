@@ -8,6 +8,7 @@
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.chatless"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity
@@ -15,6 +16,7 @@
             android:launchMode="singleTask"
             android:label="@string/main_activity_title"
             android:name=".MainActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

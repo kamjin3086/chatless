@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import {
+  ArrowLeft,
   Ellipsis,
   FolderOpen,
   MessageSquarePlus,
@@ -17,6 +18,8 @@ import { FileOpener } from '@/lib/utils/fileOpener';
 import { revealConversationWorkspace } from '@/lib/agentWorkspace/workspaceService';
 import { toast } from '@/components/ui/sonner';
 import { ModelSelector } from './ModelSelector';
+import { useAndroidChatNavigation } from './androidChatNavigation';
+import { cn } from '@/lib/utils';
 import { ProviderMetadata } from '@/lib/metadata/types';
 import { DeleteConversationDialog } from './DeleteConversationDialog';
 import { EditableTitle } from './EditableTitle';
@@ -116,6 +119,7 @@ export function ChatHeader({
   const [enabledForConv, setEnabledForConv] = useState<string[]>([]);
 
   const { toggleSidebar, isSidebarOpen, newConversation } = useSidebar();
+  const androidNavigation = useAndroidChatNavigation();
 
   const handleConfirmDelete = () => {
     onDelete();
@@ -146,19 +150,38 @@ export function ChatHeader({
 
   return (
     <>
-      <div className="app-topbar h-9 px-3 border-b border-slate-200/60 dark:border-white/10 flex items-center justify-between glass-surface">
+      <div
+        className={cn(
+          'app-topbar shrink-0 border-b border-slate-200/60 dark:border-white/10 flex items-center justify-between glass-surface',
+          androidNavigation ? 'flex-wrap px-2 pb-1' : 'h-9 px-3',
+        )}
+      >
         {/* 左侧：侧栏开关 + 标题 */}
-        <div className="flex items-center gap-1 flex-1 min-w-0">
-          <button
-            onClick={toggleSidebar}
-            className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-            title="侧边栏"
-            aria-label="切换侧边栏"
-          >
-            <PanelLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-          </button>
+        <div
+          className={cn(
+            'flex items-center gap-1 flex-1 min-w-0',
+            androidNavigation && 'basis-full',
+          )}
+        >
+          {androidNavigation ? (
+            <IconButton
+              icon={ArrowLeft}
+              title={t('androidChat.conversations')}
+              className="size-11 shrink-0"
+              onClick={androidNavigation.showConversations}
+            />
+          ) : (
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+              title="侧边栏"
+              aria-label="切换侧边栏"
+            >
+              <PanelLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            </button>
+          )}
 
-          {!isSidebarOpen && (
+          {!androidNavigation && !isSidebarOpen && (
             <IconButton
               onClick={() => void newConversation()}
               title={t('chatSidebar.newConversation')}
@@ -168,7 +191,7 @@ export function ChatHeader({
             />
           )}
 
-          {conversationId && (
+          {!androidNavigation && conversationId && (
             <>
               <button
                 type="button"
@@ -191,7 +214,10 @@ export function ChatHeader({
           <EditableTitle
             initialTitle={title}
             onTitleChange={onTitleChange}
-            className="text-[13px] font-medium text-slate-600 dark:text-slate-300 ml-0.5 min-w-0 max-w-[min(40vw,20rem)]"
+            className={cn(
+              'text-[13px] font-medium text-slate-600 dark:text-slate-300 ml-0.5 min-w-0',
+              androidNavigation ? 'flex-1' : 'max-w-[min(40vw,20rem)]',
+            )}
             inputClassName="text-[13px]"
           />
 
@@ -203,11 +229,18 @@ export function ChatHeader({
               {tag}
             </span>
           ))}
-          <div className="flex-1 h-8 min-w-2" data-tauri-drag-region />
+          {!androidNavigation && (
+            <div className="flex-1 h-8 min-w-2" data-tauri-drag-region />
+          )}
         </div>
 
         {/* 右侧：模型选择为主控件，按名称向左撑开 */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div
+          className={cn(
+            'flex items-center gap-0.5',
+            androidNavigation ? 'min-w-0 flex-wrap' : 'shrink-0',
+          )}
+        >
           {!hideModelSelector && (
             <ModelSelector
               allMetadata={allMetadata}
@@ -266,18 +299,22 @@ export function ChatHeader({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-36 text-xs">
-              <DropdownMenuItem
-                onSelect={() => void newConversation()}
-                className="text-xs"
-              >
-                {t('chatSidebar.newConversation')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={onShare} className="text-xs">
-                分享
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={onDownload} className="text-xs">
-                导出
-              </DropdownMenuItem>
+              {!androidNavigation && (
+                <>
+                  <DropdownMenuItem
+                    onSelect={() => void newConversation()}
+                    className="text-xs"
+                  >
+                    {t('chatSidebar.newConversation')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onShare} className="text-xs">
+                    分享
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onDownload} className="text-xs">
+                    导出
+                  </DropdownMenuItem>
+                </>
+              )}
               {onOpenSessionParameters && (
                 <>
                   <DropdownMenuSeparator />

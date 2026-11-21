@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } f
 import StorageUtil from '@/lib/storage';
 import { useUiPreferences } from '@/store/uiPreferences';
 import { cn } from "@/lib/utils";
-import { X, Archive, Clock, FolderPlus, Star, RotateCcw, Plus } from 'lucide-react';
+import { X, Archive, Clock, FolderPlus, Star, RotateCcw, Plus, ArrowLeft, Settings } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 // import { SidebarHeader } from './SidebarHeader';
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
@@ -22,11 +22,19 @@ import { SearchInput } from '@/components/ui/search-input';
 import { FloatingSkillApprovalPanel } from '@/components/skills/SkillApprovalPanel';
 import { RouteErrorBoundary } from '@/components/errors/RouteErrorBoundary';
 
+import { AndroidChatNavigationContext, useAndroidChatSurfaces } from '@/components/chat/androidChatNavigation';
+import dynamic from 'next/dynamic';
+import { isAndroidRuntime } from '@/lib/utils/runtimePlatform';
+
+const AiModelSettings = dynamic(() => import('@/components/settings/AiModelSettings').then((module) => module.AiModelSettings));
+
 interface ChatLayoutProps {
   children: React.ReactNode;
 }
 
 export function ChatLayout({ children }: ChatLayoutProps) {
+  const android = isAndroidRuntime();
+  const { view, showConversations, showChat, openModelSettings, closeModelSettings } = useAndroidChatSurfaces(android);
   const collapseChatSidebar = useUiPreferences((s) => s.collapseChatSidebar);
   const setCollapseChatSidebar = useUiPreferences((s) => s.setCollapseChatSidebar);
   const [isSidebarOpen, setIsSidebarOpen] = useState(!collapseChatSidebar);
@@ -171,7 +179,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'recent' | 'favorite' | 'archived'>('recent');
   const [openingWorkspace, setOpeningWorkspace] = useState(false);
-  const pendingWorkspace = useChatStore((state) => state.pendingWorkspace);
+  const storedPendingWorkspace = useChatStore((state) => state.pendingWorkspace);
+  const pendingWorkspace = android ? null : storedPendingWorkspace;
   const setGrouping = useUiPreferences((state) => state.setConversationGrouping);
   const directories = useConversationAttachmentStore((state) => state.mountedDirByConversation);
   const archivedWorkspaces = useConversationAttachmentStore((state) => state.archivedWorkspaces);
@@ -185,9 +194,9 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const hasLoadedConversations = useChatStore((state) => state.hasLoadedConversations);
 
   useEffect(() => {
-    if (!hasLoadedConversations || !isSidebarOpen) return;
+    if (!hasLoadedConversations || !(android ? view.surface === 'conversations' : isSidebarOpen)) return;
     return afterStartupPaint(() => startupMonitor.markChatReady('historyVisible'));
-  }, [hasLoadedConversations, isSidebarOpen]);
+  }, [android, hasLoadedConversations, isSidebarOpen, view.surface]);
   const currentConversationId = useChatStore(
     (state) => state.currentConversationId,
   );
@@ -199,8 +208,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
 
   // 同步 collapseChatSidebar 状态
   useEffect(() => {
-    setCollapseChatSidebar(!isSidebarOpen);
-  }, [isSidebarOpen, setCollapseChatSidebar]);
+    if (!android) setCollapseChatSidebar(!isSidebarOpen);
+  }, [android, isSidebarOpen, setCollapseChatSidebar]);
   
   // 处理搜索输入变化
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -270,7 +279,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const handleNewChat = async (path?: string | null) => {
     const defaultModelId = "default-model";
     try {
-      await createConversation(NEW_CONVERSATION_TITLE, defaultModelId, undefined, path);
+      await createConversation(NEW_CONVERSATION_TITLE, defaultModelId, undefined, android ? null : path);
+      if (android) showChat();
       if (activeFilter !== 'recent') setActiveFilter('recent');
     } catch {
       toast.error(t('chatSidebar.newConversationFailed'));
@@ -311,52 +321,72 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   }, []);
 
   return (
-    <SidebarContext.Provider value={{ isSidebarOpen, toggleSidebar, newConversation: handleNewChat }}>
+    <AndroidChatNavigationContext.Provider value={android ? { showConversations, openModelSettings } : null}>
+      <SidebarContext.Provider value={{ isSidebarOpen, toggleSidebar, newConversation: handleNewChat }}>
       <div className="flex min-h-0 h-full relative">
         {/* 左侧会话列表侧边栏 */}
         <aside
-          style={{ width: isSidebarOpen ? sidebarWidth : 0 }}
+          style={android ? undefined : { width: isSidebarOpen ? sidebarWidth : 0 }}
           className={cn(
             "chat-rail bg-white dark:bg-slate-900 flex flex-col min-h-0 flex-shrink-0 glass-surface",
-            mounted ? "transition-all duration-300" : "transition-none",
-            isSidebarOpen
-              ? "border-r border-slate-200/50 dark:border-slate-800/50 translate-x-0"
-              : "-translate-x-full overflow-hidden"
+            android
+              ? (view.surface === 'conversations' ? 'w-full' : 'hidden')
+              : cn(
+                  mounted ? 'transition-all duration-300' : 'transition-none',
+                  isSidebarOpen
+                    ? 'border-r border-slate-200/50 dark:border-slate-800/50 translate-x-0'
+                    : '-translate-x-full overflow-hidden',
+                )
           )}
         >
-          {/* 侧边栏头部已隐藏 */}
+          {android && (
+            <header className="app-topbar flex shrink-0 items-center justify-between border-b border-border px-3">
+              <h1 className="text-base font-semibold">{t('androidChat.conversations')}</h1>
+              <IconButton icon={Settings} title={t('chatStarter.manageModels')} onClick={() => openModelSettings()} className="size-11" />
+            </header>
+          )}
 
           {/* Search and sidebar tools */}
-          <div className="flex h-9 shrink-0 items-center px-2.5" data-chat-search-row>
+          <div className={cn("flex shrink-0 items-center px-2.5", android ? "h-12" : "h-9")} data-chat-search-row>
             <div className="flex w-full min-w-0 items-center gap-1">
               <div className="relative flex-1 min-w-0">
                 <SearchInput
-                  placeholder="搜索对话..."
+                  placeholder={android ? t('androidChat.searchConversations') : "搜索对话..."}
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  className="h-8 w-full pr-6 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-300"
+                  className={cn("w-full text-sm placeholder:text-slate-600 dark:placeholder:text-slate-300", android ? "h-10 [&_input]:h-10 [&_input]:pr-10" : "h-8 pr-6")}
+                  aria-label={t('androidChat.searchConversations')}
                 />
                 {isSearching && (
                   <button
                     onClick={handleClearSearch}
-                    className="absolute top-1/2 -translate-y-1/2 right-1 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    className={cn("absolute top-1/2 -translate-y-1/2 right-1 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200", android && "flex size-9 items-center justify-center")}
                     aria-label="清除"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 )}
               </div>
-              <ConversationViewMenu
-                archiveVisible={activeFilter === 'archived'}
-                onArchiveVisibleChange={(visible) => handleFilterChange(visible ? 'archived' : 'recent')}
-              />
-              <IconButton
-                onClick={handleOpenWorkspace}
-                disabled={openingWorkspace}
-                title={t('chatSidebar.openWorkspace')}
-                icon={FolderPlus}
-                className="h-7 w-7 shrink-0 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-              />
+              {android ? (
+                <IconButton icon={Archive} className="size-11 shrink-0"
+                  title={t(activeFilter === 'archived' ? 'chatSidebar.exitArchive' : 'chatSidebar.archived')}
+                  aria-pressed={activeFilter === 'archived'}
+                  onClick={() => handleFilterChange(activeFilter === 'archived' ? 'recent' : 'archived')} />
+              ) : (
+                <>
+                  <ConversationViewMenu
+                    archiveVisible={activeFilter === 'archived'}
+                    onArchiveVisibleChange={(visible) => handleFilterChange(visible ? 'archived' : 'recent')}
+                  />
+                  <IconButton
+                    onClick={handleOpenWorkspace}
+                    disabled={openingWorkspace}
+                    title={t('chatSidebar.openWorkspace')}
+                    icon={FolderPlus}
+                    className="h-7 w-7 shrink-0 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -366,7 +396,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
               disabled={Boolean(archivedTarget)}
               title={archivedTarget ? t('chatSidebar.restoreWorkspace') : pendingWorkspace?.path}
               onClick={() => void handleNewChat()}
-              className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-lg border border-slate-500/20 bg-slate-500/8 px-2.5 text-left text-sm font-medium text-slate-900 hover:bg-slate-500/15 focus-visible:outline-2 focus-visible:outline-sky-600 disabled:opacity-50 dark:text-slate-100 dark:focus-visible:outline-sky-400"
+              className={cn("flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-500/20 bg-slate-500/8 px-2.5 text-left text-sm font-medium text-slate-900 hover:bg-slate-500/15 focus-visible:outline-2 focus-visible:outline-sky-600 disabled:opacity-50 dark:text-slate-100 dark:focus-visible:outline-sky-400", android ? "min-h-11" : "min-h-9")}
             >
               <Plus aria-hidden="true" className="size-4 shrink-0" />
               <span className="shrink-0">{t('chatSidebar.newConversation')}</span>
@@ -393,6 +423,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                     onClick={() => handleFilterChange(filter)}
                     className={cn(
                       'flex min-h-7 items-center gap-1.5 rounded-md px-2 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-sky-600 motion-reduce:transition-none dark:focus-visible:outline-sky-400',
+                      android && 'min-h-10',
                       activeFilter === filter
                         ? 'bg-sky-600/10 text-sky-800 dark:bg-sky-400/12 dark:text-sky-200'
                         : 'text-slate-700 hover:bg-slate-500/10 dark:text-slate-300',
@@ -424,12 +455,13 @@ export function ChatLayout({ children }: ChatLayoutProps) {
               searchQuery={searchQuery}
               filter={activeFilter}
               onCreateInWorkspace={handleNewChat}
+              onOpenConversation={android ? showChat : undefined}
             />
           </div>
         </aside>
 
         {/* 拖拽分隔条 */}
-        {isSidebarOpen && (
+        {!android && isSidebarOpen && (
           <div
             onMouseDown={handleDragStart}
             className={cn(
@@ -453,8 +485,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           </div>
         )}
 
-        {/* 主内容区域 */}
-        <main className="flex-1 flex flex-col min-h-0 glass-surface">
+        {/* Keep chat mounted across Android surfaces so local composer state is not reset. */}
+        <main className={cn("flex-1 flex-col min-h-0 min-w-0 glass-surface", android && view.surface !== 'chat' ? "hidden" : "flex")}>
           {/* 聊天内容区域 - 使用flex-1和min-h-0确保正确滚动 */}
           <div className="flex-1 min-h-0 overflow-auto">
             {/* Keep the conversation list outside this boundary: a chat-page failure
@@ -465,9 +497,22 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           </div>
         </main>
 
+        {android && view.surface === 'models' && (
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col glass-surface">
+            <header className="app-topbar flex shrink-0 items-center gap-2 border-b border-border px-2">
+              <IconButton icon={ArrowLeft} className="size-11" title={t('androidChat.back')} onClick={closeModelSettings} />
+              <h1 className="text-base font-semibold">{t('chatStarter.manageModels')}</h1>
+            </header>
+            <div className="min-h-0 flex-1">
+              <AiModelSettings compact startWithProviderPicker={view.addProvider} />
+            </div>
+          </section>
+        )}
+
         {/* 全局审批浮层：用于 Skills/Sandbox 高风险动作的 Human-in-the-loop 确认 */}
         <FloatingSkillApprovalPanel />
       </div>
-    </SidebarContext.Provider>
+      </SidebarContext.Provider>
+    </AndroidChatNavigationContext.Provider>
   );
 } 

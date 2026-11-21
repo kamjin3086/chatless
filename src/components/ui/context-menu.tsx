@@ -35,7 +35,8 @@ export function ContextMenu({ children, menuItems, disabled = false }: ContextMe
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        event.preventDefault();
         setIsVisible(false);
       }
     };
