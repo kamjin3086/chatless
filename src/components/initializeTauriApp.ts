@@ -1,0 +1,250 @@
+import { performEnvironmentCheck } from '@/lib/utils/environment';
+import { getDatabaseService, initDatabaseService } from '@/lib/db';
+import {
+  afterStartupPaint,
+  startupMonitor,
+} from '@/lib/utils/startupPerformanceMonitor';
+import { attachConsole } from '@tauri-apps/plugin-log';
+import { scheduleBackgroundUpdateChecks } from '@/lib/update/update-notifier';
+import { serverManager } from '@/lib/mcp/ServerManager';
+import { useChatStore } from '@/store/chatStore';
+import { isMobileRuntime } from '@/lib/utils/runtimePlatform';
+
+export async function initializeTauriApp(
+  loadConversations: () => Promise<void>,
+): Promise<void> {
+  const mobile = isMobileRuntime();
+  try {
+    // 先确保将浏览器控制台日志转发到 Tauri 日志系统（避免初始化阶段日志丢失）
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      try {
+        await attachConsole();
+      } catch {
+        // 忽略 attach 失败
+      }
+    }
+
+    // 测试Tauri日志系统
+    console.log('🚀 [TauriApp] 应用启动中...');
+    console.info('📋 [TauriApp] 初始化...');
+
+    // 检查Tauri环境
+    if (typeof window !== 'undefined' && window.__TAURI__) {
+      console.log('✅ [TauriApp] 环境检测成功');
+    } else {
+      console.warn('⚠️ [TauriApp] 非PC应用环境，日志转发可能不可用');
+    }
+
+    // The database service records initialization, including its nested work.
+    await initDatabaseService();
+
+    // 初始化示例数据（如果需要）
+    // Time the work itself, not the act of scheduling its timer.
+    setTimeout(async () => {
+      startupMonitor.startPhase('示例数据初始化', { background: true });
+      try {
+        // 使用数据完整性检查来决定是否需要初始化示例数据
+        const { SampleDataInitializer } = await import(
+          '@/lib/sampleDataInitializer'
+        );
+
+        // 检查示例数据是否完整
+        const validation = await SampleDataInitializer.validateData();
+
+        if (validation.isValid) {
+          console.log('📋 [TauriApp] 示例数据已完整，跳过初始化');
+          console.log(`   - 知识库数量: ${validation.summary.knowledgeBases}`);
+          console.log(`   - 文档数量: ${validation.summary.documents}`);
+        } else {
+          console.log('📋 [TauriApp] 检测到示例数据不完整，开始初始化...');
+          console.log('发现的问题:', validation.issues);
+
+          const { initializeSampleDataIfNeeded } = await import(
+            '@/lib/sampleDataInitializer'
+          );
+
+          await initializeSampleDataIfNeeded((step, progress) => {
+            console.log(`[示例数据初始化] ${step}: ${progress}%`);
+          });
+          console.log('✅ [TauriApp] 示例数据初始化完成');
+        }
+      } catch (sampleDataError) {
+        console.warn(
+          '⚠️ [TauriApp] 示例数据初始化失败，但不影响应用启动:',
+          sampleDataError,
+        );
+      } finally {
+        startupMonitor.endPhase('示例数据初始化');
+      }
+    }, 1000); // 延迟1秒执行，确保数据库初始化完成
+
+    if (!mobile) {
+      // 延迟执行环境检查
+      setTimeout(async () => {
+        try {
+          startupMonitor.startPhase('环境检查', { background: true });
+          await performEnvironmentCheck();
+        } catch (error) {
+          console.error('❌ [TauriApp] 环境检查失败:', error);
+        } finally {
+          startupMonitor.endPhase('环境检查');
+        }
+      }, 200);
+
+      // 启用后台更新检查（无弹窗，仅记录状态）
+      try {
+        scheduleBackgroundUpdateChecks();
+      } catch {}
+    }
+
+    // 加载会话数据
+    startupMonitor.startPhase('会话加载');
+    await loadConversations();
+    startupMonitor.endPhase('会话加载');
+
+    if (useChatStore.getState().hasLoadedConversations) {
+      afterStartupPaint(() => {
+        // A full SQLite integrity scan must not compete with initial chat reads.
+        setTimeout(() => {
+          const check = async () => {
+            startupMonitor.startPhase('数据库完整性检查', { background: true });
+            try {
+              await getDatabaseService()
+                .getDbManager()
+                .validateDatabaseHealth();
+            } catch (error) {
+              console.warn('[TauriApp] 数据库完整性检查失败:', error);
+            } finally {
+              startupMonitor.endPhase('数据库完整性检查');
+            }
+          };
+          if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(() => void check(), { timeout: 5000 });
+          } else {
+            void check();
+          }
+        }, 5000);
+      });
+    }
+
+    // 开发环境：装上流式渲染性能探针（控制台 __chatlessPerf.runFixture()）。
+    // 必须挂在客户端组件里——放在 app/layout.tsx 只会跑在服务端。
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const { installStreamingProbe } = await import(
+          '@/lib/perf/streamingProbe'
+        );
+        installStreamingProbe();
+      } catch (error) {
+        console.warn('[TauriApp] 装载流式探针失败:', error);
+      }
+    }
+
+    // 预编译关键路由：在初始化完成后立即触发 /chat 的编译
+    // 这样当用户导航到聊天页面时，编译已经在后台完成
+    try {
+      // 使用 fetch 预热路由编译，但不阻塞初始化流程
+      fetch('/chat', { method: 'GET', credentials: 'same-origin' })
+        .then(() => {
+          console.log('[TauriApp] /chat 路由预编译完成');
+        })
+        .catch(() => {
+          // 忽略预热失败，不影响应用启动
+        });
+    } catch {
+      /* noop */
+    }
+
+    if (!mobile) {
+      // MCP 服务器初始化：极低优先级，确保不影响页面渲染
+      // 策略：等待页面完全稳定后（多次空闲检测 + 最小延迟）才开始启动
+      try {
+        const startMcpInBackground = async () => {
+          console.log('[TauriApp] 页面稳定，开始后台启动MCP服务...');
+
+          try {
+            await serverManager.init();
+            console.log('[TauriApp] MCP 后台连接已调度');
+          } catch (error) {
+            console.warn('[TauriApp] MCP服务启动失败:', error);
+          }
+
+          // 初始化MCP持久化缓存
+          try {
+            const { persistentCache } = await import(
+              '@/lib/mcp/persistentCache'
+            );
+            await persistentCache.init();
+            console.log('[TauriApp] MCP持久化缓存已初始化');
+          } catch (error) {
+            console.warn('[TauriApp] MCP持久化缓存初始化失败:', error);
+          }
+        };
+
+        // 智能延迟启动MCP：确保页面真正稳定后才启动
+        // 1. 等待 document 完全加载
+        // 2. 再等待多次 requestIdleCallback 确认浏览器真正空闲
+        // 3. 最少延迟 3 秒，避免与页面编译争抢资源
+        const waitForPageStable = () => {
+          const MIN_DELAY_MS = 3000; // 最少等待3秒
+          const startTime = Date.now();
+
+          const scheduleWhenIdle = (idleCount: number) => {
+            // 需要连续 3 次空闲检测才启动（确保真正空闲）
+            if (idleCount >= 3) {
+              // 确保至少等待了 MIN_DELAY_MS
+              const elapsed = Date.now() - startTime;
+              if (elapsed < MIN_DELAY_MS) {
+                setTimeout(
+                  () => startMcpInBackground(),
+                  MIN_DELAY_MS - elapsed,
+                );
+              } else {
+                startMcpInBackground();
+              }
+              return;
+            }
+
+            if ('requestIdleCallback' in window) {
+              (window as any).requestIdleCallback(
+                (deadline: {
+                  didTimeout: boolean;
+                  timeRemaining: () => number;
+                }) => {
+                  // 只有在有足够空闲时间时才计数
+                  if (deadline.timeRemaining() > 10 || deadline.didTimeout) {
+                    scheduleWhenIdle(idleCount + 1);
+                  } else {
+                    // 空闲时间不够，重新等待
+                    scheduleWhenIdle(idleCount);
+                  }
+                },
+                { timeout: 5000 },
+              );
+            } else {
+              // 回退：简单的 setTimeout
+              setTimeout(() => scheduleWhenIdle(idleCount + 1), 1000);
+            }
+          };
+
+          // 开始等待空闲
+          scheduleWhenIdle(0);
+        };
+
+        // 等待 document 完成加载后再开始
+        if (document.readyState === 'complete') {
+          waitForPageStable();
+        } else {
+          window.addEventListener('load', waitForPageStable, { once: true });
+        }
+      } catch {
+        /* noop */
+      }
+    }
+
+    console.log('✅ [TauriApp] 应用初始化完成');
+  } catch (error) {
+    console.error('❌ [TauriApp] 应用初始化失败:', error);
+    throw error;
+  }
+}

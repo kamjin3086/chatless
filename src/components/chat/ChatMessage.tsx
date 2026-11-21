@@ -7,6 +7,7 @@ import { ContextMenu, createMessageMenuItems } from '@/components/ui/context-men
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useChatStore } from '@/store/chatStore';
 import { UserMessageBlock } from './UserMessageBlock';
+import { useAndroidChatNavigation } from './androidChatNavigation';
 import { AIMessageBlock } from './AIMessageBlock';
 import {
   ThinkingLevelFacts,
@@ -107,6 +108,7 @@ function ChatMessageComponent({
   version_index: _version_index,
   versionControls = null,
 }: ChatMessageProps) {
+  const android = Boolean(useAndroidChatNavigation());
   const [isCopied, setIsCopied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const deleteMessage = useChatStore((s)=> s.deleteMessage);
@@ -348,8 +350,7 @@ function ChatMessageComponent({
         {shouldShowTimestamp && (formattedTime || (!isUser && model)) && (
           <div className={cn(
             "flex items-center justify-between flex-nowrap text-[11px] text-slate-400 dark:text-slate-500 ml-1 mt-1",
-            "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150",
-            isError && "opacity-100",
+            android || isError ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150",
             isUser ? "self-end" : "self-start w-full"
           )}>
             <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap overflow-hidden">
@@ -369,6 +370,7 @@ function ChatMessageComponent({
                     onClick={onRetry}
                     className={cn(
                       "p-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
+                      android && "flex size-11 items-center justify-center",
                       isError
                         ? "text-red-500 hover:text-red-600 dark:text-red-400"
                         : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"

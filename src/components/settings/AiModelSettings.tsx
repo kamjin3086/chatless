@@ -34,6 +34,8 @@ import { AddProvidersDialog } from './AddProvidersDialog';
 import { useStableProviderIcon } from "./useStableProviderIcon";
 import { useSearchParams } from "next/navigation";
 import { ContextMenu } from "@/components/ui/context-menu";
+import { Button } from "@/components/ui/button";
+import { useLocaleStore } from '@/store/localeStore';
 // 头部过滤器已内化到表头，无需 Select 组件
 // duplicate import removed
 
@@ -167,7 +169,12 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
   (prev.provider.models?.length ?? 0) === (next.provider.models?.length ?? 0)
 ));
 
-export function AiModelSettings({ startWithProviderPicker = false }: { startWithProviderPicker?: boolean } = {}) {
+export function AiModelSettings({ startWithProviderPicker = false, compact = false }: {
+  startWithProviderPicker?: boolean;
+  compact?: boolean;
+} = {}) {
+  const t = useLocaleStore((state) => state.t);
+  useLocaleStore((state) => state.locale);
   const [providerPickerOpen, setProviderPickerOpen] = useState(startWithProviderPicker);
   // 使用自定义 Hook 获取状态和处理函数
   const {
@@ -319,7 +326,28 @@ export function AiModelSettings({ startWithProviderPicker = false }: { startWith
 
   // --- 渲染逻辑 ---
   return (
-    <div className="h-full min-h-0 flex overflow-hidden">
+    <div className={cn("h-full min-h-0 flex overflow-hidden", compact && "flex-col")}>
+      {compact ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border p-2">
+          <select
+            className="h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            aria-label={t('androidChat.providers')}
+            value={selectedProvider?.name ?? ''}
+            onChange={(event) => handleSelectProvider(event.target.value)}
+          >
+            {!selectedProvider && <option value="">{t('chatStarter.noProvider')}</option>}
+            {displayList.map((provider) => (
+              <option key={provider.name} value={provider.name}>{provider.displayName || provider.name}</option>
+            ))}
+          </select>
+          <AddProvidersDialog
+            open={providerPickerOpen}
+            onOpenChange={setProviderPickerOpen}
+            compact
+            trigger={<Button type="button" variant="outline" className="h-11">{t('chatStarter.addProvider')}</Button>}
+          />
+        </div>
+      ) : (
       <div className="provider-rail w-52 shrink-0 flex flex-col min-h-0 border-r border-slate-200/50 dark:border-slate-700/40">
         <div className="flex-shrink-0 px-2 pt-2.5 pb-2 flex items-center gap-0.5">
           <SearchInput
@@ -399,10 +427,13 @@ export function AiModelSettings({ startWithProviderPicker = false }: { startWith
         </div>
       </div>
 
+      )}
+
       <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
         {selectedProvider ? (
           <ProviderSettings
             key={selectedProvider.name}
+            compact={compact}
             provider={selectedProvider}
             isConnecting={selectedProvider.displayStatus === 'CONNECTING'}
             isInitialChecking={isLoading}
@@ -417,7 +448,7 @@ export function AiModelSettings({ startWithProviderPicker = false }: { startWith
           />
         ) : (
           <div className="h-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
-            请从左侧选择一个提供商
+            {compact ? t('chatStarter.noProvider') : '请从左侧选择一个提供商'}
           </div>
         )}
       </div>

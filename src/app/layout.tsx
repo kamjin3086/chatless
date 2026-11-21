@@ -18,6 +18,7 @@ import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
 import { RouteErrorBoundary } from '@/components/errors/RouteErrorBoundary';
 import { AppShellErrorBoundary } from '@/components/errors/AppShellErrorBoundary';
 import { isTauriEnvironment } from '@/lib/utils/environment';
+import { isAndroidRuntime } from '@/lib/utils/runtimePlatform';
 
 // The custom title bar is a platform capability, not a user setting, so the
 // class has to exist before the first paint (waiting for an effect makes the
@@ -25,8 +26,9 @@ import { isTauriEnvironment } from '@/lib/utils/environment';
 // <html> carries a class the server could not render; the root element below
 // therefore opts out of hydration checking for its own attributes, which is
 // what the class and the storage-driven locale need.
-if (typeof window !== 'undefined' && isTauriEnvironment()) {
-  document.documentElement.classList.add('custom-titlebar');
+if (typeof window !== 'undefined') {
+  if (isAndroidRuntime()) document.documentElement.dataset.androidRuntime = 'true';
+  else if (isTauriEnvironment()) document.documentElement.classList.add('custom-titlebar');
 }
 
 // 动态导入系统托盘管理器

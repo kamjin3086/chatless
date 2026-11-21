@@ -1,3 +1,6 @@
+import { isAndroidCountdownTool } from '@/lib/mcp/nativeTools/androidCountdown';
+import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
+
 type ToolId = { server: string; tool: string };
 
 function lc(s: unknown): string {
@@ -130,6 +133,9 @@ export function detectFatalFailure(id: ToolId, result: unknown): string | undefi
 }
 
 export function buildFatalErrorHints(id: ToolId, message: string): string[] {
+  if (isAndroidCountdownTool(id.server, id.tool) && isAndroidTauri()) {
+    return ['Check the Android clock before making a new countdown request. Do not replay this call.'];
+  }
   const srv = lc(id.server);
   const tl = lc(id.tool);
   const m = lc(message);

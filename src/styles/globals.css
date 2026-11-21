@@ -1807,6 +1807,10 @@ html.custom-titlebar:not(.glass-ui) .glass-nav {
   height: calc(100vh - var(--titlebar-height)) !important;
 }
 
+html[data-android-runtime] .window-titlebar {
+  display: none;
+}
+
 .window-titlebar {
   position: fixed;
   top: 0;

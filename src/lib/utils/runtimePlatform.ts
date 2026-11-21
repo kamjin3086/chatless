@@ -1,3 +1,32 @@
+import { isTauri } from '@tauri-apps/api/core';
+import { platform } from '@tauri-apps/plugin-os';
+
+export function isAndroidRuntime(): boolean {
+  try {
+    return platform() === 'android';
+  } catch {
+    return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+  }
+}
+
+export function isAndroidTauri(): boolean {
+  try {
+    return isTauri() && platform() === 'android';
+  } catch {
+    return false;
+  }
+}
+
+export function isMobileRuntime(): boolean {
+  try {
+    const os = platform();
+    return os === 'android' || os === 'ios';
+  } catch {
+    // The OS plugin is not injected outside the Tauri WebView.
+    return typeof navigator !== 'undefined' && /android|iphone|ipad/i.test(navigator.userAgent);
+  }
+}
+
 export type RuntimePlatform = 'windows' | 'macos' | 'linux' | 'unknown';
 
 /**

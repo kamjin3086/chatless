@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from './ModelSelector';
+import { useAndroidChatNavigation } from './androidChatNavigation';
 import { selectSelectableProviders } from '@/lib/provider/modelPickerVisibility';
 import { useLocaleStore } from '@/store/localeStore';
 
@@ -17,6 +18,7 @@ interface ChatEmptyStateProps {
 const modelSettings = '/settings?tab=localModels';
 
 export function ChatEmptyState({ setupState, modelPicker }: ChatEmptyStateProps) {
+  const androidNavigation = useAndroidChatNavigation();
   const t = useLocaleStore((state) => state.t);
   useLocaleStore((state) => state.locale);
 
@@ -41,6 +43,10 @@ export function ChatEmptyState({ setupState, modelPicker }: ChatEmptyStateProps)
       </h2>
       {canPickModel ? (
         <ModelSelector {...modelPicker} setupLabel={t('chatStarter.chooseModel')} />
+      ) : androidNavigation ? (
+        <Button onClick={() => androidNavigation.openModelSettings(noProvider)}>
+          {t(noProvider ? 'chatStarter.addProvider' : 'chatStarter.manageModels')}
+        </Button>
       ) : (
         <Button asChild size="sm">
           <Link href={noProvider ? `${modelSettings}&action=addProvider` : modelSettings}>

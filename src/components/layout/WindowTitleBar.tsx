@@ -5,6 +5,7 @@ import { Minus, Square, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_INFO } from '@/config/app-info';
 import { isTauriEnvironment } from '@/lib/utils/environment';
+import { isAndroidRuntime } from '@/lib/utils/runtimePlatform';
 import { windowControlsOnLeft } from '@/lib/window/windowControls';
 import { useLocaleStore } from '@/store/localeStore';
 import { useUiPreferences } from '@/store/uiPreferences';
@@ -47,7 +48,7 @@ export function WindowTitleBar() {
   const [onLeft, setOnLeft] = useState(false);
 
   useEffect(() => {
-    if (!isTauriEnvironment()) return;
+    if (!isTauriEnvironment() || isAndroidRuntime()) return;
 
     document.documentElement.classList.add('custom-titlebar');
 

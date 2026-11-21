@@ -4,6 +4,8 @@ import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permis
 import { resolveAccess } from '@/lib/mcp/accessPolicy';
 import { conversationToolKey, hasConversationToolGrant, getConversationDirectoryGrant, isConversationAutomatic, useConversationAccessStore } from '@/store/conversationAccessStore';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
+import { isAndroidCountdownTool } from '@/lib/mcp/nativeTools/androidCountdown';
+import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { findUnresolvedAliasInValues, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
@@ -311,7 +313,8 @@ export class ToolExecutionPipeline {
     const temporaryEligible = allowsTemporaryServerApproval(server, tool);
     const conversationApproved = temporaryEligible && (isConversationAutomatic(invocation.conversationId)
       || hasConversationToolGrant(invocation.conversationId, server, tool));
-    if (!conversationApproved && decideServerCall({ server, tool, autoAuthorize: autoAuth }) === 'ask') {
+    const androidCountdownAvailable = isAndroidCountdownTool(server, tool) && isAndroidTauri();
+    if (!conversationApproved && decideServerCall({ server, tool, autoAuthorize: autoAuth, androidCountdownAvailable }) === 'ask') {
       const approval = await this.requestApproval({
         assistantMessageId, conversationId: invocation.conversationId,
         server, tool, cardId, callKey, callId,

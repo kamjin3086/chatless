@@ -62,7 +62,12 @@ pub async fn mcp_connect(
     name,
     config.r#type
   );
+  #[cfg(desktop)]
   log::debug!("[MCP] Full config: {:?}", config);
+  #[cfg(mobile)]
+  if !matches!(config.r#type.as_str(), "http" | "sse") {
+    return Err("Mobile supports externally hosted HTTP/SSE MCP servers only".to_string());
+  }
 
   if state.0.contains_key(&name) {
     log::info!("[MCP] Server {} already connected, skipping", name);
