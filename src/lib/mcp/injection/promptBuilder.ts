@@ -13,6 +13,7 @@
  * 4. **外部化提示词**: 追问提示词从 txt 文件加载，便于维护
  */
 
+import { hasAndroidDocumentAttachment } from '@/lib/documents/android/androidDocumentAttachment';
 import type { InjectionContext, InjectionResult, InjectionSignals, NativeToolDefinition } from './types';
 import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
@@ -404,8 +405,9 @@ async function buildNativeToolDefinitions(params: {
   // 记录已加载文档的服务器，避免重复注入相同文档
   const loadedDocServers = new Set<string>();
   
+  const androidDocumentAvailable = await hasAndroidDocumentAttachment(params.conversationId);
   const addToolsFromGroup = async (groupId: ToolGroupId) => {
-    const groupTools = getToolsForGroup(groupId);
+    const groupTools = getToolsForGroup(groupId, androidDocumentAvailable);
     for (const { server, tool } of groupTools) {
       const fullName = `${server}__${tool.name}`;
       

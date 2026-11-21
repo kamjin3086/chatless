@@ -18,6 +18,7 @@ import { toast } from '@/components/ui/sonner';
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { AttachmentMenu } from './input/AttachmentMenu';
+import { AndroidDocumentAttachmentStatus, useAndroidDocumentAttachment } from './input/AndroidDocumentAttachment';
 import { useAndroidChatNavigation } from './androidChatNavigation';
 import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
@@ -124,6 +125,7 @@ export function ChatInput({
   showStarterActions = false,
 }: ChatInputProps) {
   const android = Boolean(useAndroidChatNavigation());
+  const androidDocument = useAndroidDocumentAttachment(android ? conversationId : undefined);
   const [inputValue, setInputValue] = useState("");
   const [composerSelection, setComposerSelection] = useState<{ text: string; caret: number } | null>(null);
   // 直接应用提示词，无需弹窗
@@ -868,6 +870,14 @@ export function ChatInput({
         </div>
       )}
 
+      {android && (
+        <AndroidDocumentAttachmentStatus
+          state={androidDocument.state}
+          disabled={disabled || effectiveLoading}
+          onRemove={androidDocument.remove}
+        />
+      )}
+
       {/* 已移除输入框上方“长条附加项”（知识库/工作目录/文档），仅在下方彩色标签条展示 */}
 
       {attachedImages.length > 0 && (
@@ -1158,12 +1168,14 @@ export function ChatInput({
             open={attachmentMenuOpen}
             onOpenChange={setAttachmentMenuOpen}
             disabled={disabled || effectiveLoading}
-            isParsingDocument={isParsingDocument}
+            isParsingDocument={android ? androidDocument.state?.busy : isParsingDocument}
             hasDocument={!!attachedDocument}
             selectedKnowledgeBase={selectedKnowledgeBase}
             onOpenComposerPanel={openComposerPanel}
             onPickImage={() => imageInputRef.current?.click()}
-            onPickDocument={() => fileInputRef.current?.click()}
+            onPickDocument={android ? androidDocument.pick : () => fileInputRef.current?.click()}
+            documentLabel={android ? t('androidDocument.attach') : undefined}
+            documentDescription={android ? t('androidDocument.formats') : undefined}
             onSelectKnowledgeBase={(kb) => {
               if (kb) {
                 selectKnowledgeBase(kb);
@@ -1204,14 +1216,16 @@ export function ChatInput({
             accept="image/*"
             disabled={disabled}
           />
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            className="hidden"
-            accept=".pdf, .docx, .md, .markdown, .txt, .json, .csv, .xlsx, .xls, .html, .htm, .rtf, .epub"
-            disabled={disabled}
-          />
+          {!android && (
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+              accept=".pdf, .docx, .md, .markdown, .txt, .json, .csv, .xlsx, .xls, .html, .htm, .rtf, .epub"
+              disabled={disabled}
+            />
+          )}
         </div>
         <div className={cn("absolute right-2 sm:right-3 z-[2] flex items-center gap-1.5 sm:gap-2", android ? "bottom-1" : "bottom-2.5")}>
             {tokenCount > 0 && (

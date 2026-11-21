@@ -313,8 +313,11 @@ export class ToolExecutionPipeline {
     const temporaryEligible = allowsTemporaryServerApproval(server, tool);
     const conversationApproved = temporaryEligible && (isConversationAutomatic(invocation.conversationId)
       || hasConversationToolGrant(invocation.conversationId, server, tool));
-    const androidCountdownAvailable = isAndroidCountdownTool(server, tool) && isAndroidTauri();
-    if (!conversationApproved && decideServerCall({ server, tool, autoAuthorize: autoAuth, androidCountdownAvailable }) === 'ask') {
+    const androidRuntime = isAndroidTauri();
+    const androidCountdownAvailable = androidRuntime && isAndroidCountdownTool(server, tool);
+    if (!conversationApproved && decideServerCall({
+      server, tool, autoAuthorize: autoAuth, androidCountdownAvailable, androidDocumentRuntime: androidRuntime,
+    }) === 'ask') {
       const approval = await this.requestApproval({
         assistantMessageId, conversationId: invocation.conversationId,
         server, tool, cardId, callKey, callId,

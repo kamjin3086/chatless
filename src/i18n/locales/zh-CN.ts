@@ -14,6 +14,19 @@ const zhCN: TranslationDict = {
   'androidChat.availableModels': '可用模型',
   'androidChat.recentModels': '最近使用',
   'androidChat.noModels': '无匹配模型',
+  'androidDocument.attach': '附加文档',
+  'androidDocument.formats': '含文字的 PDF 或纯文本（UTF-8）',
+  'androidDocument.remove': '移除文档',
+  'androidDocument.working': '正在处理文档…',
+  'androidDocument.disclosure':
+    '选择文档不会上传文件。文档问答需要支持工具调用的模型，相关摘录会发送给所选服务商。',
+  'androidDocument.empty': '此文本文件为空，请选择其他文件。',
+  'androidDocument.inaccessible': '无法访问文档，请重新选择。',
+  'androidDocument.oversized':
+    '文档过大：单个文件不超过 8 MB，PDF 不超过 200 页，提取文本不超过 1 MB。',
+  'androidDocument.scanned':
+    '此 PDF 没有可提取的文本。扫描件需要 OCR，此处暂不支持。',
+  'androidDocument.unsupported': '请选择可读取的文本 PDF 或 UTF-8 纯文本文件。',
   'chatStarter.title': '开始会话',
   'chatStarter.initializing': '正在准备模型…',
   'chatStarter.noProvider': '先添加一个模型服务',

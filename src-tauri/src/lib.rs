@@ -65,6 +65,10 @@ pub mod onnx_logic;
 #[path = "lib/document_parser.rs"]
 pub mod document_parser;
 
+#[cfg(any(target_os = "android", test))]
+#[path = "mobile/android_document_text.rs"]
+mod android_document_text;
+
 #[path = "lib/document_structured.rs"]
 pub mod document_structured;
 

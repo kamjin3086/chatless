@@ -36,7 +36,9 @@ interface AttachmentMenuProps {
   selectedKnowledgeBase?: KnowledgeBase | null;
   onOpenComposerPanel: (trigger: ComposerTrigger) => void;
   onPickImage: () => void;
-  onPickDocument: () => void;
+  onPickDocument?: () => void;
+  documentLabel?: string;
+  documentDescription?: string;
   onSelectKnowledgeBase: (kb: KnowledgeBase | null) => void;
 }
 
@@ -50,6 +52,8 @@ export function AttachmentMenu({
   onOpenComposerPanel,
   onPickImage,
   onPickDocument,
+  documentLabel = "附加文档",
+  documentDescription,
   onSelectKnowledgeBase,
 }: AttachmentMenuProps) {
   const t = useLocaleStore((s) => s.t);
@@ -128,14 +132,16 @@ export function AttachmentMenu({
         />
 
         {/* 文档 - 橙色系 */}
-        <ActionPanelItem
-          icon={<FileText className={cn("w-4 h-4", hasDocument ? "text-amber-500" : "text-amber-400")} />}
-          title="附加文档"
-          description={hasDocument ? "已附加文档" : "PDF, Word, Markdown 等"}
-          disabled={hasDocument}
-          selected={hasDocument}
-          onClick={() => handleAction(onPickDocument)}
-        />
+        {onPickDocument && (
+          <ActionPanelItem
+            icon={<FileText className={cn("w-4 h-4", hasDocument ? "text-amber-500" : "text-amber-400")} />}
+            title={documentLabel}
+            description={documentDescription ?? (hasDocument ? "已附加文档" : "PDF, Word, Markdown 等")}
+            disabled={hasDocument}
+            selected={hasDocument}
+            onClick={() => handleAction(onPickDocument)}
+          />
+        )}
 
         <ActionPanelDivider />
 
