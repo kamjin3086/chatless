@@ -14,6 +14,15 @@ const zhCN: TranslationDict = {
   'androidChat.availableModels': '可用模型',
   'androidChat.recentModels': '最近使用',
   'androidChat.noModels': '无匹配模型',
+  'androidDirectory.label': '此对话使用的 Android 文件夹',
+  'androidDirectory.choose': '选择文件夹',
+  'androidDirectory.reselect': '重新选择文件夹',
+  'androidDirectory.forget': '取消文件夹授权',
+  'androidDirectory.disclosure':
+    '选择文件夹不会上传任何内容。处理文件夹需使用支持工具的模型，只会向其服务商发送名称和元数据，不会发送文件内容。',
+  'androidDirectory.revoked':
+    '已无法访问此文件夹。请重新选择文件夹，或取消授权。',
+  'androidDirectory.unavailable': '无法访问或更新文件夹选择，请重试。',
   'androidDocument.attach': '附加文档',
   'androidDocument.formats': '含文字的 PDF 或纯文本（UTF-8）',
   'androidDocument.remove': '移除文档',

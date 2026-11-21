@@ -1,4 +1,5 @@
 import { ANDROID_COUNTDOWN_SERVER } from './nativeTools/androidCountdown';
+import { ANDROID_DIRECTORY_SERVER } from './nativeTools/androidDirectory';
 import { ANDROID_DOCUMENT_SERVER } from './nativeTools/androidDocument';
 import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
 
@@ -10,6 +11,7 @@ export function isReservedMcpServerName(name: string): boolean {
   const normalizedName = String(name || '').toLowerCase();
   return RESERVED_MCP_SERVER_NAMES.has(normalizedName)
     || normalizedName === ANDROID_DOCUMENT_SERVER
+    || normalizedName === ANDROID_DIRECTORY_SERVER
     || (normalizedName === ANDROID_COUNTDOWN_SERVER && isAndroidTauri());
 }
 

@@ -7,6 +7,7 @@
  */
 
 import { ANDROID_COUNTDOWN_SERVER } from './nativeTools/androidCountdown';
+import { ANDROID_DIRECTORY_SERVER } from './nativeTools/androidDirectory';
 import { ANDROID_DOCUMENT_SERVER } from './nativeTools/androidDocument';
 import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
 
@@ -78,6 +79,7 @@ export function isBuiltinServer(server: unknown): boolean {
     s === 'ctx' ||
     s === 'tools' ||
     s === ANDROID_DOCUMENT_SERVER ||
+    s === ANDROID_DIRECTORY_SERVER ||
     (s === ANDROID_COUNTDOWN_SERVER && isAndroidTauri())
   );
 }

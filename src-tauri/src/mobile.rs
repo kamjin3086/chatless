@@ -6,6 +6,9 @@ use crate::{agent_runtime, http_client, http_request, mcp, sse};
 mod android_countdown;
 
 #[cfg(target_os = "android")]
+mod android_directory;
+
+#[cfg(target_os = "android")]
 mod android_document;
 
 pub fn run() {
@@ -13,7 +16,8 @@ pub fn run() {
   #[cfg(target_os = "android")]
   let builder = builder
     .plugin(android_countdown::init())
-    .plugin(android_document::init());
+    .plugin(android_document::init())
+    .plugin(android_directory::init());
 
   builder
     .plugin(tauri_plugin_os::init())
@@ -33,6 +37,14 @@ pub fn run() {
       android_countdown::start_android_countdown,
       #[cfg(target_os = "android")]
       android_document::pick_android_document,
+      #[cfg(target_os = "android")]
+      android_directory::pick_android_directory,
+      #[cfg(target_os = "android")]
+      android_directory::android_directory_selection,
+      #[cfg(target_os = "android")]
+      android_directory::forget_android_directory,
+      #[cfg(target_os = "android")]
+      android_directory::inventory_android_directory,
       sse::start_sse,
       sse::stop_sse,
       http_client::get_http_client_info,

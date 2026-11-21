@@ -14,6 +14,16 @@ const enUS: TranslationDict = {
   'androidChat.availableModels': 'Available models',
   'androidChat.recentModels': 'Recently used',
   'androidChat.noModels': 'No matching models',
+  'androidDirectory.label': 'Android folder for this chat',
+  'androidDirectory.choose': 'Choose folder',
+  'androidDirectory.reselect': 'Reselect folder',
+  'androidDirectory.forget': 'Forget folder',
+  'androidDirectory.disclosure':
+    'Picking a folder doesn’t upload anything. Folder requests use a tool-capable model and share names and metadata with its provider, not file contents.',
+  'androidDirectory.revoked':
+    'Folder access was lost. Reselect it or forget it to continue.',
+  'androidDirectory.unavailable':
+    'Could not access or update the folder selection. Try again.',
   'androidDocument.attach': 'Attach document',
   'androidDocument.formats': 'Text PDF or plain text (UTF-8)',
   'androidDocument.remove': 'Remove document',

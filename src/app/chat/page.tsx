@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { AndroidDirectorySelection } from '@/components/chat/AndroidDirectorySelection';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { useAndroidChatNavigation } from '@/components/chat/androidChatNavigation';
 import { ChatHeader } from '@/components/chat/ChatHeader';
@@ -25,6 +26,7 @@ import { useScrollManagement } from '@/hooks/useScrollManagement';
 import type { ModelParameters } from '@/types/model-params';
 import { ModelParametersService } from '@/lib/model-parameters';
 import { resolveChatSetupState } from '@/lib/chat/resolveChatSetupState';
+import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
 
 type StoreMessage = any;
 
@@ -482,6 +484,12 @@ export default function ChatPage() {
                     currentProviderName,
                     onModelChange: handleModelChange,
                   }}
+                />
+              )}
+              {android && isAndroidTauri() && (
+                <AndroidDirectorySelection
+                  key={currentConversationId}
+                  conversationId={currentConversationId}
                 />
               )}
               <div hidden={showStarter && !canSend}>

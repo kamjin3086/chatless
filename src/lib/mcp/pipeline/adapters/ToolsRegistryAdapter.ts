@@ -2,6 +2,7 @@
  * Capability directory. It intentionally has one operation: search the whole
  * enabled directory, then expose the selected capability on the next turn.
  */
+import { hasAndroidDirectorySelection } from '@/lib/documents/android/androidDirectorySelection';
 import { hasAndroidDocumentAttachment } from '@/lib/documents/android/androidDocumentAttachment';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
@@ -39,8 +40,11 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
     if (!query) return { ok: false, error: 'query is required' };
 
-    const androidDocumentAvailable = await hasAndroidDocumentAttachment(conversationId);
-    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => getToolsForGroup(group.id, androidDocumentAvailable).map(({ server, tool }) => ({
+    const [androidDocumentAvailable, androidDirectoryAvailable] = await Promise.all([
+      hasAndroidDocumentAttachment(conversationId),
+      hasAndroidDirectorySelection(conversationId),
+    ]);
+    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => getToolsForGroup(group.id, { androidDocumentAvailable, androidDirectoryAvailable }).map(({ server, tool }) => ({
       source: 'builtin' as const,
       group: group.id,
       server,
