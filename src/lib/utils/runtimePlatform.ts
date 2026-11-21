@@ -1,4 +1,13 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { platform } from '@tauri-apps/plugin-os';
+
+export function isAndroidTauri(): boolean {
+  try {
+    return isTauri() && platform() === 'android';
+  } catch {
+    return false;
+  }
+}
 
 export function isMobileRuntime(): boolean {
   try {

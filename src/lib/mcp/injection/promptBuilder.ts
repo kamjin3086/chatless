@@ -29,7 +29,7 @@ import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
 import { getSkillManager } from '@/lib/skills';
 import { resolveToolTrack, shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
-import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
+import { isReservedMcpServerName } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { buildAgentContractBlock } from '@/lib/mcp/prompt/agentContract';
 import type { PromptBlock } from '@/lib/mcp/prompt/composition';
@@ -210,8 +210,7 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
       .map((n) => serverMap.get(n.toLowerCase()))
       .filter((n): n is string => Boolean(n))
       .filter((n) => globalEnabled.includes(n))
-      // 内置保留 server（filesystem/skills/web_search/shell_executor）不走外部 mcp 连接列表
-      .filter((n) => !RESERVED_MCP_SERVER_NAMES.has(String(n || '').toLowerCase()));
+      .filter((name) => !isReservedMcpServerName(name));
 
     enabled = mentionedEnabled;
   }
@@ -493,7 +492,7 @@ async function buildNativeToolDefinitions(params: {
   // ========== 4. MCP 服务器工具（外部服务） ==========
   
   for (const server of params.servers) {
-    if (RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase())) {
+    if (isReservedMcpServerName(server)) {
       continue;
     }
     try {
