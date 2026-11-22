@@ -30,6 +30,10 @@ const getDatabaseService = () => {
 async function resolveConversationWorkspace(conversationId: string, title?: string): Promise<void> {
   const cid = String(conversationId || '').trim();
   if (!cid) return;
+  // Android has no `workspace_*` commands and no @WorkDir: asking for one only produced a
+  // failed command and a red toast on every new conversation. Desktop keeps both.
+  const { isAndroidTauri } = await import('@/lib/utils/runtimePlatform');
+  if (isAndroidTauri()) return;
   const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
   const attachments = useConversationAttachmentStore.getState();
   try {

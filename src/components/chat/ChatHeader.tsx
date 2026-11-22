@@ -167,7 +167,7 @@ export function ChatHeader({
             <IconButton
               icon={ArrowLeft}
               title={t('androidChat.conversations')}
-              className="size-11 shrink-0"
+              className="size-12 shrink-0"
               onClick={androidNavigation.showConversations}
             />
           ) : (

@@ -46,7 +46,7 @@ export function AndroidPhotoPreview({
             type="button"
             variant="ghost"
             size="icon"
-            className="size-11 shrink-0"
+            className="size-12 shrink-0"
             aria-label={t('androidPhoto.remove')}
             disabled={disabled}
             onClick={onRemove}

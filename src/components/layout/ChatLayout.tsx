@@ -342,7 +342,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           {android && (
             <header className="app-topbar flex shrink-0 items-center justify-between border-b border-border px-3">
               <h1 className="text-base font-semibold">{t('androidChat.conversations')}</h1>
-              <IconButton icon={Settings} title={t('chatStarter.manageModels')} onClick={() => openModelSettings()} className="size-11" />
+              <IconButton icon={Settings} title={t('chatStarter.manageModels')} onClick={() => openModelSettings()} className="size-12" />
             </header>
           )}
 
@@ -354,13 +354,13 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                   placeholder={android ? t('androidChat.searchConversations') : "搜索对话..."}
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  className={cn("w-full text-sm placeholder:text-slate-600 dark:placeholder:text-slate-300", android ? "h-10 [&_input]:h-10 [&_input]:pr-10" : "h-8 pr-6")}
+                  className={cn("w-full text-sm placeholder:text-slate-600 dark:placeholder:text-slate-300", android ? "h-12 [&_input]:h-12 [&_input]:pr-11" : "h-8 pr-6")}
                   aria-label={t('androidChat.searchConversations')}
                 />
                 {isSearching && (
                   <button
                     onClick={handleClearSearch}
-                    className={cn("absolute top-1/2 -translate-y-1/2 right-1 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200", android && "flex size-9 items-center justify-center")}
+                    className={cn("absolute top-1/2 -translate-y-1/2 right-1 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200", android && "flex size-11 items-center justify-center")}
                     aria-label="清除"
                   >
                     <X className="w-3 h-3" />
@@ -368,7 +368,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                 )}
               </div>
               {android ? (
-                <IconButton icon={Archive} className="size-11 shrink-0"
+                <IconButton icon={Archive} className="size-12 shrink-0"
                   title={t(activeFilter === 'archived' ? 'chatSidebar.exitArchive' : 'chatSidebar.archived')}
                   aria-pressed={activeFilter === 'archived'}
                   onClick={() => handleFilterChange(activeFilter === 'archived' ? 'recent' : 'archived')} />
@@ -396,7 +396,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
               disabled={Boolean(archivedTarget)}
               title={archivedTarget ? t('chatSidebar.restoreWorkspace') : pendingWorkspace?.path}
               onClick={() => void handleNewChat()}
-              className={cn("flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-500/20 bg-slate-500/8 px-2.5 text-left text-sm font-medium text-slate-900 hover:bg-slate-500/15 focus-visible:outline-2 focus-visible:outline-sky-600 disabled:opacity-50 dark:text-slate-100 dark:focus-visible:outline-sky-400", android ? "min-h-11" : "min-h-9")}
+              className={cn("flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-500/20 bg-slate-500/8 px-2.5 text-left text-sm font-medium text-slate-900 hover:bg-slate-500/15 focus-visible:outline-2 focus-visible:outline-sky-600 disabled:opacity-50 dark:text-slate-100 dark:focus-visible:outline-sky-400", android ? "min-h-12" : "min-h-9")}
             >
               <Plus aria-hidden="true" className="size-4 shrink-0" />
               <span className="shrink-0">{t('chatSidebar.newConversation')}</span>
@@ -423,7 +423,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                     onClick={() => handleFilterChange(filter)}
                     className={cn(
                       'flex min-h-7 items-center gap-1.5 rounded-md px-2 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-sky-600 motion-reduce:transition-none dark:focus-visible:outline-sky-400',
-                      android && 'min-h-10',
+                      android && 'min-h-12',
                       activeFilter === filter
                         ? 'bg-sky-600/10 text-sky-800 dark:bg-sky-400/12 dark:text-sky-200'
                         : 'text-slate-700 hover:bg-slate-500/10 dark:text-slate-300',
@@ -500,7 +500,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         {android && view.surface === 'models' && (
           <section className="flex min-h-0 min-w-0 flex-1 flex-col glass-surface">
             <header className="app-topbar flex shrink-0 items-center gap-2 border-b border-border px-2">
-              <IconButton icon={ArrowLeft} className="size-11" title={t('androidChat.back')} onClick={closeModelSettings} />
+              <IconButton icon={ArrowLeft} className="size-12" title={t('androidChat.back')} onClick={closeModelSettings} />
               <h1 className="text-base font-semibold">{t('chatStarter.manageModels')}</h1>
             </header>
             <div className="min-h-0 flex-1">

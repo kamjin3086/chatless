@@ -4,11 +4,12 @@ Use an ARM64 debug APK, a physical Android phone, and a tool-capable model. Reco
 revision, Android and WebView versions, model, whether the system photo picker or the AndroidX
 fallback opened, and the fixtures used. Fake-native tests do not cover the picker or the device.
 
-1. In chat A, tap **Choose photos** and press Back. No batch is selected, the chat states it, and
-   the `android_photos` tool is not offered. Pick a test batch containing two byte-identical copies
+1. In chat A, open the attachment sheet and tap **Organize photos**, then press Back. No batch is
+   selected, the chat states it, and the `android_photos` tool is not offered. Pick a test batch containing two byte-identical copies
    under different names, a screenshot, ordinary camera photos, and one photo you can make
-   unreadable (for example an unsupported or removed file). The row shows the selected count and
-   the metadata-sharing notice. Picking alone, without a message, makes no model request.
+   unreadable (for example an unsupported or removed file). The composer shows the selected count as
+   a chip and the attachment sheet carries the metadata-sharing notice. Picking alone, without a
+   message, makes no model request.
 2. Ask chat A for a read-only organization proposal. Try requests such as “Which of these are
    duplicates, and can I delete all but one?” and “Group the screenshots and suggest an album.”
    Only the picked batch may appear, and only items whose bytes are identical may be called
@@ -26,8 +27,8 @@ fallback opened, and the fixtures used. Fake-native tests do not cover the picke
    before any local read. Return to A and confirm the batch is still usable.
 5. Force-stop and relaunch Chatless. A no longer reports a selection and the tool is not offered
    until photos are chosen again; the app keeps no photo grant across restarts. Reselect and cancel
-   the picker: the earlier batch remains. Use **Forget photos** and confirm the count disappears and
-   the tool stops being offered.
+   the picker: the earlier batch remains. Use **Forget photos** in the attachment sheet and confirm
+   the chip disappears and the tool stops being offered.
 6. Interleave the pickers: start the single-photo **Choose a photo**, the **Attach document** picker
    and **Choose folder**, cancelling each in turn, then select a photo batch. No picker may receive
    another picker's result. Single-photo Q&A must be unchanged: preview, recipient, unsupported

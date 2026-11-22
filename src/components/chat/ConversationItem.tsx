@@ -85,7 +85,7 @@ function ConversationItemImpl({
       <li
         className={cn(
           "group relative flex min-w-0 items-center rounded-md px-2 py-1.5 transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-600 dark:focus-visible:outline-sky-400 motion-reduce:transition-none",
-          touch ? "min-h-11" : "min-h-9",
+          touch ? "min-h-12" : "min-h-9",
           isCurrent
             ? "bg-sky-600/10 text-slate-950 dark:bg-sky-400/12 dark:text-slate-50"
             : "text-slate-800 hover:bg-slate-500/[0.07] dark:text-slate-200 dark:hover:bg-white/[0.07]"
@@ -146,12 +146,12 @@ function ConversationItemImpl({
         {touch && !isRenaming && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <IconButton icon={Ellipsis} title={t('androidChat.conversationActions')} className="size-11 shrink-0" onClick={(event) => event.stopPropagation()} />
+              <IconButton icon={Ellipsis} title={t('androidChat.conversationActions')} className="size-12 shrink-0" onClick={(event) => event.stopPropagation()} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
               {actions.filter(({ id }) => id !== 'export' && id !== 'separator-1b').map((action) => (
                 action.separator ? <DropdownMenuSeparator key={action.id} /> : (
-                  <DropdownMenuItem key={action.id} className="min-h-11" disabled={action.enabled === false}
+                  <DropdownMenuItem key={action.id} className="min-h-12" disabled={action.enabled === false}
                     variant={action.id === 'delete' ? 'destructive' : 'default'} onSelect={action.action}>
                     {action.text}
                   </DropdownMenuItem>
