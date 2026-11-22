@@ -30,7 +30,7 @@ pub mod sandbox;
 #[path = "filesystem/mod.rs"]
 pub mod filesystem;
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 #[path = "workspace/mod.rs"]
 pub mod workspace;
 
@@ -49,7 +49,7 @@ fn exit(app: tauri::AppHandle, code: i32) {
 /// icon stayed, the process ran, nothing was on screen and there was no window to
 /// click. The window is always shown on launch now; hiding it stays a runtime
 /// action (tray menu / close-to-tray).
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 fn persisted_window_state_flags() -> tauri_plugin_window_state::StateFlags {
   use tauri_plugin_window_state::StateFlags;
   StateFlags::SIZE
@@ -58,7 +58,7 @@ fn persisted_window_state_flags() -> tauri_plugin_window_state::StateFlags {
     | StateFlags::FULLSCREEN
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 #[path = "lib/onnx_logic.rs"]
 pub mod onnx_logic;
 
@@ -68,6 +68,11 @@ pub mod document_parser;
 #[cfg(any(target_os = "android", test))]
 #[path = "mobile/android_document_text.rs"]
 mod android_document_text;
+
+// Android-only at runtime; compiled on desktop so its tests can run there.
+#[cfg(any(target_os = "android", test))]
+#[path = "mobile/android_plugin.rs"]
+mod android_plugin;
 
 #[path = "lib/document_structured.rs"]
 pub mod document_structured;
@@ -124,29 +129,29 @@ fn can_run_mcp_services() -> bool {
 }
 
 /// 应用退出时释放 ONNX 等资源
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 fn cleanup_on_exit(state: tauri::State<onnx_logic::OnnxState>) -> Result<(), String> {
   onnx_logic::clear_onnx_sessions(state)
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(target_os = "android")]
 mod mobile;
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+#[cfg(target_os = "android")]
 #[tauri::mobile_entry_point]
 pub fn run() {
   mobile::run();
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 pub fn run() {
   let _builder = tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_process::init())
     .setup(|app| {
-      #[cfg(not(any(target_os = "android", target_os = "ios")))]
+      #[cfg(not(target_os = "android"))]
       {
         let flags = persisted_window_state_flags();
         let _ = app.handle().plugin(

@@ -1,5 +1,9 @@
+use crate::android_plugin;
 use serde::{Deserialize, Serialize};
-use tauri::{plugin, Manager, State, Wry};
+use tauri::{
+  plugin::{PluginHandle, TauriPlugin},
+  State, Wry,
+};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,16 +18,14 @@ pub(super) enum CountdownReceipt {
   Unavailable,
 }
 
-pub(super) struct AndroidCountdown(plugin::PluginHandle<Wry>);
+pub(super) struct AndroidCountdown(PluginHandle<Wry>);
 
-pub(super) fn init() -> plugin::TauriPlugin<Wry> {
-  plugin::Builder::new("android_countdown")
-    .setup(|app, api| {
-      let handle = api.register_android_plugin("com.kamjin.chatless", "AndroidCountdownPlugin")?;
-      app.manage(AndroidCountdown(handle));
-      Ok(())
-    })
-    .build()
+pub(super) fn init() -> TauriPlugin<Wry> {
+  android_plugin::init(
+    "android_countdown",
+    "AndroidCountdownPlugin",
+    AndroidCountdown,
+  )
 }
 
 #[tauri::command]
@@ -35,9 +37,11 @@ pub(super) async fn start_android_countdown(
     return Err("Countdown duration must be a whole number of seconds from 1 to 86400.".into());
   }
 
-  countdown
-    .0
-    .run_mobile_plugin_async("start", CountdownRequest { duration_seconds })
-    .await
-    .map_err(|error| error.to_string())
+  android_plugin::call(
+    &countdown.0,
+    "android_countdown",
+    "start",
+    CountdownRequest { duration_seconds },
+  )
+  .await
 }

@@ -98,7 +98,7 @@ objc = "0.2"
 windows = { version = "=0.61.1", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_ProcessStatus"] }
 webview2-com-sys = "=0.37.0"
 
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+[target.'cfg(not(target_os = "android"))'.dependencies]
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
 ort = { version = "2.0.0-rc.10", features = ["load-dynamic"] }
