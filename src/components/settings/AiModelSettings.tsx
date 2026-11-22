@@ -328,9 +328,10 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
   return (
     <div className={cn("h-full min-h-0 flex overflow-hidden", compact && "flex-col")}>
       {compact ? (
-        <div className="flex shrink-0 items-center gap-2 border-b border-border p-2">
+        <div className="flex shrink-0 flex-col gap-2 border-b border-border p-2 sm:flex-row sm:items-center">
+          {/* 手机上选择器与添加按钮各自整宽、上下排列；宽屏才回到并排一行 */}
           <select
-            className="h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm text-foreground sm:flex-1"
             aria-label={t('androidChat.providers')}
             value={selectedProvider?.name ?? ''}
             onChange={(event) => handleSelectProvider(event.target.value)}
@@ -344,7 +345,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
             open={providerPickerOpen}
             onOpenChange={setProviderPickerOpen}
             compact
-            trigger={<Button type="button" variant="outline" className="h-11">{t('chatStarter.addProvider')}</Button>}
+            trigger={<Button type="button" variant="outline" className="h-11 w-full sm:w-auto">{t('chatStarter.addProvider')}</Button>}
           />
         </div>
       ) : (

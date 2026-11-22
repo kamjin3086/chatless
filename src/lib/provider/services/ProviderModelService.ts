@@ -204,7 +204,9 @@ export class ProviderModelService {
           console.warn('[ProviderModelService] 调试规则拉取失败，回退常规逻辑', e);
           try {
             const cached = await specializedStorage.models.getProviderFetchDebugResult(name);
-            if (cached && Array.isArray(cached)) {
+            // 只有非空的缓存结果才能当权威列表：空缓存意味着上次也没拉到东西，
+            // 用它覆盖会把用户手动添加的模型当成已删除。
+            if (cached && Array.isArray(cached) && cached.length) {
               onlineList = cached.map((m:any)=>({ name: m.name, label: m.label, aliases: [m.name] }));
               ruleSuccess = true;
             }
