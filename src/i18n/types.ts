@@ -39,6 +39,7 @@ export type TranslationKey =
   | 'androidPhotos.countUnitOne'
   | 'androidPhotos.countUnitMany'
   | 'androidAttachments.label'
+  | 'androidAttachmentSheet.title'
   | 'androidDirectory.choose'
   | 'androidDirectory.forget'
   | 'androidDirectory.disclosure'

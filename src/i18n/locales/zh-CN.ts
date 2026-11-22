@@ -46,6 +46,7 @@ const zhCN: TranslationDict = {
   'androidPhotos.countUnitOne': '张照片',
   'androidPhotos.countUnitMany': '张照片',
   'androidAttachments.label': '此对话的附件',
+  'androidAttachmentSheet.title': '附加内容',
   'androidDirectory.choose': '选择文件夹',
   'androidDirectory.forget': '取消文件夹授权',
   'androidDirectory.disclosure':

@@ -14,6 +14,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { ChatInitializing } from '@/components/chat/ChatInitializing';
 import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
+import { starterLayout } from '@/components/chat/starterLayout';
 import { cn } from '@/lib/utils';
 import { EmptyChatView } from '@/components/chat/EmptyChatView';
 import { ChatMessageList } from '@/components/chat/ChatMessageList';
@@ -343,6 +344,7 @@ export default function ChatPage() {
     selectedModelId,
   );
   const canSend = setupState === 'ready';
+  const starter = starterLayout(android, canSend);
 
   if (!isClient) {
     return <ChatInitializing />;
@@ -466,17 +468,11 @@ export default function ChatPage() {
             </div>
           </div>
           <div
-            className={cn(
-              'bg-transparent',
-              showStarter &&
-                'flex min-h-0 flex-1 flex-col justify-center-safe overflow-y-auto',
-            )}
+            className={cn('bg-transparent', showStarter && starter.column)}
             onMouseEnter={() => setIsInputAreaHovered(true)}
             onMouseLeave={() => setIsInputAreaHovered(false)}
           >
-            <div
-              className={cn('mx-auto w-full', showStarter && 'max-w-3xl py-6')}
-            >
+            <div className={cn('mx-auto w-full', showStarter && starter.block)}>
               {showStarter && (
                 <ChatEmptyState
                   setupState={setupState}

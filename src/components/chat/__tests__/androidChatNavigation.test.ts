@@ -27,6 +27,24 @@ describe('Android chat Back after the native IME is dismissed', () => {
     expect(result.next).toEqual({ surface: 'chat' });
   });
 
+  it('closes the attachment sheet before any navigation', () => {
+    // The sheet is a Radix dialog, so its layer listens on the document in the capture
+    // phase and cancels the Escape that Back dispatches. Cancelled means Back is consumed.
+    const back = new Event(ANDROID_BACK_EVENT, { cancelable: true });
+    const sheetLayer = new EventTarget();
+    const closeSheet = vi.fn((event: Event) => event.preventDefault());
+    sheetLayer.addEventListener('keydown', closeSheet, { capture: true });
+    const next = handleAndroidBack(
+      back,
+      () =>
+        sheetLayer.dispatchEvent(new Event('keydown', { cancelable: true })),
+      { surface: 'chat' },
+    );
+    expect(closeSheet).toHaveBeenCalledOnce();
+    expect(back.defaultPrevented).toBe(true);
+    expect(next).toEqual({ surface: 'chat' });
+  });
+
   it('returns from chat to the conversation list when no panel consumes Back', () => {
     expect(pressBack({ surface: 'chat' })).toMatchObject({
       handled: true,
