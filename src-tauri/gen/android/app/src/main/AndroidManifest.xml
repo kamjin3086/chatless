@@ -36,5 +36,14 @@
             android:name="android.support.FILE_PROVIDER_PATHS"
             android:resource="@xml/file_paths" />
         </provider>
+        <provider
+            android:name=".AndroidPhotoCaptureProvider"
+            android:authorities="${applicationId}.photo-capture"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/android_photo_capture_paths" />
+        </provider>
     </application>
 </manifest>

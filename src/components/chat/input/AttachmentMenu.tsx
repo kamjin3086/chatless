@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Plus, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X, Sparkles, AtSign,
+  Plus, Camera, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X, Sparkles, AtSign,
 } from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,8 @@ interface AttachmentMenuProps {
   selectedKnowledgeBase?: KnowledgeBase | null;
   onOpenComposerPanel: (trigger: ComposerTrigger) => void;
   onPickImage: () => void;
+  onCapturePhoto?: () => void;
+  photoActionsDisabled?: boolean;
   onPickDocument: () => void;
   onSelectKnowledgeBase: (kb: KnowledgeBase | null) => void;
 }
@@ -49,6 +51,8 @@ export function AttachmentMenu({
   selectedKnowledgeBase,
   onOpenComposerPanel,
   onPickImage,
+  onCapturePhoto,
+  photoActionsDisabled,
   onPickDocument,
   onSelectKnowledgeBase,
 }: AttachmentMenuProps) {
@@ -119,11 +123,19 @@ export function AttachmentMenu({
           />
         ))}
         <ActionPanelDivider />
-        {/* 图片 - 粉色系 */}
+        {onCapturePhoto && (
+          <ActionPanelItem
+            icon={<Camera className="size-4 text-pink-500" />}
+            title={t('androidPhoto.capture')}
+            disabled={photoActionsDisabled}
+            onClick={() => handleAction(onCapturePhoto)}
+          />
+        )}
         <ActionPanelItem
           icon={<Image className="w-4 h-4 text-pink-500" />}
-          title="上传图片"
-          description="JPG, PNG, GIF, WebP"
+          title={onCapturePhoto ? t('androidPhoto.pick') : '上传图片'}
+          description={onCapturePhoto ? undefined : 'JPG, PNG, GIF, WebP'}
+          disabled={photoActionsDisabled}
           onClick={() => handleAction(onPickImage)}
         />
 

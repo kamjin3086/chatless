@@ -14,6 +14,7 @@ import { GoogleAIProvider } from './providers/GoogleAIProvider';
 import { AnthropicProvider } from './providers/AnthropicProvider';
 import { DeepSeekProvider } from './providers/DeepSeekProvider';
 import type { ToolDefinition } from './types/tool-schema';
+import { type AndroidPhotoRecipient, AndroidPhotoSendRejection, guardAndroidPhotoWireRoute } from '@/lib/android/androidPhotoSend';
 
 /**
  * 简化版 LLMInterpreter：
@@ -188,6 +189,7 @@ export class LLMInterpreter {
         ? (options as any).__requestId
         : '__legacy__';
     const useProvider = provider; // 不做魔法纠正，维持调用方选择
+    const photoRecipient = options?.__androidPhotoRecipient as AndroidPhotoRecipient | undefined;
 
     // #101: one wrap point for cost accounting. It observes only - the request that leaves
     // is built by the code below, untouched. The context is a getter because the provider
@@ -246,6 +248,11 @@ export class LLMInterpreter {
       | 'gemini'
       | 'deepseek'
       | null = null;
+    const checkPhotoRoute = (adapter: BaseProvider, wireModel: string) => {
+      if (photoRecipient) {
+        guardAndroidPhotoWireRoute(photoRecipient, useProvider, wireModel, adapter, effectiveStrategy);
+      }
+    };
     try {
       try {
         const { specializedStorage } = await import('@/lib/storage');
@@ -286,6 +293,7 @@ export class LLMInterpreter {
         model,
         options || {},
       );
+      if (photoRecipient) delete refined.__androidPhotoRecipient;
 
       // A router that exposes effort tiers as sibling model names picks a model rather
       // than a field, so the rewrite happens here: at request build time, after the
@@ -352,6 +360,7 @@ export class LLMInterpreter {
           (originalProvider as any).strategy !== 'multi'
         ) {
           // 如果原始Provider不需要API密钥，直接使用原始Provider，不进行委派
+          checkPhotoRoute(strategy, requestModel);
           await this.runProviderStream(
             requestId,
             strategy,
@@ -407,6 +416,7 @@ export class LLMInterpreter {
             (delegate as any).aliasProviderName = display;
             break;
         }
+        checkPhotoRoute(delegate, model);
         await this.runProviderStream(
           requestId,
           delegate,
@@ -419,6 +429,7 @@ export class LLMInterpreter {
       }
 
       // 默认：使用原始 Provider
+      checkPhotoRoute(strategy, requestModel);
       await this.runProviderStream(
         requestId,
         strategy,
@@ -428,6 +439,10 @@ export class LLMInterpreter {
         refined,
       );
     } catch (e: any) {
+      if (e instanceof AndroidPhotoSendRejection) {
+        callbacks.onError?.(e);
+        throw e;
+      }
       const strategyLabel = effectiveStrategy
         ? (effectiveStrategy as string)
         : '(未设置)';

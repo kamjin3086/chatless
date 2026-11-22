@@ -14,6 +14,29 @@ const zhCN: TranslationDict = {
   'androidChat.availableModels': '可用模型',
   'androidChat.recentModels': '最近使用',
   'androidChat.noModels': '无匹配模型',
+  'androidPhoto.capture': '拍照',
+  'androidPhoto.pick': '选择照片',
+  'androidPhoto.preview': '选中的照片预览',
+  'androidPhoto.remove': '移除照片',
+  'androidPhoto.recipient': '接收照片的模型',
+  'androidPhoto.checking': '正在检查此模型是否接受照片…',
+  'androidPhoto.supported':
+    '支持照片。仅在点击发送后，照片才会发送给此提供商。',
+  'androidPhoto.unsupported':
+    '此模型或请求策略不支持发送照片。请选择使用 OpenAI 兼容 Chat Completions（非严格 OpenAI）、Gemini 或 Ollama 的视觉模型，或移除照片。',
+  'androidPhoto.busy': '请等待当前回复结束，或停止回复后再发送照片。',
+  'androidPhoto.other_attachment': '请移除文档或结束编辑后再发送照片。',
+  'androidPhoto.acquiring': '正在打开照片…',
+  'androidPhoto.unavailable':
+    'Android 无法打开相机或照片选择器，请试试另一种方式。',
+  'androidPhoto.unreadable':
+    '无法处理这张照片，请重新拍摄或选择另一张较小的图片。',
+  'androidPhoto.too_large': '照片大小超过 32 MB，请选择较小的照片。',
+  'androidPhoto.recipient_changed':
+    '接收照片的模型或其图片支持发生了变化，请重新选择模型后再试。',
+  'androidPhoto.not_accepted':
+    '照片仍在草稿中。请重试、选择更小的图片，或切换到上下文窗口更大的图像模型。',
+  'androidPhoto.message': '[照片]',
   'chatStarter.title': '开始会话',
   'chatStarter.initializing': '正在准备模型…',
   'chatStarter.noProvider': '先添加一个模型服务',

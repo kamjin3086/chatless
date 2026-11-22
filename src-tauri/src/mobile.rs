@@ -4,11 +4,15 @@ use crate::{agent_runtime, http_client, http_request, mcp, sse};
 
 #[cfg(target_os = "android")]
 mod android_countdown;
+#[cfg(target_os = "android")]
+mod android_photo;
 
 pub fn run() {
   let builder = tauri::Builder::default();
   #[cfg(target_os = "android")]
   let builder = builder.plugin(android_countdown::init());
+  #[cfg(target_os = "android")]
+  let builder = builder.plugin(android_photo::init());
 
   builder
     .plugin(tauri_plugin_os::init())
@@ -26,6 +30,8 @@ pub fn run() {
       crate::set_log_level,
       #[cfg(target_os = "android")]
       android_countdown::start_android_countdown,
+      #[cfg(target_os = "android")]
+      android_photo::acquire_android_photo,
       sse::start_sse,
       sse::stop_sse,
       http_client::get_http_client_info,

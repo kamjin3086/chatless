@@ -19,6 +19,10 @@ import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { AttachmentMenu } from './input/AttachmentMenu';
 import { useAndroidChatNavigation } from './androidChatNavigation';
+import { AndroidPhotoPreview } from './input/AndroidPhotoPreview';
+import { useAndroidPhotoDraft } from './input/useAndroidPhotoDraft';
+import { type AndroidPhotoSendCallbacks, type AndroidPhotoSendOptions, shouldClearPhotoDraft } from '@/lib/android/androidPhotoSend';
+import type { AndroidPhotoDraftHandoff } from '@/lib/android/androidPhotoDraftHandoff';
 import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
 import { useLocaleStore } from '@/store/localeStore';
@@ -80,8 +84,9 @@ interface ChatInputProps {
       id: string;
       name: string;
     },
-    options?: { images?: string[]; planOnly?: boolean }
+    options?: Partial<AndroidPhotoSendOptions> & AndroidPhotoSendCallbacks & { planOnly?: boolean }
   ) => void | Promise<void>;
+  androidPhotoHandoff?: AndroidPhotoDraftHandoff;
   onImageUpload?: (file: File) => void;
   onFileUpload?: (file: File) => void;
   isLoading?: boolean;
@@ -116,12 +121,13 @@ export function ChatInput({
   tokenCount = 0,
   editingMessage = null,
   onCancelEdit,
-  providerName: _providerName,
-  modelId: _modelId,
+  providerName,
+  modelId,
   modelLabel: _modelLabel,
   onSessionParametersChange: _onSessionParametersChange,
   conversationId,
   showStarterActions = false,
+  androidPhotoHandoff,
 }: ChatInputProps) {
   const android = Boolean(useAndroidChatNavigation());
   const [inputValue, setInputValue] = useState("");
@@ -274,6 +280,20 @@ export function ChatInput({
     setComposerSelection(null);
   }, [currentConvId]);
 
+  const clearAndroidPhotoText = useCallback((id: string) => {
+    setInputValue('');
+    historyRef.current = composerHistory('');
+    clearInputDraft(id);
+  }, [clearInputDraft]);
+  const androidPhoto = useAndroidPhotoDraft(
+    currentConvId, inputValue, android ? providerName : undefined, modelId,
+    android ? androidPhotoHandoff : undefined, setInputValue, clearAndroidPhotoText,
+  );
+  const photoConflictsWithDraft = Boolean(attachedDocument || editingMessage || isParsingDocument);
+  const photoSendBlocked = androidPhoto.acquiring || androidPhoto.sending || Boolean(
+    androidPhoto.snapshot && (!androidPhoto.recipient || effectiveLoading || photoConflictsWithDraft),
+  );
+
   // 组件卸载时：提交当前草稿
   useEffect(() => {
     return () => {
@@ -287,7 +307,15 @@ export function ChatInput({
   // 在“真正开始流”时再清空输入框，避免瞬间清空带来的不佳体验
   const streamStartCounter = useChatStore((s)=> s.streamStartCounter || 0);
   const lastStreamConvId = useChatStore((s)=> s.lastStreamConvId);
+  const ignoredPhotoStreamStart = useRef<number | null>(null);
   useEffect(()=>{
+    if (android) {
+      if (ignoredPhotoStreamStart.current === streamStartCounter) return;
+      if (!shouldClearPhotoDraft(androidPhoto.snapshot)) {
+        ignoredPhotoStreamStart.current = streamStartCounter;
+        return;
+      }
+    }
     const convId = conversationId || useChatStore.getState().currentConversationId;
     if (lastStreamConvId && convId && lastStreamConvId === convId) {
       setInputValue("");
@@ -326,7 +354,7 @@ export function ChatInput({
         }
       }
     }
-  }, [streamStartCounter, lastStreamConvId, conversationId, manualHeight, sessionManualHeight, clearInputDraft]);
+  }, [android, androidPhoto.snapshot, streamStartCounter, lastStreamConvId, conversationId, manualHeight, sessionManualHeight, clearInputDraft]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -549,7 +577,7 @@ export function ChatInput({
   }, []);
 
   const handleSend = async () => {
-    if (!inputValue.trim() && !attachedDocument) return;
+    if (photoSendBlocked || (!inputValue.trim() && !attachedDocument && !androidPhoto.snapshot)) return;
 
     // 发送前检查
     if (onBeforeSendMessage) {
@@ -606,6 +634,20 @@ export function ChatInput({
           }
         }
       } catch { /* noop */ }
+    }
+
+    if (androidPhoto.snapshot) {
+      await androidPhoto.submit(
+        androidPhoto.snapshot,
+        userMessage || t('androidPhoto.message'),
+        (content, options) => onSendMessage(
+          content,
+          undefined,
+          selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined,
+          { ...options, planOnly },
+        ),
+      );
+      return;
     }
 
     if (attachedImages.length > 0) {
@@ -816,7 +858,7 @@ export function ChatInput({
 
   useEffect(() => {
     const el = textareaRef.current;
-    if (!el) return;
+    if (android || !el) return;
     const onPaste = async (e: ClipboardEvent) => {
       try {
         if (!e.clipboardData) return;
@@ -853,7 +895,7 @@ export function ChatInput({
       el.removeEventListener('dragover', onDragOver as any);
       el.removeEventListener('drop', onDrop as any);
     };
-  }, [textareaRef.current]);
+  }, [android, textareaRef.current]);
 
   return (
     <div className={cn(
@@ -870,6 +912,17 @@ export function ChatInput({
 
       {/* 已移除输入框上方“长条附加项”（知识库/工作目录/文档），仅在下方彩色标签条展示 */}
 
+      {android && (
+        <AndroidPhotoPreview
+          photo={androidPhoto.snapshot?.photo}
+          providerName={providerName}
+          modelId={modelId}
+          status={androidPhoto.support}
+          feedback={androidPhoto.acquiring ? 'acquiring' : androidPhoto.snapshot && effectiveLoading ? 'busy' : androidPhoto.snapshot && photoConflictsWithDraft ? 'other_attachment' : androidPhoto.feedback}
+          disabled={androidPhoto.acquiring || androidPhoto.sending}
+          onRemove={androidPhoto.remove}
+        />
+      )}
       {attachedImages.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {attachedImages.map((img, idx) => (
@@ -891,6 +944,7 @@ export function ChatInput({
       <div
         className="relative flex w-full overflow-hidden rounded-2xl border border-slate-300/40 dark:border-slate-600/40 bg-white/30 dark:bg-slate-900/35 hover:border-slate-400/50 dark:hover:border-slate-500/50 focus-within:border-sky-400/45 dark:focus-within:border-sky-400/40 focus-within:ring-0 transition-colors duration-200 composer-box"
         onDragOver={(e) => {
+          if (android) return;
           const dt = (e as React.DragEvent).dataTransfer;
           if (!dt) return;
           const hasFile = Array.from(dt.items || []).some((it) => it.kind === "file");
@@ -900,6 +954,7 @@ export function ChatInput({
           }
         }}
         onDrop={async (e) => {
+          if (android) return;
           const dt = (e as React.DragEvent).dataTransfer;
           if (!dt) return;
           const files = Array.from(dt.files || []);
@@ -995,8 +1050,10 @@ export function ChatInput({
                   setInputValue(`${rendered}${after}`);
                   // 计数一次使用
                   try { usePromptStore.getState().touchUsage(id); } catch {}
-                  // 立即发送
-                  setTimeout(() => { handleSend(); }, 0);
+                  // A draft photo is sent only through the explicit Send button.
+                  if (!androidPhoto.snapshot && !androidPhoto.acquiring) {
+                    setTimeout(() => { handleSend(); }, 0);
+                  }
                 }
               }
               closeComposerPanel();
@@ -1162,7 +1219,9 @@ export function ChatInput({
             hasDocument={!!attachedDocument}
             selectedKnowledgeBase={selectedKnowledgeBase}
             onOpenComposerPanel={openComposerPanel}
-            onPickImage={() => imageInputRef.current?.click()}
+            onPickImage={android ? () => void androidPhoto.acquire('pick') : () => imageInputRef.current?.click()}
+            onCapturePhoto={android ? () => void androidPhoto.acquire('capture') : undefined}
+            photoActionsDisabled={androidPhoto.acquiring || androidPhoto.sending}
             onPickDocument={() => fileInputRef.current?.click()}
             onSelectKnowledgeBase={(kb) => {
               if (kb) {
@@ -1196,14 +1255,16 @@ export function ChatInput({
           {/* 输入框齿轮按钮已移除：会话参数入口迁移到右上角三点菜单 */}
 
           {/* 隐藏的文件输入 */}
-          <input
-            type="file"
-            ref={imageInputRef}
-            onChange={handleImageUpload}
-            className="hidden"
-            accept="image/*"
-            disabled={disabled}
-          />
+          {!android && (
+            <input
+              type="file"
+              ref={imageInputRef}
+              onChange={handleImageUpload}
+              className="hidden"
+              accept="image/*"
+              disabled={disabled}
+            />
+          )}
           <input
             type="file"
             ref={fileInputRef}
@@ -1233,7 +1294,7 @@ export function ChatInput({
                   </span>
                   {'处理中'}
                 </span>
-                {(inputValue.trim() || attachedDocument) && (
+                {!photoSendBlocked && (inputValue.trim() || attachedDocument) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1272,11 +1333,11 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={handleSend}
-                disabled={!inputValue.trim() && !attachedDocument}
+                disabled={photoSendBlocked || (!inputValue.trim() && !attachedDocument && !androidPhoto.snapshot)}
                 className={cn(
                   "composer-tool composer-send rounded-md border-0 shadow-none transition-colors",
                   android ? "size-10" : "size-8",
-                  (!inputValue.trim() && !attachedDocument)
+                  (photoSendBlocked || (!inputValue.trim() && !attachedDocument && !androidPhoto.snapshot))
                     ? "pointer-events-none bg-transparent text-slate-300 dark:text-slate-600"
                     : "bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-white"
                 )}

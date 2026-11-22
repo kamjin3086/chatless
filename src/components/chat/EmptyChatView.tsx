@@ -1,4 +1,5 @@
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import type { ComponentProps } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
 import { ProviderMetadata } from '@/lib/metadata/types';
@@ -10,7 +11,9 @@ interface EmptyChatViewProps {
   onModelChange: (modelId: string) => void;
   isLoading: boolean;
   llmInitialized: boolean;
-  onSendMessage: (content: string, documentData?: any, knowledgeBase?: any) => Promise<void>;
+  onSendMessage: ComponentProps<typeof ChatInput>['onSendMessage'];
+  providerName?: string;
+  androidPhotoHandoff?: ComponentProps<typeof ChatInput>['androidPhotoHandoff'];
   onStopGeneration: () => void;
   tokenCount?: number;
   selectedKnowledgeBaseId?: string;
@@ -25,6 +28,8 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
   isLoading,
   llmInitialized,
   onSendMessage,
+  providerName,
+  androidPhotoHandoff,
   onStopGeneration,
   selectedKnowledgeBaseId,
   onImageUpload,
@@ -58,6 +63,9 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
           <div hidden={!canSend}>
             <ChatInput
               onSendMessage={onSendMessage}
+              providerName={providerName}
+              modelId={selectedModelId || undefined}
+              androidPhotoHandoff={androidPhotoHandoff}
               onImageUpload={onImageUpload}
               onFileUpload={onFileUpload}
               isLoading={isLoading}

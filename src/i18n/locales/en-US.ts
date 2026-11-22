@@ -14,6 +14,32 @@ const enUS: TranslationDict = {
   'androidChat.availableModels': 'Available models',
   'androidChat.recentModels': 'Recently used',
   'androidChat.noModels': 'No matching models',
+  'androidPhoto.capture': 'Take a photo',
+  'androidPhoto.pick': 'Choose a photo',
+  'androidPhoto.preview': 'Selected photo preview',
+  'androidPhoto.remove': 'Remove photo',
+  'androidPhoto.recipient': 'Photo recipient',
+  'androidPhoto.checking': 'Checking whether this model accepts photos…',
+  'androidPhoto.supported':
+    'Accepts photos. The photo is shared with this provider only when you tap Send.',
+  'androidPhoto.unsupported':
+    'Photo sending is unavailable for this model or request strategy. Try a vision model on OpenAI-compatible Chat Completions (not strict OpenAI), Gemini, or Ollama, or remove the photo.',
+  'androidPhoto.busy':
+    'Wait for the current reply to finish or stop it before sending the photo.',
+  'androidPhoto.other_attachment':
+    'Remove the document or finish editing before sending the photo.',
+  'androidPhoto.acquiring': 'Opening photo…',
+  'androidPhoto.unavailable':
+    'Android could not open the camera or photo picker. Try the other option.',
+  'androidPhoto.unreadable':
+    'Could not prepare this photo. Try taking or choosing a different or smaller image.',
+  'androidPhoto.too_large':
+    'That photo is larger than 32 MB. Choose a smaller one.',
+  'androidPhoto.recipient_changed':
+    'The photo recipient or its image support changed. Reselect the model and try again.',
+  'androidPhoto.not_accepted':
+    'The photo is still in your draft. Retry, choose a smaller image, or try a photo-capable model with a larger context window.',
+  'androidPhoto.message': '[Photo]',
   'chatStarter.title': 'Start a conversation',
   'chatStarter.initializing': 'Getting models ready…',
   'chatStarter.noProvider': 'Add a provider to start chatting',

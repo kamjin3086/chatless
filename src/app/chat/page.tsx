@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { useAndroidChatNavigation } from '@/components/chat/androidChatNavigation';
+import { createAndroidPhotoDraftHandoff } from '@/lib/android/androidPhotoDraftHandoff';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
 import { ScrollToBottomButton } from '@/components/chat/ScrollToBottomButton';
@@ -39,6 +40,7 @@ interface Conversation {
 
 export default function ChatPage() {
   const android = Boolean(useAndroidChatNavigation());
+  const [photoHandoff] = useState(createAndroidPhotoDraftHandoff);
   const [isClient, setIsClient] = useState(false);
   const [isInputAreaHovered, setIsInputAreaHovered] = useState(false);
   const ensureMessagesLoaded = useChatStore(
@@ -354,6 +356,8 @@ export default function ChatPage() {
         onModelChange={handleModelChange}
         isLoading={isLoading}
         llmInitialized={llmInitialized}
+        providerName={currentProviderName}
+        androidPhotoHandoff={android ? photoHandoff : undefined}
         onSendMessage={handleSendMessage}
         onStopGeneration={handleStopGeneration}
         selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}
@@ -500,6 +504,7 @@ export default function ChatPage() {
                   // 会话参数相关
                   providerName={currentProviderName}
                   modelId={selectedModelId || undefined}
+                  androidPhotoHandoff={android ? photoHandoff : undefined}
                   modelLabel={
                     allMetadata
                       ?.find((p) =>
