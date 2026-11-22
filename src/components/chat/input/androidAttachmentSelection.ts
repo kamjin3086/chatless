@@ -51,7 +51,8 @@ const NO_DIRECTORY: AndroidDirectoryState = {
   revoked: false,
 };
 
-function photoBatchState(
+/** What the chips and the sheet read from a native batch reply. */
+export function photoBatchState(
   next: AndroidPhotoBatchSelection,
 ): AndroidPhotoBatchState {
   return {
@@ -61,7 +62,8 @@ function photoBatchState(
   };
 }
 
-function directoryState(
+/** What the chips and the sheet read from a native folder reply. */
+export function directoryState(
   next: AndroidDirectorySelection,
 ): AndroidDirectoryState {
   return {

@@ -12,6 +12,11 @@ import {
 } from '../AndroidAttachmentActions';
 import { AndroidAttachmentChips } from '../AndroidAttachmentChips';
 import type { AndroidAttachmentSelections } from '../androidAttachmentSelection';
+import {
+  directoryState,
+  photoBatchCountLabel,
+  photoBatchState,
+} from '../androidAttachmentSelection';
 
 beforeAll(() => vi.stubGlobal('React', React));
 
@@ -42,6 +47,53 @@ function render<P>(component: FunctionComponent<P>, props: P): string {
     createElement(component as FunctionComponent<object>, props as object),
   );
 }
+
+describe('native answers reaching the attachment surface', () => {
+  it('turns a ready batch into the count the chip and the sheet show', () => {
+    expect(photoBatchState({ status: 'ready', count: 3 })).toEqual({
+      count: 3,
+      working: false,
+      failed: false,
+    });
+    expect(photoBatchState({ status: 'unavailable' })).toEqual({
+      count: null,
+      working: false,
+      failed: true,
+    });
+  });
+
+  it('keeps a revoked folder forgettable', () => {
+    expect(directoryState({ status: 'revoked' })).toEqual({
+      folderName: null,
+      working: false,
+      failed: false,
+      revoked: true,
+    });
+    expect(
+      directoryState({
+        status: 'ready',
+        folder: { handle: 'h', name: 'Camera' },
+      }),
+    ).toEqual({
+      folderName: 'Camera',
+      working: false,
+      failed: false,
+      revoked: false,
+    });
+  });
+
+  it('reads a count as photos in both languages', () => {
+    expect(photoBatchCountLabel(3, (key) => translate('zh', key))).toBe(
+      '3 张照片',
+    );
+    expect(photoBatchCountLabel(1, (key) => translate('en', key))).toBe(
+      '1 photo',
+    );
+    expect(photoBatchCountLabel(3, (key) => translate('en', key))).toBe(
+      '3 photos',
+    );
+  });
+});
 
 describe('attachment sheet on Android', () => {
   it('offers the four pickers with distinct labels', () => {
