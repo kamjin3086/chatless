@@ -10,12 +10,17 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Plus, Camera, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X, Sparkles, AtSign,
+  Plus, Image, FileText, Database, Loader2, Check, ChevronLeft, Search, X, Sparkles, AtSign,
 } from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { cn } from "@/lib/utils";
 import { useLocaleStore } from '@/store/localeStore';
 import { composerTriggers, type ComposerTrigger } from './composerTriggers';
+import {
+  AndroidAttachmentActions,
+  AndroidAttachmentDisclosures,
+} from './AndroidAttachmentActions';
+import type { AndroidAttachmentSelections } from './androidAttachmentSelection';
 import {
   ActionPanel,
   ActionPanelTrigger,
@@ -38,6 +43,8 @@ interface AttachmentMenuProps {
   onPickImage: () => void;
   onCapturePhoto?: () => void;
   photoActionsDisabled?: boolean;
+  /** Android: the batch and folder pickers, with their disclosures, belong to this sheet. */
+  androidAttachments?: AndroidAttachmentSelections;
   onPickDocument?: () => void;
   documentLabel?: string;
   documentDescription?: string;
@@ -55,6 +62,7 @@ export function AttachmentMenu({
   onPickImage,
   onCapturePhoto,
   photoActionsDisabled,
+  androidAttachments,
   onPickDocument,
   documentLabel = "附加文档",
   documentDescription,
@@ -127,21 +135,23 @@ export function AttachmentMenu({
           />
         ))}
         <ActionPanelDivider />
-        {onCapturePhoto && (
+        {androidAttachments ? (
+          <AndroidAttachmentActions
+            selections={androidAttachments}
+            photoActionsDisabled={photoActionsDisabled}
+            onCapturePhoto={onCapturePhoto}
+            onPickPhoto={onPickImage}
+            onAction={handleAction}
+          />
+        ) : (
           <ActionPanelItem
-            icon={<Camera className="size-4 text-pink-500" />}
-            title={t('androidPhoto.capture')}
+            icon={<Image className="w-4 h-4 text-pink-500" />}
+            title={'上传图片'}
+            description={'JPG, PNG, GIF, WebP'}
             disabled={photoActionsDisabled}
-            onClick={() => handleAction(onCapturePhoto)}
+            onClick={() => handleAction(onPickImage)}
           />
         )}
-        <ActionPanelItem
-          icon={<Image className="w-4 h-4 text-pink-500" />}
-          title={onCapturePhoto ? t('androidPhoto.pick') : '上传图片'}
-          description={onCapturePhoto ? undefined : 'JPG, PNG, GIF, WebP'}
-          disabled={photoActionsDisabled}
-          onClick={() => handleAction(onPickImage)}
-        />
 
         {/* 文档 - 橙色系 */}
         {onPickDocument && (
@@ -166,6 +176,7 @@ export function AttachmentMenu({
           onClick={() => setView("knowledge-base")}
         />
       </ActionPanelList>
+      {androidAttachments && <AndroidAttachmentDisclosures />}
     </>
   );
 

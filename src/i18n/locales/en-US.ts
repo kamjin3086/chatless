@@ -40,22 +40,21 @@ const enUS: TranslationDict = {
   'androidPhoto.not_accepted':
     'The photo is still in your draft. Retry, choose a smaller image, or try a photo-capable model with a larger context window.',
   'androidPhoto.message': '[Photo]',
-  'androidPhotos.label': 'Android photos for this chat',
-  'androidPhotos.choose': 'Choose photos',
-  'androidPhotos.reselect': 'Reselect photos',
   'androidPhotos.forget': 'Forget photos',
-  'androidPhotos.selected': 'Photos selected',
   'androidPhotos.preparing': 'Preparing selected photos…',
   'androidPhotos.disclosure':
     'Choosing photos doesn’t upload them. Photo organization needs a tool-capable model and shares file names, sizes and grouping with its provider, never photo contents.',
   'androidPhotos.unavailable':
     'Could not access the selected photos. Choose them again.',
-  'androidDirectory.label': 'Android folder for this chat',
+  'androidPhotos.batchPick': 'Organize photos',
+  'androidPhotos.countUnitOne': 'photo',
+  'androidPhotos.countUnitMany': 'photos',
+  'androidAttachments.label': 'Attachments for this chat',
   'androidDirectory.choose': 'Choose folder',
-  'androidDirectory.reselect': 'Reselect folder',
   'androidDirectory.forget': 'Forget folder',
   'androidDirectory.disclosure':
     'Picking a folder doesn’t upload anything. Folder requests use a tool-capable model and share names and metadata with its provider, not file contents.',
+  'androidDirectory.chipPrefix': 'Folder: ',
   'androidDirectory.revoked':
     'Folder access was lost. Reselect it or forget it to continue.',
   'androidDirectory.unavailable':

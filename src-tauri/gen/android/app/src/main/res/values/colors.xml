@@ -7,4 +7,7 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- The app canvas behind and between the WebView and the system bars; values-night
+         overrides it with the dark surface so the chrome never turns purple. -->
+    <color name="app_surface">#FFF8F9FA</color>
 </resources>

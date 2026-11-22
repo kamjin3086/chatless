@@ -22,6 +22,8 @@ import { AndroidDocumentAttachmentStatus, useAndroidDocumentAttachment } from '.
 import { useAndroidChatNavigation } from './androidChatNavigation';
 import { AndroidPhotoPreview } from './input/AndroidPhotoPreview';
 import { useAndroidPhotoDraft } from './input/useAndroidPhotoDraft';
+import { AndroidAttachmentChips } from './input/AndroidAttachmentChips';
+import { useAndroidAttachmentSelections } from './input/androidAttachmentSelection';
 import { type AndroidPhotoSendCallbacks, type AndroidPhotoSendOptions, shouldClearPhotoDraft } from '@/lib/android/androidPhotoSend';
 import type { AndroidPhotoDraftHandoff } from '@/lib/android/androidPhotoDraftHandoff';
 import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
@@ -197,6 +199,11 @@ export function ChatInput({
     });
   }, [hasLoadedConversations, disabled, isParsingDocument]);
   const currentConvId = conversationId || storedConversationId;
+  // The photo batch and folder of this chat: the chips above the composer show them, the
+  // attachment sheet is the only place that picks or forgets them.
+  const androidAttachments = useAndroidAttachmentSelections(
+    android ? currentConvId ?? undefined : undefined,
+  );
   const workspaceDirectory = useConversationAttachmentStore((s) => {
     if (android) return undefined;
     if (!currentConvId) return undefined;
@@ -951,6 +958,14 @@ export function ChatInput({
 
       {/* 文档附加展示已移至下方彩色标签条 */}
 
+      {/* 本对话的附件选择状态：紧凑 chips，选择/更换/取消都在附件面板里 */}
+      {android && (
+        <AndroidAttachmentChips
+          photoBatch={androidAttachments.photoBatch}
+          directory={androidAttachments.directory}
+        />
+      )}
+
       <div
         className="relative flex w-full overflow-hidden rounded-2xl border border-slate-300/40 dark:border-slate-600/40 bg-white/30 dark:bg-slate-900/35 hover:border-slate-400/50 dark:hover:border-slate-500/50 focus-within:border-sky-400/45 dark:focus-within:border-sky-400/40 focus-within:ring-0 transition-colors duration-200 composer-box"
         onDragOver={(e) => {
@@ -1232,6 +1247,7 @@ export function ChatInput({
             onPickImage={android ? () => void androidPhoto.acquire('pick') : () => imageInputRef.current?.click()}
             onCapturePhoto={android ? () => void androidPhoto.acquire('capture') : undefined}
             photoActionsDisabled={androidPhoto.acquiring || androidPhoto.sending}
+            androidAttachments={android ? androidAttachments : undefined}
             onPickDocument={android ? androidDocument.pick : () => fileInputRef.current?.click()}
             documentLabel={android ? t('androidDocument.attach') : undefined}
             documentDescription={android ? t('androidDocument.formats') : undefined}

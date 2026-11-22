@@ -59,7 +59,7 @@ export function AndroidModelPicker({
         type="button"
         key={value}
         className={cn(
-          'flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm active:bg-muted',
+          'flex min-h-12 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm active:bg-muted',
           selected && 'bg-muted',
         )}
         aria-pressed={selected}
@@ -109,7 +109,7 @@ export function AndroidModelPicker({
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
-              className="h-11 w-full rounded-lg border border-input bg-background pr-2 pl-9 text-base"
+              className="h-12 w-full rounded-lg border border-input bg-background pr-2 pl-9 text-base"
               placeholder={t('androidChat.searchModels')}
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
@@ -118,7 +118,7 @@ export function AndroidModelPicker({
           <IconButton
             icon={Settings}
             title={t('chatStarter.manageModels')}
-            className="size-11"
+            className="size-12"
             onClick={() => {
               changeOpen(false);
               onSettings();

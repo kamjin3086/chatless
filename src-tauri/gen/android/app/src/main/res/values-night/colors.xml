@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark app surface (slate-900), the same colour the WebView body paints. -->
+    <color name="app_surface">#FF0F172A</color>
+</resources>
