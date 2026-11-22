@@ -1,5 +1,9 @@
+use crate::android_plugin;
 use serde::{Deserialize, Serialize};
-use tauri::{plugin, Manager, State, Wry};
+use tauri::{
+  plugin::{PluginHandle, TauriPlugin},
+  State, Wry,
+};
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -27,16 +31,10 @@ pub(super) enum PhotoReceipt {
   Busy,
 }
 
-pub(super) struct AndroidPhoto(plugin::PluginHandle<Wry>);
+pub(super) struct AndroidPhoto(PluginHandle<Wry>);
 
-pub(super) fn init() -> plugin::TauriPlugin<Wry> {
-  plugin::Builder::new("android_photo")
-    .setup(|app, api| {
-      let handle = api.register_android_plugin("com.kamjin.chatless", "AndroidPhotoPlugin")?;
-      app.manage(AndroidPhoto(handle));
-      Ok(())
-    })
-    .build()
+pub(super) fn init() -> TauriPlugin<Wry> {
+  android_plugin::init("android_photo", "AndroidPhotoPlugin", AndroidPhoto)
 }
 
 #[tauri::command]
@@ -44,9 +42,11 @@ pub(super) async fn acquire_android_photo(
   photo: State<'_, AndroidPhoto>,
   source: PhotoSource,
 ) -> Result<PhotoReceipt, String> {
-  photo
-    .0
-    .run_mobile_plugin_async("acquire", PhotoRequest { source })
-    .await
-    .map_err(|error| error.to_string())
+  android_plugin::call(
+    &photo.0,
+    "android_photo",
+    "acquire",
+    PhotoRequest { source },
+  )
+  .await
 }

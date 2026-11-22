@@ -1,11 +1,9 @@
+use crate::android_plugin::{self, ConversationRequest};
 use serde::{Deserialize, Serialize};
-use tauri::{plugin, Manager, State, Wry};
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BatchRequest {
-  conversation_id: String,
-}
+use tauri::{
+  plugin::{PluginHandle, TauriPlugin},
+  State, Wry,
+};
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,28 +38,25 @@ pub(super) enum PhotoBatchReceipt {
   Busy,
 }
 
-pub(super) struct AndroidPhotoBatch(plugin::PluginHandle<Wry>);
+pub(super) struct AndroidPhotoBatch(PluginHandle<Wry>);
 
-pub(super) fn init() -> plugin::TauriPlugin<Wry> {
-  plugin::Builder::new("android_photo_batch")
-    .setup(|app, api| {
-      let handle = api.register_android_plugin("com.kamjin.chatless", "AndroidPhotoBatchPlugin")?;
-      app.manage(AndroidPhotoBatch(handle));
-      Ok(())
-    })
-    .build()
+pub(super) fn init() -> TauriPlugin<Wry> {
+  android_plugin::init(
+    "android_photo_batch",
+    "AndroidPhotoBatchPlugin",
+    AndroidPhotoBatch,
+  )
 }
 
 impl AndroidPhotoBatch {
-  async fn run(&self, command: &'static str, conversation_id: String) -> PhotoBatchReceipt {
-    if conversation_id.is_empty() || conversation_id.len() > 128 {
-      return PhotoBatchReceipt::Unavailable;
-    }
-    self
-      .0
-      .run_mobile_plugin_async(command, BatchRequest { conversation_id })
-      .await
-      .unwrap_or(PhotoBatchReceipt::Unavailable)
+  async fn run(&self, command: &str, conversation_id: &str) -> Result<PhotoBatchReceipt, String> {
+    android_plugin::call(
+      &self.0,
+      "android_photo_batch",
+      command,
+      ConversationRequest::new(conversation_id)?,
+    )
+    .await
   }
 }
 
@@ -70,7 +65,7 @@ pub(super) async fn pick_android_photo_batch(
   photos: State<'_, AndroidPhotoBatch>,
   conversation_id: String,
 ) -> Result<PhotoBatchReceipt, String> {
-  Ok(photos.run("pick", conversation_id).await)
+  photos.run("pick", &conversation_id).await
 }
 
 #[tauri::command]
@@ -78,7 +73,7 @@ pub(super) async fn android_photo_batch_selection(
   photos: State<'_, AndroidPhotoBatch>,
   conversation_id: String,
 ) -> Result<PhotoBatchReceipt, String> {
-  Ok(photos.run("selection", conversation_id).await)
+  photos.run("selection", &conversation_id).await
 }
 
 #[tauri::command]
@@ -86,7 +81,7 @@ pub(super) async fn forget_android_photo_batch(
   photos: State<'_, AndroidPhotoBatch>,
   conversation_id: String,
 ) -> Result<PhotoBatchReceipt, String> {
-  Ok(photos.run("forget", conversation_id).await)
+  photos.run("forget", &conversation_id).await
 }
 
 #[tauri::command]
@@ -94,5 +89,5 @@ pub(super) async fn inventory_android_photo_batch(
   photos: State<'_, AndroidPhotoBatch>,
   conversation_id: String,
 ) -> Result<PhotoBatchReceipt, String> {
-  Ok(photos.run("inventory", conversation_id).await)
+  photos.run("inventory", &conversation_id).await
 }

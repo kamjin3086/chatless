@@ -1,11 +1,9 @@
+use crate::android_plugin::{self, ConversationRequest};
 use serde::{Deserialize, Serialize};
-use tauri::{plugin, Manager, State, Wry};
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DirectoryRequest {
-  conversation_id: String,
-}
+use tauri::{
+  plugin::{PluginHandle, TauriPlugin},
+  State, Wry,
+};
 
 #[derive(Deserialize, Serialize)]
 pub(super) struct DirectoryItem {
@@ -59,28 +57,25 @@ pub(super) enum DirectoryReceipt {
   Cancelled,
 }
 
-pub(super) struct AndroidDirectory(plugin::PluginHandle<Wry>);
+pub(super) struct AndroidDirectory(PluginHandle<Wry>);
 
-pub(super) fn init() -> plugin::TauriPlugin<Wry> {
-  plugin::Builder::new("android_directory")
-    .setup(|app, api| {
-      let handle = api.register_android_plugin("com.kamjin.chatless", "AndroidDirectoryPlugin")?;
-      app.manage(AndroidDirectory(handle));
-      Ok(())
-    })
-    .build()
+pub(super) fn init() -> TauriPlugin<Wry> {
+  android_plugin::init(
+    "android_directory",
+    "AndroidDirectoryPlugin",
+    AndroidDirectory,
+  )
 }
 
 impl AndroidDirectory {
-  async fn run(&self, command: &'static str, conversation_id: String) -> DirectoryReceipt {
-    if conversation_id.is_empty() || conversation_id.len() > 128 {
-      return DirectoryReceipt::Unavailable;
-    }
-    self
-      .0
-      .run_mobile_plugin_async(command, DirectoryRequest { conversation_id })
-      .await
-      .unwrap_or(DirectoryReceipt::Unavailable)
+  async fn run(&self, command: &str, conversation_id: &str) -> Result<DirectoryReceipt, String> {
+    android_plugin::call(
+      &self.0,
+      "android_directory",
+      command,
+      ConversationRequest::new(conversation_id)?,
+    )
+    .await
   }
 }
 
@@ -89,7 +84,7 @@ pub(super) async fn pick_android_directory(
   directory: State<'_, AndroidDirectory>,
   conversation_id: String,
 ) -> Result<DirectoryReceipt, String> {
-  Ok(directory.run("pick", conversation_id).await)
+  directory.run("pick", &conversation_id).await
 }
 
 #[tauri::command]
@@ -97,7 +92,7 @@ pub(super) async fn android_directory_selection(
   directory: State<'_, AndroidDirectory>,
   conversation_id: String,
 ) -> Result<DirectoryReceipt, String> {
-  Ok(directory.run("selection", conversation_id).await)
+  directory.run("selection", &conversation_id).await
 }
 
 #[tauri::command]
@@ -105,7 +100,7 @@ pub(super) async fn forget_android_directory(
   directory: State<'_, AndroidDirectory>,
   conversation_id: String,
 ) -> Result<DirectoryReceipt, String> {
-  Ok(directory.run("forget", conversation_id).await)
+  directory.run("forget", &conversation_id).await
 }
 
 #[tauri::command]
@@ -113,5 +108,5 @@ pub(super) async fn inventory_android_directory(
   directory: State<'_, AndroidDirectory>,
   conversation_id: String,
 ) -> Result<DirectoryReceipt, String> {
-  Ok(directory.run("inventory", conversation_id).await)
+  directory.run("inventory", &conversation_id).await
 }

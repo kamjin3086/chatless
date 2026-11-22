@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile-capability",
   "description": "Experimental mobile chat: app-private storage and provider networking only",
-  "platforms": ["android", "iOS"],
+  "platforms": ["android"],
   "windows": ["main"],
   "permissions": [
     "core:default", "sql:default", "sql:allow-execute", "core:path:default",
