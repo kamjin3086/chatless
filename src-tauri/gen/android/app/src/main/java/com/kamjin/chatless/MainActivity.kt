@@ -1,5 +1,7 @@
 package com.kamjin.chatless
 
+import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -8,6 +10,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : TauriActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -23,6 +26,32 @@ class MainActivity : TauriActivity() {
             WindowInsetsCompat.CONSUMED
         }
         ViewCompat.requestApplyInsets(content)
+        applySystemBarAppearance()
+    }
+
+    /**
+     * The bars stay transparent and the app draws behind them; the padded window
+     * background supplies their colour. A runtime day/night switch arrives through
+     * onConfigurationChanged instead of recreating the activity, so the icons and
+     * the background have to be re-applied or a light bar sits over a dark app.
+     */
+    private fun applySystemBarAppearance() {
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        window.isNavigationBarContrastEnforced = false
+        window.setBackgroundDrawableResource(R.color.app_surface)
+        val night = (resources.configuration.uiMode and
+            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !night
+            isAppearanceLightNavigationBars = !night
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applySystemBarAppearance()
+        ViewCompat.requestApplyInsets(findViewById(android.R.id.content))
     }
 
     override fun onWebViewCreate(webView: WebView) {

@@ -1406,13 +1406,16 @@ export function ChatInput({
             {t(workspaceDirectory ? 'chatStarter.workspaceFiles' : 'chatStarter.attach')}
             {workspaceDirectory && <kbd className="rounded border border-border px-1 text-[11px] leading-4">@</kbd>}
           </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
-            className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => openComposerPanel('#')}>
-            <Bookmark aria-hidden="true" className="size-3.5" />
-            {t('chatStarter.prompts')}
-            {!android && <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>}
-          </Button>
+          {/* Prompt templates insert a '#' trigger that only the desktop composer resolves. */}
+          {!android && (
+            <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
+              className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => openComposerPanel('#')}>
+              <Bookmark aria-hidden="true" className="size-3.5" />
+              {t('chatStarter.prompts')}
+              <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>
+            </Button>
+          )}
         </div>
       )}
     </div>
