@@ -12,7 +12,7 @@ import android.util.Base64
 import java.io.ByteArrayOutputStream
 import java.io.File
 
-private const val MAX_SOURCE_BYTES = 32L * 1024 * 1024
+internal const val MAX_SOURCE_BYTES = 32L * 1024 * 1024
 private const val MAX_EDGE = 2048
 // The shared context estimator currently budgets base64 as text rather than image tokens.
 private const val MAX_JPEG_BYTES = 120 * 1024

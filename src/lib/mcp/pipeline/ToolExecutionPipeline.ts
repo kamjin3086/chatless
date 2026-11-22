@@ -316,7 +316,7 @@ export class ToolExecutionPipeline {
     const androidRuntime = isAndroidTauri();
     const androidCountdownAvailable = androidRuntime && isAndroidCountdownTool(server, tool);
     if (!conversationApproved && decideServerCall({
-      server, tool, autoAuthorize: autoAuth, androidCountdownAvailable, androidDocumentRuntime: androidRuntime, androidDirectoryRuntime: androidRuntime,
+      server, tool, autoAuthorize: autoAuth, androidCountdownAvailable, androidDocumentRuntime: androidRuntime, androidDirectoryRuntime: androidRuntime, androidPhotosRuntime: androidRuntime,
     }) === 'ask') {
       const approval = await this.requestApproval({
         assistantMessageId, conversationId: invocation.conversationId,

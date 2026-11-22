@@ -3,6 +3,10 @@ import {
   ANDROID_DIRECTORY_TOOL,
 } from '@/lib/mcp/nativeTools/androidDirectory';
 import { ANDROID_DOCUMENT_SERVER } from '@/lib/mcp/nativeTools/androidDocument';
+import {
+  ANDROID_PHOTOS_SERVER,
+  ANDROID_PHOTOS_TOOL,
+} from '@/lib/mcp/nativeTools/androidPhotos';
 import { normalizeServerName } from '@/lib/mcp/toolNaming';
 
 /**
@@ -62,6 +66,7 @@ const FS_RISK: Record<string, ToolRisk> = {
  */
 const READ_TOOLS: Record<string, string[]> = {
   [ANDROID_DIRECTORY_SERVER]: [ANDROID_DIRECTORY_TOOL.name],
+  [ANDROID_PHOTOS_SERVER]: [ANDROID_PHOTOS_TOOL.name],
   [ANDROID_DOCUMENT_SERVER]: ['search', 'excerpt'],
   knowledge: ['list', 'search', 'read'],
   web_search: ['search', 'fetch'],

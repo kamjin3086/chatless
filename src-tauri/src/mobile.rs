@@ -14,6 +14,9 @@ mod android_document;
 #[cfg(target_os = "android")]
 mod android_photo;
 
+#[cfg(target_os = "android")]
+mod android_photo_batch;
+
 pub fn run() {
   let builder = tauri::Builder::default();
   #[cfg(target_os = "android")]
@@ -21,7 +24,8 @@ pub fn run() {
     .plugin(android_countdown::init())
     .plugin(android_document::init())
     .plugin(android_directory::init())
-    .plugin(android_photo::init());
+    .plugin(android_photo::init())
+    .plugin(android_photo_batch::init());
 
   builder
     .plugin(tauri_plugin_os::init())
@@ -51,6 +55,14 @@ pub fn run() {
       android_directory::inventory_android_directory,
       #[cfg(target_os = "android")]
       android_photo::acquire_android_photo,
+      #[cfg(target_os = "android")]
+      android_photo_batch::pick_android_photo_batch,
+      #[cfg(target_os = "android")]
+      android_photo_batch::android_photo_batch_selection,
+      #[cfg(target_os = "android")]
+      android_photo_batch::forget_android_photo_batch,
+      #[cfg(target_os = "android")]
+      android_photo_batch::inventory_android_photo_batch,
       sse::start_sse,
       sse::stop_sse,
       http_client::get_http_client_info,

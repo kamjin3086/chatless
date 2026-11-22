@@ -14,6 +14,7 @@ import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
 import { ANDROID_COUNTDOWN_SERVER, ANDROID_COUNTDOWN_TOOL } from './androidCountdown';
 import { ANDROID_DIRECTORY_SERVER, ANDROID_DIRECTORY_TOOL } from './androidDirectory';
 import { ANDROID_DOCUMENT_SERVER, ANDROID_DOCUMENT_TOOLS } from './androidDocument';
+import { ANDROID_PHOTOS_SERVER, ANDROID_PHOTOS_TOOL } from './androidPhotos';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from './filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecutor';
 import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
@@ -115,7 +116,11 @@ export const TOOLS_REGISTRY_TOOLS: McpTool[] = [
  */
 export function getToolsForGroup(
   groupId: ToolGroupId,
-  availability: { androidDocumentAvailable?: boolean; androidDirectoryAvailable?: boolean } = {},
+  availability: {
+    androidDocumentAvailable?: boolean;
+    androidDirectoryAvailable?: boolean;
+    androidPhotosAvailable?: boolean;
+  } = {},
 ): Array<{ server: string; tool: McpTool }> {
   const tools = TOOL_GROUPS.find(g => g.id === groupId)?.tools || [];
   return groupId === 'core' && isAndroidTauri()
@@ -124,6 +129,7 @@ export function getToolsForGroup(
         { server: ANDROID_COUNTDOWN_SERVER, tool: ANDROID_COUNTDOWN_TOOL },
         ...(availability.androidDocumentAvailable ? ANDROID_DOCUMENT_TOOLS.map((tool) => ({ server: ANDROID_DOCUMENT_SERVER, tool })) : []),
         ...(availability.androidDirectoryAvailable ? [{ server: ANDROID_DIRECTORY_SERVER, tool: ANDROID_DIRECTORY_TOOL }] : []),
+        ...(availability.androidPhotosAvailable ? [{ server: ANDROID_PHOTOS_SERVER, tool: ANDROID_PHOTOS_TOOL }] : []),
       ]
     : tools;
 }

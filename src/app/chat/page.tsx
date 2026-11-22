@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AndroidDirectorySelection } from '@/components/chat/AndroidDirectorySelection';
+import { AndroidPhotoBatchSelection } from '@/components/chat/AndroidPhotoBatchSelection';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { useAndroidChatNavigation } from '@/components/chat/androidChatNavigation';
 import { createAndroidPhotoDraftHandoff } from '@/lib/android/androidPhotoDraftHandoff';
@@ -488,6 +489,12 @@ export default function ChatPage() {
                     currentProviderName,
                     onModelChange: handleModelChange,
                   }}
+                />
+              )}
+              {android && isAndroidTauri() && currentConversationId && (
+                <AndroidPhotoBatchSelection
+                  key={currentConversationId}
+                  conversationId={currentConversationId}
                 />
               )}
               {android && isAndroidTauri() && (

@@ -11,6 +11,7 @@ import { ToolResultAdapter } from './ToolResultAdapter';
 import { AndroidCountdownAdapter } from './AndroidCountdownAdapter';
 import { AndroidDirectoryAdapter } from './AndroidDirectoryAdapter';
 import { AndroidDocumentAdapter } from './AndroidDocumentAdapter';
+import { AndroidPhotosAdapter } from './AndroidPhotosAdapter';
 
 /**
  * 默认 adapters
@@ -34,6 +35,7 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new AndroidCountdownAdapter(),
     new AndroidDocumentAdapter(),
     new AndroidDirectoryAdapter(),
+    new AndroidPhotosAdapter(),
     new McpAdapter(),
   ];
 }

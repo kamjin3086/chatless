@@ -1,5 +1,6 @@
 import { isAndroidDirectoryTool } from '@/lib/mcp/nativeTools/androidDirectory';
 import { isAndroidDocumentTool } from '@/lib/mcp/nativeTools/androidDocument';
+import { isAndroidPhotosTool } from '@/lib/mcp/nativeTools/androidPhotos';
 import type { ApprovalDecision } from '@/store/authorizationStore';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { dirnameOf } from './resolveCall';
@@ -114,7 +115,9 @@ export function decideServerCall(params: {
   androidCountdownAvailable?: boolean;
   androidDocumentRuntime?: boolean;
   androidDirectoryRuntime?: boolean;
+  androidPhotosRuntime?: boolean;
 }): 'allow' | 'ask' {
+  if (params.androidPhotosRuntime && isAndroidPhotosTool(params.server, params.tool)) return 'allow';
   if (params.androidDirectoryRuntime && isAndroidDirectoryTool(params.server, params.tool)) return 'allow';
   if (params.androidDocumentRuntime && isAndroidDocumentTool(params.server, params.tool)) return 'allow';
   if (params.androidCountdownAvailable && isAndroidCountdownTool(params.server, params.tool)) return 'allow';

@@ -37,6 +37,15 @@ const zhCN: TranslationDict = {
   'androidPhoto.not_accepted':
     '照片仍在草稿中。请重试、选择更小的图片，或切换到上下文窗口更大的图像模型。',
   'androidPhoto.message': '[照片]',
+  'androidPhotos.label': '此对话使用的 Android 照片',
+  'androidPhotos.choose': '选择照片',
+  'androidPhotos.reselect': '重新选择照片',
+  'androidPhotos.forget': '取消照片选择',
+  'androidPhotos.selected': '已选照片',
+  'androidPhotos.preparing': '正在读取所选照片…',
+  'androidPhotos.disclosure':
+    '选择照片不会上传任何内容。整理照片需使用支持工具的模型，只会向其服务商发送文件名、大小和分组结果，不会发送照片内容。',
+  'androidPhotos.unavailable': '无法访问所选照片，请重新选择。',
   'androidDirectory.label': '此对话使用的 Android 文件夹',
   'androidDirectory.choose': '选择文件夹',
   'androidDirectory.reselect': '重新选择文件夹',
