@@ -23,9 +23,15 @@ Agent。
 **表达方式**：正确说法是“轻量、本地优先、兼容多种模型的通用 Agent，也能处理代码相关
 任务”；错误说法是“Chatless 要替代 Cursor、Claude Code 或 Codex”。
 
-**当前明确不做**：移动端、便携版；自研代码编辑器、补全、LSP、IDE 深度集成；默认依赖
+**当前明确不做**：便携版；自研代码编辑器、补全、LSP、IDE 深度集成；默认依赖
 Docker、Qdrant、常驻 sidecar；强制云后端或云账号；企业级多 Agent 编排 / swarm / A2A
 作为核心能力。
+
+**移动端（已批准的实验）**：Android 是正式批准的实验方向，不是正式发布承诺。范围、取舍
+和验收见 [#212](https://github.com/kamjin3086/chatless/issues/212)；本决定取代
+`docs/issue-triage-2026-09-30.md` 中「无 Android/iOS 承诺」的记录，也取代 #72 当时
+「暂时没有移动端计划」的表述。iOS 仍不在范围内。移动端默认权限边界单独记在
+`docs/default-permissions.md`。
 
 ## 功能准入
 

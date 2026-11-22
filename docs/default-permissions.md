@@ -46,3 +46,30 @@
 ## 退出清理
 
 - 前端 `cleanup_on_exit` → Rust `release_onnx_session`，释放 ONNX session。
+
+## Android（实验构建）
+
+配置见 [`src-tauri/capabilities/mobile.json`](../src-tauri/capabilities/mobile.json)，
+只对 `android` 平台生效；桌面那一份是 `main.json`。两份不互相继承，Android 不读取
+`main.json` 的任何权限。
+
+| 范围 | Android 实际授予 |
+|------|------------------|
+| 应用私有目录 `$APPDATA` / `$APPLOG` | 读写；会话数据库、设置、文档附件、照片缓存都在这里 |
+| 设备存储、相册、下载目录 | **不授予**；只使用系统选择器或拍照后拿到的单个文件／目录授权 |
+| SQLite（`sql`） | 与应用私有库同范围 |
+| HTTP | `https://*` 与 `http://localhost` / `127.0.0.1`；与桌面不同，不开放明文任意主机 |
+| Opener / Dialog / Log / OS / Store | 插件默认能力；不包含任意路径打开 |
+| 系统时钟 | 仅发送计时器请求的专有权限；无 `SET_ALARM` |
+
+实现要点：
+
+- 没有通用 Shell、stdio MCP、工作区命令或 ONNX 嵌入：这些模块在 Android 构建下不编译，
+  不是“编译进去了但隐藏”。
+- 选目录、选照片、拍照都走 Android 系统界面；应用只拿到用户这一手选中的东西，不给
+  Agent 整盘或整相册的遍历权。拿到的是 `content://` 而非路径，不推测真实路径。
+- Agent 的四个 Android 工具（文档、目录、照片分组、计时器）都从同一张能力表注册；除计时
+  器交接外均为只读，且只在当前会话有对应选择时才出现在模型视野里。
+- 目录与照片句柄按会话发放，不携带 URI、路径或内容摘要，换会话不继承。
+- Android 构建不上传附件：照片只在用户点发送后交给所选模型；文档在本机解析，只把命中
+  的摘录交给模型。
