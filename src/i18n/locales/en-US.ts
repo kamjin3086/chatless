@@ -50,6 +50,7 @@ const enUS: TranslationDict = {
   'androidPhotos.countUnitOne': 'photo',
   'androidPhotos.countUnitMany': 'photos',
   'androidAttachments.label': 'Attachments for this chat',
+  'androidAttachmentSheet.title': 'Attachments',
   'androidDirectory.choose': 'Choose folder',
   'androidDirectory.forget': 'Forget folder',
   'androidDirectory.disclosure':

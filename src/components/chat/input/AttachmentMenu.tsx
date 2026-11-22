@@ -16,10 +16,7 @@ import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { cn } from "@/lib/utils";
 import { useLocaleStore } from '@/store/localeStore';
 import { composerTriggers, type ComposerTrigger } from './composerTriggers';
-import {
-  AndroidAttachmentActions,
-  AndroidAttachmentDisclosures,
-} from './AndroidAttachmentActions';
+import { AndroidAttachmentSheet, AndroidAttachmentSheetContent } from './AndroidAttachmentSheet';
 import type { AndroidAttachmentSelections } from './androidAttachmentSelection';
 import {
   ActionPanel,
@@ -135,23 +132,13 @@ export function AttachmentMenu({
           />
         ))}
         <ActionPanelDivider />
-        {androidAttachments ? (
-          <AndroidAttachmentActions
-            selections={androidAttachments}
-            photoActionsDisabled={photoActionsDisabled}
-            onCapturePhoto={onCapturePhoto}
-            onPickPhoto={onPickImage}
-            onAction={handleAction}
-          />
-        ) : (
-          <ActionPanelItem
-            icon={<Image className="w-4 h-4 text-pink-500" />}
-            title={'上传图片'}
-            description={'JPG, PNG, GIF, WebP'}
-            disabled={photoActionsDisabled}
-            onClick={() => handleAction(onPickImage)}
-          />
-        )}
+        <ActionPanelItem
+          icon={<Image className="w-4 h-4 text-pink-500" />}
+          title={'上传图片'}
+          description={'JPG, PNG, GIF, WebP'}
+          disabled={photoActionsDisabled}
+          onClick={() => handleAction(onPickImage)}
+        />
 
         {/* 文档 - 橙色系 */}
         {onPickDocument && (
@@ -176,7 +163,6 @@ export function AttachmentMenu({
           onClick={() => setView("knowledge-base")}
         />
       </ActionPanelList>
-      {androidAttachments && <AndroidAttachmentDisclosures />}
     </>
   );
 
@@ -261,28 +247,61 @@ export function AttachmentMenu({
     </>
   );
 
+  const trigger = (
+    <Button
+      variant="ghost"
+      size="icon"
+      disabled={disabled}
+      className={cn(
+        "composer-tool h-8 w-8 shrink-0 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+        hasAnyAttachment
+          ? "glass-chip-ok"
+          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+      )}
+      title="附加内容"
+    >
+      {isParsingDocument ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (
+        <Plus className="w-4 h-4" />
+      )}
+    </Button>
+  );
+
+  // Android gets a bottom sheet of the pickers this build can actually run; the desktop
+  // popover below keeps its entries, chevron view and behaviour untouched.
+  if (androidAttachments) {
+    return (
+      <AndroidAttachmentSheet
+        open={open}
+        onOpenChange={setOpen}
+        trigger={trigger}
+        title={t('androidAttachmentSheet.title')}
+      >
+        <AndroidAttachmentSheetContent
+          selections={androidAttachments}
+          document={
+            onPickDocument
+              ? {
+                  label: documentLabel,
+                  description: documentDescription,
+                  attached: hasDocument,
+                  onPick: onPickDocument,
+                }
+              : undefined
+          }
+          photoActionsDisabled={photoActionsDisabled}
+          onCapturePhoto={onCapturePhoto}
+          onPickPhoto={onPickImage}
+          onAction={handleAction}
+        />
+      </AndroidAttachmentSheet>
+    );
+  }
+
   return (
     <ActionPanel open={open} onOpenChange={setOpen}>
-      <ActionPanelTrigger>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          className={cn(
-            "composer-tool h-8 w-8 shrink-0 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
-            hasAnyAttachment
-              ? "glass-chip-ok"
-              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-          )}
-          title="附加内容"
-        >
-          {isParsingDocument ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Plus className="w-4 h-4" />
-          )}
-        </Button>
-      </ActionPanelTrigger>
+      <ActionPanelTrigger>{trigger}</ActionPanelTrigger>
 
       <ActionPanelContent
         width="md"

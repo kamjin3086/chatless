@@ -10,6 +10,10 @@ import {
   AndroidAttachmentActions,
   AndroidAttachmentDisclosures,
 } from '../AndroidAttachmentActions';
+import {
+  AndroidAttachmentSheetContent,
+  AndroidAttachmentSheetSurface,
+} from '../AndroidAttachmentSheet';
 import { AndroidAttachmentChips } from '../AndroidAttachmentChips';
 import type { AndroidAttachmentSelections } from '../androidAttachmentSelection';
 import {
@@ -181,6 +185,96 @@ describe('attachment sheet on Android', () => {
     const disclosures = render(AndroidAttachmentDisclosures, {});
     expect(disclosures).toContain(zh('androidPhotos.disclosure'));
     expect(disclosures).toContain(zh('androidDirectory.disclosure'));
+  });
+});
+
+describe('the Android attachment sheet as one surface', () => {
+  const documentRow = {
+    label: '附加文档',
+    description: '含文字的 PDF 或纯文本（UTF-8）',
+    attached: false,
+    onPick: noop,
+  };
+
+  function renderSheet(overrides: Partial<AndroidAttachmentSelections> = {}) {
+    return render(AndroidAttachmentSheetSurface, {
+      heading: '附加内容',
+      children: createElement(AndroidAttachmentSheetContent, {
+        selections: selections(overrides),
+        document: documentRow,
+        onCapturePhoto: noop,
+        onPickPhoto: noop,
+        onAction: (action: () => void) => action(),
+      }),
+    });
+  }
+
+  /** Everything the pane shows after its fixed header. Nothing may follow it. */
+  function scrollArea(html: string): string {
+    const at = html.indexOf('data-slot="android-attachment-sheet-scroll"');
+    expect(at).toBeGreaterThan(-1);
+    return html.slice(at);
+  }
+
+  it('is a bottom-anchored pane of at most 85dvh with rounded top corners', () => {
+    const html = renderSheet();
+    expect(html).toContain('data-slot="android-attachment-sheet"');
+    expect(html).toContain('max-h-[85dvh]');
+    expect(html).toContain('rounded-t-2xl');
+  });
+
+  it('scrolls its own content and ends with the disclosures inside that scroll area', () => {
+    const html = renderSheet();
+    const scroll = scrollArea(html);
+    expect(scroll).toContain('overflow-y-auto');
+    for (const label of [
+      zh('androidPhoto.capture'),
+      zh('androidPhoto.pick'),
+      zh('androidPhotos.batchPick'),
+      zh('androidDirectory.choose'),
+      documentRow.label,
+    ]) {
+      expect(scroll).toContain(label);
+    }
+    // Both sentences live at the end of the sheet's content, not over the composer.
+    expect(scroll).toContain(zh('androidPhotos.disclosure'));
+    expect(scroll).toContain(zh('androidDirectory.disclosure'));
+    expect(scroll.indexOf(zh('androidDirectory.disclosure'))).toBeGreaterThan(
+      scroll.indexOf(zh('androidDirectory.choose')),
+    );
+  });
+
+  it('offers no entry this build cannot run on Android', () => {
+    const html = renderSheet();
+    expect(html).not.toContain(zh('chatComposer.skills'));
+    expect(html).not.toContain(zh('chatComposer.prompts'));
+    expect(html).not.toContain(zh('chatComposer.mentions'));
+    expect(html).not.toContain('知识库');
+  });
+
+  it('gives every row 48dp and a divider between rows', () => {
+    const html = renderSheet();
+    const rows = html.match(/<button/gu) ?? [];
+    expect(rows).toHaveLength(5);
+    expect(html.match(/min-h-12/gu) ?? []).toHaveLength(rows.length);
+    expect(scrollArea(html)).toContain('divide-y');
+  });
+
+  it('adds separated forget rows once a batch and a folder are picked', () => {
+    const html = renderSheet({
+      photoBatch: { count: 3, working: false, failed: false },
+      directory: {
+        folderName: 'Camera',
+        working: false,
+        failed: false,
+        revoked: false,
+      },
+    });
+    const rows = html.match(/<button/gu) ?? [];
+    expect(rows).toHaveLength(7);
+    expect(html.match(/min-h-12/gu) ?? []).toHaveLength(rows.length);
+    expect(scrollArea(html)).toContain(zh('androidPhotos.forget'));
+    expect(scrollArea(html)).toContain(zh('androidDirectory.forget'));
   });
 });
 
