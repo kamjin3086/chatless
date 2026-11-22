@@ -40,6 +40,31 @@ const enUS: TranslationDict = {
   'androidPhoto.not_accepted':
     'The photo is still in your draft. Retry, choose a smaller image, or try a photo-capable model with a larger context window.',
   'androidPhoto.message': '[Photo]',
+  'androidDirectory.label': 'Android folder for this chat',
+  'androidDirectory.choose': 'Choose folder',
+  'androidDirectory.reselect': 'Reselect folder',
+  'androidDirectory.forget': 'Forget folder',
+  'androidDirectory.disclosure':
+    'Picking a folder doesn’t upload anything. Folder requests use a tool-capable model and share names and metadata with its provider, not file contents.',
+  'androidDirectory.revoked':
+    'Folder access was lost. Reselect it or forget it to continue.',
+  'androidDirectory.unavailable':
+    'Could not access or update the folder selection. Try again.',
+  'androidDocument.attach': 'Attach document',
+  'androidDocument.formats': 'Text PDF or plain text (UTF-8)',
+  'androidDocument.remove': 'Remove document',
+  'androidDocument.working': 'Preparing document…',
+  'androidDocument.disclosure':
+    'Chatless does not upload the file when you pick it. Document questions require a tool-capable model; relevant excerpts go to the selected provider.',
+  'androidDocument.empty': 'This text file is empty. Choose another file.',
+  'androidDocument.inaccessible':
+    'Could not access the document. Try choosing it again.',
+  'androidDocument.oversized':
+    'This document is too large. Limits: 8 MB per file, 200 PDF pages, and 1 MB of extracted text.',
+  'androidDocument.scanned':
+    'This PDF has no extractable text. Scanned pages need OCR, which is not supported here.',
+  'androidDocument.unsupported':
+    'Choose a readable text PDF or UTF-8 plain text file.',
   'chatStarter.title': 'Start a conversation',
   'chatStarter.initializing': 'Getting models ready…',
   'chatStarter.noProvider': 'Add a provider to start chatting',

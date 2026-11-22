@@ -1,3 +1,5 @@
+import { isAndroidDirectoryTool } from '@/lib/mcp/nativeTools/androidDirectory';
+import { isAndroidDocumentTool } from '@/lib/mcp/nativeTools/androidDocument';
 import type { ApprovalDecision } from '@/store/authorizationStore';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { dirnameOf } from './resolveCall';
@@ -110,7 +112,11 @@ export function decideServerCall(params: {
   tool: string;
   autoAuthorize: boolean;
   androidCountdownAvailable?: boolean;
+  androidDocumentRuntime?: boolean;
+  androidDirectoryRuntime?: boolean;
 }): 'allow' | 'ask' {
+  if (params.androidDirectoryRuntime && isAndroidDirectoryTool(params.server, params.tool)) return 'allow';
+  if (params.androidDocumentRuntime && isAndroidDocumentTool(params.server, params.tool)) return 'allow';
   if (params.androidCountdownAvailable && isAndroidCountdownTool(params.server, params.tool)) return 'allow';
 
   // 先归一：main 上的原实现就是拿 normalizeServerName 做比对的，

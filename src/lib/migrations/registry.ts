@@ -19,6 +19,7 @@ import { migration_017 } from './scripts/017_agent_approvals';
 import { migration_018 } from './scripts/018_agent_run_lineage';
 import { migration_019 } from './scripts/019_semantic_model_identity';
 import { migration_020 } from './scripts/020_delivered_evidence';
+import { migration_021 } from './scripts/021_android_document_attachments';
 // 合并到 v2 后，这里不再注册 v3/v4
 /**
  * 迁移注册器
@@ -58,6 +59,7 @@ export class MigrationRegistry {
     this.register(migration_018);
     this.register(migration_019);
     this.register(migration_020);
+    this.register(migration_021);
     // v3+v4 已合并到 v2，无需注册
   }
 

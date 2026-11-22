@@ -9,6 +9,8 @@ import { KnowledgeAdapter } from './KnowledgeAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 import { ToolResultAdapter } from './ToolResultAdapter';
 import { AndroidCountdownAdapter } from './AndroidCountdownAdapter';
+import { AndroidDirectoryAdapter } from './AndroidDirectoryAdapter';
+import { AndroidDocumentAdapter } from './AndroidDocumentAdapter';
 
 /**
  * 默认 adapters
@@ -30,6 +32,8 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new KnowledgeAdapter(),
     new SystemToolAdapter(),
     new AndroidCountdownAdapter(),
+    new AndroidDocumentAdapter(),
+    new AndroidDirectoryAdapter(),
     new McpAdapter(),
   ];
 }

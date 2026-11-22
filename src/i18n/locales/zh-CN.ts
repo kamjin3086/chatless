@@ -37,6 +37,28 @@ const zhCN: TranslationDict = {
   'androidPhoto.not_accepted':
     '照片仍在草稿中。请重试、选择更小的图片，或切换到上下文窗口更大的图像模型。',
   'androidPhoto.message': '[照片]',
+  'androidDirectory.label': '此对话使用的 Android 文件夹',
+  'androidDirectory.choose': '选择文件夹',
+  'androidDirectory.reselect': '重新选择文件夹',
+  'androidDirectory.forget': '取消文件夹授权',
+  'androidDirectory.disclosure':
+    '选择文件夹不会上传任何内容。处理文件夹需使用支持工具的模型，只会向其服务商发送名称和元数据，不会发送文件内容。',
+  'androidDirectory.revoked':
+    '已无法访问此文件夹。请重新选择文件夹，或取消授权。',
+  'androidDirectory.unavailable': '无法访问或更新文件夹选择，请重试。',
+  'androidDocument.attach': '附加文档',
+  'androidDocument.formats': '含文字的 PDF 或纯文本（UTF-8）',
+  'androidDocument.remove': '移除文档',
+  'androidDocument.working': '正在处理文档…',
+  'androidDocument.disclosure':
+    '选择文档不会上传文件。文档问答需要支持工具调用的模型，相关摘录会发送给所选服务商。',
+  'androidDocument.empty': '此文本文件为空，请选择其他文件。',
+  'androidDocument.inaccessible': '无法访问文档，请重新选择。',
+  'androidDocument.oversized':
+    '文档过大：单个文件不超过 8 MB，PDF 不超过 200 页，提取文本不超过 1 MB。',
+  'androidDocument.scanned':
+    '此 PDF 没有可提取的文本。扫描件需要 OCR，此处暂不支持。',
+  'androidDocument.unsupported': '请选择可读取的文本 PDF 或 UTF-8 纯文本文件。',
   'chatStarter.title': '开始会话',
   'chatStarter.initializing': '正在准备模型…',
   'chatStarter.noProvider': '先添加一个模型服务',

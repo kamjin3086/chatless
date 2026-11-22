@@ -4,15 +4,24 @@ use crate::{agent_runtime, http_client, http_request, mcp, sse};
 
 #[cfg(target_os = "android")]
 mod android_countdown;
+
+#[cfg(target_os = "android")]
+mod android_directory;
+
+#[cfg(target_os = "android")]
+mod android_document;
+
 #[cfg(target_os = "android")]
 mod android_photo;
 
 pub fn run() {
   let builder = tauri::Builder::default();
   #[cfg(target_os = "android")]
-  let builder = builder.plugin(android_countdown::init());
-  #[cfg(target_os = "android")]
-  let builder = builder.plugin(android_photo::init());
+  let builder = builder
+    .plugin(android_countdown::init())
+    .plugin(android_document::init())
+    .plugin(android_directory::init())
+    .plugin(android_photo::init());
 
   builder
     .plugin(tauri_plugin_os::init())
@@ -30,6 +39,16 @@ pub fn run() {
       crate::set_log_level,
       #[cfg(target_os = "android")]
       android_countdown::start_android_countdown,
+      #[cfg(target_os = "android")]
+      android_document::pick_android_document,
+      #[cfg(target_os = "android")]
+      android_directory::pick_android_directory,
+      #[cfg(target_os = "android")]
+      android_directory::android_directory_selection,
+      #[cfg(target_os = "android")]
+      android_directory::forget_android_directory,
+      #[cfg(target_os = "android")]
+      android_directory::inventory_android_directory,
       #[cfg(target_os = "android")]
       android_photo::acquire_android_photo,
       sse::start_sse,
