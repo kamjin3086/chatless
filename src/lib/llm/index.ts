@@ -220,12 +220,13 @@ export async function streamChat(
   model: string,
   messages: import('./types').Message[],
   callbacks: import('./types').StreamCallbacks,
-  options: Record<string, any> = {}
+  options: Record<string, any> = {},
+  androidPhotoRecipient?: import('@/lib/android/androidPhotoSend').AndroidPhotoRecipient,
 ) {
   await initializeLLM();
   const inst = getInterpreter();
   if (!inst) throw new Error('LLMInterpreter not initialized');
-  if (options.__schedulerLease) return inst.streamChat(provider, model, messages as any, callbacks as any, options);
+  if (options.__schedulerLease) return inst.streamChat(provider, model, messages as any, callbacks as any, options, androidPhotoRecipient);
   return modelRequestScheduler.schedule(endpointFor(provider), {
     signal: options.__signal, priority: options.__priority || 'normal',
   }, async () => {
@@ -235,7 +236,7 @@ export async function streamChat(
       onComplete: () => { try { callbacks.onComplete?.(); } finally { resolveTerminal(); } },
       onError: (error: Error) => { try { callbacks.onError?.(error); } finally { resolveTerminal(); } },
     };
-    await inst.streamChat(provider, model, messages as any, wrapped as any, { ...options, __schedulerLease: true });
+    await inst.streamChat(provider, model, messages as any, wrapped as any, { ...options, __schedulerLease: true }, androidPhotoRecipient);
     await terminal;
   });
 }

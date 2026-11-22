@@ -23,6 +23,27 @@ The chain, in order, for a single turn:
 A card state is a value in `segments.ts`'s `ToolCallStatus`; wording lives beside the card, not
 in the stream layer.
 
+### Android tools
+
+Four native tools exist only on Android, and the platform gate is the seam that matters:
+
+| Piece | Where |
+|---|---|
+| The capability table and the per-chat resolver | `src/lib/android/androidCapabilities.ts` - `ANDROID_CAPABILITIES`, `androidCapabilities(conversationId)`, `androidPlatformCapabilities()`, `androidTools`, `androidAllowsCall` |
+| What is advertised | `src/lib/mcp/nativeTools/toolRegistry.ts` (`getToolsForGroup`) reads the resolved object; `src/lib/mcp/injection/promptBuilder.ts` and `src/lib/mcp/pipeline/adapters/ToolsRegistryAdapter.ts` are the only callers |
+| What is allowed without approval | `src/lib/mcp/pipeline/policy/policy.ts` (`decideServerCall`) reads the same entries through `androidAllowsCall`; `ToolExecutionPipeline.serverGate` passes `androidPlatformCapabilities()` |
+| The tools themselves | adapters `AndroidCountdownAdapter`, `AndroidDocumentAdapter`, `AndroidDirectoryAdapter`, `AndroidPhotosAdapter` in `src/lib/mcp/pipeline/adapters/`, each `canHandle` gated on `isAndroidTauri()` (`src/lib/utils/runtimePlatform.ts`) plus its own name rule |
+
+The gate has two levels on purpose. Advertising is per chat: a document attachment, a folder
+selection or a photo batch is what turns its tool on, and `androidCapabilities` is the one place
+that asks. The approval decision is per platform: a call outside the current chat's scope is
+refused by the adapter's executor with a named error (`DOCUMENT_UNAVAILABLE`,
+`DIRECTORY_NOT_SELECTED`, `PHOTOS_NOT_SELECTED`, `PHOTOS_UNAVAILABLE`) instead of raising an
+approval card the user cannot act on. Adding a capability means adding one entry to
+`ANDROID_CAPABILITIES`; the advertised set and the allowed set both iterate it, so they cannot
+drift apart. Membership there is security-relevant the same way it is in
+`policy/toolRisk.ts` (ADR 0003): an unregistered name is asked about, not allowed.
+
 ## Parameters and the wire
 
 - The stored bag: `src/types/model-params.ts` (`ModelParameters`, twelve `enable*` flags).

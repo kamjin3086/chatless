@@ -173,16 +173,32 @@ describe('Android photo organization tool scope', () => {
         {
           signal: 'duplicate',
           items: [
-            { handle: original.handle, name: original.name },
-            { handle: copy.handle, name: copy.name },
+            {
+              handle: original.handle,
+              name: original.name,
+              sizeBytes: original.sizeBytes,
+            },
+            { handle: copy.handle, name: copy.name, sizeBytes: copy.sizeBytes },
           ],
         },
         {
           signal: 'screenshot',
-          items: [{ handle: screenshot.handle, name: screenshot.name }],
+          items: [
+            {
+              handle: screenshot.handle,
+              name: screenshot.name,
+              sizeBytes: screenshot.sizeBytes,
+            },
+          ],
         },
       ],
-      ungrouped: [{ handle: uncompared.handle, name: uncompared.name }],
+      ungrouped: [
+        {
+          handle: uncompared.handle,
+          name: uncompared.name,
+          sizeBytes: uncompared.sizeBytes,
+        },
+      ],
       omissions: [
         { reason: 'unreadable' },
         { reason: 'duplicate_check_skipped', name: uncompared.name },
@@ -195,8 +211,15 @@ describe('Android photo organization tool scope', () => {
     expect(mocks.ask).not.toHaveBeenCalled();
   });
 
-  it('sends the model handles and names, never photo content or local URIs', async () => {
-    const serialized = JSON.stringify(await run());
+  it('sends the model handles, names and sizes, never photo content or local URIs', async () => {
+    const result = (await run()) as { groups: { items: unknown[] }[] };
+    const serialized = JSON.stringify(result);
+
+    expect(result.groups[0].items[0]).toEqual({
+      handle: original.handle,
+      name: original.name,
+      sizeBytes: original.sizeBytes,
+    });
     expect(serialized).not.toMatch(/content:\/\//);
     expect(serialized).not.toMatch(/data:image/);
     expect(serialized).not.toContain('contentDigest');

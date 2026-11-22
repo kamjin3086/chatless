@@ -1,10 +1,11 @@
-import { isAndroidDirectoryTool } from '@/lib/mcp/nativeTools/androidDirectory';
-import { isAndroidDocumentTool } from '@/lib/mcp/nativeTools/androidDocument';
-import { isAndroidPhotosTool } from '@/lib/mcp/nativeTools/androidPhotos';
+import {
+  androidAllowsCall,
+  NO_ANDROID_CAPABILITIES,
+  type AndroidCapabilities,
+} from '@/lib/android/androidCapabilities';
 import type { ApprovalDecision } from '@/store/authorizationStore';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { dirnameOf } from './resolveCall';
-import { isAndroidCountdownTool } from '@/lib/mcp/nativeTools/androidCountdown';
 import { isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 
 /**
@@ -112,15 +113,13 @@ export function decideServerCall(params: {
   server: string;
   tool: string;
   autoAuthorize: boolean;
-  androidCountdownAvailable?: boolean;
-  androidDocumentRuntime?: boolean;
-  androidDirectoryRuntime?: boolean;
-  androidPhotosRuntime?: boolean;
+  /**
+   * 这次运行愿意自动放行的 Android 能力。调用方给出 `androidPlatformCapabilities()`：
+   * 平台加上能力表决定认识哪些调用，越出当前会话范围由执行端报具体错误，不在这里问。
+   */
+  android?: AndroidCapabilities;
 }): 'allow' | 'ask' {
-  if (params.androidPhotosRuntime && isAndroidPhotosTool(params.server, params.tool)) return 'allow';
-  if (params.androidDirectoryRuntime && isAndroidDirectoryTool(params.server, params.tool)) return 'allow';
-  if (params.androidDocumentRuntime && isAndroidDocumentTool(params.server, params.tool)) return 'allow';
-  if (params.androidCountdownAvailable && isAndroidCountdownTool(params.server, params.tool)) return 'allow';
+  if (androidAllowsCall(params.android ?? NO_ANDROID_CAPABILITIES, params.server, params.tool)) return 'allow';
 
   // 先归一：main 上的原实现就是拿 normalizeServerName 做比对的，
   // 不归一则 'System' / 'User_FS' 这类写法会落到兜底分支，把原本不问的变成问。

@@ -13,7 +13,16 @@ const SCREENSHOT_NAME =
 
 export type AndroidPhotoSignal = 'duplicate' | 'screenshot';
 
-export type AndroidPhotoGroupItem = { handle: string; name: string };
+/**
+ * What the model gets per photo: the handle, the name and the byte count the inventory
+ * read. The digest that decided the grouping stays in the app - it is the only thing
+ * here that would let a provider compare photos across selections.
+ */
+export type AndroidPhotoGroupItem = {
+  handle: string;
+  name: string;
+  sizeBytes: number | null;
+};
 
 export type AndroidPhotoSignalGroup = {
   signal: AndroidPhotoSignal;
@@ -31,7 +40,7 @@ export type AndroidPhotoGrouping = {
 type ReadyBatch = Extract<AndroidPhotoBatchInventory, { status: 'ready' }>;
 
 function groupItem(item: ReadyBatch['items'][number]): AndroidPhotoGroupItem {
-  return { handle: item.handle, name: item.name };
+  return { handle: item.handle, name: item.name, sizeBytes: item.sizeBytes };
 }
 
 /**

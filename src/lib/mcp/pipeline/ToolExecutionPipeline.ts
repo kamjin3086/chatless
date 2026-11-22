@@ -4,8 +4,7 @@ import { EVERYDAY_DIRECTORY_PERMISSIONS } from '@/lib/filesystemAllowlist/permis
 import { resolveAccess } from '@/lib/mcp/accessPolicy';
 import { conversationToolKey, hasConversationToolGrant, getConversationDirectoryGrant, isConversationAutomatic, useConversationAccessStore } from '@/store/conversationAccessStore';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
-import { isAndroidCountdownTool } from '@/lib/mcp/nativeTools/androidCountdown';
-import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
+import { androidPlatformCapabilities } from '@/lib/android/androidCapabilities';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { findUnresolvedAliasInValues, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
@@ -313,10 +312,8 @@ export class ToolExecutionPipeline {
     const temporaryEligible = allowsTemporaryServerApproval(server, tool);
     const conversationApproved = temporaryEligible && (isConversationAutomatic(invocation.conversationId)
       || hasConversationToolGrant(invocation.conversationId, server, tool));
-    const androidRuntime = isAndroidTauri();
-    const androidCountdownAvailable = androidRuntime && isAndroidCountdownTool(server, tool);
     if (!conversationApproved && decideServerCall({
-      server, tool, autoAuthorize: autoAuth, androidCountdownAvailable, androidDocumentRuntime: androidRuntime, androidDirectoryRuntime: androidRuntime, androidPhotosRuntime: androidRuntime,
+      server, tool, autoAuthorize: autoAuth, android: androidPlatformCapabilities(),
     }) === 'ask') {
       const approval = await this.requestApproval({
         assistantMessageId, conversationId: invocation.conversationId,

@@ -9,12 +9,13 @@ function photo(
   handle: string,
   name: string,
   contentDigest: string | null = `digest-${handle}`,
+  sizeBytes: number | null = 2400,
 ): AndroidPhotoBatchItem {
   return {
     handle,
     name,
     mimeType: 'image/jpeg',
-    sizeBytes: 2400,
+    sizeBytes,
     contentDigest,
   };
 }
@@ -85,6 +86,28 @@ describe('Android photo batch grouping', () => {
     ]);
   });
 
+  it('reports each photo’s size alongside its name, and never its digest', () => {
+    const grouping = groupAndroidPhotoBatch(
+      batch([
+        photo('original', 'IMG_4021.jpg', 'same-bytes', 3_200_000),
+        photo('copy', 'IMG_4021 (1).jpg', 'same-bytes', 3_200_000),
+        photo('other', 'IMG_4022.jpg', 'different-bytes', 512),
+        photo('unread', 'IMG_5000.jpg', null, null),
+      ]),
+    );
+
+    expect(grouping.groups[0].items).toEqual([
+      { handle: 'original', name: 'IMG_4021.jpg', sizeBytes: 3_200_000 },
+      { handle: 'copy', name: 'IMG_4021 (1).jpg', sizeBytes: 3_200_000 },
+    ]);
+    expect(grouping.ungrouped).toEqual([
+      { handle: 'other', name: 'IMG_4022.jpg', sizeBytes: 512 },
+      { handle: 'unread', name: 'IMG_5000.jpg', sizeBytes: null },
+    ]);
+    expect(JSON.stringify(grouping)).not.toContain('same-bytes');
+    expect(JSON.stringify(grouping)).not.toContain('different-bytes');
+  });
+
   it('states what it could not compare instead of guessing duplicates', () => {
     const unread = photo('unread', 'IMG_5000.jpg', null);
     const grouping = groupAndroidPhotoBatch({
@@ -94,7 +117,7 @@ describe('Android photo batch grouping', () => {
     });
     expect(grouping.groups).toEqual([]);
     expect(grouping.ungrouped).toEqual([
-      { handle: 'unread', name: 'IMG_5000.jpg' },
+      { handle: 'unread', name: 'IMG_5000.jpg', sizeBytes: 2400 },
     ]);
     expect(grouping.omissions).toEqual([
       { reason: 'unreadable' },

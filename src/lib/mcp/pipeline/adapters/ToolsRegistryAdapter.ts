@@ -2,9 +2,7 @@
  * Capability directory. It intentionally has one operation: search the whole
  * enabled directory, then expose the selected capability on the next turn.
  */
-import { hasAndroidPhotoBatchSelection } from '@/lib/android/androidPhotoBatch';
-import { hasAndroidDirectorySelection } from '@/lib/documents/android/androidDirectorySelection';
-import { hasAndroidDocumentAttachment } from '@/lib/documents/android/androidDocumentAttachment';
+import { androidCapabilities } from '@/lib/android/androidCapabilities';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 import { getToolsForGroup, TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
@@ -41,12 +39,8 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
     if (!query) return { ok: false, error: 'query is required' };
 
-    const [androidDocumentAvailable, androidDirectoryAvailable, androidPhotosAvailable] = await Promise.all([
-      hasAndroidDocumentAttachment(conversationId),
-      hasAndroidDirectorySelection(conversationId),
-      hasAndroidPhotoBatchSelection(conversationId),
-    ]);
-    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => getToolsForGroup(group.id, { androidDocumentAvailable, androidDirectoryAvailable, androidPhotosAvailable }).map(({ server, tool }) => ({
+    const android = await androidCapabilities(conversationId);
+    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => getToolsForGroup(group.id, android).map(({ server, tool }) => ({
       source: 'builtin' as const,
       group: group.id,
       server,

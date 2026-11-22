@@ -6,6 +6,10 @@ import { buildInitialPrompt } from '@/lib/mcp/injection/promptBuilder';
 import { serverManager } from '@/lib/mcp/ServerManager';
 import { resolveNonConflictingServerName } from '@/lib/mcp/serverNamePolicy';
 import { decideServerCall } from '../policy/policy';
+import {
+  NO_ANDROID_CAPABILITIES,
+  type AndroidCapabilities,
+} from '@/lib/android/androidCapabilities';
 
 const mocks = vi.hoisted(() => ({
   isTauri: vi.fn(),
@@ -311,24 +315,27 @@ describe('Android countdown execution', () => {
       tool: 'start',
       autoAuthorize: false,
     };
+    const countdownOn: AndroidCapabilities = {
+      ...NO_ANDROID_CAPABILITIES,
+      countdown: true,
+    };
+    expect(decideServerCall({ ...params, android: countdownOn })).toBe('allow');
     expect(
-      decideServerCall({ ...params, androidCountdownAvailable: true }),
-    ).toBe('allow');
-    expect(
-      decideServerCall({ ...params, androidCountdownAvailable: false }),
+      decideServerCall({ ...params, android: NO_ANDROID_CAPABILITIES }),
     ).toBe('ask');
+    expect(decideServerCall({ ...params })).toBe('ask');
     expect(
       decideServerCall({
         ...params,
         tool: 'set_alarm',
-        androidCountdownAvailable: true,
+        android: countdownOn,
       }),
     ).toBe('ask');
     expect(
       decideServerCall({
         ...params,
         server: 'other_device',
-        androidCountdownAvailable: true,
+        android: countdownOn,
       }),
     ).toBe('ask');
   });

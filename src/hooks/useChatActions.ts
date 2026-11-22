@@ -724,9 +724,8 @@ export const useChatActions = (
               images: options?.images,
               attachmentDocumentIds,
             },
-            options: expectedPhoto
-              ? { ...composed, __androidPhotoRecipient: expectedPhoto }
-              : composed,
+            options: composed,
+            androidPhotoRecipient: expectedPhoto,
             planOnly: options?.planOnly,
             runtimeHooks: {
               onAgentStart: () => {

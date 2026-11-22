@@ -10,11 +10,11 @@
  */
 
 import type { McpTool } from '@/lib/mcp/McpClient';
-import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
-import { ANDROID_COUNTDOWN_SERVER, ANDROID_COUNTDOWN_TOOL } from './androidCountdown';
-import { ANDROID_DIRECTORY_SERVER, ANDROID_DIRECTORY_TOOL } from './androidDirectory';
-import { ANDROID_DOCUMENT_SERVER, ANDROID_DOCUMENT_TOOLS } from './androidDocument';
-import { ANDROID_PHOTOS_SERVER, ANDROID_PHOTOS_TOOL } from './androidPhotos';
+import {
+  androidTools,
+  NO_ANDROID_CAPABILITIES,
+  type AndroidCapabilities,
+} from '@/lib/android/androidCapabilities';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from './filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecutor';
 import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
@@ -112,26 +112,15 @@ export const TOOLS_REGISTRY_TOOLS: McpTool[] = [
 ];
 
 /**
- * 获取指定组的工具列表
+ * 获取指定组的工具列表。Android 能力由调用方从 androidCapabilities 解析后传入，
+ * 与审批门用的是同一份能力表。
  */
 export function getToolsForGroup(
   groupId: ToolGroupId,
-  availability: {
-    androidDocumentAvailable?: boolean;
-    androidDirectoryAvailable?: boolean;
-    androidPhotosAvailable?: boolean;
-  } = {},
+  android: AndroidCapabilities = NO_ANDROID_CAPABILITIES,
 ): Array<{ server: string; tool: McpTool }> {
   const tools = TOOL_GROUPS.find(g => g.id === groupId)?.tools || [];
-  return groupId === 'core' && isAndroidTauri()
-    ? [
-        ...tools,
-        { server: ANDROID_COUNTDOWN_SERVER, tool: ANDROID_COUNTDOWN_TOOL },
-        ...(availability.androidDocumentAvailable ? ANDROID_DOCUMENT_TOOLS.map((tool) => ({ server: ANDROID_DOCUMENT_SERVER, tool })) : []),
-        ...(availability.androidDirectoryAvailable ? [{ server: ANDROID_DIRECTORY_SERVER, tool: ANDROID_DIRECTORY_TOOL }] : []),
-        ...(availability.androidPhotosAvailable ? [{ server: ANDROID_PHOTOS_SERVER, tool: ANDROID_PHOTOS_TOOL }] : []),
-      ]
-    : tools;
+  return groupId === 'core' ? [...tools, ...androidTools(android)] : tools;
 }
 
 /**

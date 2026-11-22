@@ -514,7 +514,7 @@ export class AgentLoopRunner {
             try {
               await modelRequestScheduler.schedule(endpointKey, { signal: ctrl.signal }, async () => {
                 if (ctrl.signal.aborted) return;
-                void streamChat(provider, model, messages, callbacks, { ...toolOptions, __requestId: requestId, __schedulerLease: true }).catch((error) => {
+                void streamChat(provider, model, messages, callbacks, { ...toolOptions, __requestId: requestId, __schedulerLease: true }, params.androidPhotoRecipient).catch((error) => {
                   callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
                 });
                 await streamDone;

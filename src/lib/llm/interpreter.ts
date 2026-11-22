@@ -175,6 +175,9 @@ export class LLMInterpreter {
 
   /**
    * 统一流式聊天接口，仅通过 ProviderRegistry 调度。
+   *
+   * `androidPhotoRecipient` 是一个具名参数而不是 options 里的键：它要在线路复核里被看见，
+   * 也不该成为可以透传进请求体的 option。
    */
   async streamChat(
     provider: string,
@@ -182,6 +185,7 @@ export class LLMInterpreter {
     messages: Message[],
     callbacksIn: StreamCallbacks,
     options: ChatOptions = {},
+    androidPhotoRecipient?: AndroidPhotoRecipient,
   ): Promise<void> {
     const requestId =
       typeof (options as any).__requestId === 'string' &&
@@ -189,7 +193,7 @@ export class LLMInterpreter {
         ? (options as any).__requestId
         : '__legacy__';
     const useProvider = provider; // 不做魔法纠正，维持调用方选择
-    const photoRecipient = options?.__androidPhotoRecipient as AndroidPhotoRecipient | undefined;
+    const photoRecipient = androidPhotoRecipient;
 
     // #101: one wrap point for cost accounting. It observes only - the request that leaves
     // is built by the code below, untouched. The context is a getter because the provider
@@ -293,7 +297,6 @@ export class LLMInterpreter {
         model,
         options || {},
       );
-      if (photoRecipient) delete refined.__androidPhotoRecipient;
 
       // A router that exposes effort tiers as sibling model names picks a model rather
       // than a field, so the rewrite happens here: at request build time, after the

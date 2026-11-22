@@ -117,12 +117,11 @@ it.each([
           modelId,
           [{ role: 'user', content, images }],
           {},
+          {},
           {
-            __androidPhotoRecipient: {
-              providerName: provider.name,
-              modelId,
-              route,
-            },
+            providerName: provider.name,
+            modelId,
+            route,
           },
         )
         .catch(() => {});
@@ -148,6 +147,9 @@ it.each([
     const requestBody = transport.mock.calls[0]?.[1].body;
     const wire =
       typeof requestBody === 'string' ? JSON.parse(requestBody) : requestBody;
+    // The recipient is a typed argument, not an option key: nothing about it may reach the wire.
+    expect(JSON.stringify(wire)).not.toContain('androidPhotoRecipient');
+    expect(JSON.stringify(wire)).not.toContain('providerName');
     if (body.contents) {
       expect(wire.contents).toEqual([{ role: 'user', ...body.contents[0] }]);
     } else if (encoding === 'base64') {
@@ -300,12 +302,11 @@ it.each(['gemini', 'openai', 'openai-responses', 'anthropic'])(
           },
         ],
         {},
+        {},
         {
-          __androidPhotoRecipient: {
-            providerName: provider.name,
-            modelId: 'gpt-4o',
-            route: 'openai-compatible',
-          },
+          providerName: provider.name,
+          modelId: 'gpt-4o',
+          route: 'openai-compatible',
         },
       ),
     ).rejects.toThrow('recipient_changed');
