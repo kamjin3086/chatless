@@ -94,7 +94,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   async fetchModels(): Promise<Array<{ name: string; label?: string; aliases?: string[]; contextWindow?: number }> | null> {
-    // 通用兜底：按 OpenAI 兼容协议拉取 /models
+    // 通用兜底：按 OpenAI 兼容协议拉取 /models。
+    // 只有真的拿到模型数组，空列表才表示“服务端确认没有模型”；请求失败是“未知”。
+    let respondedWithList = false;
     try {
       const apiKey = await this.getApiKey();
       const base = (this as any).baseUrl?.replace(/\/$/, '') || '';
@@ -102,8 +104,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
       const url = `${base}/models`;
       const { tauriFetch } = await import('@/lib/request');
       const resp: any = await tauriFetch(url, { method: 'GET', headers: this.buildHeaders(apiKey), fallbackToBrowserOnError: true, verboseDebug: true, debugTag: 'ModelList' });
-      const items = Array.isArray(resp?.data) ? resp.data : (Array.isArray(resp) ? resp : []);
-      if (Array.isArray(items) && items.length) {
+      const items: any[] | null = Array.isArray(resp?.data) ? resp.data : (Array.isArray(resp) ? resp : null);
+      if (items) respondedWithList = true;
+      if (items && items.length) {
         return items.map((it: any) => {
           const id = it?.id || it?.name;
           const label = it?.label || it?.id || it?.name;
@@ -121,7 +124,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
     }
     const key = this.name || 'OpenAI-Compatible';
     const list = getStaticModels(key);
-    return list?.map((m) => ({ name: m.id, label: m.label, aliases: [m.id] })) ?? null;
+    if (list?.length) {
+      return list.map((m) => ({ name: m.id, label: m.label, aliases: [m.id] }));
+    }
+    // 没有静态兜底可给时，失败必须返回 null：空数组会被 ProviderModelService 当成
+    // “权威空列表”，把用户手动添加的模型当成已删除并从仓库里清掉。
+    return respondedWithList ? [] : null;
   }
 
   async checkConnection(): Promise<CheckResult> {
