@@ -46,7 +46,7 @@ chatless is a desktop AI chat client that supports multiple cloud-based AI servi
   <img src="docs/assets/screenshot-main1.png" alt="chatless main interface" width="960" />
 </div>
 
-For more feature demonstrations, visit the [complete documentation](https://kamjin3086.github.io/chatless/docs)
+For more feature demonstrations, visit the [documentation site (in Chinese)](https://kamjin3086.github.io/chatless/docs).
 
 ## Quick Start
 
@@ -74,7 +74,7 @@ Configure WebDAV in `Settings → Sync`:
 - Remote structure: `{basePath}/prompts/data/{id}.json` and `.../metadata.json`
 - Deletion: remote files are not deleted; `deleted_at` tombstones are synced
 
-> For complete usage instructions, visit the [User Documentation](https://kamjin3086.github.io/chatless/docs)
+> For more usage instructions, see the [user documentation (in Chinese)](https://kamjin3086.github.io/chatless/docs).
 
 ## Development
 
@@ -86,7 +86,7 @@ cd chatless
 # Install dependencies
 pnpm install
 
-# Start development server
+# Launch the desktop app in development mode
 pnpm tauri dev
 
 # Build application
@@ -95,36 +95,39 @@ pnpm tauri build
 
 **Tech Stack:** Tauri 2.0, Next.js 15, TypeScript, Rust, SQLite
 
-For more development information, see [Contributing Guide](CONTRIBUTING.md)
+For development prerequisites and verification commands, see the [Contributing Guide](CONTRIBUTING_EN.md).
 
 ## Documentation
 
 | Documentation | Link |
 | --- | --- |
-| User Guide | [View Docs](https://kamjin3086.github.io/chatless/docs) |
-| Quick Start | [Quick Start](https://kamjin3086.github.io/chatless/docs/getting-started) |
-| Features | [Feature Details](https://kamjin3086.github.io/chatless/docs/features) |
-| FAQ | [FAQ](https://kamjin3086.github.io/chatless/docs/faq) |
+| User Guide | [View Docs (in Chinese)](https://kamjin3086.github.io/chatless/docs) |
+| Quick Start | [Quick Start (in Chinese)](https://kamjin3086.github.io/chatless/docs/getting-started) |
+| Features | [Feature Details (in Chinese)](https://kamjin3086.github.io/chatless/docs/features) |
+| FAQ | [FAQ and troubleshooting](docs/faq-en.md) |
 | Roadmap | [Roadmap](https://github.com/users/kamjin3086/projects/1) |
 
 ## FAQ
+
+The [FAQ and troubleshooting guide](docs/faq-en.md) covers installation, provider errors, local models, and bug reports.
 
 **Q: App crashes immediately on Windows startup?**
 
 Some Windows environments require Microsoft Visual C++ runtime. Download and install:
 - [VC++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 
-For more solutions, see [FAQ Documentation](https://kamjin3086.github.io/chatless/docs/faq)
+See also the [FAQ on the documentation site (in Chinese)](https://kamjin3086.github.io/chatless/docs/faq).
 
 ## Feedback & Support
 
-- **Bug Reports** - [GitHub Issues](https://github.com/kamjin3086/chatless/issues)
-- **Feature Discussions** - [GitHub Discussions](https://github.com/kamjin3086/chatless/discussions)
-- **In-app Feedback** - Settings → Feedback
+- **Bug reports and feature requests** - Use [GitHub Issues](https://github.com/kamjin3086/chatless/issues). Write in whichever language lets you describe the issue accurately. See the [Contributing Guide](CONTRIBUTING_EN.md) before filing.
+- **Questions and discussion** - Use [GitHub Discussions](https://github.com/kamjin3086/chatless/discussions).
+- **Feedback from the app** - Settings → About (`关于`) → Submit feedback (`提交反馈`) opens the Chinese-language feedback page.
+- **Private security reports** - See the [Security Policy (in Chinese)](SECURITY.md). Do not post vulnerabilities publicly.
 
 ## Contributing
 
-Issues and Pull Requests are welcome. Please read the [Contributing Guide](CONTRIBUTING.md) before contributing.
+Issues and Pull Requests are welcome. Please read the [Contributing Guide](CONTRIBUTING_EN.md) before contributing.
 
 ## License
 
