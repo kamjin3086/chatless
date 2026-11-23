@@ -58,12 +58,19 @@
 | 应用私有目录 `$APPDATA` / `$APPLOG` | 读写；会话数据库、设置、文档附件、照片缓存都在这里 |
 | 设备存储、相册、下载目录 | **不授予**；只使用系统选择器或拍照后拿到的单个文件／目录授权 |
 | SQLite（`sql`） | 与应用私有库同范围 |
-| HTTP | `https://*` 与 `http://localhost` / `127.0.0.1`；与桌面不同，不开放明文任意主机 |
+| HTTP | `https://*` 与 `http://*:*`——与桌面同一范围，内网明文地址能用 |
 | Opener / Dialog / Log / OS / Store | 插件默认能力；不包含任意路径打开 |
-| 系统时钟 | 仅发送计时器请求的专有权限；无 `SET_ALARM` |
+| 系统时钟 | `com.android.alarm.permission.SET_ALARM`——`ACTION_SET_TIMER` 会检查它，缺了就拒收计时请求 |
 
 实现要点：
 
+- 这条范围一度和桌面不同（只开 localhost / 127.0.0.1），结果是手机填一个局域网地址就报
+  `url not allowed on the configured scope`——不是连接失败，而是请求根本没出门。手机的模型
+  服务常常就在另一台机器上，所以这里开了 `http://*:*`。
+- 想按内网段收窄时不要直接在 capability 里写 IP 通配：Tauri 的 URL pattern 在 hostname 上
+  认不了 IPv4 前缀通配，实测 `http://10.*:*`、`http://192.168.*:*`、`http://11.*.*.*:*`
+  全部匹配不上 `10.0.2.2` / `192.168.1.20`（`http://*.local:*` 能匹配，`http://[::1]:*`
+  则解不过）。真要按网段收，只能在应用侧发请求前判 IP，不能写在这份表里。
 - 没有通用 Shell、stdio MCP、工作区命令或 ONNX 嵌入：这些模块在 Android 构建下不编译，
   不是“编译进去了但隐藏”。
 - 选目录、选照片、拍照都走 Android 系统界面；应用只拿到用户这一手选中的东西，不给

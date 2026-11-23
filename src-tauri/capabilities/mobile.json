@@ -10,7 +10,10 @@
     "fs:allow-read-text-file", "fs:allow-write-text-file",
     "fs:scope-appconfig", "fs:allow-appconfig-read-recursive", "fs:allow-appconfig-write-recursive",
     { "identifier": "fs:scope", "allow": [{"path": "$APPDATA"}, {"path": "$APPDATA/**/*"}, {"path": "$APPLOG"}, {"path": "$APPLOG/**/*"}] },
-    { "identifier": "http:default", "allow": [{"url": "https://*"}, {"url": "http://localhost:*"}, {"url": "http://127.0.0.1:*"}] },
+    { "identifier": "http:default", "allow": [
+      { "url": "https://*" },
+      { "url": "http://*:*" }
+    ] },
     "store:default", "opener:default", "dialog:default",
     "log:default", "log:allow-log", "os:default"
   ]
