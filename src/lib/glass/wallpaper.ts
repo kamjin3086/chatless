@@ -28,25 +28,35 @@ function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && Boolean((window as any).__TAURI__);
 }
 
+export class WallpaperSaveError extends Error {
+  constructor(
+    readonly reason: 'emptyFile' | 'tooLarge' | 'unsupportedFormat' | 'readFailed',
+    options?: ErrorOptions,
+  ) {
+    super(reason, options);
+    this.name = 'WallpaperSaveError';
+  }
+}
+
 async function fileToDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error || new Error('读取图片失败'));
+    reader.onerror = () => reject(new WallpaperSaveError('readFailed', { cause: reader.error }));
     reader.readAsDataURL(file);
   });
 }
 
 export async function saveGlassWallpaper(file: File): Promise<string> {
   if (!file || file.size <= 0) {
-    throw new Error('请选择一张图片');
+    throw new WallpaperSaveError('emptyFile');
   }
   if (file.size > GLASS_WALLPAPER_MAX_BYTES) {
-    throw new Error('壁纸需小于 8MB');
+    throw new WallpaperSaveError('tooLarge');
   }
   const ext = wallpaperExtension(file.name) || wallpaperExtension(file.type.replace('image/', '.')) || (file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : file.type === 'image/gif' ? 'gif' : null);
   if (!ext) {
-    throw new Error('仅支持 PNG / JPG / WEBP / GIF');
+    throw new WallpaperSaveError('unsupportedFormat');
   }
 
   if (!isTauriRuntime()) {

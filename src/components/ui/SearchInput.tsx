@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/useTranslation";
 
 export type SearchInputVariant =
   | "basic"            // 简洁基础型
@@ -21,13 +22,16 @@ interface SearchInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEleme
 export function SearchInput({
   value,
   onChange,
-  placeholder = "搜索…",
+  placeholder,
   variant = "withIcon",
   onSubmit,
   className,
   allowClear = false,
   ...rest
 }: SearchInputProps) {
+  // The prop wins; the default follows the interface language.
+  const t = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t('ui.searchPlaceholder');
   if (variant === "underlineAnimated") {
     return (
       <div className={cn("relative overflow-hidden", className)}>
@@ -35,7 +39,7 @@ export function SearchInput({
           {...rest}
           value={value}
           onChange={onChange}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           className="glass-field w-full h-8 py-1.5 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200"
           onKeyDown={(e)=>{ if (e.key === 'Enter') onSubmit?.(); }}
         />
@@ -50,7 +54,7 @@ export function SearchInput({
           {...rest}
           value={value}
           onChange={onChange}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           className="flex-1 min-w-0 h-8 py-1.5 pl-2.5 border-0 bg-transparent text-slate-800 dark:text-slate-100 text-sm appearance-none focus:outline-none focus-visible:ring-0"
           onKeyDown={(e)=>{ if (e.key === 'Enter') onSubmit?.(); }}
         />
@@ -69,7 +73,7 @@ export function SearchInput({
         {...rest}
         value={value}
         onChange={onChange}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         className={cn(
           "glass-field w-full h-8 py-1.5 px-3 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200",
           className
@@ -85,7 +89,7 @@ export function SearchInput({
         {...rest}
         value={value}
         onChange={onChange}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         className={cn(
           "glass-field w-full h-8 py-1.5 px-3 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200",
           className
@@ -120,7 +124,7 @@ export function SearchInput({
         {...rest}
         value={value}
         onChange={onChange}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         className="glass-field w-full h-8 py-1.5 pl-8 pr-6 rounded-lg border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-white/5 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/25 focus-visible:border-slate-400/55 transition-colors duration-200"
         onKeyDown={(e)=>{ if (e.key === 'Enter') onSubmit?.(); }}
       />

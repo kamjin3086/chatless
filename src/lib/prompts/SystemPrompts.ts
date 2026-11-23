@@ -153,6 +153,14 @@ export const ConversationPrompts = {
   chainOfThought: `For complex problems: 1) break the problem down 2) reason step by step 3) state the conclusion`,
 
   /**
+   * Sent as the turn that resumes an agent run the user stopped. It replaces the
+   * user's text for that turn, and it is an instruction to the model rather than
+   * something the user reads, so it stays English whatever the UI language is
+   * (docs/prompt-language.md). The user's own words are already in the history.
+   */
+  continueStoppedRun: `Continue the task that was left unfinished. Do not repeat steps already completed.`,
+
+  /**
    * Base role-play template.
    */
   rolePlay: (role: string, context?: string) => 
