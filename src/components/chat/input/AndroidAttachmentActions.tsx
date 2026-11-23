@@ -173,9 +173,7 @@ export function AndroidAttachmentActions({
                 aria-checked={root.agentEnabled}
                 disabled={selections.rootsWorking}
                 onClick={() =>
-                  onAction(() =>
-                    selections.toggleRootAgent(root.uri, !root.agentEnabled),
-                  )
+                  selections.toggleRootAgent(root.uri, !root.agentEnabled)
                 }
                 className={cn(ROOT_BUTTON, root.agentEnabled && ROOT_BUTTON_ON)}
               >
@@ -184,7 +182,7 @@ export function AndroidAttachmentActions({
               <button
                 type="button"
                 disabled={selections.rootsWorking}
-                onClick={() => onAction(() => selections.revokeRoot(root.uri))}
+                onClick={() => selections.revokeRoot(root.uri)}
                 className={ROOT_BUTTON}
               >
                 {t('androidDirectory.revokeRoot')}
