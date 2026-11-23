@@ -8,7 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 // import { SettingsSectionHeader } from "./SettingsSectionHeader";
 // import { ModelCard } from "./ModelCard"; // 不再使用 ModelCard
 import { ProviderSettings } from "./ProviderSettings";
-import { ServerCog, GripVertical, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { ServerCog, GripVertical, ChevronDown, ChevronLeft, ChevronRight, FileDown, RotateCcw } from "lucide-react";
 import { useChatStore } from "@/store/chatStore";
 import { specializedStorage } from "@/lib/storage";
 import {
@@ -38,6 +38,7 @@ import { useProviderManagement, ProviderWithStatus } from '@/hooks/useProviderMa
 import { cn } from "@/lib/utils"; // Assuming cn is used somewhere or will be
 import { AddProvidersDialog } from './AddProvidersDialog';
 import { formatProviderModelCount } from './providerModelPresentation';
+import { exportAndroidLogs } from '@/lib/android/androidLogExport';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useStableProviderIcon } from "./useStableProviderIcon";
 import { getHtmlLang, translate } from '@/i18n';
@@ -308,6 +309,37 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
   }, [compact]);
   const inUseProviderName = conversationProviderName ?? lastUsedPair?.provider ?? null;
   const [openProviderName, setOpenProviderName] = useState<string | null>(null);
+  // 「日志导出」：手机不接 adb 时靠它把现场带走
+  const [exportingLogs, setExportingLogs] = useState(false);
+  const exportLogs = useCallback(async () => {
+    setExportingLogs(true);
+    try {
+      const outcome = await exportAndroidLogs();
+      switch (outcome.kind) {
+        case 'shared':
+          toast.success(t('androidLogs.shared'));
+          break;
+        case 'saved':
+          toast.success(t('androidLogs.saved').replace('{0}', outcome.name));
+          break;
+        case 'clipboard':
+          toast.success(t('androidLogs.copied'));
+          break;
+        case 'empty':
+          toast.info(t('androidLogs.empty'));
+          break;
+        case 'cancelled':
+          break;
+        default:
+          toast.error(t('androidLogs.failed'));
+      }
+    } catch (error) {
+      console.error('[androidLogs] 导出失败', error);
+      toast.error(t('androidLogs.failed'));
+    } finally {
+      setExportingLogs(false);
+    }
+  }, [t]);
   // 系统返回先收起服务详情、回到列表，而不是直接退出管理页。
   useEffect(() => {
     if (!compact || !openProviderName) return;
@@ -641,6 +673,19 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
           {renderProviderDetail(selectedProvider)}
         </div>
+      )}
+
+      {compact && (
+        // 临时调试用：手机不接 adb 时，这是把日志带出手机的唯一入口。
+        <button
+          type="button"
+          onClick={() => void exportLogs()}
+          disabled={exportingLogs}
+          className="fixed bottom-24 right-4 z-50 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border bg-background/95 px-4 text-sm text-foreground shadow-lg backdrop-blur active:scale-[0.98] disabled:opacity-60"
+        >
+          <FileDown className="size-4 shrink-0" aria-hidden="true" />
+          {exportingLogs ? t('androidLogs.exporting') : t('androidLogs.export')}
+        </button>
       )}
     </div>
   );

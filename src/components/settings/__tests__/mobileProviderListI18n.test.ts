@@ -90,8 +90,16 @@ describe('mobile model-service list', () => {
       expect(html).not.toContain('<select');
       expect(html).toContain(heading);
       expect(html).toContain(refresh);
+      // 手机不接 adb 时，右下角这个按钮是把日志带出手机的唯一入口。
+      expect(html).toContain(locale === 'zh' ? '日志导出' : 'Export logs');
     },
   );
+
+  it('keeps the log button off the desktop page', () => {
+    const desktop = renderToStaticMarkup(createElement(AiModelSettings));
+    expect(desktop).not.toContain('日志导出');
+    expect(desktop).not.toContain('Export logs');
+  });
 
   it.each([
     [
