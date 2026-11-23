@@ -23,7 +23,7 @@ const zhCN: TranslationDict = {
   'androidPhoto.supported':
     '支持照片。仅在点击发送后，照片才会发送给此提供商。',
   'androidPhoto.unsupported':
-    '此模型或请求策略不支持发送照片。请选择使用 OpenAI 兼容 Chat Completions（非严格 OpenAI）、Gemini 或 Ollama 的视觉模型，或移除照片。',
+    '此模型或请求策略不支持发送照片。请选择 OpenAI 兼容 Chat Completions（非严格 OpenAI）、Gemini 或 Ollama 的模型，或在这个模型的菜单里把「视觉能力」标为支持视觉；也可以移除照片。',
   'androidPhoto.busy': '请等待当前回复结束，或停止回复后再发送照片。',
   'androidPhoto.other_attachment': '请移除文档或结束编辑后再发送照片。',
   'androidPhoto.acquiring': '正在打开照片…',

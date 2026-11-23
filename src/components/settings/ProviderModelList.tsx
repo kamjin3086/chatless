@@ -5,6 +5,10 @@ import type { ProviderWithStatus } from "@/hooks/useProviderManagement";
 import { ProviderAddModelDialog } from "./ProviderAddModelDialog";
 import { Brain, Workflow, Camera, ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
 import { getModelCapabilities } from "@/lib/provider/staticModels";
+import {
+  getModelCapabilityOverrides,
+  onModelCapabilitiesChanged,
+} from "@/lib/provider/modelCapabilityOverrides";
 import { ProviderModelItem } from "./ProviderModelItem";
 import { toast } from "@/components/ui/sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -230,6 +234,8 @@ export function ProviderModelList(props: ProviderModelListProps) {
   const [filterThinking, setFilterThinking] = React.useState(false);
   const [filterTools, setFilterTools] = React.useState(false);
   const [filterVision, setFilterVision] = React.useState(false);
+  // 手动设过的视觉能力：筛选结果要和模型行上显示的一致。
+  const [visionOverrides, setVisionOverrides] = React.useState<Record<string, boolean>>({});
   const [searchOpen, setSearchOpen] = React.useState(false);
   const searchRef = React.useRef<HTMLInputElement | null>(null);
   const listAreaRef = React.useRef<HTMLDivElement | null>(null);
@@ -279,6 +285,31 @@ export function ProviderModelList(props: ProviderModelListProps) {
   }, [modelsForDisplay.length]);
 
   React.useEffect(() => { setPage(1); }, [modelSearch, filterThinking, filterTools, filterVision, provider.name]);
+
+  React.useEffect(() => {
+    let alive = true;
+    const load = () => {
+      void Promise.all(
+        modelsForDisplay.map(async (m) => {
+          const overrides = await getModelCapabilityOverrides(provider.name, m.name);
+          return [m.name, overrides.vision] as const;
+        }),
+      ).then((entries) => {
+        if (!alive) return;
+        const next: Record<string, boolean> = {};
+        for (const [name, vision] of entries) if (vision !== undefined) next[name] = vision;
+        setVisionOverrides(next);
+      });
+    };
+    load();
+    const unsubscribe = onModelCapabilitiesChanged((detail) => {
+      if (detail.providerName === provider.name) load();
+    });
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, [provider.name, modelsForDisplay]);
 
   // —— 归类 ——
   const SERIES_ORDER = [
@@ -357,7 +388,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
     const caps = getModelCapabilities(m.name);
     if (filterThinking && !caps.supportsThinking) return false;
     if (filterTools && !caps.supportsFunctionCalling) return false;
-    if (filterVision && !caps.supportsVision) return false;
+    if (filterVision && !(visionOverrides[m.name] ?? caps.supportsVision)) return false;
     return true;
   }).sort(compareModels);
 

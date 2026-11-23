@@ -473,6 +473,27 @@ export const specializedStorage = {
           return StorageUtil.removeItem(key, 'model-strategy.json');
         },
 
+        // —— 模型能力覆盖（per-provider、per-model）——
+        // 名字推断判不准时（本地模型、改名后的模型）由用户手动指定，见
+        // src/lib/provider/modelCapabilityOverrides.ts。
+        setModelCapabilityOverride: async (
+          providerName: string,
+          modelId: string,
+          capability: string,
+          value: boolean | null,
+        ) => {
+          const key = `${providerName.toLowerCase()}_${modelId.toLowerCase()}_capabilities`;
+          const record =
+            (await StorageUtil.getItem<Record<string, boolean>>(key, {}, 'model-capabilities.json')) || {};
+          if (value === null) delete record[capability];
+          else record[capability] = value;
+          return StorageUtil.setItem(key, record, 'model-capabilities.json');
+        },
+        getModelCapabilityOverrides: (providerName: string, modelId: string) => {
+          const key = `${providerName.toLowerCase()}_${modelId.toLowerCase()}_capabilities`;
+          return StorageUtil.getItem<Record<string, boolean>>(key, {}, 'model-capabilities.json');
+        },
+
         // —— Provider 模型获取调试规则 ——
         /**
          * 保存指定 Provider 的模型获取调试规则

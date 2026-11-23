@@ -16,9 +16,12 @@ import {
   trackAndroidPhotoResponse,
 } from '@/lib/android/androidPhotoSend';
 
-const { transport, modelStrategy } = vi.hoisted(() => ({
+const { transport, modelStrategy, capabilityOverrides } = vi.hoisted(() => ({
   transport: vi.fn(),
   modelStrategy: vi.fn(async (): Promise<string | null> => null),
+  capabilityOverrides: vi.fn(
+    async (): Promise<Record<string, boolean>> => ({}),
+  ),
 }));
 vi.mock('@/lib/request', () => ({ tauriFetch: transport }));
 vi.mock('@/lib/llm/KeyManager', () => ({
@@ -33,6 +36,7 @@ vi.mock('@/lib/storage', () => ({
     models: {
       getModelStrategy: modelStrategy,
       getProviderDefaultStrategy: async () => null,
+      getModelCapabilityOverrides: capabilityOverrides,
     },
   },
 }));
@@ -45,6 +49,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
   transport.mockReset();
   modelStrategy.mockReset();
+  capabilityOverrides.mockReset();
+  capabilityOverrides.mockResolvedValue({});
+});
+
+// 名字推断只是默认值：本地服务上的模型名字里通常没有任何线索。
+it('routes a model the user marked as vision-capable despite its name', async () => {
+  const provider = new OpenAICompatibleProvider('https://example.test/v1');
+  ProviderRegistry.register(provider);
+  capabilityOverrides.mockResolvedValue({ vision: true });
+  expect(
+    await resolveAndroidPhotoRoute(provider.name, 'Qwen3.8-Flash-Next'),
+  ).toBe('openai-compatible');
+});
+
+it('drops a photo route the user marked as not vision-capable', async () => {
+  const provider = new OpenAICompatibleProvider('https://example.test/v1');
+  ProviderRegistry.register(provider);
+  capabilityOverrides.mockResolvedValue({ vision: false });
+  expect(await resolveAndroidPhotoRoute(provider.name, 'gpt-4o')).toBeNull();
 });
 
 it.each([

@@ -24,6 +24,7 @@ import {
   resolveAndroidPhotoRoute,
   shouldClearPhotoDraft,
 } from '@/lib/android/androidPhotoSend';
+import { onModelCapabilitiesChanged } from '@/lib/provider/modelCapabilityOverrides';
 
 export type AndroidPhotoFeedback =
   | 'checking'
@@ -132,17 +133,30 @@ export function useAndroidPhotoDraft(
   useEffect(() => {
     if (!photo || !providerName || !modelId) return;
     let cancelled = false;
-    void resolveAndroidPhotoRoute(providerName, modelId).then((route) => {
-      if (!cancelled) {
-        setSupport({
-          providerName,
-          modelId,
-          recipient: route ? { providerName, modelId, route } : null,
-        });
-      }
+    const resolve = () => {
+      void resolveAndroidPhotoRoute(providerName, modelId).then((route) => {
+        if (!cancelled) {
+          setSupport({
+            providerName,
+            modelId,
+            recipient: route ? { providerName, modelId, route } : null,
+          });
+        }
+      });
+    };
+    resolve();
+    // 挂着照片去模型菜单里打开「支持视觉」，回来得重新判断一次，否则仍然发不出去。
+    const unsubscribe = onModelCapabilitiesChanged((detail) => {
+      if (
+        detail.providerName === providerName &&
+        detail.modelId === modelId &&
+        detail.capability === 'vision'
+      )
+        resolve();
     });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [photo, providerName, modelId]);
 

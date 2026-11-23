@@ -154,10 +154,12 @@ export async function resolveAndroidPhotoRoute(
   modelId: string,
 ): Promise<AndroidPhotoRoute | null> {
   try {
-    const { getModelCapabilities } = await import(
-      '@/lib/provider/staticModels'
+    const { resolveModelCapabilities } = await import(
+      '@/lib/provider/modelCapabilityOverrides'
     );
-    if (!getModelCapabilities(modelId).supportsVision) return null;
+    // 名字推断只是默认值：用户可以在模型菜单里改「支持视觉」。
+    if (!(await resolveModelCapabilities(providerName, modelId)).supportsVision)
+      return null;
     const [{ specializedStorage }, { ProviderRegistry }] = await Promise.all([
       import('@/lib/storage'),
       import('@/lib/llm/ProviderRegistry'),
