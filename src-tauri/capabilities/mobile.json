@@ -12,6 +12,7 @@
     { "identifier": "fs:scope", "allow": [{"path": "$APPDATA"}, {"path": "$APPDATA/**/*"}, {"path": "$APPLOG"}, {"path": "$APPLOG/**/*"}] },
     { "identifier": "http:default", "allow": [
       { "url": "https://*" },
+      { "url": "https://*:*" },
       { "url": "http://*:*" }
     ] },
     "store:default", "opener:default", "dialog:default",
