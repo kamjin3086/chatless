@@ -38,6 +38,38 @@ in the stream layer.
   is in flight in #171 (`src-tauri/src/`, `src/lib/window/`).
 - Known traps: `docs/tauri-window-pitfalls.md`; screenshotting is `scripts/shot/`.
 
+## Interface language (zh-CN / en-US)
+
+The UI is bilingual, and the seam is that three things have to agree: the dictionaries,
+the store that holds the choice, and the components that render it.
+
+| Step | Where |
+|---|---|
+| The copy | `src/i18n/locales/zh-CN.ts` and `en-US.ts`; the shared key set is `src/i18n/types.ts` (`TranslationKey`) |
+| The contract between them | `src/i18n/__tests__/index.test.ts` - same keys both sides, same `{placeholders}` per key |
+| The choice and its persistence | `src/store/localeStore.ts` (`locale`, `translate`, `ready`); `<html lang>` is set from it via `getHtmlLang` |
+| Reading it in a component | `useTranslation()` in `src/i18n/useTranslation.ts`; outside React, `useLocaleStore.getState().t` |
+| Applying it without a reload | components must read `t` at render time - a label built once at module scope keeps the language it was built in |
+
+Three consequences that are easy to miss from inside a component:
+
+- **A new key is three edits**: both dictionaries and `types.ts`. The dictionary files
+  are append-only for formatting reasons - a reflow of one is a 2,000-line diff.
+- **Anything persisted as text is frozen in the language it was written in**. Stopped-run
+  markers, send-failure reasons and seeded knowledge data are stored strings, so they
+  render as stored; translating them at render time needs the event, not the sentence.
+- **Model-facing text is not UI text.** Prompts stay English regardless of the interface
+  language (`docs/prompt-language.md`), and `src/lib/prompts/__tests__/prompt-language.test.ts`
+  also checks the one prompt assembled in the send path.
+- **Provider and catalogue labels travel with the language too**: `src/lib/models.json`
+  carries `descriptionEn` beside the Chinese description, and the model managers pick
+  per locale. A model *name* is an identifier and is never translated.
+
+Verification, in order: `npx vitest run src/i18n src/lib/prompts`, then
+`node scripts/e2e/i18n-locale-acceptance.mjs` against a built binary (`CHATLESS_E2E_APP`)
+with a WebDriver on `127.0.0.1:4444` - it switches language in the real window, walks every
+route and settings tab, and fails on Chinese interface copy left behind.
+
 ## Where the rules live
 
 - Agent behaviour and the PR bar: `docs/agents/maintenance.md`.

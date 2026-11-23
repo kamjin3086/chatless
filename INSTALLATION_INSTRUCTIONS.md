@@ -1,5 +1,7 @@
 # Chatless 安装指南
 
+中文 | [English](INSTALLATION_INSTRUCTIONS_EN.md)
+
 ## 快速安装
 
 选择您的操作系统，点击对应链接下载最新版本：
@@ -58,5 +60,5 @@
 ## 获取帮助
 
 - [查看所有版本](https://github.com/kamjin3086/chatless/releases)
-- [报告问题](https://github.com/kamjin3086/chatless/issues)
-- [项目主页](https://github.com/kamjin3086/chatless)
+- [报告问题](https://github.com/kamjin3086/chatless/issues)（可用中文填写，见[贡献指南](CONTRIBUTING.md)）
+- [项目主页](README.md)

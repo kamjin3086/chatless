@@ -1,5 +1,7 @@
 # Chatless Installation Guide
 
+[中文](INSTALLATION_INSTRUCTIONS.md) | English
+
 ## Quick Install
 
 Choose your operating system and click the corresponding link to download the latest version:
@@ -58,5 +60,5 @@ Choose your operating system and click the corresponding link to download the la
 ## Get Help
 
 - [View all versions](https://github.com/kamjin3086/chatless/releases)
-- [Report issues](https://github.com/kamjin3086/chatless/issues)
-- [Project homepage](https://github.com/kamjin3086/chatless)
+- [Report an issue](https://github.com/kamjin3086/chatless/issues) (see the [Contributing Guide](CONTRIBUTING_EN.md) for what to include)
+- [Project homepage](README_EN.md)
