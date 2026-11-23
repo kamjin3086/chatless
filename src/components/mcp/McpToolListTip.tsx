@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface McpToolListTipProps {
   toolCount: number;
@@ -17,6 +18,7 @@ interface McpToolListTipProps {
  * - 工具数据由调用方提供，组件仅负责展示
  */
 export function McpToolListTip({ toolCount, tools, className, children }: McpToolListTipProps) {
+  const { t } = useLocaleStore();
   const list = (tools || []).map((t: any) =>
     typeof t === 'string' ? { name: t } : { name: String(t?.name || ''), description: t?.description }
   ).filter(it => it.name);
@@ -30,7 +32,7 @@ export function McpToolListTip({ toolCount, tools, className, children }: McpToo
       <TooltipContent side="right" sideOffset={8} className={`max-w-md p-3 z-[9999] ${className || ''}`}>
         <div className="space-y-2">
           <div className="font-medium text-sm text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 pb-1">
-            可用工具列表 ({toolCount})
+            {t('mcpSettings.availableTools').replace('{0}', String(toolCount))}
           </div>
           <div className="space-y-1.5 max-h-40 overflow-y-auto">
             {list.map((tool, index) => (
@@ -44,7 +46,7 @@ export function McpToolListTip({ toolCount, tools, className, children }: McpToo
               </div>
             ))}
             {list.length === 0 && (
-              <div className="text-xs text-slate-500">无可用工具</div>
+              <div className="text-xs text-slate-500">{t('mcpSettings.noTools')}</div>
             )}
           </div>
         </div>

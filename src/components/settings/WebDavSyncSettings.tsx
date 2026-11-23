@@ -10,47 +10,40 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWebDavSyncStore, ALL_SYNC_DATA_TYPES, type ConnectionStatus } from "@/store/webDavSyncStore";
-import { SYNC_DATA_TYPE_INFO } from "@/lib/sync/core/types";
+import { translate } from "@/i18n";
+import type { Locale, TranslationKey } from "@/i18n/types";
+import { useLocaleStore } from "@/store/localeStore";
 import { cn } from "@/lib/utils";
+import {
+  formatWebDavSyncDataTypes,
+  formatWebDavSyncSummary,
+  formatWebDavSyncText,
+  formatWebDavSyncTime,
+} from "./webDavSyncPresentation";
 
 /** 连接状态圆点组件 */
-function ConnectionStatusDot({ status }: { status: ConnectionStatus }) {
-  const statusConfig = {
-    unknown: { color: "bg-slate-400", text: "未检测" },
-    checking: { color: "bg-yellow-500 animate-pulse", text: "检测中..." },
-    connected: { color: "bg-green-500", text: "已连接" },
-    error: { color: "bg-red-500", text: "连接失败" },
+function ConnectionStatusDot({ status, locale }: { status: ConnectionStatus; locale: Locale }) {
+  const statusColors = {
+    unknown: "bg-slate-400",
+    checking: "bg-yellow-500 animate-pulse",
+    connected: "bg-green-500",
+    error: "bg-red-500",
   };
-
-  const config = statusConfig[status];
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className={cn("w-2 h-2 rounded-full", config.color)} />
-      <span className="text-xs text-slate-500 dark:text-slate-400">{config.text}</span>
+      <span className={cn("w-2 h-2 rounded-full", statusColors[status])} />
+      <span className="text-xs text-slate-500 dark:text-slate-400">
+        {translate(locale, `settings.sync.connection.${status}`)}
+      </span>
     </div>
   );
 }
 
-/** 格式化时间显示 */
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - timestamp;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "刚刚";
-  if (diffMins < 60) return `${diffMins} 分钟前`;
-  if (diffHours < 24) return `${diffHours} 小时前`;
-  if (diffDays < 7) return `${diffDays} 天前`;
-  
-  return date.toLocaleDateString();
-}
-
 export function WebDavSyncSettings() {
   const cfg = useWebDavSyncStore();
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [dataTypesOpen, setDataTypesOpen] = useState(false);
@@ -78,31 +71,32 @@ export function WebDavSyncSettings() {
     await cfg.performSync('both');
   };
 
-  /** 获取启用的数据类型标签 */
-  const enabledTypesLabel = useMemo(() => {
-    if (cfg.enabledDataTypes.length === 0) return '未选择';
-    if (cfg.enabledDataTypes.length === ALL_SYNC_DATA_TYPES.length) return '全部';
-    return cfg.enabledDataTypes
-      .map(t => SYNC_DATA_TYPE_INFO[t]?.label || t)
-      .join('、');
-  }, [cfg.enabledDataTypes]);
+  const enabledTypesLabel = cfg.enabledDataTypes.length === 0
+    ? t('settings.sync.dataTypes.none')
+    : cfg.enabledDataTypes.length === ALL_SYNC_DATA_TYPES.length
+      ? t('settings.sync.dataTypes.all')
+      : formatWebDavSyncDataTypes(locale, cfg.enabledDataTypes);
+
+  // History entries have their own timestamps; match the persisted summary instead.
+  const lastSyncEntry = cfg.syncHistory.find((entry) => !entry.error && entry.summary === cfg.lastSyncSummary);
+  const lastSyncSummary = lastSyncEntry ? formatWebDavSyncSummary(locale, lastSyncEntry) : cfg.lastSyncSummary;
 
   return (
     <div className="space-y-4">
       <SettingsPageHeader
-        title="同步设置"
-        description="使用 WebDAV 在多设备间同步提示词、技能配置、Provider 设置等数据"
+        title={t('settings.sync.title')}
+        description={t('settings.sync.description')}
       />
 
       <SettingsCard>
         <div className="flex items-center justify-between mb-3">
-          <SettingsSectionHeader icon={Cloud} title="WebDAV 同步" />
-          {cfg.enabled && <ConnectionStatusDot status={cfg.connectionStatus} />}
+          <SettingsSectionHeader icon={Cloud} title={t('settings.sync.webdav')} />
+          {cfg.enabled && <ConnectionStatusDot status={cfg.connectionStatus} locale={locale} />}
         </div>
 
         <div className="space-y-2">
           <ToggleSwitch
-            label="启用同步"
+            label={t('settings.sync.enabled')}
             checked={cfg.enabled}
             onChange={(v) => cfg.setConfig({ enabled: v })}
           />
@@ -110,10 +104,10 @@ export function WebDavSyncSettings() {
           {cfg.enabled && (
             <>
               <ToggleSwitch
-                label="自动同步"
+                label={t('settings.sync.autoSync')}
                 checked={cfg.autoSync}
                 onChange={(v) => cfg.setConfig({ autoSync: v })}
-                tooltip="数据变化后自动同步（5秒延迟）"
+                tooltip={t('settings.sync.autoSyncHelp')}
               />
 
               {/* 数据类型选择 */}
@@ -121,7 +115,7 @@ export function WebDavSyncSettings() {
                 <CollapsibleTrigger className="flex items-center justify-between w-full text-sm">
                   <div className="flex items-center gap-1.5">
                     <Database className="w-4 h-4 text-slate-400" />
-                    <span>同步内容</span>
+                    <span>{t('settings.sync.dataTypes')}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -136,7 +130,6 @@ export function WebDavSyncSettings() {
                 <CollapsibleContent className="pt-2">
                   <div className="space-y-2 pl-5">
                     {ALL_SYNC_DATA_TYPES.map((type) => {
-                      const info = SYNC_DATA_TYPE_INFO[type];
                       const isChecked = cfg.enabledDataTypes.includes(type);
                       return (
                         <label
@@ -150,10 +143,10 @@ export function WebDavSyncSettings() {
                           />
                           <div className="flex-1">
                             <div className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">
-                              {info?.label || type}
+                              {t(`settings.sync.dataTypes.${type}`)}
                             </div>
                             <div className="text-xs text-slate-500 dark:text-slate-400">
-                              {info?.description}
+                              {t(`settings.sync.dataTypes.${type}Help`)}
                             </div>
                           </div>
                         </label>
@@ -166,37 +159,41 @@ export function WebDavSyncSettings() {
               <div className="pt-2 border-t border-slate-100/80 dark:border-slate-800/60" />
 
               <InputField
-                label="WebDAV URL"
+                label={t('settings.sync.url')}
                 value={cfg.url}
                 onChange={(e) => cfg.setConfig({ url: e.target.value })}
                 placeholder="https://example.com/dav/files/user/"
                 icon={<Link2 className="w-4 h-4 text-slate-400" />}
-                tooltip="WebDAV 服务器地址，建议以 / 结尾"
+                tooltip={t('settings.sync.urlHelp')}
               />
 
               <InputField
-                label="远端目录"
+                label={t('settings.sync.basePath')}
                 value={cfg.basePath}
                 onChange={(e) => cfg.setConfig({ basePath: e.target.value })}
                 placeholder="chatless"
                 icon={<Folder className="w-4 h-4 text-slate-400" />}
-                tooltip="数据存储的子目录名称"
+                tooltip={t('settings.sync.basePathHelp')}
               />
 
               <InputField
-                label="用户名"
+                label={t('settings.sync.username')}
                 value={cfg.username}
                 onChange={(e) => cfg.setConfig({ username: e.target.value })}
-                placeholder="username"
+                placeholder={t('settings.sync.username')}
                 icon={<User className="w-4 h-4 text-slate-400" />}
               />
 
               <InputField
-                label="密码"
+                label={t('settings.sync.password')}
                 type="password"
                 value={cfg.password}
                 onChange={(e) => cfg.setConfig({ password: e.target.value })}
                 placeholder="••••••••"
+                passwordVisibilityLabels={{
+                  show: t('settings.sync.showPassword'),
+                  hide: t('settings.sync.hidePassword'),
+                }}
                 icon={<KeyRound className="w-4 h-4 text-slate-400" />}
               />
 
@@ -207,7 +204,7 @@ export function WebDavSyncSettings() {
                   onClick={onSync}
                 >
                   <RefreshCw className={cn("w-4 h-4 mr-1.5", syncing && "animate-spin")} />
-                  {syncing ? "同步中..." : "立即同步"}
+                  {t(syncing ? 'settings.sync.syncing' : 'settings.sync.syncNow')}
                 </Button>
                 <Button
                   size="sm"
@@ -215,7 +212,7 @@ export function WebDavSyncSettings() {
                   disabled={cfg.connectionStatus === 'checking'}
                   onClick={() => cfg.checkConnection()}
                 >
-                  检测连接
+                  {t('settings.sync.checkConnection')}
                 </Button>
               </div>
 
@@ -224,12 +221,15 @@ export function WebDavSyncSettings() {
                 <div className="mt-3 text-xs">
                   {cfg.lastSyncAt && !cfg.lastError && (
                     <div className="text-slate-500 dark:text-slate-400">
-                      上次同步：{cfg.lastSyncSummary}（{formatTime(cfg.lastSyncAt)}）
+                      {formatWebDavSyncText(locale, lastSyncSummary ? 'settings.sync.lastSync' : 'settings.sync.lastSyncTime', {
+                        summary: lastSyncSummary ?? '',
+                        time: formatWebDavSyncTime(locale, cfg.lastSyncAt),
+                      })}
                     </div>
                   )}
                   {cfg.lastError && (
                     <div className="text-red-500 dark:text-red-400 line-clamp-2">
-                      错误：{cfg.lastError}
+                      {formatWebDavSyncText(locale, 'settings.sync.error', { detail: cfg.lastError })}
                     </div>
                   )}
                 </div>
@@ -241,7 +241,7 @@ export function WebDavSyncSettings() {
                   <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
                     <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", historyOpen && "rotate-180")} />
                     <History className="w-3.5 h-3.5" />
-                    <span>同步历史（{cfg.syncHistory.length}）</span>
+                    <span>{formatWebDavSyncText(locale, 'settings.sync.history', { count: String(cfg.syncHistory.length) })}</span>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
@@ -257,15 +257,15 @@ export function WebDavSyncSettings() {
                         >
                           <div className="flex justify-between items-start gap-2">
                             <div className="flex-1">
-                              <div>{entry.error ? `失败: ${entry.error}` : entry.summary}</div>
+                              <div>{formatWebDavSyncSummary(locale, entry)}</div>
                               {entry.dataTypes && entry.dataTypes.length > 0 && (
                                 <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                                  {entry.dataTypes.map(t => SYNC_DATA_TYPE_INFO[t]?.label || t).join('、')}
+                                  {formatWebDavSyncDataTypes(locale, entry.dataTypes)}
                                 </div>
                               )}
                             </div>
                             <span className="text-slate-400 dark:text-slate-500 whitespace-nowrap">
-                              {formatTime(entry.timestamp)}
+                              {formatWebDavSyncTime(locale, entry.timestamp)}
                             </span>
                           </div>
                         </div>
@@ -276,7 +276,7 @@ export function WebDavSyncSettings() {
                         onClick={() => cfg.clearSyncHistory()}
                         className="mt-2 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                       >
-                        清除历史
+                        {t('settings.sync.clearHistory')}
                       </button>
                     )}
                   </CollapsibleContent>

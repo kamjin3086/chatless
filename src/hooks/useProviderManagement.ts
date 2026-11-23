@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ProviderMetadata } from '@/lib/metadata/types';
 import { toast } from '@/components/ui/sonner';
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
+import { translateConnectionCheckMessage } from '@/lib/provider/formatConnectionCheckMessage';
 
 // 新的 ProviderStatusStore
 import {
@@ -127,7 +130,7 @@ export function useProviderManagement() {
           // 启动时清理任何遗留的CONNECTING状态
           if (p.displayStatus === 'CONNECTING') {
             console.warn(`发现遗留的CONNECTING状态：${p.name}，将重置为UNKNOWN`);
-            return { ...p, displayStatus: 'UNKNOWN' as const, statusTooltip: '状态未知，请手动刷新' };
+            return { ...p, displayStatus: 'UNKNOWN' as const, statusTooltip: translate(useLocaleStore.getState().locale, 'provider.connection.unknownStatus') };
           }
           return p;
         });
@@ -232,7 +235,7 @@ export function useProviderManagement() {
               const keyEmpty = !(latest && String(latest).trim());
               setStatusStore(provider.name, {
                 configStatus: (inputEmpty && keyEmpty) ? 'NO_KEY' : undefined,
-                temporaryMessage: (inputEmpty && keyEmpty) ? (p.message ?? '未配置API密钥') : undefined,
+                temporaryMessage: (inputEmpty && keyEmpty) ? (p.message ?? translate(useLocaleStore.getState().locale, 'provider.status.noApiKey')) : undefined,
                 lastCheckedAt: now,
               }, false);
             } catch {
@@ -240,7 +243,7 @@ export function useProviderManagement() {
               const inputEmpty = !(provider.default_api_key && String(provider.default_api_key).trim());
               setStatusStore(provider.name, {
                 configStatus: inputEmpty ? 'NO_KEY' : undefined,
-                temporaryMessage: inputEmpty ? (p.message ?? '未配置API密钥') : undefined,
+                temporaryMessage: inputEmpty ? (p.message ?? translate(useLocaleStore.getState().locale, 'provider.status.noApiKey')) : undefined,
                 lastCheckedAt: now,
               }, false);
             }
@@ -255,11 +258,17 @@ export function useProviderManagement() {
           // 统一改用通知反馈结果：标题为 Provider 名称，描述为标准化文案
           if (showToast) {
             const title = provider.displayName || provider.name;
+            const { locale } = useLocaleStore.getState();
             if (p.status === 'CONNECTED') {
-              toast.success(title, { description: p.message || '接口可访问', duration: 4000 });
+              const description = p.message
+                ? translateConnectionCheckMessage(locale, p.message)
+                : translate(locale, 'provider.connection.reachable');
+              toast.success(title, { description, duration: 4000 });
             } else {
               toast.error(title, {
-                description: p.message || '无法连接，请检查服务是否启动以及地址和端口',
+                description: p.message
+                  ? translateConnectionCheckMessage(locale, p.message)
+                  : translate(locale, 'provider.connection.disconnectedHelp'),
                 duration: 5000,
               });
             }
@@ -279,12 +288,15 @@ export function useProviderManagement() {
         setStatusStore(provider.name, {
           lastCheckedAt: Date.now(),
           lastResult: 'NOT_CONNECTED',
-          lastMessage: p.message ?? '无法连接',
+          lastMessage: p.message ?? translate(useLocaleStore.getState().locale, 'provider.connection.disconnected'),
         }, false);
 
         if (showToast) {
+          const { locale } = useLocaleStore.getState();
           toast.error(`${provider.displayName || provider.name}`, {
-            description: p.message || '无法连接，请检查服务是否启动以及地址和端口',
+            description: p.message
+              ? translateConnectionCheckMessage(locale, p.message)
+              : translate(locale, 'provider.connection.disconnectedHelp'),
           });
         }
         offStart(); offSuccess(); offFail(); offTimeout(); offCancel();
@@ -298,11 +310,14 @@ export function useProviderManagement() {
         setStatusStore(provider.name, {
           lastCheckedAt: Date.now(),
           lastResult: 'NOT_CONNECTED',
-          lastMessage: '连接超时',
+          lastMessage: translate(useLocaleStore.getState().locale, 'provider.connection.timedOut'),
         }, false);
 
         if (showToast) {
-          toast.error(`${provider.displayName || provider.name}`, { description: '连接超时' });
+          const { locale } = useLocaleStore.getState();
+          toast.error(`${provider.displayName || provider.name}`, {
+            description: translate(locale, 'provider.connection.timedOut'),
+          });
         }
         offStart(); offSuccess(); offFail(); offTimeout(); offCancel();
         resolve();
@@ -410,13 +425,16 @@ export function useProviderManagement() {
         try { await refreshOllamaModels(effectiveUrl); } catch {/* noop */}
       }
 
-      toast.success("地址已保存");
+      toast.success(translate(useLocaleStore.getState().locale, 'provider.connection.addressSaved'));
       if (current) {
         void handleSingleProviderRefresh(current, false);
       }
     } catch (error: any) {
       console.error("Error updating provider URL:", error);
-      toast.error("地址保存失败", { description: error?.message || "请检查后重试。" });
+      const { locale } = useLocaleStore.getState();
+      toast.error(translate(locale, 'provider.connection.addressSaveFailed'), {
+        description: error?.message || translate(locale, 'provider.connection.addressSaveRetry'),
+      });
     }
   }, [refreshOllamaModels, handleSingleProviderRefresh, providers]);
 
@@ -437,7 +455,10 @@ export function useProviderManagement() {
       await updateProviderConfigUseCase.execute(providerName, { apiKey: finalApiKey });
     } catch (error: any) {
       console.error("更新 Provider 默认 API Key 覆盖配置失败:", error);
-      toast.error("更新 API 密钥失败", { description: error?.message || "无法保存密钥更改。" });
+      const { locale } = useLocaleStore.getState();
+      toast.error(translate(locale, 'provider.connection.keySaveFailed'), {
+        description: error?.message || translate(locale, 'provider.connection.keySaveDetail'),
+      });
       // loadData(true);
     }
   }, [handleSingleProviderRefresh, providers]);
@@ -463,7 +484,10 @@ export function useProviderManagement() {
       }
     } catch (error: any) {
       console.error("更新 Model API Key 覆盖配置失败:", error);
-      toast.error("更新模型 API 密钥失败", { description: error?.message || "无法保存密钥更改。" });
+      const { locale } = useLocaleStore.getState();
+      toast.error(translate(locale, 'provider.connection.modelKeySaveFailed'), {
+        description: error?.message || translate(locale, 'provider.connection.keySaveDetail'),
+      });
       // loadData(true);
     }
   }, []);
@@ -479,10 +503,10 @@ export function useProviderManagement() {
       await providerRepository.getAll();
 
 
-      toast.success("提供商刷新完成");
+      toast.success(translate(useLocaleStore.getState().locale, 'provider.refresh.completed'));
     } catch (e:any) {
       console.error("Global refresh failed", e);
-      toast.error("刷新失败", { description: e?.message || String(e) });
+      toast.error(translate(useLocaleStore.getState().locale, 'provider.refresh.failed'), { description: e?.message || String(e) });
     }
     setIsRefreshing(false);
   }, [storeRefreshAll]);
@@ -509,10 +533,10 @@ export function useProviderManagement() {
       } catch (e) {
         console.warn('sync preferences to stores failed', e);
       }
-      toast.success(`已更新 ${providerName} 的高级设置`);
+      toast.success(translate(useLocaleStore.getState().locale, 'provider.preference.updated').replace('{0}', providerName));
     } catch (error) {
       console.error("Failed to update provider preferences:", error);
-      toast.error("设置更新失败");
+      toast.error(translate(useLocaleStore.getState().locale, 'provider.preference.updateFailed'));
       // 回滚交由仓库订阅完成
     }
   }, []);

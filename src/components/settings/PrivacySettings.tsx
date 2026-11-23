@@ -27,6 +27,7 @@ import { StorageUtil } from "@/lib/storage";
 import { Download as DownloadIcon } from "lucide-react";
 import { Upload } from "lucide-react";
 import React from "react";
+import { useTranslation } from "@/i18n/useTranslation";
 
 // 浏览器端导出无需文件系统插件
 
@@ -46,6 +47,7 @@ export function PrivacySettings() {
   const [exporting, setExporting] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
+  const t = useTranslation();
 
   const clearChats = async () => {
     setClearing(true);
@@ -53,9 +55,14 @@ export function PrivacySettings() {
       const dbService = DatabaseService.getInstance();
       await dbService.initialize();
       await dbService.clearAllConversations();
-      toast.success("已清空全部聊天记录");
+      toast.success(t("settings.privacy.chatsCleared"));
     } catch (e: any) {
-      toast.error(`清空失败: ${e?.message || "未知错误"}`);
+      toast.error(
+        t("settings.privacy.clearChatsFailed").replace(
+          "{0}",
+          e?.message || t("settings.privacy.unknownError"),
+        ),
+      );
     } finally {
       setClearing(false);
     }
@@ -68,9 +75,14 @@ export function PrivacySettings() {
       await dbService.initialize();
       await dbService.clearKnowledgeData();
 
-      toast.success("已清空知识库文档与索引");
+      toast.success(t("settings.privacy.knowledgeCleared"));
     } catch (e: any) {
-      toast.error(`清理失败: ${e?.message || "未知错误"}`);
+      toast.error(
+        t("settings.privacy.clearKnowledgeFailed").replace(
+          "{0}",
+          e?.message || t("settings.privacy.unknownError"),
+        ),
+      );
     } finally {
       setClearingKb(false);
     }
@@ -106,9 +118,14 @@ export function PrivacySettings() {
         }
       } catch {}
 
-      toast.success("已清空本地模型缓存");
+      toast.success(t("settings.privacy.modelCacheCleared"));
     } catch (e: any) {
-      toast.error(`清理失败: ${e?.message || "未知错误"}`);
+      toast.error(
+        t("settings.privacy.clearModelCacheFailed").replace(
+          "{0}",
+          e?.message || t("settings.privacy.unknownError"),
+        ),
+      );
     } finally {
       setClearingModel(false);
     }
@@ -130,12 +147,17 @@ export function PrivacySettings() {
         await getKnowledgeBaseConfigManager().resetToDefault();
       } catch {}
 
-      toast.success("已恢复出厂设置，应用将重新加载");
+      toast.success(t("settings.privacy.factoryResetDone"));
       setTimeout(() => {
         location.reload();
       }, 1500);
     } catch (e: any) {
-      toast.error(`恢复失败: ${e?.message || "未知错误"}`);
+      toast.error(
+        t("settings.privacy.factoryResetFailed").replace(
+          "{0}",
+          e?.message || t("settings.privacy.unknownError"),
+        ),
+      );
     } finally {
       setResetting(false);
     }
@@ -163,12 +185,12 @@ export function PrivacySettings() {
       const success = await downloadService.downloadJson(fileName, exportObj);
       
       if (success) {
-        toast.success("聊天记录已导出");
+        toast.success(t("settings.privacy.chatsExported"));
       }
     } catch (e: any) {
       console.error('导出聊天记录失败', e);
       const msg = e?.message || JSON.stringify(e);
-      toast.error(`导出失败: ${msg}`);
+      toast.error(t("settings.privacy.exportFailed").replace("{0}", msg));
     } finally {
       setExporting(false);
     }
@@ -184,7 +206,7 @@ export function PrivacySettings() {
     
     // 验证文件类型
     if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
-      toast.error('请选择JSON格式的文件');
+      toast.error(t("settings.privacy.importInvalidType"));
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -194,7 +216,8 @@ export function PrivacySettings() {
       const text = await file.text();
       const data = JSON.parse(text);
       if (!Array.isArray(data.conversations)) {
-        throw new Error('文件格式不正确，请确保是chatless导出的聊天备份文件');
+        toast.error(t("settings.privacy.importInvalidFormat"));
+        return;
       }
 
       const db = DatabaseService.getInstance();
@@ -203,7 +226,7 @@ export function PrivacySettings() {
       for (const conv of data.conversations) {
         // 导入时保持原有的收藏状态，如果没有则默认为 false
         const newConv = await db.createConversation(
-          conv.title || '导入对话', 
+          conv.title || t("settings.privacy.importDefaultTitle"), 
           conv.model_id || 'unknown',
           {
             is_favorite: conv.is_favorite || false
@@ -220,9 +243,19 @@ export function PrivacySettings() {
       const { useChatStore } = await import('@/store/chatStore');
       await useChatStore.getState().loadConversations();
       
-      toast.success(`已导入 ${data.conversationCount || data.conversations.length} 个对话`);
+      toast.success(
+        t("settings.privacy.importDone").replace(
+          "{0}",
+          String(data.conversationCount || data.conversations.length),
+        ),
+      );
     } catch (err:any) {
-      toast.error(`导入失败: ${err?.message || '未知错误'}`);
+      toast.error(
+        t("settings.privacy.importFailed").replace(
+          "{0}",
+          err?.message || t("settings.privacy.unknownError"),
+        ),
+      );
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -233,18 +266,18 @@ export function PrivacySettings() {
     <SettingsCard>
       <SettingsSectionHeader
         icon={Shield}
-        title="数据与备份"
+        title={t("settings.privacy.dataAndBackup")}
       />
 
       <div className="flex flex-wrap gap-2">
         <input type="file" accept="application/json" hidden ref={fileInputRef} onChange={handleFileChange} />
         <Button variant="outline" size="sm" className="h-7 px-2.5" onClick={triggerImport} disabled={importing}>
           <Upload className={`w-3.5 h-3.5 ${importing ? "animate-spin" : ""}`} />
-          {importing ? "导入中..." : "导入备份"}
+          {importing ? t("settings.privacy.importing") : t("settings.privacy.importBackup")}
         </Button>
         <Button variant="outline" size="sm" className="h-7 px-2.5" onClick={exportChats} disabled={exporting}>
           <DownloadIcon className={`w-3.5 h-3.5 ${exporting ? "animate-spin" : ""}`} />
-          {exporting ? "导出中..." : "导出记录"}
+          {exporting ? t("settings.privacy.exporting") : t("settings.privacy.exportRecords")}
         </Button>
       </div>
 
@@ -256,7 +289,7 @@ export function PrivacySettings() {
             className="mt-3 h-7 px-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 data-[state=open]:[&_svg]:rotate-180"
           >
             <ChevronDown className="w-3.5 h-3.5 transition-transform" />
-            危险操作
+            {t("settings.privacy.dangerZone")}
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -270,38 +303,38 @@ export function PrivacySettings() {
               className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>清空聊天记录</span>
+              <span>{t("settings.privacy.clearChats")}</span>
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
-            <AlertDialogTitle>确认清空全部聊天记录？</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.privacy.clearChatsTitle")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
-                <p className="mb-2 text-sm text-red-600 font-semibold">将执行以下操作并<strong>无法撤销</strong>：</p>
+                <p className="mb-2 text-sm text-red-600 font-semibold">{t("settings.privacy.clearChatsWarning")}<strong>{t("settings.privacy.irreversible")}</strong>{t("settings.privacy.warningColon")}</p>
                 <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                  <li>删除所有会话（Conversation）记录</li>
-                  <li>删除每条聊天消息内容</li>
-                  <li>重置最近聊天模型统计</li>
+                  <li>{t("settings.privacy.clearChatsItemConversations")}</li>
+                  <li>{t("settings.privacy.clearChatsItemMessages")}</li>
+                  <li>{t("settings.privacy.clearChatsItemStats")}</li>
                 </ul>
-                <p className="mt-3">请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">DELETE</span> 以继续。</p>
+                <p className="mt-3">{t("settings.privacy.clearChatsConfirmPrefix")}<span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">DELETE</span>{t("settings.privacy.clearChatsConfirmSuffix")}</p>
               </div>
             </AlertDialogDescription>
             <input
               type="text"
               value={confirmInput}
               onChange={(e) => setConfirmInput(e.target.value)}
-              placeholder="请输入 DELETE 以确认"
+              placeholder={t("settings.privacy.clearChatsPlaceholder")}
               className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogCancel>{t("settings.privacy.cancel")}</AlertDialogCancel>
               <AlertDialogAction asChild>
                 <Button
                   variant="destructive"
                   disabled={clearing || !allowDelete}
                   onClick={clearChats}
                 >
-                  {clearing ? "清理中..." : "确认删除"}
+                  {clearing ? t("settings.privacy.clearing") : t("settings.privacy.confirmDelete")}
                 </Button>
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -316,38 +349,38 @@ export function PrivacySettings() {
               className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10"
             >
               <Book className="w-3.5 h-3.5" />
-              <span>清空知识库数据</span>
+              <span>{t("settings.privacy.clearKnowledge")}</span>
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
-            <AlertDialogTitle>确认清空所有知识库数据？</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.privacy.clearKnowledgeTitle")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
-                <p className="mb-2 text-sm text-red-600 font-semibold">此操作将删除以下内容并<strong>无法恢复</strong>：</p>
+                <p className="mb-2 text-sm text-red-600 font-semibold">{t("settings.privacy.clearKnowledgeWarning")}<strong>{t("settings.privacy.unrecoverable")}</strong>{t("settings.privacy.warningColon")}</p>
                 <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                  <li>已上传 / 抓取的文档文件</li>
-                  <li>删除知识库索引和缓存</li>
-                  <li>知识库配置项</li>
+                  <li>{t("settings.privacy.clearKnowledgeItemDocs")}</li>
+                  <li>{t("settings.privacy.clearKnowledgeItemIndex")}</li>
+                  <li>{t("settings.privacy.clearKnowledgeItemConfig")}</li>
                 </ul>
-                <p className="mt-3">若确认，请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">CLEAR KB</span> 继续。</p>
+                <p className="mt-3">{t("settings.privacy.clearKnowledgeConfirmPrefix")}<span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">CLEAR KB</span>{t("settings.privacy.clearKnowledgeConfirmSuffix")}</p>
               </div>
             </AlertDialogDescription>
             <input
               type="text"
               value={confirmKbInput}
               onChange={(e) => setConfirmKbInput(e.target.value)}
-              placeholder="请输入 CLEAR KB 以确认"
+              placeholder={t("settings.privacy.clearKnowledgePlaceholder")}
               className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogCancel>{t("settings.privacy.cancel")}</AlertDialogCancel>
               <AlertDialogAction asChild>
                 <Button
                   variant="destructive"
                   disabled={clearingKb || !allowKbDelete}
                   onClick={clearKnowledgeData}
                 >
-                  {clearingKb ? "清理中..." : "确认删除"}
+                  {clearingKb ? t("settings.privacy.clearing") : t("settings.privacy.confirmDelete")}
                 </Button>
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -358,37 +391,37 @@ export function PrivacySettings() {
           <AlertDialogTrigger asChild>
             <Button variant="outline" size="sm" className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10">
               <HardDrive className="w-3.5 h-3.5" />
-              <span>清空模型缓存</span>
+              <span>{t("settings.privacy.clearModelCache")}</span>
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
-            <AlertDialogTitle>确认清空所有本地模型缓存？</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.privacy.clearModelCacheTitle")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
-                <p className="mb-2 text-sm text-red-600 font-semibold">将删除以下内容：</p>
+                <p className="mb-2 text-sm text-red-600 font-semibold">{t("settings.privacy.clearModelCacheWarning")}</p>
                 <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                  <li>通过应用下载的模型文件</li>
-                  <li>模型下载进度与缓存记录</li>
+                  <li>{t("settings.privacy.clearModelCacheItemDownloaded")}</li>
+                  <li>{t("settings.privacy.clearModelCacheItemProgress")}</li>
                 </ul>
-                <p className="mt-3">不会影响你手动放置的模型文件。请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">CLEAR MODEL</span> 继续。</p>
+                <p className="mt-3">{t("settings.privacy.clearModelCacheConfirmPrefix")}<span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">CLEAR MODEL</span>{t("settings.privacy.clearModelCacheConfirmSuffix")}</p>
               </div>
             </AlertDialogDescription>
             <input
               type="text"
               value={confirmModelInput}
               onChange={(e) => setConfirmModelInput(e.target.value)}
-              placeholder="请输入 CLEAR MODEL"
+              placeholder={t("settings.privacy.clearModelCachePlaceholder")}
               className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogCancel>{t("settings.privacy.cancel")}</AlertDialogCancel>
               <AlertDialogAction asChild>
                 <Button
                   variant="destructive"
                   disabled={clearingModel || !allowModelDelete}
                   onClick={clearModelCache}
                 >
-                  {clearingModel ? "清理中..." : "确认删除"}
+                  {clearingModel ? t("settings.privacy.clearing") : t("settings.privacy.confirmDelete")}
                 </Button>
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -399,37 +432,37 @@ export function PrivacySettings() {
           <AlertDialogTrigger asChild>
             <Button variant="outline" size="sm" className="h-7 px-2.5 justify-start text-rose-600 border-rose-200/80 hover:bg-rose-50/80 dark:text-rose-400 dark:border-rose-500/25 dark:hover:bg-rose-500/10">
               <Settings2 className="w-3.5 h-3.5" />
-              <span>恢复出厂设置</span>
+              <span>{t("settings.privacy.factoryReset")}</span>
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
-            <AlertDialogTitle>确认恢复出厂设置？</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.privacy.factoryResetTitle")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
-                <p className="mb-2 text-sm text-red-600 font-semibold">此操作极其危险，将执行以下步骤并<strong>无法撤销</strong>：</p>
+                <p className="mb-2 text-sm text-red-600 font-semibold">{t("settings.privacy.factoryResetWarning")}<strong>{t("settings.privacy.irreversible")}</strong>{t("settings.privacy.warningColon")}</p>
                 <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                  <li>删除 <b className="text-red-500">全部聊天记录</b></li>
-                  <li>删除 <b className="text-red-500">全部知识库文档与索引</b></li>
-                  <li>删除 <b className="text-red-500">本地模型缓存</b></li>
-                  <li>清除 所有 API Key、界面偏好等 <b className="text-red-500">个人设置</b></li>
-                  <li>清空 所有应用缓存文件</li>
-                  <li>应用随后自动重启为初始状态</li>
+                  <li>{t("settings.privacy.factoryResetDeletePrefix")}<b className="text-red-500">{t("settings.privacy.factoryResetItemChats")}</b></li>
+                  <li>{t("settings.privacy.factoryResetDeletePrefix")}<b className="text-red-500">{t("settings.privacy.factoryResetItemKnowledge")}</b></li>
+                  <li>{t("settings.privacy.factoryResetDeletePrefix")}<b className="text-red-500">{t("settings.privacy.factoryResetItemModels")}</b></li>
+                  <li>{t("settings.privacy.factoryResetItemSettingsPrefix")}<b className="text-red-500">{t("settings.privacy.factoryResetItemSettingsEmphasis")}</b></li>
+                  <li>{t("settings.privacy.factoryResetItemCache")}</li>
+                  <li>{t("settings.privacy.factoryResetItemRestart")}</li>
                 </ul>
-                <p className="mt-3">若确认无误，请输入 <span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">RESET APP</span> 继续。</p>
+                <p className="mt-3">{t("settings.privacy.factoryResetConfirmPrefix")}<span className="font-mono bg-slate-100 px-1 py-0.5 rounded-md">RESET APP</span>{t("settings.privacy.factoryResetConfirmSuffix")}</p>
               </div>
             </AlertDialogDescription>
             <input
               type="text"
               value={confirmResetInput}
               onChange={(e) => setConfirmResetInput(e.target.value)}
-              placeholder="请输入 RESET APP"
+              placeholder={t("settings.privacy.factoryResetPlaceholder")}
               className="w-full mt-3 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 dark:bg-slate-800 dark:border-slate-700"
             />
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogCancel>{t("settings.privacy.cancel")}</AlertDialogCancel>
               <AlertDialogAction asChild>
                 <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10" disabled={resetting || !allowReset} onClick={factoryReset}>
-                  {resetting ? "处理中..." : "确认恢复"}
+                  {resetting ? t("settings.privacy.resetting") : t("settings.privacy.confirmReset")}
                 </Button>
               </AlertDialogAction>
             </AlertDialogFooter>

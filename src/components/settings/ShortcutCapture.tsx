@@ -1,5 +1,8 @@
 "use client";
 import { useState } from "react";
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 
 const BLACKLIST = [
   'mod+c', 'mod+v', 'mod+x', 'mod+s', 'mod+z', 'mod+shift+z',
@@ -7,13 +10,12 @@ const BLACKLIST = [
   'ctrl+alt+delete', 'ctrl+shift+escape', 'alt+f4', 'alt+tab'
 ];
 
-// 验证快捷键是否有效
-const validateShortcut = (combo: string): { valid: boolean; error?: string } => {
+const getShortcutError = (combo: string): TranslationKey | null => {
   const parts = combo.toLowerCase().split('+');
   
   // 检查基本格式
   if (parts.length < 2) {
-    return { valid: false, error: '快捷键需包含至少一个修饰键和一个按键' };
+    return 'settings.shortcut.error.incomplete';
   }
 
   // 检查是否包含修饰键
@@ -21,21 +23,21 @@ const validateShortcut = (combo: string): { valid: boolean; error?: string } => 
     ['mod', 'ctrl', 'alt', 'shift'].includes(part)
   );
   if (!hasModifier) {
-    return { valid: false, error: '快捷键必须包含至少一个修饰键 (Ctrl/⌘/Alt/Shift)' };
+    return 'settings.shortcut.error.modifier';
   }
 
   // 检查是否包含有效按键
   const lastPart = parts[parts.length - 1];
   if (!lastPart || lastPart.length === 0) {
-    return { valid: false, error: '快捷键必须包含有效的按键' };
+    return 'settings.shortcut.error.key';
   }
 
   // 检查黑名单
   if (BLACKLIST.includes(combo)) {
-    return { valid: false, error: '该组合与系统/常用快捷键冲突' };
+    return 'settings.shortcut.error.conflict';
   }
 
-  return { valid: true };
+  return null;
 };
 
 interface ShortcutCaptureProps {
@@ -44,7 +46,8 @@ interface ShortcutCaptureProps {
 }
 
 export function ShortcutCapture({ value, onChange }: ShortcutCaptureProps) {
-  const [error, setError] = useState<string | null>(null);
+  const locale = useLocaleStore((state) => state.locale);
+  const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -69,14 +72,9 @@ export function ShortcutCapture({ value, onChange }: ShortcutCaptureProps) {
 
     const combo = parts.join('+');
     
-    // 使用新的验证逻辑
-    const validation = validateShortcut(combo);
-    if (!validation.valid) {
-      setError(validation.error || '快捷键格式无效');
-      return;
-    }
-
-    setError(null);
+    const nextErrorKey = getShortcutError(combo);
+    setErrorKey(nextErrorKey);
+    if (nextErrorKey) return;
     onChange(combo);
   };
 
@@ -99,10 +97,10 @@ export function ShortcutCapture({ value, onChange }: ShortcutCaptureProps) {
         readOnly
         value={formatDisplay(value)}
         onKeyDown={handleKeyDown}
-        placeholder="按下组合键..."
+        placeholder={translate(locale, 'settings.shortcut.placeholder')}
         className="w-full px-3 py-2.5 border border-slate-100 rounded-lg focus:ring-1 focus:ring-blue-500/30 focus:border-blue-200 transition-all duration-150 bg-white dark:bg-slate-800/30 dark:border-slate-700/30 hover:border-slate-200 dark:hover:border-slate-600/50 cursor-pointer text-center font-mono tracking-wide text-sm"
       />
-      {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
+      {errorKey && <p className="text-sm text-red-500 mt-1">{translate(locale, errorKey)}</p>}
     </div>
   );
 } 

@@ -1,6 +1,7 @@
 import React, { useState, useId } from "react";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, HelpCircle } from "lucide-react";
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -10,6 +11,7 @@ interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   wrapperClassName?: string;
   inline?: boolean; // 行内显示：标签与输入框同一行
   labelWidthClassName?: string; // 行内模式下标签宽度，例如 w-28
+  passwordVisibilityLabels?: { show: string; hide: string };
 }
 
 export function InputField({
@@ -22,9 +24,15 @@ export function InputField({
   type,
   inline,
   labelWidthClassName,
+  passwordVisibilityLabels,
   ...props
 }: InputFieldProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const t = useTranslation();
+  const resolvedPasswordVisibilityLabels = passwordVisibilityLabels ?? {
+    show: t('common.showPassword'),
+    hide: t('common.hidePassword'),
+  };
 
   const isPassword = type === 'password';
   const inputHasValue = typeof props.value === 'string' ? props.value.length > 0 : (typeof props.defaultValue === 'string' ? (props.defaultValue).length > 0 : false);
@@ -80,7 +88,7 @@ export function InputField({
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none"
-            aria-label={showPassword ? "隐藏密码" : "显示密码"}
+            aria-label={showPassword ? resolvedPasswordVisibilityLabels.hide : resolvedPasswordVisibilityLabels.show}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>

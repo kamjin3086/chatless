@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Trash2, RefreshCw, HardDrive } from 'lucide-react';
 import { persistentCache } from '@/lib/mcp/persistentCache';
+import { useTranslation } from '@/i18n/useTranslation';
+import { useLocaleStore } from '@/store/localeStore';
+import { getHtmlLang } from '@/i18n';
 
 interface CacheStats {
   totalServers: number;
@@ -15,6 +18,8 @@ interface CacheStats {
 }
 
 export function CacheStatsPanel() {
+  const t = useTranslation();
+  const locale = useLocaleStore((state) => state.locale);
   const [stats, setStats] = useState<CacheStats | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -49,9 +54,8 @@ export function CacheStatsPanel() {
   };
 
   const formatTime = (timestamp: number) => {
-    if (!timestamp) return '从未';
-    const date = new Date(timestamp);
-    return date.toLocaleString('zh-CN');
+    if (!timestamp) return t('mcpCache.never');
+    return new Date(timestamp).toLocaleString(getHtmlLang(locale));
   };
 
   useEffect(() => {
@@ -64,9 +68,9 @@ export function CacheStatsPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <HardDrive className="w-5 h-5" />
-            MCP缓存管理
+            {t('mcpCache.title')}
           </CardTitle>
-          <CardDescription>正在加载缓存信息...</CardDescription>
+          <CardDescription>{t('mcpCache.loading')}</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -77,10 +81,10 @@ export function CacheStatsPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <HardDrive className="w-5 h-5" />
-          MCP缓存管理
+          {t('mcpCache.title')}
         </CardTitle>
         <CardDescription>
-          管理MCP工具信息的本地缓存，提升连接速度
+          {t('mcpCache.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -88,21 +92,21 @@ export function CacheStatsPanel() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{stats.totalServers}</div>
-            <div className="text-sm text-slate-500">缓存服务器</div>
+            <div className="text-sm text-slate-500">{t('mcpCache.cachedServers')}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">{formatBytes(stats.cacheSize)}</div>
-            <div className="text-sm text-slate-500">缓存大小</div>
+            <div className="text-sm text-slate-500">{t('mcpCache.cacheSize')}</div>
           </div>
           <div className="col-span-2 text-center">
-            <div className="text-sm text-slate-600">最后更新: {formatTime(stats.lastUpdate)}</div>
+            <div className="text-sm text-slate-600">{t('mcpCache.lastUpdated').replace('{0}', formatTime(stats.lastUpdate))}</div>
           </div>
         </div>
 
         {/* 服务器列表 */}
         {stats.cachedServers.length > 0 && (
           <div>
-            <h4 className="font-medium mb-2">已缓存的服务器</h4>
+            <h4 className="font-medium mb-2">{t('mcpCache.serverList')}</h4>
             <div className="flex flex-wrap gap-2">
               {stats.cachedServers.map((server) => (
                 <div key={server} className="flex items-center gap-1">
@@ -132,7 +136,7 @@ export function CacheStatsPanel() {
             className="flex items-center gap-2"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            刷新
+            {t('mcpCache.refresh')}
           </Button>
           
           {stats.totalServers > 0 && (
@@ -144,16 +148,16 @@ export function CacheStatsPanel() {
               className="flex items-center gap-2"
             >
               <Trash2 className="w-4 h-4" />
-              清除所有缓存
+              {t('mcpCache.clearAll')}
             </Button>
           )}
         </div>
 
         {/* 帮助信息 */}
         <div className="text-xs text-slate-500 space-y-1">
-          <p>• 缓存会在24小时后自动过期</p>
-          <p>• 缓存可以在服务器离线时提供工具信息</p>
-          <p>• 清除缓存后下次连接会重新获取工具信息</p>
+          <p>• {t('mcpCache.helpExpire')}</p>
+          <p>• {t('mcpCache.helpOffline')}</p>
+          <p>• {t('mcpCache.helpRefresh')}</p>
         </div>
       </CardContent>
     </Card>

@@ -5,12 +5,14 @@ import { Palette } from 'lucide-react';
 import { ToggleSwitch } from "./ToggleSwitch";
 import { SelectField } from "./SelectField";
 import { useUiPreferences } from "@/store/uiPreferences";
+import { useLocaleStore } from '@/store/localeStore';
 import { toast } from "@/components/ui/sonner";
 import {
   clearGlassWallpaperFile,
   isWallpaperDataUrl,
   loadGlassWallpaperUrl,
   saveGlassWallpaper,
+  WallpaperSaveError,
 } from "@/lib/glass/wallpaper";
 import {
   applyWindowSizePreset,
@@ -18,8 +20,13 @@ import {
   type WindowSize,
 } from "@/lib/window/windowFit";
 
+function formatWindowDimensions({ width, height }: WindowSize): string {
+  return `${Math.round(width)} × ${Math.round(height)}`;
+}
+
 export function PersonalizationSettings() {
   const ui = useUiPreferences();
+  const { t } = useLocaleStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -72,10 +79,14 @@ export function PersonalizationSettings() {
       const stored = await saveGlassWallpaper(file);
       ui.setGlassWallpaperFile(stored);
       if (!ui.glassTheme) ui.setGlassTheme(true);
-      toast.success('壁纸已更新');
+      toast.success(t('settings.personalization.wallpaper.updated'));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '设置壁纸失败';
-      toast.error(msg);
+      if (err instanceof WallpaperSaveError) {
+        toast.error(t(`settings.personalization.wallpaper.error.${err.reason}`));
+      } else {
+        console.warn('Failed to save wallpaper:', err);
+        toast.error(t('settings.personalization.wallpaper.error.saveFailed'));
+      }
     } finally {
       setPicking(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -92,30 +103,32 @@ export function PersonalizationSettings() {
       {/* 头部 */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-50 dark:border-slate-800">
         <Palette className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">外观与体验</h3>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">
+          {t('settings.personalization.title')}
+        </h3>
       </div>
 
              {/* 设置内容 */}
        <div className="space-y-6">
          <ToggleSwitch
-           label="简洁模式"
+           label={t('settings.personalization.simpleMode')}
            checked={ui.simpleMode}
            onChange={ui.setSimpleMode}
-           tooltip="弱化颜色、阴影和装饰元素，提供更简洁的界面"
+           tooltip={t('settings.personalization.simpleModeHelp')}
          />
 
          <ToggleSwitch
-           label="低动画模式"
+           label={t('settings.personalization.lowAnimationMode')}
            checked={ui.lowAnimationMode}
            onChange={ui.setLowAnimationMode}
-           tooltip="减少过渡动画和淡入淡出效果，适合性能较弱的设备"
+           tooltip={t('settings.personalization.lowAnimationModeHelp')}
          />
 
          <ToggleSwitch
-           label="玻璃主题"
+           label={t('settings.personalization.glassTheme')}
            checked={ui.glassTheme}
            onChange={ui.setGlassTheme}
-           tooltip="半透明毛玻璃面板。搭配壁纸时效果最接近沉浸式对话界面，可随时关闭"
+           tooltip={t('settings.personalization.glassThemeHelp')}
          />
 
          {ui.glassTheme && (
@@ -130,8 +143,12 @@ export function PersonalizationSettings() {
                  )}
                </div>
                <div className="min-w-0">
-                 <div className="text-xs text-slate-700 dark:text-slate-300">聊天壁纸</div>
-                 <div className="text-[10px] text-slate-400">可选。壁纸会做柔化与压暗处理，动图只取首帧</div>
+                 <div className="text-xs text-slate-700 dark:text-slate-300">
+                   {t('settings.personalization.wallpaper.label')}
+                 </div>
+                 <div className="text-[10px] text-slate-400">
+                   {t('settings.personalization.wallpaper.help')}
+                 </div>
                </div>
              </div>
              <div className="flex items-center gap-2 flex-shrink-0">
@@ -148,7 +165,9 @@ export function PersonalizationSettings() {
                  onClick={() => fileInputRef.current?.click()}
                  className="h-7 px-2 text-xs rounded-md border border-slate-200/70 dark:border-slate-700/50 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                >
-                 {picking ? '处理中…' : '选择图片'}
+                 {picking
+                   ? t('settings.personalization.wallpaper.processing')
+                   : t('settings.personalization.wallpaper.chooseImage')}
                </button>
                {ui.glassWallpaperFile && (
                  <button
@@ -156,7 +175,7 @@ export function PersonalizationSettings() {
                    onClick={() => void handleClearWallpaper()}
                    className="h-7 px-2 text-xs rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
                  >
-                   清除
+                   {t('settings.personalization.wallpaper.clear')}
                  </button>
                )}
              </div>
@@ -164,17 +183,20 @@ export function PersonalizationSettings() {
          )}
 
          <ToggleSwitch
-           label="显示设置页图标"
+           label={t('settings.personalization.showSettingIcons')}
            checked={ui.showSettingIcons}
            onChange={ui.setShowSettingIcons}
          />
 
         <div>
           <SelectField
-            label="应用窗口尺寸"
+            label={t('settings.personalization.windowSize')}
             options={[
               { value: '900x700', label: '900 × 700' },
-              { value: '1024x768', label: '1024 × 768（默认）' },
+              {
+                value: '1024x768',
+                label: t('settings.personalization.windowSize.default').replace('{0}', '1024 × 768'),
+              },
               { value: '1280x800', label: '1280 × 800' },
               { value: '1366x768', label: '1366 × 768' },
               { value: '1440x900', label: '1440 × 900' },
@@ -191,7 +213,9 @@ export function PersonalizationSettings() {
                 await savePersistedWindowState();
                 if (applied.reduced) {
                   toast.info(
-                    `当前显示器可用 ${Math.round(applied.workArea.width)} × ${Math.round(applied.workArea.height)}，窗口已缩到 ${applied.applied.width} × ${applied.applied.height}`,
+                    t('settings.personalization.windowSize.reduced')
+                      .replace('{0}', formatWindowDimensions(applied.workArea))
+                      .replace('{1}', formatWindowDimensions(applied.applied)),
                   );
                 }
               } catch (err) {
@@ -201,45 +225,43 @@ export function PersonalizationSettings() {
           />
           {workArea && (
             <div className="text-[10px] text-slate-400 text-right mt-0.5">
-              当前显示器可用 {Math.round(workArea.width)} × {Math.round(workArea.height)}，超出时按可用区域缩小
+              {t('settings.personalization.windowSize.workArea').replace('{0}', formatWindowDimensions(workArea))}
             </div>
           )}
         </div>
 
         <SelectField
-           label="主侧边栏宽度"
+           label={t('settings.personalization.sidebarWidth')}
            options={[
-             { value: 'narrow', label: '窄' },
-             { value: 'medium', label: '中' },
-             { value: 'wide', label: '宽' },
-             { value: 'xwide', label: '超宽' },
+             { value: 'narrow', label: t('settings.personalization.sidebarWidth.narrow') },
+             { value: 'medium', label: t('settings.personalization.sidebarWidth.medium') },
+             { value: 'wide', label: t('settings.personalization.sidebarWidth.wide') },
+             { value: 'xwide', label: t('settings.personalization.sidebarWidth.xwide') },
            ]}
            value={ui.sidebarWidth}
            onChange={(v) => ui.setSidebarWidth(v as any)}
          />
 
          <SelectField
-           label="侧边栏图标大小"
+           label={t('settings.personalization.sidebarIconSize')}
            options={[
-             { value: 'small', label: '小' },
-             { value: 'medium', label: '中' },
-             { value: 'large', label: '大' },
+             { value: 'small', label: t('settings.personalization.sidebarIconSize.small') },
+             { value: 'medium', label: t('settings.personalization.sidebarIconSize.medium') },
+             { value: 'large', label: t('settings.personalization.sidebarIconSize.large') },
            ]}
            value={ui.sidebarIconSize}
            onChange={(v) => ui.setSidebarIconSize(v as any)}
          />
 
-      
-
          <SelectField
-           label="显示时间时区"
+           label={t('settings.personalization.timezone')}
            options={[
-             { value: 'local', label: '本地时区' },
+             { value: 'local', label: t('settings.personalization.timezone.local') },
              { value: 'UTC', label: 'UTC' },
              { value: 'UTC+8', label: 'UTC+8' },
-             { value: 'America/New_York', label: '纽约 (UTC-4/5)' },
-             { value: 'Europe/London', label: '伦敦 (UTC+0)' },
-             { value: 'Asia/Tokyo', label: '东京 (UTC+9)' },
+             { value: 'America/New_York', label: t('settings.personalization.timezone.newYork') },
+             { value: 'Europe/London', label: t('settings.personalization.timezone.london') },
+             { value: 'Asia/Tokyo', label: t('settings.personalization.timezone.tokyo') },
            ]}
            value={ui.timezone}
            onChange={ui.setTimezone}

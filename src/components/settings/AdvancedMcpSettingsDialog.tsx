@@ -7,7 +7,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
+import { useLocaleStore } from "@/store/localeStore";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,8 @@ interface Props {
 }
 
 export default function AdvancedMcpSettingsDialog({ open, onOpenChange, maxDepth, onSave }: Props) {
+  const { t } = useLocaleStore();
+  const autoAuthorizeId = useId();
   const [val, setVal] = useState(maxDepth);
   const [saving, setSaving] = useState(false);
   const [defaultAutoAuth, setDefaultAutoAuth] = useState(false);
@@ -45,32 +48,31 @@ export default function AdvancedMcpSettingsDialog({ open, onOpenChange, maxDepth
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" closeLabel={t('common.close')}>
         <DialogHeader>
-          <DialogTitle>高级设置</DialogTitle>
-          <DialogDescription>
-            配置 MCP 全局默认参数。注：每个服务器的特定设置优先级更高，会覆盖这些默认值。
-          </DialogDescription>
+          <DialogTitle>{t('mcpSettings.advancedTitle')}</DialogTitle>
+          <DialogDescription>{t('mcpSettings.advancedDescription')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <label className="flex flex-col gap-2 text-sm">
-            最大递归深度：{val}
+            {t('mcpSettings.depthValue').replace('{0}', String(val))}
             <Slider min={3} max={20} step={1} value={[val]} onValueChange={([v]) => setVal(v)} />
             <span className="text-xs text-slate-500 dark:text-slate-400">
-              MCP工具可以递归调用的最大次数，防止无限循环
+              {t('mcpSettings.depthHelp')}
             </span>
           </label>
           
           <div className="flex items-center justify-between space-x-2">
             <div className="flex flex-col gap-1">
-              <Label className="text-sm font-medium">
-                默认自动授权
+              <Label htmlFor={autoAuthorizeId} className="text-sm font-medium">
+                {t('mcpSettings.defaultAutoAuthorize')}
               </Label>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                开启后，MCP工具调用将自动执行，无需手动确认
+                {t('mcpSettings.defaultAutoAuthorizeHelp')}
               </span>
             </div>
             <Switch
+              id={autoAuthorizeId}
               checked={defaultAutoAuth}
               onCheckedChange={setDefaultAutoAuth}
               disabled={loadingAuth}
@@ -94,7 +96,7 @@ export default function AdvancedMcpSettingsDialog({ open, onOpenChange, maxDepth
               onOpenChange(false); 
             }}
           >
-            保存
+            {t('mcpSettings.save')}
           </Button>
         </div>
       </DialogContent>

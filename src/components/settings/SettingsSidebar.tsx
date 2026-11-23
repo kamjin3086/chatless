@@ -13,18 +13,20 @@ import {
   Cloud
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { translate } from '@/i18n';
 import { shouldShowAboutBlueDot, UPDATE_AVAILABILITY_EVENT, checkForUpdatesSilently } from '@/lib/update/update-notifier';
+import { useLocaleStore } from '@/store/localeStore';
 
 const settingsTabs = [
-  { id: 'general', name: '常规', icon: SlidersHorizontal },
-  { id: 'localModels', name: 'AI模型', icon: Bot },
-  { id: 'knowledgeBase', name: '知识库', icon: Database },
-  { id: 'sync', name: '同步', icon: Cloud },
-  { id: 'webSearch', name: '网络搜索', icon: Globe },
-  { id: 'privacySecurity', name: '安全', icon: ShieldCheck },
-  { id: 'advanced', name: '高级', icon: Settings },
-  { id: 'aboutSupport', name: '关于', icon: Info },
-];
+  { id: 'general', labelKey: 'settings.nav.general', icon: SlidersHorizontal },
+  { id: 'localModels', labelKey: 'settings.nav.localModels', icon: Bot },
+  { id: 'knowledgeBase', labelKey: 'settings.nav.knowledgeBase', icon: Database },
+  { id: 'sync', labelKey: 'settings.nav.sync', icon: Cloud },
+  { id: 'webSearch', labelKey: 'settings.nav.webSearch', icon: Globe },
+  { id: 'privacySecurity', labelKey: 'settings.nav.privacySecurity', icon: ShieldCheck },
+  { id: 'advanced', labelKey: 'settings.nav.advanced', icon: Settings },
+  { id: 'aboutSupport', labelKey: 'settings.nav.aboutSupport', icon: Info },
+] as const;
 
 interface SettingsSidebarProps {
   activeTab: string;
@@ -32,6 +34,7 @@ interface SettingsSidebarProps {
 }
 
 export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const [showAboutDot, setShowAboutDot] = useState(false);
 
   useEffect(() => {
@@ -68,7 +71,7 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
   return (
     <div className="settings-rail w-44 shrink-0 border-r border-slate-200/40 dark:border-slate-800/40 overflow-y-auto custom-scrollbar flex flex-col h-full select-none">
       <div className="px-3 pt-3 pb-1.5 flex items-center justify-between flex-shrink-0" data-tauri-drag-region>
-        <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">设置</h3>
+        <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">{translate(locale, 'nav.settings')}</h3>
       </div>
       
       {/* Settings Tabs */}
@@ -94,12 +97,12 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
                 isActive ? "text-slate-700 dark:text-slate-200" : "text-slate-500 dark:text-slate-400"
               )} />
               <span className="truncate flex items-center gap-2 flex-1">
-                {tab.name}
+                {translate(locale, tab.labelKey)}
                 {isAbout && showAboutDot && !isActive && (
                   <span
                     className="ml-auto inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-medium leading-tight text-slate-600 bg-slate-200/70 dark:text-slate-300 dark:bg-white/10"
                   >
-                    NEW
+                    {translate(locale, 'settings.nav.updateBadge')}
                   </span>
                 )}
               </span>

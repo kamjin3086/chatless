@@ -12,8 +12,10 @@ import { toast } from "@/components/ui/sonner";
 import { LogsIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { useTranslation } from "@/i18n/useTranslation";
 
 export function AdvancedSettings() {
+  const t = useTranslation();
   const [logLevel, setLogLevelState] = useState<'none'|'error'|'warn'|'info'|'debug'>('info');
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +39,7 @@ export function AdvancedSettings() {
       if (isTauri) {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('set_log_level', { level: lvl });
-        toast.success(`日志级别: ${lvl}`);
+        toast.success(`${t('settings.advanced.logLevelChanged')}: ${t(`settings.advanced.logLevel.${lvl}`)}`);
       }
     } catch (e) {
       console.warn('设置日志级别失败:', e);
@@ -74,7 +76,7 @@ export function AdvancedSettings() {
 
         const logFilePaths = await collectLogFiles('');
         if (!logFilePaths || logFilePaths.length === 0) {
-          toast.error('未找到日志文件');
+          toast.error(t('settings.advanced.logsNotFound'));
           return;
         }
 
@@ -92,11 +94,11 @@ export function AdvancedSettings() {
 
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
         const success = await downloadService.downloadText(`chatless-logs-${timestamp}.txt`, combined);
-        if (success) toast.success('日志已导出');
+        if (success) toast.success(t('settings.advanced.logsExported'));
       }
     } catch (error) {
       console.error('导出日志失败:', error);
-      toast.error('导出失败');
+      toast.error(t('settings.advanced.exportFailed'));
     } finally {
       setLoading(false);
     }
@@ -107,17 +109,17 @@ export function AdvancedSettings() {
       const report = startupMonitor.exportReport();
       const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
       const success = await downloadService.downloadText(`performance-${timestamp}.txt`, report);
-      if (success) toast.success('性能报告已导出');
+      if (success) toast.success(t('settings.advanced.reportExported'));
     } catch {
-      toast.error('导出失败');
+      toast.error(t('settings.advanced.exportFailed'));
     }
   };
 
   return (
     <div className="space-y-4">
       <SettingsPageHeader 
-        title="高级设置" 
-        description="网络代理、日志系统等高级选项。"
+        title={t('settings.advanced.title')}
+        description={t('settings.advanced.description')}
       />
 
       {/* 网络设置 */}
@@ -125,20 +127,20 @@ export function AdvancedSettings() {
 
       {/* 日志系统 */}
       <SettingsCard>
-        <SettingsSectionHeader icon={LogsIcon} title="日志系统" />
+        <SettingsSectionHeader icon={LogsIcon} title={t('settings.advanced.logs')} />
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-700 dark:text-slate-300">日志级别</span>
+            <span className="text-xs text-slate-700 dark:text-slate-300">{t('settings.advanced.logLevel')}</span>
             <select
               value={logLevel}
               onChange={(e) => handleLevelChange(e.target.value)}
               className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
             >
-              <option value="none">无</option>
-              <option value="error">错误</option>
-              <option value="warn">警告</option>
-              <option value="info">信息</option>
-              <option value="debug">调试</option>
+              <option value="none">{t('settings.advanced.logLevel.none')}</option>
+              <option value="error">{t('settings.advanced.logLevel.error')}</option>
+              <option value="warn">{t('settings.advanced.logLevel.warn')}</option>
+              <option value="info">{t('settings.advanced.logLevel.info')}</option>
+              <option value="debug">{t('settings.advanced.logLevel.debug')}</option>
             </select>
           </div>
 
@@ -154,14 +156,14 @@ export function AdvancedSettings() {
               )}
             >
               <Download className="h-3 w-3" />
-              导出日志
+              {t('settings.advanced.exportLogs')}
             </button>
             <button
               onClick={exportPerformanceReport}
               className="h-7 px-2 text-xs rounded-md flex items-center gap-1 border border-slate-200/60 dark:border-slate-700/40 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               <Download className="h-3 w-3" />
-              性能报告
+              {t('settings.advanced.performanceReport')}
             </button>
           </div>
         </div>
