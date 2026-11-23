@@ -141,6 +141,7 @@ export function AndroidDocumentAttachmentStatus({
             size="sm"
             onClick={onRemove}
             disabled={disabled || state.busy}
+            data-doc-chip-remove
           >
             {t('androidDocument.remove')}
           </Button>

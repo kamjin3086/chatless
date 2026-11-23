@@ -465,7 +465,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
             </button>
           </div>
         )}
-        <div className="ml-auto flex items-center gap-0.5 shrink-0">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5" data-model-tools>
           {modelsForDisplay.length > 0 && (
             <>
               <button

@@ -115,6 +115,7 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
               : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
           title="MCP 服务器"
+          aria-label="MCP 服务器"
         >
           <Plug className="w-4 h-4" />
         </Button>

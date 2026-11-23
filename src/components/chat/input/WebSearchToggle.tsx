@@ -81,6 +81,7 @@ export function WebSearchToggle({
               : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
           title="网络搜索"
+          aria-label="网络搜索"
         >
           <Globe className="w-4 h-4" />
         </Button>
@@ -89,6 +90,7 @@ export function WebSearchToggle({
       <ActionPanelContent width="md" maxHeight="20rem">
         <ActionPanelHeader
           title="网络搜索"
+          aria-label="网络搜索"
           icon={<Globe className={cn("w-4 h-4", isEnabled ? "text-sky-600 dark:text-sky-400" : "text-slate-400")} />}
           action={
             <div className="flex items-center gap-2">

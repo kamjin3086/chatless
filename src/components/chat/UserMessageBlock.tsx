@@ -163,12 +163,13 @@ export const UserMessageBlock = ({
       </div>
       
       {/* 操作按钮 - 轻量设计 */}
-      <div className="absolute top-1/2 -translate-y-1/2 -left-2 transform -translate-x-full flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+      <div className="absolute top-1/2 -translate-y-1/2 -left-2 transform -translate-x-full flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150" data-user-msg-tools>
         {onEdit && id && (
           <button
             onClick={() => onEdit(id)}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
             title="编辑"
+            aria-label="编辑"
           >
             <Pencil className="w-3 h-3" />
           </button>
@@ -183,6 +184,7 @@ export const UserMessageBlock = ({
                 : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             )}
             title={isCopied ? "已复制" : "复制"}
+            aria-label={isCopied ? "已复制" : "复制"}
           >
             {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
@@ -192,6 +194,7 @@ export const UserMessageBlock = ({
             onClick={() => onDelete()}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
             title="删除"
+            aria-label="删除"
           >
             <Trash2 className="w-3 h-3" />
           </button>

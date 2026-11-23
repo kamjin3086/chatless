@@ -1304,7 +1304,7 @@ export function ChatInput({
             </>
           )}
         </div>
-        <div className={cn("absolute right-2 sm:right-3 z-[2] flex items-center gap-1.5 sm:gap-2", android ? "bottom-1" : "bottom-2.5")}>
+        <div className={cn("absolute right-2 sm:right-3 z-[2] flex items-center gap-1.5 sm:gap-2", android ? "bottom-1" : "bottom-2.5")} data-composer-send>
             {tokenCount > 0 && (
               <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-1 select-none font-mono tabular-nums hidden sm:inline">
                 T:{tokenCount}

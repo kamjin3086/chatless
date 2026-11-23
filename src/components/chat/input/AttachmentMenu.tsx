@@ -111,6 +111,7 @@ export function AttachmentMenu({
     <>
       <ActionPanelHeader
         title="附加内容"
+      aria-label="附加内容"
         icon={<Plus className="w-4 h-4 text-slate-400" />}
       />
 

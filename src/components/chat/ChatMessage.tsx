@@ -363,7 +363,7 @@ function ChatMessageComponent({
               <span className="shrink-0">{formattedTime}</span>
             </div>
             {!isUser && (
-              <div className="flex items-center gap-0.5 whitespace-nowrap">
+              <div className="flex items-center gap-0.5 whitespace-nowrap" data-msg-actions>
                 {thoughtThisTurn && <ThinkingLevelFacts messageId={id} />}
                 {onRetry && (
                   <button
