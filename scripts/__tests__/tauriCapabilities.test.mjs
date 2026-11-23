@@ -41,8 +41,8 @@ it('keeps app-private storage and provider HTTP on Android without granting desk
         identifier: 'http:default',
         allow: expect.arrayContaining([
           { url: 'https://*' },
-          { url: 'http://localhost:*' },
-          { url: 'http://127.0.0.1:*' },
+          { url: 'https://*:*' },
+          { url: 'http://*:*' },
         ]),
       },
     ]),
@@ -59,7 +59,17 @@ it('keeps app-private storage and provider HTTP on Android without granting desk
   expect(
     android.find((permission) => permission.identifier === 'http:default')
       .allow,
-  ).not.toContainEqual({ url: 'http://*:*' });
+  ).toEqual(
+    // 手机上模型服务常常在局域网另一台机器上：曾经只放 localhost，给个内网地址就报
+    // `url not allowed on the configured scope`。现在和桌面一样放明文。
+    expect.arrayContaining([{ url: 'http://*:*' }, { url: 'https://*:*' }]),
+  );
+  expect(
+    android.find((permission) => permission.identifier === 'http:default')
+      .allow,
+  ).not.toContainEqual({ url: 'http://10.*:*' });
+  // ↑ scope 的 URL matcher 认不了 IPv4 前缀通配（实测匹配不上 `10.0.2.2`），
+  //   谁再把内网段写进来，这里要提醒它其实匹配不到东西。
 
   for (const desktop of ['linux', 'macOS', 'windows']) {
     expect(mainWindowPermissions(desktop)).toEqual(
@@ -70,7 +80,10 @@ it('keeps app-private storage and provider HTTP on Android without granting desk
         'window-state:default',
         expect.objectContaining({
           identifier: 'http:default',
-          allow: expect.arrayContaining([{ url: 'http://*:*' }]),
+          allow: expect.arrayContaining([
+            { url: 'http://*:*' },
+            { url: 'https://*:*' },
+          ]),
         }),
       ]),
     );
