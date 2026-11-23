@@ -21,7 +21,7 @@ import {
   subscribeThinkingTurns,
 } from '@/lib/telemetry/thinkingTelemetryStore';
 import type { TranslationKey } from '@/i18n/types';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 /**
  * Did this answer think at all?
@@ -44,7 +44,7 @@ export function hasThinkingEvidence(args: {
 }
 
 export function ThinkingLevelFacts({ messageId }: { messageId?: string }) {
-  const translate = useLocaleStore((s) => s.t);
+  const translate = useTranslation();
   const t = (key: string) => translate(key as TranslationKey);
   const [turn, setTurn] = useState<ThinkingTurnRecord | null>(null);
 

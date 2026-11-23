@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { cn } from "@/lib/utils";
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { composerTriggers, type ComposerTrigger } from './composerTriggers';
 import {
   ActionPanel,
@@ -52,8 +52,7 @@ export function AttachmentMenu({
   onPickDocument,
   onSelectKnowledgeBase,
 }: AttachmentMenuProps) {
-  const t = useLocaleStore((s) => s.t);
-  useLocaleStore((s) => s.locale);
+  const t = useTranslation();
   const focusComposerOnClose = useRef(false);
   const [view, setView] = useState<"main" | "knowledge-base">("main");
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
@@ -97,7 +96,7 @@ export function AttachmentMenu({
   const renderMainView = () => (
     <>
       <ActionPanelHeader
-        title="附加内容"
+        title={t('chatAttachment.add')}
         icon={<Plus className="w-4 h-4 text-slate-400" />}
       />
 
@@ -122,7 +121,7 @@ export function AttachmentMenu({
         {/* 图片 - 粉色系 */}
         <ActionPanelItem
           icon={<Image className="w-4 h-4 text-pink-500" />}
-          title="上传图片"
+          title={t('chatAttachment.uploadImage')}
           description="JPG, PNG, GIF, WebP"
           onClick={() => handleAction(onPickImage)}
         />
@@ -130,8 +129,8 @@ export function AttachmentMenu({
         {/* 文档 - 橙色系 */}
         <ActionPanelItem
           icon={<FileText className={cn("w-4 h-4", hasDocument ? "text-amber-500" : "text-amber-400")} />}
-          title="附加文档"
-          description={hasDocument ? "已附加文档" : "PDF, Word, Markdown 等"}
+          title={t('chatAttachment.attachDocument')}
+          description={t(hasDocument ? 'chatAttachment.documentAttached' : 'chatAttachment.documentFormats')}
           disabled={hasDocument}
           selected={hasDocument}
           onClick={() => handleAction(onPickDocument)}
@@ -142,8 +141,10 @@ export function AttachmentMenu({
         {/* 知识库 - 紫色系 */}
         <ActionPanelItem
           icon={<Database className={cn("w-4 h-4", selectedKnowledgeBase ? "text-violet-500" : "text-violet-400")} />}
-          title={selectedKnowledgeBase ? `知识库: ${selectedKnowledgeBase.name}` : "选择知识库"}
-          description={selectedKnowledgeBase ? "点击更换或移除" : "基于知识库内容回答"}
+          title={selectedKnowledgeBase
+            ? t('chatAttachment.selectedKnowledgeBase').replace('{name}', () => selectedKnowledgeBase.name)
+            : t('chatAttachment.chooseKnowledgeBase')}
+          description={t(selectedKnowledgeBase ? 'chatAttachment.changeOrRemoveKnowledgeBase' : 'chatAttachment.useKnowledgeBase')}
           selected={!!selectedKnowledgeBase}
           onClick={() => setView("knowledge-base")}
         />
@@ -155,9 +156,10 @@ export function AttachmentMenu({
   const renderKnowledgeBaseView = () => (
     <>
       <ActionPanelHeader
-        title="选择知识库"
+        title={t('chatAttachment.chooseKnowledgeBase')}
         icon={
           <button
+            aria-label={t('chatAttachment.backToAttachments')}
             onClick={() => setView("main")}
             className="p-0.5 -ml-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
           >
@@ -173,7 +175,7 @@ export function AttachmentMenu({
               }}
               className="text-[11px] text-rose-500 hover:text-rose-600 transition-colors"
             >
-              移除
+              {t('chatAttachment.removeKnowledgeBase')}
             </button>
           ) : null
         }
@@ -187,11 +189,12 @@ export function AttachmentMenu({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索知识库..."
+            placeholder={t('chatAttachment.searchKnowledgeBases')}
             className="w-full pl-8 pr-8 py-2 text-sm bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
           />
           {searchQuery && (
             <button
+              aria-label={t('chatAttachment.clearKnowledgeBaseSearch')}
               onClick={() => setSearchQuery("")}
               className="absolute right-2.5 top-1/2 -translate-y-1/2"
             >
@@ -212,7 +215,7 @@ export function AttachmentMenu({
               key={kb.id}
               icon={<Database className="w-4 h-4 text-violet-500" />}
               title={kb.name}
-              description={kb.description?.replace(/\\n|\n/g, " ").slice(0, 50) || "暂无描述"}
+              description={kb.description?.replace(/\\n|\n/g, " ").slice(0, 50) || t('chatAttachment.noKnowledgeBaseDescription')}
               selected={selectedKnowledgeBase?.id === kb.id}
               suffix={selectedKnowledgeBase?.id === kb.id ? <Check className="w-4 h-4 text-violet-500" /> : null}
               onClick={() => {
@@ -224,8 +227,8 @@ export function AttachmentMenu({
         ) : (
           <ActionPanelEmpty
             icon={<Database className="w-6 h-6 text-slate-300" />}
-            title="没有找到知识库"
-            description={searchQuery ? "尝试其他关键词" : "暂无可用的知识库"}
+            title={t('chatAttachment.noKnowledgeBasesFound')}
+            description={t(searchQuery ? 'chatAttachment.tryOtherKeywords' : 'chatAttachment.noKnowledgeBases')}
           />
         )}
       </ActionPanelList>
@@ -245,7 +248,8 @@ export function AttachmentMenu({
               ? "glass-chip-ok"
               : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
-          title="附加内容"
+          title={t('chatAttachment.add')}
+          aria-label={t('chatAttachment.add')}
         >
           {isParsingDocument ? (
             <Loader2 className="w-4 h-4 animate-spin" />

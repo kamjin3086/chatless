@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { usePromptStore } from '@/store/promptStore';
 import { generateShortcutCandidates } from '@/lib/prompt/shortcut';
 import { createPortal } from 'react-dom';
@@ -26,6 +29,8 @@ interface SlashPromptPanelProps {
 }
 
 export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, queryText }: SlashPromptPanelProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const prompts = usePromptStore((s) => s.prompts);
   const loadFromDatabase = usePromptStore((s) => (s as any).loadFromDatabase);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -222,12 +227,12 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
       {/* 头部 */}
       <div className={panelHeaderClass}>
         <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
-          # 提示词
+          # {t('chatComposer.prompts')}
         </span>
         <button
           className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
           onMouseDown={(e) => { e.preventDefault(); window.location.assign('/prompts'); }}
-          title="管理提示词"
+          title={t('chatComposer.managePrompts')}
         >
           <Settings className="w-3.5 h-3.5" />
         </button>
@@ -286,14 +291,14 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
         
         {displayList.length === 0 && (
           <li className="px-3 py-4 text-center text-sm text-slate-500">
-            没有匹配的提示词
+            {t('chatComposer.noMatchingPrompts')}
           </li>
           )}
         </ul>
 
       {/* 底部 */}
       <div className={cn(panelFooterClass, "flex items-center justify-between")}>
-        <span>↑↓ 导航 · Enter 代入 · Alt+Enter 设为系统</span>
+        <span>{t('chatComposer.promptNavigation')}</span>
       </div>
     </div>
   );

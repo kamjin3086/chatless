@@ -4,6 +4,8 @@ import { SelectItem } from "@/components/ui/select";
 import { ModelSelectItem } from "./ModelSelectItem";
 import { Clock } from "lucide-react";
 import type { ProviderMetadata, ModelMetadata } from '@/lib/metadata/types';
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface RecentModelsListProps {
   recentModelDetails: { provider: ProviderMetadata, model: ModelMetadata }[];
@@ -20,11 +22,12 @@ export function RecentModelsList({
   onSetDefault,
   onOpenParameters,
 }: RecentModelsListProps) {
+  const locale = useLocaleStore((state) => state.locale);
   if (recentModelDetails.length === 0) {
     return (
       <div className="py-6 text-center text-slate-500 dark:text-slate-400">
         <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">暂无最近使用模型</p>
+        <p className="text-sm">{translate(locale, 'modelChooser.noRecentModels')}</p>
       </div>
     );
   }

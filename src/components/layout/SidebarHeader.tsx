@@ -2,6 +2,7 @@
 
 import { Settings } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface SidebarHeaderProps {
   userName: string;
@@ -16,6 +17,7 @@ export function SidebarHeader({
   onSettingsClick,
   className
 }: SidebarHeaderProps) {
+  const t = useTranslation();
   return (
     <div className={cn(
       "p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between",
@@ -30,7 +32,7 @@ export function SidebarHeader({
       </div>
       <button 
         className="text-slate-600 dark:text-slate-400 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 p-1.5 rounded-md transition-all duration-200 icon-shadow" 
-        title="设置"
+        title={t('chatUi.sidebar.settings')}
         onClick={onSettingsClick}
       >
         <Settings className="w-5 h-5 gradient-icon" />

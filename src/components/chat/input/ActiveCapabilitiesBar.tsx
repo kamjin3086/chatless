@@ -12,8 +12,10 @@ import { X, Database, Plug, Folder, ExternalLink, FileText } from "lucide-react"
 import type { KnowledgeBase } from "@/lib/knowledgeService";
 import { QuickSelectPopover, type QuickSelectOption } from "./QuickSelectPopover";
 import { cn } from "@/lib/utils";
-import { toast } from "@/components/ui/sonner";
 import { FileOpener } from "@/lib/utils/fileOpener";
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface ActiveCapabilitiesBarProps {
   // Web Search
@@ -62,6 +64,8 @@ export function ActiveCapabilitiesBar({
   attachedDocument,
   onRemoveDocument,
 }: ActiveCapabilitiesBarProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   // 上拉状态
   const [knowledgeBasePopoverOpen, setKnowledgeBasePopoverOpen] = useState(false);
   
@@ -92,11 +96,7 @@ export function ActiveCapabilitiesBar({
 
   const openWorkingDir = async () => {
     if (!workingDir) return;
-    try {
-      await FileOpener.openDirectory(workingDir);
-    } catch (e) {
-      toast.error("打开目录失败", { description: String(e) });
-    }
+    await FileOpener.openDirectory(workingDir, locale);
   };
 
   return (
@@ -142,7 +142,7 @@ export function ActiveCapabilitiesBar({
               "hover:bg-emerald-100 dark:hover:bg-emerald-900/50",
               "border border-emerald-200/50 dark:border-emerald-800/50"
             )}
-            title={`${workingDir}\n本会话的工作目录（你选定的）：点右侧 × 改回会话默认`}
+            title={`${workingDir}\n${t('chatAttachment.workingDirectoryHint')}`}
           >
             <Folder className="w-3 h-3" />
             {/* 只显示文件夹名，悬浮显示完整路径 */}
@@ -208,8 +208,8 @@ export function ActiveCapabilitiesBar({
         options={availableKnowledgeBases}
         selectedId={selectedKnowledgeBase?.id}
         onSelect={(id) => onSelectKnowledgeBase?.(id)}
-        title="切换知识库"
-        emptyText="暂无知识库"
+        title={t('chatAttachment.switchKnowledgeBase')}
+        emptyText={t('chatAttachment.noKnowledgeBases')}
         accentColor="violet"
       />
     </>

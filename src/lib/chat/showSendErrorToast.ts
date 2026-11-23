@@ -1,4 +1,7 @@
 import { toast } from '@/components/ui/sonner';
+import { translate } from '@/i18n';
+import type { Locale, TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 
 export type SendErrorInfo = {
   title: string;
@@ -39,7 +42,8 @@ function extractProviderMessage(text: string): string | null {
   }
 }
 
-export function formatSendError(error: unknown): SendErrorInfo {
+export function formatSendError(error: unknown, locale: Locale): SendErrorInfo {
+  const t = (key: TranslationKey) => translate(locale, key);
   const code = (error as { code?: string } | null)?.code;
   const raw = error instanceof Error ? error.message : String(error ?? '');
   const msg = raw.replace(/\s+/g, ' ').trim();
@@ -48,8 +52,8 @@ export function formatSendError(error: unknown): SendErrorInfo {
 
   if (code === 'NO_KEY' || /NO_KEY|未配置 API 密钥/i.test(msg)) {
     return {
-      title: '未配置 API 密钥',
-      description: '请先为该提供商填写密钥。',
+      title: t('chatSendError.noKey.title'),
+      description: t('chatSendError.noKey.description'),
       isNetwork: false,
       openProviderSettings: true,
     };
@@ -57,8 +61,8 @@ export function formatSendError(error: unknown): SendErrorInfo {
 
   if (status === 401 || status === 403) {
     return {
-      title: '密钥无效或没有权限',
-      description: '请检查该提供商的密钥。',
+      title: t('chatSendError.unauthorized.title'),
+      description: t('chatSendError.unauthorized.description'),
       isNetwork: false,
       openProviderSettings: true,
     };
@@ -66,8 +70,8 @@ export function formatSendError(error: unknown): SendErrorInfo {
 
   if (status === 404) {
     return {
-      title: '接口地址不正确',
-      description: '请核对服务地址和路径。',
+      title: t('chatSendError.endpoint.title'),
+      description: t('chatSendError.endpoint.description'),
       isNetwork: false,
       openProviderSettings: true,
     };
@@ -75,8 +79,8 @@ export function formatSendError(error: unknown): SendErrorInfo {
 
   if (status === 429) {
     return {
-      title: '请求过于频繁',
-      description: '请稍后再试。',
+      title: t('chatSendError.rateLimited.title'),
+      description: t('chatSendError.rateLimited.description'),
       isNetwork: false,
       openProviderSettings: false,
     };
@@ -84,8 +88,8 @@ export function formatSendError(error: unknown): SendErrorInfo {
 
   if (status === 400 || (providerMessage && status === null)) {
     return {
-      title: '模型拒绝了这次请求',
-      description: providerMessage || '请检查这次请求的内容与所选模型是否兼容。',
+      title: t('chatSendError.rejected.title'),
+      description: providerMessage || t('chatSendError.rejected.description'),
       isNetwork: false,
       openProviderSettings: false,
     };
@@ -93,16 +97,16 @@ export function formatSendError(error: unknown): SendErrorInfo {
 
   if (status === 502 || status === 503 || status === 504 || status === 500 || NETWORK_RE.test(msg)) {
     return {
-      title: '模型服务访问不通',
-      description: '请检查服务是否启动，以及地址和端口。',
+      title: t('chatSendError.unreachable.title'),
+      description: t('chatSendError.unreachable.description'),
       isNetwork: true,
       openProviderSettings: true,
     };
   }
 
   return {
-    title: '发送失败',
-    description: '请检查该提供商的配置。',
+    title: t('chatSendError.generic.title'),
+    description: t('chatSendError.generic.description'),
     isNetwork: false,
     openProviderSettings: true,
   };
@@ -119,13 +123,14 @@ export function showSendErrorToast(
   error: unknown,
   opts?: { rolledBack?: boolean; providerName?: string }
 ): void {
-  const info = formatSendError(error);
+  const { locale } = useLocaleStore.getState();
+  const info = formatSendError(error, locale);
   toast.error(info.title, {
     description: info.description,
     duration: 8000,
     action: info.openProviderSettings
       ? {
-          label: '去配置',
+          label: translate(locale, 'chatSendError.configureProvider'),
           onClick: () => openProviderSettings(opts?.providerName),
         }
       : undefined,

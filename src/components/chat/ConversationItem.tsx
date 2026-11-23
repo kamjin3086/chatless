@@ -7,8 +7,10 @@ import { ContextMenu, createConversationMenuItems } from "@/components/ui/contex
 import { Star } from "lucide-react";
 import { formatDistanceToNow } from 'date-fns';
 import { enUS, zhCN } from 'date-fns/locale';
+import { translate } from '@/i18n';
 import type { Locale } from '@/i18n/types';
 import { cn } from "@/lib/utils";
+import { displayConversationTitle, NEW_CONVERSATION_TITLE } from '@/lib/chat/TitleGenerator';
 import type { Conversation } from "@/types/chat";
 
 interface ConversationItemProps {
@@ -55,6 +57,10 @@ function ConversationItemImpl({
   // 使用固定的时间戳数字作为依赖，避免对象引用变化导致的重新计算
   // 但在格式化时仍然使用Date对象
   const updatedAtTimestamp = new Date(conversation.updated_at).getTime();
+  const displayTitle = displayConversationTitle(
+    conversation.title,
+    translate(locale, 'conversation.newTitle'),
+  );
   
   const compactTime = useMemo(() => {
     if (!Number.isFinite(updatedAtTimestamp)) return '';
@@ -62,12 +68,15 @@ function ConversationItemImpl({
       addSuffix: true,
       locale: locale === 'zh' ? zhCN : enUS,
     });
-    return locale === 'zh' ? formattedTime.replace(/^大约\s*/, '约 ') : formattedTime;
+    return locale === 'zh'
+      ? translate(locale, 'conversation.approxPrefix') + formattedTime.replace(/^大约\s*/, '')
+      : formattedTime;
   }, [updatedAtTimestamp, locale]);
 
   return (
     <ContextMenu
       menuItems={createConversationMenuItems(
+        locale,
         conversation.id,
         (conversation as any).is_favorite,
         (_id) => onRenameStart({ stopPropagation: () => {} } as React.MouseEvent, conversation),
@@ -101,6 +110,7 @@ function ConversationItemImpl({
         <div className="ml-1 flex min-w-0 flex-1 items-center gap-1.5">
           {isRenaming ? (
             <Input
+              aria-label={translate(locale, 'conversation.rename')}
               value={renameInputValue}
               onChange={(e) => onRenameChange(e.target.value)}
               onBlur={onRenameBlur}
@@ -117,18 +127,18 @@ function ConversationItemImpl({
                       <Star className="w-3 h-3 text-yellow-500 dark:text-yellow-400 fill-current" />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>已收藏</p>
+                      <p>{translate(locale, 'conversation.favorited')}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
               )}
               <div
                 className={cn('min-w-0 flex-1 truncate text-sm leading-5', isCurrent ? 'font-semibold' : 'font-medium')}
-                title={[conversation.title, conversation.model_full_id || conversation.model_id].filter(Boolean).join('\n')}
+                title={[displayTitle, conversation.model_full_id || conversation.model_id].filter(Boolean).join('\n')}
                 onClick={(e) => onTitleClick(e, conversation)}
                 onDoubleClick={(e) => onRenameStart(e, conversation)}
               >
-                {conversation.title}
+                {displayTitle}
               </div>
               {compactTime && (
                 <span className="pointer-events-none hidden max-w-[50%] shrink-0 truncate text-xs leading-5 text-slate-600 group-hover:block group-focus-visible:block dark:text-slate-300">

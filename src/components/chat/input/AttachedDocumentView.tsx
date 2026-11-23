@@ -7,6 +7,7 @@ import { getCurrentKnowledgeBaseConfig } from '@/lib/knowledgeBaseConfig';
 import { estimateTokens } from '@/lib/utils/tokenBudget';
 import { toast } from '@/components/ui/sonner';
 import { KnowledgeService } from '@/lib/knowledgeService';
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface AttachedDocumentViewProps {
   document: {
@@ -28,6 +29,7 @@ const formatFileSize = (bytes: number): string => {
 };
 
 export function AttachedDocumentView({ document, onRemove, className, onIndexed }: AttachedDocumentViewProps) {
+  const t = useTranslation();
   const cfg = getCurrentKnowledgeBaseConfig();
   const isBigFile = document.fileSize > cfg.documentProcessing.bigFileSizeMb * 1024 * 1024;
   const tokenEstimate = estimateTokens(document.summary || document.name);
@@ -55,10 +57,10 @@ export function AttachedDocumentView({ document, onRemove, className, onIndexed 
         onProgress: () => {},
         skipIfExists: true,
       });
-      toast.success('已索引到知识库');
+      toast.success(t('chatAttachment.indexedToKnowledgeBase'));
       onIndexed?.(kb.id);
     } catch (e) {
-      toast.error('索引失败');
+      toast.error(t('chatAttachment.indexFailed'));
     } finally {
       setIndexing(false);
     }
@@ -94,14 +96,14 @@ export function AttachedDocumentView({ document, onRemove, className, onIndexed 
           }}
           disabled={indexing}
           className="shrink-0 px-2 py-1 rounded-md text-[11px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-          title="文档较大，建议索引到知识库"
+          title={t('chatAttachment.indexLargeDocument')}
         >
           {indexing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
           ) : (
             <Database className="w-3 h-3" />
           )}
-          <span>索引</span>
+          <span>{t('chatAttachment.index')}</span>
         </button>
           )}
 
@@ -113,7 +115,7 @@ export function AttachedDocumentView({ document, onRemove, className, onIndexed 
             onRemove();
           }}
         className="shrink-0 p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-        title="移除"
+        title={t('knowledge.resource.remove')}
         >
           <X className="w-3.5 h-3.5" />
       </button>

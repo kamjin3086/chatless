@@ -13,18 +13,25 @@
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { Locale } from '@/i18n/types';
 import { ThinkingBar } from '../ThinkingBar';
+
+const localeState = vi.hoisted(() => ({ locale: 'zh' as Locale }));
+vi.mock('@/store/localeStore', () => ({
+  useLocaleStore: (select: (state: typeof localeState) => Locale) =>
+    select(localeState),
+}));
 
 beforeAll(() => vi.stubGlobal('React', React));
 
 const PREVIEW = 'data-thinking-preview';
 
-function render(content: string): string {
+function render(content: string, durationSeconds = 3, isActive = true): string {
   return renderToStaticMarkup(
     createElement(ThinkingBar, {
       thinkingContent: content,
-      durationSeconds: 3,
-      isActive: true,
+      durationSeconds,
+      isActive,
     }),
   );
 }
@@ -34,6 +41,24 @@ function preview(html: string): string | null {
   const match = new RegExp(`${PREVIEW}[^>]*>([^<]*)<`).exec(html);
   return match ? match[1] : null;
 }
+
+describe('ThinkingBar status and duration', () => {
+  it.each([
+    ['en', 'Thinking', '3s', 'Thought for 1m 1s', 'Thought for 1h 0m 1s'],
+    ['zh', '正在思考', '3秒', '思考了 1分1秒', '思考了 1小时0分1秒'],
+  ] as const)(
+    'localizes first-party copy in %s without translating the preview',
+    (locale, active, seconds, minutes, hours) => {
+      localeState.locale = locale;
+      const thinking = render('保留原样');
+      expect(thinking).toContain(`>${active}<`);
+      expect(thinking).toContain(`>${seconds}<`);
+      expect(preview(thinking)).toBe('保留原样');
+      expect(render('', 61.9, false)).toContain(`>${minutes}<`);
+      expect(render('', 3601, false)).toContain(`>${hours}<`);
+    },
+  );
+});
 
 describe('the thinking preview keeps its line', () => {
   it('shows the last line while the stream is mid-sentence', () => {

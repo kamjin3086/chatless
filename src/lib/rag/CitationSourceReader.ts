@@ -1,13 +1,15 @@
 import type { Citation } from './evidenceTypes';
+import type { Locale } from '@/i18n/types';
 import { generateId } from '@/lib/utils/id';
 import { clearEvidenceRegistry, restoreEvidence } from './EvidenceRegistry';
 import { DatabaseService } from '@/lib/database/services/DatabaseService';
 import { KnowledgeAdapter } from '@/lib/mcp/pipeline/adapters/KnowledgeAdapter';
 import { ToolInvocation } from '@/lib/mcp/pipeline/ToolInvocation';
 
+type SourceFailure = { ok: false; code: string };
 export type SourceRead =
   | { ok: true; text: string; nextCursor?: string }
-  | { ok: false; code: string; message: string };
+  | SourceFailure;
 export type SourceReadMode = 'exact' | 'neighbors' | 'current' | 'more';
 
 /** A user-opened source view uses the same scope, revision and cursor checks as
@@ -50,11 +52,7 @@ export class CitationSourceReader {
   async read(mode: SourceReadMode, cursor?: string): Promise<SourceRead> {
     if (!this.active) throw new Error('Source view was closed');
     if (mode === 'more' && !cursor)
-      return {
-        ok: false,
-        code: 'CURSOR_INVALID',
-        message: '没有可继续读取的位置。',
-      };
+      return { ok: false, code: 'NO_CONTINUATION' };
     const args =
       mode === 'current'
         ? { documentId: this.citation.documentId }
@@ -89,13 +87,7 @@ export class CitationSourceReader {
         'error' in result && typeof result.error === 'string'
           ? result.error
           : 'SOURCE_UNAVAILABLE';
-      const message =
-        code === 'CURSOR_INVALID'
-          ? '来源已重建、更新或没有保存精确位置。引用快照不受影响，可改读当前版本。'
-          : code === 'INDEX_NOT_READY'
-            ? '当前文档尚未完成索引，请完成索引后重试。'
-            : '当前会话无法读取此来源。请确认文档仍在已挂载的知识库或会话附件中。';
-      return { ok: false, code, message };
+      return { ok: false, code };
     }
     if (
       mode === 'current' &&
@@ -115,23 +107,29 @@ export class CitationSourceReader {
     };
   }
 
-  async openCurrentFile(): Promise<boolean> {
+  async openCurrentFile(locale: Locale): Promise<{ ok: true } | SourceFailure> {
     // Recheck scope at click time; the historical path alone grants no access.
     const anchor = this.anchorId;
     const checked = await this.read('current');
     this.anchorId = anchor;
-    if (!checked.ok) throw new Error(checked.message);
+    if (!checked.ok) return checked;
     const rows = await DatabaseService.getInstance()
       .getDbManager()
       .select<{ file_path: string }>(
         'SELECT file_path FROM documents WHERE id = ?',
         [this.citation.documentId],
       );
-    if (!this.active) return false;
-    if (!rows[0]?.file_path) throw new Error('当前原文件已不存在。');
+    if (!this.active) return { ok: false, code: 'FILE_OPEN_FAILED' };
+    if (!rows[0]?.file_path) return { ok: false, code: 'FILE_MISSING' };
     const { FileOpener } = await import('@/lib/utils/fileOpener');
-    if (!this.active) return false;
-    return FileOpener.openFile(rows[0].file_path, this.citation.documentName);
+    const opened =
+      this.active &&
+      (await FileOpener.openFile(
+        rows[0].file_path,
+        this.citation.documentName,
+        locale,
+      ));
+    return opened ? { ok: true } : { ok: false, code: 'FILE_OPEN_FAILED' };
   }
 
   dispose() {

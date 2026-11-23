@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from './ModelSelector';
 import { selectSelectableProviders } from '@/lib/provider/modelPickerVisibility';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 export type ChatSetupState = 'initializing' | 'no_provider' | 'no_model' | 'ready';
 
@@ -17,8 +17,7 @@ interface ChatEmptyStateProps {
 const modelSettings = '/settings?tab=localModels';
 
 export function ChatEmptyState({ setupState, modelPicker }: ChatEmptyStateProps) {
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
 
   if (setupState === 'initializing') {
     return <p role="status" className="py-4 text-center text-sm text-muted-foreground">{t('chatStarter.initializing')}</p>;

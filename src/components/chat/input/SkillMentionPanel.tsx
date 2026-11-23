@@ -6,6 +6,9 @@ import { getSkillManager } from '@/lib/skills';
 import type { Skill } from '@/lib/skills/types';
 import { Settings, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import {
   panelContainerClass,
   panelHeaderClass,
@@ -32,6 +35,8 @@ export function SkillMentionPanel({
   onClose, 
   filterQuery = '' 
 }: SkillMentionPanelProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [pos, setPos] = useState<ReturnType<typeof calcPanelPosition>>(null);
   const activeRef = useRef(0);
@@ -121,12 +126,12 @@ export function SkillMentionPanel({
       {/* 头部 */}
       <div className={panelHeaderClass}>
         <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
-          / 技能
+          / {t('chatComposer.skills')}
         </span>
         <button
           className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
           onMouseDown={(e) => { e.preventDefault(); window.location.assign('/settings?tab=skills'); }}
-          title="管理技能"
+          title={t('chatComposer.manageSkills')}
         >
           <Settings className="w-3.5 h-3.5" />
         </button>
@@ -179,14 +184,14 @@ export function SkillMentionPanel({
         
         {filteredSkills.length === 0 && (
           <li className="px-3 py-4 text-center text-sm text-slate-500">
-            {skills.length === 0 ? '暂无已启用的技能' : '未找到匹配的技能'}
+            {t(skills.length === 0 ? 'chatComposer.noEnabledSkills' : 'chatComposer.noMatchingSkills')}
           </li>
         )}
       </ul>
 
       {/* 底部 */}
       <div className={panelFooterClass}>
-        <span>↑↓ 导航 · Enter 选择 · Esc 关闭</span>
+        <span>{t('chatComposer.skillNavigation')}</span>
       </div>
     </div>
   );

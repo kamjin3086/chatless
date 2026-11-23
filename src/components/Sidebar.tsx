@@ -16,7 +16,7 @@ import { shouldShowDevTools } from '@/lib/utils/environment';
 import { useEffect, useState, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { DockHoverScaler } from '@/components/ui/DockHoverScaler';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 const ExtensionsIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <Plug2 {...props} />
@@ -24,7 +24,7 @@ const ExtensionsIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 function useAppNavigation() {
   const [showDevTools, setShowDevTools] = useState(false);
-  const { locale, t } = useLocaleStore();
+  const t = useTranslation();
   const pathname = usePathname();
 
   useEffect(() => {
@@ -50,7 +50,7 @@ function useAppNavigation() {
     return showDevTools
       ? [...base, { href: '/dev-tools', label: t('nav.devTools'), icon: Wrench }]
       : base;
-  }, [showDevTools, t, locale]);
+  }, [showDevTools, t]);
   const active = navItems.find(({ href }) => pathname === href || pathname?.startsWith(`${href}/`)) ?? navItems[0];
   return { navItems, active, t };
 }

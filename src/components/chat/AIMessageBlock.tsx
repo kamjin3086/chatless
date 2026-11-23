@@ -19,6 +19,7 @@ import { Download as DownloadIcon, Maximize2, Copy as CopyIcon } from 'lucide-re
 import { motion, AnimatePresence } from 'framer-motion';
 import { extractFileChangesFromToolCards } from '@/lib/chat/extractFileChangesFromToolCards';
 import { toast } from '@/components/ui/sonner';
+import { useTranslation } from '@/i18n/useTranslation';
 import { FileOpener } from '@/lib/utils/fileOpener';
 import { resolveAliasPath } from '@/lib/filesystemAllowlist/displayPathAliases';
 import { extractThinkAndRegular, splitThinkFromMarkdown } from '@/lib/markdown/splitThinkTags';
@@ -57,6 +58,7 @@ export function AIMessageBlock({
   citations,
   viewModel
 }: AIMessageBlockProps) {
+  const t = useTranslation();
   const [streamedState, _setStreamedState] = useState<null | {
     thinkingContent: string;
     regularContent: string;
@@ -378,7 +380,9 @@ export function AIMessageBlock({
       // 对于文件直接打开；对目录也能打开
       await FileOpener.openDirectory(path);
     } catch (e) {
-      toast.error('打开失败', { description: e instanceof Error ? e.message : String(e) });
+      toast.error(t('chatMessage.openFailed'), {
+        description: e instanceof Error ? e.message : String(e),
+      });
     }
   };
 
@@ -483,7 +487,7 @@ export function AIMessageBlock({
                       <div className="relative inline-block group">
                         <img
                           src={src}
-                          alt="generated"
+                          alt={t('chatMessage.imageAlt')}
                           className="max-w-[50vw] max-h-[50vh] w-auto h-auto object-contain rounded-md border border-slate-200/60 dark:border-slate-700/60"
                           onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
                           onDoubleClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
@@ -492,8 +496,8 @@ export function AIMessageBlock({
                           <button
                             className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
                             onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
-                            title="查看"
-                            aria-label="查看"
+                            title={t('chatMessage.view')}
+                            aria-label={t('chatMessage.view')}
                           >
                             <Maximize2 size={16} className="text-slate-800 dark:text-slate-200" />
                           </button>
@@ -506,8 +510,8 @@ export function AIMessageBlock({
                                 await downloadService.downloadFile(`image-${(id||'msg')}-${idx}.png`, blob, blob.type);
                               } catch { /* noop */ }
                             }}
-                            title="下载"
-                            aria-label="下载"
+                            title={t('chatMessage.download')}
+                            aria-label={t('chatMessage.download')}
                           >
                             <DownloadIcon size={16} className="text-slate-800 dark:text-slate-200" />
                           </button>
@@ -521,8 +525,8 @@ export function AIMessageBlock({
                                 await (navigator as any).clipboard.write([item]);
                               } catch { /* noop */ }
                             }}
-                            title="复制到剪贴板"
-                            aria-label="复制到剪贴板"
+                            title={t('chatMessage.copyToClipboard')}
+                            aria-label={t('chatMessage.copyToClipboard')}
                           >
                             <CopyIcon size={16} className="text-slate-800 dark:text-slate-200" />
                           </button>
@@ -573,7 +577,9 @@ export function AIMessageBlock({
               <div className="flex items-center gap-2">
                 <FoldingLoader key="loader-tool" size={22} />
               </div>
-              <span className="text-xs italic text-slate-500 dark:text-slate-400">正在识别工具调用指令…</span>
+              <span className="text-xs italic text-slate-500 dark:text-slate-400">
+                {t('chatMessage.detectingToolCall')}
+              </span>
             </div>
           )}
           {/* 思考结束到卡片出现的过渡期占位：当仍在流式但暂无任何片段时显示 */}
@@ -582,7 +588,9 @@ export function AIMessageBlock({
               <div className="flex items-center gap-2">
                 <FoldingLoader key="loader-reply" size={22} />
               </div>
-              <span className="text-xs italic text-slate-500 dark:text-slate-400">正在准备回复…</span>
+              <span className="text-xs italic text-slate-500 dark:text-slate-400">
+                {t('chatMessage.preparingReply')}
+              </span>
             </div>
           )}
           {/* 悬浮显示字数 */}
@@ -673,8 +681,8 @@ export function AIMessageBlock({
                 await downloadService.downloadFile(im.filename, blob, blob.type);
               } catch { /* noop */ }
             }}
-            title="下载"
-            aria-label="下载"
+            title={t('chatMessage.download')}
+            aria-label={t('chatMessage.download')}
           >
             <DownloadIcon size={18} className="text-slate-800 dark:text-slate-200" />
           </button>

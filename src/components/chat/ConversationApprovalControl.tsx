@@ -15,7 +15,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 import { useConversationAccessStore } from '@/store/conversationAccessStore';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 const modes = [
   {
@@ -37,8 +37,7 @@ export function ConversationApprovalControl({
   const id = useId();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Mode | null>(null);
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   const access = useConversationAccessStore(
     (state) => state.conversations[conversationId],
   );

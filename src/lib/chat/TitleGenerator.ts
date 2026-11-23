@@ -2,6 +2,18 @@ import type { Conversation } from '@/types/chat';
 
 export const NEW_CONVERSATION_TITLE = '新对话';
 
+/**
+ * Stored titles cannot be rewritten when the interface language changes, so the
+ * default-title sentinel is translated at render time instead. Anything the user
+ * typed is returned untouched.
+ */
+export function displayConversationTitle(
+  title: string,
+  label: string,
+): string {
+  return title === NEW_CONVERSATION_TITLE ? label : title;
+}
+
 /** Titles assigned by the old new-conversation controls, not user-named chats. */
 export function hasLegacyNewConversationTime(title: string): boolean {
   return /^新对话\s+(?:上午|下午)?\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?$/iu.test(title);
