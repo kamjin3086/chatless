@@ -29,7 +29,12 @@ class AndroidCountdownPlugin(private val activity: Activity) : Plugin(activity) 
                 activity.startActivity(intent)
                 "handed_off"
             } catch (_: ActivityNotFoundException) {
+                // No clock app on this device: a known non-start, safe to tell the model.
                 "unavailable"
+            } catch (_: SecurityException) {
+                // The clock rejects the handoff without SET_ALARM: also a known non-start,
+                // so the run must pause as an error rather than as an unknown side effect.
+                "denied"
             } catch (error: Exception) {
                 invoke.reject("Android countdown handoff was not confirmed", error)
                 return@runOnUiThread

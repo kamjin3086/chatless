@@ -37,10 +37,9 @@ export class AndroidCountdownAdapter implements ToolAdapter {
 
     // Only explicit native receipts are known outcomes. Errors or unexpected
     // receipts must use the pipeline's unknown-side-effect path, never replay.
-    const receipt = await invoke<{ status: 'handed_off' | 'unavailable' }>(
-      'start_android_countdown',
-      { durationSeconds },
-    ).catch(() => undefined);
+    const receipt = await invoke<{
+      status: 'handed_off' | 'unavailable' | 'denied';
+    }>('start_android_countdown', { durationSeconds }).catch(() => undefined);
     if (receipt?.status === 'unavailable') {
       return {
         ok: false,
@@ -48,6 +47,18 @@ export class AndroidCountdownAdapter implements ToolAdapter {
           code: 'CLOCK_UNAVAILABLE',
           message:
             'No compatible Android clock app accepted the countdown request.',
+        },
+      };
+    }
+    if (receipt?.status === 'denied') {
+      // The clock refused the handoff, so nothing started: report it as a plain
+      // failure instead of pausing the run on an unverifiable side effect.
+      return {
+        ok: false,
+        error: {
+          code: 'CLOCK_DENIED',
+          message:
+            'The Android clock refused the countdown request (missing SET_ALARM permission). The timer did not start.',
         },
       };
     }

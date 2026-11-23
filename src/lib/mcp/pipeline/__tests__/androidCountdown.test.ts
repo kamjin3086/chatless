@@ -309,6 +309,17 @@ describe('Android countdown execution', () => {
     expect(mocks.handoff).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a clock that refuses the handoff as a known failure', async () => {
+    mocks.handoff.mockResolvedValue({ status: 'denied' });
+
+    expect(await run()).toMatchObject({
+      ok: false,
+      resultStatus: 'failed',
+      error: expect.objectContaining({ code: 'CLOCK_DENIED' }),
+    });
+    expect(mocks.handoff).toHaveBeenCalledTimes(1);
+  });
+
   it('allows only the exact countdown tool without approval, and only on Android', () => {
     const params = {
       server: 'android_countdown',
