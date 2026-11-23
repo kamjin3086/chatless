@@ -31,6 +31,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
 
     private val resolver = activity.contentResolver
     private val agent = activity.getSharedPreferences("android_directory_agent", Context.MODE_PRIVATE)
+    private val nonces = activity.getSharedPreferences("android_directory_nonces", Context.MODE_PRIVATE)
     private val selections = activity.getSharedPreferences("android_directory_selections", Context.MODE_PRIVATE)
     private var activePicker: Invoke? = null
     // Tauri's shared activity-result callback is also used by other attachment pickers.
@@ -186,44 +187,121 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         }
     }
 
+    /**
+     * The inventory of every folder the Agent is allowed to read, or of one named folder.
+     *
+     * Authorized means Android still holds the grant and the user has not switched the folder off;
+     * a conversation that excluded folders keeps that exclusion. Results come back per folder, so
+     * a model that asked across folders can say which folder an answer came from, and the first
+     * folder is also reported under the single-folder keys the composer preview reads. Filters are
+     * applied in TypeScript: this walks trees, and no model argument names a path.
+     */
     @Command
-    fun inventory(invoke: Invoke) = runInBackground(invoke) { conversationId ->
-        val selection = attached(conversationId) ?: return@runInBackground status("none")
-        val root = openRoot(selection) ?: return@runInBackground status("revoked")
-        val result = AndroidDirectoryInventory(selection.nonce).scan(root) { parentId, accept ->
-            // Every query is made through the selected tree URI using IDs it supplied.
-            // No model arguments choose a document ID, URI, or path.
-            if (getSelection(conversationId) != selection) return@scan false
-            try {
-                val children = DocumentsContract.buildChildDocumentsUriUsingTree(selection.uri, parentId)
-                resolver.query(children, columns, null, null, null)?.use { cursor ->
-                    while (cursor.moveToNext()) if (!accept(cursor.toDirectoryRow())) break
-                    !cursor.extras.getBoolean(DocumentsContract.EXTRA_LOADING) &&
-                        !cursor.extras.containsKey(DocumentsContract.EXTRA_ERROR)
-                } ?: false
+    fun inventory(invoke: Invoke) {
+        val conversationId = invoke.getArgs().getString("conversationId")
+        val selector = invoke.getArgs().optString("root").trim()
+        executor.execute {
+            val receipt = try {
+                val all = agentRoots(conversationId)
+                val targets = if (selector.isEmpty()) all else all.filter {
+                    it.name.equals(selector, ignoreCase = true)
+                }
+                when {
+                    all.isEmpty() -> status("none")
+                    targets.isEmpty() -> status("root_not_found").apply {
+                        put("roots", JSONArray(all.map { it.name }))
+                    }
+                    else -> sectionsOf(targets)
+                }
             } catch (_: Exception) {
-                false
+                status("unavailable")
             }
+            invoke.resolve(receipt)
         }
-        if (getSelection(conversationId) != selection || !hasReadGrant(selection.uri)) {
-            return@runInBackground status("revoked")
+    }
+
+    private fun sectionsOf(targets: List<RootEntry>): JSObject {
+        val sections = JSONArray()
+        for (entry in targets) {
+            val row = openRoot(entry.selection) ?: continue
+            val result = AndroidDirectoryInventory(entry.selection.nonce).scan(row) { parentId, accept ->
+                queryChildren(entry.selection, parentId, accept)
+            } ?: continue
+            sections.put(JSObject().apply {
+                put("folder", result.folder.toJson())
+                put("entries", entriesOf(result))
+                put("omissions", omissionsOf(result))
+            })
         }
-        ready(result.folder).apply {
-            put("entries", JSONArray(result.entries.map { entry ->
-                entry.item.toJson().apply {
-                    put("parentHandle", entry.parentHandle)
-                    put("kind", if (entry.directory) "directory" else "file")
-                    put("mimeType", entry.mimeType ?: JSONObject.NULL)
-                    put("sizeBytes", entry.sizeBytes ?: JSONObject.NULL)
-                    put("modifiedAt", entry.modifiedAt ?: JSONObject.NULL)
-                }
-            }))
-            put("omissions", JSONArray(result.omissions.map { omission ->
-                (omission.item?.toJson() ?: JSObject()).apply {
-                    put("parentHandle", omission.parentHandle)
-                    put("reason", omission.reason)
-                }
-            }))
+        if (sections.length() == 0) return status("revoked")
+        val first = sections.getJSONObject(0)
+        return status("ready").apply {
+            put("sections", sections)
+            put("folder", first.getJSONObject("folder"))
+            put("entries", first.getJSONArray("entries"))
+            put("omissions", first.getJSONArray("omissions"))
+        }
+    }
+
+    /** Every query goes through the authorized tree URI using IDs it supplied. */
+    private fun queryChildren(selection: Selection, parentId: String, accept: (DirectoryRow?) -> Boolean): Boolean {
+        if (!hasReadGrant(selection.uri) || !agentEnabled(selection.uri)) return false
+        return try {
+            val children = DocumentsContract.buildChildDocumentsUriUsingTree(selection.uri, parentId)
+            resolver.query(children, columns, null, null, null)?.use { cursor ->
+                while (cursor.moveToNext()) if (!accept(cursor.toDirectoryRow())) break
+                !cursor.extras.getBoolean(DocumentsContract.EXTRA_LOADING) &&
+                    !cursor.extras.containsKey(DocumentsContract.EXTRA_ERROR)
+            } ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun entriesOf(result: DirectoryInventory) = JSONArray(result.entries.map { entry ->
+        entry.item.toJson().apply {
+            put("parentHandle", entry.parentHandle)
+            put("kind", if (entry.directory) "directory" else "file")
+            put("mimeType", entry.mimeType ?: JSONObject.NULL)
+            put("sizeBytes", entry.sizeBytes ?: JSONObject.NULL)
+            put("modifiedAt", entry.modifiedAt ?: JSONObject.NULL)
+        }
+    })
+
+    private fun omissionsOf(result: DirectoryInventory) = JSONArray(result.omissions.map { omission ->
+        (omission.item?.toJson() ?: JSObject()).apply {
+            put("parentHandle", omission.parentHandle)
+            put("reason", omission.reason)
+        }
+    })
+
+    private data class RootEntry(val selection: Selection, val name: String)
+
+    /** The folders the Agent may read right now: granted, switched on, not excluded here. */
+    private fun agentRoots(conversationId: String?): List<RootEntry> {
+        if (conversationId != null && getSelection(conversationId) == null &&
+            selections.getString(detachedKey(conversationId), null) != null) return emptyList()
+        val seen = HashSet<String>()
+        return resolver.persistedUriPermissions
+            .filter { it.isReadPermission && DocumentsContract.isTreeUri(it.uri) && agentEnabled(it.uri) }
+            .map { it.uri }
+            .filter { seen.add(it.toString()) }
+            .mapNotNull { uri ->
+                val selection = Selection(uri, nonceFor(uri))
+                val row = openRoot(selection) ?: return@mapNotNull null
+                RootEntry(selection, row.name.ifEmpty { displayNameOf(uri) })
+            }
+    }
+
+    /**
+     * The nonce a folder's handles are derived from, stable across conversations.
+     *
+     * A model may hold handles from an earlier conversation; a per-conversation nonce would expire
+     * them the moment a new chat attached the same folder.
+     */
+    private fun nonceFor(uri: Uri): String = synchronized(nonces) {
+        nonces.getString(uri.toString(), null) ?: UUID.randomUUID().toString().also {
+            nonces.edit().putString(uri.toString(), it).commit()
         }
     }
 

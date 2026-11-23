@@ -28,8 +28,17 @@ type Inventory =
   | (Extract<AndroidDirectorySelection, { status: 'ready' }> & {
       entries: Entry[];
       omissions: Omission[];
+      /** One per authorized folder; the single-folder keys above carry the first of them. */
+      sections?: Section[];
     })
+  | { status: 'root_not_found'; roots?: string[] }
   | Exclude<AndroidDirectorySelection, { status: 'ready' }>;
+
+type Section = {
+  folder: AndroidDirectoryFolder;
+  entries: Entry[];
+  omissions: Omission[];
+};
 
 type Filters = {
   mimeType?: string;
@@ -40,6 +49,7 @@ type Filters = {
   groupBy?: 'type' | 'size' | 'date';
 };
 const allowedKeys = [
+  'root',
   'mimeType',
   'minBytes',
   'maxBytes',
@@ -156,13 +166,31 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
         'INVALID_FILTER',
         'Use valid metadata filters only. The folder comes from the current chat, not from paths, URIs or handles.',
       );
+    const rootArg =
+      typeof invocation.args?.root === 'string'
+        ? invocation.args.root.trim()
+        : '';
+    if (
+      'root' in (invocation.args ?? {}) &&
+      (typeof rootArg !== 'string' || rootArg.length > 120)
+    )
+      return failure(
+        'INVALID_ROOT',
+        '`root` is the name of one authorized folder, at most 120 characters, or omitted to read all of them.',
+      );
     const receipt = await invoke<Inventory>('inventory_android_directory', {
       conversationId: invocation.conversationId,
+      root: rootArg || null,
     }).catch(() => undefined);
+    if (receipt?.status === 'root_not_found')
+      return failure(
+        'ROOT_NOT_FOUND',
+        `No authorized folder is named "${rootArg}". Authorized: ${(receipt.roots ?? []).join(', ') || 'none'}. Call again with one of those names, or omit \`root\` to read all of them.`,
+      );
     if (receipt?.status === 'none')
       return failure(
         'DIRECTORY_NOT_SELECTED',
-        'Ask the user to choose a folder in this chat.',
+        'No folder is authorized for this app. Ask the user to attach one from the attachment menu (选择文件夹), or to turn Agent access on for an authorized folder.',
       );
     if (receipt?.status === 'revoked')
       return failure(
@@ -175,39 +203,63 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
         'The folder could not be inventoried. Ask the user to check or reselect it.',
       );
 
-    const entries: Entry[] = [];
-    const folders: Entry[] = [];
+    const sections: Section[] =
+      receipt.sections && receipt.sections.length
+        ? receipt.sections
+        : [
+            {
+              folder: receipt.folder,
+              entries: receipt.entries,
+              omissions: receipt.omissions,
+            },
+          ];
+
+    const entries: (Entry & { folderName: string })[] = [];
+    const folders: (Entry & { folderName: string })[] = [];
     const excludedForUnknownMetadata: (AndroidDirectoryFolder & {
       parentHandle: string;
     })[] = [];
+    const omissions: (Omission & { folderName?: string })[] = [];
     let filteredOut = 0;
     const groups = new Map<string, string[]>();
-    for (const entry of receipt.entries) {
-      if (entry.kind === 'directory') {
-        folders.push(entry);
-        continue;
-      }
-      const match = matches(entry, filters);
-      if (match === 'excluded') filteredOut += 1;
-      if (match === 'unknown') {
-        const { handle, name, parentHandle } = entry;
-        excludedForUnknownMetadata.push({ handle, name, parentHandle });
-      }
-      if (match !== 'match') continue;
-      entries.push(entry);
-      if (filters.groupBy) {
-        const label = groupLabel(entry, filters.groupBy);
-        if (!groups.has(label)) groups.set(label, []);
-        groups.get(label)?.push(entry.handle);
+    for (const section of sections) {
+      const folderName = section.folder.name;
+      omissions.push(
+        ...(section.omissions ?? []).map((omission) => ({
+          ...omission,
+          folderName,
+        })),
+      );
+      for (const entry of section.entries ?? []) {
+        if (entry.kind === 'directory') {
+          folders.push({ ...entry, folderName });
+          continue;
+        }
+        const match = matches(entry, filters);
+        if (match === 'excluded') filteredOut += 1;
+        if (match === 'unknown') {
+          const { handle, name, parentHandle } = entry;
+          excludedForUnknownMetadata.push({ handle, name, parentHandle });
+        }
+        if (match !== 'match') continue;
+        entries.push({ ...entry, folderName });
+        if (filters.groupBy) {
+          const label =
+            sections.length > 1
+              ? `${folderName} · ${groupLabel(entry, filters.groupBy)}`
+              : groupLabel(entry, filters.groupBy);
+          if (!groups.has(label)) groups.set(label, []);
+          groups.get(label)?.push(entry.handle);
+        }
       }
     }
     return {
       ok: true,
-      folder: receipt.folder,
+      folder: sections[0].folder,
       folders,
       entries,
       groups: [...groups].map(([label, handles]) => ({ label, handles })),
-      omissions: receipt.omissions,
+      omissions,
       filteredOut,
       excludedForUnknownMetadata,
     };

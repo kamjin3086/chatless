@@ -21,8 +21,8 @@ vi.mock('@/lib/utils/runtimePlatform', () => ({
 vi.mock('@/lib/documents/android/androidDocumentAttachment', () => ({
   hasAndroidDocumentAttachment: probes.document,
 }));
-vi.mock('@/lib/documents/android/androidDirectorySelection', () => ({
-  hasAndroidDirectorySelection: probes.directory,
+vi.mock('@/lib/documents/android/androidAuthorizedRoots', () => ({
+  hasAndroidAuthorizedFolders: probes.directory,
 }));
 vi.mock('@/lib/android/androidPhotoBatch', () => ({
   hasAndroidPhotoBatchSelection: probes.photos,
@@ -52,7 +52,8 @@ describe('Android capabilities', () => {
       photos: false,
     });
     expect(probes.document).toHaveBeenCalledExactlyOnceWith('chat-a');
-    expect(probes.directory).toHaveBeenCalledExactlyOnceWith('chat-a');
+    // Folders are app-level now: the probe does not ask about a chat at all (#228).
+    expect(probes.directory).toHaveBeenCalledExactlyOnceWith();
     expect(probes.photos).toHaveBeenCalledExactlyOnceWith('chat-a');
   });
 

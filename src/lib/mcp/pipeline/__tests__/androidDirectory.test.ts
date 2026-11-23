@@ -127,6 +127,18 @@ beforeEach(() => {
         ? { status: 'ready', folder }
         : { status: 'none' };
     }
+    if (command === 'android_directory_roots') {
+      // Authorized folders are the app's, so every chat sees the same list (#228).
+      return {
+        roots: [
+          {
+            uri: 'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+            name: '整理测试',
+            agentEnabled: true,
+          },
+        ],
+      };
+    }
     if (command === 'inventory_android_directory') {
       return args?.conversationId === selectedChat
         ? snapshot
@@ -137,7 +149,7 @@ beforeEach(() => {
 });
 
 describe('Android directory tool scope', () => {
-  it('discovers inventory in the active Android chat, not in another chat or on desktop', async () => {
+  it('discovers inventory in every Android chat, never on desktop', async () => {
     const search = (conversationId: string) =>
       run({
         conversationId,
@@ -157,10 +169,16 @@ describe('Android directory tool scope', () => {
         { server: 'android_directory', name: 'inventory', source: 'builtin' },
       ],
     });
-    expect((await buildCatalog('other')).nativeTools).not.toContainEqual(
+    // Authorized folders belong to the app: another conversation reads them without picking
+    // again, which is the whole point of #227/#228.
+    expect((await buildCatalog('other')).nativeTools).toContainEqual(
       expect.objectContaining({ name: 'android_directory__inventory' }),
     );
-    expect(await search('other')).toMatchObject({ results: [] });
+    expect(await search('other')).toMatchObject({
+      results: [
+        { server: 'android_directory', name: 'inventory', source: 'builtin' },
+      ],
+    });
     mocks.platform.mockReturnValue('linux');
     mocks.invoke.mockClear();
     expect(await search(selectedChat)).toMatchObject({ results: [] });
@@ -189,7 +207,7 @@ describe('Android directory tool scope', () => {
     });
     expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
       'inventory_android_directory',
-      { conversationId: selectedChat },
+      { conversationId: selectedChat, root: null },
     );
     expect(mocks.ask).not.toHaveBeenCalled();
   });

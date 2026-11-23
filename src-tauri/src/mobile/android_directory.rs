@@ -41,6 +41,22 @@ pub(super) struct DirectoryOmission {
   name: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InventoryRequest<'a> {
+  conversation_id: &'a str,
+  root: Option<&'a str>,
+}
+
+/// One authorized folder's inventory.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct DirectorySection {
+  folder: DirectoryItem,
+  entries: Vec<DirectoryEntry>,
+  omissions: Vec<DirectoryOmission>,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub(super) enum DirectoryReceipt {
@@ -50,6 +66,12 @@ pub(super) enum DirectoryReceipt {
     entries: Option<Vec<DirectoryEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     omissions: Option<Vec<DirectoryOmission>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sections: Option<Vec<DirectorySection>>,
+  },
+  RootNotFound {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    roots: Option<Vec<String>>,
   },
   None,
   Revoked,
@@ -184,6 +206,16 @@ pub(super) async fn revoke_android_directory_root(
 pub(super) async fn inventory_android_directory(
   directory: State<'_, AndroidDirectory>,
   conversation_id: String,
+  root: Option<String>,
 ) -> Result<DirectoryReceipt, String> {
-  directory.run("inventory", &conversation_id).await
+  android_plugin::call(
+    &directory.0,
+    "android_directory",
+    "inventory",
+    InventoryRequest {
+      conversation_id: &conversation_id,
+      root: root.as_deref().filter(|value| !value.is_empty()),
+    },
+  )
+  .await
 }

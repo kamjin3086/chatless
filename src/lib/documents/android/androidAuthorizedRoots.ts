@@ -30,6 +30,10 @@ export async function listAndroidAuthorizedRoots(): Promise<
   }
 }
 
+export async function hasAndroidAuthorizedFolders(): Promise<boolean> {
+  return (await listAndroidAuthorizedRoots()).some((root) => root.agentEnabled);
+}
+
 export async function setAndroidRootAgent(
   uri: string,
   agentEnabled: boolean,

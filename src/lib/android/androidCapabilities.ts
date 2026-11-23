@@ -7,7 +7,7 @@
  * reverse - adding one is this list plus its probe, nothing else.
  */
 import { hasAndroidPhotoBatchSelection } from '@/lib/android/androidPhotoBatch';
-import { hasAndroidDirectorySelection } from '@/lib/documents/android/androidDirectorySelection';
+import { hasAndroidAuthorizedFolders } from '@/lib/documents/android/androidAuthorizedRoots';
 import { hasAndroidDocumentAttachment } from '@/lib/documents/android/androidDocumentAttachment';
 import type { McpTool } from '@/lib/mcp/McpClient';
 import {
@@ -74,7 +74,9 @@ export const ANDROID_CAPABILITIES: readonly AndroidCapability[] = [
     server: ANDROID_DIRECTORY_SERVER,
     tools: [ANDROID_DIRECTORY_TOOL],
     matches: isAndroidDirectoryTool,
-    present: hasAndroidDirectorySelection,
+    // Authorized folders belong to the app, not to one chat: a folder the user authorized once
+    // is readable from any conversation unless they switched it off (#228).
+    present: () => hasAndroidAuthorizedFolders(),
   },
   {
     id: 'photos',
