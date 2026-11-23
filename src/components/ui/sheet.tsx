@@ -60,12 +60,13 @@ interface SheetContentProps
     VariantProps<typeof sheetVariants> {
   /** 是否隐藏关闭按钮 */
   hideCloseButton?: boolean
+  closeLabel?: string
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideCloseButton, ...props }, ref) => {
+>(({ side = "right", className, children, hideCloseButton, closeLabel = "Close", ...props }, ref) => {
   // 打开抽屉时锁定 body 滚动
   React.useEffect(() => {
     const originalOverflow = document.body.style.overflow
@@ -94,7 +95,7 @@ const SheetContent = React.forwardRef<
         {!hideCloseButton && (
           <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1.5 opacity-70 ring-offset-white transition-opacity hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-slate-100 dark:ring-offset-slate-950 dark:focus:ring-slate-800 dark:data-[state=open]:bg-slate-800">
             <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{closeLabel}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

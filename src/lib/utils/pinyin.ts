@@ -1,4 +1,6 @@
 import { pinyin } from 'pinyin-pro';
+import { translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
 
 /**
  * 中文转拼音工具函数
@@ -105,7 +107,7 @@ export function generateSafeId(text: string): string {
  * @param name 提供商名称
  * @returns 验证结果
  */
-export function validateProviderName(name: string): {
+export function validateProviderName(name: string, locale: Locale = 'zh'): {
   isValid: boolean;
   error?: string;
   suggestion?: string;
@@ -113,7 +115,7 @@ export function validateProviderName(name: string): {
   if (!name || name.trim() === '') {
     return {
       isValid: false,
-      error: '名称不能为空'
+      error: translate(locale, 'provider.name.empty')
     };
   }
 
@@ -123,8 +125,8 @@ export function validateProviderName(name: string): {
   if (trimmed.length < 2) {
     return {
       isValid: false,
-      error: '名称过短',
-      suggestion: '请使用至少 2 个字符'
+      error: translate(locale, 'provider.name.tooShort'),
+      suggestion: translate(locale, 'provider.name.minLength')
     };
   }
 
@@ -132,8 +134,8 @@ export function validateProviderName(name: string): {
   if (trimmed.length > 24) {
     return {
       isValid: false,
-      error: '名称过长',
-      suggestion: '请使用不超过 24 个字符'
+      error: translate(locale, 'provider.name.tooLong'),
+      suggestion: translate(locale, 'provider.name.maxLength')
     };
   }
 
@@ -143,8 +145,8 @@ export function validateProviderName(name: string): {
   if (!validPattern.test(trimmed)) {
     return {
       isValid: false,
-      error: '名称包含非法字符',
-      suggestion: '仅支持中文、英文字母、数字、下划线(_) 和连字符(-)'
+      error: translate(locale, 'provider.name.invalidCharacters'),
+      suggestion: translate(locale, 'provider.name.allowedCharacters')
     };
   }
 

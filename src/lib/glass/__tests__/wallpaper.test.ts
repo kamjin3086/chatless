@@ -1,11 +1,14 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   AMBIENT_MAX_EDGE,
+  GLASS_WALLPAPER_MAX_BYTES,
   ambientTargetSize,
   deriveAmbientWallpaper,
   isWallpaperDataUrl,
+  saveGlassWallpaper,
   wallpaperExtension,
   wallpaperMime,
+  WallpaperSaveError,
 } from '../wallpaper';
 
 describe('glass wallpaper helpers', () => {
@@ -27,6 +30,69 @@ describe('glass wallpaper helpers', () => {
     expect(isWallpaperDataUrl('data:image/png;base64,aaa')).toBe(true);
     expect(isWallpaperDataUrl('wallpaper.jpg')).toBe(false);
     expect(isWallpaperDataUrl(null)).toBe(false);
+  });
+});
+
+describe('saveGlassWallpaper', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test.each([
+    [new File([], 'wallpaper.png'), 'emptyFile'],
+    [
+      new File(
+        [new Uint8Array(GLASS_WALLPAPER_MAX_BYTES + 1)],
+        'wallpaper.png',
+      ),
+      'tooLarge',
+    ],
+    [
+      new File(['text'], 'wallpaper.txt', { type: 'text/plain' }),
+      'unsupportedFormat',
+    ],
+  ])(
+    'reports a stable, localizable reason for rejecting %s',
+    async (file, reason) => {
+      await expect(saveGlassWallpaper(file)).rejects.toEqual(
+        expect.objectContaining({ name: 'WallpaperSaveError', reason }),
+      );
+    },
+  );
+
+  test('accepts a supported image at the existing size limit', async () => {
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        result = 'data:image/png;base64,AA==';
+        onload?: () => void;
+        readAsDataURL() {
+          this.onload?.();
+        }
+      },
+    );
+    const file = new File(
+      [new Uint8Array(GLASS_WALLPAPER_MAX_BYTES)],
+      'wallpaper.png',
+    );
+    await expect(saveGlassWallpaper(file)).resolves.toBe(
+      'data:image/png;base64,AA==',
+    );
+  });
+
+  test('reports a read failure without losing the original FileReader error', async () => {
+    const cause = new DOMException('File cannot be read', 'NotReadableError');
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        error = cause;
+        onerror?: () => void;
+        readAsDataURL() {
+          this.onerror?.();
+        }
+      },
+    );
+    const result = saveGlassWallpaper(new File(['image'], 'wallpaper.png'));
+    await expect(result).rejects.toBeInstanceOf(WallpaperSaveError);
+    await expect(result).rejects.toMatchObject({ reason: 'readFailed', cause });
   });
 });
 

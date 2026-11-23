@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { storage } from '@/lib/storage';
+import { translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
 
 export type MarkdownTheme = 'swiss' | 'minimal' | 'modern' | 'classic' | 'github';
 
@@ -64,32 +66,34 @@ export function useMarkdownTheme() {
 
 /**
  * 主题元数据
+ *
+ * 名称与说明是界面文案，按当前语言给出。
  */
-export const MARKDOWN_THEMES = {
+export const MARKDOWN_THEMES = (locale: Locale) => ({
   swiss: {
-    name: '瑞士简约',
-    description: '优雅简洁，注重排版与留白',
-    icon: '🇨🇭'
+    name: translate(locale, 'chatUi.markdownTheme.swiss.name'),
+    description: translate(locale, 'chatUi.markdownTheme.swiss.description'),
+    icon: '🇨🇭',
   },
   minimal: {
-    name: '极简主义',
-    description: '最小化设计，专注内容本身',
-    icon: '✨'
+    name: translate(locale, 'chatUi.markdownTheme.minimal.name'),
+    description: translate(locale, 'chatUi.markdownTheme.minimal.description'),
+    icon: '✨',
   },
   modern: {
-    name: '现代简洁',
-    description: '现代感设计，清晰易读',
-    icon: '🎨'
+    name: translate(locale, 'chatUi.markdownTheme.modern.name'),
+    description: translate(locale, 'chatUi.markdownTheme.modern.description'),
+    icon: '🎨',
   },
   classic: {
-    name: '经典书籍',
-    description: '传统书籍排版风格',
-    icon: '📖'
+    name: translate(locale, 'chatUi.markdownTheme.classic.name'),
+    description: translate(locale, 'chatUi.markdownTheme.classic.description'),
+    icon: '📖',
   },
   github: {
-    name: 'GitHub风格',
-    description: 'GitHub Markdown样式',
-    icon: '🐙'
-  }
-} as const;
+    name: translate(locale, 'chatUi.markdownTheme.github.name'),
+    description: translate(locale, 'chatUi.markdownTheme.github.description'),
+    icon: '🐙',
+  },
+});
 

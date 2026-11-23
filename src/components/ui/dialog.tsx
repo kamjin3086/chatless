@@ -35,8 +35,8 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { closeLabel?: string }
+>(({ className, children, closeLabel = "Close", ...props }, ref) => {
   // 打开弹窗时锁定 body 滚动，避免滚动条占位导致的居中偏移
   React.useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -70,7 +70,7 @@ const DialogContent = React.forwardRef<
           tabIndex={-1}
           className="absolute cursor-pointer right-4 top-4 p-1.5 rounded-lg opacity-80 text-slate-500 dark:text-slate-400 hover:opacity-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 hover:text-slate-700 dark:hover:text-slate-200 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-400/30">
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>

@@ -4,6 +4,7 @@ import { useTheme } from "next-themes"
 import { Toaster as Sonner, ToasterProps, toast as sonnerToast } from "sonner"
 import React, { useMemo, useState } from "react"
 import { Check, Copy, X } from "lucide-react"
+import { useTranslation } from "@/i18n/useTranslation"
 
 /**
  * 项目统一的Toast通知组件封装
@@ -74,6 +75,9 @@ function CollapsibleDetailsWithControl(props: { text: string; toastIdRef: ToastI
   const { text, toastIdRef, initialAutoCloseMs = 7000, leaveAutoCloseMs = 3000 } = props;
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const t = useTranslation();
+  const copyLabel = t(copied ? 'toast.copied' : 'toast.copyError');
+  const closeLabel = t('common.close');
   const leaveTimerRef = React.useRef<number | null>(null);
   const initialTimerRef = React.useRef<number | null>(null);
 
@@ -203,21 +207,21 @@ function CollapsibleDetailsWithControl(props: { text: string; toastIdRef: ToastI
               type="button"
               onClick={() => void handleCopy()}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800/70 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors"
-              title={copied ? "已复制" : "复制错误信息"}
-              aria-label={copied ? "已复制" : "复制错误信息"}
+              title={copyLabel}
+              aria-label={copyLabel}
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span className="text-[11px]">{copied ? "已复制" : "复制"}</span>
+              <span className="text-[11px]">{t(copied ? 'toast.copied' : 'toast.copy')}</span>
             </button>
             <button
               type="button"
               onClick={() => { const id = toastIdRef.current; if (id != null) { try { sonnerToast.dismiss(id); } catch { /* noop */ } } }}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800/70 dark:hover:bg-slate-700 dark:text-slate-200 transition-colors"
-              title="关闭"
-              aria-label="关闭"
+              title={closeLabel}
+              aria-label={closeLabel}
             >
               <X className="w-3.5 h-3.5" />
-              <span className="text-[11px]">关闭</span>
+              <span className="text-[11px]">{closeLabel}</span>
             </button>
           </div>
           <div className="mt-1.5 max-h-[55vh] overflow-y-auto overflow-x-hidden rounded-md border border-slate-100 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 p-2 text-[12px] leading-5 font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-200">
@@ -242,7 +246,7 @@ function CollapsibleDetailsWithControl(props: { text: string; toastIdRef: ToastI
               }}
               className="text-[12px] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors underline-offset-2 hover:underline"
             >
-              展开详情
+              {t('toast.showDetails')}
             </button>
           </div>
         </div>
@@ -325,8 +329,9 @@ export const toast = {
   raw: sonnerToast,
 };
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  const t = useTranslation()
 
   return (
     <>
@@ -336,10 +341,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
         // 使用更高对比度且更轻盈的样式，确保亮色/暗色模式的可读性
         position={props.position || "bottom-right"}
         expand
+        containerAriaLabel={t('toast.notifications')}
         toastOptions={{
-          ...props.toastOptions,
           classNames: {
-            ...props.toastOptions?.classNames,
             // 精致轻盈风格：半透明毛玻璃、柔和阴影、可选中文本
             toast:
               "relative rounded-xl border px-3.5 py-2.5 backdrop-blur-lg glass-overlay " +
@@ -354,6 +358,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
             actionButton: "text-[12px]",
             cancelButton: "text-[12px]",
           },
+          ...toastOptions,
+          closeButtonAriaLabel: toastOptions?.closeButtonAriaLabel ?? t('toast.closeNotification'),
         }}
         {...props}
       />
