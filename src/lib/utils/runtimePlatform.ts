@@ -27,7 +27,7 @@ export function isMobileRuntime(): boolean {
   }
 }
 
-export type RuntimePlatform = 'windows' | 'macos' | 'linux' | 'unknown';
+export type RuntimePlatform = 'windows' | 'macos' | 'linux' | 'android' | 'unknown';
 
 /**
  * Best-effort runtime platform detection.
@@ -42,6 +42,8 @@ export async function getRuntimePlatform(): Promise<RuntimePlatform> {
     const v = String(p || '').toLowerCase();
     if (v === 'windows') return 'windows';
     if (v === 'macos' || v === 'darwin') return 'macos';
+    if (v === 'android') return 'android';
+    if (v === 'ios') return 'android';
     if (v === 'linux') return 'linux';
   } catch {
     // ignore
@@ -53,6 +55,11 @@ export async function getRuntimePlatform(): Promise<RuntimePlatform> {
       const ua = navigator.userAgent.toLowerCase();
       if (ua.includes('windows')) return 'windows';
       if (ua.includes('mac os') || ua.includes('macintosh') || ua.includes('darwin')) return 'macos';
+      // An Android WebView says "Linux; Android 14" in the same breath, so this
+      // has to be checked before the bare `linux` below, or the phone reports a
+      // desktop Linux and the model starts planning `bash` commands.
+      if (ua.includes('android')) return 'android';
+      if (ua.includes('iphone') || ua.includes('ipad')) return 'android';
       if (ua.includes('linux')) return 'linux';
     }
   } catch {
@@ -68,10 +75,13 @@ export async function getRuntimePlatform(): Promise<RuntimePlatform> {
  */
 export function getShellGuidance(platform: RuntimePlatform): {
   platformLabel: string;
-  preferredShell: string;
+  /** Absent where there is no shell to call at all. */
+  preferredShell?: string;
   rules: string[];
   /** Platform-specific command examples. */
   commandExamples: Record<string, string>;
+  /** The desktop filesystem tools are always there; the phone's are conditional. */
+  toolNote?: string;
 } {
   if (platform === 'windows') {
     return {
@@ -91,6 +101,7 @@ export function getShellGuidance(platform: RuntimePlatform): {
         'run python': 'shell__run({ shell: "cmd", command: "python \\"script path\\"" })',
         'run node': 'shell__run({ shell: "cmd", command: "node \\"script path\\"" })',
       },
+      toolNote: 'Prefer fs__mkdir over a shell command when creating a directory.',
     };
   }
   if (platform === 'macos') {
@@ -108,6 +119,7 @@ export function getShellGuidance(platform: RuntimePlatform): {
         'delete a directory': 'shell__run({ shell: "bash", command: "rm -rf \\"path\\"" })',
         'read a file': 'shell__run({ shell: "bash", command: "cat \\"path\\"" })',
       },
+      toolNote: 'Prefer fs__mkdir over a shell command when creating a directory.',
     };
   }
   if (platform === 'linux') {
@@ -125,6 +137,20 @@ export function getShellGuidance(platform: RuntimePlatform): {
         'delete a directory': 'shell__run({ shell: "bash", command: "rm -rf \\"path\\"" })',
         'read a file': 'shell__run({ shell: "bash", command: "cat \\"path\\"" })',
       },
+      toolNote: 'Prefer fs__mkdir over a shell command when creating a directory.',
+    };
+  }
+  if (platform === 'android') {
+    return {
+      platformLabel: 'Android',
+      rules: [
+        'This app runs on an Android phone or tablet - not a desktop, and not a Linux server.',
+        'There is no shell here: do not call shell__run, do not run ls / cat / mkdir / find, and do not ssh somewhere to reach the user\'s files.',
+        'There is no home directory and no "~". Paths like ~/Downloads, ~\Download or C:\\Users do not exist on this device.',
+        'Files are reachable only through the tools this chat gives you (the folder, photo and document tools). A folder is readable only after the user hands it over from the attachment menu.',
+        'When the user asks about a directory you cannot see, say which folder you need and ask them to attach it. Do not guess paths, and do not retry a path that just failed.',
+      ],
+      commandExamples: {},
     };
   }
   return {
@@ -134,5 +160,6 @@ export function getShellGuidance(platform: RuntimePlatform): {
       'The platform is unknown: prefer the filesystem tools. If a command is unavoidable, determine the platform before choosing a shell.',
     ],
     commandExamples: {},
+    toolNote: 'Prefer fs__mkdir over a shell command when creating a directory.',
   };
 }

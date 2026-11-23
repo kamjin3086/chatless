@@ -5,6 +5,7 @@ import { resolveAccess } from '@/lib/mcp/accessPolicy';
 import { conversationToolKey, hasConversationToolGrant, getConversationDirectoryGrant, isConversationAutomatic, useConversationAccessStore } from '@/store/conversationAccessStore';
 import { shouldAutoAuthorize } from '@/lib/mcp/authorizationConfig';
 import { androidPlatformCapabilities } from '@/lib/android/androidCapabilities';
+import { mobileUnsupportedReason } from '@/lib/mcp/nativeTools/mobileUnsupported';
 import { getAgentExperienceConfig } from '@/lib/mcp/experience/agentExperienceConfig';
 import { findUnresolvedAliasInValues, resolveAllowlistPath } from '@/lib/filesystemAllowlist';
 import { useFilesystemAllowlistStore } from '@/store/filesystemAllowlistStore';
@@ -97,6 +98,15 @@ export class ToolExecutionPipeline {
       markError({ assistantMessageId, server, tool, cardId }, msg);
       this.coordinator.markToolCallComplete(callKey, 'failed');
       return { error: 'NO_ADAPTER', message: msg };
+    }
+
+    // 手机上没有桌面那套 fs / shell 后端（mobile.rs 未注册这些命令），在审批
+    // 与建立授权之前挡下，并把可用的替代品说清楚。
+    const unsupported = mobileUnsupportedReason(server, tool);
+    if (unsupported) {
+      markError({ assistantMessageId, server, tool, cardId }, unsupported);
+      this.coordinator.markToolCallComplete(callKey, 'failed');
+      return { ok: false, error: { code: 'ANDROID_TOOL_UNAVAILABLE', message: unsupported, server, tool } };
     }
 
     if (invocation.planOnly && !isPlanOnlyAllowed(server, tool)) {

@@ -17,6 +17,8 @@ import {
 } from '@/lib/android/androidCapabilities';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from './filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecutor';
+import { isMobileUnsupportedServer } from './mobileUnsupported';
+import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
 import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
 import { SYSTEM_SERVER_NAME, SYSTEM_PROMPT_TOOLS } from './systemPrompts';
 import { SKILL_SERVER_NAME, SKILL_UNIFIED_TOOLS } from './skillUnifiedTools';
@@ -120,7 +122,10 @@ export function getToolsForGroup(
   android: AndroidCapabilities = NO_ANDROID_CAPABILITIES,
 ): Array<{ server: string; tool: McpTool }> {
   const tools = TOOL_GROUPS.find(g => g.id === groupId)?.tools || [];
-  return groupId === 'core' ? [...tools, ...androidTools(android)] : tools;
+  if (groupId !== 'core') return tools;
+  // 手机把桌面上那套 fs / shell 全去掉：它们在那边不存在（见 mobileUnsupported.ts）。
+  const core = isAndroidTauri() ? tools.filter(t => !isMobileUnsupportedServer(t.server)) : tools;
+  return [...core, ...androidTools(android)];
 }
 
 /**

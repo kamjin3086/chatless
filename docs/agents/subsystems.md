@@ -44,6 +44,15 @@ approval card the user cannot act on. Adding a capability means adding one entry
 drift apart. Membership there is security-relevant the same way it is in
 `policy/toolRisk.ts` (ADR 0003): an unregistered name is asked about, not allowed.
 
+The phone also loses two desktop servers. `fs` and `shell` are absent from its `core` group,
+because `mobile.rs` registers neither the `filesystem_*` commands nor the process ones - and
+`src/lib/mcp/nativeTools/mobileUnsupported.ts` is the single list both halves read: the catalog
+(no tool to call) and `ToolExecutionPipeline` (a call from an old conversation or a prompt-track
+model fails with `ANDROID_TOOL_UNAVAILABLE` and the alternative, before the gate and before any
+grant). The platform named in the prompt comes from `getRuntimePlatform()`, which answers `android`
+for the phone; its `runtime-environment` block has no `Shell:` line and no command examples, so
+the model is never told to reach for `bash` (ADR 0006).
+
 ## Parameters and the wire
 
 - The stored bag: `src/types/model-params.ts` (`ModelParameters`, twelve `enable*` flags).

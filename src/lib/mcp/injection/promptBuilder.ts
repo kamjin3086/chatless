@@ -127,20 +127,18 @@ export async function buildInitialPrompt(
       .map(([op, cmd]) => `  ${op}: ${cmd}`)
       .join('\n');
     
+    // 手机没有 shell 可说，也没有 fs__mkdir 可用，所以那两行只在桌面端出现。
+    const pieces = [`[Runtime environment - ${g.platformLabel} (binding)]`, ''];
+    if (g.preferredShell) pieces.push(`Shell: ${g.preferredShell}`, '');
+    pieces.push('Rules:', ...g.rules.map((r) => `- ${r}`), '');
+    pieces.push(cmdExamples ? `Common commands:\n${cmdExamples}` : '', '');
+    if (g.toolNote) pieces.push(g.toolNote);
+
     blocks.push({
       id: 'runtime-environment',
       layer: 'conversation',
       order: 10,
-      content: `[Runtime environment - ${g.platformLabel} (binding)]
-
-Shell: ${g.preferredShell}
-
-Rules:
-${g.rules.map((r) => `- ${r}`).join('\n')}
-
-${cmdExamples ? `Common commands:\n${cmdExamples}` : ''}
-
-Prefer fs__mkdir over a shell command when creating a directory.`,
+      content: pieces.join('\n').replace(/\s+$/, ''),
     });
   } catch {
     // ignore
