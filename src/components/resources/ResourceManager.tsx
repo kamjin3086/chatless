@@ -24,10 +24,12 @@ import { UnifiedFileService, type UnifiedFile } from '@/lib/unifiedFileService';
 import { toast } from "@/components/ui/sonner";
 import { ResourceDocument, ResourceManagerProps } from './types';
 import { FileOpener } from '@/lib/utils/fileOpener';
-import { formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { formatResourceReferenceTime } from './formatResourceReferenceTime';
 import { useRouter } from 'next/navigation';
 import { useChatStore } from '@/store/chatStore';
+import { useLocaleStore } from '@/store/localeStore';
+import { getHtmlLang, translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
 
 // 类型转换：将 UnifiedFile 转换为 ResourceDocument 格式以保持组件接口不变
 const convertUnifiedFileToDocument = (file: UnifiedFile): ResourceDocument => ({
@@ -49,11 +51,13 @@ interface RecentReference {
   id: string;
   type: string;
   name: string;
-  time: string;
+  createdAt: string;
   conversationId: string;
 }
 
 export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats = false }: ResourceManagerProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [documents, setDocuments] = useState<ResourceDocument[]>([]);
   const [chatFiles, setChatFiles] = useState<ResourceDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,15 +93,6 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
   
   const router = useRouter();
   const setCurrentConversation = useChatStore((state)=>state.setCurrentConversation);
-  
-  // 将 ISO 日期转换为"x分钟前"等格式
-  const formatRelativeTime = (isoDate: string): string => {
-    try {
-      return formatDistanceToNow(new Date(isoDate), { addSuffix: true, locale: zhCN });
-    } catch {
-      return isoDate;
-    }
-  };
   
   // 加载聊天文件
   const loadChatFiles = async () => {
@@ -190,7 +185,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
             const mappings = await knowledgeBaseRepo.getDocumentKnowledgeBases(doc.id);
             doc.knowledgeBases = mappings.map(mapping => ({
               id: mapping.knowledgeBaseId,
-              name: kbMap.get(mapping.knowledgeBaseId) || '未知知识库',
+              name: kbMap.get(mapping.knowledgeBaseId) || '',
               status: mapping.status
             }));
           } catch (error) {
@@ -212,13 +207,13 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
         await db.initialize();
         const recentRows = await db.getMessageRepository().getRecentDocumentReferences(5);
 
-        const recentRefs: RecentReference[] = recentRows.map((row: any) => {
-          const fileName = row.file_name?.replace(/"/g, '') || '文件';
+        const recentRefs: RecentReference[] = recentRows.map((row) => {
+          const fileName = row.file_name?.replace(/"/g, '') || '';
           return {
             id: row.conversation_id + fileName,
             type: fileName.split('.').pop() || 'file',
             name: fileName,
-            time: formatRelativeTime(row.created_at),
+            createdAt: row.created_at,
             conversationId: row.conversation_id
           };
         });
@@ -230,8 +225,9 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       
     } catch (error) {
       console.error('加载文档失败:', error);
-      toast.error('加载文档失败', {
-        description: '请检查权限或稍后重试',
+      const { t } = useLocaleStore.getState();
+      toast.error(t('resources.loadFailed'), {
+        description: t('resources.loadFailedHint'),
       });
     } finally {
       setLoading(false);
@@ -259,8 +255,9 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       const refreshedFiles = await UnifiedFileService.getAllFiles();
       
       // 显示成功通知，使用实际的文件数量
-      toast.success('资源列表已更新', {
-        description: `目前共有 ${refreshedFiles.length} 个资源`
+      const { locale, t } = useLocaleStore.getState();
+      toast.success(t('knowledge.import.resourcesUpdated'), {
+        description: t('knowledge.import.resourceCount').replace('{0}', refreshedFiles.length.toLocaleString(getHtmlLang(locale))),
       });
 
       // 通知父组件刷新计数
@@ -307,8 +304,9 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
         return;
       } catch (error) {
         console.error('跳转到对话失败:', error);
-        toast.error('跳转失败', {
-          description: '无法跳转到对应的对话'
+        const { t } = useLocaleStore.getState();
+        toast.error(t('resources.openConversationFailed'), {
+          description: t('resources.openConversationFailedHint')
         });
         return;
       }
@@ -318,7 +316,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
     const document = documents.find(r => r.id === id);
     if (!document) return;
     
-    await FileOpener.openFile(document.filePath, document.title);
+    await FileOpener.openFile(document.filePath, document.title, useLocaleStore.getState().locale);
   }, [documents, chatFiles, router]);
   
   // 处理添加到知识库
@@ -346,8 +344,9 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       // 强制触发刷新
       setLastRefreshTime(Date.now());
       
-      toast.success('已添加到知识库', {
-        description: '资源已成功添加到知识库',
+      const { t } = useLocaleStore.getState();
+      toast.success(t('knowledge.import.addedToKnowledgeBase'), {
+        description: t('knowledge.import.resourceAdded'),
       });
     }, 500);
   }, []);
@@ -370,13 +369,15 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
     
     try {
       // 文档暂不支持备注功能，直接关闭对话框
-      toast.info('备注功能', {
-        description: '文档备注功能将在后续版本中添加'
+      const { t } = useLocaleStore.getState();
+      toast.info(t('resources.note.unavailableTitle'), {
+        description: t('resources.note.unavailable')
       });
     } catch (error) {
       console.error('保存备注失败:', error);
-      toast.error('保存备注失败', {
-        description: '无法保存备注，请稍后重试'
+      const { t } = useLocaleStore.getState();
+      toast.error(t('resources.note.saveFailed'), {
+        description: t('resources.note.saveFailedHint')
       });
     } finally {
       closeNoteDialog();
@@ -421,16 +422,18 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
           setLastRefreshTime(Date.now());
         }, 500);
         
-        toast.success('文档已删除', {
-          description: `已删除文档: ${resourceToDeleteName}`
+        const { t } = useLocaleStore.getState();
+        toast.success(t('resources.delete.success'), {
+          description: t('resources.delete.successDetails').replace('{0}', () => resourceToDeleteName)
         });
       } else {
         throw new Error('删除文档失败');
       }
     } catch (error) {
       console.error('删除文档失败:', error);
-      toast.error('删除文档失败', {
-        description: '无法删除文档，请稍后重试'
+      const { t } = useLocaleStore.getState();
+      toast.error(t('resources.delete.failed'), {
+        description: t('resources.delete.failedHint')
       });
       isOperationInProgress.current = false;
     } finally {
@@ -447,8 +450,9 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
   
   // 处理评论
   const handleComment = useCallback((_id: string) => {
-    toast.info('评论功能', {
-      description: '评论功能将在后续版本中添加'
+    const { t } = useLocaleStore.getState();
+    toast.info(t('resources.comment.title'), {
+      description: t('resources.comment.unavailable')
     });
   }, []);
   
@@ -475,6 +479,9 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
     return arr;
   }, [documents, showIndexedOnly, sortOption]);
   
+  const [notePrefix, noteSuffix] = t('resources.note.description').split('{0}');
+  const [deletePrefix, deleteSuffix] = t('resources.delete.description').split('{0}');
+
   return (
     <div className="h-full flex flex-col bg-white/100 dark:bg-slate-900/95 glass-surface">
       {/* 拖放上传卡片 */}
@@ -486,20 +493,24 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200/50 dark:border-slate-700/30">
         {/* 文件统计 */}
         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-          {isLoadingStats ? '加载中...' : `${totalFileCount} 个文件`}
+          {isLoadingStats
+            ? t('resources.loading')
+            : t(totalFileCount === 1 ? 'resources.fileCount.one' : 'resources.fileCount.other')
+              .replace('{0}', totalFileCount.toLocaleString(getHtmlLang(locale)))}
         </span>
         
         <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
         
         {/* 排序 */}
         <select
+          aria-label={t('resources.sort.label')}
           value={sortOption}
           onChange={(e) => setSortOption(e.target.value)}
           className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
         >
-          <option value="date">日期</option>
-          <option value="name">名称</option>
-          <option value="size">大小</option>
+          <option value="date">{t('resources.sort.date')}</option>
+          <option value="name">{t('resources.sort.name')}</option>
+          <option value="size">{t('resources.sort.size')}</option>
         </select>
 
         {/* 仅已入库 */}
@@ -509,7 +520,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
             checked={showIndexedOnly}
             onCheckedChange={(val: boolean) => setShowIndexedOnly(Boolean(val))}
           />
-          <span>仅已入库</span>
+          <span>{t('resources.indexedOnly')}</span>
         </label>
       </div>
       
@@ -517,10 +528,10 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       <div className="flex-1 overflow-hidden flex flex-col px-4 pb-3 pt-3">
         <Tabs defaultValue="documents" className="w-full h-full flex flex-col" onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-4 mb-2 flex-shrink-0 bg-slate-50 dark:bg-slate-800/40 p-0.5 rounded-lg h-8">
-            <TabsTrigger value="documents" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文档</TabsTrigger>
-            <TabsTrigger value="files" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">文件</TabsTrigger>
-            <TabsTrigger value="chat" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">聊天文件</TabsTrigger>
-            <TabsTrigger value="knowledge" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">已入库</TabsTrigger>
+            <TabsTrigger value="documents" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">{t('resources.tab.documents')}</TabsTrigger>
+            <TabsTrigger value="files" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">{t('resources.tab.files')}</TabsTrigger>
+            <TabsTrigger value="chat" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">{t('resources.tab.chat')}</TabsTrigger>
+            <TabsTrigger value="knowledge" className="text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 transition-colors">{t('resources.tab.knowledge')}</TabsTrigger>
           </TabsList>
           
           <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
@@ -577,12 +588,12 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       {/* 最近引用区域 */}
       <div className="border-t border-slate-200/50 dark:border-slate-700/30 p-3 flex-shrink-0">
         <RecentUsedList 
-          title="最近引用"
+          title={t('resources.references.title')}
           items={recentReferences.map(ref => ({
             id: ref.id,
-            name: ref.name,
+            name: ref.name || t('resources.references.unnamedFile'),
             iconType: ref.type,
-            time: ref.time,
+            time: formatResourceReferenceTime(ref.createdAt, locale),
           } as RecentItem))}
           onItemClick={(id) => {
             const ref = recentReferences.find(r => r.id === id);
@@ -591,7 +602,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
               router.push('/chat');
             }
           }}
-          emptyText="暂无引用"
+          emptyText={t('resources.references.empty')}
         />
       </div>
       
@@ -608,22 +619,24 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
       
       {/* 备注对话框 */}
       <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
-        <DialogContent className="rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-xl">
+        <DialogContent closeLabel={t('common.close')} className="rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-xl">
           <DialogHeader className="border-b border-slate-100/80 dark:border-slate-800/60 pb-3 bg-gradient-to-b from-slate-50/50 to-transparent dark:from-slate-900/30">
-            <DialogTitle className="text-lg font-semibold">添加资源备注</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">{t('resources.note.title')}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">为资源 <span className="font-medium text-slate-900 dark:text-slate-100">{resourceToNoteName}</span> 添加备注：</p>
+            <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
+              {notePrefix}<span className="font-medium text-slate-900 dark:text-slate-100">{resourceToNoteName}</span>{noteSuffix}
+            </p>
             <Textarea
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
-              placeholder="输入备注内容..."
+              placeholder={t('resources.note.placeholder')}
               className="min-h-[120px]"
             />
           </div>
           <DialogFooter className="border-t border-slate-200/40 dark:border-slate-700/40 pt-4 glass-dialog-footer">
-            <Button variant="outline" onClick={closeNoteDialog} className="rounded-lg">取消</Button>
-            <Button onClick={saveNote} className="rounded-lg shadow-sm">保存</Button>
+            <Button variant="outline" onClick={closeNoteDialog} className="rounded-lg">{t('common.cancel')}</Button>
+            <Button onClick={saveNote} className="rounded-lg shadow-sm">{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -635,7 +648,7 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
           <button
             onClick={() => setDeleteDialogOpen(false)}
             className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
-            aria-label="关闭"
+            aria-label={t('common.close')}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -643,15 +656,15 @@ export function ResourceManager({ onRefresh, totalFileCount = 0, isLoadingStats 
           </button>
           
           <AlertDialogHeader className="pr-8">
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogTitle>{t('resources.delete.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除资源 <span className="font-medium">{resourceToDeleteName}</span> 吗？此操作无法撤销。
+              {deletePrefix}<span className="font-medium">{resourceToDeleteName}</span>{deleteSuffix}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeDeleteDialog}>取消</AlertDialogCancel>
+            <AlertDialogCancel onClick={closeDeleteDialog}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete}>
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,15 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { getHtmlLang, translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
+
+export function getAppRecoveryLocale(
+  documentLanguage?: string,
+  browserLanguage?: string,
+): Locale {
+  return /^zh(?:-|$)/i.test(documentLanguage || browserLanguage || '')
+    ? 'zh'
+    : 'en';
+}
 
 export function AppRecoveryView() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [closeFailed, setCloseFailed] = useState(false);
-  const [chinese, setChinese] = useState(false);
+  const [locale, setLocale] = useState<Locale>('en');
 
   useEffect(() => {
-    const language = document.documentElement.lang || navigator.language;
-    setChinese(/^zh\b/i.test(language));
+    // This view must still work if the root layout or storage failed to start.
+    setLocale(
+      getAppRecoveryLocale(document.documentElement.lang, navigator.language),
+    );
     if (!('__TAURI_INTERNALS__' in window)) return;
     setIsDesktop(true);
     void import('@tauri-apps/api/window')
@@ -34,6 +47,7 @@ export function AppRecoveryView() {
 
   return (
     <main
+      lang={getHtmlLang(locale)}
       translate="no"
       style={{
         colorScheme: 'light dark',
@@ -49,12 +63,10 @@ export function AppRecoveryView() {
     >
       <section style={{ maxWidth: '30rem' }}>
         <h1 style={{ fontSize: '1.25rem', margin: '0 0 0.5rem' }}>
-          {chinese ? 'Chatless 遇到了错误' : 'Chatless ran into an error'}
+          {translate(locale, 'error.recovery.title')}
         </h1>
         <p style={{ margin: '0 0 1rem' }}>
-          {chinese
-            ? '可以重新加载界面；如果问题仍然存在，请关闭窗口后重新打开 Chatless。'
-            : 'Reload the interface. If the problem persists, close the window and reopen Chatless.'}
+          {translate(locale, 'error.recovery.description')}
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
           <button
@@ -62,7 +74,7 @@ export function AppRecoveryView() {
             onClick={() => window.location.reload()}
             style={{ font: 'inherit', padding: '0.4rem 0.75rem' }}
           >
-            {chinese ? '重新加载' : 'Reload'}
+            {translate(locale, 'error.recovery.reload')}
           </button>
           {isDesktop && (
             <button
@@ -70,16 +82,12 @@ export function AppRecoveryView() {
               onClick={() => void closeWindow()}
               style={{ font: 'inherit', padding: '0.4rem 0.75rem' }}
             >
-              {chinese ? '关闭窗口' : 'Close window'}
+              {translate(locale, 'error.recovery.closeWindow')}
             </button>
           )}
         </div>
         {closeFailed && (
-          <p role="status">
-            {chinese
-              ? '无法从这里关闭窗口，请使用系统窗口菜单或任务管理器。'
-              : 'Could not close the window here. Use your system window menu or task manager.'}
-          </p>
+          <p role="status">{translate(locale, 'error.recovery.closeFailed')}</p>
         )}
       </section>
     </main>

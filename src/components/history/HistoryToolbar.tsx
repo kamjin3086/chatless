@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, Download, Grid, List, BarChart3, RefreshCw, X, Search } from 'lucide-react';
 import { SearchInput } from '@/components/ui/search-input';
 import { useHistoryStore } from '@/store/historyStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -20,6 +21,7 @@ import {
 import { Input } from "../ui/input";
 
 export default function HistoryToolbar() {
+  const t = useTranslation();
   const {
     selectedItems,
     searchQuery,
@@ -98,7 +100,8 @@ export default function HistoryToolbar() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
               <Input 
                 type="text" 
-                placeholder="搜索对话标题、内容..."
+                placeholder={t('history.search')}
+                aria-label={t('history.search')}
                 value={localSearchQuery}
                 onChange={(e) => setLocalSearchQuery(e.target.value)}
                 onKeyDown={handleKeyPress}
@@ -110,7 +113,7 @@ export default function HistoryToolbar() {
                   size="sm"
                   className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
                   onClick={clearSearch}
-                  title="清除搜索"
+                  title={t('common.clearSearch')}
                 >
                   <X className="h-3 w-3" />
                 </Button>
@@ -127,22 +130,22 @@ export default function HistoryToolbar() {
               size="icon"
               className="h-8 w-8"
               onClick={handleExportAll}
-              title="导出所有对话"
+              title={t('history.exportAll')}
             >
               <Download className="h-4 w-4" />
             </Button>
 
             {/* 排序控制 */}
             <div className="flex items-center gap-1">
-              <span className="text-xs text-slate-500 whitespace-nowrap">排序:</span>
+              <span className="text-xs text-slate-500 whitespace-nowrap">{t('history.sortBy')}</span>
               <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
                 <SelectTrigger className="w-20 h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="date">时间</SelectItem>
-                  <SelectItem value="title">标题</SelectItem>
-                  <SelectItem value="model">模型</SelectItem>
+                  <SelectItem value="date">{t('history.sortByDate')}</SelectItem>
+                  <SelectItem value="title">{t('history.sortByTitle')}</SelectItem>
+                  <SelectItem value="model">{t('history.sortByModel')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -151,7 +154,7 @@ export default function HistoryToolbar() {
                 size="sm"
                 className="h-8 w-8 p-0"
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                title={sortOrder === 'asc' ? '升序' : '降序'}
+                title={t(sortOrder === 'asc' ? 'history.ascending' : 'history.descending')}
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </Button>
@@ -164,7 +167,7 @@ export default function HistoryToolbar() {
                 size="sm"
                 className="rounded-r-none h-8"
                 onClick={() => setViewMode('list')}
-                title="列表视图"
+                title={t('history.listView')}
               >
                 <List className="h-4 w-4" />
               </Button>
@@ -173,7 +176,7 @@ export default function HistoryToolbar() {
                 size="sm"
                 className="rounded-l-none h-8"
                 onClick={() => setViewMode('grid')}
-                title="网格视图"
+                title={t('history.gridView')}
               >
                 <Grid className="h-4 w-4" />
               </Button>
@@ -185,7 +188,7 @@ export default function HistoryToolbar() {
               size="sm"
               className="h-8"
               onClick={toggleStats}
-              title="显示统计信息"
+              title={t('history.showStats')}
             >
               <BarChart3 className="h-4 w-4" />
             </Button>
@@ -197,7 +200,7 @@ export default function HistoryToolbar() {
               className="h-8"
               onClick={refresh}
               disabled={isLoading}
-              title="刷新"
+              title={t('history.refresh')}
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
@@ -209,18 +212,18 @@ export default function HistoryToolbar() {
           <div className="flex items-center justify-between px-4 py-2 bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2">
               <Badge variant="secondary">
-                已选择 {selectedItems.length} 项
+                {t('history.selectedCount').replace('{count}', String(selectedItems.length))}
               </Badge>
               <Button variant="ghost" size="sm" onClick={clearSelection} className="cursor-pointer">
-                取消选择
+                {t('history.clearSelection')}
               </Button>
             </div>
             
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={handleExportSelected} title="导出选中" className="cursor-pointer">
+              <Button variant="ghost" size="icon" onClick={handleExportSelected} title={t('history.exportSelected')} className="cursor-pointer">
                 <Download className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleBatchDelete} title="删除选中" className="cursor-pointer">
+              <Button variant="ghost" size="icon" onClick={handleBatchDelete} title={t('history.deleteSelected')} className="cursor-pointer">
                 <Trash2 className="h-4 w-4 text-red-500" />
               </Button>
             </div>
@@ -235,7 +238,7 @@ export default function HistoryToolbar() {
           <button
             onClick={() => setBatchDeleteDialogOpen(false)}
             className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
-            aria-label="关闭"
+            aria-label={t('common.close')}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -243,15 +246,15 @@ export default function HistoryToolbar() {
           </button>
           
           <AlertDialogHeader className="pr-8">
-            <AlertDialogTitle>确认批量删除</AlertDialogTitle>
+            <AlertDialogTitle>{t('history.batchDeleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除选中的 {selectedItems.length} 个对话吗？此操作无法撤销。
+              {t('history.batchDeleteDescription').replace('{count}', String(selectedItems.length))}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelBatchDelete}>取消</AlertDialogCancel>
+            <AlertDialogCancel onClick={handleCancelBatchDelete}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmBatchDelete}>
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -6,8 +6,10 @@ import { PromptEditorDialog } from './PromptEditorDialog';
 import { usePromptStore } from '@/store/promptStore';
 import { PromptImportExport } from './PromptImportExport';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/i18n/useTranslation';
 
 export function PromptsHeader() {
+  const t = useTranslation();
   const [open, setOpen] = useState(false);
   const createPrompt = usePromptStore((s) => s.createPrompt);
   const prompts = usePromptStore((s) => s.prompts);
@@ -44,7 +46,8 @@ export function PromptsHeader() {
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
-              placeholder="搜索提示词..."
+              aria-label={t('prompts.search')}
+              placeholder={t('prompts.search')}
               value={ui?.searchQuery || ''}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-7 pl-7 pr-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600"
@@ -55,11 +58,12 @@ export function PromptsHeader() {
           <div className="flex items-center gap-1.5">
             {/* 标签筛选 */}
             <select
+              aria-label={t('prompts.filterByTag')}
               value={ui?.tagFilter || '__all__'}
               onChange={(e) => setTagFilter(e.target.value === '__all__' ? null : e.target.value)}
               className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
             >
-              <option value="__all__">全部标签</option>
+              <option value="__all__">{t('prompts.allTags')}</option>
               {topTags.map(({ tag }) => (
                 <option key={tag} value={tag}>{tag}</option>
               ))}
@@ -76,19 +80,20 @@ export function PromptsHeader() {
               )}
             >
               <Star className={cn("w-3 h-3", ui?.favoriteOnly && "fill-current")} />
-              收藏
+              {t('prompts.favorites')}
             </button>
 
             {/* 排序 */}
             <select
+              aria-label={t('prompts.sortBy')}
               value={ui?.sortBy || 'recent'}
               onChange={(e) => setSortBy(e.target.value as any)}
               className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
             >
-              <option value="recent">最近更新</option>
-              <option value="created">创建时间</option>
-              <option value="frequency">使用次数</option>
-              <option value="name">名称</option>
+              <option value="recent">{t('prompts.updated')}</option>
+              <option value="created">{t('prompts.created')}</option>
+              <option value="frequency">{t('prompts.usage')}</option>
+              <option value="name">{t('prompts.name')}</option>
             </select>
           </div>
 
@@ -100,7 +105,7 @@ export function PromptsHeader() {
               className="h-7 px-2.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400 rounded-md transition-colors flex items-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" />
-              新建
+              {t('prompts.new')}
             </button>
           </div>
         </div>
@@ -108,19 +113,19 @@ export function PromptsHeader() {
         {/* 当前筛选状态 */}
         {hasFilters && (
           <div className="flex items-center gap-1.5 text-[11px]">
-            <span className="text-slate-400">筛选：</span>
+            <span className="text-slate-400">{t('prompts.filters')}</span>
             {ui?.tagFilter && (
               <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                 {ui.tagFilter}
-                <button onClick={() => setTagFilter(null)} className="ml-0.5 hover:text-slate-900 dark:hover:text-slate-100">
+                <button aria-label={t('prompts.removeTagFilter')} onClick={() => setTagFilter(null)} className="ml-0.5 hover:text-slate-900 dark:hover:text-slate-100">
                   <X className="w-2.5 h-2.5" />
                 </button>
               </span>
             )}
             {ui?.favoriteOnly && (
               <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300">
-                收藏
-                <button onClick={() => setFavoriteOnly(false)} className="ml-0.5 hover:text-slate-800 dark:hover:text-slate-100">
+                {t('prompts.favorites')}
+                <button aria-label={t('prompts.removeFavoritesFilter')} onClick={() => setFavoriteOnly(false)} className="ml-0.5 hover:text-slate-800 dark:hover:text-slate-100">
                   <X className="w-2.5 h-2.5" />
                 </button>
               </span>
@@ -128,7 +133,7 @@ export function PromptsHeader() {
             {ui?.searchQuery && (
               <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                 "{ui.searchQuery}"
-                <button onClick={() => setSearchQuery('')} className="ml-0.5 hover:text-slate-900 dark:hover:text-slate-100">
+                <button aria-label={t('common.clearSearch')} onClick={() => setSearchQuery('')} className="ml-0.5 hover:text-slate-900 dark:hover:text-slate-100">
                   <X className="w-2.5 h-2.5" />
                 </button>
               </span>
@@ -137,7 +142,7 @@ export function PromptsHeader() {
               onClick={() => { setSearchQuery(''); setFavoriteOnly(false); setTagFilter(null); }}
               className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             >
-              清除
+              {t('prompts.clearFilters')}
             </button>
           </div>
         )}

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 import { memo } from 'react';
 import { SectionCard } from '@/components/ui/section-card';
+import { useTranslation } from '@/i18n/useTranslation';
 
 interface HistoryCardProps {
   id: string;
@@ -49,7 +50,8 @@ const HistoryCard = memo(function HistoryCard({
   onExport,
   onToggleFavorite,
 }: HistoryCardProps) {
-  
+  const t = useTranslation();
+
   // 格式化时间显示 - 更紧凑的格式
   const formatCompactTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -57,9 +59,9 @@ const HistoryCard = memo(function HistoryCard({
     const diffInMinutes = (now.getTime() - date.getTime()) / (1000 * 60);
     
     if (diffInMinutes < 60) {
-      return `${Math.floor(diffInMinutes)}分钟前`;
+      return t('history.minutesAgo').replace('{count}', String(Math.floor(diffInMinutes)));
     } else if (diffInMinutes < 1440) { // 24小时
-      return `${Math.floor(diffInMinutes / 60)}小时前`;
+      return t('history.hoursAgo').replace('{count}', String(Math.floor(diffInMinutes / 60)));
     } else {
       return format(date, 'MM-dd');
     }
@@ -163,7 +165,7 @@ const HistoryCard = memo(function HistoryCard({
                 size="icon"
                 className="h-6 w-6 text-slate-400 hover:text-yellow-500 transition-all duration-150 cursor-pointer"
                 onClick={() => onToggleFavorite?.(id)}
-                title={isFavorite ? "取消收藏" : "收藏"}
+                title={t(isFavorite ? 'conversation.unfavorite' : 'conversation.favorite')}
               >
                 <Star className="h-3 w-3" />
               </Button>
@@ -173,7 +175,7 @@ const HistoryCard = memo(function HistoryCard({
                 size="icon"
                 className="h-6 w-6 text-slate-400 hover:text-slate-600 transition-all duration-150 cursor-pointer"
                 onClick={() => onExport?.(id)}
-                title="导出"
+                title={t('conversation.export')}
               >
                 <FileUp className="h-3 w-3" />
               </Button>
@@ -183,7 +185,7 @@ const HistoryCard = memo(function HistoryCard({
                 size="icon"
                 className="h-6 w-6 text-slate-400 hover:text-red-500 transition-all duration-150 cursor-pointer"
                 onClick={() => onDelete?.(id)}
-                title="删除"
+                title={t('conversation.delete')}
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -197,7 +199,7 @@ const HistoryCard = memo(function HistoryCard({
               size="icon"
               className="h-6 w-6 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-all duration-150 cursor-pointer"
               onClick={() => onView?.(id)}
-              title="查看"
+              title={t('history.view')}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -207,7 +209,7 @@ const HistoryCard = memo(function HistoryCard({
               size="icon"
               className="h-6 w-6 text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-all duration-150 cursor-pointer"
               onClick={() => onContinue?.(id)}
-              title="继续"
+              title={t('history.continue')}
             >
               <ArrowRightCircle className="h-4 w-4" />
             </Button>

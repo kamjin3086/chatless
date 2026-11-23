@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { FileText, FileJson, FileCode, Clock } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface RecentReference {
   id: string;
@@ -28,6 +30,7 @@ const getIcon = (type: string) => {
 };
 
 export function RecentlyReferenced({ references, onNavigate }: RecentlyReferencedProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const [hover, setHover] = useState(false);
   const visibleRefs = hover ? references : references.slice(0, 1);
 
@@ -39,11 +42,11 @@ export function RecentlyReferenced({ references, onNavigate }: RecentlyReference
     >
       <h3 className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
         <Clock className="h-3 w-3" />
-        最近引用
+        {translate(locale, 'resources.references.title')}
       </h3>
 
       {references.length === 0 ? (
-        <div className="text-[11px] text-slate-400 py-1">暂无</div>
+        <div className="text-[11px] text-slate-400 py-1">{translate(locale, 'resources.references.empty')}</div>
       ) : (
         <ScrollArea className={cn(
           'transition-all',

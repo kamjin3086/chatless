@@ -19,20 +19,25 @@ import { RAGQueryInterface } from "@/components/knowledge/RAGQueryInterface";
 import { AlertDialog, AlertDialogHeader, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { motion } from "framer-motion";
 import { cn } from '@/lib/utils';
+import { getHtmlLang, translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
+import { formatKnowledgeDocumentCount } from '@/components/knowledge/formatKnowledgeDocumentCount';
 
 // 扩展知识库类型，添加文档数量
 interface KnowledgeBaseWithCount extends KnowledgeBase {
   documentCount: number;
 }
 
-const tabs = [
-  { id: 'resources', label: '资源', icon: <FolderOpen className="w-4 h-4" /> },
-  { id: 'knowledge', label: '知识库', icon: <Database className="w-4 h-4" /> },
-];
-
 export default function KnowledgePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
+  const tabs = [
+    { id: 'resources', label: t('knowledge.tab.resources'), icon: <FolderOpen className="w-4 h-4" /> },
+    { id: 'knowledge', label: t('knowledge.tab.library'), icon: <Database className="w-4 h-4" /> },
+  ];
   
   // Tab 状态，支持 URL 参数
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -142,8 +147,8 @@ export default function KnowledgePage() {
   };
 
   const handleUseKnowledgeBase = (id: string) => {
-    toast.info('知识库启用成功', {
-      description: '已在聊天中启用该知识库'
+    toast.info(t('knowledge.toast.enabled'), {
+      description: t('knowledge.toast.enabledInChat'),
     });
     router.push(`/chat?knowledgeBase=${id}`);
   };
@@ -151,7 +156,7 @@ export default function KnowledgePage() {
   const createKnowledgeBase = async (name: string, description: string) => {
     const kb = await KnowledgeService.createKnowledgeBase(name, description, 'database', false);
     setKnowledgeBases(prev => [...prev, { ...kb, documentCount: 0 }]);
-    toast.success('知识库创建成功');
+    toast.success(t('knowledge.toast.created'));
   };
 
   const handleDeleteKnowledgeBase = (kb: KnowledgeBase) => {
@@ -164,13 +169,13 @@ export default function KnowledgePage() {
     try {
       const deleted = await KnowledgeService.deleteKnowledgeBase(kbToDelete.id);
       if (!deleted) {
-        toast.error('未找到该知识库，请刷新后重试');
+        toast.error(t('knowledge.toast.notFound'));
         return;
       }
       setKnowledgeBases(prev => prev.filter(item => item.id !== kbToDelete.id));
-      toast.success('知识库已删除');
+      toast.success(t('knowledge.toast.deleted'));
     } catch {
-      toast.error('删除失败');
+      toast.error(t('knowledge.toast.deleteFailed'));
     } finally {
       setDeleteKbDialogOpen(false);
       setKbToDelete(null);
@@ -191,9 +196,9 @@ export default function KnowledgePage() {
           ? { ...item, name: updated?.name ?? name, description: updated?.description ?? description }
           : item
       ));
-      toast.success('已保存');
+      toast.success(t('knowledge.toast.saved'));
     } catch {
-      toast.error('保存失败');
+      toast.error(t('knowledge.toast.saveFailed'));
     }
   };
 
@@ -210,13 +215,9 @@ export default function KnowledgePage() {
   const recentKnowledgeBases = filteredKnowledgeBases.slice(0, 3).map(kb => ({
     id: kb.id,
     name: kb.name,
-    icon: kb.icon || 'database',
-    iconBg: 'from-slate-400 to-slate-600',
-    source: '本地',
-    docCount: kb.documentCount,
-    description: kb.description || '',
-    lastUpdated: new Date(kb.updatedAt).toLocaleString('zh-CN'),
-    isEncrypted: kb.isEncrypted
+    iconType: 'database',
+    subtitle: formatKnowledgeDocumentCount(locale, kb.documentCount),
+    time: new Date(kb.updatedAt).toLocaleString(getHtmlLang(locale)),
   }));
 
   return (
@@ -242,8 +243,8 @@ export default function KnowledgePage() {
             <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800/40 flex items-center justify-between">
               <div className="flex gap-1">
                 {[
-                  { id: 'my', label: '我的知识库' },
-                  { id: 'query', label: '智能问答' },
+                  { id: 'my', label: t('knowledge.tab.myLibrary') },
+                  { id: 'query', label: t('knowledge.tab.query') },
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -267,16 +268,16 @@ export default function KnowledgePage() {
                     onChange={(e) => setSortBy(e.target.value)}
                     className="h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
                   >
-                    <option value="recent">最近更新</option>
-                    <option value="name">名称</option>
-                    <option value="docs">文档数量</option>
+                    <option value="recent">{t('knowledge.sort.recent')}</option>
+                    <option value="name">{t('knowledge.sort.name')}</option>
+                    <option value="docs">{t('knowledge.sort.documentCount')}</option>
                   </select>
                   <button
                     onClick={() => setShowCreateDialog(true)}
                     className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    新建
+                    {t('knowledge.new')}
                   </button>
                 </div>
               )}
@@ -315,14 +316,14 @@ export default function KnowledgePage() {
                       <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center mb-3">
                         <Database className="w-5 h-5 text-slate-400" />
                       </div>
-                      <h3 className="text-xs font-medium text-slate-500 mb-0.5">暂无知识库</h3>
-                      <p className="text-[11px] text-slate-400 mb-3">创建您的第一个知识库</p>
+                      <h3 className="text-xs font-medium text-slate-500 mb-0.5">{t('knowledge.empty.title')}</h3>
+                      <p className="text-[11px] text-slate-400 mb-3">{t('knowledge.empty.description')}</p>
                       <button 
                         onClick={() => setShowCreateDialog(true)} 
                         className="h-7 px-3 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md border border-slate-200/60 dark:border-slate-700/40 transition-colors flex items-center gap-1"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        创建知识库
+                        {t('knowledge.create.title')}
                       </button>
                     </motion.div>
                   )}
@@ -330,16 +331,10 @@ export default function KnowledgePage() {
                   {recentKnowledgeBases.length > 0 && filteredKnowledgeBases.length > 0 && (
                     <div className="mt-6 border-t border-slate-200/50 dark:border-slate-700/30 pt-3">
                       <RecentUsedList 
-                        title="最近使用"
-                        items={recentKnowledgeBases.map(kb => ({
-                          id: kb.id,
-                          name: kb.name,
-                          iconType: 'database',
-                          subtitle: `${kb.docCount} 文档`,
-                          time: kb.lastUpdated,
-                        }))}
+                        title={t('knowledge.recent.title')}
+                        items={recentKnowledgeBases}
                         onItemClick={handleUseKnowledgeBase}
-                        emptyText="暂无"
+                        emptyText={t('knowledge.recent.empty')}
                       />
                     </div>
                   )}
@@ -360,14 +355,14 @@ export default function KnowledgePage() {
       <AlertDialog open={deleteKbDialogOpen} onOpenChange={setDeleteKbDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除知识库</AlertDialogTitle>
+            <AlertDialogTitle>{t('knowledge.delete.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除知识库 "{kbToDelete?.name}" 吗？此操作不可撤销。
+              {t('knowledge.delete.description').replace('{0}', () => kbToDelete?.name ?? '')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteKb}>删除</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteKb}>{t('knowledge.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

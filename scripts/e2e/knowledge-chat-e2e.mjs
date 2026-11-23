@@ -423,7 +423,7 @@ try {
     await wd(`/element/${openSource[elementKey]}/click`, {});
     await wait('source sheet reopens the actual delivered range', () =>
       evaluate(
-        `return document.querySelector('section[aria-label="当前原文"]')?.innerText.includes(arguments[0]) && !document.querySelector('[role="alert"]');`,
+        `return document.querySelector('[data-citation-source-text]')?.innerText.includes(arguments[0]) && !document.querySelector('[role="alert"]');`,
         [expected],
       ),
     );

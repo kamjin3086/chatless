@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { useLocaleStore } from '@/store/localeStore';
 import { ChevronRight, File, Folder, RefreshCw } from 'lucide-react';
 
 type NodeKind = 'dir' | 'file';
@@ -103,6 +104,7 @@ interface SkillFileTreeProps {
 }
 
 export function SkillFileTree({ rootPath }: SkillFileTreeProps) {
+  const { t } = useLocaleStore();
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
@@ -212,13 +214,13 @@ export function SkillFileTree({ rootPath }: SkillFileTreeProps) {
       {/* 头部：刷新按钮 */}
       <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-200/60 dark:border-slate-700/40">
         <span className="text-[10px] text-slate-400">
-          {tree?.children?.length || 0} 项
+          {t('skills.filesCount').replace('{0}', String(tree?.children?.length ?? 0))}
         </span>
         <button
           onClick={handleRefresh}
           disabled={loading}
           className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
-          title="刷新"
+          title={t('skills.refresh')}
         >
           <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
         </button>
@@ -227,13 +229,13 @@ export function SkillFileTree({ rootPath }: SkillFileTreeProps) {
       {/* 文件列表 */}
       <div className="py-1">
         {loading ? (
-          <div className="text-xs text-slate-400 py-3 text-center">读取中…</div>
+          <div className="text-xs text-slate-400 py-3 text-center">{t('skills.filesLoading')}</div>
         ) : !tree ? (
-          <div className="text-xs text-slate-400 py-3 text-center">无法读取目录</div>
+          <div className="text-xs text-slate-400 py-3 text-center">{t('skills.filesReadFailed')}</div>
         ) : tree.children && tree.children.length > 0 ? (
           tree.children.map((c) => renderNode(c, 0))
         ) : (
-          <div className="text-xs text-slate-400 py-3 text-center">空目录</div>
+          <div className="text-xs text-slate-400 py-3 text-center">{t('skills.filesEmpty')}</div>
         )}
       </div>
     </div>
