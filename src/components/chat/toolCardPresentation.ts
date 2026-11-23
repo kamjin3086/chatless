@@ -446,6 +446,51 @@ export function presentToolCard(locale: Locale, params: {
     return { titleLine: t('toolCall.systemOperation'), detailLineLabel: t('toolCall.detail.tool'), detailLineFull: tool, detailLineShort: truncate(tool, 25), kind: 'generic' };
   }
 
+  // ---------- Android 手机能力 ----------
+  // 这些工具没有桌面同名物，不映射就会落到 `android_directory · inventory` 这种
+  // 内部名字上，手机上阅读卡片的人看不懂。
+  if (srv === 'android_directory') {
+    const mime = pickArg(args, 'mimeType');
+    return {
+      titleLine: t('toolCall.androidFolderInventory'),
+      detailLineLabel: mime ? t('toolCall.detail.mime') : undefined,
+      detailLineFull: mime || undefined,
+      detailLineShort: mime || undefined,
+      kind: 'path',
+    };
+  }
+  if (srv === 'android_photos') {
+    return { titleLine: t('toolCall.androidPhotoGroups'), kind: 'path' };
+  }
+  if (srv === 'android_document') {
+    if (tl === 'excerpt') {
+      return {
+        titleLine: t('toolCall.androidDocumentExcerpt'),
+        kind: 'path',
+      };
+    }
+    const query = pickArg(args, 'query');
+    return {
+      titleLine: t('toolCall.androidDocumentSearch'),
+      detailLineLabel: t('toolCall.detail.query'),
+      detailLineFull: query,
+      detailLineShort: truncate(query, 25),
+      kind: 'query',
+    };
+  }
+  if (srv === 'android_countdown') {
+    const seconds = typeof args?.durationSeconds === 'number' && args.durationSeconds > 0
+      ? Math.round(args.durationSeconds)
+      : 0;
+    return {
+      titleLine: t('toolCall.androidTimer'),
+      detailLineLabel: seconds ? t('toolCall.detail.duration') : undefined,
+      detailLineFull: seconds ? t('toolCall.duration').replace('{seconds}', String(seconds)) : undefined,
+      detailLineShort: seconds ? t('toolCall.duration').replace('{seconds}', String(seconds)) : undefined,
+      kind: 'generic',
+    };
+  }
+
   // ---------- generic fallback ----------
   const maybeUrl = pickArg(args, 'url');
   if (maybeUrl)
