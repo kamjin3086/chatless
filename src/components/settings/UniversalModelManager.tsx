@@ -21,6 +21,8 @@ import { OnnxModelDownloader, type OnnxModelInfo, type ModelDownloadProgress } f
 import { getKnowledgeBaseConfigManager } from '@/lib/knowledgeBaseConfig';
 import { toast } from '@/components/ui/sonner';
 import modelsConfig from '@/lib/models.json';
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface ModelInfo {
   id: string;
@@ -45,6 +47,7 @@ interface UniversalModelManagerProps {
 }
 
 export function UniversalModelManager({}: UniversalModelManagerProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<'ollama' | 'local-onnx'>('local-onnx');
   const [currentEmbedding, setCurrentEmbedding] = useState<EmbeddingConfig | null>(null);
@@ -61,7 +64,9 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
     return modelsConfig.map(config => ({
       id: config.id,
       name: config.name,
-      description: config.description,
+      // The catalogue is authored in Chinese; English users read the English
+      // description where the catalogue has one.
+      description: locale === 'en' ? ((config as { descriptionEn?: string }).descriptionEn ?? config.description) : config.description,
       size: config.size,
       strategy: config.strategy as 'ollama' | 'local-onnx',
       status: 'available' as const,
@@ -91,11 +96,11 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
   const getStrategyDescription = (strategy: 'ollama' | 'local-onnx'): string => {
     switch (strategy) {
       case 'ollama':
-        return 'Ollama 提供的在线推理服务，需要 Ollama 服务运行';
+        return translate(locale, 'settings.universalModels.strategy.ollamaDescription');
       case 'local-onnx':
-        return '本地离线推理模型，支持完全离线使用，无需外部服务';
+        return translate(locale, 'settings.universalModels.strategy.localDescription');
       default:
-        return '未知策略';
+        return translate(locale, 'settings.universalModels.strategy.unknown');
     }
   };
 
@@ -320,15 +325,24 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
         }));
 
         setOllamaStatus('connected');
-        toast.success(`Ollama连接成功 发现 ${modelNames.length} 个模型`);
+        toast.success(
+          translate(locale, 'settings.universalModels.toast.ollamaConnected').replace(
+            '{0}',
+            String(modelNames.length),
+          ),
+        );
       } else {
         setOllamaStatus('error');
-        const msg = response.status ? `状态码 ${response.status}` : '无法访问 /api/tags';
-        toast.error(`无法连接 Ollama`, { description: msg });
+        const msg = response.status
+          ? translate(locale, 'settings.universalModels.toast.ollamaStatus').replace('{0}', String(response.status))
+          : translate(locale, 'settings.universalModels.toast.ollamaTagsUnavailable');
+        toast.error(translate(locale, 'settings.universalModels.toast.ollamaConnectFailed'), { description: msg });
       }
     } catch (error: any) {
       setOllamaStatus('error');
-      toast.error('无法连接 Ollama', { description: error?.message || '网络错误' });
+      toast.error(translate(locale, 'settings.universalModels.toast.ollamaConnectFailed'), {
+        description: error?.message || translate(locale, 'settings.universalModels.toast.networkError'),
+      });
     } finally {
       setIsTestingOllama(false);
     }
@@ -375,7 +389,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
       // 更新状态为下载中
       setModels(prev => prev.map(m => 
         m.id === model.id 
-          ? { ...m, status: 'downloading', downloadProgress: 0, downloadHint: '连接服务器...' }
+          ? { ...m, status: 'downloading', downloadProgress: 0, downloadHint: translate(locale, 'settings.universalModels.download.connecting') }
           : m
       ));
 
@@ -437,7 +451,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
               if (progressData.status === 'pulling manifest') {
                 setModels(prev => prev.map(m => 
                   m.id === model.id 
-                    ? { ...m, downloadProgress: 5, downloadHint: '获取模型信息...' }
+                    ? { ...m, downloadProgress: 5, downloadHint: translate(locale, 'settings.universalModels.download.fetchingInfo') }
                     : m
                 ));
                              } else if (progressData.status?.includes('downloading') || (progressData.total && progressData.completed)) {
@@ -452,7 +466,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                        ? { 
                            ...m, 
                            downloadProgress: Math.min(progress, 95), 
-                           downloadHint: `下载中: ${sizeCompleted} / ${sizeTotal}`
+                           downloadHint: translate(locale, 'settings.universalModels.download.progress').replace('{0}', sizeCompleted).replace('{1}', sizeTotal)
                          }
                        : m
                    ));
@@ -460,19 +474,19 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
               } else if (progressData.status === 'verifying sha256 digest') {
                 setModels(prev => prev.map(m => 
                   m.id === model.id 
-                    ? { ...m, downloadProgress: 96, downloadHint: '验证文件完整性...' }
+                    ? { ...m, downloadProgress: 96, downloadHint: translate(locale, 'settings.universalModels.download.verifying') }
                     : m
                 ));
               } else if (progressData.status === 'writing manifest') {
                 setModels(prev => prev.map(m => 
                   m.id === model.id 
-                    ? { ...m, downloadProgress: 98, downloadHint: '写入模型信息...' }
+                    ? { ...m, downloadProgress: 98, downloadHint: translate(locale, 'settings.universalModels.download.writingManifest') }
                     : m
                 ));
               } else if (progressData.status === 'removing any unused layers') {
                 setModels(prev => prev.map(m => 
                   m.id === model.id 
-                    ? { ...m, downloadProgress: 99, downloadHint: '清理缓存...' }
+                    ? { ...m, downloadProgress: 99, downloadHint: translate(locale, 'settings.universalModels.download.cleaning') }
                     : m
                 ));
                              } else if (progressData.status === 'success') {
@@ -487,7 +501,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                        }
                      : m
                  ));
-                 toast.success(`模型 ${model.name} 安装成功！`);
+                 toast.success(translate(locale, 'settings.universalModels.toast.installed').replace('{0}', model.name));
                  
                  // 刷新 Ollama 模型列表
                  await checkOllamaModels();
@@ -525,7 +539,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                }
              : m
          ));
-         toast.warning('下载可能未完成，请检查模型状态或重试');
+         toast.warning(translate(locale, 'settings.universalModels.toast.downloadIncomplete'));
        }
 
     } catch (error: any) {
@@ -548,7 +562,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
           : m
       ));
       
-      toast.error(`模型安装失败: ${error.message}`);
+      toast.error(translate(locale, 'settings.universalModels.toast.installFailed').replace('{0}', error.message));
     }
   };
 
@@ -560,21 +574,21 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
       // 更新状态为下载中
       setModels(prev => prev.map(m => 
         m.id === model.id 
-          ? { ...m, status: 'downloading', downloadProgress: 0, downloadHint: '准备下载模型...' }
+          ? { ...m, status: 'downloading', downloadProgress: 0, downloadHint: translate(locale, 'settings.universalModels.download.preparing') }
           : m
       ));
 
       // 立即启动模型阶段模拟 0->79
-      startFakeProgress(model.id, 0, 79, 1, 400, '下载模型中...', () => {
+      startFakeProgress(model.id, 0, 79, 1, 400, translate(locale, 'settings.universalModels.download.model'), () => {
         // 第二阶段分词器 79->99
-        startFakeProgress(model.id, 79, 99, 1, 600, '下载分词器中...');
+        startFakeProgress(model.id, 79, 99, 1, 600, translate(locale, 'settings.universalModels.download.tokenizer'));
       });
 
       // 使用真实的下载器下载模型
       await onnxDownloader.current.downloadModel(model.id, (progress: ModelDownloadProgress) => {
         if (progress.percentage >= 100) {
           if (simTimers.current[model.id]) clearInterval(simTimers.current[model.id]);
-          setModels(prev => prev.map(m => m.id === model.id ? { ...m, downloadProgress: 100, downloadHint: '下载完成' } : m));
+          setModels(prev => prev.map(m => m.id === model.id ? { ...m, downloadProgress: 100, downloadHint: translate(locale, 'settings.universalModels.download.complete') } : m));
         }
       });
 
@@ -583,7 +597,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
 
       setModels(prev => prev.map(m => 
         m.id === model.id 
-          ? { ...m, status: 'installed', downloadProgress: undefined, downloadHint: '下载完成' }
+          ? { ...m, status: 'installed', downloadProgress: undefined, downloadHint: translate(locale, 'settings.universalModels.download.complete') }
           : m
       ));
 
@@ -652,7 +666,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
     } else {
       const paths = await onnxDownloader.current.getModelPaths(model.id);
       if (!paths) {
-        toast.error('未找到模型文件，请先安装');
+        toast.error(translate(locale, 'settings.universalModels.toast.modelFilesMissing'));
         return;
       }
       config = {
@@ -677,10 +691,10 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
       await updateModelListWithConfig(config);
       
       console.log('模型选择已保存:', { modelId: model.id, config });
-      toast.success(`已选择模型: ${model.name}`);
+      toast.success(translate(locale, 'settings.universalModels.toast.selected').replace('{0}', model.name));
     } catch (error) {
       console.error('保存配置失败:', error);
-      toast.error('保存配置失败');
+      toast.error(translate(locale, 'settings.universalModels.toast.saveFailed'));
     }
   };
 
@@ -775,13 +789,13 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
   const getStatusBadge = (model: ModelInfo) => {
     switch (model.status) {
       case 'installed':
-        return <Badge variant="default" className="bg-green-500">已安装</Badge>;
+        return <Badge variant="default" className="bg-green-500">{translate(locale, 'settings.universalModels.status.installed')}</Badge>;
       case 'downloading':
-        return <Badge variant="secondary">下载中</Badge>;
+        return <Badge variant="secondary">{translate(locale, 'settings.universalModels.status.downloading')}</Badge>;
       case 'error':
-        return <Badge variant="destructive">错误</Badge>;
+        return <Badge variant="destructive">{translate(locale, 'settings.universalModels.status.error')}</Badge>;
       default:
-        return <Badge variant="outline">可用</Badge>;
+        return <Badge variant="outline">{translate(locale, 'settings.universalModels.status.available')}</Badge>;
     }
   };
 
@@ -790,7 +804,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
     // 获取当前选中的模型
     const selectedModel = models.find(m => m.selected);
     if (!selectedModel) {
-      toast.error('请先选择一个模型');
+      toast.error(translate(locale, 'settings.universalModels.toast.selectModelFirst'));
       return;
     }
 
@@ -842,14 +856,25 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
         dimension: result.length 
       });
       
-      toast.success(`嵌入服务测试成功！延迟: ${totalTime}ms, 维度: ${result.length}`);
+      toast.success(
+        translate(locale, 'settings.universalModels.toast.testSuccess')
+          .replace('{0}', String(totalTime))
+          .replace('{1}', String(result.length)),
+      );
       
       // 清理资源
       await embeddingService.cleanup();
       
     } catch (error) {
       setTestResult({ success: false });
-      toast.error(`嵌入服务测试失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      toast.error(
+        translate(locale, 'settings.universalModels.toast.testFailed').replace(
+          '{0}',
+          error instanceof Error
+            ? error.message
+            : translate(locale, 'settings.universalModels.toast.unknownError'),
+        ),
+      );
     } finally {
       setIsTestingService(false);
     }
@@ -882,7 +907,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
           )}
           {testResult?.success === false && (
             <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">
-              失败
+              {translate(locale, 'settings.universalModels.testFailed')}
             </Badge>
           )}
         </div>
@@ -893,7 +918,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
             size="icon"
             onClick={testEmbeddingService}
             disabled={isTestingService}
-            title="测试"
+            title={translate(locale, 'settings.universalModels.test')}
           >
             {isTestingService ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -906,7 +931,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
             size="icon"
             onClick={checkModelStatus}
             disabled={isLoading}
-            title="刷新"
+            title={translate(locale, 'settings.universalModels.refresh')}
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
@@ -929,7 +954,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
             className="flex items-center space-x-1 h-8"
           >
             <Server className="w-4 h-4" />
-            <span>Ollama 服务</span>
+            <span>{translate(locale, 'settings.universalModels.strategy.ollama')}</span>
           </Button>
           <Button
             variant={selectedStrategy === 'local-onnx' ? 'soft' : 'outline'}
@@ -942,7 +967,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
             className="flex items-center space-x-1 h-8"
           >
             <HardDrive className="w-4 h-4" />
-            <span>本地模型</span>
+            <span>{translate(locale, 'settings.universalModels.strategy.local')}</span>
           </Button>
         </div>
 
@@ -969,7 +994,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                     <h3 className="font-medium">{model.name}</h3>
                     {model.isRecommended && (
                       <Badge variant="secondary" className="text-xs">
-                        推荐
+                        {translate(locale, 'settings.universalModels.recommended')}
                       </Badge>
                     )}
                     <div className="flex items-center space-x-1">
@@ -990,7 +1015,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                       )}
                       {model.selected && (
                         <Badge variant="secondary" className="text-xs">
-                          使用中
+                          {translate(locale, 'settings.universalModels.inUse')}
                         </Badge>
                       )}
                     </div>
@@ -1020,7 +1045,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                     className="flex items-center space-x-1"
                   >
                     <Download className="w-4 h-4" />
-                    <span>安装</span>
+                    <span>{translate(locale, 'settings.universalModels.install')}</span>
                   </Button>
                 )}
                 
@@ -1034,7 +1059,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                         className="flex items-center space-x-1 opacity-60"
                       >
                         <CheckCircle className="w-4 h-4" />
-                        <span>已激活</span>
+                        <span>{translate(locale, 'settings.universalModels.activated')}</span>
                       </Button>
                     ) : (
                       <Button
@@ -1044,7 +1069,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                         className="flex items-center space-x-1"
                       >
                         <CheckCircle className="w-4 h-4" />
-                        <span>激活</span>
+                        <span>{translate(locale, 'settings.universalModels.activate')}</span>
                       </Button>
                     )}
                     <Button
@@ -1053,10 +1078,14 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                       onClick={() => handleDeleteModel(model)}
                       className="flex items-center space-x-1 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                       disabled={model.selected}
-                      title={model.selected ? "无法删除正在使用的模型" : "删除模型"}
+                      title={
+                        model.selected
+                          ? translate(locale, 'settings.universalModels.deleteDisabledTitle')
+                          : translate(locale, 'settings.universalModels.deleteTitle')
+                      }
                     >
                       <Trash2 className="w-4 h-4" />
-                      <span>删除</span>
+                      <span>{translate(locale, 'settings.universalModels.delete')}</span>
                     </Button>
                   </>
                 )}
@@ -1074,7 +1103,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                     <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                       <span className="flex items-center space-x-1">
                         <Clock className="w-3 h-3 animate-spin" />
-                        <span>{model.downloadHint || '下载中...'}</span>
+                        <span>{model.downloadHint || translate(locale, 'settings.universalModels.download.fallback')}</span>
                       </span>
                       <span className="font-mono">
                         {model.downloadProgress ? `${model.downloadProgress}%` : '0%'}
@@ -1091,7 +1120,7 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
                     className="flex items-center space-x-1 text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400"
                   >
                     <RefreshCw className="w-4 h-4" />
-                    <span>重试</span>
+                    <span>{translate(locale, 'settings.universalModels.retry')}</span>
                   </Button>
                 )}
               </div>
@@ -1106,11 +1135,11 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
           <div className="flex items-start space-x-2">
             <Globe className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-slate-600 dark:text-slate-300">
-              <p className="font-medium mb-1">Ollama 使用说明</p>
+              <p className="font-medium mb-1">{translate(locale, 'settings.universalModels.hint.ollamaTitle')}</p>
               <ul className="space-y-1 text-xs">
-                <li>• 可连接本地或远端 Ollama API 服务</li>
-                <li>• 请在「设置 → AI 模型」中配置 Ollama 服务地址与端口</li>
-                <li>• 模型首次调用时自动下载并缓存，可离线推理</li>
+                <li>• {translate(locale, 'settings.universalModels.hint.ollamaLine1')}</li>
+                <li>• {translate(locale, 'settings.universalModels.hint.ollamaLine2')}</li>
+                <li>• {translate(locale, 'settings.universalModels.hint.ollamaLine3')}</li>
               </ul>
             </div>
           </div>
@@ -1120,12 +1149,12 @@ export function UniversalModelManager({}: UniversalModelManagerProps) {
           <div className="flex items-start space-x-2">
             <HardDrive className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-slate-600 dark:text-slate-300">
-              <p className="font-medium mb-1">本地离线推理</p>
+              <p className="font-medium mb-1">{translate(locale, 'settings.universalModels.hint.localTitle')}</p>
               <ul className="space-y-1 text-xs">
-                <li>• 完全本地推理，生成高质量嵌入向量</li>
-                <li>• 适用于离线环境或对数据隐私要求极高的场景</li>
-                <li>• 无需外部服务或网络连接</li>
-                <li>• 生产环境也可直接使用</li>
+                <li>• {translate(locale, 'settings.universalModels.hint.localLine1')}</li>
+                <li>• {translate(locale, 'settings.universalModels.hint.localLine2')}</li>
+                <li>• {translate(locale, 'settings.universalModels.hint.localLine3')}</li>
+                <li>• {translate(locale, 'settings.universalModels.hint.localLine4')}</li>
               </ul>
             </div>
           </div>

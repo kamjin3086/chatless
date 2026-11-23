@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SelectField } from "./SelectField";
+import { useTranslation } from "@/i18n/useTranslation";
 import {
   getAuthorizationConfig,
   getServerConfig,
@@ -25,6 +26,7 @@ export function NativeToolAuthSettings() {
   const [loading, setLoading] = useState(true);
   const [globalDefaultAuto, setGlobalDefaultAuto] = useState(false);
   const [mode, setMode] = useState<Mode>("default");
+  const t = useTranslation();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,8 +45,8 @@ export function NativeToolAuthSettings() {
   }, [load]);
 
   const defaultLabel = useMemo(
-    () => (globalDefaultAuto ? "自动授权" : "每次确认"),
-    [globalDefaultAuto]
+    () => (globalDefaultAuto ? t('settings.nativeToolAuth.autoAuthorize') : t('settings.nativeToolAuth.confirmEveryTime')),
+    [globalDefaultAuto, t]
   );
 
   const onChange = useCallback(async (next: Mode) => {
@@ -55,14 +57,14 @@ export function NativeToolAuthSettings() {
   return (
     <div className={loading ? "opacity-70 pointer-events-none" : undefined}>
       <SelectField
-        label="命令执行确认"
-        tooltip="是否在运行命令前弹出确认。全局默认可在 MCP 高级设置中调整。"
+        label={t('settings.nativeToolAuth.label')}
+        tooltip={t('settings.nativeToolAuth.tooltip')}
         value={mode}
         onChange={(v) => void onChange(v as Mode)}
         options={[
-          { value: "default", label: `跟随默认（${defaultLabel}）` },
-          { value: "manual", label: "每次确认" },
-          { value: "auto", label: "自动授权" },
+          { value: "default", label: t('settings.nativeToolAuth.followDefault').replace('{0}', defaultLabel) },
+          { value: "manual", label: t('settings.nativeToolAuth.confirmEveryTime') },
+          { value: "auto", label: t('settings.nativeToolAuth.autoAuthorize') },
         ]}
       />
     </div>

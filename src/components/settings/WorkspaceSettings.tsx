@@ -10,6 +10,7 @@ import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/chatStore";
 import { useConversationAttachmentStore } from "@/store/conversationAttachmentStore";
+import { useTranslation } from "@/i18n/useTranslation";
 import { toast } from "@/components/ui/sonner";
 import {
   ensureConversationWorkspace,
@@ -33,12 +34,13 @@ function formatBytes(bytes: number): string {
 }
 
 // 格式化会话标题
-function formatConversationTitle(title: string, maxLen = 24): string {
-  if (!title) return '未命名会话';
+function formatConversationTitle(title: string, unnamed: string, maxLen = 24): string {
+  if (!title) return unnamed;
   return title.length > maxLen ? title.slice(0, maxLen) + '...' : title;
 }
 
 export function WorkspaceSettings() {
+  const t = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const isGenerating = useChatStore((s) => s.isGenerating);
@@ -92,14 +94,14 @@ export function WorkspaceSettings() {
   const onExport = useCallback(async () => {
     const ids = selectedIds.size > 0 ? Array.from(selectedIds) : (currentConversationId ? [currentConversationId] : []);
     if (ids.length === 0) {
-      toast.error("请选择要导出的会话");
+      toast.error(t('settings.security.workspace.toast.selectToExport'));
       return;
     }
     
     setLoading(true);
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({ directory: true, multiple: false, title: "选择导出位置" });
+      const selected = await open({ directory: true, multiple: false, title: t('settings.security.workspace.dialog.exportLocation') });
       if (!selected || typeof selected !== "string") return;
 
       // 导出固定在会话自带的产物目录（用户附加的项目目录不属于"AI 产物"）。
@@ -115,24 +117,26 @@ export function WorkspaceSettings() {
           totalBytes += result.bytes;
         } catch (error) {
           const name = conversations.find(c => c.id === id)?.title || id;
-          failures.push(`${name}：${error instanceof Error ? error.message : String(error)}`);
+          failures.push(t('settings.security.workspace.toast.exportFailureItem')
+            .replace('{0}', name)
+            .replace('{1}', error instanceof Error ? error.message : String(error)));
         }
       }
 
       if (failures.length > 0) {
-        toast.error(`有 ${failures.length} 个会话导出失败`, { description: failures[0] });
+        toast.error(t('settings.security.workspace.toast.exportPartialFailure').replace('{0}', String(failures.length)), { description: failures[0] });
       }
       if (totalFiles === 0 && failures.length === 0) {
-        toast.info("没有需要导出的文件", {
-          description: "这些会话还没有产生文件；工作目录在第一次用到文件或命令时才会创建。",
+        toast.info(t('settings.security.workspace.toast.nothingToExport'), {
+          description: t('settings.security.workspace.toast.nothingToExportDescription'),
         });
       } else if (failures.length === 0) {
-        toast.success(`导出完成：${totalFiles} 个文件（${formatBytes(totalBytes)}）`);
+        toast.success(t('settings.security.workspace.toast.exportComplete').replace('{0}', String(totalFiles)).replace('{1}', formatBytes(totalBytes)));
       }
       setSelectedIds(new Set());
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`导出失败：${msg}`);
+      toast.error(t('settings.security.workspace.toast.exportFailed').replace('{0}', msg));
     } finally {
       setLoading(false);
     }
@@ -142,13 +146,13 @@ export function WorkspaceSettings() {
   const onCleanSelected = useCallback(async () => {
     const ids = selectedIds.size > 0 ? Array.from(selectedIds) : (currentConversationId ? [currentConversationId] : []);
     if (ids.length === 0) {
-      toast.error("请选择要清理的会话");
+      toast.error(t('settings.security.workspace.toast.selectToClean'));
       return;
     }
     const blocked = ids.filter((id) => runningConversationIds.has(id));
     if (blocked.length > 0) {
-      toast.error("这些会话正在运行，先停止再清理", {
-        description: blocked.map((id) => conversations.find(c => c.id === id)?.title || id).join("、"),
+      toast.error(t('settings.security.workspace.toast.runningBlocked'), {
+        description: blocked.map((id) => conversations.find(c => c.id === id)?.title || id).join(t('settings.security.workspace.separator')),
       });
       return;
     }
@@ -160,17 +164,17 @@ export function WorkspaceSettings() {
         clearWorkingDir(id);
       });
       if (outcome.failed.length > 0) {
-        toast.error(`${outcome.failed.length} 个工作区清理失败`, {
+        toast.error(t('settings.security.workspace.toast.cleanPartialFailure').replace('{0}', String(outcome.failed.length)), {
           description: outcome.failed[0].error,
         });
       }
       if (outcome.removed.length > 0) {
-        toast.success(`已移入回收站：${outcome.removed.length} 个会话的产物`);
+        toast.success(t('settings.security.workspace.toast.cleanComplete').replace('{0}', String(outcome.removed.length)));
       }
       setSelectedIds(new Set(outcome.failed.map((f) => f.conversationId)));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`清理失败：${msg}`);
+      toast.error(t('settings.security.workspace.toast.cleanFailed').replace('{0}', msg));
     } finally {
       setLoading(false);
     }
@@ -179,25 +183,25 @@ export function WorkspaceSettings() {
   // 清理全部工作区
   const onClearAll = useCallback(async () => {
     if (runningConversationIds.size > 0) {
-      toast.error("有会话正在运行，先停止再清理全部会话产物");
+      toast.error(t('settings.security.workspace.toast.allRunningBlocked'));
       return;
     }
-    if (!window.confirm("将所有会话的产物移入系统回收站？侧栏工作区和会话不受影响。")) return;
+    if (!window.confirm(t('settings.security.workspace.confirmClearAll'))) return;
     
     setLoading(true);
     try {
       const outcome = await trashEveryConversationWorkspace();
       for (const id of outcome.removed) clearWorkingDir(id);
       if (outcome.failed.length > 0) {
-        toast.error(`${outcome.failed.length} 个工作区清理失败`, {
+        toast.error(t('settings.security.workspace.toast.cleanPartialFailure').replace('{0}', String(outcome.failed.length)), {
           description: outcome.failed[0].error,
         });
       } else {
-        toast.success(`已清理全部会话产物（${outcome.removed.length} 个目录，均在回收站）`);
+        toast.success(t('settings.security.workspace.toast.cleanAllComplete').replace('{0}', String(outcome.removed.length)));
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`清理失败：${msg}`);
+      toast.error(t('settings.security.workspace.toast.cleanFailed').replace('{0}', msg));
     } finally {
       setLoading(false);
     }
@@ -209,7 +213,7 @@ export function WorkspaceSettings() {
     try {
       await revealConversationWorkspace(currentConversationId);
     } catch (e) {
-      toast.error("打开工作目录失败", {
+      toast.error(t('settings.security.workspace.toast.revealFailed'), {
         description: e instanceof Error ? e.message : String(e),
       });
     }
@@ -227,11 +231,11 @@ export function WorkspaceSettings() {
       useConversationAttachmentStore.getState().setWorkingDir(currentConversationId, ws.root, ws.exists);
       useConversationAttachmentStore.getState().markWorkspaceMaterialized(currentConversationId);
       clearWorkspaceError(currentConversationId);
-      toast.success("工作目录已就绪", { description: ws.root });
+      toast.success(t('settings.security.workspace.toast.ready'), { description: ws.root });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       useConversationAttachmentStore.getState().setWorkspaceError(currentConversationId, msg);
-      toast.error("仍然无法准备工作目录", { description: msg });
+      toast.error(t('settings.security.workspace.toast.retryFailed'), { description: msg });
     }
   }, [currentConversationId, conversations, clearWorkspaceError]);
 
@@ -259,12 +263,10 @@ export function WorkspaceSettings() {
 
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={HardDrive} title="会话产物" />
+      <SettingsSectionHeader icon={HardDrive} title={t('settings.security.workspace.title')} />
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-        未绑定工作区的会话默认将文件写到「文档/Chatless/&lt;标题&gt;-&lt;会话摘要&gt;」，此目录按需创建。
-        绑定工作区的会话在所选项目目录中工作，文件访问仍按原规则审批。
-        打开、导出和清理只针对会话产物，不会改动侧栏工作区的目录或会话归属。清理会将产物移入系统回收站。
+        {t('settings.security.workspace.description')}
       </p>
 
       {/* 当前会话显示 */}
@@ -272,9 +274,9 @@ export function WorkspaceSettings() {
         <div className="mt-3 px-3 py-2 rounded-lg bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/40">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[10px] text-slate-400">当前会话</div>
+              <div className="text-[10px] text-slate-400">{t('settings.security.workspace.currentConversation')}</div>
               <div className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                {formatConversationTitle(currentConversation.title)}
+                {formatConversationTitle(currentConversation.title, t('settings.security.workspace.unnamedConversation'))}
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -283,10 +285,10 @@ export function WorkspaceSettings() {
                 size="sm"
                 className="h-7 px-2.5"
                 onClick={onReveal}
-                title="在文件管理器中打开这个会话的工作目录"
+                title={t('settings.security.workspace.revealTitle')}
               >
                 <FolderOpen className="h-3.5 w-3.5" />
-                打开目录
+                {t('settings.security.workspace.reveal')}
               </Button>
               <Button
                 variant="outline"
@@ -296,21 +298,21 @@ export function WorkspaceSettings() {
                 disabled={loading}
               >
                 <FolderDown className="h-3.5 w-3.5" />
-                导出
+                {t('settings.security.workspace.export')}
               </Button>
             </div>
           </div>
           {currentConversationId && workspaceErrors[currentConversationId] && (
             <div className="mt-2 flex items-start justify-between gap-2 text-[11px] text-rose-600 dark:text-rose-400">
               <span className="min-w-0 flex-1 break-words">
-                工作目录不可用：{workspaceErrors[currentConversationId]}
+                {t('settings.security.workspace.errorUnavailable').replace('{0}', workspaceErrors[currentConversationId])}
               </span>
               <button
                 type="button"
                 onClick={onRetryWorkspace}
                 className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] underline hover:no-underline"
               >
-                重试
+                {t('settings.security.workspace.retry')}
               </button>
             </div>
           )}
@@ -325,7 +327,7 @@ export function WorkspaceSettings() {
               onClick={() => setShowDropdown(!showDropdown)}
               className="h-7 px-2 text-xs rounded-md border border-slate-200/60 dark:border-slate-700/40 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
             >
-              选择会话
+              {t('settings.security.workspace.selectConversations')}
               <ChevronDown className={cn("h-3 w-3 transition-transform", showDropdown && "rotate-180")} />
             </button>
             
@@ -336,7 +338,7 @@ export function WorkspaceSettings() {
                     onClick={toggleSelectAll}
                     className="w-full text-left px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-md transition-colors"
                   >
-                    {selectedIds.size === conversations.length ? '取消全选' : '全选'}
+                    {selectedIds.size === conversations.length ? t('settings.security.workspace.deselectAll') : t('settings.security.workspace.selectAll')}
                   </button>
                 </div>
                 <ScrollArea className="h-[200px]">
@@ -356,7 +358,7 @@ export function WorkspaceSettings() {
                           {selectedIds.has(conv.id) && <Check className="h-3 w-3 text-white dark:text-slate-900" />}
                         </div>
                         <span className="text-xs text-slate-700 dark:text-slate-200 truncate flex-1">
-                          {formatConversationTitle(conv.title, 32)}
+                          {formatConversationTitle(conv.title, t('settings.security.workspace.unnamedConversation'), 32)}
                         </span>
                       </button>
                     ))}
@@ -367,7 +369,7 @@ export function WorkspaceSettings() {
           </div>
           
           {selectedIds.size > 0 && (
-            <span className="text-[11px] text-slate-400">已选 {selectedIds.size} 个</span>
+            <span className="text-[11px] text-slate-400">{t('settings.security.workspace.selectedCount').replace('{0}', String(selectedIds.size))}</span>
           )}
         </div>
 
@@ -382,7 +384,7 @@ export function WorkspaceSettings() {
               disabled={loading}
             >
               <FolderDown className="h-3.5 w-3.5" />
-              导出选中
+              {t('settings.security.workspace.exportSelected')}
             </Button>
             <Button
               variant="outline"
@@ -390,10 +392,10 @@ export function WorkspaceSettings() {
               className="h-7 px-2.5"
               onClick={onCleanSelected}
               disabled={loading || Array.from(selectedIds).some((id) => runningConversationIds.has(id))}
-              title="移入系统回收站"
+              title={t('settings.security.workspace.moveToTrash')}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              清理选中
+              {t('settings.security.workspace.cleanSelected')}
             </Button>
           </div>
         )}
@@ -409,7 +411,7 @@ export function WorkspaceSettings() {
           disabled={loading || runningConversationIds.size > 0}
         >
           <Trash2 className="h-3.5 w-3.5" />
-          清理全部会话产物
+          {t('settings.security.workspace.cleanAll')}
         </Button>
       </div>
     </SettingsCard>

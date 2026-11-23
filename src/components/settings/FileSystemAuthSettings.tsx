@@ -9,6 +9,8 @@ import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { useFilesystemAllowlistStore } from "@/store/filesystemAllowlistStore";
 import { useChatStore } from "@/store/chatStore";
+import { useTranslation } from "@/i18n/useTranslation";
+import type { TranslationKey } from "@/i18n/types";
 import { ensureAllowlistedDirectory, normalizeAlias as normalizeAliasCore } from "@/lib/filesystemAllowlist";
 import { syncFilesystemAllowlistToBackend } from "@/lib/filesystemAllowlist/backendSync";
 import {
@@ -25,24 +27,25 @@ function normalizeAlias(input: string): string {
 }
 
 // 从路径中提取显示名称（仅显示最后一级目录名）
-function getDisplayName(path: string, alias?: string): string {
+function getDisplayName(path: string, alias: string | undefined, unknownDir: string): string {
   if (alias) return `@${alias}`;
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
   const parts = normalized.split('/');
-  return parts[parts.length - 1] || '未知目录';
+  return parts[parts.length - 1] || unknownDir;
 }
 
 // 来源标签
-function getSourceLabel(source: string): string {
+function getSourceLabel(source: string, t: (key: TranslationKey) => string): string {
   switch (source) {
-    case 'manual': return '手动添加';
-    case 'skills': return '技能';
-    case 'attachment': return '附件';
+    case 'manual': return t('settings.security.fs.source.manual');
+    case 'skills': return t('settings.security.fs.source.skills');
+    case 'attachment': return t('settings.security.fs.source.attachment');
     default: return '';
   }
 }
 
 export function FileSystemAuthSettings() {
+  const t = useTranslation();
   const { directories, load, removeDirectory, updateDirectory } = useFilesystemAllowlistStore();
   const [loading, setLoading] = useState(false);
   const [accessLevel, setAccessLevel] = useState<AccessLevel>('ask');
@@ -83,7 +86,7 @@ export function FileSystemAuthSettings() {
       const selected = await open({ directory: true, multiple: false });
       if (!selected || typeof selected !== "string") return;
 
-      const rawAlias = window.prompt("为该目录设置一个别名（推荐设置，便于识别）", "");
+      const rawAlias = window.prompt(t('settings.security.fs.promptAliasAdd'), "");
       const alias = rawAlias ? normalizeAlias(rawAlias) : undefined;
 
       await ensureAllowlistedDirectory({
@@ -106,21 +109,21 @@ export function FileSystemAuthSettings() {
 
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={Shield} title="文件访问白名单" />
+      <SettingsSectionHeader icon={Shield} title={t('settings.security.fs.title')} />
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-        管理允许AI访问的目录。建议为每个目录设置易识别的别名。
+        {t('settings.security.fs.description')}
       </p>
 
       {/* 访问策略：决定越权操作是否还要询问 */}
       <div className="mt-3 rounded-lg border border-slate-200/60 dark:border-slate-700/40 p-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-xs font-medium text-slate-700 dark:text-slate-200">白名单之外的操作</div>
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-200">{t('settings.security.fs.outsideAllowlist')}</div>
             <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
               {accessLevel === 'unrestricted'
-                ? '不再询问，文件读写和删除直接执行（适合长时间自动任务）'
-                : '弹卡片询问，可选仅本次 / 以后都允许 / 本会话不再询问'}
+                ? t('settings.security.fs.unrestrictedHint')
+                : t('settings.security.fs.askHint')}
             </div>
           </div>
           <div className="shrink-0 flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -136,7 +139,7 @@ export function FileSystemAuthSettings() {
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
                 )}
               >
-                {level === 'ask' ? '每次询问' : '不再询问'}
+                {level === 'ask' ? t('settings.security.askEveryTime') : t('settings.security.neverAsk')}
               </button>
             ))}
           </div>
@@ -147,7 +150,7 @@ export function FileSystemAuthSettings() {
       {conversationOverride === 'unrestricted' && (
         <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-amber-300/60 dark:border-amber-700/50 bg-amber-50/60 dark:bg-amber-950/20 px-2.5 py-2">
           <span className="text-[11px] text-amber-700 dark:text-amber-300">
-            当前会话已关闭文件操作询问
+            {t('settings.security.fs.conversationOverrideNotice')}
           </span>
           <Button
             variant="outline"
@@ -158,7 +161,7 @@ export function FileSystemAuthSettings() {
               setConversationOverride(undefined);
             }}
           >
-            恢复询问
+            {t('settings.security.fs.restoreAsk')}
           </Button>
         </div>
       )}
@@ -173,9 +176,9 @@ export function FileSystemAuthSettings() {
           disabled={loading}
         >
           <FolderPlus className="h-3.5 w-3.5" />
-          添加目录
+          {t('settings.security.fs.addDirectory')}
         </Button>
-        <span className="text-[11px] text-slate-400">{filteredDirs.length} 个</span>
+        <span className="text-[11px] text-slate-400">{t('settings.security.fs.count').replace('{0}', String(filteredDirs.length))}</span>
       </div>
 
       {/* 目录列表 */}
@@ -183,7 +186,7 @@ export function FileSystemAuthSettings() {
         <ScrollArea className={filteredDirs.length === 0 ? "h-[88px]" : "h-[200px]"}>
           {filteredDirs.length === 0 ? (
             <div className="p-4 text-center text-[11px] text-slate-400">
-              暂无白名单目录
+              {t('settings.security.fs.empty')}
             </div>
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -199,11 +202,11 @@ export function FileSystemAuthSettings() {
                         "text-xs font-medium truncate",
                         d.alias ? "text-emerald-600 dark:text-emerald-400" : "text-slate-700 dark:text-slate-200"
                       )}>
-                        {getDisplayName(d.path, d.alias)}
+                        {getDisplayName(d.path, d.alias, t('settings.security.fs.unknownDirectory'))}
                       </span>
-                      {getSourceLabel(d.source) && (
+                      {getSourceLabel(d.source, t) && (
                         <span className="text-[9px] px-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-400">
-                          {getSourceLabel(d.source)}
+                          {getSourceLabel(d.source, t)}
                         </span>
                       )}
                     </div>
@@ -212,19 +215,19 @@ export function FileSystemAuthSettings() {
                       <span className={cn(
                         "text-[9px]",
                         d.permissions.read ? "text-emerald-500" : "text-slate-300"
-                      )}>读{permLabel(d.permissions.read)}</span>
+                      )}>{t('settings.security.fs.perm.read')}{permLabel(d.permissions.read)}</span>
                       <span className={cn(
                         "text-[9px]",
                         d.permissions.write ? "text-blue-500" : "text-slate-300"
-                      )}>写{permLabel(d.permissions.write)}</span>
+                      )}>{t('settings.security.fs.perm.write')}{permLabel(d.permissions.write)}</span>
                       <span className={cn(
                         "text-[9px]",
                         d.permissions.create ? "text-amber-500" : "text-slate-300"
-                      )}>建{permLabel(d.permissions.create)}</span>
+                      )}>{t('settings.security.fs.perm.create')}{permLabel(d.permissions.create)}</span>
                       <span className={cn(
                         "text-[9px]",
                         d.permissions.delete ? "text-red-500" : "text-slate-300"
-                      )}>删{permLabel(d.permissions.delete)}</span>
+                      )}>{t('settings.security.fs.perm.delete')}{permLabel(d.permissions.delete)}</span>
                     </div>
                   </div>
                   
@@ -232,13 +235,13 @@ export function FileSystemAuthSettings() {
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={async () => {
-                        const raw = window.prompt("设置别名（便于识别）", d.alias || "");
+                        const raw = window.prompt(t('settings.security.fs.promptAliasEdit'), d.alias || "");
                         if (raw === null) return;
                         await updateDirectory(d.id, { alias: raw.trim() ? normalizeAlias(raw) : "" });
                         await syncToBackend();
                       }}
                       className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
-                      title="编辑别名"
+                      title={t('settings.security.fs.editAlias')}
                     >
                       <Edit2 className="h-3 w-3" />
                     </button>
@@ -255,9 +258,9 @@ export function FileSystemAuthSettings() {
                           ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20" 
                           : "text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
                       )}
-                      title="切换写入权限"
+                      title={t('settings.security.fs.toggleWrite')}
                     >
-                      写
+                      {t('settings.security.fs.perm.write')}
                     </button>
                     <button
                       onClick={async () => {
@@ -272,9 +275,9 @@ export function FileSystemAuthSettings() {
                           ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" 
                           : "text-slate-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/40"
                       )}
-                      title="切换删除权限"
+                      title={t('settings.security.fs.toggleDelete')}
                     >
-                      删
+                      {t('settings.security.fs.perm.delete')}
                     </button>
                     <button
                       onClick={async () => {
@@ -282,7 +285,7 @@ export function FileSystemAuthSettings() {
                         await syncToBackend();
                       }}
                       className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      title="移除"
+                      title={t('settings.security.fs.remove')}
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>

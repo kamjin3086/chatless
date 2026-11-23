@@ -4,13 +4,15 @@ import type { ModelMetadata } from "@/lib/metadata/types";
 import type { ProviderWithStatus } from "@/hooks/useProviderManagement";
 import { ProviderAddModelDialog } from "./ProviderAddModelDialog";
 import { Brain, Workflow, Camera, ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
-import { getModelCapabilities } from "@/lib/provider/staticModels";
+import { getModelCapabilities, getStaticModels } from "@/lib/provider/staticModels";
 import { ProviderModelItem } from "./ProviderModelItem";
 import { toast } from "@/components/ui/sonner";
+import { useTranslation } from "@/i18n/useTranslation";
+import { formatProviderModelCount, formatProviderModelStrategyUpdate, translateProviderModelNotification } from "./providerModelPresentation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { StrategyValue } from "@/lib/provider/strategyInference";
+import { inferStrategyFromModelId, type StrategyValue } from "@/lib/provider/strategyInference";
 import { isNoKeyProvider, NO_KEY_MODEL_REFRESH_MIN_INTERVAL_MS } from "@/lib/provider/modelFetchPolicy";
 
 interface ProviderModelListProps {
@@ -33,6 +35,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
     onModelApiKeyChange, onModelApiKeyBlur, onOpenParameters,
   } = props;
 
+  const t = useTranslation();
   const rootRef = React.useRef<HTMLDivElement | null>(null);
 
   const getScroller = () => {
@@ -74,25 +77,23 @@ export function ProviderModelList(props: ProviderModelListProps) {
   const applyBatch = async (overrideStrategy?: string) => {
     try {
       const ids = Object.keys(checked).filter(k => checked[k]);
-      if (ids.length === 0) { toast.error('请先选择模型'); return; }
+      if (ids.length === 0) { toast.error(translateProviderModelNotification('provider.models.selectRequired')); return; }
       const { specializedStorage } = await import('@/lib/storage');
       const value = (overrideStrategy || batchStrategy) as any;
       await Promise.all(ids.map(id => specializedStorage.models.setModelStrategy(props.provider.name, id, value)));
       setStrategyMap(prev => ({ ...prev, ...Object.fromEntries(ids.map(id => [id, value])) }));
-      toast.success(`已为 ${ids.length} 个模型设置策略`);
+      toast.success(formatProviderModelStrategyUpdate(translateProviderModelNotification, ids.length));
     } catch (e) {
       console.error(e);
-      toast.error('批量设置失败');
+      toast.error(translateProviderModelNotification('provider.models.batchApplyFailed'));
     }
   };
 
   // —— 自动推断：根据模型ID推断策略 ——
-  const { inferStrategyFromModelId } = require('@/lib/provider/strategyInference');
-
   const applyAutoInfer = async () => {
     try {
       const ids = Object.keys(checked).filter(k => checked[k]);
-      if (ids.length === 0) { toast.error('请先选择模型'); return; }
+      if (ids.length === 0) { toast.error(translateProviderModelNotification('provider.models.selectRequired')); return; }
       const { specializedStorage } = await import('@/lib/storage');
       const entries = ids.map(id => [id, inferStrategyFromModelId(id)] as const);
       const hits = entries.filter(([, s]) => !!s) as Array<[string, StrategyValue]>;
@@ -101,24 +102,24 @@ export function ProviderModelList(props: ProviderModelListProps) {
         setStrategyMap(prev => ({ ...prev, ...Object.fromEntries(hits) }));
       }
       const missed = ids.length - hits.length;
-      toast.success(`已为 ${hits.length} 个模型设置策略${missed? `，${missed} 个未命中已跳过`: ''}`);
+      toast.success(formatProviderModelStrategyUpdate(translateProviderModelNotification, hits.length, missed));
     } catch (e) {
       console.error(e);
-      toast.error('自动推断失败');
+      toast.error(translateProviderModelNotification('provider.models.inferStrategyFailed'));
     }
   };
 
   const clearBatch = async () => {
     try {
       const ids = Object.keys(checked).filter(k => checked[k]);
-      if (ids.length === 0) { toast.error('请先选择模型'); return; }
+      if (ids.length === 0) { toast.error(translateProviderModelNotification('provider.models.selectRequired')); return; }
       const { specializedStorage } = await import('@/lib/storage');
       await Promise.all(ids.map(id => specializedStorage.models.removeModelStrategy(props.provider.name, id)));
       setStrategyMap(prev => ({ ...prev, ...Object.fromEntries(ids.map(id => [id, null])) }));
-      toast.success(`已清除 ${ids.length} 个模型的策略覆盖`);
+      toast.success(translateProviderModelNotification('provider.models.overridesCleared').replace('{0}', formatProviderModelCount(translateProviderModelNotification, ids.length)));
     } catch (e) {
       console.error(e);
-      toast.error('清除覆盖失败');
+      toast.error(translateProviderModelNotification('provider.models.clearOverridesFailed'));
     }
   };
 
@@ -135,14 +136,14 @@ export function ProviderModelList(props: ProviderModelListProps) {
       await providerModelService.fetchIfNeeded(provider.name, { force: true });
       const { modelRepository } = await import('@/lib/provider/ModelRepository');
       const latest = await modelRepository.get(provider.name);
-      toast.success('已刷新模型列表', { description: `${latest?.length || 0} 个模型` });
+      toast.success(translateProviderModelNotification('provider.models.refreshed'), { description: formatProviderModelCount(translateProviderModelNotification, latest?.length || 0) });
       // 轻量回到刷新前的大致位置（一次性），避免“来回拉扯”
       restoreScroll(scroller, prevY);
       setTimeout(() => {
         if (root) root.style.minHeight = prevMinH;
       }, 300);
     } catch (e:any) {
-      toast.error('刷新模型失败', { description: e?.message || String(e) });
+      toast.error(translateProviderModelNotification('provider.models.refreshFailed'), { description: e?.message || String(e) });
     }
   };
 
@@ -200,17 +201,16 @@ export function ProviderModelList(props: ProviderModelListProps) {
       allowDelete={!isOllama}
       onRename={async (modelName, nextLabelRaw) => {
         const nextLabel = (nextLabelRaw || '').trim();
-        if (!nextLabel) { toast.error('名称不可为空'); return; }
+        if (!nextLabel) { toast.error(translateProviderModelNotification('provider.models.nameRequired')); return; }
         const { modelRepository } = await import('@/lib/provider/ModelRepository');
         const { specializedStorage } = await import('@/lib/storage');
         const list = (await modelRepository.get(provider.name)) || [];
         const updated = list.map((m: any) => (m.name === modelName ? { ...m, label: nextLabel } : m));
         await modelRepository.save(provider.name, updated);
         await specializedStorage.models.setModelLabel(provider.name, modelName, nextLabel);
-        toast.success('已重命名', { description: nextLabel });
+        toast.success(translateProviderModelNotification('provider.models.renamed'), { description: nextLabel });
       }}
       canDelete={(() => {
-        const { getStaticModels } = require('@/lib/provider/staticModels');
         const staticList = getStaticModels(provider.name) || getStaticModels((provider as any).aliases?.[0] || provider.name) || [];
         const isStatic = staticList.some((m: any) => m.id === model.name);
         return !isStatic;
@@ -220,7 +220,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
         const list = (await modelRepository.get(provider.name)) || [];
         const next = list.filter((m: any) => m.name !== model.name);
         await modelRepository.save(provider.name, next);
-        toast.success('已删除模型', { description: model.name });
+        toast.success(translateProviderModelNotification('provider.models.deleted'), { description: model.name });
       }}
     />
     </div>
@@ -284,7 +284,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
   const SERIES_ORDER = [
     'Gemini', 'GPT', 'DeepSeek', 'Qwen', 'Grok', 'Claude', 'LLaMA', 'Mistral', 'GLM', 'Gemma', 'Kimi', 'Moonshot', 'Yi'
   ] as const;
-  type Series = typeof SERIES_ORDER[number] | '未归类';
+  type Series = typeof SERIES_ORDER[number] | 'uncategorized';
 
   const detectSeries = (model: ModelMetadata): Series => {
     const s = `${model?.name || ''} ${model?.label || ''}`.toLowerCase();
@@ -312,7 +312,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
     if (s.includes('kimi')) return 'Kimi';
     if (s.includes('moonshot')) return 'Moonshot';
     if (s.includes('yi')) return 'Yi';
-    return '未归类';
+    return 'uncategorized';
   };
 
   // —— 列表排序：与 Provider 侧保持一致的前端兜底排序 ——
@@ -372,7 +372,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
     if (!groups.has(series)) groups.set(series, []);
     groups.get(series)!.push(x);
   }
-  const orderedSeries: Series[] = [...SERIES_ORDER, '未归类'];
+  const orderedSeries: Series[] = [...SERIES_ORDER, 'uncategorized'];
 
   React.useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -381,7 +381,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
   return (
     <div ref={rootRef} className="flex flex-col flex-1 min-h-0 h-full overflow-hidden gap-2">
       <div className="flex items-center gap-2 shrink-0 min-h-8">
-        <h3 className="text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400 shrink-0">模型</h3>
+        <h3 className="text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400 shrink-0">{t('provider.models.title')}</h3>
         {modelsForDisplay.length > 0 && (
           <div className="flex items-center gap-1.5 shrink-0">
             <div className="flex items-center gap-0.5">
@@ -390,7 +390,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 className="w-6 h-6 flex items-center justify-center rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
                 disabled={safePage <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                title="上一页"
+                title={t('provider.models.previousPage')}
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -402,20 +402,20 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 disabled={safePage >= totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                title="下一页"
+                title={t('provider.models.nextPage')}
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
             <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums whitespace-nowrap">
-              {total} 个
+              {formatProviderModelCount(t, total)}
             </span>
             {batchMode && isMultiStrategyProvider && (
               (() => {
                 const ids = pageItems.map((x) => x.name);
                 const allChecked = ids.length > 0 && ids.every((id) => !!checked[id]);
                 const anyChecked = ids.some((id) => !!checked[id]);
-                const label = allChecked ? "取消本页" : (anyChecked ? "反选" : "全选本页");
+                const label = allChecked ? t('provider.models.unselectPage') : (anyChecked ? t('provider.models.invertPageSelection') : t('provider.models.selectPage'));
                 return (
                   <button
                     type="button"
@@ -449,13 +449,13 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   else setSearchOpen(false);
                 }
               }}
-              placeholder="筛选模型"
+              placeholder={t('provider.models.filter')}
               className="w-full h-8 pl-7 pr-7 text-sm rounded-lg border border-slate-200/80 dark:border-slate-700/70 bg-slate-50/80 dark:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-400/50"
             />
             <button
               type="button"
               className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-md"
-              title="关闭搜索"
+              title={t('provider.models.closeSearch')}
               onClick={() => {
                 setModelSearch("");
                 setSearchOpen(false);
@@ -475,7 +475,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   else setSearchOpen(true);
                 }}
                 className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${searchVisible ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
-                title="筛选模型"
+                title={t('provider.models.filter')}
               >
                 <Search className="w-3.5 h-3.5" />
               </button>
@@ -483,7 +483,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 type="button"
                 onClick={() => setFilterThinking((v) => !v)}
                 className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterThinking ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
-                title="仅显示支持思考的模型"
+                title={t('provider.models.filterReasoning')}
               >
                 <Brain className="w-3.5 h-3.5" />
               </button>
@@ -491,7 +491,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 type="button"
                 onClick={() => setFilterTools((v) => !v)}
                 className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterTools ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
-                title="仅显示支持工具调用的模型"
+                title={t('provider.models.filterTools')}
               >
                 <Workflow className="w-3.5 h-3.5" />
               </button>
@@ -499,7 +499,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 type="button"
                 onClick={() => setFilterVision((v) => !v)}
                 className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${filterVision ? "bg-slate-200/70 text-slate-700 dark:bg-white/10 dark:text-slate-200" : "text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10"}`}
-                title="仅显示支持视觉的模型"
+                title={t('provider.models.filterVision')}
               >
                 <Camera className="w-3.5 h-3.5" />
               </button>
@@ -508,7 +508,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
           <button
             className="h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             onClick={refreshModels}
-            title="刷新模型列表"
+            title={t('provider.models.refresh')}
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -518,7 +518,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
               className="h-8 px-2.5 text-xs rounded-lg"
               onClick={() => setBatchMode((v) => !v)}
             >
-              {batchMode ? "退出批量" : "批量"}
+              {batchMode ? t('provider.models.exitBatch') : t('provider.models.batch')}
             </Button>
           )}
           {!batchMode && !isOllama && (
@@ -527,20 +527,20 @@ export function ProviderModelList(props: ProviderModelListProps) {
           {isMultiStrategyProvider && batchMode && (
             <>
               <Select value={batchStrategy} onValueChange={(v:any)=>{ if (v === '__clear__') { const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void clearBatch(); } return; } if (v === '__auto__') { void applyAutoInfer(); return; } setBatchStrategy(v); const anyChecked = Object.values(checked).some(Boolean); if (anyChecked) { void applyBatch(v); } }}>
-                <SelectTrigger className="w-32 h-8 text-[10px] rounded-md border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder="选择策略"/></SelectTrigger>
+                <SelectTrigger className="w-32 h-8 text-[10px] rounded-md border-slate-200/70 dark:border-slate-700/70"><SelectValue placeholder={t('provider.models.chooseStrategy')}/></SelectTrigger>
                 <SelectContent className="rounded-md min-w-[140px]">
-                  <SelectItem value="__auto__" className="text-[11px] py-1.5">自动推断</SelectItem>
+                  <SelectItem value="__auto__" className="text-[11px] py-1.5">{t('provider.models.inferStrategy')}</SelectItem>
                   <SelectItem value="openai-compatible" className="text-[11px] py-1.5">OpenAI Compatible</SelectItem>
                   <SelectItem value="openai-responses" className="text-[11px] py-1.5">OpenAI Responses</SelectItem>
                   <SelectItem value="openai" className="text-[11px] py-1.5">OpenAI Strict</SelectItem>
                   <SelectItem value="anthropic" className="text-[11px] py-1.5">Anthropic</SelectItem>
                   <SelectItem value="gemini" className="text-[11px] py-1.5">Gemini</SelectItem>
                   <SelectItem value="deepseek" className="text-[11px] py-1.5">DeepSeek</SelectItem>
-                  <SelectItem value="__clear__" className="text-[11px] py-1.5 text-red-600">清除覆盖</SelectItem>
+                  <SelectItem value="__clear__" className="text-[11px] py-1.5 text-red-600">{t('provider.models.clearOverrides')}</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" className="h-8 px-1.5 text-[10px] rounded-md" onClick={() => applyBatch()}>应用</Button>
-              <Button variant="secondary" className="h-8 px-1.5 text-[10px] rounded-md border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>清除</Button>
+              <Button variant="outline" className="h-8 px-1.5 text-[10px] rounded-md" onClick={() => applyBatch()}>{t('provider.models.apply')}</Button>
+              <Button variant="secondary" className="h-8 px-1.5 text-[10px] rounded-md border-slate-200/70 dark:border-slate-700/70 transition-colors" onClick={clearBatch}>{t('provider.models.clear')}</Button>
               <Button
                 variant="ghost"
                 className="h-8 px-1.5 text-[10px] rounded-md transition-colors"
@@ -565,7 +565,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                   }
                 }}
               >
-                全选
+                {t('provider.models.selectAll')}
               </Button>
             </>
           )}
@@ -576,7 +576,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
         {modelsForDisplay && modelsForDisplay.length > 0 ? (
           total === 0 ? (
             <div className="px-1 py-10 text-center">
-              <p className="text-xs text-slate-400 dark:text-slate-500">没有符合筛选条件的模型</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{t('provider.models.noMatches')}</p>
             </div>
           ) : (
             <div ref={listContentRef} className="space-y-2">
@@ -586,7 +586,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                 return (
                   <div key={series}>
                     <div className="flex items-center justify-between px-1 pb-0.5">
-                      <div className="text-xs font-medium text-slate-400 dark:text-slate-500">{series}</div>
+                      <div className="text-xs font-medium text-slate-400 dark:text-slate-500">{series === 'uncategorized' ? t('provider.models.uncategorized') : series}</div>
                       {batchMode && isMultiStrategyProvider ? (
                         (() => {
                           const groupIds = list.map((x) => x.name);
@@ -598,7 +598,7 @@ export function ProviderModelList(props: ProviderModelListProps) {
                               className="text-[11px] px-1.5 py-0.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               onClick={() => setAll(groupIds, next)}
                             >
-                              {allChecked ? "取消" : "全选"}
+                              {allChecked ? t('provider.models.deselectAll') : t('provider.models.selectAll')}
                             </button>
                           );
                         })()
@@ -616,8 +616,8 @@ export function ProviderModelList(props: ProviderModelListProps) {
           <div className="px-1 py-10 text-center">
             <p className="text-xs text-slate-400 dark:text-slate-500">
               {provider.displayStatus === "NO_KEY"
-                ? "填写密钥后可拉取模型，也可手动添加"
-                : "暂无模型，可刷新列表或手动添加"}
+                ? t('provider.models.emptyNeedsKey')
+                : t('provider.models.empty')}
             </p>
           </div>
         )}

@@ -1,21 +1,28 @@
 "use client";
 
+import { useId } from "react";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { Globe } from "lucide-react";
 import { useNetworkPreferences } from '@/store/networkPreferences';
+import { useTranslation } from '@/i18n/useTranslation';
 
 export function NetworkSettings() {
   const { proxyUrl, useSystemProxy, offline, setProxyUrl, setUseSystemProxy, setOffline } = useNetworkPreferences();
+  const t = useTranslation();
+  const proxyId = useId();
 
   return (
     <SettingsCard>
-      <SettingsSectionHeader icon={Globe} title="网络设置" />
+      <SettingsSectionHeader icon={Globe} title={t('settings.network.title')} />
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-xs text-slate-700 dark:text-slate-300">代理地址</span>
+          <label htmlFor={proxyId} className="text-xs text-slate-700 dark:text-slate-300">
+            {t('settings.network.proxyUrl')}
+          </label>
           <input
+            id={proxyId}
             type="text"
             value={proxyUrl}
             onChange={(e) => setProxyUrl(e.target.value)}
@@ -24,15 +31,15 @@ export function NetworkSettings() {
           />
         </div>
         <ToggleSwitch
-          label="使用系统代理"
+          label={t('settings.network.useSystemProxy')}
           checked={useSystemProxy}
           onChange={setUseSystemProxy}
         />
         <ToggleSwitch
-          label="离线模式"
+          label={t('settings.network.offline')}
           checked={offline}
           onChange={setOffline}
-          tooltip="阻止网络请求，仅使用本地模型"
+          tooltip={t('settings.network.offlineHelp')}
         />
       </div>
     </SettingsCard>

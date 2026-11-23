@@ -5,10 +5,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { APP_INFO, getVersionInfo } from "@/config/app-info";
-import { getUpdateAvailability, UPDATE_AVAILABILITY_EVENT, checkForUpdatesSilently } from "@/lib/update/update-notifier";
+import { getUpdateAvailability, UPDATE_AVAILABILITY_EVENT, UNKNOWN_UPDATE_VERSION, checkForUpdatesSilently } from "@/lib/update/update-notifier";
 import StorageUtil from "@/lib/storage";
 import { linkOpener } from "@/lib/utils/linkOpener";
 import { toast } from "@/components/ui/sonner";
+import { UpdateNotesPreview } from "@/components/update/UpdateNotesPreview";
+import { useTranslation } from "@/i18n/useTranslation";
 import { cn } from "@/lib/utils";
 
 const aboutCardClass =
@@ -17,6 +19,7 @@ const aboutLinkClass =
   "text-xs text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 hover:underline";
 
 export function AboutSupportSettings() {
+  const t = useTranslation();
   const [showCopied, setShowCopied] = useState(false);
   const [versionInfo, setVersionInfo] = useState(getVersionInfo());
   const [onlyCheckDev, setOnlyCheckDev] = useState(false);
@@ -94,11 +97,11 @@ export function AboutSupportSettings() {
     try {
       const success = await linkOpener.openLink(url);
       if (!success) {
-        toast.error('无法打开链接，请稍后重试');
+        toast.error(t('about.linkRetry'));
       }
     } catch (error) {
       console.error('打开链接失败:', error);
-      toast.error('打开链接失败');
+      toast.error(t('about.linkFailed'));
     }
   };
 
@@ -108,18 +111,27 @@ export function AboutSupportSettings() {
       const update = await check({ timeout: 30_000 });
 
       if (!update || !('available' in update) || !update.available) {
-        toast.success('已是最新版本');
+        toast.success(t('update.upToDate'));
         setNotLatest(null);
         return;
       }
 
-      const version = (update as any).version ?? '新版本';
+      const version = update.version;
 
       const onlyCheck = typeof window !== 'undefined'
         && (window as any).__CHATLESS_ONLY_CHECK_UPDATE__;
 
-      toast.message(`检测到更新：${version}`, {
-        description: onlyCheck ? '如需安装，请取消仅检查更新。' : '正在下载并安装，请稍候…'
+      const description = t(onlyCheck ? 'update.onlyCheckHint' : 'update.installing');
+      const title = !version || version === UNKNOWN_UPDATE_VERSION
+        ? t('update.available')
+        : t('update.detectedVersion').replace('{0}', () => version);
+      toast.message(title, {
+        description: update.body?.trim() ? (
+          <div>
+            <div>{description}</div>
+            <UpdateNotesPreview body={update.body} />
+          </div>
+        ) : description
       });
 
       // 若可用，一步到位：下载并安装
@@ -127,7 +139,7 @@ export function AboutSupportSettings() {
         await (update as any).downloadAndInstall();
         setNotLatest(null);
         // Windows 会在安装前自动退出应用（由系统安装器决定）
-        toast.success('更新已安装，将重启应用');
+        toast.success(t('update.installed'));
         const { relaunch } = await import('@tauri-apps/plugin-process');
         relaunch();
 
@@ -137,7 +149,7 @@ export function AboutSupportSettings() {
       }
     } catch (error) {
       console.error('检查更新失败:', error);
-      toast.error('检查或安装更新失败');
+      toast.error(t('update.checkFailed'));
     }
   };
 
@@ -145,10 +157,10 @@ export function AboutSupportSettings() {
     <div className="about-support space-y-4">
       {/* 页面标题 */}
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">关于与支持</h2>
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">{t('app.about.title')}</h2>
         <div className={cn(aboutCardClass, "p-4")}>
           <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            在此查看关于与支持相关信息，包括版本信息、更新检查、帮助中心等。
+            {t('app.about.description')}
           </p>
         </div>
       </div>
@@ -184,13 +196,15 @@ export function AboutSupportSettings() {
               {notLatest && (
                 <span className="ml-2 inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
-                  当前不是最新版本（可用：{notLatest.version}）
-                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-200/70 text-slate-600 dark:bg-white/10 dark:text-slate-300 text-[10px] font-semibold align-middle">NEW</span>
+                  {notLatest.version === UNKNOWN_UPDATE_VERSION
+                    ? t('update.outdated')
+                    : t('update.outdatedVersion').replace('{0}', () => notLatest.version)}
+                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-200/70 text-slate-600 dark:bg-white/10 dark:text-slate-300 text-[10px] font-semibold align-middle">{t('update.newBadge')}</span>
                 </span>
               )}
             </p>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-              {APP_INFO.description}
+              {t('app.about.tagline')}
             </p>
             {/* 操作区：按钮 + 勾选框 */}
             <div className="flex items-center flex-wrap gap-4 mt-3">
@@ -200,7 +214,7 @@ export function AboutSupportSettings() {
                 size="sm"
                 className="bg-white/60 dark:bg-white/5 border-slate-300/70 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-white/10"
               >
-                检查更新
+                {t('update.check')}
               </Button>
 
               <Label htmlFor="only-check-update" className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-500 select-none cursor-pointer">
@@ -218,7 +232,7 @@ export function AboutSupportSettings() {
                     } catch {}
                   }}
                 />
-                仅检查更新，不自动安装
+                {t('update.onlyCheck')}
               </Label>
             </div>
           </div>
@@ -230,57 +244,57 @@ export function AboutSupportSettings() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 帮助中心 */}
           <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
-            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">帮助中心</h3>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">{t('app.about.helpCenter')}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
-              查找使用教程和常见问题
+              {t('app.about.helpCenterDescription')}
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.helpCenter)}
               className={aboutLinkClass}
             >
-              查看帮助 →
+              {t('app.about.helpCenterLink')}
             </button>
           </div>
 
           {/* 提交反馈 */}
           <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
-            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">意见反馈</h3>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">{t('app.about.feedback')}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
-              分享使用体验，报告问题或提出建议
+              {t('app.about.feedbackDescription')}
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.feedback)}
               className={aboutLinkClass}
             >
-              提交反馈 →
+              {t('app.about.feedbackLink')}
             </button>
           </div>
 
           {/* 官方网站 */}
           <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
-            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">官方网站</h3>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">{t('app.about.website')}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
-              了解更多产品信息和最新动态
+              {t('app.about.websiteDescription')}
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.website)}
               className={aboutLinkClass}
             >
-              访问官网 →
+              {t('app.about.websiteLink')}
             </button>
           </div>
 
           {/* 加入社区 */}
           <div className={cn(aboutCardClass, "rounded-lg hover:bg-white/20 dark:hover:bg-white/[0.07] transition-colors")}>
-            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">用户社区</h3>
+            <h3 className="font-medium text-slate-800 dark:text-slate-200 text-sm">{t('app.about.community')}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2">
-              与其他用户交流使用心得和技巧
+              {t('app.about.communityDescription')}
             </p>
             <button
               onClick={() => handleOpenLink(APP_INFO.community)}
               className={aboutLinkClass}
             >
-              加入社区 →
+              {t('app.about.communityLink')}
             </button>
           </div>
         </div>
@@ -293,17 +307,17 @@ export function AboutSupportSettings() {
             onClick={() => handleOpenLink(APP_INFO.terms)}
             className="hover:text-slate-600 dark:hover:text-slate-300 hover:underline"
           >
-            服务条款
+            {t('app.about.terms')}
           </button>
           <span>&middot;</span>
           <button
             onClick={() => handleOpenLink(APP_INFO.privacy)}
             className="hover:text-slate-600 dark:hover:text-slate-300 hover:underline"
           >
-            隐私政策
+            {t('app.about.privacy')}
           </button>
         </div>
-        <p className="mt-1">© 2025 {APP_INFO.name}. All rights reserved.</p>
+        <p className="mt-1">{t('app.about.copyright').replace('{name}', APP_INFO.name)}</p>
       </footer>
     </div>
   );

@@ -13,6 +13,7 @@ import { useMarkdownFontSize } from "@/hooks/useMarkdownFontSize";
 import { useGlobalFontSize } from "@/hooks/useGlobalFontSize";
 import { useUiPreferences } from '@/store/uiPreferences';
 import { ThemeInitializer } from "@/lib/utils/themeInitializer";
+import { useTranslation } from '@/i18n/useTranslation';
 import { useLocaleStore } from '@/store/localeStore';
 import type { Locale } from '@/i18n/types';
 import { THEME_KEY } from '@/lib/preferences/keys';
@@ -21,7 +22,9 @@ import { THEME_KEY } from '@/lib/preferences/keys';
 export function GeneralSettings() {
   const [theme, setTheme] = useState<string>("system");
   const [initialized, setInitialized] = useState(false);
-  const { locale, setLocale, t } = useLocaleStore();
+  const locale = useLocaleStore((state) => state.locale);
+  const setLocale = useLocaleStore((state) => state.setLocale);
+  const t = useTranslation();
   const { size: chatFontSize, setSize: setChatFontSize } = useMarkdownFontSize();
   const { size: globalFontSize, setSize: setGlobalFontSize } = useGlobalFontSize();
   const ui = useUiPreferences();
@@ -54,13 +57,13 @@ export function GeneralSettings() {
 
       {/* 基础设置 */}
       <SettingsCard>
-        <SettingsSectionHeader icon={SlidersHorizontal} title="基础选项" />
+        <SettingsSectionHeader icon={SlidersHorizontal} title={t('settings.general.basicOptions')} />
         <div className="space-y-2">
           <SelectField
             label={t('settings.general.language')}
             options={[
-              { value: "zh", label: "简体中文" },
-              { value: "en", label: "English" },
+              { value: "zh", label: t('settings.general.language.zh') },
+              { value: "en", label: t('settings.general.language.en') },
             ]}
             value={locale}
             onChange={(v) => setLocale(v as Locale)}
@@ -68,9 +71,9 @@ export function GeneralSettings() {
           <SelectField
             label={t('settings.general.theme')}
             options={[
-              { value: "system", label: "跟随系统" },
-              { value: "light", label: "亮色" },
-              { value: "dark", label: "暗色" },
+              { value: "system", label: t('settings.general.theme.system') },
+              { value: "light", label: t('settings.general.theme.light') },
+              { value: "dark", label: t('settings.general.theme.dark') },
             ]}
             value={theme}
             onChange={setTheme}
@@ -83,37 +86,37 @@ export function GeneralSettings() {
             max={100}
             step={1}
             valueLabel={`${ui.nightBrightness}%`}
-            tooltip="仅暗色模式生效。100% 为当前默认亮度，调低可减轻夜间刺眼"
+            tooltip={t('settings.general.nightBrightness.help')}
           />
         </div>
       </SettingsCard>
 
       {/* 聊天显示 */}
       <SettingsCard>
-        <SettingsSectionHeader icon={MessageSquare} title="聊天显示" />
+        <SettingsSectionHeader icon={MessageSquare} title={t('settings.general.chatDisplay')} />
         <div className="space-y-2">
           <ToggleSwitch
-            label="默认折叠聊天侧边栏"
+            label={t('settings.general.collapseChatSidebar')}
             checked={ui.collapseChatSidebar}
             onChange={ui.setCollapseChatSidebar}
           />
           <SelectField
-            label="聊天字体大小"
+            label={t('settings.general.chatFontSize')}
             options={[
-              { value: "small", label: "小" },
-              { value: "medium", label: "中" },
-              { value: "large", label: "大" },
+              { value: "small", label: t('settings.general.fontSize.small') },
+              { value: "medium", label: t('settings.general.fontSize.medium') },
+              { value: "large", label: t('settings.general.fontSize.large') },
             ]}
             value={chatFontSize}
             onChange={(v) => setChatFontSize(v as any)}
           />
           <SelectField
-            label="逐字淡入强度"
+            label={t('settings.general.charFadeIntensity')}
             options={[
-              { value: 'off', label: '关闭' },
-              { value: 'light', label: '轻' },
-              { value: 'normal', label: '中' },
-              { value: 'strong', label: '重' },
+              { value: 'off', label: t('settings.general.charFadeIntensity.off') },
+              { value: 'light', label: t('settings.general.charFadeIntensity.light') },
+              { value: 'normal', label: t('settings.general.charFadeIntensity.normal') },
+              { value: 'strong', label: t('settings.general.charFadeIntensity.strong') },
             ]}
             value={ui.charFadeIntensity as string}
             onChange={(v) => ui.setCharFadeIntensity(v as any)}
@@ -123,14 +126,14 @@ export function GeneralSettings() {
 
       {/* 界面显示 */}
       <SettingsCard>
-        <SettingsSectionHeader icon={Monitor} title="界面显示" />
+        <SettingsSectionHeader icon={Monitor} title={t('settings.general.interfaceDisplay')} />
         <div className="space-y-2">
           <SelectField
-            label="界面文本大小"
+            label={t('settings.general.interfaceTextSize')}
             options={[
-              { value: "small", label: "小" },
-              { value: "medium", label: "中" },
-              { value: "large", label: "大" },
+              { value: "small", label: t('settings.general.fontSize.small') },
+              { value: "medium", label: t('settings.general.fontSize.medium') },
+              { value: "large", label: t('settings.general.fontSize.large') },
             ]}
             value={globalFontSize}
             onChange={(v) => setGlobalFontSize(v as any)}
@@ -146,17 +149,17 @@ export function GeneralSettings() {
             onChange={ui.setCloseToTray}
           />
           <ToggleSwitch
-            label="启用快捷指令面板"
+            label={t('settings.general.commandPalette')}
             checked={ui.cmdPaletteEnabled}
             onChange={(v) => ui.setCmdPaletteEnabled(v)}
-            tooltip="使用快捷键快速搜索和执行操作"
+            tooltip={t('settings.general.commandPalette.help')}
           />
           {ui.cmdPaletteEnabled && (
             <ShortcutField
-              label="快捷键"
+              label={t('settings.general.shortcut')}
               value={ui.cmdPaletteShortcut}
               onChange={ui.setCmdPaletteShortcut}
-              tooltip="点击后按下组合键设置"
+              tooltip={t('settings.general.shortcut.help')}
             />
           )}
         </div>

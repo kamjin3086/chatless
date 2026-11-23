@@ -11,6 +11,8 @@ export interface ModelInfo {
   id: string;
   name: string;
   description: string;
+  /** English description for the English interface; falls back to `description`. */
+  descriptionEn?: string;
   size: string;
   strategy: 'ollama' | 'local-onnx';
   downloadUrl?: string;
@@ -61,6 +63,7 @@ export class ModelManager {
         id: config.id,
         name: config.name,
         description: config.description,
+        descriptionEn: (config as { descriptionEn?: string }).descriptionEn,
         size: config.size,
         strategy: config.strategy as 'local-onnx' | 'ollama',
         downloadUrl: config.downloadUrl,

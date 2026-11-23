@@ -4,6 +4,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { KeyRound, ExternalLink, CheckCircle2, XCircle, Loader2, AlertTriangle, Eye, EyeOff, Pencil } from "lucide-react";
 import type { ProviderWithStatus } from "@/hooks/useProviderManagement";
 import { toast } from "@/components/ui/sonner";
+import { translate } from "@/i18n";
+import type { Locale } from "@/i18n/types";
+import { useLocaleStore } from "@/store/localeStore";
 import { cn } from "@/lib/utils";
 import { resolveConnectionHintStatus } from "@/lib/provider/connectionHintStatus";
 import { formatConnectionCheckMessage } from "@/lib/provider/formatConnectionCheckMessage";
@@ -11,11 +14,14 @@ import { formatConnectionCheckMessage } from "@/lib/provider/formatConnectionChe
 function ConnectionStatusHint({
   provider,
   isConnecting,
+  locale,
 }: {
   provider: ProviderWithStatus;
   isConnecting?: boolean;
+  locale: Locale;
 }) {
   const message = formatConnectionCheckMessage(
+    locale,
     provider.statusTooltip || provider.temporaryMessage || provider.lastMessage
   );
   const status = resolveConnectionHintStatus(!!isConnecting, provider);
@@ -26,27 +32,27 @@ function ConnectionStatusHint({
     CONNECTING: {
       icon: <Loader2 className="w-3 h-3 animate-spin" />,
       className: "text-slate-500 dark:text-slate-400",
-      label: "检测中",
+      label: translate(locale, 'provider.connection.checking'),
     },
     CONNECTED: {
       icon: <CheckCircle2 className="w-3 h-3" />,
       className: "text-emerald-600 dark:text-emerald-400",
-      label: "连接正常",
+      label: translate(locale, 'provider.connection.connected'),
     },
     NOT_CONNECTED: {
       icon: <XCircle className="w-3 h-3" />,
       className: "text-red-600 dark:text-red-400",
-      label: "无法连接",
+      label: translate(locale, 'provider.connection.disconnected'),
     },
     NO_KEY: {
       icon: <KeyRound className="w-3 h-3" />,
       className: "text-slate-500 dark:text-slate-400",
-      label: "未配置密钥",
+      label: translate(locale, 'provider.connection.noKey'),
     },
     NO_FETCHER: {
       icon: <AlertTriangle className="w-3 h-3" />,
       className: "text-slate-500 dark:text-slate-400",
-      label: "无法拉取",
+      label: translate(locale, 'provider.connection.noFetcher'),
     },
   };
 
@@ -57,7 +63,7 @@ function ConnectionStatusHint({
     message && message !== entry.label
       ? message
       : status === "NO_FETCHER"
-        ? "无法拉取模型列表"
+        ? translate(locale, 'provider.connection.noFetcherDetail')
         : null;
 
   const chip = (
@@ -118,6 +124,7 @@ function InlineEditableValue({
   mono,
   secret,
   extra,
+  locale,
 }: {
   value: string;
   onCommit: (next: string) => void;
@@ -126,6 +133,7 @@ function InlineEditableValue({
   mono?: boolean;
   secret?: boolean;
   extra?: React.ReactNode;
+  locale: Locale;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -185,7 +193,7 @@ function InlineEditableValue({
           <button
             type="button"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-md"
-            title={reveal ? "隐藏" : "显示"}
+            title={reveal ? translate(locale, 'provider.connection.hide') : translate(locale, 'provider.connection.show')}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setReveal((v) => !v)}
           >
@@ -219,11 +227,11 @@ function InlineEditableValue({
       >
         {shown}
       </button>
-      <IconButton title="编辑" onClick={() => setEditing(true)}>
+      <IconButton title={translate(locale, 'provider.connection.edit')} onClick={() => setEditing(true)}>
         <Pencil className="w-3.5 h-3.5" />
       </IconButton>
       {secret && hasValue && (
-        <IconButton title={reveal ? "隐藏密钥" : "显示密钥"} onClick={() => setReveal((v) => !v)}>
+        <IconButton title={reveal ? translate(locale, 'provider.connection.hideKey') : translate(locale, 'provider.connection.showKey')} onClick={() => setReveal((v) => !v)}>
           {reveal ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </IconButton>
       )}
@@ -263,6 +271,7 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
     isConnecting,
   } = props;
 
+  const locale = useLocaleStore((state) => state.locale);
   const repoName = provider.aliases?.[0] || provider.name;
 
   return (
@@ -270,17 +279,17 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
       <div className={cn("grid gap-x-5 gap-y-1", showApiKeyFields ? "grid-cols-2" : "grid-cols-1")}>
         <div className="flex h-5 items-center gap-2 min-w-0">
           <label className="shrink-0 whitespace-nowrap text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400">
-            服务地址
+            {translate(locale, 'provider.connection.address')}
           </label>
           <div className="ml-auto min-w-0 flex justify-end">
-            <ConnectionStatusHint provider={provider} isConnecting={isConnecting} />
+            <ConnectionStatusHint provider={provider} isConnecting={isConnecting} locale={locale} />
           </div>
         </div>
 
         {showApiKeyFields ? (
           <div className="flex h-5 items-center gap-2 min-w-0">
             <label className="shrink-0 whitespace-nowrap text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400">
-              API 密钥
+              {translate(locale, 'provider.connection.apiKey')}
             </label>
             {docUrl && (
               <button
@@ -289,15 +298,15 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
                   try {
                     const { linkOpener } = await import("@/lib/utils/linkOpener");
                     const success = await linkOpener.openLink(docUrl);
-                    if (!success) toast.error("无法打开链接，请稍后重试");
+                    if (!success) toast.error(translate(locale, 'provider.connection.linkRetry'));
                   } catch (error) {
                     console.error("打开链接失败:", error);
-                    toast.error("打开链接失败");
+                    toast.error(translate(locale, 'provider.connection.linkFailed'));
                   }
                 }}
                 className="ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               >
-                获取密钥
+                {translate(locale, 'provider.connection.getKey')}
                 <ExternalLink className="w-3 h-3" />
               </button>
             )}
@@ -306,9 +315,10 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
 
         <InlineEditableValue
           key={`${provider.name}-url`}
+          locale={locale}
           value={localUrl}
           placeholder={provider.name.toLowerCase() === "ollama" ? "http://localhost:11434" : "https://…"}
-          emptyLabel="未设置服务地址"
+          emptyLabel={translate(locale, 'provider.connection.addressUnset')}
           mono
           onCommit={(next) => {
             setLocalUrl(next);
@@ -321,7 +331,7 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
                   <button
                     type="button"
                     className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100/80 dark:hover:text-slate-300 dark:hover:bg-white/10"
-                    title="实际请求地址"
+                    title={translate(locale, 'provider.connection.actualAddress')}
                   >
                     <Eye className="w-3.5 h-3.5" />
                   </button>
@@ -337,9 +347,10 @@ export function ProviderConnectionSection(props: ProviderConnectionSectionProps)
         {showApiKeyFields ? (
           <InlineEditableValue
             key={`${provider.name}-key`}
+            locale={locale}
             value={localDefaultApiKey}
-            placeholder="可选，部分服务不需要"
-            emptyLabel="未设置"
+            placeholder={translate(locale, 'provider.connection.keyPlaceholder')}
+            emptyLabel={translate(locale, 'provider.connection.keyUnset')}
             secret
             onCommit={(next) => {
               setLocalDefaultApiKey(next);

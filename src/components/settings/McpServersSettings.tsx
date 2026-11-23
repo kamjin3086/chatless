@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@/lib/mcp/McpClient";
 import { serverManager } from "@/lib/mcp/ServerManager";
 import { useMcpServerStatuses, useMcpStore } from "@/store/mcpStore";
+import { useLocaleStore } from "@/store/localeStore";
 import { normalizeSavedServers, resolveNonConflictingServerName } from "@/lib/mcp/serverNamePolicy";
 import { toast, trimToastDescription } from "@/components/ui/sonner";
 import { downloadService } from "@/lib/utils/downloadService";
@@ -66,7 +67,7 @@ function isStdioPackageRunner(config: McpServerConfig): boolean {
   return (cmd === "cmd" || cmd === "cmd.exe") && ["npx", "uvx", "bunx"].includes(inner);
 }
 
-function formatMcpConnectError(e: unknown): string {
+function formatMcpConnectError(e: unknown, missingRunnerHelp: string): string {
   const raw = trimToastDescription(e);
   const s = String(e).toLowerCase();
   if (
@@ -75,19 +76,13 @@ function formatMcpConnectError(e: unknown): string {
     s.includes("not found in path") ||
     s.includes("无法自动修复")
   ) {
-    return `${raw}\n请安装 Node.js（npx）或 uv（uvx）后再次刷新。`;
+    return `${raw}\n${missingRunnerHelp}`;
   }
   return raw || String(e);
 }
 
-function notifyStdioRefresh(config: McpServerConfig) {
-  if (!isStdioPackageRunner(config)) return;
-  toast.info("正在刷新连接", {
-    description: "若运行程序或依赖缺失，将尝试修复并重新下载，可能需要 1–3 分钟。",
-  });
-}
-
 export function McpServersSettings() {
+  const { t } = useLocaleStore();
   const [servers, setServers] = useState<SavedServer[]>([]);
   const [editing, setEditing] = useState<SavedServer | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -122,6 +117,10 @@ export function McpServersSettings() {
   const [advDialogOpen, setAdvDialogOpen] = useState(false);
   const [maxDepthValue, setMaxDepthValue] = useState<number>(6);
   const [defaultAutoAuth, setDefaultAutoAuth] = useState<boolean>(false);
+  const globalDefaults = useMemo(() => ({
+    autoAuthorize: defaultAutoAuth,
+    maxRecursionDepth: maxDepthValue,
+  }), [defaultAutoAuth, maxDepthValue]);
 
   const loadAdvanced = useCallback(async () => {
     try {
@@ -189,14 +188,14 @@ export function McpServersSettings() {
         } catch {
           // ignore
         }
-        toast.info("已自动规避 MCP 保留名冲突", {
-          description: renames.map((r) => `${r.from} → ${r.to}`).join("，"),
+        toast.info(t('mcpSettings.reservedNameRenamed'), {
+          description: renames.map((r) => `${r.from} → ${r.to}`).join(useLocaleStore.getState().locale === 'zh' ? '，' : ', '),
         });
       }
     } catch {
       // ignore; use memory default
     }
-  }, []);
+  }, [t]);
 
   const saveServers = useCallback(async (list: SavedServer[]) => {
     setServers(list);
@@ -270,7 +269,7 @@ export function McpServersSettings() {
     try {
       const raw = JSON.parse(importText);
       const imported: SavedServer[] = parseServersFromRaw(raw);
-      if (imported.length === 0) throw new Error('无法识别的 JSON 格式');
+      if (imported.length === 0) throw new Error(t('mcpSettings.jsonFormatUnrecognized'));
       const byName = new Map(servers.map(s => [s.name, s] as const));
       for (const s of imported) byName.set(s.name, { ...s, enabled: true });
       const merged = Array.from(byName.values());
@@ -280,14 +279,14 @@ export function McpServersSettings() {
       await loadServers();
       setImportOpen(false);
       setImportText("");
-      toast.success("导入成功", { description: `共 ${imported.length} 条` });
+      toast.success(t('mcpSettings.importSuccess'), { description: t('mcpSettings.totalCount').replace('{0}', String(imported.length)) });
       if (renames.length) {
-        toast.info("已自动规避 MCP 保留名/重名", {
-          description: renames.map((r) => `${r.from} → ${r.to}`).join("，"),
+        toast.info(t('mcpSettings.serverRenamed'), {
+          description: renames.map((r) => `${r.from} → ${r.to}`).join(useLocaleStore.getState().locale === 'zh' ? '，' : ', '),
         });
       }
     } catch (e) {
-      setImportError('导入失败: ' + String(e));
+      setImportError(t('mcpSettings.importFailed').replace('{0}', () => String(e)));
     }
   };
 
@@ -376,14 +375,14 @@ export function McpServersSettings() {
         // store 内部已更新，这里无需再调用
       }
       if (e.type === "ERROR") {
-        setError(String(e.payload?.error ?? "未知错误"));
+        setError(String(e.payload?.error ?? t('error.unknown')));
       }
     });
 
     // validateStatus removed（状态一致性由单一来源保证）
 
     return () => { off(); };
-  }, [loadServers, setServerStatuses]);
+  }, [loadServers, setServerStatuses, t]);
 
 
 
@@ -428,10 +427,17 @@ export function McpServersSettings() {
 
   const cancelEdit = () => setEditing(null);
 
+  function notifyStdioRefresh(config: McpServerConfig) {
+    if (!isStdioPackageRunner(config)) return;
+    toast.info(t('mcpSettings.refreshingConnection'), {
+      description: t('mcpSettings.refreshingHelp'),
+    });
+  }
+
   const persistEdit = async () => {
     if (!editing) return;
     const desiredName = editing.name.trim();
-    if (!desiredName) { setError("请输入名称"); return; }
+    if (!desiredName) { setError(t('mcpSettings.enterName')); return; }
 
     const existingNames = servers
       .map((s) => s.name)
@@ -439,7 +445,7 @@ export function McpServersSettings() {
     const { name } = resolveNonConflictingServerName({ desiredName, existingNames });
     if (name !== desiredName) {
       setEditing({ ...editing, name });
-      toast.info("已自动规避 MCP 保留名/重名", { description: `${desiredName} → ${name}` });
+      toast.info(t('mcpSettings.serverRenamed'), { description: `${desiredName} → ${name}` });
     }
 
     const exists = servers.find((s) => s.name === name);
@@ -463,12 +469,12 @@ export function McpServersSettings() {
         await serverManager.startServer(s.name, s.config);
         setError("");
         // 状态由 ServerManager 事件更新
-        toast.success("已保存并连接", { description: `${s.name} · 连接成功` });
+        toast.success(t('mcpSettings.savedAndConnected'), { description: t('mcpSettings.connectionDetail').replace('{0}', () => s.name) });
       }
     } catch (e) {
       setError(String(e));
       // 失败时状态由 ServerManager 更新
-      toast.error("保存成功但连接失败", { description: formatMcpConnectError(e) });
+      toast.error(t('mcpSettings.savedButConnectionFailed'), { description: formatMcpConnectError(e, t('mcpSettings.missingRunnerHelp')) });
     }
   };
 
@@ -498,11 +504,11 @@ export function McpServersSettings() {
       notifyStdioRefresh(s.config);
       await serverManager.startServer(s.name, s.config);
       setError("");
-      toast.success("连接成功", { description: `${s.name} · 连接成功` });
+      toast.success(t('mcpSettings.connected'), { description: t('mcpSettings.connectionDetail').replace('{0}', () => s.name) });
     } catch (e) {
       setError(String(e));
       // 失败时状态由 ServerManager 更新
-      toast.error("连接失败", { description: formatMcpConnectError(e) });
+      toast.error(t('mcpSettings.connectionFailed'), { description: formatMcpConnectError(e, t('mcpSettings.missingRunnerHelp')) });
     }
     setLoadingMap(prev => ({ ...prev, [s.name]: false }));
   };
@@ -510,8 +516,8 @@ export function McpServersSettings() {
   const disconnect = async (name: string) => {
     setLoadingMap(prev => ({ ...prev, [name]: true }));
     setError("");
-    try { await serverManager.stopServer(name); setError(""); toast.success("已断开", { description: name }); }
-    catch (e) { setError(String(e)); toast.error("断开失败", { description: trimToastDescription(e) }); }
+    try { await serverManager.stopServer(name); setError(""); toast.success(t('mcpSettings.disconnected'), { description: name }); }
+    catch (e) { setError(String(e)); toast.error(t('mcpSettings.disconnectFailed'), { description: trimToastDescription(e) }); }
     // 状态和工具缓存清理由 ServerManager.stopServer 处理
     setLoadingMap(prev => ({ ...prev, [name]: false }));
   };
@@ -549,7 +555,7 @@ export function McpServersSettings() {
         }
         setEditingJsonError("");
       } catch (e) {
-        setEditingJsonError('JSON 解析失败: ' + String(e));
+        setEditingJsonError(t('mcpSettings.jsonParseFailed').replace('{0}', () => String(e)));
       }
     };
     const isCmdWrap = config.type === 'stdio' && config.command === 'cmd' && Array.isArray(config.args) && config.args[0] === '/c';
@@ -572,17 +578,17 @@ export function McpServersSettings() {
         await serverManager.startServer(name || 'mcp-test', config);
         const tools = await serverManager.listTools(name || 'mcp-test').catch(()=>[]);
         setError("");
-        toast.success("测试连接成功", { description: `Tools: ${Array.isArray(tools)?tools.length:0}` });
+        toast.success(t('mcpSettings.testConnectionSuccess'), { description: t('mcpSettings.toolCount').replace('{0}', String(Array.isArray(tools) ? tools.length : 0)) });
       } catch (e) {
         setError(String(e));
-        toast.error("测试连接失败", { description: formatMcpConnectError(e) });
+        toast.error(t('mcpSettings.testConnectionFailed'), { description: formatMcpConnectError(e, t('mcpSettings.missingRunnerHelp')) });
       }
     };
     return (
       <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-4 bg-white dark:bg-slate-900 shadow-sm glass-panel">
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-slate-50 dark:border-slate-700 pb-3">
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{isAdding ? '新增服务器' : '编辑服务器'}</h3>
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t(isAdding ? 'mcpSettings.addServer' : 'mcpSettings.editServer')}</h3>
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -590,18 +596,18 @@ export function McpServersSettings() {
                   className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 text-sm" 
                   onClick={()=>{ if (!editingJsonMode) buildEditingJson(); setEditingJsonMode(!editingJsonMode); }}
                 >
-                  {editingJsonMode ? '切换到表单' : '切换到 JSON'}
+                  {t(editingJsonMode ? 'mcpSettings.switchToForm' : 'mcpSettings.switchToJson')}
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{editingJsonMode ? '切换到表单编辑模式' : '切换到 JSON 编辑模式'}</p>
+                <p>{t(editingJsonMode ? 'mcpSettings.switchToFormHelp' : 'mcpSettings.switchToJsonHelp')}</p>
               </TooltipContent>
             </Tooltip>
             {/* 统一右上角关闭样式 */}
             <button
               onClick={cancelEdit}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200"
-              aria-label="关闭"
+              aria-label={t('window.close')}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -616,23 +622,24 @@ export function McpServersSettings() {
             {/* 基本信息 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">名称</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.name')}</label>
                 <input 
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-500/40 focus:border-transparent transition-all duration-200 text-sm bg-white dark:bg-slate-800/70 text-slate-900 dark:text-slate-100" 
+                  aria-label={t('mcpSettings.name')}
                   value={name} 
                   onChange={(e)=>setEditing({ name: e.target.value, config })} 
-                  placeholder="输入服务器名称"
+                  placeholder={t('mcpSettings.enterName')}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">传输类型</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.transport')}</label>
                 <Select
                 
                   value={type}
                   onValueChange={(value) => setEditing({ name, config: { ...config, type: value as TransportType } })}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择传输类型" />
+                  <SelectTrigger aria-label={t('mcpSettings.transport')}>
+                    <SelectValue placeholder={t('mcpSettings.chooseTransport')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="stdio">stdio</SelectItem>
@@ -648,19 +655,21 @@ export function McpServersSettings() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">命令</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.command')}</label>
                     <input 
                       className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-500/40 focus:border-transparent transition-all duration-200 text-sm bg-white dark:bg-slate-800/70 text-slate-900 dark:text-slate-100" 
+                      aria-label={t('mcpSettings.command')}
                       value={config.command || ""} 
                       onChange={(e)=>setConfig({ command: e.target.value })} 
-                      placeholder="例如: npx"
+                      placeholder={t('mcpSettings.commandExample')}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">参数</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.arguments')}</label>
                     <input 
                       className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-500/40 focus:border-transparent transition-all duration-200 text-sm bg-white dark:bg-slate-800/70 text-slate-900 dark:text-slate-100" 
-                      placeholder="以空格分隔" 
+                      aria-label={t('mcpSettings.arguments')}
+                      placeholder={t('mcpSettings.argumentHelp')}
                       value={(config.args||[]).join(" ")} 
                       onChange={(e)=>setConfig({ args: e.target.value.trim() ? e.target.value.split(/\s+/g) : [] })} 
                     />
@@ -668,10 +677,11 @@ export function McpServersSettings() {
                 </div>
                 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">环境变量</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.environmentVariables')}</label>
                   <input 
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-500/40 focus:border-transparent transition-all duration-200 text-sm bg-white dark:bg-slate-800/70 text-slate-900 dark:text-slate-100" 
                     placeholder="KEY=VALUE,KEY2=VALUE2" 
+                    aria-label={t('mcpSettings.environmentVariables')}
                     value={(config.env||[]).map(([k,v])=>`${k}=${v}`).join(", ")} 
                     onChange={(e)=>{
                       const items = e.target.value.split(/,|\n/g).map(s=>s.trim()).filter(Boolean);
@@ -685,29 +695,32 @@ export function McpServersSettings() {
                 <div className="flex items-center gap-2">
                   <input 
                     type="checkbox" 
+                    aria-label={t('mcpSettings.windowsCompatibility')}
                     checked={isCmdWrap} 
                     onChange={toggleCmdWrap}
                     className="w-4 h-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded-md focus:ring-blue-500"
                   />
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Windows 兼容（cmd /c 包装）</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-400">{t('mcpSettings.windowsCompatibility')}</span>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Base URL</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.baseUrl')}</label>
                   <input 
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-500/40 focus:border-transparent transition-all duration-200 text-sm bg-white dark:bg-slate-800/70 text-slate-900 dark:text-slate-100" 
                     placeholder="http(s)://..." 
+                    aria-label={t('mcpSettings.baseUrl')}
                     value={config.baseUrl || ""} 
                     onChange={(e)=>setConfig({ baseUrl: e.target.value })} 
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">请求头</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.headers')}</label>
                   <input 
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-500/40 focus:border-transparent transition-all duration-200 text-sm bg-white dark:bg-slate-800/70 text-slate-900 dark:text-slate-100" 
                     placeholder="Authorization=Bearer xxx, X-Api-Key=xxx" 
+                    aria-label={t('mcpSettings.headers')}
                     value={(config.headers||[]).map(([k,v])=>`${k}=${v}`).join(", ")} 
                     onChange={(e)=>{
                       const items = e.target.value.split(/,|\n/g).map(s=>s.trim()).filter(Boolean);
@@ -725,7 +738,7 @@ export function McpServersSettings() {
             {!isAdding ? (
               <>
                 <div className="text-sm text-slate-600 dark:text-slate-400">
-                  JSON 编辑（可直接粘贴配置，支持 name/type/command/args/env 或 baseUrl/headers）
+                  {t('mcpSettings.jsonEditHelp')}
                 </div>
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                   <div className="flex">
@@ -733,12 +746,13 @@ export function McpServersSettings() {
                       {editingJsonText.split('\n').map((_,i)=>String(i+1)).join('\n')}
                     </pre>
                     <textarea 
+                      aria-label={t('mcpSettings.jsonConfig')}
                       value={editingJsonText} 
                       onChange={(e)=>setEditingJsonText(e.target.value)} 
                       onScroll={(e)=>{ if(importNumsRef.current){ importNumsRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop; } }} 
                       className="flex-1 font-mono text-sm p-2 leading-6 bg-white dark:bg-slate-900 outline-none resize-none" 
                       style={{maxHeight:200}} 
-                      placeholder="在此粘贴 JSON 配置..."
+                      placeholder={t('mcpSettings.pasteJson')}
                     />
                   </div>
                 </div>
@@ -754,11 +768,11 @@ export function McpServersSettings() {
                         className="px-3 py-1.5 rounded-lg border border-slate-200/70 text-slate-700 hover:bg-slate-100/60 dark:border-slate-600/50 dark:text-slate-200 dark:hover:bg-slate-800/40 transition-colors text-sm" 
                         onClick={applyEditingJson}
                       >
-                        应用到表单
+                        {t('mcpSettings.applyToForm')}
                       </button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>将 JSON 配置应用到表单中</p>
+                      <p>{t('mcpSettings.applyToFormHelp')}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -766,7 +780,7 @@ export function McpServersSettings() {
             ) : (
               <>
                 <div className="text-sm text-slate-600 dark:text-slate-400">
-                  快速新增：粘贴整段 MCP 配置，自动识别 {`{ mcpServers: { name: { command,args,env } | { url } } }`}、或通用 {`servers`} 数组/对象。
+                  {t('mcpSettings.quickAddHelp')}
                 </div>
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                   <div className="flex">
@@ -774,11 +788,12 @@ export function McpServersSettings() {
                       {addingJsonText.split('\n').map((_,i)=>String(i+1)).join('\n')}
                     </pre>
                   <textarea 
+                    aria-label={t('mcpSettings.jsonConfig')}
                     value={addingJsonText} 
                     onChange={(e)=>setAddingJsonText(e.target.value)} 
                     className="flex-1 font-mono text-sm p-3 leading-6 bg-white dark:bg-slate-900 outline-none resize-y" 
                     style={{height: 280}} 
-                    placeholder={`直接粘贴 JSON 配置并点击“解析并创建”。\n\n示例：\n{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/path/to/allowed/files\"]\n    },\n    \"git\": {\n      \"command\": \"uvx\",\n      \"args\": [\"mcp-server-git\", \"--repository\", \"path/to/git/repo\"]\n    },\n    \"github\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"],\n      \"env\": { \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"<YOUR_TOKEN>\" }\n    },\n    \"postgres\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-postgres\", \"postgresql://localhost/mydb\"]\n    }\n  }\n}`}
+                    placeholder={`${t('mcpSettings.quickAddExample')}\n{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/path/to/allowed/files\"]\n    },\n    \"git\": {\n      \"command\": \"uvx\",\n      \"args\": [\"mcp-server-git\", \"--repository\", \"path/to/git/repo\"]\n    },\n    \"github\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"],\n      \"env\": { \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"<YOUR_TOKEN>\" }\n    },\n    \"postgres\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-postgres\", \"postgresql://localhost/mydb\"]\n    }\n  }\n}`}
                   />
                   </div>
                 </div>
@@ -792,7 +807,7 @@ export function McpServersSettings() {
                     className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200" 
                     onClick={()=>{ setAddingJsonText(""); setEditingJsonError(""); }}
                   >
-                    清空
+                    {t('mcpSettings.clear')}
                   </button>
                   <button 
                     className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 transition-all duration-200 text-sm" 
@@ -800,14 +815,14 @@ export function McpServersSettings() {
                       try {
                         const raw = JSON.parse(addingJsonText||"{}");
                         const imported = parseServersFromRaw(raw);
-                        if (imported.length === 0) throw new Error('无法识别的 JSON 格式');
+                        if (imported.length === 0) throw new Error(t('mcpSettings.jsonFormatUnrecognized'));
                         if (imported.length === 1) {
                           // 单条则应用到表单，便于确认后保存
                           const s = imported[0];
                           setEditing({ name: s.name, config: s.config });
                           setEditingJsonMode(false);
                           setIsAdding(false);
-                          toast.success('已解析为单个服务器', { description: s.name });
+                          toast.success(t('mcpSettings.singleServerParsed'), { description: s.name });
                         } else {
                           const byName = new Map(servers.map(s => [s.name, s] as const));
                           for (const s of imported) byName.set(s.name, { ...s, enabled: true });
@@ -815,16 +830,16 @@ export function McpServersSettings() {
                           await saveServers(next);
                           setEditing(null);
                           setIsAdding(false);
-                          toast.success('已批量新增', { description: `共 ${imported.length} 条` });
+                          toast.success(t('mcpSettings.serversAdded'), { description: t('mcpSettings.totalCount').replace('{0}', String(imported.length)) });
                         }
                         setAddingJsonText("");
                         setEditingJsonError("");
                       } catch (e) {
-                        setEditingJsonError('JSON 解析失败: ' + String(e));
+                        setEditingJsonError(t('mcpSettings.jsonParseFailed').replace('{0}', () => String(e)));
                       }
                     }}
                   >
-                    解析并创建
+                    {t('mcpSettings.parseAndCreate')}
                   </button>
                 </div>
               </>
@@ -850,11 +865,11 @@ export function McpServersSettings() {
                 className="px-4 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-900 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white transition-colors text-sm" 
                 onClick={persistEdit}
               >
-                保存
+                {t('mcpSettings.save')}
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>保存服务器配置</p>
+              <p>{t('mcpSettings.saveServerHelp')}</p>
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -863,11 +878,11 @@ export function McpServersSettings() {
                 className="px-4 py-1.5 rounded-lg border border-slate-200/70 text-slate-700 hover:bg-slate-100/60 dark:border-slate-600/50 dark:text-slate-200 dark:hover:bg-slate-800/40 transition-colors text-sm" 
                 onClick={testConnect}
               >
-                测试连接
+                {t('mcpSettings.testConnection')}
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>测试服务器连接</p>
+              <p>{t('mcpSettings.testConnectionHelp')}</p>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -875,6 +890,8 @@ export function McpServersSettings() {
       </div>
     );
   };
+
+  const [beforeServerName, afterServerName] = t('mcpSettings.deleteDescription').split('{0}');
 
   return (
     <TooltipProvider>
@@ -894,32 +911,35 @@ export function McpServersSettings() {
               <TooltipTrigger asChild>
                 <button 
                   className="w-7 h-7 rounded-md flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  aria-label={t('mcpSettings.addServer')}
                   onClick={beginAdd}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="text-xs">新增服务器</p>
+                <p className="text-xs">{t('mcpSettings.addServer')}</p>
               </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button 
                   className="w-7 h-7 rounded-md flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  aria-label={t('mcpSettings.import')}
                   onClick={()=>{ setImportOpen(true); setImportText(""); }}
                 >
                   <Upload className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="text-xs">导入配置</p>
+                <p className="text-xs">{t('mcpSettings.import')}</p>
               </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button 
                   className="w-7 h-7 rounded-md flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  aria-label={t('mcpSettings.export')}
                   onClick={async()=>{
                     try {
                       // 参考 AdvancedSettings 的下载服务，兼容 macOS/Tauri
@@ -942,9 +962,9 @@ export function McpServersSettings() {
                           URL.revokeObjectURL(url);
                         }
                       }
-                      toast.success('已导出 MCP 配置');
+                      toast.success(t('mcpSettings.exportSuccess'));
                     } catch (e) {
-                      toast.error('导出失败', { description: trimToastDescription(e) });
+                      toast.error(t('mcpSettings.exportFailed'), { description: trimToastDescription(e) });
                     }
                   }}
                 >
@@ -952,7 +972,7 @@ export function McpServersSettings() {
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="text-xs">导出配置</p>
+                <p className="text-xs">{t('mcpSettings.export')}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -963,24 +983,26 @@ export function McpServersSettings() {
               <TooltipTrigger asChild>
                 <button
                   className="w-7 h-7 rounded-md flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  aria-label={t('mcpSettings.recheckDependencies')}
                   onClick={() => void envHealth.reload()}
-                  title="重新检测"
+                  title={t('mcpSettings.recheckDependencies')}
                 >
                   <RefreshCw className={cn("w-4 h-4", envHealth.loading && "animate-spin")} />
                 </button>
               </TooltipTrigger>
-              <TooltipContent><p className="text-xs">重新检测依赖</p></TooltipContent>
+              <TooltipContent><p className="text-xs">{t('mcpSettings.recheckDependencies')}</p></TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   className="w-7 h-7 rounded-md flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                  aria-label={t('mcpSettings.advancedTitle')}
                   onClick={() => setAdvDialogOpen(true)}
                 >
                   <Settings className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent><p className="text-xs">高级设置</p></TooltipContent>
+              <TooltipContent><p className="text-xs">{t('mcpSettings.advancedTitle')}</p></TooltipContent>
             </Tooltip>
           </div>
         </div>
@@ -996,10 +1018,11 @@ export function McpServersSettings() {
                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                 </svg>
-                导入 MCP 配置
+                {t('mcpSettings.importTitle')}
               </h3>
             </div>
             <button
+              aria-label={t('window.close')}
               onClick={() => { setImportOpen(false); setImportText(""); }}
               className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200"
             >
@@ -1011,17 +1034,17 @@ export function McpServersSettings() {
 
           {/* 格式说明 */}
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            支持多种 JSON 格式，自动识别并转换
+            {t('mcpSettings.importHelp')}
           </div>
           
           {/* 输入区域 */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">JSON 配置</label>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.jsonConfig')}</label>
               <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>{importText.split('\n').length} 行</span>
+                <span>{t('mcpSettings.lineCount').replace('{0}', String(importText.split('\n').length))}</span>
                 <span>•</span>
-                <span>{importText.length} 字符</span>
+                <span>{t('mcpSettings.characterCount').replace('{0}', String(importText.length))}</span>
               </div>
             </div>
             <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
@@ -1033,9 +1056,10 @@ export function McpServersSettings() {
                   ref={importAreaRef} 
                   onScroll={(e)=>{ if(importNumsRef.current){ importNumsRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop; } }} 
                   className="flex-1 font-mono text-sm p-3 leading-6 bg-white dark:bg-slate-900 outline-none resize-none focus:ring-0 focus:border-transparent" 
+                  aria-label={t('mcpSettings.jsonConfig')}
                   value={importText} 
                   onChange={(e)=>setImportText(e.target.value)}
-                  placeholder={`格式一:
+                  placeholder={`${t('mcpSettings.formatOne')}
 {
   "mcpServers": {
     "filesystem": {
@@ -1045,7 +1069,7 @@ export function McpServersSettings() {
   }
 }
 
-格式二:
+${t('mcpSettings.formatTwo')}
 {
   "servers": [
     {
@@ -1075,7 +1099,7 @@ export function McpServersSettings() {
           {/* 操作按钮 */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
             <div className="text-xs text-slate-500">
-              {importText.trim() ? '准备导入配置' : '请粘贴 JSON 配置'}
+              {t(importText.trim() ? 'mcpSettings.importReady' : 'mcpSettings.pasteJson')}
             </div>
             <div className="flex gap-2">
               {/* 统一右上角关闭，不再保留取消 */}
@@ -1088,7 +1112,7 @@ export function McpServersSettings() {
                 onClick={importFromJson}
                 disabled={!importText.trim()}
               >
-                导入配置
+                {t('mcpSettings.import')}
               </button>
             </div>
           </div>
@@ -1096,7 +1120,7 @@ export function McpServersSettings() {
       )}
 
       <div className="space-y-2">
-        {servers.length === 0 && <div className="text-[11px] text-slate-400 py-4 text-center">尚未添加服务器</div>}
+        {servers.length === 0 && <div className="text-[11px] text-slate-400 py-4 text-center">{t('mcpSettings.noServers')}</div>}
         {servers.map((s) => {
           const st = serverStatuses[s.name] || "disconnected";
           const toolsCache = useMcpStore.getState().toolsCache[s.name];
@@ -1127,14 +1151,14 @@ export function McpServersSettings() {
                     ) : (
                       <XCircle className="w-2.5 h-2.5" />
                     )}
-                    {st === 'connected' ? '已连接' : 
-                     st === 'connecting' ? '连接中' : 
-                     st === 'error' ? '连接失败' : '未连接'}
+                    {t(st === 'connected' ? 'mcpSettings.connected' :
+                     st === 'connecting' ? 'mcpSettings.connecting' :
+                     st === 'error' ? 'mcpSettings.connectionFailed' : 'mcpSettings.disconnected')}
                   </span>
                   {toolCount > 0 && (
                     <McpToolListTip toolCount={toolCount} tools={tools as any}>
                       <span className="text-[10px] text-slate-400 cursor-help hover:text-slate-600 dark:hover:text-slate-300">
-                        {toolCount} 工具
+                        {t('mcpSettings.toolCount').replace('{0}', String(toolCount))}
                       </span>
                     </McpToolListTip>
                   )}
@@ -1142,6 +1166,7 @@ export function McpServersSettings() {
                 {/* 右侧：操作按钮 */}
                 <div className="flex items-center gap-1">
                   <Checkbox
+                    aria-label={t('mcpSettings.enableServer').replace('{0}', () => s.name)}
                     checked={s.enabled !== false}
                     onCheckedChange={(checked) => {
                       const next = servers.map(x => x.name === s.name ? { ...x, enabled: !!checked } : x);
@@ -1153,27 +1178,27 @@ export function McpServersSettings() {
                     className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors disabled:opacity-50"
                     disabled={!!loadingMap[s.name]} 
                     onClick={()=>connect(s)}
-                    title="刷新连接"
+                    title={t('mcpSettings.refreshConnection')}
                   >
                     {loadingMap[s.name] ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                   </button>
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
-                      <button className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors">
+                      <button aria-label={t('mcpSettings.serverActions').replace('{0}', () => s.name)} className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors">
                         <MoreVertical className="w-3.5 h-3.5" />
                       </button>
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content className="z-50 w-40 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg py-1 text-xs" sideOffset={4} align="end">
                         <DropdownMenu.Item onSelect={() => beginEdit(s)} className="flex items-center gap-2 px-3 py-1.5 outline-none hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-slate-600 dark:text-slate-300">
-                          <Edit className="w-3.5 h-3.5" /> 编辑
+                          <Edit className="w-3.5 h-3.5" /> {t('mcpSettings.edit')}
                         </DropdownMenu.Item>
                         <DropdownMenu.Item onSelect={() => { setConfigServerName(s.name); setServerConfigDialogOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 outline-none hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-slate-600 dark:text-slate-300">
-                          <Settings className="w-3.5 h-3.5" /> 配置
+                          <Settings className="w-3.5 h-3.5" /> {t('mcpSettings.configure')}
                         </DropdownMenu.Item>
                         <DropdownMenu.Separator className="my-1 h-px bg-slate-200 dark:bg-slate-700" />
                         <DropdownMenu.Item onSelect={() => remove(s.name)} className="flex items-center gap-2 px-3 py-1.5 text-red-500 outline-none hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer">
-                          <Trash2 className="w-3.5 h-3.5" /> 删除
+                          <Trash2 className="w-3.5 h-3.5" /> {t('mcpSettings.delete')}
                         </DropdownMenu.Item>
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
@@ -1191,14 +1216,15 @@ export function McpServersSettings() {
             {exportText && (
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 space-y-4 bg-white dark:bg-slate-900 shadow-sm glass-panel">
           <div className="border-b border-slate-100 pb-4">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">导出 JSON</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">可复制保存为 mcp.json</p>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">{t('mcpSettings.exportJson')}</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{t('mcpSettings.exportHelp')}</p>
           </div>
           
           <div className="space-y-3">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">配置内容</label>
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('mcpSettings.configContents')}</label>
             <textarea 
               className="w-full h-40 border border-slate-200 dark:border-slate-700 rounded-lg p-3 font-mono text-sm bg-slate-50 dark:bg-slate-800 resize-none" 
+              aria-label={t('mcpSettings.configContents')}
               value={exportText} 
               readOnly 
             />
@@ -1213,7 +1239,7 @@ export function McpServersSettings() {
            <button
              onClick={() => setDeleteDialogOpen(false)}
              className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
-             aria-label="关闭"
+             aria-label={t('window.close')}
            >
              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1221,15 +1247,15 @@ export function McpServersSettings() {
            </button>
            
            <AlertDialogHeader className="pr-8">
-             <AlertDialogTitle>确认删除</AlertDialogTitle>
+             <AlertDialogTitle>{t('mcpSettings.deleteTitle')}</AlertDialogTitle>
              <AlertDialogDescription>
-               确定要删除服务器 <span className="font-medium">{serverToDelete}</span> 吗？此操作无法撤销。
+               {beforeServerName}<span className="font-medium">{serverToDelete}</span>{afterServerName}
              </AlertDialogDescription>
            </AlertDialogHeader>
            <AlertDialogFooter>
-             <AlertDialogCancel onClick={cancelDelete}>取消</AlertDialogCancel>
+             <AlertDialogCancel onClick={cancelDelete}>{t('common.cancel')}</AlertDialogCancel>
              <AlertDialogAction onClick={confirmDelete}>
-               删除
+               {t('mcpSettings.delete')}
              </AlertDialogAction>
            </AlertDialogFooter>
          </AlertDialogContent>
@@ -1247,10 +1273,7 @@ export function McpServersSettings() {
           open={serverConfigDialogOpen}
           onOpenChange={setServerConfigDialogOpen}
           serverName={configServerName}
-          globalDefaults={{
-            autoAuthorize: defaultAutoAuth,
-            maxRecursionDepth: maxDepthValue,
-          }}
+          globalDefaults={globalDefaults}
       />
       </div>
     </TooltipProvider>
