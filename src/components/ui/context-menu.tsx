@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
 
 // Tauri Menu API imports
 interface MenuOptions {
@@ -167,6 +169,7 @@ export async function popupNativeMenu(
 
 // 预定义的菜单项创建函数
 export const createConversationMenuItems = (
+  locale: Locale,
   conversationId: string,
   isStarred: boolean,
   onEdit: (id: string) => void,
@@ -178,7 +181,7 @@ export const createConversationMenuItems = (
 ): MenuItem[] => [
   {
     id: 'edit',
-    text: '重命名对话',
+    text: translate(locale, 'conversation.rename'),
     action: () => onEdit(conversationId)
   },
   {
@@ -188,7 +191,7 @@ export const createConversationMenuItems = (
   },
   {
     id: 'export',
-    text: '导出对话',
+    text: translate(locale, 'conversation.export'),
     action: () => onExport?.(conversationId),
     enabled: !!onExport
   },
@@ -199,12 +202,12 @@ export const createConversationMenuItems = (
   },
   {
     id: 'star',
-    text: isStarred ? '取消收藏' : '收藏对话',
+    text: translate(locale, isStarred ? 'conversation.unfavorite' : 'conversation.favorite'),
     action: () => onStar(conversationId)
   },
   {
     id: 'duplicate',
-    text: '复制对话',
+    text: translate(locale, 'conversation.duplicate'),
     action: () => onDuplicate?.(conversationId),
     enabled: !!onDuplicate
   },
@@ -216,12 +219,13 @@ export const createConversationMenuItems = (
   ...(archive ? [{ id: 'archive', ...archive }] : []),
   {
     id: 'delete',
-    text: '删除对话',
+    text: translate(locale, 'conversation.delete'),
     action: () => onDelete(conversationId)
   }
 ];
 
 export const createMessageMenuItems = (
+  locale: Locale,
   messageId: string,
   content: string,
   isAssistant: boolean,
@@ -234,7 +238,7 @@ export const createMessageMenuItems = (
   const items: MenuItem[] = [
     {
       id: 'copy',
-      text: '复制内容',
+      text: translate(locale, 'chatMessage.copyContent'),
       action: () => onCopy(content)
     }
   ];
@@ -248,7 +252,7 @@ export const createMessageMenuItems = (
       },
       {
         id: 'edit',
-        text: '编辑消息',
+        text: translate(locale, 'chatMessage.editMessage'),
         action: () => onEdit(messageId)
       }
     );
@@ -263,7 +267,7 @@ export const createMessageMenuItems = (
       },
       {
         id: 'retry',
-        text: '重新生成',
+        text: translate(locale, 'chatGeneration.regenerate'),
         action: () => onRetry(messageId)
       }
     );
@@ -278,7 +282,7 @@ export const createMessageMenuItems = (
       },
       {
         id: 'star',
-        text: '收藏回答',
+        text: translate(locale, 'chatMessage.starAnswer'),
         action: () => onStar(messageId)
       }
     );
@@ -293,7 +297,7 @@ export const createMessageMenuItems = (
       },
       {
         id: 'delete',
-        text: '删除消息',
+        text: translate(locale, 'chatMessage.deleteMessage'),
         action: () => onDelete(messageId)
       }
     );

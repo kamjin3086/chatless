@@ -1,3 +1,5 @@
+import type { TranslationKey } from '@/i18n/types';
+
 export type CatalogStrategy =
   | 'openai'               // OpenAI 官方
   | 'openai-responses'     // OpenAI Responses (/responses)
@@ -14,14 +16,14 @@ export interface CatalogProviderDef {
   strategy: CatalogStrategy;
   requiresKey: boolean;
   defaultUrl?: string;
-  notes?: string;
+  notesKey?: TranslationKey;
   staticModels?: Array<{ id: string; label?: string }>; // 可选：静态模型清单
 }
 
 // 可添加的 Provider 清单（本地 / 热门 / 常见网关优先，冷门靠后）
 export const AVAILABLE_PROVIDERS_CATALOG: CatalogProviderDef[] = [
   // —— 本地 / 免密优先 ——
-  { id: 'lemonade', name: 'Lemonade', strategy: 'openai-compatible', requiresKey: false, defaultUrl: 'http://localhost:13305/api/v1', notes: '本地 Lemonade Server，需先在服务端加载模型' },
+  { id: 'lemonade', name: 'Lemonade', strategy: 'openai-compatible', requiresKey: false, defaultUrl: 'http://localhost:13305/api/v1', notesKey: 'provider.chooser.note.lemonade' },
   { id: 'lmstudio', name: 'LM Studio', strategy: 'openai-compatible', requiresKey: false, defaultUrl: 'http://localhost:1234/v1' },
   { id: 'ollama', name: 'Ollama', strategy: 'ollama', requiresKey: false, defaultUrl: 'http://localhost:11434' },
 
@@ -53,7 +55,7 @@ export const AVAILABLE_PROVIDERS_CATALOG: CatalogProviderDef[] = [
     strategy: 'openai-responses',
     requiresKey: true,
     defaultUrl: 'https://api.openai.com/v1',
-    notes: '使用 /responses 端点，支持 reasoning 与工具调用预留',
+    notesKey: 'provider.chooser.note.openaiResponses',
   },
   {
     id: 'anthropic',
@@ -111,7 +113,7 @@ export const AVAILABLE_PROVIDERS_CATALOG: CatalogProviderDef[] = [
   { id: 'mistral', name: 'Mistral', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.mistral.ai/v1' },
   { id: 'perplexity', name: 'Perplexity', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.perplexity.ai' },
   { id: 'nvidia', name: 'NVIDIA', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://integrate.api.nvidia.com/v1' },
-  { id: 'voyageai', name: 'VoyageAI', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.voyageai.com/v1', notes: 'Embedding 专用接口，不适合作为聊天模型 Provider' },
+  { id: 'voyageai', name: 'VoyageAI', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.voyageai.com/v1', notesKey: 'provider.chooser.note.voyageai' },
   { id: 'hyperbolic', name: 'Hyperbolic', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.hyperbolic.xyz/v1' },
   { id: 'jina', name: 'Jina', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.jina.ai/v1' },
   { id: 'together', name: 'Together', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.together.xyz/v1' },
@@ -142,7 +144,7 @@ export const AVAILABLE_PROVIDERS_CATALOG: CatalogProviderDef[] = [
   { id: 'burncloud', name: 'BurnCloud', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://ai.burncloud.com/v1' },
   { id: 'grok', name: 'Grok', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.x.ai' },
   { id: 'gptgod', name: 'GPT-GOD', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://api.gptgod.online/v1' },
-  { id: 'ph8', name: 'PH8', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://ph8.co/v1', notes: '海外模型已下线，国内模型仍可用' },
+  { id: 'ph8', name: 'PH8', strategy: 'openai-compatible', requiresKey: true, defaultUrl: 'https://ph8.co/v1', notesKey: 'provider.chooser.note.ph8' },
 ];
 
 

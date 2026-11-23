@@ -6,6 +6,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/components/ui/sonner';
 import { withOneShotGrant } from '@/lib/filesystemAllowlist/oneShotGrant';
 import { fileHistory, restoreFileVersion, type FileHistoryVersion } from '@/lib/tauri/filesystemCommands';
+import { useTranslation } from '@/i18n/useTranslation';
+import type { TranslationKey } from '@/i18n/types';
 
 /**
  * 覆盖/编辑前的版本清单，点一下就能恢复。
@@ -13,15 +15,16 @@ import { fileHistory, restoreFileVersion, type FileHistoryVersion } from '@/lib/
  * 历史保存在应用数据目录（不写进用户目录），所以这里只显示时间、大小和来源操作。
  */
 /** 后端拒绝读取时，给出可执行的原因而不是一句原始错误。 */
-function describeHistoryError(error: unknown): string {
+function describeHistoryError(error: unknown, t: (key: TranslationKey) => string): string {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes('forbidden')) {
-    return '这个文件当前不在授权范围内。让 Agent 再读一次该文件，或把它所在的目录附加为工作目录后再试。';
+    return t('chatUi.fileHistory.forbidden');
   }
   return message;
 }
 
 export function FileHistoryPopover({ path, disabled }: { path: string; disabled?: boolean }) {
+  const t = useTranslation();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -37,7 +40,7 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
         (scope) => fileHistory(path, scope));
       setVersions(result?.versions || []);
     } catch (e) {
-      setError(describeHistoryError(e));
+      setError(describeHistoryError(e, t));
       setVersions([]);
     } finally {
       setLoading(false);
@@ -51,10 +54,10 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
         { path, scope: 'restore', read: true, write: true },
         (scope) => restoreFileVersion(path, version.id, scope),
       );
-      toast.success('已恢复该版本', { description: new Date(version.createdAt).toLocaleString() });
+      toast.success(t('chatUi.fileHistory.restored'), { description: new Date(version.createdAt).toLocaleString() });
       await load();
     } catch (e) {
-      toast.error('恢复失败', { description: describeHistoryError(e) });
+      toast.error(t('chatUi.fileHistory.restoreFailed'), { description: describeHistoryError(e, t) });
     } finally {
       setRestoring(null);
     }
@@ -72,8 +75,8 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
         <button
           type="button"
           disabled={disabled}
-          title="历史版本"
-          aria-label="历史版本"
+          title={t('chatUi.fileHistory.title')}
+          aria-label={t('chatUi.fileHistory.title')}
           className="inline-flex items-center rounded-md px-1 py-0.5 text-slate-400 hover:text-slate-600
             dark:hover:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -81,11 +84,11 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-2" onClick={(e) => e.stopPropagation()}>
-        <div className="px-1 pb-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">历史版本</div>
-        {loading && <div className="px-1 py-2 text-[11px] text-slate-400">读取中…</div>}
+        <div className="px-1 pb-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">{t('chatUi.fileHistory.title')}</div>
+        {loading && <div className="px-1 py-2 text-[11px] text-slate-400">{t('chatUi.fileHistory.loading')}</div>}
         {!loading && error && <div className="px-1 py-2 text-[11px] text-red-500">{error}</div>}
         {!loading && !error && versions?.length === 0 && (
-          <div className="px-1 py-2 text-[11px] text-slate-400">这个文件还没有被覆盖过。</div>
+          <div className="px-1 py-2 text-[11px] text-slate-400">{t('chatUi.fileHistory.empty')}</div>
         )}
         {!loading && !!versions?.length && (
           <div className="max-h-56 overflow-y-auto">
@@ -108,16 +111,14 @@ export function FileHistoryPopover({ path, disabled }: { path: string; disabled?
                     disabled:opacity-40"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  恢复
+                  {t('chatUi.fileHistory.restore')}
                 </button>
               </div>
             ))}
           </div>
         )}
         <div className="px-1 pt-1.5 text-[10px] text-slate-400">
-          应用内写入与编辑会先存一份副本，每个文件最多保留 20 版（总量约 200MB）。
-          恢复前也会把当前内容存成历史，所以恢复本身可以再撤销。
-          通过终端或外部编辑器做的修改不在此列。
+          {t('chatUi.fileHistory.footerNote')}
         </div>
       </PopoverContent>
     </Popover>

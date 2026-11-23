@@ -6,9 +6,12 @@ import { SettingsCard, SettingsPageHeader } from "./SettingsCard";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { SelectField } from "./SelectField";
 import { ToggleSwitch } from "./ToggleSwitch";
-import { useWebSearchStore, type SearchProvider } from "@/store/webSearchStore";
+import { useWebSearchStore, type SearchProvider, type WebSearchConfig } from "@/store/webSearchStore";
 import { linkOpener } from "@/lib/utils/linkOpener";
-import { providerOptions } from "@/lib/websearch/registry";
+import { providerLabel, providerOptions } from "@/lib/websearch/registry";
+import { getHtmlLang } from "@/i18n";
+import { useTranslation } from "@/i18n/useTranslation";
+import { useLocaleStore } from "@/store/localeStore";
 
 const inputClass = "w-full h-8 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none";
 
@@ -23,119 +26,135 @@ function Field({ label, value, type = "text", placeholder, onChange }: {
   </label>;
 }
 
-function DocsLink({ url }: { url: string }) {
+function DocsLink({ url, label }: { url: string; label: string }) {
   return <button onClick={() => void linkOpener.openLink(url)}
     className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-600">
-    <ExternalLink className="w-3 h-3" /> 官方文档
+    <ExternalLink className="w-3 h-3" /> {label}
   </button>;
 }
 
 export function WebSearchSettings() {
   const store = useWebSearchStore();
+  const t = useTranslation();
+  const locale = useLocaleStore((state) => state.locale);
   const available = useMemo(() => store.getAvailableProviders(), [
     store.apiKeyGoogle, store.cseIdGoogle, store.apiKeyBing, store.apiKeyOllama,
     store.apiKeyTavily, store.apiKeyBrave, store.searxngBaseUrl,
   ]);
+  const getProviderLabel = (provider: SearchProvider) =>
+    provider === 'custom_scrape' ? t('chatComposer.customSearchProvider') : providerLabel(provider);
+  const availableLabels = new Intl.ListFormat(getHtmlLang(locale), { style: 'narrow' })
+    .format(available.map(getProviderLabel));
+  const resultCountLabel = (max: number) => t('settings.webSearch.resultCount').replace('{0}', String(max));
+  const safeSearchOptions = (['off', 'moderate', 'strict'] as const)
+    .map(value => ({ value, label: t(`settings.webSearch.safeSearch.${value}`) }));
+  const docsLabel = t('settings.webSearch.docs');
 
   return <div className="space-y-4">
-    <SettingsPageHeader title="网络搜索" description="配置搜索服务、结果数量、区域语言和安全搜索策略。" />
+    <SettingsPageHeader title={t('settings.nav.webSearch')} description={t('settings.webSearch.description')} />
     <SettingsCard>
-      <SettingsSectionHeader icon={Globe} title="搜索配置" />
+      <SettingsSectionHeader icon={Globe} title={t('settings.webSearch.configuration')} />
       <div className="space-y-3">
-        <ToggleSwitch label="自动授权网络搜索" checked={store.autoAuthorizeWebSearch}
+        <ToggleSwitch label={t('settings.webSearch.autoAuthorize')} checked={store.autoAuthorizeWebSearch}
           onChange={(value) => store.setAutoAuthorizeWebSearch(!!value)}
-          tooltip="开启后，模型调用搜索工具时不再逐次确认。" />
-        <SelectField label="默认搜索引擎" value={store.provider}
+          tooltip={t('settings.webSearch.autoAuthorizeHelp')} />
+        <SelectField label={t('settings.webSearch.defaultProvider')} value={store.provider}
           onChange={(value) => store.setSearchProvider(value as SearchProvider)}
-          options={providerOptions() as any} />
+          options={providerOptions().map(({ value }) => ({ value, label: getProviderLabel(value) }))} />
 
         {store.provider === "google" && <div className="grid gap-2 pt-2 border-t">
-          <Field label="API Key" type="password" value={store.apiKeyGoogle}
+          <Field label={t('settings.webSearch.apiKey')} type="password" value={store.apiKeyGoogle}
             onChange={(v) => store.setGoogleCredentials(v, store.cseIdGoogle)} />
-          <Field label="Programmable Search Engine ID" value={store.cseIdGoogle}
+          <Field label={t('settings.webSearch.googleCseId')} value={store.cseIdGoogle}
             onChange={(v) => store.setGoogleCredentials(store.apiKeyGoogle, v)} />
-          <DocsLink url="https://developers.google.com/custom-search/v1/overview" />
+          <DocsLink url="https://developers.google.com/custom-search/v1/overview" label={docsLabel} />
         </div>}
 
         {store.provider === "bing" && <div className="space-y-2 pt-2 border-t">
-          <Field label="API Key" type="password" value={store.apiKeyBing} onChange={store.setBingCredentials} />
+          <Field label={t('settings.webSearch.apiKey')} type="password" value={store.apiKeyBing} onChange={store.setBingCredentials} />
         </div>}
 
         {store.provider === "ollama" && <div className="space-y-2 pt-2 border-t">
-          <Field label="API Key" type="password" value={store.apiKeyOllama} onChange={store.setOllamaApiKey} />
-          <Field label="结果数量（1–10）" type="number" value={store.ollamaMaxResults}
+          <Field label={t('settings.webSearch.apiKey')} type="password" value={store.apiKeyOllama} onChange={store.setOllamaApiKey} />
+          <Field label={resultCountLabel(10)} type="number" value={store.ollamaMaxResults}
             onChange={(v) => store.setOllamaAdvanced({ ollamaMaxResults: clamp(v, 1, 10) })} />
         </div>}
 
         {store.provider === "tavily" && <div className="grid gap-2 pt-2 border-t">
-          <Field label="API Key" type="password" value={store.apiKeyTavily}
+          <Field label={t('settings.webSearch.apiKey')} type="password" value={store.apiKeyTavily}
             onChange={(v) => store.setTavilyConfig({ apiKeyTavily: v })} />
-          <Field label="结果数量（1–20）" type="number" value={store.tavilyMaxResults}
+          <Field label={resultCountLabel(20)} type="number" value={store.tavilyMaxResults}
             onChange={(v) => store.setTavilyConfig({ tavilyMaxResults: clamp(v, 1, 20) })} />
-          <SelectField label="搜索深度" value={store.tavilySearchDepth}
-            onChange={(v) => store.setTavilyConfig({ tavilySearchDepth: v as any })}
-            options={["basic", "advanced", "fast", "ultra-fast"].map(value => ({ value, label: value })) as any} />
-          <SelectField label="主题" value={store.tavilyTopic}
-            onChange={(v) => store.setTavilyConfig({ tavilyTopic: v as any })}
-            options={["general", "news", "finance"].map(value => ({ value, label: value })) as any} />
-          <Field label="包含域名（逗号或空格分隔）" value={store.tavilyIncludeDomains}
+          <SelectField label={t('settings.webSearch.depth')} value={store.tavilySearchDepth}
+            onChange={(v) => store.setTavilyConfig({ tavilySearchDepth: v as WebSearchConfig['tavilySearchDepth'] })}
+            options={(['basic', 'advanced', 'fast', 'ultra-fast'] as const)
+              .map(value => ({ value, label: t(`settings.webSearch.depth.${value}`) }))} />
+          <SelectField label={t('settings.webSearch.topic')} value={store.tavilyTopic}
+            onChange={(v) => store.setTavilyConfig({ tavilyTopic: v as WebSearchConfig['tavilyTopic'] })}
+            options={(['general', 'news', 'finance'] as const)
+              .map(value => ({ value, label: t(`settings.webSearch.topic.${value}`) }))} />
+          <Field label={t('settings.webSearch.includeDomains')} value={store.tavilyIncludeDomains}
             onChange={(v) => store.setTavilyConfig({ tavilyIncludeDomains: v })} />
-          <Field label="排除域名（逗号或空格分隔）" value={store.tavilyExcludeDomains}
+          <Field label={t('settings.webSearch.excludeDomains')} value={store.tavilyExcludeDomains}
             onChange={(v) => store.setTavilyConfig({ tavilyExcludeDomains: v })} />
-          <DocsLink url="https://docs.tavily.com/documentation/api-reference/endpoint/search" />
+          <DocsLink url="https://docs.tavily.com/documentation/api-reference/endpoint/search" label={docsLabel} />
         </div>}
 
         {store.provider === "brave" && <div className="grid gap-2 pt-2 border-t">
-          <Field label="API Key" type="password" value={store.apiKeyBrave}
+          <Field label={t('settings.webSearch.apiKey')} type="password" value={store.apiKeyBrave}
             onChange={(v) => store.setBraveConfig({ apiKeyBrave: v })} />
-          <Field label="结果数量（1–20）" type="number" value={store.braveCount}
+          <Field label={resultCountLabel(20)} type="number" value={store.braveCount}
             onChange={(v) => store.setBraveConfig({ braveCount: clamp(v, 1, 20) })} />
-          <Field label="国家代码（如 CN、US，可空）" value={store.braveCountry}
+          <Field label={t('settings.webSearch.countryCode')} value={store.braveCountry}
             onChange={(v) => store.setBraveConfig({ braveCountry: v })} />
-          <Field label="搜索语言（如 zh-hans、en，可空）" value={store.braveSearchLang}
+          <Field label={t('settings.webSearch.searchLanguage')} value={store.braveSearchLang}
             onChange={(v) => store.setBraveConfig({ braveSearchLang: v })} />
-          <SelectField label="安全搜索" value={store.braveSafeSearch}
-            onChange={(v) => store.setBraveConfig({ braveSafeSearch: v as any })}
-            options={["off", "moderate", "strict"].map(value => ({ value, label: value })) as any} />
-          <ToggleSwitch label="返回额外摘要" checked={store.braveExtraSnippets}
+          <SelectField label={t('settings.webSearch.safeSearch')} value={store.braveSafeSearch}
+            onChange={(v) => store.setBraveConfig({ braveSafeSearch: v as WebSearchConfig['braveSafeSearch'] })}
+            options={safeSearchOptions} />
+          <ToggleSwitch label={t('settings.webSearch.extraSnippets')} checked={store.braveExtraSnippets}
             onChange={(v) => store.setBraveConfig({ braveExtraSnippets: !!v })} />
-          <DocsLink url="https://api-dashboard.search.brave.com/api-reference/web/search/get" />
+          <DocsLink url="https://api-dashboard.search.brave.com/api-reference/web/search/get" label={docsLabel} />
         </div>}
 
         {store.provider === "searxng" && <div className="grid gap-2 pt-2 border-t">
-          <Field label="实例地址" placeholder="https://searx.example.com" value={store.searxngBaseUrl}
+          <Field label={t('settings.webSearch.instanceUrl')} placeholder="https://searx.example.com" value={store.searxngBaseUrl}
             onChange={(v) => store.setSearxngConfig({ searxngBaseUrl: v })} />
-          <Field label="结果数量（1–20）" type="number" value={store.searxngLimit}
+          <Field label={resultCountLabel(20)} type="number" value={store.searxngLimit}
             onChange={(v) => store.setSearxngConfig({ searxngLimit: clamp(v, 1, 20) })} />
-          <Field label="语言" value={store.searxngLanguage}
+          <Field label={t('settings.webSearch.language')} value={store.searxngLanguage}
             onChange={(v) => store.setSearxngConfig({ searxngLanguage: v })} />
-          <Field label="分类（逗号分隔）" value={store.searxngCategories}
+          <Field label={t('settings.webSearch.categories')} value={store.searxngCategories}
             onChange={(v) => store.setSearxngConfig({ searxngCategories: v })} />
-          <SelectField label="安全搜索" value={String(store.searxngSafeSearch)}
-            onChange={(v) => store.setSearxngConfig({ searxngSafeSearch: Number(v) as 0|1|2 })}
-            options={[0, 1, 2].map(value => ({ value: String(value), label: ["关闭", "适中", "严格"][value] })) as any} />
-          <SelectField label="时间范围" value={store.searxngTimeRange}
-            onChange={(v) => store.setSearxngConfig({ searxngTimeRange: v as any })}
-            options={[["", "不限"], ["day", "一天"], ["month", "一月"], ["year", "一年"]].map(([value, label]) => ({ value, label })) as any} />
-          <DocsLink url="https://docs.searxng.org/dev/search_api.html" />
+          <SelectField label={t('settings.webSearch.safeSearch')} value={String(store.searxngSafeSearch)}
+            onChange={(v) => store.setSearxngConfig({ searxngSafeSearch: Number(v) as WebSearchConfig['searxngSafeSearch'] })}
+            options={safeSearchOptions.map(({ label }, value) => ({ value: String(value), label }))} />
+          <SelectField label={t('settings.webSearch.timeRange')} value={store.searxngTimeRange}
+            onChange={(v) => store.setSearxngConfig({ searxngTimeRange: v as WebSearchConfig['searxngTimeRange'] })}
+            options={[
+              { value: '', label: t('settings.webSearch.timeRange.any') },
+              ...(['day', 'month', 'year'] as const)
+                .map(value => ({ value, label: t(`settings.webSearch.timeRange.${value}`) })),
+            ]} />
+          <DocsLink url="https://docs.searxng.org/dev/search_api.html" label={docsLabel} />
         </div>}
 
         {(store.provider === "duckduckgo" || store.provider === "custom_scrape") &&
           <div className="grid gap-2 pt-2 border-t">
-            <Field label="结果数量（1–10）" type="number" value={store.ddgLimit}
+            <Field label={resultCountLabel(10)} type="number" value={store.ddgLimit}
               onChange={(v) => store.setDdgAdvanced({ ddgLimit: clamp(v, 1, 10) })} />
-            <Field label="区域/语言（如 cn-zh、us-en）" value={store.ddgKl}
+            <Field label={t('settings.webSearch.regionLanguage')} value={store.ddgKl}
               onChange={(v) => store.setDdgAdvanced({ ddgKl: v })} />
-            <Field label="Accept-Language（可空）" value={store.ddgAcceptLanguage}
+            <Field label={t('settings.webSearch.acceptLanguage')} value={store.ddgAcceptLanguage}
               onChange={(v) => store.setDdgAdvanced({ ddgAcceptLanguage: v })} />
-            <Field label="限定站点（可空）" value={store.ddgSite}
+            <Field label={t('settings.webSearch.restrictToSite')} value={store.ddgSite}
               onChange={(v) => store.setDdgAdvanced({ ddgSite: v })} />
-            <ToggleSwitch label="安全搜索" checked={store.ddgSafe}
+            <ToggleSwitch label={t('settings.webSearch.safeSearch')} checked={store.ddgSafe}
               onChange={(v) => store.setDdgAdvanced({ ddgSafe: !!v })} />
           </div>}
 
         <div className="pt-2 border-t text-[10px] text-slate-400">
-          已可用：{available.join("、")}
+          {t('settings.webSearch.available').replace('{0}', availableLabels)}
         </div>
       </div>
     </SettingsCard>

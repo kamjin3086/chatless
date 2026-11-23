@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/sonner';
 import { FileOpener } from '@/lib/utils/fileOpener';
 import { conversationSidebarRows, workspaceGroupName, workspaceGroupParent, workspacePath } from '@/lib/chat/conversationGroups';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useLocaleStore } from '@/store/localeStore';
 import { useUiPreferences } from '@/store/uiPreferences';
 import FoldingLoader from '@/components/ui/FoldingLoader';
@@ -51,7 +52,7 @@ export function ConversationSidebar({
   const grouping = onOpenConversation ? 'time' : savedGrouping;
   const mountedDirectories = useConversationAttachmentStore((state) => state.mountedDirByConversation);
   const locale = useLocaleStore((state) => state.locale);
-  const t = useLocaleStore((state) => state.t);
+  const t = useTranslation();
   const openedWorkspaces = useConversationAttachmentStore((state) => state.openedWorkspaces);
   const archivedWorkspaces = useConversationAttachmentStore((state) => state.archivedWorkspaces);
   const archivedConversations = useConversationAttachmentStore((state) => state.archivedConversations);
@@ -204,12 +205,12 @@ export function ConversationSidebar({
           {isSearching ? (
             <>
               <SearchIcon className="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-500" />
-              <p>没有找到与 "{searchQuery}" 相关的会话</p>
+              <p>{t('chatSidebar.noSearchResults').replace('{query}', () => searchQuery ?? '')}</p>
             </>
           ) : (
             <div className="space-y-2">
               <MessageSquare className="h-6 w-6 mx-auto text-slate-400/60 dark:text-slate-500/60" />
-              <p className="text-xs">{filter === 'archived' ? t('chatSidebar.emptyArchive') : '无对话记录，选择一个模型开始对话'}</p>
+              <p className="text-xs">{t(filter === 'archived' ? 'chatSidebar.emptyArchive' : 'chatSidebar.empty')}</p>
             </div>
           )}
         </div>

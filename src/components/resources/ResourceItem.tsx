@@ -1,5 +1,10 @@
 'use client';
 
+import { getHtmlLang, translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
+import { formatKnowledgeChunkCount } from '@/components/knowledge/formatKnowledgeIndexProgress';
+
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
@@ -31,12 +36,12 @@ const getFileIcon = (filename: string) => {
 };
 
 // 格式化文件大小
-const formatFileSize = (bytes: number): string => {
+const formatFileSize = (bytes: number, language: string): string => {
   if (bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  return `${Number((bytes / Math.pow(k, i)).toFixed(2)).toLocaleString(language)} ${sizes[i]}`;
 };
 
 // 扩展资源项目属性接口
@@ -72,6 +77,9 @@ export function ResourceItem({
   onRetrySemantic,
   onCancelSemantic,
 }: ExtendedResourceItemProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
+  const language = getHtmlLang(locale);
   const [detailOpen, setDetailOpen] = useState(false);
   
   // 检查是否为聊天文件 - 修复检测逻辑
@@ -110,7 +118,7 @@ export function ResourceItem({
             </p>
             {isChatFile && (
               <span className="rounded-md px-1 py-0.5 text-[10px] border border-slate-200/70 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-800/40 dark:text-slate-300">
-                聊天
+                {t('knowledge.import.chatFile')}
               </span>
             )}
             {lexicalStatus && (
@@ -118,7 +126,7 @@ export function ResourceItem({
                 ? 'border-emerald-200/70 bg-emerald-50/70 text-emerald-700 dark:text-emerald-400'
                 : lexicalStatus === 'failed' ? 'border-red-200/70 bg-red-50/70 text-red-700 dark:text-red-400'
                 : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
-                关键词{lexicalStatus === 'ready' ? '可用' : lexicalStatus === 'failed' ? '失败' : '处理中'}
+                {t(lexicalStatus === 'ready' ? 'knowledge.resource.keywordReady' : lexicalStatus === 'failed' ? 'knowledge.resource.keywordFailed' : 'knowledge.resource.keywordProcessing')}
               </span>
             )}
             {semanticStatus && (
@@ -126,7 +134,12 @@ export function ResourceItem({
                 ? 'border-blue-200/70 bg-blue-50/70 text-blue-700 dark:text-blue-400'
                 : semanticStatus === 'failed' ? 'border-amber-200/70 bg-amber-50/70 text-amber-700 dark:text-amber-400'
                 : 'border-slate-200/70 bg-slate-100/70 text-slate-600 dark:text-slate-300'}`}>
-                语义{semanticStatus === 'ready' ? '可用' : semanticStatus === 'failed' ? '不可用' : semanticStatus === 'cancelled' ? '已取消' : semanticStatus === 'processing' ? '处理中' : semanticStatus === 'waiting_model' ? '等待模型' : '等待'}
+                {t(semanticStatus === 'ready' ? 'knowledge.resource.semanticReady'
+                  : semanticStatus === 'failed' ? 'knowledge.resource.semanticFailed'
+                  : semanticStatus === 'cancelled' ? 'knowledge.resource.semanticCancelled'
+                  : semanticStatus === 'processing' ? 'knowledge.resource.semanticProcessing'
+                  : semanticStatus === 'waiting_model' ? 'knowledge.resource.semanticWaitingModel'
+                  : 'knowledge.resource.semanticWaiting')}
               </span>
             )}
             {semanticStatus && ['failed', 'cancelled', 'waiting_model'].includes(semanticStatus) && onRetrySemantic && (
@@ -134,14 +147,14 @@ export function ResourceItem({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    aria-label="重试语义索引"
+                    aria-label={t('knowledge.resource.retrySemantic')}
                     className="rounded-md p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     onClick={(event) => { event.stopPropagation(); onRetrySemantic(id); }}
                   >
                     <RotateCcw className="h-3 w-3" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>重试语义索引</TooltipContent>
+                <TooltipContent>{t('knowledge.resource.retrySemantic')}</TooltipContent>
               </Tooltip>
             )}
             {onCancelSemantic && (semanticStatus === 'processing' || semanticStatus === 'pending' || semanticStatus === 'waiting_model') && (
@@ -149,14 +162,14 @@ export function ResourceItem({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    aria-label="取消语义索引"
+                    aria-label={t('knowledge.resource.cancelSemantic')}
                     className="rounded-md p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     onClick={(event) => { event.stopPropagation(); onCancelSemantic(id); }}
                   >
                     <Ban className="h-3 w-3" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>取消语义索引</TooltipContent>
+                <TooltipContent>{t('knowledge.resource.cancelSemantic')}</TooltipContent>
               </Tooltip>
             )}
             {!hideIndexedStatus && knowledgeBases && knowledgeBases.length > 0 && (
@@ -172,7 +185,7 @@ export function ResourceItem({
                         : 'border-red-200/70 bg-red-50/70 text-red-700 dark:border-red-800/40 dark:bg-red-900/20 dark:text-red-400'
                     }`}
                   >
-                    {kb.name}
+                    {kb.name || t('resources.unknownKnowledgeBase')}
                   </span>
                 ))}
                 {knowledgeBases.length > 2 && (
@@ -182,17 +195,17 @@ export function ResourceItem({
             )}
           </div>
           <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-            <span>{formatFileSize(fileSize)}</span>
-            <span>{new Date(createdAt).toLocaleDateString('zh-CN')}</span>
+            <span>{formatFileSize(fileSize, language)}</span>
+            <span>{new Date(createdAt).toLocaleDateString(language)}</span>
             {!isChatFile && typeof chunkCount === 'number' && chunkCount > 0 && (
-              <span>{chunkCount} 分片</span>
+              <span>{formatKnowledgeChunkCount(locale, chunkCount)}</span>
             )}
             {isChatFile && conversationId && (
               <span 
                 className="text-blue-500 dark:text-blue-400 cursor-pointer hover:underline"
                 onClick={handleJumpToConversation}
               >
-                对话中
+                {t('knowledge.resource.inConversation')}
               </span>
             )}
           </div>
@@ -204,7 +217,7 @@ export function ResourceItem({
             <button
               onClick={() => onView(id)}
               className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-              title={isChatFile ? '跳转到对话' : '查看'}
+              title={t(isChatFile ? 'knowledge.resource.openConversation' : 'knowledge.resource.view')}
             >
               <Eye className="h-3.5 w-3.5" />
             </button>
@@ -214,7 +227,7 @@ export function ResourceItem({
             <button
               onClick={() => onAddToKnowledgeBase(id)}
               className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-              title="添加到知识库"
+              title={t('knowledge.import.addToKnowledgeBase')}
             >
               <Database className="h-3.5 w-3.5" />
             </button>
@@ -229,7 +242,7 @@ export function ResourceItem({
             <DropdownMenuContent align="end" className="w-32 text-xs">
               <DropdownMenuItem onClick={() => setDetailOpen(true)} className="cursor-pointer text-xs">
                 <Info className="h-3 w-3 mr-2" />
-                详情
+                {t('knowledge.resource.details')}
               </DropdownMenuItem>
               {onDelete && (
                 <>
@@ -239,7 +252,7 @@ export function ResourceItem({
                     className="cursor-pointer text-xs text-red-500"
                   >
                     <Trash2 className="h-3 w-3 mr-2" />
-                    {isChatFile ? '移除' : '删除'}
+                    {t(isChatFile ? 'knowledge.resource.remove' : 'knowledge.delete')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -250,24 +263,24 @@ export function ResourceItem({
 
       {/* 详情对话框 */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden">
+        <DialogContent closeLabel={t('common.close')} className="max-w-lg p-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b border-slate-200/40 dark:border-slate-700/40">
             <DialogTitle className="text-lg font-semibold truncate pr-8 text-slate-900 dark:text-slate-100">{title}</DialogTitle>
           </DialogHeader>
           <div className="text-sm space-y-4 px-6 py-4 max-h-96 overflow-y-auto text-slate-700 dark:text-slate-300">
             <div className="space-y-2">
-              <p><strong>文件大小:</strong> {formatFileSize(fileSize)}</p>
-              <p><strong>创建时间:</strong> {new Date(createdAt).toLocaleString('zh-CN')}</p>
-              {typeof chunkCount === 'number' && <p><strong>分片数量:</strong> {chunkCount} 个</p>}
+              <p><strong>{t('knowledge.resource.sizeLabel')}</strong> {formatFileSize(fileSize, language)}</p>
+              <p><strong>{t('knowledge.resource.createdLabel')}</strong> {new Date(createdAt).toLocaleString(language)}</p>
+              {typeof chunkCount === 'number' && <p><strong>{t('knowledge.resource.chunksLabel')}</strong> {chunkCount.toLocaleString(language)}</p>}
             </div>
             
             {!hideIndexedStatus && knowledgeBases && knowledgeBases.length > 0 && (
               <div>
-                <p className="font-medium mb-3">关联的知识库:</p>
+                <p className="font-medium mb-3">{t('knowledge.resource.knowledgeBasesLabel')}</p>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {knowledgeBases.map((kb, index) => (
                     <div key={`${kb.id}-${index}`} className="flex items-center justify-between p-2.5 glass-inset rounded-lg text-sm">
-                      <span className="truncate mr-2">{kb.name}</span>
+                      <span className="truncate mr-2">{kb.name || t('resources.unknownKnowledgeBase')}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 border ${
                         kb.status === 'indexed' 
                           ? 'text-emerald-700 border-emerald-200/70 bg-emerald-50/50 dark:text-emerald-400 dark:border-emerald-800/40 dark:bg-emerald-900/20'
@@ -275,7 +288,7 @@ export function ResourceItem({
                           ? 'text-slate-600 border-slate-200/70 bg-slate-100/50 dark:text-slate-300 dark:border-slate-600/50 dark:bg-slate-800/40'
                           : 'text-red-600 border-red-200/70 bg-red-50/50 dark:text-red-400 dark:border-red-800/40 dark:bg-red-900/20'
                       }`}>
-                        {kb.status === 'indexed' ? '已索引' : kb.status === 'pending' ? '待处理' : kb.status === 'indexing' ? '处理中' : '失败'}
+                        {t(`knowledge.resource.${kb.status}`)}
                       </span>
                     </div>
                   ))}
@@ -285,7 +298,7 @@ export function ResourceItem({
             
             {!hideIndexedStatus && (!knowledgeBases || knowledgeBases.length === 0) && (
               <div className="text-center py-4">
-                <p className="text-slate-500 dark:text-slate-400">尚未添加到任何知识库</p>
+                <p className="text-slate-500 dark:text-slate-400">{t('knowledge.resource.noKnowledgeBases')}</p>
               </div>
             )}
           </div>

@@ -1,6 +1,8 @@
 import { openPath } from '@tauri-apps/plugin-opener';
 import { exists } from '@tauri-apps/plugin-fs';
 import { toast } from '@/components/ui/sonner';
+import { translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
 import { useState } from 'react';
 import { resolveAliasPath } from '@/lib/filesystemAllowlist/displayPathAliases';
 import { openCheckedPath } from '@/lib/filesystemAllowlist/openCheckedPath';
@@ -45,11 +47,11 @@ export class FileOpener {
    * @param fileName 文件名（用于提示信息）
    * @returns Promise<boolean> 是否成功打开
    */
-  static async openFile(filePath: string, fileName?: string): Promise<boolean> {
+  static async openFile(filePath: string, fileName?: string, locale: Locale = 'zh'): Promise<boolean> {
     try {
       const normalized = this.normalizeForOpen(filePath);
       if (!normalized) {
-        toast.error('打开文件失败', { description: '路径为空' });
+        toast.error(translate(locale, 'fileOpener.openFailed'), { description: translate(locale, 'fileOpener.emptyPath') });
         return false;
       }
       if (this.shouldSkipDuplicate(normalized)) return true;
@@ -61,8 +63,8 @@ export class FileOpener {
         if (!fileExists) {
           // 仍尝试打开（某些系统关联程序可以处理不存在/快捷方式等场景）
           // 但给出提示更友好
-          toast.error('文件不存在', {
-            description: `无法找到文件: ${fileName || normalized}`
+          toast.error(translate(locale, 'fileOpener.notFound'), {
+            description: translate(locale, 'fileOpener.notFoundDetails').replace('{0}', () => fileName || normalized),
           });
           return false;
         }
@@ -75,18 +77,18 @@ export class FileOpener {
       const opened = await openCheckedPath(normalized);
       if (!opened) await openPath(normalized);
       
-      toast.success('文档已打开', {
-        description: `已使用系统默认程序打开: ${fileName || '文档'}`
+      toast.success(translate(locale, 'fileOpener.opened'), {
+        description: translate(locale, 'fileOpener.openedDetails').replace('{0}', () => fileName || translate(locale, 'fileOpener.document')),
       });
       
       return true;
     } catch (error) {
       console.error('打开文件失败:', error);
       
-      toast.error('打开文件失败', {
-        description: error instanceof Error 
-          ? error.message 
-          : '未知错误，请检查文件路径是否正确'
+      toast.error(translate(locale, 'fileOpener.openFailed'), {
+        description: error instanceof Error
+          ? error.message
+          : translate(locale, 'fileOpener.unknownError'),
       });
       
       return false;
@@ -159,11 +161,12 @@ export class FileOpener {
   /**
    * 打开目录（不依赖 fs 权限校验；仅做去重与别名解析）
    */
-  static async openDirectory(dirPath: string): Promise<boolean> {
+  static async openDirectory(dirPath: string, locale: Locale = 'zh'): Promise<boolean> {
+    const failureTitle = translate(locale, 'chatAttachment.openDirectoryFailed');
     try {
       const normalized = this.normalizeForOpen(dirPath);
       if (!normalized) {
-        toast.error('打开目录失败', { description: '路径为空' });
+        toast.error(failureTitle, { description: translate(locale, 'chatAttachment.directoryPathEmpty') });
         return false;
       }
       if (this.shouldSkipDuplicate(normalized)) return true;
@@ -171,7 +174,7 @@ export class FileOpener {
       if (!openedTarget) await openPath(normalized);
       return true;
     } catch (e) {
-      toast.error('打开目录失败', { description: e instanceof Error ? e.message : String(e) });
+      toast.error(failureTitle, { description: e instanceof Error ? e.message : String(e) });
       return false;
     }
   }

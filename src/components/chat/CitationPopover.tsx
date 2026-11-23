@@ -11,23 +11,37 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { FileText } from 'lucide-react';
+import { useLocaleStore } from '@/store/localeStore';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
 
-function formatLocator(citation: Citation): string {
+function formatLocator(
+  citation: Citation,
+  t: (key: TranslationKey) => string,
+): string {
   const loc = citation.locator;
   const parts: string[] = [];
-  if (loc.page != null) parts.push(`第 ${loc.page} 页`);
+  if (loc.page != null)
+    parts.push(
+      t('chatUi.citation.page').replace('{0}', () => String(loc.page)),
+    );
   if (loc.sectionPath?.length) parts.push(loc.sectionPath.join(' > '));
   if (loc.lineStart != null) {
-    parts.push(
-      `行 ${loc.lineStart}${loc.lineEnd != null && loc.lineEnd !== loc.lineStart ? `–${loc.lineEnd}` : ''}`,
-    );
+    const range =
+      loc.lineEnd != null && loc.lineEnd !== loc.lineStart
+        ? `${loc.lineStart}–${loc.lineEnd}`
+        : `${loc.lineStart}`;
+    parts.push(t('chatUi.citation.lines').replace('{0}', () => range));
   }
   const first = citation.range?.chunks[0];
   return (
     parts.join(' · ') ||
     (first
-      ? `片段 ${first.chunkIndex + 1} · 偏移 ${first.startOffset}–${first.endOffset}`
-      : '未知位置')
+      ? t('chatUi.citation.chunk')
+          .replace('{0}', () => String(first.chunkIndex + 1))
+          .replace('{1}', () => String(first.startOffset))
+          .replace('{2}', () => String(first.endOffset))
+      : t('chatUi.citation.unknownLocation'))
   );
 }
 
@@ -37,6 +51,8 @@ export function CitationPopover({
 }: { citation: Citation; disabled?: boolean }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const conversationId = useChatStore((state) => state.currentConversationId);
   return (
     <>
@@ -44,7 +60,9 @@ export function CitationPopover({
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label={`查看引用 ${citation.n}`}
+            aria-label={t('chatUi.citation.view').replace('{0}', () =>
+              String(citation.n),
+            )}
             className="mx-0.5 inline-flex items-center rounded-md px-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
             disabled={disabled}
           >
@@ -63,10 +81,12 @@ export function CitationPopover({
             <div className="min-w-0 break-words">
               <p className="font-medium">{citation.documentName}</p>
               <p className="text-xs text-muted-foreground">
-                {formatLocator(citation)}
+                {formatLocator(citation, t)}
               </p>
               {citation.stale && (
-                <p className="text-xs text-amber-600 mt-1">来源文档已变化</p>
+                <p className="text-xs text-amber-600 mt-1">
+                  {t('chatUi.citation.staleSource')}
+                </p>
               )}
             </div>
           </div>
@@ -82,7 +102,7 @@ export function CitationPopover({
               setSourceOpen(true);
             }}
           >
-            查看原文
+            {t('chatUi.citation.viewSource')}
           </Button>
         </PopoverContent>
       </Popover>

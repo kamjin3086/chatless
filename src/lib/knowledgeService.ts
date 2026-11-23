@@ -3,6 +3,13 @@ import { DatabaseService } from '@/lib/database/services/DatabaseService';
 // 重新导出Repository中的类型定义，保持API兼容性
 export type { KnowledgeBase, DocKnowledgeMapping } from '@/lib/database/repositories/KnowledgeBaseRepository';
 
+export type KnowledgeIndexProgress =
+  | { stage: 'alreadyAdded' | 'preparing' | 'loadingDocument' | 'initializing' | 'starting' | 'extracting' | 'chunking' | 'embedding' | 'storing' | 'processing' | 'updating' | 'rebuildComplete' }
+  | { stage: 'complete'; chunks: number }
+  | { stage: 'preparingRebuild'; current: number; total: number };
+
+type KnowledgeIndexProgressCallback = (percent: number, update: KnowledgeIndexProgress) => void;
+
 // 知识片段定义（保持兼容性）
 export interface KnowledgeChunk {
   id: string;
@@ -263,7 +270,7 @@ export const KnowledgeService = {
     documentId: string, 
     knowledgeBaseId: string,
     options: {
-      onProgress?: (progress: number, message: string) => void;
+      onProgress?: KnowledgeIndexProgressCallback;
       skipIfExists?: boolean;
     } = {}
   ) {
@@ -275,12 +282,12 @@ export const KnowledgeService = {
       if (options.skipIfExists) {
         const exists = await knowledgeBaseRepo.isDocumentInKnowledgeBase(documentId, knowledgeBaseId);
         if (exists) {
-          options.onProgress?.(100, '文档已存在于知识库中');
+          options.onProgress?.(100, { stage: 'alreadyAdded' });
           return null;
         }
       }
 
-      options.onProgress?.(10, '准备文档索引...');
+      options.onProgress?.(10, { stage: 'preparing' });
       
       // 1. 创建文档映射关系，状态为indexing
       const mapping = await knowledgeBaseRepo.addDocumentToKnowledgeBase(
@@ -291,7 +298,7 @@ export const KnowledgeService = {
 
       try {
         // 2. 获取文档信息
-        options.onProgress?.(20, '获取文档信息...');
+        options.onProgress?.(20, { stage: 'loadingDocument' });
         const { UnifiedFileService } = await import('./unifiedFileService');
         const document = await UnifiedFileService.getFile(documentId);
         
@@ -300,12 +307,12 @@ export const KnowledgeService = {
         }
 
         // 3. 初始化文档索引器
-        options.onProgress?.(30, '初始化索引服务...');
+        options.onProgress?.(30, { stage: 'initializing' });
         const { DocumentIndexer } = await import('./indexing/DocumentIndexer');
         const indexer = new DocumentIndexer();
 
         // 4. 执行文档索引（包含提取、分块、嵌入生成、向量存储）
-        options.onProgress?.(40, '开始文档索引...');
+        options.onProgress?.(40, { stage: 'starting' });
         
         const indexingResult = await indexer.indexDocument(
           documentId,
@@ -315,26 +322,17 @@ export const KnowledgeService = {
             progressCallback: (task) => {
               // 将索引进度映射到总进度的40-90%区间
               const indexProgress = 40 + (task.progress * 0.5);
-              let message = '';
-              
-              switch (task.status) {
+              const { status } = task;
+              switch (status) {
                 case 'extracting':
-                  message = '提取文档内容...';
-                  break;
                 case 'chunking':
-                  message = '文档分块处理...';
-                  break;
                 case 'embedding':
-                  message = '生成嵌入向量...';
-                  break;
                 case 'storing':
-                  message = '存储向量数据...';
+                  options.onProgress?.(indexProgress, { stage: status });
                   break;
                 default:
-                  message = '处理中...';
+                  options.onProgress?.(indexProgress, { stage: 'processing' });
               }
-              
-              options.onProgress?.(indexProgress, message);
             }
           }
         );
@@ -350,7 +348,7 @@ export const KnowledgeService = {
         }
 
         // 5. 更新映射状态为已索引
-        options.onProgress?.(95, '更新索引状态...');
+        options.onProgress?.(95, { stage: 'updating' });
         await knowledgeBaseRepo.updateDocumentMappingStatus(
           documentId,
           knowledgeBaseId,
@@ -368,7 +366,7 @@ export const KnowledgeService = {
           console.warn(`[KnowledgeService] ⚠️ 同步文件记录失败，但不影响索引结果:`, syncError);
         }
 
-        options.onProgress?.(100, `文档索引完成 (${indexingResult.chunksProcessed} 个片段)`);
+        options.onProgress?.(100, { stage: 'complete', chunks: indexingResult.chunksProcessed });
         
         return {
           ...mapping,
@@ -479,7 +477,7 @@ export const KnowledgeService = {
   async rebuildKnowledgeBase(
     knowledgeBaseId: string,
     options: {
-      onProgress?: (progress: number, message: string) => void;
+      onProgress?: KnowledgeIndexProgressCallback;
     } = {}
   ) {
     try {
@@ -501,22 +499,22 @@ export const KnowledgeService = {
         if (!mapping?.documentId) continue;
         current += 1;
         const progBase = Math.floor((current - 1) / progressDenominator * 100);
-        options.onProgress?.(progBase, `准备重建文档 ${current}/${totalDocs}`);
+        options.onProgress?.(progBase, { stage: 'preparingRebuild', current, total: totalDocs });
 
         const docId = mapping.documentId;
         await knowledgeBaseRepo.updateDocumentMappingStatus(docId, knowledgeBaseId, 'indexing');
 
         // 重新索引文档
         await this.addDocumentToKnowledgeBase(docId, knowledgeBaseId, {
-          onProgress: (p, m) => {
+          onProgress: (p, update) => {
             const overall = progBase + p / progressDenominator;
-            options.onProgress?.(Math.min(99, Math.floor(overall)), m);
+            options.onProgress?.(Math.min(99, Math.floor(overall)), update);
           },
           skipIfExists: false,
         });
       }
 
-      options.onProgress?.(100, '知识库重建完成');
+      options.onProgress?.(100, { stage: 'rebuildComplete' });
       return true;
     } catch (err) {
       console.error('[KnowledgeService] rebuildKnowledgeBase error', err);

@@ -67,10 +67,13 @@ Do not force English onto these; the cost is real and the benefit is zero.
   non-maintainers are Chinese. Making English a requirement for filing does not
   make reporters bilingual, it makes them leave. See the intake recipe below.
 - **End-user surfaces**: UI strings and `src/i18n/`, `README.md` + `README_EN.md`,
-  `INSTALLATION_INSTRUCTIONS*.md`, `CHANGELOG.md` and the release notes
-  `.github/workflows/tag-release.yml` generates (Chinese copy plus the English
-  block it already writes). Localization is not even finished in-product, so a
-  promise of all-English user docs would be hollow.
+  `INSTALLATION_INSTRUCTIONS*.md`, `CHANGELOG.md` and the published release
+  notes (see [the release notes format](maintenance.md#release-notes)).
+  These ship in both languages, so "stays Chinese" here means *not English-only*:
+  a new UI string, README paragraph or release note is written twice, once per
+  language, and neither one replaces the other. Which one a reader sees is the
+  product's job (`docs/agents/subsystems.md` - Interface language), not a reason
+  to write only one.
 - **`GLOSSARY.md` domain entries** that name Chinese UI words (「记住目录」
   「全局免问」). The Chinese *is* the domain term; translating it makes the entry
   wrong. English `Definition` prose around a Chinese term is the right shape.

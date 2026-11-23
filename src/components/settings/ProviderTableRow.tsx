@@ -20,6 +20,8 @@ import { AdvancedSettingsDialog } from '@/components/settings/AdvancedSettingsDi
 import { ModelParametersDialog } from '@/components/chat/ModelParametersDialog';
 import { useProviderStatusStore } from '@/store/providerStatusStore';
 import { useProviderMetaStore } from '@/store/providerMetaStore';
+import { useTranslation } from '@/i18n/useTranslation';
+import type { TranslationKey } from '@/i18n/types';
 
 interface ProviderTableRowProps {
   provider: ProviderWithStatus;
@@ -37,13 +39,13 @@ interface ProviderTableRowProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-function formatLastCheckedTime(timestamp: number): string {
+function formatLastCheckedTime(timestamp: number, t: (key: TranslationKey) => string): string {
   const now = Date.now();
   const diff = now - timestamp;
-  if (diff < 60000) { return '刚刚'; }
-  else if (diff < 3600000) { const minutes = Math.floor(diff / 60000); return `${minutes}分钟前`; }
-  else if (diff < 86400000) { const hours = Math.floor(diff / 3600000); return `${hours}小时前`; }
-  else { const days = Math.floor(diff / 86400000); return `${days}天前`; }
+  if (diff < 60000) { return t('settings.providerRow.time.justNow'); }
+  else if (diff < 3600000) { const minutes = Math.floor(diff / 60000); return t('settings.providerRow.time.minutesAgo').replace('{0}', String(minutes)); }
+  else if (diff < 86400000) { const hours = Math.floor(diff / 3600000); return t('settings.providerRow.time.hoursAgo').replace('{0}', String(hours)); }
+  else { const days = Math.floor(diff / 86400000); return t('settings.providerRow.time.daysAgo').replace('{0}', String(days)); }
 }
 
 // 绝对时间格式化（本地化显示）
@@ -69,6 +71,7 @@ export function ProviderTableRow({
   open,
   onOpenChange
 }: ProviderTableRowProps & { dragHandleProps?: any }) {
+  const t = useTranslation();
   // 实时订阅该 provider 的最新检查结果，确保无需切页即可更新
   const live = useProviderStatusStore(s => s.map[provider.name]);
   const lastCheckedAt = live?.lastCheckedAt ?? provider.lastCheckedAt;
@@ -130,14 +133,14 @@ export function ProviderTableRow({
   if (effectiveConfigStatus) {
     switch (provider.configStatus) {
       case 'NO_KEY':
-        statusText = '未配置密钥';
+        statusText = t('provider.connection.noKey');
         StatusIcon = KeyRound;
         badgeVariant = 'secondary';
         // 去边框，微底色
         badgeClasses = "text-slate-700 dark:text-slate-200 bg-slate-100/60 dark:bg-slate-800/40 px-2 py-1 text-xs font-medium rounded-md";
         break;
       case 'NO_FETCHER':
-        statusText = '未实现检查';
+        statusText = t('settings.providerRow.notImplementedCheck');
         StatusIcon = AlertTriangle;
         badgeVariant = 'secondary';
         badgeClasses = "text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 text-xs font-medium";
@@ -170,6 +173,8 @@ export function ProviderTableRow({
     return () => { try { unsubscribe?.(); } catch { /* noop */ } };
   }, [provider.name]);
 
+  const modelCount = ((localRepoModels ?? provider.models ?? []) as any[]).length;
+
   return (
     <>
       <div className={cn(
@@ -183,7 +188,7 @@ export function ProviderTableRow({
           <div className="col-span-1 flex items-center gap-2 select-none">
             <button
               type="button"
-              title="拖动排序"
+              title={t('settings.providerRow.dragToReorder')}
               className="h-7 w-7 flex items-center justify-center cursor-grab active:cursor-grabbing text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-all rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/50"
               {...(dragHandleProps || {})}
             >
@@ -238,7 +243,7 @@ export function ProviderTableRow({
                   ? "text-slate-600 dark:text-slate-300"
                   : "text-slate-500 dark:text-slate-400"
               )}>
-                {((localRepoModels ?? provider.models ?? []) as any[]).length} 个模型
+                {t(modelCount === 1 ? 'provider.list.oneModel' : 'provider.list.modelCount').replace('{0}', String(modelCount))}
               </div>
               </div>
             </div>
@@ -257,10 +262,10 @@ export function ProviderTableRow({
                     <TooltipContent side="bottom" align="start">
                       <div className="text-xs max-w-xs space-y-1">
                         {provider.lastCheckedAt ? (
-                          <p>最后检查：{formatLastCheckedTime(provider.lastCheckedAt)}</p>
-                        ) : <p>尚未检查</p>}
+                          <p>{t('settings.providerRow.lastChecked').replace('{0}', formatLastCheckedTime(provider.lastCheckedAt, t))}</p>
+                        ) : <p>{t('settings.providerRow.notChecked')}</p>}
                         {provider.lastResult ? (
-                          <p>上次结果：{provider.lastResult === 'CONNECTED' ? '基本可用' : provider.lastResult === 'NOT_CONNECTED' ? '无法访问' : '未知'}</p>
+                          <p>{t('settings.providerRow.lastResult').replace('{0}', provider.lastResult === 'CONNECTED' ? t('settings.providerRow.basicAvailable') : provider.lastResult === 'NOT_CONNECTED' ? t('settings.providerRow.unavailable') : t('settings.providerRow.unknown'))}</p>
                         ) : null}
                         {provider.lastMessage ? (<p>{provider.lastMessage}</p>) : null}
                       </div>
@@ -276,8 +281,8 @@ export function ProviderTableRow({
                     <TooltipContent side="bottom" align="start">
                       <div className="text-xs max-w-xs space-y-1">
                         {provider.lastCheckedAt ? (
-                          <p>最后检查：{formatLastCheckedTime(provider.lastCheckedAt)}</p>
-                        ) : <p>尚未检查</p>}
+                          <p>{t('settings.providerRow.lastChecked').replace('{0}', formatLastCheckedTime(provider.lastCheckedAt, t))}</p>
+                        ) : <p>{t('settings.providerRow.notChecked')}</p>}
                       </div>
                     </TooltipContent>
                   </Tooltip>
@@ -312,21 +317,21 @@ export function ProviderTableRow({
                 <TooltipContent side="bottom" align="center">
                   <div className="text-xs max-w-xs space-y-1">
                     {isConnectingLive ? (
-                      <p>正在检查状态...</p>
+                      <p>{t('settings.providerRow.checking')}</p>
                     ) : (
                       <>
                         {lastCheckedAt ? (
-                          <p className="font-medium">最后检查：{formatDateTime(lastCheckedAt)}</p>
+                          <p className="font-medium">{t('settings.providerRow.lastChecked').replace('{0}', formatDateTime(lastCheckedAt) ?? '')}</p>
                         ) : (
-                          <p>尚未检查</p>
+                          <p>{t('settings.providerRow.notChecked')}</p>
                         )}
                         {lastResult ? (
-                          <p>上次结果：{lastResult === 'CONNECTED' ? '基本可用' : lastResult === 'NOT_CONNECTED' ? '无法访问' : '未知'}</p>
+                          <p>{t('settings.providerRow.lastResult').replace('{0}', lastResult === 'CONNECTED' ? t('settings.providerRow.basicAvailable') : lastResult === 'NOT_CONNECTED' ? t('settings.providerRow.unavailable') : t('settings.providerRow.unknown'))}</p>
                         ) : null}
                         {lastMessage ? (
                           <p className="text-slate-500">{lastMessage}</p>
                         ) : null}
-                        <p className="text-slate-500 mt-1">点击重新检查状态</p>
+                        <p className="text-slate-500 mt-1">{t('settings.providerRow.recheckHint')}</p>
                       </>
                     )}
                   </div>
@@ -347,8 +352,8 @@ export function ProviderTableRow({
                     <Pencil className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">修改提供商</span>
-                    <span className="text-xs text-slate-500">重命名、服务地址、策略等</span>
+                    <span className="text-sm font-medium">{t('provider.chooser.edit')}</span>
+                    <span className="text-xs text-slate-500">{t('settings.providerRow.editDescription')}</span>
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAdvancedOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md">
@@ -356,8 +361,8 @@ export function ProviderTableRow({
                     <Sliders className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">高级设置</span>
-                    <span className="text-xs text-slate-500">网络请求方式等高级选项</span>
+                    <span className="text-sm font-medium">{t('modelParams.advanced')}</span>
+                    <span className="text-xs text-slate-500">{t('settings.providerRow.advancedDescription')}</span>
                   </div>
                   {hasAdvanced && <span className="ml-auto w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500" />}
                 </DropdownMenuItem>
@@ -366,7 +371,7 @@ export function ProviderTableRow({
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-700 dark:text-slate-300" /> : <ChevronDown className="w-4 h-4 text-slate-700 dark:text-slate-300" />}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">{isExpanded ? '收起详情' : '展开详情'}</span>
+                    <span className="text-sm font-medium">{isExpanded ? t('settings.providerRow.collapseDetails') : t('settings.providerRow.expandDetails')}</span>
                   </div>
                 </DropdownMenuItem>
                 {/* 快速隐藏 */}
@@ -376,7 +381,7 @@ export function ProviderTableRow({
                       const { providerRepository } = await import('@/lib/provider/ProviderRepository');
                       await providerRepository.setVisibility(provider.name, false);
                       const { toast } = await import('@/components/ui/sonner');
-                      toast.success('已隐藏', { description: provider.displayName || provider.name });
+                      toast.success(t('settings.providerRow.hidden'), { description: provider.displayName || provider.name });
                     } catch (e) { console.error(e); }
                   }}
                   className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md"
@@ -385,8 +390,8 @@ export function ProviderTableRow({
                     <ChevronDown className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">隐藏提供商</span>
-                    <span className="text-xs text-slate-500">从列表中隐藏（可在管理里重新显示）</span>
+                    <span className="text-sm font-medium">{t('provider.list.hide')}</span>
+                    <span className="text-xs text-slate-500">{t('settings.providerRow.hideDescription')}</span>
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setFetchDebuggerOpen(true)} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-md">
@@ -394,7 +399,7 @@ export function ProviderTableRow({
                       <BugPlay className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">调试网络请求</span>
+                      <span className="text-sm font-medium">{t('settings.providerRow.debugNetworkRequests')}</span>
                     </div>
                   </DropdownMenuItem>
               </DropdownMenuContent>

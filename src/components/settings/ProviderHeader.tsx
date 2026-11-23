@@ -12,24 +12,18 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { getHtmlLang, translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import type { ProviderWithStatus } from "@/hooks/useProviderManagement";
 
-function formatLastCheckedTime(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-
-  if (diff < 60000) {
-    return "刚刚";
-  } else if (diff < 3600000) {
-    const minutes = Math.floor(diff / 60000);
-    return `${minutes}分钟前`;
-  } else if (diff < 86400000) {
-    const hours = Math.floor(diff / 3600000);
-    return `${hours}小时前`;
-  } else {
-    const days = Math.floor(diff / 86400000);
-    return `${days}天前`;
-  }
+function formatLastCheckedTime(locale: Locale, timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  if (diff < 60000) return translate(locale, 'provider.connection.justNow');
+  const relativeTime = new Intl.RelativeTimeFormat(getHtmlLang(locale));
+  if (diff < 3600000) return relativeTime.format(-Math.floor(diff / 60000), 'minute');
+  if (diff < 86400000) return relativeTime.format(-Math.floor(diff / 3600000), 'hour');
+  return relativeTime.format(-Math.floor(diff / 86400000), 'day');
 }
 
 interface ProviderHeaderProps {
@@ -45,6 +39,7 @@ interface ProviderHeaderProps {
 }
 
 function ProviderHeaderImpl(props: ProviderHeaderProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const {
     provider,
     isConnecting,
@@ -59,7 +54,7 @@ function ProviderHeaderImpl(props: ProviderHeaderProps) {
         <div className="w-6 h-6 rounded-md overflow-hidden flex-shrink-0">
           <Image
             src={resolvedIconSrc}
-            alt={`${provider.name} 图标`}
+            alt={translate(locale, 'settings.providerHeader.iconAlt').replace('{0}', provider.name)}
             width={24}
             height={24}
             className="w-6 h-6 object-contain"
@@ -84,7 +79,7 @@ function ProviderHeaderImpl(props: ProviderHeaderProps) {
                 ? "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                 : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
             )}
-            title="模型获取调试器"
+            title={translate(locale, 'settings.providerHeader.fetchDebugger')}
           >
             <BugPlay className="w-4 h-4" />
           </button>
@@ -106,14 +101,14 @@ function ProviderHeaderImpl(props: ProviderHeaderProps) {
             <TooltipContent side="bottom" align="center">
               <div className="text-xs max-w-xs">
                 {isConnecting ? (
-                  <p>正在检查连接…</p>
+                  <p>{translate(locale, 'provider.connection.checkingTooltip')}</p>
                 ) : provider.lastCheckedAt ? (
                   <div>
-                    <p className="font-medium">上次检查：{formatLastCheckedTime(provider.lastCheckedAt)}</p>
-                    <p className="text-slate-400 mt-1">点击重新检查</p>
+                    <p className="font-medium">{translate(locale, 'provider.connection.lastChecked').replace('{0}', formatLastCheckedTime(locale, provider.lastCheckedAt))}</p>
+                    <p className="text-slate-400 mt-1">{translate(locale, 'provider.connection.recheck')}</p>
                   </div>
                 ) : (
-                  <p>点击检查连接</p>
+                  <p>{translate(locale, 'provider.connection.check')}</p>
                 )}
               </div>
             </TooltipContent>
@@ -128,7 +123,7 @@ function ProviderHeaderImpl(props: ProviderHeaderProps) {
                   "relative p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg focus:outline-none transition-colors",
                   provider.preferences?.useBrowserRequest && "text-blue-600 dark:text-blue-400"
                 )}
-                title="提供商设置"
+                title={translate(locale, 'settings.providerHeader.settings')}
               >
                 <MoreVertical className="w-4 h-4" />
                 {provider.preferences?.useBrowserRequest && (
@@ -137,31 +132,31 @@ function ProviderHeaderImpl(props: ProviderHeaderProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuLabel>提供商设置</DropdownMenuLabel>
+              <DropdownMenuLabel>{translate(locale, 'settings.providerHeader.settings')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
 
               {props.onResetUrl && (
                 <DropdownMenuItem
-                  title="恢复默认配置"
+                  title={translate(locale, 'provider.connection.restoreDefaults')}
                   onClick={(e) => {
                     e.stopPropagation();
                     props.onResetUrl?.();
                   }}
                 >
                   <Undo2 />
-                  重置地址
+                  {translate(locale, 'provider.connection.resetUrl')}
                 </DropdownMenuItem>
               )}
 
               <DropdownMenuItem
-                title="请求方式等"
+                title={translate(locale, 'settings.providerHeader.advancedOptionsHint')}
                 onClick={(e) => {
                   e.stopPropagation();
                   props.onOpenSettings?.();
                 }}
               >
                 <Sliders />
-                高级选项
+                {translate(locale, 'settings.providerHeader.advancedOptions')}
                 {provider.preferences?.useBrowserRequest && (
                   <span className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500" />
                 )}

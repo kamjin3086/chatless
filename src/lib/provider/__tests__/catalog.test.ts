@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { translate } from '@/i18n';
 import { AVAILABLE_PROVIDERS_CATALOG } from '@/lib/provider/catalog';
 
 describe('AVAILABLE_PROVIDERS_CATALOG', () => {
@@ -62,7 +63,9 @@ describe('AVAILABLE_PROVIDERS_CATALOG', () => {
   it('annotates embedding-only and partially offline providers', () => {
     const voyageai = AVAILABLE_PROVIDERS_CATALOG.find((p) => p.id === 'voyageai');
     const ph8 = AVAILABLE_PROVIDERS_CATALOG.find((p) => p.id === 'ph8');
-    expect(voyageai?.notes).toMatch(/Embedding/i);
-    expect(ph8?.notes).toMatch(/海外模型已下线/);
+    expect(voyageai?.notesKey && translate('zh', voyageai.notesKey)).toMatch(/Embedding/i);
+    expect(ph8?.notesKey && translate('zh', ph8.notesKey)).toMatch(/海外模型已下线/);
+    expect(voyageai?.notesKey && translate('en', voyageai.notesKey)).toMatch(/for embeddings, not chat models/);
+    expect(ph8?.notesKey && translate('en', ph8.notesKey)).toMatch(/International models are offline/);
   });
 });

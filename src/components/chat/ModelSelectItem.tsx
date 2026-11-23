@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ProviderMetadata, ModelMetadata } from "@/lib/metadata/types";
 import { ProviderGlyph } from "./ProviderGlyph";
+import { translate } from "@/i18n";
+import { useLocaleStore } from "@/store/localeStore";
 
 interface ModelSelectItemProps {
   provider: ProviderMetadata;
@@ -21,6 +23,7 @@ export function ModelSelectItem({
   isSelected,
   showProviderIcon = false,
 }: ModelSelectItemProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const label = model.label || model.name;
   const providerLabel = (provider as { displayName?: string }).displayName || provider.name;
 
@@ -43,7 +46,10 @@ export function ModelSelectItem({
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8} className="max-w-[420px] text-xs">
         <div className="space-y-0.5">
-          <div><span className="text-slate-400 mr-1">ID</span>{model.name}</div>
+          <div>
+            <span className="text-slate-400 mr-1">{translate(locale, 'modelChooser.modelId')}</span>
+            {model.name}
+          </div>
           <div className="text-slate-400">{providerLabel}</div>
         </div>
       </TooltipContent>

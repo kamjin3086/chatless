@@ -3,6 +3,7 @@
 import { ArrowDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/i18n/useTranslation';
 
 interface ScrollToBottomButtonProps {
   show: boolean;
@@ -15,6 +16,7 @@ interface ScrollToBottomButtonProps {
  * 当用户向上滚动查看历史消息时显示，点击可快速回到底部并恢复自动滚动
  */
 export function ScrollToBottomButton({ show, onClick, className }: ScrollToBottomButtonProps) {
+  const t = useTranslation();
   return (
     <AnimatePresence>
       {show && (
@@ -41,8 +43,8 @@ export function ScrollToBottomButton({ show, onClick, className }: ScrollToBotto
             "group",
             className
           )}
-          aria-label="回到底部"
-          title="回到底部并恢复自动滚动"
+          aria-label={t('chatUi.scrollToBottom.aria')}
+          title={t('chatUi.scrollToBottom.title')}
         >
           <ArrowDown 
             className={cn(

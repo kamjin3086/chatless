@@ -1,5 +1,6 @@
 import { CheckCircle, XCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/useTranslation";
 import { InputField } from "./InputField";
 
 interface ModelCardProps {
@@ -21,6 +22,7 @@ export function ModelCard({
   availableModels,
   iconBgGradient = "from-indigo-100 to-purple-100"
 }: ModelCardProps) {
+  const t = useTranslation();
   return (
     <div className="border border-slate-100 dark:border-slate-700/60 rounded-lg p-4 mb-5 bg-white dark:bg-slate-800 transition-colors">
       <div className="flex gap-4">
@@ -40,15 +42,15 @@ export function ModelCard({
                 : "bg-red-50 dark:bg-red-900 text-red-600 dark:text-red-300"
             )}>
               {isConnected ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-              <span>{isConnected ? '已连接' : '未连接'}</span>
+              <span>{isConnected ? t('settings.modelCard.connected') : t('settings.modelCard.disconnected')}</span>
             </div>
           </div>
           <div className="mb-4">
             <InputField
-              label="服务地址"
+              label={t('settings.modelCard.serviceUrl')}
               value={serviceUrl}
               onChange={(e) => onServiceUrlChange(e.target.value)}
-              placeholder={`输入${name}服务地址`}
+              placeholder={t('settings.modelCard.serviceUrlPlaceholder').replace('{name}', name)}
             />
           </div>
           {availableModels && availableModels.length > 0 && (

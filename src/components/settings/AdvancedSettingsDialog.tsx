@@ -16,6 +16,8 @@ import type { ProviderWithStatus } from "@/hooks/useProviderManagement";
 import { useToolCallPreferences } from "@/store/toolCallPreferences";
 import { getProviderConfig, inferProviderId, type ToolCallStrategy } from "@/lib/llm/config/tool-call-config";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/useTranslation";
+import type { TranslationKey } from "@/i18n/types";
 
 interface AdvancedSettingsDialogProps {
   open: boolean;
@@ -25,50 +27,48 @@ interface AdvancedSettingsDialogProps {
 }
 
 // 策略选项
-const STRATEGY_OPTIONS: { value: ToolCallStrategy; label: string; description: string; icon: React.ReactNode }[] = [
+const STRATEGY_OPTIONS: { value: ToolCallStrategy; labelKey: TranslationKey; icon: React.ReactNode }[] = [
   {
     value: 'auto',
-    label: '自动',
-    description: '根据能力自动选择',
+    labelKey: 'settings.advancedProvider.strategy.auto',
     icon: <Settings2 className="w-3.5 h-3.5" />,
   },
   {
     value: 'native',
-    label: '原生API',
-    description: '使用 tools 参数',
+    labelKey: 'settings.advancedProvider.strategy.native',
     icon: <Zap className="w-3.5 h-3.5" />,
   },
   {
     value: 'prompt',
-    label: '提示词',
-    description: '注入到 System Prompt',
+    labelKey: 'settings.advancedProvider.strategy.prompt',
     icon: <MessageSquare className="w-3.5 h-3.5" />,
   },
   {
     value: 'disabled',
-    label: '禁用',
-    description: '不使用工具调用',
+    labelKey: 'settings.advancedProvider.strategy.disabled',
     icon: <Ban className="w-3.5 h-3.5" />,
   },
 ];
 
 // 能力标签
 function CapabilityBadge({ capability }: { capability: string }) {
+  const t = useTranslation();
   const styles: Record<string, string> = {
     native: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
     prompt: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     experimental: 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
     none: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
   };
-  const labels: Record<string, string> = {
-    native: '原生支持',
-    prompt: '提示词模式',
-    experimental: '实验性',
-    none: '不支持',
+  const labelKeys: Record<string, TranslationKey> = {
+    native: 'settings.advancedProvider.capability.native',
+    prompt: 'settings.advancedProvider.capability.prompt',
+    experimental: 'settings.advancedProvider.capability.experimental',
+    none: 'settings.advancedProvider.capability.none',
   };
+  const labelKey = labelKeys[capability];
   return (
     <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium', styles[capability] || styles.none)}>
-      {labels[capability] || capability}
+      {labelKey ? t(labelKey) : capability}
     </span>
   );
 }
@@ -81,6 +81,7 @@ export function AdvancedSettingsDialog({
 }: AdvancedSettingsDialogProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [browserMode, setBrowserMode] = useState<boolean>(provider.preferences?.useBrowserRequest ?? false);
+  const t = useTranslation();
 
   // 工具调用偏好
   const { 
@@ -135,10 +136,10 @@ export function AdvancedSettingsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Globe className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-            {provider.name} - 高级设置
+            {t('settings.advancedProvider.title').replace('{name}', provider.name)}
           </DialogTitle>
           <DialogDescription>
-            配置网络请求方式和其他高级选项
+            {t('settings.advancedProvider.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -148,13 +149,13 @@ export function AdvancedSettingsDialog({
             <div className="flex items-center justify-between">
               <div className="flex-1 space-y-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">浏览器请求模式</h3>
+                  <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('settings.advancedProvider.browserMode')}</h3>
                   {isUpdating && (
                     <Loader2 className="w-3 h-3 animate-spin text-sky-500" />
                   )}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  默认请求方式已适合大多数情况，如遇网络问题可尝试此模式
+                  {t('settings.advancedProvider.browserModeHint')}
                 </p>
               </div>
               <Switch
@@ -171,11 +172,11 @@ export function AdvancedSettingsDialog({
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                   <div className="text-xs text-amber-700 dark:text-amber-300">
-                    <div className="font-medium mb-1">注意事项：</div>
+                    <div className="font-medium mb-1">{t('settings.advancedProvider.warningTitle')}</div>
                     <ul className="space-y-0.5 text-amber-600 dark:text-amber-400">
-                      <li>• 不支持跨域受限的API接口</li>
-                      <li>• 某些代理设置可能不生效</li>
-                      <li>• 建议仅在网络异常时启用</li>
+                      <li>• {t('settings.advancedProvider.warningCors')}</li>
+                      <li>• {t('settings.advancedProvider.warningProxy')}</li>
+                      <li>• {t('settings.advancedProvider.warningWhenToEnable')}</li>
                     </ul>
                   </div>
                 </div>
@@ -189,12 +190,14 @@ export function AdvancedSettingsDialog({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Wrench className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                  <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">工具调用策略</h3>
+                  <h3 className="text-sm font-medium text-slate-800 dark:text-slate-100">{t('settings.advancedProvider.toolCallStrategy')}</h3>
                 </div>
                 <CapabilityBadge capability={providerConfig.defaultCapability} />
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {providerConfig.note || `${provider.name} 默认使用${providerConfig.defaultCapability === 'native' ? '原生' : '提示词'}工具调用`}
+                {providerConfig.note || t('settings.advancedProvider.defaultNote')
+                  .replace('{name}', provider.name)
+                  .replace('{strategy}', providerConfig.defaultCapability === 'native' ? t('settings.advancedProvider.defaultStrategyNative') : t('settings.advancedProvider.defaultStrategyPrompt'))}
               </p>
             </div>
 
@@ -227,7 +230,7 @@ export function AdvancedSettingsDialog({
                       effectiveStrategy === option.value
                         ? 'text-sky-700 dark:text-sky-300'
                         : 'text-slate-600 dark:text-slate-300'
-                    )}>{option.label}</span>
+                    )}>{t(option.labelKey)}</span>
                   </button>
                 ))}
               </div>
@@ -238,22 +241,22 @@ export function AdvancedSettingsDialog({
               <div className="flex items-center justify-between p-2 rounded-lg bg-sky-50 dark:bg-sky-900/20 border border-sky-200/70 dark:border-sky-800/40">
                 <div className="flex items-center gap-2 text-xs text-sky-700 dark:text-sky-300">
                   <Info className="w-3.5 h-3.5" />
-                  <span>已覆盖默认策略</span>
+                  <span>{t('settings.advancedProvider.overridden')}</span>
                 </div>
                 <button
                   onClick={() => removeProviderOverride(providerId)}
                   className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-200"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  重置
+                  {t('settings.advancedProvider.reset')}
                 </button>
               </div>
             )}
 
             {/* 功能说明 */}
             <div className="text-[10px] text-slate-500 dark:text-slate-400 space-y-1">
-              <p>• <strong>原生API</strong>：通过 API 的 tools 参数传递工具定义，更稳定</p>
-              <p>• <strong>提示词</strong>：在 System Prompt 中注入工具描述，兼容性更广</p>
+              <p>• <strong>{t('settings.advancedProvider.strategy.native')}</strong>{t('settings.advancedProvider.noteNative')}</p>
+              <p>• <strong>{t('settings.advancedProvider.strategy.prompt')}</strong>{t('settings.advancedProvider.notePrompt')}</p>
             </div>
           </div>
         </div>

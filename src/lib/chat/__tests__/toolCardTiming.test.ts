@@ -138,22 +138,29 @@ describe('seconds are rounded where it matters', () => {
   it('keeps a sub-second call visible instead of showing 0', () => {
     expect(cardDurationSeconds(1_000, 1_040)).toBe(0.1);
     expect(cardDurationSeconds(1_000, 1_005)).toBe(0.1);
-    expect(formatToolDuration(cardDurationSeconds(1_000, 1_040))).toBe('0.1s');
-    expect(formatToolDuration(cardDurationSeconds(1_000, 1_420))).toBe('0.4s');
+    expect(formatToolDuration('en', cardDurationSeconds(1_000, 1_040))).toBe(
+      '0.1s',
+    );
+    expect(formatToolDuration('en', cardDurationSeconds(1_000, 1_420))).toBe(
+      '0.4s',
+    );
   });
 
   it('keeps one decimal below ten seconds and rounds above', () => {
-    expect(formatToolDuration(1.24)).toBe('1.2s');
-    expect(formatToolDuration(9.96)).toBe('10.0s');
-    expect(formatToolDuration(12.4)).toBe('12s');
-    expect(formatToolDuration(83.6)).toBe('84s');
+    expect(formatToolDuration('en', 1.24)).toBe('1.2s');
+    expect(formatToolDuration('en', 9.96)).toBe('10.0s');
+    expect(formatToolDuration('en', 12.4)).toBe('12s');
+    expect(formatToolDuration('en', 83.6)).toBe('84s');
+    expect(formatToolDuration('zh', 0.04)).toBe('0.1 秒');
+    expect(formatToolDuration('zh', 9.96)).toBe('10.0 秒');
+    expect(formatToolDuration('zh', 12.4)).toBe('12 秒');
   });
 
   it('renders nothing for a missing or nonsense value', () => {
-    expect(formatToolDuration(undefined)).toBeNull();
-    expect(formatToolDuration(null)).toBeNull();
-    expect(formatToolDuration(0)).toBeNull();
-    expect(formatToolDuration(-1)).toBeNull();
-    expect(formatToolDuration(Number.NaN)).toBeNull();
+    expect(formatToolDuration('en', undefined)).toBeNull();
+    expect(formatToolDuration('en', null)).toBeNull();
+    expect(formatToolDuration('en', 0)).toBeNull();
+    expect(formatToolDuration('en', -1)).toBeNull();
+    expect(formatToolDuration('en', Number.NaN)).toBeNull();
   });
 });

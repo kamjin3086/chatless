@@ -3,6 +3,8 @@ import StorageUtil from "@/lib/storage";
 // 简化：仅持久化"忽略版本"。移除所有时间限制，改为基于用户明确操作的交互设计
 const STORE = "updates.json";
 export const UPDATE_AVAILABILITY_EVENT = 'chatless-update-availability-changed';
+// Keep the persisted ignore identity for updates that don't report a version.
+export const UNKNOWN_UPDATE_VERSION = '新版本';
 
 const KEY_IGNORED_VERSION = "ignored_version"; // string
 
@@ -11,6 +13,7 @@ const KEY_IGNORED_VERSION = "ignored_version"; // string
 export interface UpdateAvailability {
   available: boolean;
   version?: string | null;
+  body?: string;
 }
 
 // 单航班锁：避免在启动阶段或设置页并发触发多次插件检查
@@ -26,8 +29,8 @@ export async function getUpdateAvailability(): Promise<UpdateAvailability> {
     console.log('[update-notifier] getUpdateAvailability: plugin result', result);
     if (result && (result as any).available) {
       const versionRaw: any = (result as any).version;
-      const version: string | null = typeof versionRaw === 'string' && versionRaw.length > 0 ? versionRaw : '新版本';
-      return { available: true, version };
+      const version: string | null = typeof versionRaw === 'string' && versionRaw.length > 0 ? versionRaw : UNKNOWN_UPDATE_VERSION;
+      return { available: true, version, body: result.body };
     }
     return { available: false };
   } catch {
@@ -65,14 +68,14 @@ export async function checkForUpdatesSilently(): Promise<UpdateAvailability> {
 
       if (result && (result as any).available) {
         const versionRaw: any = (result as any).version;
-        const version: string = typeof versionRaw === 'string' && versionRaw.length > 0 ? versionRaw : '新版本';
-        // 通知前端监听者（携带版本号）
+        const version: string = typeof versionRaw === 'string' && versionRaw.length > 0 ? versionRaw : UNKNOWN_UPDATE_VERSION;
+        const availability: UpdateAvailability = { available: true, version, body: result.body };
         try {
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent(UPDATE_AVAILABILITY_EVENT, { detail: { available: true, version } as any }));
+            window.dispatchEvent(new CustomEvent(UPDATE_AVAILABILITY_EVENT, { detail: availability }));
           }
         } catch { /* noop */ }
-        return { available: true, version };
+        return availability;
       }
       return { available: false };
     } catch (error) {

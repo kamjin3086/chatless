@@ -91,6 +91,21 @@ describe('prompt language', () => {
 
   });
 
+  it('keeps the prompts built at a call site English', () => {
+    // The continuation turn is assembled in the send path, not in SystemPrompts,
+    // so a Chinese string there would slip past every prompt object above.
+    const source = readFileSync(
+      join(process.cwd(), 'src/hooks/useChatActions.ts'),
+      'utf8',
+    );
+    const argument = /continuationPrompt:([\s\S]*?)\n {10}\S/.exec(source)?.[1];
+    expect(argument, 'continuationPrompt is missing from the send path').toBeDefined();
+    expect(argument).toContain('ConversationPrompts.continueStoppedRun');
+    expectAllEnglish('continuationPrompt argument', argument);
+
+    expect(ConversationPrompts.continueStoppedRun.trim().length).toBeGreaterThan(0);
+  });
+
   it('keeps the tool documentation that is appended to descriptions English', () => {
     expect(LOADED_TOOL_DOCS.length).toBeGreaterThan(0);
     for (const name of LOADED_TOOL_DOCS) {

@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useSkillStore } from '@/store/skillStore';
+import { useLocaleStore } from '@/store/localeStore';
 import { getSkillManager } from '@/lib/skills';
 import type { Skill } from '@/lib/skills/types';
 import { SkillGrid } from './SkillGrid';
@@ -28,6 +29,7 @@ interface SkillsPageProps {
 }
 
 export function SkillsPage({ className }: SkillsPageProps) {
+  const { t } = useLocaleStore();
   const {
     skills,
     isLoading,
@@ -122,9 +124,9 @@ export function SkillsPage({ className }: SkillsPageProps) {
       await manager.openSkillsFolder();
     } catch (err) {
       console.error('Failed to open skills folder:', err);
-      toast.error('打开文件夹失败', { description: String(err) });
+      toast.error(t('skills.openFolderFailed'), { description: String(err) });
     }
-  }, []);
+  }, [t]);
 
   // 导入技能
   const handleImport = useCallback((mode: 'zip' | 'git') => {
@@ -136,8 +138,8 @@ export function SkillsPage({ className }: SkillsPageProps) {
   const handleImportSuccess = useCallback(async () => {
     setImportDialogOpen(false);
     await handleRefresh();
-    toast.success('技能导入成功');
-  }, [handleRefresh]);
+    toast.success(t('skills.import.done'));
+  }, [handleRefresh, t]);
 
   // 搜索处理
   const handleSearchChange = useCallback((value: string) => {
@@ -159,6 +161,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
 
   // 获取筛选后的技能列表
   const filteredSkills = getFilteredSkills();
+  const enabledCount = skills.filter((skill) => skill.enabled).length;
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -169,7 +172,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="搜索技能..."
+            placeholder={t('skills.search')}
             value={filterOptions.search || ''}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="glass-field w-full h-7 pl-7 pr-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
@@ -184,8 +187,8 @@ export function SkillsPage({ className }: SkillsPageProps) {
             onChange={(e) => handleSourceChange(e.target.value)}
             className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           >
-            <option value="all">全部来源</option>
-            <option value="local">本地</option>
+            <option value="all">{t('skills.allSources')}</option>
+            <option value="local">{t('skills.local')}</option>
           </select>
 
           {/* 状态筛选 */}
@@ -194,18 +197,18 @@ export function SkillsPage({ className }: SkillsPageProps) {
             onChange={(e) => handleStatusChange(e.target.value)}
             className="glass-field h-7 px-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-md text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400/30"
           >
-            <option value="all">全部状态</option>
-            <option value="installed">已安装</option>
-            <option value="needs_update">有更新</option>
-            <option value="missing_deps">缺少依赖</option>
+            <option value="all">{t('skills.allStatuses')}</option>
+            <option value="installed">{t('skills.status.installed')}</option>
+            <option value="needs_update">{t('skills.status.needsUpdate')}</option>
+            <option value="missing_deps">{t('skills.status.missingDeps')}</option>
           </select>
 
           {/* 统计 */}
           <span className="text-[11px] text-slate-500 dark:text-slate-400 ml-1">
-            {filteredSkills.length} 个
-            {skills.filter(s => s.enabled).length > 0 && (
+            {t('skills.shownCount').replace('{0}', String(filteredSkills.length))}
+            {enabledCount > 0 && (
               <span className="text-emerald-600 dark:text-emerald-400 ml-1">
-                · {skills.filter(s => s.enabled).length} 启用
+                · {t('skills.enabledCount').replace('{0}', String(enabledCount))}
               </span>
             )}
           </span>
@@ -216,7 +219,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
           <button
             onClick={handleOpenSkillsFolder}
             className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1"
-            title="打开技能文件夹"
+            title={t('skills.openSkillsFolder')}
           >
             <FolderOpen className="w-3.5 h-3.5" />
           </button>
@@ -226,16 +229,16 @@ export function SkillsPage({ className }: SkillsPageProps) {
             <DropdownMenuTrigger asChild>
               <button className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1">
                 <Plus className="w-3.5 h-3.5" />
-                <span>导入</span>
+                <span>{t('skills.import.action')}</span>
                 <ChevronDown className="w-3 h-3" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-xs">
               <DropdownMenuItem onClick={() => handleImport('zip')} className="text-xs">
-                从 ZIP 导入
+                {t('skills.import.fromZip')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleImport('git')} className="text-xs">
-                从 Git 克隆
+                {t('skills.import.fromGit')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -245,7 +248,7 @@ export function SkillsPage({ className }: SkillsPageProps) {
             onClick={handleRefresh}
             disabled={isRefreshing || isLoading}
             className="h-7 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors flex items-center gap-1 disabled:opacity-50"
-            title="刷新"
+            title={t('skills.refresh')}
           >
             <RefreshCw className={cn('w-3.5 h-3.5', isRefreshing && 'animate-spin')} />
           </button>

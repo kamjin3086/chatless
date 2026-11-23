@@ -53,7 +53,7 @@ import {
   type SessionThinkingChoice,
 } from '@/lib/chat/sessionParameterMerge';
 import { mergeSessionParameterOptions } from '@/lib/chat/sendParameterMerge';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import type { TranslationKey } from '@/i18n/types';
 
 interface SessionParametersDialogProps {
@@ -87,7 +87,7 @@ export function SessionParametersDialog({
   const [parameters, setParameters] = useState<ModelParameters>(
     DEFAULT_MODEL_PARAMETERS,
   );
-  const t = useLocaleStore((s) => s.t);
+  const t = useTranslation();
   // What this conversation may choose. An unverified model gets the generic tiers - they
   // are sent through reasoning_effort and labelled as unverified, not hidden.
   const thinkingTiers = supportedThinkingLevels(providerName, modelId);
@@ -192,25 +192,26 @@ export function SessionParametersDialog({
   const _savePromptFromText = () => {
     const text = (systemPromptText || '').trim();
     if (!text) {
-      toast.error('请输入要保存的系统提示词');
+      toast.error(t('settings.sessionParameters.toast.enterPrompt'));
       return;
     }
     const firstLine = text.split('\n')[0] || '';
     const name =
-      (firstLine.slice(0, 24) || '系统提示词') +
+      (firstLine.slice(0, 24) ||
+        t('settings.sessionParameters.defaultPromptName')) +
       ' · ' +
       new Date().toLocaleTimeString();
     try {
       const id = createPrompt({
         name,
-        description: '会话参数设置中保存',
+        description: t('settings.sessionParameters.promptSavedDescription'),
         content: text,
         tags: ['system'],
       });
-      toast.success('已保存到提示词列表');
+      toast.success(t('settings.sessionParameters.toast.savedToPrompts'));
       return id as string;
     } catch {
-      toast.error('保存提示词失败');
+      toast.error(t('settings.sessionParameters.toast.savePromptFailed'));
       return undefined;
     }
   };
@@ -218,20 +219,20 @@ export function SessionParametersDialog({
   const savePromptFromTextWithName = (name: string) => {
     const text = (systemPromptText || '').trim();
     if (!text) {
-      toast.error('请输入要保存的系统提示词');
+      toast.error(t('settings.sessionParameters.toast.enterPrompt'));
       return;
     }
     try {
       const id = createPrompt({
         name,
-        description: '会话参数设置中保存',
+        description: t('settings.sessionParameters.promptSavedDescription'),
         content: text,
         tags: ['system'],
       });
-      toast.success('已保存到提示词列表');
+      toast.success(t('settings.sessionParameters.toast.savedToPrompts'));
       return id as string;
     } catch {
-      toast.error('保存提示词失败');
+      toast.error(t('settings.sessionParameters.toast.savePromptFailed'));
       return undefined;
     }
   };
@@ -242,9 +243,11 @@ export function SessionParametersDialog({
       updateConversation(conversationId, {
         system_prompt_applied: { promptId: pid, mode: 'permanent' } as any,
       });
-      toast.success('已应用到当前会话');
+      toast.success(
+        t('settings.sessionParameters.toast.appliedToConversation'),
+      );
     } catch {
-      toast.error('应用提示词失败');
+      toast.error(t('settings.sessionParameters.toast.applyPromptFailed'));
     }
   };
 
@@ -255,7 +258,7 @@ export function SessionParametersDialog({
         updateConversation(conversationId, {
           system_prompt_applied: null,
         } as any);
-        toast.success('已清除会话提示词');
+        toast.success(t('settings.sessionParameters.toast.clearedPrompt'));
       } catch {
         /* noop */
       }
@@ -264,7 +267,7 @@ export function SessionParametersDialog({
 
     if (!promptName.trim()) {
       setNameInvalid(true);
-      toast.error('请填写提示词名称');
+      toast.error(t('settings.sessionParameters.toast.enterPromptName'));
       return;
     }
 
@@ -276,7 +279,7 @@ export function SessionParametersDialog({
       (current.content !== systemPromptText || current.name !== promptName)
     ) {
       const overwrite = confirm(
-        '内容或名称有更改。确定覆盖原提示词，取消则新建提示词。',
+        t('settings.sessionParameters.confirmOverwrite'),
       );
       if (overwrite) {
         try {
@@ -285,10 +288,10 @@ export function SessionParametersDialog({
             content: systemPromptText,
           });
           setSelectedPromptId(current.id);
-          toast.success('已覆盖原提示词');
+          toast.success(t('settings.sessionParameters.toast.overwrotePrompt'));
           applyPromptIdToConversation(current.id);
         } catch {
-          toast.error('覆盖失败');
+          toast.error(t('settings.sessionParameters.toast.overwriteFailed'));
         }
       } else {
         const id = savePromptFromTextWithName(promptName.trim());
@@ -722,11 +725,11 @@ export function SessionParametersDialog({
   const getParameterSourceText = () => {
     switch (parameterSource) {
       case 'session':
-        return '会话参数';
+        return t('settings.sessionParameters.source.session');
       case 'model':
-        return '模型默认';
+        return t('settings.sessionParameters.source.model');
       case 'default':
-        return '系统默认';
+        return t('settings.sessionParameters.source.default');
     }
   };
 
@@ -755,7 +758,7 @@ export function SessionParametersDialog({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <DialogTitle className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                  会话参数设置
+                  {t('settings.sessionParameters.title')}
                 </DialogTitle>
                 <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                   {modelLabel || modelId}
@@ -770,9 +773,11 @@ export function SessionParametersDialog({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                仅对当前会话生效；未开启或未改动的参数
-                <span className="font-medium">不会下发</span>
-                ，由模型默认值接管。
+                {t('settings.sessionParameters.hintPrefix')}
+                <span className="font-medium">
+                  {t('settings.sessionParameters.hintEmphasis')}
+                </span>
+                {t('settings.sessionParameters.hintSuffix')}
               </p>
             </div>
           </div>
@@ -786,13 +791,13 @@ export function SessionParametersDialog({
                 value="prompt"
                 className="px-4 py-1 text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm"
               >
-                提示词
+                {t('settings.sessionParameters.tabPrompt')}
               </TabsTrigger>
               <TabsTrigger
                 value="params"
                 className="px-4 py-1 text-xs rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm"
               >
-                参数
+                {t('settings.sessionParameters.tabParams')}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -809,7 +814,9 @@ export function SessionParametersDialog({
                     <Input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="搜索提示词..."
+                      placeholder={t(
+                        'settings.sessionParameters.searchPlaceholder',
+                      )}
                       className="pl-8 h-7 text-xs bg-white dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/40 rounded-md"
                     />
                   </div>
@@ -828,7 +835,9 @@ export function SessionParametersDialog({
                         showFavoritesOnly && 'fill-amber-500',
                       )}
                     />
-                    {showFavoritesOnly ? '仅收藏' : '显示全部'}
+                    {showFavoritesOnly
+                      ? t('settings.sessionParameters.favoritesOnly')
+                      : t('settings.sessionParameters.showAll')}
                   </button>
                 </div>
 
@@ -836,7 +845,9 @@ export function SessionParametersDialog({
                 <div className="flex-1 overflow-y-auto">
                   {filteredPrompts.length === 0 ? (
                     <div className="p-3 text-center text-[11px] text-slate-400">
-                      {searchQuery ? '未找到匹配的提示词' : '暂无提示词'}
+                      {searchQuery
+                        ? t('settings.sessionParameters.noMatchingPrompts')
+                        : t('settings.sessionParameters.noPrompts')}
                     </div>
                   ) : (
                     filteredPrompts.map((p: any) => (
@@ -862,7 +873,10 @@ export function SessionParametersDialog({
                           <span className="truncate font-medium">{p.name}</span>
                         </div>
                         <div className="text-[10px] text-slate-400 mt-0.5">
-                          使用 {p?.stats?.uses || 0} 次
+                          {t('settings.sessionParameters.usageCount').replace(
+                            '{0}',
+                            () => String(p?.stats?.uses || 0),
+                          )}
                         </div>
                       </button>
                     ))
@@ -889,7 +903,7 @@ export function SessionParametersDialog({
                     )}
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    新建提示词
+                    {t('settings.sessionParameters.newPrompt')}
                   </button>
                   <button
                     onClick={() => {
@@ -912,14 +926,14 @@ export function SessionParametersDialog({
                     )}
                   >
                     <X className="w-3.5 h-3.5" />
-                    不使用提示词
+                    {t('settings.sessionParameters.noPrompt')}
                   </button>
                 </div>
 
                 {/* 名称输入 */}
                 <div className="mb-2">
                   <Label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 block">
-                    提示词名称
+                    {t('settings.sessionParameters.promptNameLabel')}
                     {nameInvalid && (
                       <span className="text-red-500 ml-1">*</span>
                     )}
@@ -931,7 +945,9 @@ export function SessionParametersDialog({
                       if (nameInvalid && e.target.value.trim())
                         setNameInvalid(false);
                     }}
-                    placeholder="请输入提示词名称"
+                    placeholder={t(
+                      'settings.sessionParameters.promptNamePlaceholder',
+                    )}
                     className={cn(
                       'h-8 text-sm border-slate-200/60 dark:border-slate-700/40 rounded-md',
                       nameInvalid && 'border-red-400 focus:border-red-400',
@@ -942,13 +958,15 @@ export function SessionParametersDialog({
                 {/* 内容输入 */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <Label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                    系统提示词
+                    {t('settings.sessionParameters.systemPromptLabel')}
                   </Label>
                   <textarea
                     value={systemPromptText}
                     onChange={(e) => setSystemPromptText(e.target.value)}
                     className="w-full flex-1 resize-none rounded-md border border-slate-200/60 dark:border-slate-700/40 bg-white dark:bg-slate-800/50 p-2.5 text-sm text-slate-700 dark:text-slate-300 outline-none transition-all focus:border-blue-400 focus:ring-1 focus:ring-blue-400/20 placeholder:text-slate-400"
-                    placeholder="为本会话设置系统提示词，可保存到提示词列表"
+                    placeholder={t(
+                      'settings.sessionParameters.systemPromptPlaceholder',
+                    )}
                   />
                 </div>
 
@@ -959,10 +977,10 @@ export function SessionParametersDialog({
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    保存并应用
+                    {t('settings.sessionParameters.saveAndApply')}
                   </button>
                   <span className="text-[11px] text-slate-400">
-                    提示词将应用于当前会话的所有消息
+                    {t('settings.sessionParameters.applyToAllMessages')}
                   </span>
                 </div>
               </div>
@@ -1000,7 +1018,7 @@ export function SessionParametersDialog({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="text-[11px]">
-                          控制输出的随机性。值越高越有创意，越低越确定。
+                          {t('settings.sessionParameters.temperatureHelp')}
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -1086,7 +1104,7 @@ export function SessionParametersDialog({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="text-[11px]">
-                          限制单次回复能生成的最大 Token 数。
+                          {t('settings.sessionParameters.maxTokensHelp')}
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -1169,7 +1187,7 @@ export function SessionParametersDialog({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="text-[11px]">
-                          从累计概率最高的候选中采样。越低越保守。
+                          {t('settings.sessionParameters.topPHelp')}
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -1253,7 +1271,7 @@ export function SessionParametersDialog({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="text-[11px]">
-                          增大可降低重复词汇的概率。
+                          {t('settings.sessionParameters.frequencyPenaltyHelp')}
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -1336,7 +1354,7 @@ export function SessionParametersDialog({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="text-[11px]">
-                          增大可鼓励模型引入新话题。
+                          {t('settings.sessionParameters.presencePenaltyHelp')}
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -1419,7 +1437,7 @@ export function SessionParametersDialog({
                         </TooltipTrigger>
                         <TooltipContent>
                           <p className="text-xs">
-                            从概率最高的 K 个候选词中选择。值越小越保守。
+                            {t('settings.sessionParameters.topKHelp')}
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -1504,7 +1522,7 @@ export function SessionParametersDialog({
                         </TooltipTrigger>
                         <TooltipContent>
                           <p className="text-xs">
-                            最小概率阈值，过滤掉概率过低的候选词。
+                            {t('settings.sessionParameters.minPHelp')}
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -1636,7 +1654,7 @@ export function SessionParametersDialog({
                           : 'text-slate-600 dark:text-slate-300',
                       )}
                     >
-                      启用流式响应
+                      {t('settings.sessionParameters.streamingLabel')}
                     </Label>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1644,7 +1662,7 @@ export function SessionParametersDialog({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="text-[11px]">
-                          启用后，模型会实时流式输出内容。
+                          {t('settings.sessionParameters.streamingHelp')}
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -1659,7 +1677,9 @@ export function SessionParametersDialog({
                           : 'text-slate-500',
                       )}
                     >
-                      {parameters.streaming ? '已启用' : '已禁用'}
+                      {parameters.streaming
+                        ? t('settings.sessionParameters.streamingEnabled')
+                        : t('settings.sessionParameters.streamingDisabled')}
                     </span>
                     <button
                       type="button"
@@ -1681,7 +1701,9 @@ export function SessionParametersDialog({
                           'opacity-50 cursor-not-allowed',
                       )}
                     >
-                      {parameters.streaming ? '开启' : '关闭'}
+                      {parameters.streaming
+                        ? t('settings.sessionParameters.streamingOn')
+                        : t('settings.sessionParameters.streamingOff')}
                     </button>
                   </div>
                 </div>
@@ -1705,7 +1727,7 @@ export function SessionParametersDialog({
                             : 'text-slate-700 dark:text-slate-300',
                         )}
                       >
-                        输出格式
+                        {t('settings.sessionParameters.formatLabel')}
                       </Label>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -1713,7 +1735,7 @@ export function SessionParametersDialog({
                         </TooltipTrigger>
                         <TooltipContent>
                           <p className="text-xs">
-                            指定模型输出格式。选择"json"可强制模型返回JSON格式的内容。
+                            {t('settings.sessionParameters.formatHelp')}
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -1740,7 +1762,9 @@ export function SessionParametersDialog({
                             : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
                         )}
                       >
-                        <option value="none">无限制</option>
+                        <option value="none">
+                          {t('settings.sessionParameters.formatAny')}
+                        </option>
                         <option value="json">JSON</option>
                       </select>
                     </div>
@@ -1751,7 +1775,7 @@ export function SessionParametersDialog({
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                      自定义参数
+                      {t('settings.sessionParameters.customParametersLabel')}
                     </Label>
                     <button
                       type="button"
@@ -1759,7 +1783,7 @@ export function SessionParametersDialog({
                       className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                     >
                       <Plus className="w-3 h-3" />
-                      添加参数
+                      {t('settings.sessionParameters.addParameter')}
                     </button>
                   </div>
 
@@ -1769,7 +1793,9 @@ export function SessionParametersDialog({
                       className="flex items-center gap-2 p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded-md"
                     >
                       <Input
-                        placeholder="参数名"
+                        placeholder={t(
+                          'settings.sessionParameters.parameterNamePlaceholder',
+                        )}
                         value={param.key}
                         onChange={(e) =>
                           updateCustomParameter(index, 'key', e.target.value)
@@ -1777,7 +1803,9 @@ export function SessionParametersDialog({
                         className="w-28 h-6 text-xs border-slate-200/60 dark:border-slate-700/40 rounded-md"
                       />
                       <Input
-                        placeholder="参数值"
+                        placeholder={t(
+                          'settings.sessionParameters.parameterValuePlaceholder',
+                        )}
                         value={param.value}
                         onChange={(e) =>
                           updateCustomParameter(index, 'value', e.target.value)
@@ -1797,7 +1825,7 @@ export function SessionParametersDialog({
                           className="h-3 w-3"
                         />
                         <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                          字符串
+                          {t('settings.sessionParameters.asString')}
                         </span>
                       </div>
                       <button
@@ -1813,7 +1841,7 @@ export function SessionParametersDialog({
                   {modelInheritedParameters.length > 0 && (
                     <div className="mt-2">
                       <span className="text-[10px] text-slate-400">
-                        继承自模型（未覆盖）
+                        {t('settings.sessionParameters.inheritedFromModel')}
                       </span>
                       <div className="mt-1 space-y-1">
                         {modelInheritedParameters.map((p) => (
@@ -1833,7 +1861,7 @@ export function SessionParametersDialog({
                               onClick={() => adoptInheritedParameter(p)}
                               className="text-[10px] text-blue-500 hover:text-blue-600"
                             >
-                              覆盖
+                              {t('settings.sessionParameters.override')}
                             </button>
                           </div>
                         ))}
@@ -1845,7 +1873,7 @@ export function SessionParametersDialog({
                 {/* 预览JSON */}
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-1.5">
                   <Label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    参数预览
+                    {t('settings.sessionParameters.previewLabel')}
                   </Label>
                   <div className="p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded-md">
                     <pre className="text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap overflow-auto max-h-32 font-mono">
@@ -1853,7 +1881,7 @@ export function SessionParametersDialog({
                     </pre>
                   </div>
                   <p className="text-[10px] text-slate-400">
-                    以上是发送给 LLM 时的完整参数配置（仅包含已启用的参数）
+                    {t('settings.sessionParameters.previewHelp')}
                   </p>
                 </div>
               </div>
@@ -1871,13 +1899,13 @@ export function SessionParametersDialog({
                   className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  重置为模型默认
+                  {t('settings.sessionParameters.resetToModelDefault')}
                 </button>
                 <button
                   onClick={handleResetToSystemDefault}
                   className="px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
-                  重置为系统默认
+                  {t('settings.sessionParameters.resetToSystemDefault')}
                 </button>
               </>
             ) : (
@@ -1887,7 +1915,7 @@ export function SessionParametersDialog({
                   className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  重置提示词
+                  {t('settings.sessionParameters.resetPrompt')}
                 </button>
                 <button
                   onClick={() => {
@@ -1896,15 +1924,15 @@ export function SessionParametersDialog({
                   className="flex items-center gap-1 px-2 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   <Settings className="w-3 h-3" />
-                  管理已保存提示词
+                  {t('settings.sessionParameters.manageSavedPrompts')}
                 </button>
               </>
             )}
             <div className="flex-1" />
             <span className="text-[10px] text-slate-400">
               {activeTab === 'params'
-                ? '参数调整实时生效'
-                : '提示词仅在保存时应用'}
+                ? t('settings.sessionParameters.paramsLiveHint')
+                : t('settings.sessionParameters.promptSaveHint')}
             </span>
           </div>
         </DialogFooter>

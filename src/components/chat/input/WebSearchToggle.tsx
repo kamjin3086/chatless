@@ -12,6 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Globe, Check, Settings, ExternalLink } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { useWebSearchStore, type SearchProvider } from "@/store/webSearchStore";
 import { useRouter } from "next/navigation";
 import {
@@ -35,6 +38,8 @@ export function WebSearchToggle({
   conversationId,
   disabled = false,
 }: WebSearchToggleProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [open, setOpen] = useState(false);
   const webSearch = useWebSearchStore();
   const router = useRouter();
@@ -80,8 +85,8 @@ export function WebSearchToggle({
               ? "glass-chip-search"
               : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
-          title="网络搜索"
-          aria-label="网络搜索"
+          title={t('chatComposer.webSearch')}
+          aria-label={t('chatComposer.webSearch')}
         >
           <Globe className="w-4 h-4" />
         </Button>
@@ -89,8 +94,8 @@ export function WebSearchToggle({
 
       <ActionPanelContent width="md" maxHeight="20rem">
         <ActionPanelHeader
-          title="网络搜索"
-          aria-label="网络搜索"
+          title={t('chatComposer.webSearch')}
+          aria-label={t('chatComposer.webSearch')}
           icon={<Globe className={cn("w-4 h-4", isEnabled ? "text-sky-600 dark:text-sky-400" : "text-slate-400")} />}
           action={
             <div className="flex items-center gap-2">
@@ -98,10 +103,11 @@ export function WebSearchToggle({
                 "text-[11px]",
                 isEnabled ? "text-sky-600 dark:text-sky-400" : "text-slate-400"
               )}>
-                {isEnabled ? "已启用" : "已禁用"}
+                {t(isEnabled ? 'chatComposer.enabled' : 'chatComposer.disabled')}
               </span>
               <Switch
                 size="sm"
+                aria-label={t('chatComposer.webSearch')}
                 checked={isEnabled}
                 onCheckedChange={(v) => webSearch.toggleWebSearch(!!v)}
               />
@@ -113,7 +119,7 @@ export function WebSearchToggle({
 
         <div className="px-3 py-2">
           <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
-            搜索提供商
+            {t('chatComposer.searchProvider')}
           </p>
         </div>
 
@@ -126,13 +132,13 @@ export function WebSearchToggle({
               return (
                 <ActionPanelItem
                   key={provider}
-                  title={providerLabel(provider)}
+                  title={provider === 'custom_scrape' ? t('chatComposer.customSearchProvider') : providerLabel(provider)}
                   description={
-                    !isConfigured
-                      ? "未配置"
-                      : provider === "duckduckgo"
-                      ? "免费使用"
-                      : "已配置"
+                    t(!isConfigured
+                      ? 'chatComposer.providerNotConfigured'
+                      : provider === 'duckduckgo'
+                        ? 'chatComposer.providerFree'
+                        : 'chatComposer.providerConfigured')
                   }
                   selected={isSelected}
                   disabled={!isConfigured}
@@ -143,7 +149,7 @@ export function WebSearchToggle({
             })
           ) : (
             <div className="px-3 py-4 text-center text-[12px] text-slate-400">
-              请先选择或创建一个会话
+              {t('chatComposer.chooseSearchConversation')}
             </div>
           )}
         </ActionPanelList>
@@ -154,7 +160,7 @@ export function WebSearchToggle({
             className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />
-            配置密钥
+            {t('chatComposer.configureSearchKeys')}
             <ExternalLink className="w-3 h-3 opacity-60" />
           </button>
         </ActionPanelFooter>

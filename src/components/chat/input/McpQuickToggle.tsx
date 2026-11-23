@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Plug, Settings, Check, RotateCcw, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import {
   getEnabledConfiguredServers,
   getConnectedServers,
@@ -38,6 +41,8 @@ interface McpQuickToggleProps {
 }
 
 export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState<string[]>([]);
   const [connected, setConnected] = useState<string[]>([]);
@@ -114,8 +119,8 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
               ? "glass-chip-ok"
               : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
-          title="MCP 服务器"
-          aria-label="MCP 服务器"
+          title={t('chatComposer.mcpServers')}
+          aria-label={t('chatComposer.mcpServers')}
         >
           <Plug className="w-4 h-4" />
         </Button>
@@ -123,8 +128,10 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
 
       <ActionPanelContent width="md" maxHeight="20rem">
         <ActionPanelHeader
-          title="MCP 服务器"
-          subtitle={`${connected.length}/${all.length} 已连接`}
+          title={t('chatComposer.mcpServers')}
+          subtitle={t('chatComposer.mcpConnectionCount')
+            .replace('{connected}', String(connected.length))
+            .replace('{total}', String(all.length))}
           icon={<Plug className={cn("w-4 h-4", isActive ? "text-emerald-500" : "text-slate-400")} />}
           action={
             <div className="flex items-center gap-2">
@@ -132,10 +139,11 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
                 "text-[11px]",
                 globalEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
               )}>
-                {globalEnabled ? "已启用" : "已禁用"}
+                {t(globalEnabled ? 'chatComposer.enabled' : 'chatComposer.disabled')}
               </span>
               <Switch
                 size="sm"
+                aria-label={t('chatComposer.mcpServers')}
                 checked={globalEnabled}
                 onCheckedChange={toggleGlobal}
               />
@@ -149,8 +157,8 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
           {all.length === 0 ? (
             <ActionPanelEmpty
               icon={<Plug className="w-6 h-6 text-slate-300" />}
-              title="暂无配置的服务器"
-              description="前往设置页面添加"
+              title={t('chatComposer.noConfiguredMcp')}
+              description={t('chatComposer.addMcpInSettings')}
             />
           ) : (
             all.map((name) => {
@@ -168,7 +176,7 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
                     )} />
                   }
                   title={name}
-                  description={isConnected ? "已连接" : "未连接"}
+                  description={t(isConnected ? 'chatComposer.mcpConnected' : 'chatComposer.mcpDisconnected')}
                   selected={isEnabled}
                   suffix={
                     <div className="flex items-center gap-1">
@@ -179,7 +187,7 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
                             e.stopPropagation();
                             handleConnect(name);
                           }}
-                          title="连接"
+                          title={t('chatComposer.connectMcp')}
                         >
                           {isBusy ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -196,9 +204,9 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
                             onInsertMention(name);
                             setOpen(false);
                           }}
-                          title="插入 @引用"
+                          title={t('chatComposer.insertMention')}
                         >
-                          @引用
+                          {t('chatComposer.mentionAction')}
                         </button>
                       )}
                       {isEnabled && <Check className="w-4 h-4 text-emerald-500" />}
@@ -218,7 +226,7 @@ export function McpQuickToggle({ onInsertMention }: McpQuickToggleProps) {
             className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />
-            管理服务器
+            {t('chatComposer.manageMcp')}
           </Link>
         </ActionPanelFooter>
       </ActionPanelContent>

@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { Copy, Pencil, Check, Trash2 } from 'lucide-react';
 import { DocumentReference } from './DocumentReference';
 import { cn } from '@/lib/utils';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 
 // 帮助函数: 检查文档引用是否有效
 const isValidDocumentReference = (ref: any): boolean => {
@@ -82,6 +85,8 @@ export const UserMessageBlock = ({
   onCopy,
   onDelete,
 }: UserMessageBlockProps) => {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopy = async (content: string) => {
@@ -110,7 +115,7 @@ export const UserMessageBlock = ({
                 <span className="text-base">🧠</span>
               </div>
               <div className="flex flex-col min-w-0 flex-1">
-                <span className="text-xs text-blue-600/70 dark:text-blue-400/70 font-medium whitespace-nowrap">引用知识库</span>
+                <span className="text-xs text-blue-600/70 dark:text-blue-400/70 font-medium whitespace-nowrap">{t('chatAttachment.knowledgeBaseReference')}</span>
                 <span className="text-sm text-blue-700 dark:text-blue-300 font-semibold truncate">{knowledgeBaseReference.name}</span>
               </div>
             </div>
@@ -143,7 +148,7 @@ export const UserMessageBlock = ({
               // 将纯base64数据转换为Data URL格式
               const imageSrc = src.startsWith('data:') ? src : `data:${detectImageFormat(src)};base64,${src}`;
               return (
-                <img key={idx} src={imageSrc} alt="img" className="w-24 h-24 object-cover rounded-md" />
+                <img key={idx} src={imageSrc} alt={t('chatAttachment.image')} className="w-24 h-24 object-cover rounded-md" />
               );
             })}
           </div>
@@ -152,12 +157,9 @@ export const UserMessageBlock = ({
         {/* 默认提示文本 - 使用 truncate 实现单行显示 */}
         {!content && (documentReference || knowledgeBaseReference) && (
           <div className="text-blue-600/80 dark:text-blue-300/80 italic text-sm truncate">
-            {documentReference && knowledgeBaseReference ? 
-              "请基于上述文档和知识库为我解答问题" :
-              documentReference ? 
-                "请基于上述文档为我解答问题" :
-                "请基于知识库为我解答问题"
-            }
+            {t(documentReference && knowledgeBaseReference
+              ? 'chatAttachment.answerWithBoth'
+              : documentReference ? 'chatAttachment.answerWithDocument' : 'chatAttachment.answerWithKnowledgeBase')}
           </div>
         )}
       </div>
@@ -168,8 +170,8 @@ export const UserMessageBlock = ({
           <button
             onClick={() => onEdit(id)}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
-            title="编辑"
-            aria-label="编辑"
+            title={t('chatUi.userMessage.edit')}
+            aria-label={t('chatUi.userMessage.edit')}
           >
             <Pencil className="w-3 h-3" />
           </button>
@@ -183,8 +185,8 @@ export const UserMessageBlock = ({
                 ? "text-emerald-500"
                 : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             )}
-            title={isCopied ? "已复制" : "复制"}
-            aria-label={isCopied ? "已复制" : "复制"}
+            title={isCopied ? t('chatUi.userMessage.copied') : t('chatUi.userMessage.copy')}
+            aria-label={isCopied ? t('chatUi.userMessage.copied') : t('chatUi.userMessage.copy')}
           >
             {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
@@ -193,8 +195,8 @@ export const UserMessageBlock = ({
           <button
             onClick={() => onDelete()}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
-            title="删除"
-            aria-label="删除"
+            title={t('chatUi.userMessage.delete')}
+            aria-label={t('chatUi.userMessage.delete')}
           >
             <Trash2 className="w-3 h-3" />
           </button>

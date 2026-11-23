@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronRight, Loader2 } from 'lucide-react';
+import { useTranslation } from '@/i18n/useTranslation';
 import { cn } from '@/lib/utils';
 import { LazyStreamingMarkdown } from './LazyStreamingMarkdown';
 
@@ -13,18 +14,16 @@ interface ThinkingBarProps {
   isActive?: boolean;
 }
 
-const formatDuration = (seconds: number): string => {
+const formatDuration = (seconds: number, t: ReturnType<typeof useTranslation>): string => {
   const s = Math.floor(seconds);
-  if (s < 60) return `${s}秒`;
-  if (s < 3600) {
-    const minutes = Math.floor(s / 60);
-    const remainingSeconds = s % 60;
-    return `${minutes}分${remainingSeconds}秒`;
-  }
-  const hours = Math.floor(s / 3600);
+  if (s < 60) return t('thinkingBar.duration.seconds').replace('{seconds}', String(s));
   const minutes = Math.floor((s % 3600) / 60);
   const remainingSeconds = s % 60;
-  return `${hours}小时${minutes}分${remainingSeconds}秒`;
+  const key = s < 3600 ? 'thinkingBar.duration.minutes' : 'thinkingBar.duration.hours';
+  return t(key)
+    .replace('{hours}', String(Math.floor(s / 3600)))
+    .replace('{minutes}', String(minutes))
+    .replace('{seconds}', String(remainingSeconds));
 };
 
 export const ThinkingBar = ({
@@ -32,9 +31,10 @@ export const ThinkingBar = ({
   durationSeconds,
   isActive = false,
 }: ThinkingBarProps) => {
+  const t = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const formattedDuration = formatDuration(durationSeconds);
+  const formattedDuration = formatDuration(durationSeconds, t);
 
   // 内容由父级按帧推入；这里不再自己跑 rAF 二次节流（那是多余的重复渲染）。
   const hasContent = thinkingContent.trim().length > 0;
@@ -72,7 +72,7 @@ export const ThinkingBar = ({
           aria-expanded={isExpanded}
         >
           <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
-          <span>正在思考</span>
+          <span>{t('thinkingBar.active')}</span>
           {durationSeconds > 0 && (
             <span className="text-slate-400 dark:text-slate-500 font-mono tabular-nums">{formattedDuration}</span>
           )}
@@ -113,7 +113,7 @@ export const ThinkingBar = ({
         aria-expanded={isExpanded}
         disabled={!hasContent}
       >
-        <span>思考了 {formattedDuration}</span>
+        <span>{t('thinkingBar.completed').replace('{duration}', formattedDuration)}</span>
         {hasContent && (
           <ChevronRight className={cn("w-3 h-3 shrink-0 transition-transform", isExpanded && "rotate-90")} />
         )}

@@ -6,21 +6,22 @@ import {
 } from '@/lib/provider/providerListStatus';
 
 describe('mobile provider list status', () => {
-  it('uses the same verdict the detail page shows', () => {
-    expect(providerStatusChip({ lastResult: 'CONNECTED' }).label).toBe(
-      '已连接',
+  it('labels rows with the same keys the detail hint uses', () => {
+    // 列表和详情页两边各写一套文案的话，同一件事会有两种说法。
+    expect(providerStatusChip({ lastResult: 'CONNECTED' }).labelKey).toBe(
+      'provider.connection.connected',
     );
-    expect(providerStatusChip({ configStatus: 'NO_KEY' }).label).toBe(
-      '需要密钥',
+    expect(providerStatusChip({ configStatus: 'NO_KEY' }).labelKey).toBe(
+      'provider.connection.noKey',
     );
-    expect(providerStatusChip({ lastResult: 'NOT_CONNECTED' }).label).toBe(
-      '无法连接',
+    expect(providerStatusChip({ lastResult: 'NOT_CONNECTED' }).labelKey).toBe(
+      'provider.connection.disconnected',
     );
-    expect(providerStatusChip({ displayStatus: 'CONNECTING' }).label).toBe(
-      '检测中',
+    expect(providerStatusChip({ displayStatus: 'CONNECTING' }).labelKey).toBe(
+      'provider.connection.checking',
     );
     // 没检过就说没检过，不要装作连不上。
-    expect(providerStatusChip({}).label).toBe('未检查');
+    expect(providerStatusChip({}).labelKey).toBe('provider.list.unchecked');
   });
 
   it('puts the provider in use first, then the ones that work', () => {

@@ -9,7 +9,7 @@ import {
   pickAndroidDocumentAttachment,
   removeAndroidDocumentAttachment,
 } from '@/lib/documents/android/androidDocumentAttachment';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 const errors: Record<
   Exclude<AndroidDocumentPickStatus, 'cancelled'>,
@@ -122,8 +122,7 @@ export function AndroidDocumentAttachmentStatus({
   disabled: boolean;
   onRemove: () => void;
 }) {
-  const t = useLocaleStore((s) => s.t);
-  useLocaleStore((s) => s.locale);
+  const t = useTranslation();
   if (!state?.attachment && !state?.error && !state?.busy) return null;
   return (
     <div className="mb-2 rounded-lg border border-border px-3 py-2 text-xs">

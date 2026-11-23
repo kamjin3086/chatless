@@ -10,11 +10,31 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import type { TranslationKey } from '@/i18n/types';
+import { useTranslation } from '@/i18n/useTranslation';
+import { useLocaleStore } from '@/store/localeStore';
 import type { Citation } from '@/lib/rag/evidenceTypes';
 import type {
   CitationSourceReader,
   SourceReadMode,
 } from '@/lib/rag/CitationSourceReader';
+
+function sourceErrorKey(code: string): TranslationKey {
+  switch (code) {
+    case 'NO_CONTINUATION':
+      return 'citationSource.noContinuation';
+    case 'CURSOR_INVALID':
+      return 'citationSource.locationUnavailable';
+    case 'INDEX_NOT_READY':
+      return 'citationSource.indexNotReady';
+    case 'FILE_MISSING':
+      return 'citationSource.fileMissing';
+    case 'FILE_OPEN_FAILED':
+      return 'citationSource.fileOpenFailed';
+    default:
+      return 'citationSource.unavailable';
+  }
+}
 
 export function CitationSourceSheet({
   citation,
@@ -27,11 +47,12 @@ export function CitationSourceSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslation();
   const reader = useRef<CitationSourceReader | null>(null);
   const [text, setText] = useState('');
   const [cursor, setCursor] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<TranslationKey>();
   const [currentVersion, setCurrentVersion] = useState(false);
 
   const load = useCallback(
@@ -46,7 +67,7 @@ export function CitationSourceSheet({
         const result = await source.read(mode, next);
         if (reader.current !== source) return;
         if (!result.ok) {
-          setError(result.message);
+          setError(sourceErrorKey(result.code));
           setText('');
           setCursor(undefined);
           return;
@@ -55,11 +76,9 @@ export function CitationSourceSheet({
         setCursor(result.nextCursor);
         if (mode === 'current' || mode === 'exact')
           setCurrentVersion(mode === 'current');
-      } catch (cause) {
+      } catch {
         if (reader.current === source) {
-          setError(
-            cause instanceof Error ? cause.message : '来源读取失败，请重试。',
-          );
+          setError('citationSource.readFailed');
           setText('');
           setCursor(undefined);
         }
@@ -80,7 +99,7 @@ export function CitationSourceSheet({
     setCurrentVersion(false);
     setBusy(false);
     if (!conversationId) {
-      setError('请先打开引用所属的会话。');
+      setError('citationSource.conversationRequired');
       return;
     }
     setBusy(true);
@@ -93,7 +112,7 @@ export function CitationSourceSheet({
       })
       .catch(() => {
         if (active) {
-          setError('来源读取器加载失败，请关闭面板后重试。');
+          setError('citationSource.readerLoadFailed');
           setBusy(false);
         }
       });
@@ -110,11 +129,13 @@ export function CitationSourceSheet({
     setBusy(true);
     setError(undefined);
     try {
-      if (!(await source.openCurrentFile()) && reader.current === source)
-        setError('未能打开当前原文件，请检查文件是否仍然存在。');
-    } catch (cause) {
-      if (reader.current === source)
-        setError(cause instanceof Error ? cause.message : '原文件打开失败。');
+      const result = await source.openCurrentFile(
+        useLocaleStore.getState().locale,
+      );
+      if (!result.ok && reader.current === source)
+        setError(sourceErrorKey(result.code));
+    } catch {
+      if (reader.current === source) setError('citationSource.openFailed');
     } finally {
       if (reader.current === source) setBusy(false);
     }
@@ -123,6 +144,7 @@ export function CitationSourceSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        closeLabel={t('common.close')}
         className="flex w-full flex-col sm:max-w-xl"
         style={{
           top: 'var(--titlebar-height, 0px)',
@@ -136,34 +158,42 @@ export function CitationSourceSheet({
           >
             {citation.documentName}
           </SheetTitle>
-          <SheetDescription>
-            历史引用保留快照；读取当前原文会重新检查会话挂载范围和文档版本。
-          </SheetDescription>
+          <SheetDescription>{t('citationSource.description')}</SheetDescription>
         </SheetHeader>
         <SheetBody className="min-h-0 space-y-6 py-4">
-          <section aria-label="引用时快照">
-            <h3 className="mb-2 text-sm font-medium">引用时快照</h3>
+          <section aria-label={t('citationSource.snapshot')}>
+            <h3 className="mb-2 text-sm font-medium">
+              {t('citationSource.snapshot')}
+            </h3>
             <blockquote className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
               {citation.quote}
             </blockquote>
           </section>
-          <section aria-label="当前原文" aria-busy={busy}>
+          <section
+            data-citation-source-text
+            aria-label={t('citationSource.original')}
+            aria-busy={busy}
+          >
             <h3 className="mb-2 text-sm font-medium">
-              {currentVersion ? '当前版本（从文档开头读取）' : '引用对应原文'}
+              {t(
+                currentVersion
+                  ? 'citationSource.currentHeading'
+                  : 'citationSource.exactHeading',
+              )}
             </h3>
             {error && (
               <p role="alert" className="mb-3 text-sm text-destructive">
-                {error}
+                {t(error)}
               </p>
             )}
             {busy && (
               <p role="status" className="mb-3 text-sm text-muted-foreground">
-                正在读取来源…
+                {t('citationSource.loading')}
               </p>
             )}
             {!busy && !error && !text && (
               <p className="text-sm text-muted-foreground">
-                此位置没有可读取的文本。
+                {t('citationSource.empty')}
               </p>
             )}
             {text && (
@@ -183,7 +213,7 @@ export function CitationSourceSheet({
                 reader.current && void load(reader.current, 'exact')
               }
             >
-              引用位置
+              {t('citationSource.exact')}
             </Button>
             <Button
               size="sm"
@@ -197,7 +227,7 @@ export function CitationSourceSheet({
                 reader.current && void load(reader.current, 'neighbors')
               }
             >
-              相邻段落
+              {t('citationSource.neighbors')}
             </Button>
             <Button
               size="sm"
@@ -207,7 +237,7 @@ export function CitationSourceSheet({
                 reader.current && void load(reader.current, 'more', cursor)
               }
             >
-              下一段
+              {t('citationSource.more')}
             </Button>
             <Button
               size="sm"
@@ -217,7 +247,7 @@ export function CitationSourceSheet({
                 reader.current && void load(reader.current, 'current')
               }
             >
-              当前版本
+              {t('citationSource.current')}
             </Button>
             <Button
               size="sm"
@@ -225,11 +255,11 @@ export function CitationSourceSheet({
               disabled={busy || !reader.current}
               onClick={() => void openFile()}
             >
-              打开当前文件
+              {t('citationSource.openFile')}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            当前版本及原文件可能与历史引用不同；知识库已卸载或文档被删除时，仅保留快照。
+            {t('citationSource.versionNote')}
           </p>
         </div>
       </SheetContent>

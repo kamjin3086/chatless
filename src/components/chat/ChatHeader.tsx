@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { workspaceGroupName } from '@/lib/chat/conversationGroups';
 import { FileOpener } from '@/lib/utils/fileOpener';
 import { revealConversationWorkspace } from '@/lib/agentWorkspace/workspaceService';
@@ -100,8 +100,7 @@ export function ChatHeader({
   const directory = useConversationAttachmentStore((s) =>
     conversationId ? s.mountedDirByConversation[conversationId] : undefined,
   );
-  const t = useLocaleStore((s) => s.t);
-  useLocaleStore((s) => s.locale);
+  const t = useTranslation();
   const workspaceName = directory
     ? workspaceGroupName(directory)
     : t('chatSidebar.defaultWorkspace');
@@ -174,8 +173,8 @@ export function ChatHeader({
             <button
               onClick={toggleSidebar}
               className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-              title="侧边栏"
-              aria-label="切换侧边栏"
+              title={t('chatSidebar.toggle')}
+              aria-label={t('chatSidebar.toggle')}
             >
               <PanelLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             </button>
@@ -274,8 +273,8 @@ export function ChatHeader({
               <DropdownMenuTrigger asChild>
                 <button
                   className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-                  title="消息导航"
-                  aria-label="消息导航"
+                  title={t('chatUi.messageNavigation')}
+                  aria-label={t('chatUi.messageNavigation')}
                 >
                   <LocateFixed className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 </button>
@@ -292,8 +291,8 @@ export function ChatHeader({
             <DropdownMenuTrigger asChild>
               <button
                 className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-                title="更多"
-                aria-label="更多操作"
+                title={t('conversation.moreActions')}
+                aria-label={t('conversation.moreActions')}
               >
                 <Ellipsis className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               </button>
@@ -308,10 +307,10 @@ export function ChatHeader({
                     {t('chatSidebar.newConversation')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={onShare} className="text-xs">
-                    分享
+                    {t('chatUi.share')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={onDownload} className="text-xs">
-                    导出
+                    {t('conversation.export')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -323,7 +322,7 @@ export function ChatHeader({
                     className="text-xs"
                   >
                     <Settings className="w-3 h-3 mr-1.5" />
-                    参数
+                    {t('chatUi.parameters')}
                     {hasSessionParameters && (
                       <span className="ml-auto text-[9px] text-slate-400">
                         ·
@@ -338,7 +337,7 @@ export function ChatHeader({
                 onSelect={() => setShowDeleteConfirm(true)}
                 className="text-xs"
               >
-                删除
+                {t('conversation.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

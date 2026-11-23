@@ -1,3 +1,6 @@
+import { translate } from '@/i18n';
+import type { Locale, TranslationKey } from '@/i18n/types';
+
 export type ToolCardKind = 'shell' | 'path' | 'url' | 'query' | 'generic';
 
 export type ToolCardPresentation = {
@@ -66,7 +69,7 @@ export function previewCommand(command: string): string {
  * wrapper says nothing the user asked for. Anything this cannot understand is still printed
  * in full, because a preview that hides the result is worse than an ugly one.
  */
-export function previewResult(value: unknown): string {
+export function previewResult(locale: Locale, value: unknown): string {
   const parsed = coerceResult(value);
   if (parsed === null || parsed === undefined) return '';
   // The result box scrolls, so prose is shown whole: the complaint was that it was
@@ -79,10 +82,12 @@ export function previewResult(value: unknown): string {
     );
     if (scalars.length === parsed.length && scalars.length > 0)
       return previewLine(scalars.slice(0, 6).map((x) => String(x)).join(' · '));
-    return `${parsed.length} 项`;
+    return translate(locale, parsed.length === 1 ? 'toolCall.resultCount.one' : 'toolCall.resultCount.other')
+      .replace('{count}', String(parsed.length));
   }
   if (typeof parsed === 'object') {
     const pairs = pairValues(
+      locale,
       parsed as Record<string, unknown>,
       Object.keys(parsed),
       true,
@@ -150,14 +155,14 @@ const NOISE_KEY = /^(units?|unit|lang|language|locale|format|pretty(?:_print)?|v
 /** Values that must never be printed into a transcript surface. */
 const SECRET_KEY = /(api[_-]?key|token|secret|passwor(?:d|d)|credential|authorization|cookie)/i;
 
-function shortValue(v: unknown): string {
+function shortValue(locale: Locale, v: unknown): string {
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
   if (Array.isArray(v)) {
     const scalars = v.filter(
       (x) => typeof x === 'string' || typeof x === 'number',
     );
     if (scalars.length === 0) return '';
-    const shown = scalars.slice(0, 3).map((x) => String(x)).join('、');
+    const shown = scalars.slice(0, 3).map((x) => String(x)).join(translate(locale, 'toolCall.listSeparator'));
     return scalars.length > 3 ? `${shown}…` : shown;
   }
   if (typeof v !== 'string') return '';
@@ -176,6 +181,7 @@ function shortValue(v: unknown): string {
  * while `天气查询 city=上海` says the same thing twice and `28 · 上海` is a riddle.
  */
 function pairValues(
+  locale: Locale,
   values: Record<string, unknown>,
   orderedKeys: string[],
   withKeys: boolean,
@@ -185,16 +191,17 @@ function pairValues(
   for (const key of orderedKeys) {
     if (parts.length >= limit) break;
     if (SECRET_KEY.test(key) || NOISE_KEY.test(key)) continue;
-    const value = shortValue(values[key]);
+    const value = shortValue(locale, values[key]);
     if (!value) continue;
     parts.push(withKeys ? `${key}=${value}` : value);
   }
   return parts.join(' · ');
 }
 
-function describeArgs(args: Record<string, unknown>): string {
+function describeArgs(locale: Locale, args: Record<string, unknown>): string {
   const keys = Object.keys(args || {});
   return pairValues(
+    locale,
     args,
     [
       ...ABOUT_KEYS.filter((k) => keys.includes(k)),
@@ -209,26 +216,27 @@ function describeArgs(args: Record<string, unknown>): string {
  * worse than the raw `server · tool`, so this list is short and every entry is pinned by a
  * test - anything not on it keeps the names the user can grep for.
  */
-const TOOL_VERBS: Array<[RegExp, string]> = [
-  [/forecast|weather/i, '天气查询'],
-  [/translate/i, '翻译'],
-  [/search|query|lookup/i, '搜索'],
-  [/fetch|browse|scrape|webpage/i, '抓取网页'],
-  [/^(send|notify|post_message)/i, '发送'],
-  [/^list[_-]/i, '列出'],
-  [/download/i, '下载'],
+const TOOL_VERBS: Array<[RegExp, TranslationKey]> = [
+  [/forecast|weather/i, 'toolCall.weather'],
+  [/translate/i, 'toolCall.translate'],
+  [/search|query|lookup/i, 'toolCall.search'],
+  [/fetch|browse|scrape|webpage/i, 'toolCall.fetchPage'],
+  [/^(send|notify|post_message)/i, 'toolCall.send'],
+  [/^list[_-]/i, 'toolCall.list'],
+  [/download/i, 'toolCall.download'],
 ];
 
-function describeToolName(server: string, tool: string): string {
+function describeToolName(locale: Locale, server: string, tool: string): string {
   const verb = TOOL_VERBS.find(([pattern]) => pattern.test(tool))?.[1];
-  return verb ?? `${server} · ${tool}`;
+  return verb ? translate(locale, verb) : `${server} · ${tool}`;
 }
 
-export function presentToolCard(params: {
+export function presentToolCard(locale: Locale, params: {
   server: string;
   tool: string;
   args?: Record<string, unknown>;
 }): ToolCardPresentation {
+  const t = (key: TranslationKey) => translate(locale, key);
   const server = String(params.server || '');
   const tool = String(params.tool || '');
   const srv = server.toLowerCase();
@@ -244,50 +252,50 @@ export function presentToolCard(params: {
     
     // 使用类（只读）
     if (tl === 'list_available_skills' || tl === 'list') {
-      return { titleLine: '列出技能', kind: 'generic' };
+      return { titleLine: t('toolCall.listSkills'), kind: 'generic' };
     }
     if (tl === 'get_skill_instructions' || tl === 'guide' || tl === 'use' || tl === 'get') {
-      return { titleLine: '获取技能指南', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.getSkillGuide'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     if (tl === 'list_resources' || tl === 'list_files') {
-      return { titleLine: '列出技能资源', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.listSkillResources'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     if (tl === 'get_template' || tl === 'read_file') {
       const resourceName = pickArg(args, 'name') || pickArg(args, 'path');
-      return { titleLine: '获取模板', detailLineLabel: '文件', detailLineFull: resourceName, detailLineShort: truncate(resourceName, 25), kind: 'generic' };
+      return { titleLine: t('toolCall.getTemplate'), detailLineLabel: t('toolCall.detail.file'), detailLineFull: resourceName, detailLineShort: truncate(resourceName, 25), kind: 'generic' };
     }
     if (tl === 'list_skill_actions') {
-      return { titleLine: '列出技能动作', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.listSkillActions'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     
     // 管理类
     if (tl === 'install') {
       const repoUrl = pickArg(args, 'repoUrl');
-      return { titleLine: '安装技能', detailLineLabel: '来源', detailLineFull: repoUrl, detailLineShort: truncate(repoUrl, 30), kind: 'generic' };
+      return { titleLine: t('toolCall.installSkill'), detailLineLabel: t('toolCall.detail.source'), detailLineFull: repoUrl, detailLineShort: truncate(repoUrl, 30), kind: 'generic' };
     }
     if (tl === 'uninstall') {
-      return { titleLine: '卸载技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.uninstallSkill'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     if (tl === 'update') {
-      return { titleLine: '更新技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.updateSkill'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     if (tl === 'enable') {
-      return { titleLine: '启用技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.enableSkill'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     if (tl === 'disable') {
-      return { titleLine: '禁用技能', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.disableSkill'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     if (tl === 'check_deps') {
-      return { titleLine: '检查依赖', detailLineLabel: '技能', detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.checkDependencies'), detailLineLabel: t('toolCall.detail.skill'), detailLineFull: skillLabel, detailLineShort: truncate(skillLabel, 20), kind: 'generic' };
     }
     
     // 编辑类
     if (tl === 'edit_resource' || tl === 'write_file') {
       const resourceName = pickArg(args, 'name') || pickArg(args, 'path');
-      return { titleLine: '编辑技能资源', detailLineLabel: '文件', detailLineFull: resourceName, detailLineShort: truncate(resourceName, 25), kind: 'generic' };
+      return { titleLine: t('toolCall.editSkillResource'), detailLineLabel: t('toolCall.detail.file'), detailLineFull: resourceName, detailLineShort: truncate(resourceName, 25), kind: 'generic' };
     }
     
-    return { titleLine: 'skill 操作', detailLineLabel: '工具', detailLineFull: tool, detailLineShort: truncate(tool, 30), kind: 'generic' };
+    return { titleLine: t('toolCall.skillOperation'), detailLineLabel: t('toolCall.detail.tool'), detailLineFull: tool, detailLineShort: truncate(tool, 30), kind: 'generic' };
   }
 
   // ---------- ctx (Agent Context) ----------
@@ -297,44 +305,57 @@ export function presentToolCard(params: {
     const type = pickArg(args, 'type');
     
     if (tl === 'save_research') {
-      return { titleLine: '保存研究', detailLineLabel: '主题', detailLineFull: topic, detailLineShort: topic || '研究结果', kind: 'generic' };
+      return { titleLine: t('toolCall.saveResearch'), detailLineLabel: t('toolCall.detail.topic'), detailLineFull: topic, detailLineShort: topic || t('toolCall.researchResults'), kind: 'generic' };
     }
     if (tl === 'save_plan') {
-      return { titleLine: '创建计划', detailLineLabel: '任务', detailLineFull: title, detailLineShort: truncate(title, 25) || '任务计划', kind: 'generic' };
+      return { titleLine: t('toolCall.createPlan'), detailLineLabel: t('toolCall.detail.task'), detailLineFull: title, detailLineShort: truncate(title, 25) || t('toolCall.taskPlan'), kind: 'generic' };
     }
     if (tl === 'log_error') {
       const operation = pickArg(args, 'operation');
-      return { titleLine: '记录错误', detailLineLabel: '操作', detailLineFull: operation, detailLineShort: truncate(operation, 25), kind: 'generic' };
+      return { titleLine: t('toolCall.logError'), detailLineLabel: t('toolCall.detail.operation'), detailLineFull: operation, detailLineShort: truncate(operation, 25), kind: 'generic' };
     }
     if (tl === 'get') {
-      const typeLabel = type === 'plan' ? '计划' : type === 'research' ? '研究' : type === 'errors' ? '错误' : '状态';
-      return { titleLine: `检索${typeLabel}`, detailLineLabel: '类型', detailLineFull: type, detailLineShort: typeLabel, kind: 'generic' };
+      const [title, typeLabel]: [TranslationKey, TranslationKey] = type === 'plan'
+        ? ['toolCall.getPlan', 'toolCall.detail.plan']
+        : type === 'research'
+          ? ['toolCall.getResearch', 'toolCall.detail.research']
+          : type === 'errors'
+            ? ['toolCall.getErrors', 'toolCall.detail.errors']
+            : ['toolCall.getState', 'toolCall.detail.state'];
+      return { titleLine: t(title), detailLineLabel: t('toolCall.detail.type'), detailLineFull: type, detailLineShort: t(typeLabel), kind: 'generic' };
     }
     if (tl === 'update_step') {
       const stepIndex = pickArg(args, 'stepIndex');
       const status = pickArg(args, 'status');
-      return { titleLine: '更新进度', detailLineLabel: '步骤', detailLineFull: `第${stepIndex}步: ${status}`, detailLineShort: `第${stepIndex}步`, kind: 'generic' };
+      return {
+        titleLine: t('toolCall.updateProgress'),
+        detailLineLabel: t('toolCall.detail.step'),
+        detailLineFull: t('toolCall.stepStatus').replace(/\{(index|status)\}/g, (_, key) => key === 'index' ? stepIndex : status),
+        detailLineShort: t('toolCall.stepNumber').replace('{index}', () => stepIndex),
+        kind: 'generic',
+      };
     }
-    return { titleLine: '上下文管理', detailLineLabel: '工具', detailLineFull: tool, detailLineShort: tool, kind: 'generic' };
+    return { titleLine: t('toolCall.manageContext'), detailLineLabel: t('toolCall.detail.tool'), detailLineFull: tool, detailLineShort: tool, kind: 'generic' };
   }
 
   // ---------- tools (工具发现) ----------
   if (srv === 'tools') {
     if (tl === 'discover') {
-      return { titleLine: '发现工具', kind: 'generic' };
+      return { titleLine: t('toolCall.discoverTools'), kind: 'generic' };
     }
     if (tl === 'load') {
       const group = pickArg(args, 'group');
       const groupNames: Record<string, string> = {
-        fs_extra: '文件管理',
-        shell: '命令执行',
-        web: '网络工具',
-        ctx: '上下文管理',
-        skills: '技能系统',
+        fs_extra: t('toolCall.group.files'),
+        shell: t('toolCall.group.shell'),
+        web: t('toolCall.group.web'),
+        ctx: t('toolCall.manageContext'),
+        skills: t('toolCall.group.skills'),
       };
-      return { titleLine: '加载工具组', detailLineLabel: '组', detailLineFull: group, detailLineShort: groupNames[group] || group, kind: 'generic' };
+      const groupLabel = Object.hasOwn(groupNames, group) ? groupNames[group] : group;
+      return { titleLine: t('toolCall.loadToolGroup'), detailLineLabel: t('toolCall.detail.group'), detailLineFull: group, detailLineShort: groupLabel, kind: 'generic' };
     }
-    return { titleLine: '工具管理', kind: 'generic' };
+    return { titleLine: t('toolCall.manageTools'), kind: 'generic' };
   }
 
   // （兼容遗留）user_fs / skills_fs 不再对外暴露；这里保留通用兜底即可。
@@ -342,7 +363,7 @@ export function presentToolCard(params: {
   // ---------- shell ----------
   if (srv === 'shell_executor' || srv === 'shell-executor' || srv === 'shell') {
     const cmd = pickArg(args, 'command');
-    return { titleLine: '运行', detailLineLabel: '命令', detailLineFull: cmd, detailLineShort: previewCommand(cmd), kind: 'shell' };
+    return { titleLine: t('toolCall.run'), detailLineLabel: t('toolCall.detail.command'), detailLineFull: cmd, detailLineShort: previewCommand(cmd), kind: 'shell' };
   }
 
   // ---------- web ----------
@@ -353,24 +374,24 @@ export function presentToolCard(params: {
     
     if (tl === 'download') {
       const filename = savePath ? basename(savePath) : '';
-      return { 
-        titleLine: '下载文件', 
-        detailLineLabel: '保存为', 
-        detailLineFull: savePath, 
+      return {
+        titleLine: t('toolCall.downloadFile'),
+        detailLineLabel: t('toolCall.detail.saveAs'),
+        detailLineFull: savePath,
         detailLineShort: filename || truncate(url, 30),
-        kind: 'path' 
+        kind: 'path',
       };
     }
     if (tl === 'fetch') {
-      return { 
-        titleLine: '抓取网页', 
-        detailLineLabel: 'URL', 
-        detailLineFull: url, 
+      return {
+        titleLine: t('toolCall.fetchPage'),
+        detailLineLabel: 'URL',
+        detailLineFull: url,
         detailLineShort: truncate(url, 40),
-        kind: 'url' 
+        kind: 'url',
       };
     }
-    return { titleLine: '网络搜索', detailLineLabel: '查询', detailLineFull: query, detailLineShort: truncate(query, 25), kind: 'query' };
+    return { titleLine: t('toolCall.webSearch'), detailLineLabel: t('toolCall.detail.query'), detailLineFull: query, detailLineShort: truncate(query, 25), kind: 'query' };
   }
 
   // ---------- filesystem / fs ----------
@@ -382,20 +403,20 @@ export function presentToolCard(params: {
     const displayPath = path || (hasDirPattern ? `${dir.replace(/\\/g, '/')}/${pattern}` : '');
     const filename = basename(displayPath);
     const op =
-      tl === 'mkdir' || tl.includes('create_directory') || tl.includes('create-dir') ? '创建目录' :
-      tl === 'write' || tl.includes('write') ? '写入文件' :
-      tl === 'rm' || tl.includes('delete') ? '删除文件' :
-      tl === 'read' || tl.includes('read') ? '读取文件' :
-      tl === 'ls' || tl.includes('list') || tl.includes('dir') ? '列目录' :
-      tl === 'mv' || tl.includes('rename') ? '移动文件' :
-      '文件操作';
+      tl === 'mkdir' || tl.includes('create_directory') || tl.includes('create-dir') ? t('toolCall.createDirectory') :
+      tl === 'write' || tl.includes('write') ? t('toolCall.writeFile') :
+      tl === 'rm' || tl.includes('delete') ? t('toolCall.deleteFile') :
+      tl === 'read' || tl.includes('read') ? t('toolCall.readFile') :
+      tl === 'ls' || tl.includes('list') || tl.includes('dir') ? t('toolCall.listDirectory') :
+      tl === 'mv' || tl.includes('rename') ? t('toolCall.moveFile') :
+      t('toolCall.fileOperation');
     if (tl === 'rm' || tl.includes('delete')) {
-      const label = hasDirPattern ? '范围' : '路径';
+      const label = t(hasDirPattern ? 'toolCall.detail.scope' : 'toolCall.detail.path');
       const full = displayPath;
       const short = hasDirPattern ? truncate(displayPath, 40) : (filename || truncate(displayPath, 30));
       return { titleLine: op, detailLineLabel: label, detailLineFull: full, detailLineShort: short, kind: 'path' };
     }
-    return { titleLine: op, detailLineLabel: '路径', detailLineFull: displayPath, detailLineShort: filename || truncate(displayPath, 30), kind: 'path' };
+    return { titleLine: op, detailLineLabel: t('toolCall.detail.path'), detailLineFull: displayPath, detailLineShort: filename || truncate(displayPath, 30), kind: 'path' };
   }
 
   // ---------- system (提示词管理) ----------
@@ -405,57 +426,44 @@ export function presentToolCard(params: {
     const promptLabel = name || id || '';
     
     if (tl === 'list_prompts') {
-      return { titleLine: '列出提示词', kind: 'generic' };
+      return { titleLine: t('toolCall.listPrompts'), kind: 'generic' };
     }
     if (tl === 'get_prompt') {
-      return { titleLine: '获取提示词', detailLineLabel: '名称', detailLineFull: promptLabel, detailLineShort: truncate(promptLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.getPrompt'), detailLineLabel: t('toolCall.detail.name'), detailLineFull: promptLabel, detailLineShort: truncate(promptLabel, 20), kind: 'generic' };
     }
     if (tl === 'create_prompt') {
-      return { titleLine: '创建提示词', detailLineLabel: '名称', detailLineFull: name, detailLineShort: truncate(name, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.createPrompt'), detailLineLabel: t('toolCall.detail.name'), detailLineFull: name, detailLineShort: truncate(name, 20), kind: 'generic' };
     }
     if (tl === 'update_prompt') {
-      return { titleLine: '更新提示词', detailLineLabel: '名称', detailLineFull: promptLabel, detailLineShort: truncate(promptLabel, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.updatePrompt'), detailLineLabel: t('toolCall.detail.name'), detailLineFull: promptLabel, detailLineShort: truncate(promptLabel, 20), kind: 'generic' };
     }
     if (tl === 'delete_prompt') {
-      return { titleLine: '删除提示词', detailLineLabel: 'ID', detailLineFull: id, detailLineShort: truncate(id, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.deletePrompt'), detailLineLabel: 'ID', detailLineFull: id, detailLineShort: truncate(id, 20), kind: 'generic' };
     }
     if (tl === 'optimize_prompt') {
-      return { titleLine: '优化提示词', detailLineLabel: 'ID', detailLineFull: id, detailLineShort: truncate(id, 20), kind: 'generic' };
+      return { titleLine: t('toolCall.optimizePrompt'), detailLineLabel: 'ID', detailLineFull: id, detailLineShort: truncate(id, 20), kind: 'generic' };
     }
-    return { titleLine: '系统操作', detailLineLabel: '工具', detailLineFull: tool, detailLineShort: truncate(tool, 25), kind: 'generic' };
+    return { titleLine: t('toolCall.systemOperation'), detailLineLabel: t('toolCall.detail.tool'), detailLineFull: tool, detailLineShort: truncate(tool, 25), kind: 'generic' };
   }
 
   // ---------- generic fallback ----------
   const maybeUrl = pickArg(args, 'url');
   if (maybeUrl)
     return {
-      titleLine: '访问链接',
+      titleLine: t('toolCall.openLink'),
       detailLineLabel: 'URL',
       detailLineFull: maybeUrl,
       detailLineShort: previewLine(maybeUrl),
       kind: 'url',
     };
   const maybePath = pickArg(args, 'path');
-  if (maybePath) return { titleLine: `${server} 操作`, detailLineLabel: '路径', detailLineFull: maybePath, detailLineShort: basename(maybePath) || truncate(maybePath, 30), kind: 'path' };
+  if (maybePath) return { titleLine: t('toolCall.serverOperation').replace('{server}', () => server), detailLineLabel: t('toolCall.detail.path'), detailLineFull: maybePath, detailLineShort: basename(maybePath) || truncate(maybePath, 30), kind: 'path' };
 
-  // 尝试生成友好的回退名称
-  const friendlyServerNames: Record<string, string> = {
-    'fs': '文件',
-    'filesystem': '文件',
-    'shell': '命令',
-    'web': '网络',
-    'skill': '技能',
-    'skills': '技能',
-    'ctx': '上下文',
-    'system': '系统',
-    'tools': '工具',
-  };
-  const friendlyServer = friendlyServerNames[srv] || server;
-  const about = describeArgs(args);
+  const about = describeArgs(locale, args);
 
   return {
-    titleLine: describeToolName(friendlyServer, tool),
-    detailLineLabel: about ? '参数' : undefined,
+    titleLine: describeToolName(locale, server, tool),
+    detailLineLabel: about ? t('toolCall.arguments') : undefined,
     detailLineFull: about || undefined,
     detailLineShort: about || undefined,
     kind: 'generic',
@@ -464,17 +472,17 @@ export function presentToolCard(params: {
 
 
 /**
- * The duration suffix for a tool row: `1.2s`.
+ * The localized duration for a tool row, such as `1.2s`.
  *
  * One decimal below ten seconds, because the point of the column is spotting the call that took
  * 40 seconds and 0.4 s is materially different from 0. Above ten seconds the tenth does not
  * inform anything, so it rounds. A missing, zero or negative value renders nothing - an old row
  * must look exactly as it did before the field existed.
  */
-export function formatToolDuration(seconds?: number | null): string | null {
+export function formatToolDuration(locale: Locale, seconds?: number | null): string | null {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return null;
-  if (seconds < 10) {
-    return `${Math.max(0.1, Math.round(seconds * 10) / 10).toFixed(1)}s`;
-  }
-  return `${Math.round(seconds)}s`;
+  const rounded = seconds < 10
+    ? Math.max(0.1, Math.round(seconds * 10) / 10).toFixed(1)
+    : String(Math.round(seconds));
+  return translate(locale, 'toolCall.duration').replace('{seconds}', rounded);
 }

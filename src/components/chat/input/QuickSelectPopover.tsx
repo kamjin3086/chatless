@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/useTranslation";
 
 export interface QuickSelectOption {
   id: string;
@@ -69,9 +70,10 @@ export function QuickSelectPopover({
   selectedId,
   onSelect,
   title,
-  emptyText = "暂无可用选项",
+  emptyText,
   accentColor = "slate",
 }: QuickSelectPopoverProps) {
+  const t = useTranslation();
   const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const theme = colorThemes[accentColor];
@@ -146,7 +148,7 @@ export function QuickSelectPopover({
       <ul className="py-1.5 max-h-52 overflow-y-auto">
         {options.length === 0 ? (
           <li className="px-3 py-4 text-center text-sm text-slate-400">
-            {emptyText}
+            {emptyText ?? t('chatUi.noAvailableOptions')}
           </li>
         ) : (
           options.map((opt) => {

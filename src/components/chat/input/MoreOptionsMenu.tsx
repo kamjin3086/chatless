@@ -7,6 +7,7 @@
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface MoreOptionsMenuProps {
   disabled?: boolean;
@@ -21,6 +22,8 @@ export function MoreOptionsMenu({
   canEditSessionParameters,
   onOpenSessionParameters,
 }: MoreOptionsMenuProps) {
+  const t = useTranslation();
+
   if (!canEditSessionParameters) {
     return null;
   }
@@ -35,7 +38,7 @@ export function MoreOptionsMenu({
         "h-8 w-8 shrink-0 rounded-md text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800",
         hasSessionParameters && "text-slate-700 dark:text-slate-200"
       )}
-      title="会话参数"
+      title={t('chatUi.sessionParameters')}
     >
       <Settings className="w-4 h-4" />
     </Button>

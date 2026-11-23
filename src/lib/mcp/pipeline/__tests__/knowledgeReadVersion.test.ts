@@ -131,8 +131,12 @@ it('the source view reopens exactly and opens only the current authorized file p
       ok: true,
       text: 'source',
     });
-    expect(await reader.openCurrentFile()).toBe(true);
-    expect(openFile).toHaveBeenCalledWith('/managed/current.txt', 'Source');
+    expect(await reader.openCurrentFile('en')).toEqual({ ok: true });
+    expect(openFile).toHaveBeenCalledWith(
+      '/managed/current.txt',
+      'Source',
+      'en',
+    );
   } finally {
     reader.dispose();
   }
@@ -146,7 +150,10 @@ it('the source view rechecks mounting before reading or opening the original fil
   );
   try {
     expect(await reader.read('exact')).toMatchObject({ ok: false });
-    await expect(reader.openCurrentFile()).rejects.toThrow('当前会话');
+    expect(await reader.openCurrentFile('en')).toEqual({
+      ok: false,
+      code: 'NO_KNOWLEDGE_BASE',
+    });
     expect(openFile).not.toHaveBeenCalled();
   } finally {
     reader.dispose();
@@ -155,7 +162,7 @@ it('the source view rechecks mounting before reading or opening the original fil
 
 it('closing a source view prevents an in-flight read from opening an external file', async () => {
   const reader = sourceReader();
-  const opening = reader.openCurrentFile();
+  const opening = reader.openCurrentFile('en');
   reader.dispose();
   await expect(opening).rejects.toThrow('Source view was closed');
   expect(openFile).not.toHaveBeenCalled();

@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { IconButton } from '@/components/ui/icon-button';
 import type { ModelMetadata, ProviderMetadata } from '@/lib/metadata/types';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { cn } from '@/lib/utils';
 import { ProviderGlyph } from './ProviderGlyph';
 
@@ -37,8 +37,7 @@ export function AndroidModelPicker({
   onSelect,
   onSettings,
 }: AndroidModelPickerProps) {
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
 

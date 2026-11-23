@@ -80,9 +80,10 @@ const setupNavigationListener = async (router: any) => {
           // 动态导入聊天store
           const { useChatStore } = await import('@/store/chatStore');
           const { createConversation } = useChatStore.getState();
+          const { NEW_CONVERSATION_TITLE } = await import('@/lib/chat/TitleGenerator');
           
           // 创建新会话
-          const newChatId = await createConversation('新对话', 'default');
+          const newChatId = await createConversation(NEW_CONVERSATION_TITLE, 'default');
           console.log('新聊天会话创建成功:', newChatId);
         } catch (error) {
           console.error('创建新聊天会话失败:', error);
@@ -176,15 +177,10 @@ export default function RootLayout({
 
   // 订阅 UI 偏好
   const { initialized, simpleMode, lowAnimationMode, sidebarWidth, sidebarIconSize } = useUiPreferences();
-  const { locale, initialized: localeInitialized } = useLocaleStore();
+  const locale = useLocaleStore((state) => state.locale);
   
   // 获取 Next.js 路由实例
   const router = useRouter();
-
-  useEffect(() => {
-    if (!localeInitialized) return;
-    document.documentElement.lang = getHtmlLang(locale);
-  }, [locale, localeInitialized]);
 
   useEffect(() => {
     if (!initialized) return;

@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
+import { getHtmlLang, translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { formatKnowledgeDocumentCount } from './formatKnowledgeDocumentCount';
+import { useLocaleStore } from '@/store/localeStore';
 import { ChevronDown, ChevronUp, Calendar, FileText, Clock, Database } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +17,9 @@ interface CollapsibleKnowledgeInfoProps {
 }
 
 export function CollapsibleKnowledgeInfo({ knowledgeBase, documentsCount }: CollapsibleKnowledgeInfoProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
+  const language = getHtmlLang(locale);
   const [isExpanded, setIsExpanded] = useState(false);
   
   const rawDescription = knowledgeBase.description || '';
@@ -45,7 +52,7 @@ export function CollapsibleKnowledgeInfo({ knowledgeBase, documentsCount }: Coll
                 {shouldShowCollapse && !isExpanded ? (
                   <span>{truncatedDescription}</span>
                 ) : (
-                  <span>{formattedDescription || "暂无描述"}</span>
+                  <span>{formattedDescription || t('knowledge.noDescription')}</span>
                 )}
               </div>
               
@@ -59,12 +66,12 @@ export function CollapsibleKnowledgeInfo({ knowledgeBase, documentsCount }: Coll
                   {isExpanded ? (
                     <>
                       <ChevronUp className="h-4 w-4 mr-1" />
-                      收起
+                      {t('knowledge.detail.showLess')}
                     </>
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4 mr-1" />
-                      查看更多
+                      {t('knowledge.detail.showMore')}
                     </>
                   )}
                 </Button>
@@ -79,10 +86,10 @@ export function CollapsibleKnowledgeInfo({ knowledgeBase, documentsCount }: Coll
             <Calendar className="h-4 w-4 text-slate-500" />
             <div>
               <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                创建时间
+                {t('knowledge.createdAt')}
               </div>
               <div className="text-[13px] font-medium text-slate-900 dark:text-slate-100">
-                {new Date(knowledgeBase.createdAt).toLocaleDateString('zh-CN', {
+                {new Date(knowledgeBase.createdAt).toLocaleDateString(language, {
                   year: 'numeric',
                   month: 'short',
                   day: 'numeric'
@@ -95,10 +102,10 @@ export function CollapsibleKnowledgeInfo({ knowledgeBase, documentsCount }: Coll
             <Clock className="h-4 w-4 text-slate-500" />
             <div>
               <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                更新时间
+                {t('knowledge.detail.updatedAt')}
               </div>
               <div className="text-[13px] font-medium text-slate-900 dark:text-slate-100">
-                {new Date(knowledgeBase.updatedAt).toLocaleDateString('zh-CN', {
+                {new Date(knowledgeBase.updatedAt).toLocaleDateString(language, {
                   year: 'numeric',
                   month: 'short',
                   day: 'numeric'
@@ -111,10 +118,10 @@ export function CollapsibleKnowledgeInfo({ knowledgeBase, documentsCount }: Coll
             <FileText className="h-4 w-4 text-slate-500" />
             <div>
               <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                文档数量
+                {t('knowledge.detail.documentCount')}
               </div>
               <div className="text-[13px] font-medium text-slate-900 dark:text-slate-100">
-                {documentsCount} 个文档
+                {formatKnowledgeDocumentCount(locale, documentsCount)}
               </div>
             </div>
           </div>
@@ -130,28 +137,28 @@ export function CollapsibleKnowledgeInfo({ knowledgeBase, documentsCount }: Coll
           <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="font-medium text-slate-700 dark:text-slate-300">知识库ID：</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">{t('knowledge.detail.idLabel')}</span>
                 <span className="text-slate-600 dark:text-slate-400 font-mono text-xs">{knowledgeBase.id}</span>
               </div>
               <div>
-                <span className="font-medium text-slate-700 dark:text-slate-300">加密状态：</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">{t('knowledge.detail.encryptionLabel')}</span>
                 <span className={cn(
                   "ml-2 px-2 py-1 rounded-full text-xs font-medium",
                   knowledgeBase.isEncrypted 
                     ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" 
                     : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                 )}>
-                  {knowledgeBase.isEncrypted ? "已加密" : "未加密"}
+                  {t(knowledgeBase.isEncrypted ? 'knowledge.detail.encrypted' : 'knowledge.detail.notEncrypted')}
                 </span>
               </div>
               <div>
-                <span className="font-medium text-slate-700 dark:text-slate-300">图标：</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">{t('knowledge.detail.iconLabel')}</span>
                 <span className="text-slate-600 dark:text-slate-400">{knowledgeBase.icon}</span>
               </div>
               <div>
-                <span className="font-medium text-slate-700 dark:text-slate-300">完整更新时间：</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">{t('knowledge.detail.updatedAtLabel')}</span>
                 <span className="text-slate-600 dark:text-slate-400">
-                  {new Date(knowledgeBase.updatedAt).toLocaleString('zh-CN')}
+                  {new Date(knowledgeBase.updatedAt).toLocaleString(language)}
                 </span>
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, ReactNode } from 'react';
+import { useTranslation } from '@/i18n/useTranslation';
 import { cn } from '@/lib/utils';
 import { Clock, FileText, FileJson, FileCode, Database, Folder, Book, MessageSquare } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -65,13 +66,16 @@ const getIcon = (iconType?: string): ReactNode => {
 };
 
 export function RecentUsedList({
-  title = '最近使用',
+  title,
   items,
   onItemClick,
-  emptyText = '暂无',
+  emptyText,
   maxHeight = 128,
   className,
 }: RecentUsedListProps) {
+  const t = useTranslation();
+  const resolvedTitle = title ?? t('ui.recentUsed');
+  const resolvedEmptyText = emptyText ?? t('ui.empty');
   const [hover, setHover] = useState(false);
   const visibleItems = hover ? items : items.slice(0, 1);
 
@@ -83,11 +87,11 @@ export function RecentUsedList({
     >
       <h3 className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
         <Clock className="h-3 w-3" />
-        {title}
+        {resolvedTitle}
       </h3>
 
       {items.length === 0 ? (
-        <div className="text-[11px] text-slate-400 py-1">{emptyText}</div>
+        <div className="text-[11px] text-slate-400 py-1">{resolvedEmptyText}</div>
       ) : (
         <ScrollArea 
           className={cn(

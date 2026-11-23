@@ -3,6 +3,7 @@
 import { ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/i18n/useTranslation';
 
 interface NewMessageIndicatorProps {
   show: boolean;
@@ -15,6 +16,7 @@ interface NewMessageIndicatorProps {
  * 当用户在查看历史消息时，如果有新消息到达，显示此提示
  */
 export function NewMessageIndicator({ show, onClick, className }: NewMessageIndicatorProps) {
+  const t = useTranslation();
   return (
     <AnimatePresence>
       {show && (
@@ -42,9 +44,9 @@ export function NewMessageIndicator({ show, onClick, className }: NewMessageIndi
             "cursor-pointer select-none",
             className
           )}
-          aria-label="查看新消息"
+          aria-label={t('chatUi.newMessage.aria')}
         >
-          <span>新消息</span>
+          <span>{t('chatUi.newMessage.label')}</span>
           <ChevronDown className="w-4 h-4 animate-bounce" />
         </motion.button>
       )}

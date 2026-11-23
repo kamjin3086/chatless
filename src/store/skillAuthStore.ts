@@ -5,6 +5,8 @@
  */
 
 import { create } from 'zustand';
+import { translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
 import type { 
   PendingSkillAction,
   SkillAction,
@@ -344,7 +346,7 @@ export function createPendingSkillAction(
 /**
  * 获取风险等级显示信息
  */
-export function getRiskLevelInfo(level: SkillRiskLevel): {
+export function getRiskLevelInfo(level: SkillRiskLevel, locale: Locale = 'zh'): {
   label: string;
   color: string;
   bgColor: string;
@@ -353,38 +355,38 @@ export function getRiskLevelInfo(level: SkillRiskLevel): {
   switch (level) {
     case 'safe':
       return {
-        label: '安全',
+        label: translate(locale, 'skillRisk.safe'),
         color: 'text-green-600 dark:text-green-400',
         bgColor: 'bg-green-100 dark:bg-green-900/30',
-        description: '此操作是安全的，不会对系统造成影响',
+        description: translate(locale, 'skillRisk.safeDescription'),
       };
     case 'low':
       return {
-        label: '低风险',
+        label: translate(locale, 'skillRisk.low'),
         color: 'text-blue-600 dark:text-blue-400',
         bgColor: 'bg-blue-100 dark:bg-blue-900/30',
-        description: '此操作风险较低，通常是读取操作',
+        description: translate(locale, 'skillRisk.lowDescription'),
       };
     case 'medium':
       return {
-        label: '中等风险',
+        label: translate(locale, 'skillRisk.medium'),
         color: 'text-yellow-600 dark:text-yellow-400',
         bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
-        description: '此操作可能修改文件或安装软件包',
+        description: translate(locale, 'skillRisk.mediumDescription'),
       };
     case 'high':
       return {
-        label: '高风险',
+        label: translate(locale, 'skillRisk.high'),
         color: 'text-orange-600 dark:text-orange-400',
         bgColor: 'bg-orange-100 dark:bg-orange-900/30',
-        description: '此操作需要管理员权限或可能影响系统配置',
+        description: translate(locale, 'skillRisk.highDescription'),
       };
     case 'critical':
       return {
-        label: '关键风险',
+        label: translate(locale, 'skillRisk.critical'),
         color: 'text-red-600 dark:text-red-400',
         bgColor: 'bg-red-100 dark:bg-red-900/30',
-        description: '此操作可能导致不可逆的系统更改',
+        description: translate(locale, 'skillRisk.criticalDescription'),
       };
   }
 }

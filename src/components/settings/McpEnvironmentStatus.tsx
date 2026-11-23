@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocaleStore } from "@/store/localeStore";
 
 interface ToolAvailability {
   tool_name: string;
@@ -52,13 +53,15 @@ export function McpEnvironmentStatus({
   loading: boolean;
   error: string | null;
 }) {
+  const { locale, t } = useLocaleStore();
   const unhealthy = !loading && !error && health && !health.overall_healthy;
 
-  let text = "MCP 依赖已就绪";
-  if (loading) text = "正在检测 MCP 依赖…";
-  else if (error || !health) text = "暂时无法检测 MCP 依赖";
+  let text = t('mcpSettings.dependenciesReady');
+  if (loading) text = t('mcpSettings.checkingDependencies');
+  else if (error || !health) text = t('mcpSettings.dependenciesUnavailable');
   else if (!health.overall_healthy) {
-    text = `缺少工具：${health.missing_critical_tools.join("、")}`;
+    const tools = health.missing_critical_tools.join(locale === 'zh' ? '、' : ', ');
+    text = t('mcpSettings.missingTools').replace('{0}', () => tools);
   }
 
   return (

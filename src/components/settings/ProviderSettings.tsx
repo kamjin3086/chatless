@@ -11,6 +11,8 @@ import { ProviderConnectionSection } from './ProviderConnectionSection';
 import { ProviderModelList } from './ProviderModelList';
 import { AVAILABLE_PROVIDERS_CATALOG } from '@/lib/provider/catalog';
 import { toast } from '@/components/ui/sonner';
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
 import { AdvancedSettingsDialog } from './AdvancedSettingsDialog';
 import { useStableProviderIcon } from './useStableProviderIcon';
 import { useRecentModelsHint } from './useRecentModelsHint';
@@ -139,7 +141,7 @@ function ProviderSettingsImpl({
     const defaultUrl = getDefaultUrl(provider.name);
     setLocalUrl(defaultUrl);
     onUrlChange(repoName, defaultUrl);
-    toast.success('已重置为默认地址', { description: defaultUrl });
+    toast.success(translate(useLocaleStore.getState().locale, 'provider.connection.urlReset'), { description: defaultUrl });
   };
 
   const isGloballyInitializing = isInitialChecking;

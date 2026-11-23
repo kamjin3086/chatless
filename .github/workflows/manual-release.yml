@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       release_notes:
-        description: 'Release notes (supports Markdown).'
+        description: 'Markdown notes for v0.8.2 and older. Newer releases use CHANGELOG.md.'
         required: false
         type: string
         default: 'New release!'
@@ -35,15 +35,27 @@ jobs:
         with:
           ref: 'main'
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'pnpm'
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+      - name: Validate and render GitHub Release body
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          LEGACY_RELEASE_NOTES: ${{ github.event.inputs.release_notes }}
+        run: node scripts/extract-changelog.mjs --format manual > release_notes.md
+      - name: Save validated release body
+        uses: actions/upload-artifact@v4
         with:
-          version: latest
+          name: release-body
+          path: release_notes.md
+          if-no-files-found: error
+          overwrite: true
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Set version to inputs.version
@@ -180,16 +192,22 @@ jobs:
 
   release:
     runs-on: ubuntu-22.04
-    if: always()
-    needs: [build-ubuntu, build-windows, build-macos]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    needs: [prepare, build-ubuntu, build-windows, build-macos]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: 'main'
-      - name: Download all artifacts
+      - name: Download validated release body
         uses: actions/download-artifact@v4
         with:
+          name: release-body
+          path: release-body/
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: chatless-*
           path: artifacts/
       - name: Display structure of downloaded files
         run: ls -R artifacts
@@ -198,7 +216,7 @@ jobs:
         with:
           tag_name: v${{ github.event.inputs.version }}
           name: Release v${{ github.event.inputs.version }}
-          body: ${{ github.event.inputs.release_notes }}
+          body_path: release-body/release_notes.md
           files: artifacts/**/*
           draft: false
           prerelease: ${{ contains(github.event.inputs.version, '-') }}
@@ -247,16 +265,19 @@ jobs:
       - name: Skip public release mirror (missing secrets)
         if: ${{ steps.check.outputs.has_secrets != 'true' }}
         run: echo "PUBLIC_RELEASE_TOKEN/PUBLIC_RELEASE_REPO not set, skipping mirror."
-      - name: Download all artifacts
+      - name: Download build artifacts
         if: ${{ steps.check.outputs.has_secrets == 'true' }}
         uses: actions/download-artifact@v4
         with:
+          pattern: chatless-*
           path: artifacts/
       - name: Fetch release notes from source repository
         if: ${{ steps.check.outputs.has_secrets == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release view v${{ github.event.inputs.version }} --json body -q .body > public_release_notes.md
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: gh release view "v$VERSION" --json body -q .body > public_release_notes.md
       - name: Create or update public release and upload assets
         if: ${{ steps.check.outputs.has_secrets == 'true' }}
         env:

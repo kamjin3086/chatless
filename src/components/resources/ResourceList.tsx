@@ -4,6 +4,8 @@ import { ResourceItem } from './ResourceItem';
 import { Loader2 } from 'lucide-react';
 import { ResourceListProps } from './types';
 import { FileText } from 'lucide-react'; // Added FileText import
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
 
 // 文档类型扩展名
 const DOCUMENT_EXTENSIONS = [
@@ -40,6 +42,8 @@ export function ResourceList({
   onAddNote,
   onComment
 }: ResourceListProps) {
+  const locale = useLocaleStore((state) => state.locale);
+
   // 根据类型筛选资源
   const filteredResources = type === 'documents'
     ? resources.filter(r => r.source !== 'chat' && isDocumentType(r.title)) // 只显示文档类型，排除聊天文件
@@ -56,7 +60,7 @@ export function ResourceList({
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
-          <p className="mt-2 text-xs text-slate-400">加载资源中...</p>
+          <p className="mt-2 text-xs text-slate-400">{translate(locale, 'resources.loading')}</p>
         </div>
       </div>
     );
@@ -70,17 +74,14 @@ export function ResourceList({
             <FileText className="w-5 h-5 text-slate-400" strokeWidth={1.5} />
           </div>
           <p className="text-xs font-medium text-slate-500 mb-1">
-            {type === 'documents' && '暂无文档'}
-            {type === 'files' && '暂无文件'}
-            {type === 'chat' && '暂无聊天附件'}
-            {type === 'knowledge' && '知识库中暂无资源'}
+            {translate(locale, `resources.empty.${type}`)}
           </p>
           <p className="text-[11px] text-slate-400">
-            {type === 'knowledge' 
-              ? '点击"添加到知识库"即可入库' 
+            {translate(locale, type === 'knowledge'
+              ? 'resources.empty.knowledgeHint'
               : type === 'chat'
-                ? '聊天中附加的文件会自动出现' 
-                : '拖放文件到上方区域上传'}
+                ? 'resources.empty.chatHint'
+                : 'resources.empty.uploadHint')}
           </p>
         </div>
       </div>

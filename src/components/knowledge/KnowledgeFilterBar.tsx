@@ -7,17 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { SearchInput } from '@/components/ui/search-input';
 import { Input } from "../ui/input";
-
-const filters = [
-  { id: 'all', name: '全部' },
-  { id: 'local', name: '本地' },
-];
-
-const sortOptions = [
-  { value: 'recent', label: '最近更新' },
-  { value: 'name', label: '名称' },
-  { value: 'docs', label: '文档数量' },
-];
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface KnowledgeFilterBarProps {
   activeFilter: string;
@@ -34,6 +24,18 @@ export function KnowledgeFilterBar({
   onSortChange,
   onCreateKnowledgeBase,
 }: KnowledgeFilterBarProps) {
+  const t = useTranslation();
+  const filters = [
+    { id: 'all', name: t('knowledge.filter.all') },
+    { id: 'local', name: t('knowledge.filter.local') },
+  ];
+
+  const sortOptions = [
+    { value: 'recent', label: t('knowledge.sort.recent') },
+    { value: 'name', label: t('knowledge.sort.name') },
+    { value: 'docs', label: t('knowledge.sort.documentCount') },
+  ];
+
   return (
     <div className="flex justify-between items-center px-4 md:px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 glass-surface">
       <div className="flex gap-6">
@@ -58,7 +60,7 @@ export function KnowledgeFilterBar({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
               <Input 
                 type="text" 
-                placeholder="搜索知识库..." 
+                placeholder={t('knowledge.searchPlaceholder')} 
                 
                 className="pl-10 pr-3 py-1.5 text-[13px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg w-full focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:ring-offset-0 transition-all duration-200"
               />
@@ -76,7 +78,7 @@ export function KnowledgeFilterBar({
           </SelectContent>
         </Select>
 
-        <IconButton icon={Plus} onClick={onCreateKnowledgeBase} title="新建知识库" />
+        <IconButton icon={Plus} onClick={onCreateKnowledgeBase} title={t('knowledge.newKnowledgeBase')} />
       </div>
     </div>
   );

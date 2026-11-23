@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { ChevronRight, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useContextCompactionStore } from '@/store/contextCompactionStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 /**
  * "历史已压缩"标记：默认只显示一行，点开才看摘要正文。
  * 自己订阅 store，不牵连外层已 memo 的消息组件。
  */
 export function ContextCompactionNotice({ messageId }: { messageId: string }) {
+  const t = useTranslation();
   const notice = useContextCompactionStore((state) => state.notices[messageId]);
   const [open, setOpen] = useState(false);
 
@@ -21,10 +23,10 @@ export function ContextCompactionNotice({ messageId }: { messageId: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:text-slate-600 dark:hover:text-slate-300"
-        title="较早的历史已被摘要，模型看到的是摘要 + 最近几轮完整对话"
+        title={t('chatUi.compaction.tooltip')}
       >
         <Layers className="h-3 w-3" />
-        <span>历史已压缩 {notice.coveredMessages} 条</span>
+        <span>{t('chatUi.compaction.summary').replace('{0}', () => String(notice.coveredMessages))}</span>
         <ChevronRight className={cn('h-3 w-3 transition-transform', open && 'rotate-90')} />
       </button>
       {open && (

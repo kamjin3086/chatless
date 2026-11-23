@@ -2,6 +2,7 @@
 
 import { MessageSquare, Star, MoreHorizontal, FolderOpen } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface ChatListItemProps {
   id: string;
@@ -32,6 +33,7 @@ export function ChatListItem({
   onStarToggle,
   onMoreActions
 }: ChatListItemProps) {
+  const t = useTranslation();
   if (category) {
     return (
       <div className="flex items-center py-2 px-2 mt-2">
@@ -86,7 +88,7 @@ export function ChatListItem({
                 ? "text-accent dark:text-yellow-400 hover:bg-red-100/50 dark:hover:bg-red-800/40"
                 : "text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600/70 hover:text-slate-600 dark:hover:text-slate-300"
             )}
-            title="收藏"
+            title={t('chatUi.chatList.favorite')}
             onClick={(e) => { e.stopPropagation(); onStarToggle(id); }}
           >
             <Star className="w-4 h-4" />
@@ -95,7 +97,7 @@ export function ChatListItem({
         {onMoreActions && (
           <button 
             className="p-1 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
-            title="更多"
+            title={t('chatUi.chatList.more')}
             onClick={(e) => { e.stopPropagation(); onMoreActions(id); }}
           >
             <MoreHorizontal className="w-4 h-4" />

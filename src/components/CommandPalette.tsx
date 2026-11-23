@@ -6,12 +6,12 @@ import { StorageUtil } from '@/lib/storage';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { getCommands, Command } from '@/commands/commandRegistry';
+import { useTranslation } from '@/i18n/useTranslation';
+import type { TranslationKey } from '@/i18n/types';
 import { cn } from '@/lib/utils';
 
-// 简易 i18n placeholder
-const t = (k: string) => k;
-
 export function CommandPalette() {
+  const translate = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState<number>(-1); // -1 表示输入框
@@ -166,7 +166,7 @@ export function CommandPalette() {
     const q = query.trim().toLowerCase();
     let list = commands;
     if (q) list = commands.filter((c) => {
-      const txt = t(c.titleI18n).toLowerCase();
+      const txt = c.titleI18n.toLowerCase();
       if (txt.includes(q)) return true;
       return c.keywords?.some((k) => k.toLowerCase().includes(q));
     });
@@ -256,8 +256,8 @@ export function CommandPalette() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-lg p-0 overflow-hidden border border-slate-100 rounded-xl bg-white dark:bg-slate-900 shadow-lg">
-        <DialogTitle className="sr-only">Command Palette</DialogTitle>
-        <DialogDescription className="sr-only">Search and execute commands</DialogDescription>
+        <DialogTitle className="sr-only">{translate('command.dialogTitle')}</DialogTitle>
+        <DialogDescription className="sr-only">{translate('command.dialogDescription')}</DialogDescription>
         
         {/* 搜索输入区域 */}
         <div className="border-b border-slate-50 dark:border-slate-800 px-4 py-3">
@@ -268,7 +268,7 @@ export function CommandPalette() {
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
-            placeholder="输入以搜索指令…"
+            placeholder={translate('commandPalette.searchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -308,7 +308,7 @@ export function CommandPalette() {
         <div className="max-h-80 overflow-y-auto scroll-smooth" role="listbox">
           {filtered.length === 0 && (
             <div className="p-6 text-center">
-              <p className="text-sm text-slate-500 dark:text-slate-400">没有匹配项</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{translate('commandPalette.noMatches')}</p>
             </div>
           )}
 
@@ -319,7 +319,11 @@ export function CommandPalette() {
               <div key={sec} className="border-t border-slate-50 dark:border-slate-800 first:border-none">
                 <div className="px-4 pt-3 pb-2">
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    {sec === 'navigation' ? '导航' : sec === 'action' ? '操作' : '设置'}
+                    {sec === 'navigation'
+                      ? translate('command.sectionNavigation')
+                      : sec === 'action'
+                        ? translate('command.sectionAction')
+                        : translate('command.sectionSettings')}
                   </p>
                 </div>
                                  {items.map((c, idxInSec) => {
@@ -330,9 +334,9 @@ export function CommandPalette() {
 
 
                   const renderTitle = () => {
-                    if (!query) return t(c.titleI18n);
+                    if (!query) return translate(c.titleI18n as TranslationKey);
                     const qLow = query.toLowerCase();
-                    const title = t(c.titleI18n);
+                    const title = translate(c.titleI18n as TranslationKey);
                     const index = title.toLowerCase().indexOf(qLow);
                     if (index === -1) return title;
                     return (
@@ -393,14 +397,14 @@ export function CommandPalette() {
                         )}
                         <span className="font-medium">{renderTitle()}</span>
                       </div>
-                      {c.hint && (
+                      {c.hintI18n && (
                         <span className={cn(
                           "text-xs ml-4 font-mono",
                           highlight === globalIdx 
                             ? "text-blue-600 dark:text-blue-300" 
                             : "text-slate-400 dark:text-slate-500"
                         )}>
-                          {c.hint}
+                          {translate(c.hintI18n as TranslationKey)}
                         </span>
                       )}
                     </button>

@@ -10,8 +10,13 @@ import { useEffect, useMemo } from "react";
 import { filterAndSortPrompts } from "@/lib/prompt/search";
 import { toast } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
+import { getHtmlLang } from '@/i18n';
+import { useTranslation } from '@/i18n/useTranslation';
+import { useLocaleStore } from '@/store/localeStore';
 
 export default function PromptsPage() {
+  const t = useTranslation();
+  const language = getHtmlLang(useLocaleStore((state) => state.locale));
   const prompts = usePromptStore((s) => s.prompts);
   const ui = usePromptStore((s) => s.ui);
   const loadFromDatabase = usePromptStore((s) => s.loadFromDatabase);
@@ -39,10 +44,10 @@ export default function PromptsPage() {
       tags: p.tags || [],
       shortcuts: p.shortcuts || [],
       usageCount: p.stats?.uses || 0,
-      lastUpdated: new Date(p.updatedAt).toLocaleString(),
+      lastUpdated: new Date(p.updatedAt).toLocaleString(language),
       isFavorite: !!p.favorite,
     }));
-  }, [prompts, ui]);
+  }, [prompts, ui, language]);
 
   // 最近使用的提示词（按使用时间排序，取前5个）
   const recentlyUsed = useMemo(() => {
@@ -55,21 +60,21 @@ export default function PromptsPage() {
         name: p.name,
         iconType: 'prompt',
         subtitle: p.tags?.slice(0, 2).join(', ') || '',
-        time: p.stats?.lastUsedAt ? new Date(p.stats.lastUsedAt).toLocaleDateString() : '',
+        time: p.stats?.lastUsedAt ? new Date(p.stats.lastUsedAt).toLocaleDateString(language) : '',
       }));
-  }, [prompts]);
+  }, [prompts, language]);
 
   // 应用提示词到当前对话
   const handleApplyPrompt = (id: string) => {
     if (!currentConversationId) {
-      toast.info('请先选择一个对话');
+      toast.info(t('prompts.selectConversation'));
       router.push('/chat');
       return;
     }
     updateConversation(currentConversationId, { 
       system_prompt_applied: { promptId: id, mode: 'permanent' } as any 
     });
-    toast.success('已应用到当前对话');
+    toast.success(t('prompts.applied'));
     router.push('/chat');
   };
 
@@ -94,10 +99,10 @@ export default function PromptsPage() {
         <div className="border-t border-slate-200/50 dark:border-slate-700/30 p-3 flex-shrink-0">
           <div className="max-w-7xl mx-auto">
             <RecentUsedList 
-              title="最近使用"
+              title={t('prompts.recentlyUsed')}
               items={recentlyUsed}
               onItemClick={handleApplyPrompt}
-              emptyText="暂无"
+              emptyText={t('prompts.none')}
             />
           </div>
         </div>

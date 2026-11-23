@@ -8,6 +8,8 @@ import { Bot, Search } from "lucide-react";
 import type { ProviderMetadata } from "@/lib/metadata/types";
 import { cn } from "@/lib/utils";
 import { ProviderGlyph } from "./ProviderGlyph";
+import { translate } from "@/i18n";
+import { useLocaleStore } from "@/store/localeStore";
 
 interface ModelListProps {
   models: ProviderMetadata[];
@@ -28,6 +30,7 @@ export function ModelList({
   onSetDefault,
   onOpenParameters,
 }: ModelListProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     if (currentSelection && currentSelection.includes("::")) {
@@ -67,12 +70,12 @@ export function ModelList({
         {searchQuery ? (
           <>
             <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">未找到匹配的模型</p>
+            <p className="text-sm">{translate(locale, 'modelChooser.noSearchResults')}</p>
           </>
         ) : (
           <>
             <Bot className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">无可用模型数据</p>
+            <p className="text-sm">{translate(locale, 'modelChooser.noModels')}</p>
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { AndroidPhoto } from '@/lib/android/androidPhoto';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import type { AndroidPhotoFeedback } from './useAndroidPhotoDraft';
 
 export function AndroidPhotoPreview({
@@ -21,8 +21,7 @@ export function AndroidPhotoPreview({
   disabled: boolean;
   onRemove: () => void;
 }) {
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   if (!photo && !feedback) return null;
   return (
     <div className="mb-2 space-y-2 rounded-lg border border-border p-2 text-sm">

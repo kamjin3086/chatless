@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getHtmlLang } from '@/i18n';
 import type { Skill } from '@/lib/skills/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { SkillStatusBadge } from './SkillStatusBadge';
 import { SkillMdRenderer } from './SkillMdRenderer';
 import { SkillFileTree } from './SkillFileTree';
@@ -40,6 +42,7 @@ export function SkillDetailDialog({
   onToggleEnabled,
   onOpenFolder,
 }: SkillDetailDialogProps) {
+  const { locale, t } = useLocaleStore();
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showFileTree, setShowFileTree] = useState(false);
@@ -97,7 +100,7 @@ export function SkillDetailDialog({
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(skill.id);
-    toast.success('已复制技能 ID');
+    toast.success(t('skills.idCopied'));
   };
 
   const handleCheckUpdate = async () => {
@@ -106,10 +109,10 @@ export function SkillDetailDialog({
     try {
       const manager = getSkillManager();
       const r = await manager.updateSkillFromGit(skill.id);
-      if (r.ok) toast.success('更新完成');
-      else toast.error('更新失败', { description: r.message });
+      if (r.ok) toast.success(t('skills.updateDone'));
+      else toast.error(t('skills.updateFailed'), { description: r.message });
     } catch (e) {
-      toast.error('更新失败', { description: e instanceof Error ? e.message : String(e) });
+      toast.error(t('skills.updateFailed'), { description: e instanceof Error ? e.message : String(e) });
     } finally {
       setIsUpdating(false);
     }
@@ -121,17 +124,17 @@ export function SkillDetailDialog({
     try {
       const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
       const selected = await openDialog({
-        title: `选择 ZIP 文件覆盖安装`,
-        filters: [{ name: 'ZIP 文件', extensions: ['zip'] }],
+        title: t('skills.reimportPicker'),
+        filters: [{ name: t('skills.import.zipFiles'), extensions: ['zip'] }],
         multiple: false,
       });
       if (!selected || typeof selected !== 'string') return;
       const manager = getSkillManager();
       const r = await manager.reinstallSkillFromZip(skill.id, selected);
-      if (r.ok) toast.success('覆盖安装完成');
-      else toast.error('覆盖安装失败', { description: r.message });
+      if (r.ok) toast.success(t('skills.reimportDone'));
+      else toast.error(t('skills.reimportFailed'), { description: r.message });
     } catch (e) {
-      toast.error('覆盖安装失败', { description: e instanceof Error ? e.message : String(e) });
+      toast.error(t('skills.reimportFailed'), { description: e instanceof Error ? e.message : String(e) });
     } finally {
       setIsUpdating(false);
     }
@@ -163,6 +166,7 @@ export function SkillDetailDialog({
             
             {/* 关闭按钮 */}
             <button
+              aria-label={t('common.close')}
               onClick={() => onOpenChange(false)}
               className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
@@ -187,7 +191,7 @@ export function SkillDetailDialog({
               >
                 <span className="flex items-center gap-2">
                   <FolderOpen className="w-3.5 h-3.5 text-slate-400" />
-                  <span>文件结构</span>
+                  <span>{t('skills.files')}</span>
                 </span>
                 {showFileTree ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
@@ -206,7 +210,7 @@ export function SkillDetailDialog({
             </div>
           ) : (
             <div className="text-center py-8 text-xs text-slate-400 glass-inset rounded-lg">
-              暂无文档内容
+              {t('skills.noDocumentation')}
             </div>
           )}
 
@@ -218,20 +222,24 @@ export function SkillDetailDialog({
             </div>
             {skill.author && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">作者</span>
+                <span className="text-slate-400">{t('skills.author')}</span>
                 <span className="text-slate-600 dark:text-slate-300">{skill.author}</span>
               </div>
             )}
             {skill.installedAt && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">安装时间</span>
-                <span className="text-slate-600 dark:text-slate-300">{new Date(skill.installedAt).toLocaleDateString()}</span>
+                <span className="text-slate-400">{t('skills.installedAt')}</span>
+                <span className="text-slate-600 dark:text-slate-300">
+                  {new Date(skill.installedAt).toLocaleDateString(getHtmlLang(locale))}
+                </span>
               </div>
             )}
             {skill.source && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">来源</span>
-                <span className="text-slate-600 dark:text-slate-300">{skill.source === 'local' ? '本地' : '在线'}</span>
+                <span className="text-slate-400">{t('skills.source')}</span>
+                <span className="text-slate-600 dark:text-slate-300">
+                  {t(skill.source === 'local' ? 'skills.local' : 'skills.online')}
+                </span>
               </div>
             )}
           </div>
@@ -249,7 +257,7 @@ export function SkillDetailDialog({
                     onCheckedChange={handleToggleEnabled}
                     className="scale-90"
                   />
-                  <span className="text-xs text-slate-500">{skill.enabled ? '已启用' : '已禁用'}</span>
+                  <span className="text-xs text-slate-500">{t(skill.enabled ? 'skills.enabled' : 'skills.disabled')}</span>
                 </label>
               )}
             </div>
@@ -260,7 +268,7 @@ export function SkillDetailDialog({
               <button
                 onClick={handleCopyId}
                 className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md flex items-center gap-1.5 transition-colors"
-                title="复制 ID"
+                title={t('skills.copyId')}
               >
                 <Copy className="w-3.5 h-3.5" />
               </button>
@@ -270,7 +278,7 @@ export function SkillDetailDialog({
                 <button
                   onClick={handleOpenFolder}
                   className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md flex items-center gap-1.5 transition-colors"
-                  title="打开文件夹"
+                  title={t('skills.openFolder')}
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
                 </button>
@@ -281,7 +289,7 @@ export function SkillDetailDialog({
                 <button
                   onClick={handleOpenRepo}
                   className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md flex items-center gap-1.5 transition-colors"
-                  title="查看仓库"
+                  title={t('skills.viewRepository')}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </button>
@@ -295,7 +303,7 @@ export function SkillDetailDialog({
                   className="h-7 px-2.5 text-xs border border-slate-200/70 bg-slate-100/50 dark:border-slate-600/50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/50 rounded-md flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   <RefreshCw className={cn("w-3.5 h-3.5", isUpdating && "animate-spin")} />
-                  <span>{isGitRepo ? '更新' : '重新导入'}</span>
+                  <span>{t(isGitRepo ? 'skills.update' : 'skills.reimport')}</span>
                 </button>
               )}
               
@@ -306,7 +314,7 @@ export function SkillDetailDialog({
                   className="h-7 px-2.5 text-xs text-red-600 border border-red-200/60 hover:bg-red-50/60 dark:border-red-800/40 dark:hover:bg-red-900/20 rounded-md flex items-center gap-1.5 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>卸载</span>
+                  <span>{t('skills.uninstall')}</span>
                 </button>
               )}
             </div>

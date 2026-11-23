@@ -5,6 +5,7 @@ import { Database, X, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { KnowledgeBase } from '@/lib/knowledgeService';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface SelectedKnowledgeBaseViewProps {
   knowledgeBase: KnowledgeBase;
@@ -14,6 +15,7 @@ interface SelectedKnowledgeBaseViewProps {
 
 export function SelectedKnowledgeBaseView({ knowledgeBase, onRemove, className }: SelectedKnowledgeBaseViewProps) {
   const router = useRouter();
+  const t = useTranslation();
 
   const handleGoToKnowledgeBase = () => {
     router.push(`/knowledge/detail?id=${knowledgeBase.id}`);
@@ -43,7 +45,7 @@ export function SelectedKnowledgeBaseView({ knowledgeBase, onRemove, className }
           handleGoToKnowledgeBase();
         }}
         className="shrink-0 p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-        title="管理知识库"
+        title={t('chatAttachment.manageKnowledgeBase')}
             >
         <ExternalLink className="w-3.5 h-3.5" />
             </button>
@@ -56,7 +58,7 @@ export function SelectedKnowledgeBaseView({ knowledgeBase, onRemove, className }
               onRemove();
             }}
         className="shrink-0 p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-        title="移除"
+        title={t('knowledge.resource.remove')}
           >
             <X className="w-3.5 h-3.5" />
       </button>

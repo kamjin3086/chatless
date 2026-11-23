@@ -7,7 +7,7 @@ import { APP_INFO } from '@/config/app-info';
 import { isTauriEnvironment } from '@/lib/utils/environment';
 import { isAndroidRuntime } from '@/lib/utils/runtimePlatform';
 import { windowControlsOnLeft } from '@/lib/window/windowControls';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useUiPreferences } from '@/store/uiPreferences';
 import { AppPageSwitcher } from '@/components/Sidebar';
 
@@ -41,7 +41,7 @@ function TitleBarBrand() {
 }
 
 export function WindowTitleBar() {
-  const { t } = useLocaleStore();
+  const t = useTranslation();
   const appNavCollapsed = useUiPreferences((state) => state.appNavCollapsed);
   const [active, setActive] = useState(false);
   const [maximized, setMaximized] = useState(false);

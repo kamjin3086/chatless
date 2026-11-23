@@ -8,7 +8,8 @@
     "dimensions": 768,
     "contextLength": 8192,
     "isRecommended": true,
-    "category": "general"
+    "category": "general",
+    "descriptionEn": "High-performance text embedding model with multilingual support"
   },
   {
     "id": "all-minilm",
@@ -19,7 +20,8 @@
     "dimensions": 384,
     "contextLength": 512,
     "isRecommended": false,
-    "category": "lightweight"
+    "category": "lightweight",
+    "descriptionEn": "Lightweight embedding model balancing quality and speed"
   },
   {
     "id": "mxbai-embed-large",
@@ -30,7 +32,8 @@
     "dimensions": 1024,
     "contextLength": 512,
     "isRecommended": false,
-    "category": "large"
+    "category": "large",
+    "descriptionEn": "Large embedding model for the highest accuracy"
   },
   {
     "id": "all-minilm-l6-v2",
@@ -45,7 +48,8 @@
     "dimensions": 384,
     "contextLength": 256,
     "isRecommended": true,
-    "category": "local"
+    "category": "local",
+    "descriptionEn": "Lightweight embedding model with broad compatibility"
   },
   {
     "id": "bge-small-zh-v1.5",
@@ -60,6 +64,7 @@
     "dimensions": 512,
     "contextLength": 512,
     "isRecommended": false,
-    "category": "chinese"
+    "category": "chinese",
+    "descriptionEn": "Lightweight embedding model optimised for Chinese"
   }
-] 
+]

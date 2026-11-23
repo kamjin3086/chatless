@@ -9,6 +9,19 @@ import {
   DocumentMetadata 
 } from '@/types/document';
 
+export type DocumentFileParseFailure =
+  | { code: 'missing-file' }
+  | { code: 'file-too-large'; maxBytes: number }
+  | { code: 'unsupported-file-type'; fileType: string }
+  | { code: 'timeout' }
+  | { code: 'parse-failed'; diagnostic?: string };
+
+type DocumentFileParseResult =
+  | { success: true; content: string; fileType: string; fileName: string; fileSize: number }
+  | { success: false; failure: DocumentFileParseFailure };
+
+class DocumentParseTimeoutError extends Error {}
+
 export class DocumentParser {
   private static readonly DEFAULT_MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB，与后端一致
   private static readonly DEFAULT_TIMEOUT_MS = 30_000; // 30s 超时保护
@@ -84,35 +97,23 @@ export class DocumentParser {
    * @returns 解析结果
    */
   static async parseFileObject(
-    file: File, 
+    file: File,
     options: DocumentParseOptions = {}
-  ): Promise<DocumentParseResult> {
+  ): Promise<DocumentFileParseResult> {
     try {
-      // 验证文件
       if (!file) {
-        return {
-          success: false,
-          error: '文件不能为空'
-        };
+        return { success: false, failure: { code: 'missing-file' } };
       }
 
-      // 检查文件大小
       const maxSize = options.maxFileSize || this.DEFAULT_MAX_FILE_SIZE;
       if (file.size > maxSize) {
-        return {
-          success: false,
-          error: `文件大小超过限制 (${Math.round(maxSize / 1024 / 1024)}MB)`
-        };
+        return { success: false, failure: { code: 'file-too-large', maxBytes: maxSize } };
       }
 
-      // 检查文件类型
       const fileType = this.getFileExtension(file.name);
       const isSupported = await this.isSupportedFileType(fileType);
       if (!isSupported) {
-        return {
-          success: false,
-          error: `不支持的文件类型: ${fileType}`
-        };
+        return { success: false, failure: { code: 'unsupported-file-type', fileType } };
       }
 
       // 读取文件内容为二进制数组
@@ -142,7 +143,9 @@ export class DocumentParser {
       console.error('文档解析失败:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : '文档解析失败'
+        failure: error instanceof DocumentParseTimeoutError
+          ? { code: 'timeout' }
+          : { code: 'parse-failed', diagnostic: error instanceof Error ? error.message : undefined },
       };
     }
   }
@@ -214,7 +217,7 @@ export class DocumentParser {
   private static withTimeout<T>(promise: Promise<T>, ms: number, label = '操作'): Promise<T> {
     let timer: any;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label}超时，请稍后重试`)), ms);
+      timer = setTimeout(() => reject(new DocumentParseTimeoutError(`${label}超时，请稍后重试`)), ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
   }

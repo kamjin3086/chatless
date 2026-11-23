@@ -12,6 +12,8 @@ import {
 } from '@/lib/embedding/ModelManager';
 import { OllamaConfigService } from '@/lib/config/OllamaConfigService';
 import { toast } from '@/components/ui/sonner';
+import { useTranslation } from '@/i18n/useTranslation';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface EmbeddingModelManagerProps {
   onModelChange?: (modelId: string | null) => void;
@@ -23,6 +25,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
   const [downloadProgress, setDownloadProgress] = useState<Map<string, ModelDownloadProgress>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [ollamaUrl, setOllamaUrl] = useState<string>('localhost:11434'); // 默认显示值，将在初始化时更新
+  const t = useTranslation();
 
   const modelManager = getModelManager();
 
@@ -80,13 +83,13 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
         const model = models.find(m => m.id === modelId);
         const modelName = model?.name || modelId;
         
-        toast.success(`${modelName} 下载完成并已激活`, {
-          description: '知识库配置已自动同步'
+        toast.success(t('settings.knowledge.embeddingManager.toast.downloadComplete').replace('{0}', modelName), {
+          description: t('settings.knowledge.embeddingManager.toast.knowledgeSynced')
         });
       }
     } catch (error) {
       console.error('下载模型失败:', error);
-      toast.error('下载模型失败', {
+      toast.error(t('settings.knowledge.embeddingManager.toast.downloadFailed'), {
         description: error instanceof Error ? error.message : String(error)
       });
     }
@@ -126,14 +129,14 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
           const model = models.find(m => m.id === modelId);
           const modelName = model?.name || modelId;
           
-          toast.success(`${modelName} 已删除`, {
-            description: '知识库配置已重置为默认值'
+          toast.success(t('settings.knowledge.embeddingManager.toast.deleted').replace('{0}', modelName), {
+            description: t('settings.knowledge.embeddingManager.toast.knowledgeReset')
           });
         }
       }
     } catch (error) {
       console.error('删除模型失败:', error);
-      toast.error('删除模型失败', {
+      toast.error(t('settings.knowledge.embeddingManager.toast.deleteFailed'), {
         description: error instanceof Error ? error.message : String(error)
       });
     }
@@ -176,12 +179,12 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
       const modelName = model?.name || modelId;
       
       console.log('[EmbeddingModelManager] 模型激活完成，配置已同步');
-      toast.success(`${modelName} 已激活`, {
-        description: '知识库配置已自动同步，可以开始使用RAG功能'
+      toast.success(t('settings.knowledge.embeddingManager.toast.activated').replace('{0}', modelName), {
+        description: t('settings.knowledge.embeddingManager.toast.activationDescription')
       });
     } catch (error) {
       console.error('激活模型失败:', error);
-      toast.error('激活模型失败', {
+      toast.error(t('settings.knowledge.embeddingManager.toast.activateFailed'), {
         description: error instanceof Error ? error.message : String(error)
       });
     }
@@ -272,7 +275,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-32">
-        <div className="text-slate-500">加载模型状态中...</div>
+        <div className="text-slate-500">{t('settings.knowledge.embeddingManager.loading')}</div>
       </div>
     );
   }
@@ -283,7 +286,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
       <div className="space-y-3">
         <div className="flex items-center space-x-2">
           <Brain className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-medium">嵌入模型管理</h3>
+          <h3 className="text-lg font-medium">{t('settings.knowledge.embeddingManager.title')}</h3>
         </div>
         
         <div className="flex space-x-2">
@@ -292,7 +295,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
             size="sm"
             onClick={() => setSelectedStrategy('local-onnx')}
           >
-            本地模型
+            {t('settings.knowledge.embeddingManager.localStrategy')}
           </Button>
           <Button
             variant={selectedStrategy === 'ollama' ? 'default' : 'outline'}
@@ -304,14 +307,14 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
               }
             }}
           >
-            Ollama 服务
+            {t('settings.knowledge.embeddingManager.ollamaStrategy')}
           </Button>
         </div>
 
         <p className="text-sm text-slate-600 dark:text-slate-400">
           {selectedStrategy === 'local-onnx' 
-            ? '本地离线推理模型，完全离线运行，无需外部服务'
-            : `Ollama模型需要本地运行Ollama服务 (${ollamaUrl})`
+            ? t('settings.knowledge.embeddingManager.localDescription')
+            : t('settings.knowledge.embeddingManager.ollamaDescription').replace('{0}', ollamaUrl)
           }
         </p>
       </div>
@@ -320,7 +323,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
       <div className="space-y-3">
         {currentModels.length === 0 ? (
           <div className="text-center py-8 text-slate-500">
-            该策略下暂无可用模型
+            {t('settings.knowledge.embeddingManager.empty')}
           </div>
         ) : (
           currentModels.map(model => (
@@ -343,7 +346,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
           <div className="flex items-center space-x-2">
             <CheckCircle className="w-4 h-4 text-green-600" />
             <span className="text-sm text-green-800 dark:text-green-300">
-              嵌入服务已就绪，可以开始使用知识库功能
+              {t('settings.knowledge.embeddingManager.ready')}
             </span>
           </div>
         </div>
@@ -354,7 +357,7 @@ export function EmbeddingModelManager({ onModelChange }: EmbeddingModelManagerPr
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-yellow-600" />
             <span className="text-sm text-yellow-800 dark:text-yellow-300">
-              请下载并激活一个模型以启用嵌入功能
+              {t('settings.knowledge.embeddingManager.activationPrompt')}
             </span>
           </div>
         </div>
@@ -377,20 +380,25 @@ function ModelCard({
   downloadProgress, 
   onDownload, 
   onCancel, 
-  onDelete, 
+  onDelete,
   onActivate 
 }: ModelCardProps) {
+  const t = useTranslation();
+  const locale = useLocaleStore((state) => state.locale);
+  // The model catalogue ships a Chinese description; English users get the
+  // English one when the catalogue has it.
+  const description = locale === 'en' ? (model.descriptionEn ?? model.description) : model.description;
   const getStatusBadge = () => {
     if (model.isActive) {
-      return <Badge variant="default" className="bg-green-600">激活中</Badge>;
+      return <Badge variant="default" className="bg-green-600">{t('settings.knowledge.embeddingManager.status.active')}</Badge>;
     }
     if (model.isDownloading) {
-      return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />下载中</Badge>;
+      return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />{t('settings.knowledge.embeddingManager.status.downloading')}</Badge>;
     }
     if (model.isDownloaded) {
-      return <Badge variant="outline" className="text-green-600 border-green-600">已下载</Badge>;
+      return <Badge variant="outline" className="text-green-600 border-green-600">{t('settings.knowledge.embeddingManager.status.downloaded')}</Badge>;
     }
-    return <Badge variant="outline">未下载</Badge>;
+    return <Badge variant="outline">{t('settings.knowledge.embeddingManager.status.notDownloaded')}</Badge>;
   };
 
   const getActionButton = () => {
@@ -403,7 +411,7 @@ function ModelCard({
           className="text-red-600 hover:text-red-700"
         >
           <X className="w-4 h-4 mr-1" />
-          取消
+          {t('common.cancel')}
         </Button>
       );
     }
@@ -417,7 +425,7 @@ function ModelCard({
               size="sm"
               onClick={onActivate}
             >
-              激活
+              {t('settings.knowledge.embeddingManager.activate')}
             </Button>
           )}
           <Button
@@ -440,7 +448,7 @@ function ModelCard({
         className="text-blue-600 hover:text-blue-700"
       >
         <Download className="w-4 h-4 mr-1" />
-        下载
+        {t('settings.knowledge.embeddingManager.download')}
       </Button>
     );
   };
@@ -455,10 +463,10 @@ function ModelCard({
             {getStatusBadge()}
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            {model.description}
+            {description}
           </p>
           <p className="text-xs text-slate-500">
-            大小: {model.size}
+            {t('settings.knowledge.embeddingManager.size').replace('{0}', model.size)}
           </p>
         </div>
         
@@ -471,14 +479,14 @@ function ModelCard({
       {model.isDownloading && downloadProgress && (
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span>下载进度</span>
+            <span>{t('settings.knowledge.embeddingManager.downloadProgress')}</span>
             <span>{downloadProgress.progress}%</span>
           </div>
           <Progress value={downloadProgress.progress} className="h-2" />
           {downloadProgress.speed && (
             <div className="text-xs text-slate-500">
-              速度: {downloadProgress.speed}
-              {downloadProgress.eta && ` • 剩余: ${downloadProgress.eta}`}
+              {t('settings.knowledge.embeddingManager.speed').replace('{0}', downloadProgress.speed)}
+              {downloadProgress.eta && ` • ${t('settings.knowledge.embeddingManager.eta').replace('{0}', downloadProgress.eta)}`}
             </div>
           )}
         </div>
@@ -488,7 +496,7 @@ function ModelCard({
       {downloadProgress?.status === 'error' && downloadProgress.error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-2">
           <p className="text-sm text-red-800 dark:text-red-300">
-            下载失败: {downloadProgress.error}
+            {t('settings.knowledge.embeddingManager.downloadFailed').replace('{0}', downloadProgress.error)}
           </p>
         </div>
       )}

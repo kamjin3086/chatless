@@ -24,6 +24,7 @@ import {
   ActionPanelItem,
   ActionPanelEmpty,
 } from "@/components/ui/action-panel";
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface KnowledgeBaseSelectorProps {
   onSelect: (knowledgeBase: KnowledgeBase) => void;
@@ -34,6 +35,7 @@ export function KnowledgeBaseSelector({
   onSelect,
   selectedKnowledgeBase,
 }: KnowledgeBaseSelectorProps) {
+  const t = useTranslation();
   const [open, setOpen] = useState(false);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(false);
@@ -87,7 +89,7 @@ export function KnowledgeBaseSelector({
               ? "glass-chip-knowledge"
               : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
           )}
-          title={selectedKnowledgeBase ? "更换知识库" : "选择知识库"}
+          title={selectedKnowledgeBase ? t('chatAttachment.changeKnowledgeBase') : t('chatAttachment.chooseKnowledgeBase')}
         >
           <Database className="w-4 h-4" />
         </Button>
@@ -95,8 +97,8 @@ export function KnowledgeBaseSelector({
 
       <ActionPanelContent width="lg" maxHeight="24rem">
         <ActionPanelHeader
-          title="选择知识库"
-          subtitle="AI 将基于所选知识库内容回答"
+          title={t('chatAttachment.chooseKnowledgeBase')}
+          subtitle={t('chatAttachment.answerFromSelectedKnowledgeBase')}
           icon={<Database className="w-4 h-4 text-slate-500" />}
         />
 
@@ -104,7 +106,7 @@ export function KnowledgeBaseSelector({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onClear={handleClear}
-          placeholder="搜索知识库..."
+          placeholder={t('chatAttachment.searchKnowledgeBases')}
         />
 
         <ActionPanelList maxHeight="14rem">
@@ -124,9 +126,9 @@ export function KnowledgeBaseSelector({
           ) : (
             <ActionPanelEmpty
               icon={<Database className="w-8 h-8" />}
-              title="没有找到匹配的知识库"
+              title={t('chatAttachment.noMatchingKnowledgeBases')}
               description={
-                searchQuery ? "尝试使用其他关键词搜索" : "暂无可用的知识库"
+                searchQuery ? t('chatAttachment.tryOtherKeywordsSearch') : t('chatAttachment.noKnowledgeBases')
               }
             />
           )}
@@ -148,12 +150,13 @@ function KnowledgeBaseItem({
   isSelected,
   onSelect,
 }: KnowledgeBaseItemProps) {
+  const t = useTranslation();
   // 清理描述文本
   const cleanDescription = kb.description
     ? kb.description
         .replace(/\\n|\n|\r|\\r|\t|\\t/g, " ")
         .replace(/\s{2,}/g, " ")
-    : "暂无描述";
+    : t('chatAttachment.noKnowledgeBaseDescription');
 
   return (
     <ActionPanelItem

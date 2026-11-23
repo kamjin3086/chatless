@@ -85,7 +85,7 @@ cd chatless
 # 安装依赖
 pnpm install
 
-# 启动开发服务器
+# 以开发模式启动桌面应用
 pnpm tauri dev
 
 # 构建应用
@@ -94,7 +94,7 @@ pnpm tauri build
 
 **技术栈：** Tauri 2.0、Next.js 15、TypeScript、Rust、SQLite
 
-更多开发信息请查看 [贡献指南](CONTRIBUTING.md)
+开发环境要求与验证命令请查看 [贡献指南](CONTRIBUTING.md)。
 
 ## 功能文档
 
@@ -103,23 +103,26 @@ pnpm tauri build
 | 使用文档 | [查看文档](https://kamjin3086.github.io/chatless/docs) |
 | 快速开始 | [快速开始](https://kamjin3086.github.io/chatless/docs/getting-started) |
 | 功能介绍 | [功能详情](https://kamjin3086.github.io/chatless/docs/features) |
-| 常见问题 | [FAQ](https://kamjin3086.github.io/chatless/docs/faq) |
+| 常见问题 | [常见问题与故障排查](docs/faq.md) |
 | 开发计划 | [Roadmap](https://github.com/users/kamjin3086/projects/1) |
 
 ## 常见问题
+
+仓库内的[常见问题与故障排查](docs/faq.md)涵盖安装、提供商错误、本地模型和问题反馈。
 
 **Q: Windows 下启动后立即退出/闪退？**
 
 部分 Windows 环境需要安装 Microsoft Visual C++ 运行库。请下载并安装：
 - [VC++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 
-更多问题解决方案请查看 [FAQ 文档](https://kamjin3086.github.io/chatless/docs/faq)
+也可参阅[文档站的常见问题](https://kamjin3086.github.io/chatless/docs/faq)。
 
 ## 反馈与支持
 
-- **问题反馈** - [GitHub Issues](https://github.com/kamjin3086/chatless/issues)
-- **功能讨论** - [GitHub Discussions](https://github.com/kamjin3086/chatless/discussions)
-- **应用内反馈** - 设置 → 反馈
+- **报告 Bug 或提出功能需求** - [GitHub Issues](https://github.com/kamjin3086/chatless/issues)，可以用中文填写。提交前请阅读[贡献指南](CONTRIBUTING.md)。
+- **提问与交流** - [GitHub Discussions](https://github.com/kamjin3086/chatless/discussions)
+- **从应用打开反馈页面** - 设置 → 关于 → 提交反馈
+- **私下报告安全漏洞** - 请按[安全政策](SECURITY.md)中的方式联系维护者，不要公开提交。
 
 ## 贡献
 

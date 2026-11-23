@@ -1,37 +1,45 @@
-"use client";
+'use client';
 
 import { create } from 'zustand';
-import StorageUtil from '@/lib/storage';
+import { getHtmlLang, translate } from '@/i18n';
 import type { Locale, TranslationKey } from '@/i18n/types';
-import { translate, getHtmlLang } from '@/i18n';
+import StorageUtil from '@/lib/storage';
 
 const LANG_KEY = 'app_lang';
+const DEFAULT_LOCALE: Locale = 'zh';
+let pendingLocaleWrite: Promise<unknown> = Promise.resolve();
 
 interface LocaleState {
   locale: Locale;
   initialized: boolean;
   setLocale: (locale: Locale) => void;
+  /** Live translation for non-React callers. Components should use useTranslation. */
   t: (key: TranslationKey) => string;
 }
 
-export const useLocaleStore = create<LocaleState>((set, get) => ({
-  locale: 'zh',
+export const useLocaleStore = create<LocaleState>((_set, get) => ({
+  locale: DEFAULT_LOCALE,
   initialized: false,
   setLocale: (locale) => {
-    set({ locale });
-    void StorageUtil.setItem(LANG_KEY, locale);
-    if (typeof document !== 'undefined') {
-      document.documentElement.lang = getHtmlLang(locale);
-    }
+    // Save selections in order without waiting to update the UI.
+    pendingLocaleWrite = pendingLocaleWrite.then(() =>
+      StorageUtil.setItem(LANG_KEY, locale),
+    );
+    applyLocale(locale);
   },
   t: (key) => translate(get().locale, key),
 }));
 
-(async () => {
-  const saved = await StorageUtil.getItem<string>(LANG_KEY, 'zh');
-  const locale: Locale = saved === 'en' ? 'en' : 'zh';
-  useLocaleStore.setState({ locale, initialized: true });
+function applyLocale(locale: Locale) {
   if (typeof document !== 'undefined') {
     document.documentElement.lang = getHtmlLang(locale);
   }
+  useLocaleStore.setState({ locale, initialized: true });
+}
+
+void (async () => {
+  const saved = await StorageUtil.getItem<string>(LANG_KEY, DEFAULT_LOCALE);
+  // An explicit selection, even of the default locale, beats a late startup read.
+  if (useLocaleStore.getState().initialized) return;
+  applyLocale(saved === 'en' ? 'en' : DEFAULT_LOCALE);
 })();

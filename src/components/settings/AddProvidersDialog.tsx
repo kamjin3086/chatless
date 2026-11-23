@@ -1,5 +1,8 @@
 "use client";
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { AVAILABLE_PROVIDERS_CATALOG, CatalogStrategy } from '@/lib/provider/catalog';
 import { providerRepository } from '@/lib/provider/ProviderRepository';
 import { ProviderStatus } from '@/lib/provider/types';
@@ -87,6 +90,9 @@ function ProviderIcon({ id, name, size = 18, src }: { id?: string; name: string;
 
 
 export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, onOpenChange, editOnly, compact }: Props) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
+  const translateNotification = (key: TranslationKey) => translate(useLocaleStore.getState().locale, key);
   const [internalOpen, setInternalOpen] = useState(false);
   const open = externalOpen !== undefined ? externalOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
@@ -191,7 +197,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       setCustomProviders(prev => prev.map(cp => cp.id === name ? { ...cp, isVisible: checked } : cp));
     } catch (e: any) {
       console.error('toggle provider failed', e);
-      toast.error('更新失败', { description: e?.message || String(e) });
+      toast.error(translateNotification('provider.chooser.updateFailed'), { description: e?.message || String(e) });
     }
   };
 
@@ -216,22 +222,22 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
     const apiKey = (customApiKey || '').trim();
     
     // 验证提供商名称
-    const nameValidation = validateProviderName(displayName);
+    const nameValidation = validateProviderName(displayName, locale);
     if (!nameValidation.isValid) {
-      toast.error(nameValidation.error || '名称验证失败', { 
+      toast.error(nameValidation.error || t('provider.chooser.invalidName'), {
         description: nameValidation.suggestion 
       });
       return;
     }
     
     if (url && !/^https?:\/\//i.test(url)) {
-      toast.error('无效的服务地址', { description: 'URL 必须以 http:// 或 https:// 开头' });
+      toast.error(t('provider.chooser.invalidUrl'), { description: t('provider.chooser.urlScheme') });
       return;
     }
     
     const baseId = sanitizeId(displayName);
     if (!baseId || baseId.length < 2) {
-      toast.error('名称过短', { description: '请使用至少 2 个字符（字母/数字/连字符）' });
+      toast.error(t('provider.name.tooShort'), { description: t('provider.chooser.generatedIdTooShort') });
       return;
     }
     setIsSavingCustom(true);
@@ -267,11 +273,11 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       await updateProviderConfigUseCase.execute(finalId, { url, displayName, strategy: customStrategy, apiKey: apiKey || null });
       setVisibleMap(m=>({ ...m, [finalId]: true }));
       setCustomProviders(prev => ([...prev, { id: finalId, displayName, url, strategy: customStrategy, isVisible: true }]));
-      toast.success('已添加自定义 Provider');
+      toast.success(translateNotification('provider.chooser.added'));
       setCustomModalOpen(false);
     } catch (e:any) {
       console.error(e);
-      toast.error('保存失败', { description: e?.message || String(e) });
+      toast.error(translateNotification('provider.chooser.saveFailed'), { description: e?.message || String(e) });
     }
     setIsSavingCustom(false);
   };
@@ -301,9 +307,9 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       const apiKey = (customApiKey || '').trim();
       
       // 验证提供商名称
-      const nameValidation = validateProviderName(displayName);
+      const nameValidation = validateProviderName(displayName, locale);
       if (!nameValidation.isValid) {
-        toast.error(nameValidation.error || '名称验证失败', { 
+        toast.error(nameValidation.error || t('provider.chooser.invalidName'), {
           description: nameValidation.suggestion 
         });
         setIsSavingCustom(false);
@@ -311,14 +317,14 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       }
       
       if (url && !/^https?:\/\//i.test(url)) {
-        toast.error('无效的服务地址', { description: 'URL 必须以 http:// 或 https:// 开头' });
+        toast.error(t('provider.chooser.invalidUrl'), { description: t('provider.chooser.urlScheme') });
         setIsSavingCustom(false);
         return;
       }
       const { updateProviderConfigUseCase } = await import('@/lib/provider/usecases/UpdateProviderConfig');
       await updateProviderConfigUseCase.execute(editingName, { displayName: displayName || editingName, url, strategy: customStrategy, apiKey: apiKey || null });
       setCustomProviders(prev => prev.map(cp => cp.id === editingName ? { ...cp, url: customUrl.trim(), strategy: customStrategy, displayName: customDisplayName.trim() || editingName } : cp));
-      toast.success('已保存修改');
+      toast.success(translateNotification('provider.chooser.saved'));
       setCustomModalOpen(false);
       // editOnly 模式下关闭外层受控对话框
       if (typeof externalOpen !== 'undefined' && onOpenChange) {
@@ -326,7 +332,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       }
     } catch (e:any) {
       console.error(e);
-      toast.error('保存失败', { description: e?.message || String(e) });
+      toast.error(translateNotification('provider.chooser.saveFailed'), { description: e?.message || String(e) });
     }
     setIsSavingCustom(false);
   };
@@ -336,10 +342,10 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       await providerRepository.deleteByName(name);
       setCustomProviders(prev => prev.filter(cp => cp.id !== name));
       setVisibleMap(prev => { const n = { ...prev }; delete n[name]; return n; });
-      toast.success('已删除');
+      toast.success(translateNotification('provider.chooser.deleted'));
     } catch (e:any) {
       console.error(e);
-      toast.error('删除失败', { description: e?.message || String(e) });
+      toast.error(translateNotification('provider.chooser.deleteFailed'), { description: e?.message || String(e) });
     }
   };
 
@@ -365,11 +371,11 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       <Dialog open={open} onOpenChange={(v)=>onOpenChange ? onOpenChange(v) : setOpen(v)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>修改提供商</DialogTitle>
+            <DialogTitle>{t('provider.chooser.edit')}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div>
-              <label className="block text-xs text-slate-500 mb-1">名称</label>
+              <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.name')}</label>
               <Input
                 value={customDisplayName}
                 onChange={(e)=>{
@@ -381,10 +387,10 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                     else setPreviewAvatar(null);
                   }
                 }}
-                placeholder="请输入显示名称"
+                placeholder={t('provider.chooser.enterName')}
               />
               {editingName && (
-                <div className="mt-1 text-[10px] text-slate-400">名称仅用于展示，唯一标识仍为 {editingName}</div>
+                <div className="mt-1 text-[10px] text-slate-400">{t('provider.chooser.nameHelp').replace('{0}', () => editingName)}</div>
               )}
             </div>
 
@@ -392,8 +398,8 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
             {isEditingCustom ? (
               previewAvatar && (
                 <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <Image src={previewAvatar} alt="avatar" width={20} height={20} className="rounded-md" />
-                  <span>头像预览（保存后将显示）</span>
+                  <Image src={previewAvatar} alt="" width={20} height={20} className="rounded-md" />
+                  <span>{t('provider.chooser.avatarPreview')}</span>
                 </div>
               )
             ) : (
@@ -402,30 +408,30 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                   const def = AVAILABLE_PROVIDERS_CATALOG.find(d=>d.name===editingName);
                   return <ProviderIcon id={def?.id} name={def?.name || editingName || ''} />;
                 })()}
-                <span>当前图标</span>
+                <span>{t('provider.chooser.currentIcon')}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs text-slate-500 mb-1">服务地址（可选）</label>
-              <Input value={customUrl} onChange={(e)=>setCustomUrl(e.target.value)} placeholder="例如：https://api.example.com/v1" />
+              <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.optionalUrl')}</label>
+              <Input value={customUrl} onChange={(e)=>setCustomUrl(e.target.value)} placeholder={t('provider.chooser.urlExample')} />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">API 密钥（可选）</label>
-              <Input value={customApiKey} onChange={(e)=>setCustomApiKey(e.target.value)} placeholder="粘贴密钥（可选）" type="password" />
+              <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.optionalKey')}</label>
+              <Input value={customApiKey} onChange={(e)=>setCustomApiKey(e.target.value)} placeholder={t('provider.chooser.pasteKey')} type="password" />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">API 策略</label>
+              <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.strategy')}</label>
               <Select value={customStrategy} onValueChange={(v)=>setCustomStrategy(v as CatalogStrategy)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择策略" />
+                  <SelectValue placeholder={t('provider.chooser.chooseStrategy')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
-                  <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
-                  <SelectItem value="openai">OpenAI 官方</SelectItem>
-                  <SelectItem value="anthropic">Anthropic（Claude）</SelectItem>
-                  <SelectItem value="gemini">Google AI（Gemini）</SelectItem>
+                  <SelectItem value="openai-compatible">{t('provider.chooser.openAICompatible')}</SelectItem>
+                  <SelectItem value="openai">{t('provider.chooser.officialOpenAI')}</SelectItem>
+                  <SelectItem value="anthropic">{t('provider.chooser.anthropic')}</SelectItem>
+                  <SelectItem value="gemini">{t('provider.chooser.gemini')}</SelectItem>
                   <SelectItem value="deepseek">DeepSeek</SelectItem>
                   <SelectItem value="ollama">Ollama</SelectItem>
                 </SelectContent>
@@ -433,8 +439,8 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
             </div>
 
             <div className="flex justify-end gap-2 mt-2">
-              <Button variant="dialogSecondary" onClick={()=> (onOpenChange ? onOpenChange(false) : setOpen(false))}>取消</Button>
-              <Button variant="dialogPrimary" onClick={saveEditProvider} disabled={isSavingCustom}>{isSavingCustom ? '保存中...' : '保存'}</Button>
+              <Button variant="dialogSecondary" onClick={()=> (onOpenChange ? onOpenChange(false) : setOpen(false))}>{t('common.cancel')}</Button>
+              <Button variant="dialogPrimary" onClick={saveEditProvider} disabled={isSavingCustom}>{isSavingCustom ? t('provider.chooser.saving') : t('provider.chooser.save')}</Button>
             </div>
           </div>
         </DialogContent>
@@ -448,15 +454,15 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className={`max-w-[92vw] w-[92vw] sm:w-auto sm:max-w-xl box-border p-4 sm:p-5 ${compact ? 'max-h-[calc(100dvh-1rem)] overflow-y-auto' : 'overflow-hidden max-h-[85vh]'}`}>
         <DialogHeader>
-          <DialogTitle className="text-[15px] font-medium text-slate-700 dark:text-slate-200">添加/管理提供商</DialogTitle>
+          <DialogTitle className="text-[15px] font-medium text-slate-700 dark:text-slate-200">{t('provider.chooser.title')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 min-w-0">
           {/* 为避免在小屏宽度下出现水平溢出，强制容器与输入框不超出 */}
-          <Input className="w-full max-w-full min-w-0" placeholder="搜索提供商..." value={keyword} onChange={(e)=>setKeyword(e.target.value)} />
+          <Input className="w-full max-w-full min-w-0" placeholder={t('provider.chooser.search')} value={keyword} onChange={(e)=>setKeyword(e.target.value)} />
           {/* 顶部TAB */}
           <div className="flex items-center gap-2 px-1">
-            <button onClick={()=>setActiveTab("builtIn")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='builtIn'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>默认</button>
-            <button onClick={()=>setActiveTab("custom")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='custom'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>自定义</button>
+            <button onClick={()=>setActiveTab("builtIn")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='builtIn'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{t('provider.chooser.defaultTab')}</button>
+            <button onClick={()=>setActiveTab("custom")} className={`px-3 py-1.5 text-sm rounded-md ${activeTab==='custom'?'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{t('provider.chooser.customTab')}</button>
           </div>
           <div ref={listRef} className="h-[60vh] overflow-y-auto rounded-md bg-white/80 dark:bg-slate-900/20 space-y-1.5 px-1">
             {activeTab === 'builtIn' && (
@@ -464,7 +470,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                 {catalog.local.length > 0 && (
                   <>
                     <div className="px-2 pt-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                      本地推荐
+                      {t('provider.chooser.local')}
                     </div>
                     {catalog.local.map((c) => {
                       const checked = visibleMap[c.name] ?? false;
@@ -475,16 +481,16 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                           <div className="flex-1 min-w-0">
                             <label htmlFor={`chk-${c.id}`} className="font-medium truncate cursor-pointer select-none">{c.name}</label>
                             <div className="text-xs text-slate-500 truncate">
-                              {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? '· 需要密钥' : '· 免密'}
+                              {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? `· ${t('provider.chooser.keyRequired')}` : `· ${t('provider.chooser.keyNotRequired')}`}
                             </div>
-                            {c.notes ? <div className="text-[11px] text-slate-400 truncate">{c.notes}</div> : null}
+                            {c.notesKey ? <div className="text-[11px] text-slate-400 truncate">{t(c.notesKey)}</div> : null}
                           </div>
                         </label>
                       );
                     })}
                     {catalog.rest.length > 0 && (
                       <div className="px-2 pt-2 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        更多提供商
+                        {t('provider.chooser.more')}
                       </div>
                     )}
                   </>
@@ -498,15 +504,15 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                       <div className="flex-1 min-w-0">
                         <label htmlFor={`chk-${c.id}`} className="font-medium truncate cursor-pointer select-none">{c.name}</label>
                         <div className="text-xs text-slate-500 truncate">
-                          {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? '· 需要密钥' : ''}
+                          {c.strategy} {c.defaultUrl ? `· ${c.defaultUrl}` : ''} {c.requiresKey ? `· ${t('provider.chooser.keyRequired')}` : ''}
                         </div>
-                        {c.notes ? <div className="text-[11px] text-slate-400 truncate">{c.notes}</div> : null}
+                        {c.notesKey ? <div className="text-[11px] text-slate-400 truncate">{t(c.notesKey)}</div> : null}
                       </div>
                     </label>
                   );
                 })}
                 {catalog.all.length === 0 && (
-                  <div className="py-6 text-center text-sm text-slate-500">未找到匹配的提供商</div>
+                  <div className="py-6 text-center text-sm text-slate-500">{t('provider.chooser.noMatches')}</div>
                 )}
               </>
             )}
@@ -532,22 +538,22 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" sideOffset={6} className="min-w-36">
                           <DropdownMenuItem onClick={()=>startEdit(cp.id)}>
-                            <Pencil className="w-3.5 h-3.5 mr-2" /> 修改
+                            <Pencil className="w-3.5 h-3.5 mr-2" /> {t('provider.chooser.editAction')}
                           </DropdownMenuItem>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <DropdownMenuItem className="text-red-600 focus:text-red-600" onSelect={(e)=>{ e.preventDefault(); }}>
-                                <Trash2 className="w-3.5 h-3.5 mr-2" /> 删除
+                                <Trash2 className="w-3.5 h-3.5 mr-2" /> {t('provider.chooser.delete')}
                               </DropdownMenuItem>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>确认删除该 Provider？</AlertDialogTitle>
-                                <AlertDialogDescription>此操作将从当前列表移除该 Provider，但不会删除已配置的密钥和模型参数。</AlertDialogDescription>
+                                <AlertDialogTitle>{t('provider.chooser.deleteTitle')}</AlertDialogTitle>
+                                <AlertDialogDescription>{t('provider.chooser.deleteDescription')}</AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction onClick={()=>confirmDelete(cp.id)}>删除</AlertDialogAction>
+                                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                                <AlertDialogAction onClick={()=>confirmDelete(cp.id)}>{t('provider.chooser.delete')}</AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
@@ -557,11 +563,11 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                   );
                 })}
                 {filteredCustoms.length === 0 && customProviders.length > 0 && keyword.trim() !== '' && (
-                  <div className="py-2 text-center text-xs text-slate-400">没有匹配的自定义提供商</div>
+                  <div className="py-2 text-center text-xs text-slate-400">{t('provider.chooser.noCustomMatches')}</div>
                 )}
                 <div className="py-2 px-1">
                   <Button variant="soft" className="w-full" onClick={openAddModal}>
-                    <Plus className="w-4 h-4" /> 添加自定义 Provider
+                    <Plus className="w-4 h-4" /> {t('provider.chooser.addCustom')}
                   </Button>
                 </div>
               </>
@@ -574,11 +580,11 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
           <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
       <DialogContent className={compact ? "w-[92vw] max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-md" : "sm:max-w-md"}>
               <DialogHeader>
-              <DialogTitle>{isEditMode ? '修改 Provider' : '添加自定义 Provider'}</DialogTitle>
+              <DialogTitle>{isEditMode ? t('provider.chooser.editCustom') : t('provider.chooser.addCustom')}</DialogTitle>
               </DialogHeader>
               <div className="grid gap-3 py-2">
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">名称</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.name')}</label>
                   <Input
                     value={customDisplayName}
                     onChange={(e)=>{
@@ -588,43 +594,43 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                       if (id && id.length >= 2) setPreviewAvatar(generateAvatarDataUrl(id, val, 40));
                       else setPreviewAvatar(null);
                     }}
-                    placeholder="例如：我的提供商 或 My Provider"
+                    placeholder={t('provider.chooser.nameExample')}
                   />
                   {isEditMode && editingName && (
-                    <div className="mt-1 text-[10px] text-slate-400">名称仅用于展示，唯一标识仍为 {editingName}</div>
+                    <div className="mt-1 text-[10px] text-slate-400">{t('provider.chooser.nameHelp').replace('{0}', () => editingName)}</div>
                   )}
                 </div>
                 {previewAvatar && (
                   <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Image src={previewAvatar} alt="avatar" width={20} height={20} className="rounded-md" />
-                    <span>头像预览（保存后将显示）</span>
+                    <Image src={previewAvatar} alt="" width={20} height={20} className="rounded-md" />
+                    <span>{t('provider.chooser.avatarPreview')}</span>
                   </div>
                 )}
                 {containsChinese(customDisplayName) && (
                   <div className="text-xs text-blue-600 dark:text-blue-400">
-                    💡 中文名称将自动转换为拼音ID：{sanitizeId(customDisplayName)}
+                    {t('provider.chooser.pinyinId').replace('{0}', () => sanitizeId(customDisplayName))}
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">服务地址（可选）</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.optionalUrl')}</label>
                   <Input value={customUrl} onChange={(e)=>setCustomUrl(e.target.value)} placeholder="https://api.example.com/v1" />
                 </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">API 密钥（可选）</label>
-              <Input value={customApiKey} onChange={(e)=>setCustomApiKey(e.target.value)} placeholder="粘贴密钥（可选）" type="password" />
+              <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.optionalKey')}</label>
+              <Input value={customApiKey} onChange={(e)=>setCustomApiKey(e.target.value)} placeholder={t('provider.chooser.pasteKey')} type="password" />
             </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">API 策略</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('provider.chooser.strategy')}</label>
                   <Select value={customStrategy} onValueChange={(v)=>setCustomStrategy(v as CatalogStrategy)}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="选择策略" />
+                      <SelectValue placeholder={t('provider.chooser.chooseStrategy')} />
                     </SelectTrigger>
                     <SelectContent>
                   <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
-                      <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
-                      <SelectItem value="openai">OpenAI 官方</SelectItem>
-                  <SelectItem value="anthropic">Anthropic（Claude）</SelectItem>
-                  <SelectItem value="gemini">Google AI（Gemini）</SelectItem>
+                      <SelectItem value="openai-compatible">{t('provider.chooser.openAICompatible')}</SelectItem>
+                      <SelectItem value="openai">{t('provider.chooser.officialOpenAI')}</SelectItem>
+                  <SelectItem value="anthropic">{t('provider.chooser.anthropic')}</SelectItem>
+                  <SelectItem value="gemini">{t('provider.chooser.gemini')}</SelectItem>
                       <SelectItem value="deepseek">DeepSeek</SelectItem>
                       <SelectItem value="ollama">Ollama</SelectItem>
                     </SelectContent>
@@ -632,9 +638,9 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
                 </div>
                 
                 <div className="flex justify-end gap-2 mt-2">
-                  <Button variant="dialogSecondary" onClick={()=>setCustomModalOpen(false)}>取消</Button>
+                  <Button variant="dialogSecondary" onClick={()=>setCustomModalOpen(false)}>{t('common.cancel')}</Button>
                   <Button variant="dialogPrimary" onClick={isEditMode ? saveEditProvider : saveCustomProvider} disabled={isSavingCustom}>
-                    {isSavingCustom ? '保存中...' : '保存'}
+                    {isSavingCustom ? t('provider.chooser.saving') : t('provider.chooser.save')}
                   </Button>
                 </div>
               </div>

@@ -19,8 +19,11 @@ import {
   ClockIcon
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { enUS, zhCN } from 'date-fns/locale';
 import type { Message } from '@/types/chat';
+import { useLocaleStore } from '@/store/localeStore';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
 
 interface MessageNavigationMenuProps {
   messages: Message[];
@@ -49,6 +52,8 @@ const highlightSearchTerm = (text: string, query: string) => {
 };
 
 export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }: MessageNavigationMenuProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'user' | 'assistant'>('all');
 
@@ -82,7 +87,7 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
     >
       <DropdownMenuLabel className="text-sm text-slate-800 dark:text-slate-100">
         <div className="flex items-center justify-between">
-          <span>消息导航 ({messages.length}条)</span>
+          <span>{t('chatUi.messageNavigation.count').replace('{0}', () => String(messages.length))}</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -91,15 +96,15 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
             </DropdownMenuTrigger>
             <DropdownMenuContent side="left">
               <DropdownMenuItem onClick={() => setFilterType('all')}>
-                <span className={filterType === 'all' ? 'font-bold' : ''}>全部</span>
+                <span className={filterType === 'all' ? 'font-bold' : ''}>{t('chatUi.messageNavigation.filterAll')}</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterType('user')}>
                 <UserIcon className="w-3 h-3 mr-2" />
-                <span className={filterType === 'user' ? 'font-bold' : ''}>用户</span>
+                <span className={filterType === 'user' ? 'font-bold' : ''}>{t('chatUi.messageNavigation.filterUser')}</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterType('assistant')}>
                 <BotIcon className="w-3 h-3 mr-2" />
-                <span className={filterType === 'assistant' ? 'font-bold' : ''}>AI</span>
+                <span className={filterType === 'assistant' ? 'font-bold' : ''}>{t('chatUi.messageNavigation.filterAssistant')}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -110,7 +115,7 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
         <div className="relative">
           <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground dark:text-slate-400" />
           <Input
-            placeholder="搜索消息内容..."
+            placeholder={t('chatUi.messageNavigation.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-7 h-7 text-xs"
@@ -138,7 +143,7 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
                   <BotIcon className="w-3 h-3 text-green-500 flex-shrink-0" />
                 )}
                 <span className="text-xs font-medium">
-                  {message.role === 'user' ? '用户' : 'AI助手'}
+                  {message.role === 'user' ? t('chatUi.role.user') : t('chatUi.role.assistant')}
                 </span>
                 <span className="text-xs text-muted-foreground ml-auto">
                   #{message.originalIndex + 1}
@@ -154,14 +159,14 @@ export function MessageNavigationMenu({ messages, onNavigateToMessage, onClose }
               <div className="flex items-center gap-1.5 w-full mt-2 text-xs text-muted-foreground/80">
                 <ClockIcon className="w-3 h-3" />
                 <span>
-                  {formatDistanceToNow(message.created_at, { addSuffix: true, locale: zhCN })}
+                  {formatDistanceToNow(message.created_at, { addSuffix: true, locale: locale === 'en' ? enUS : zhCN })}
                 </span>
               </div>
             </DropdownMenuItem>
           ))
         ) : (
           <div className="text-center py-4 text-sm text-muted-foreground">
-            <p>无匹配消息</p>
+            <p>{t('chatUi.messageNavigation.noMatches')}</p>
           </div>
         )}
       </div>

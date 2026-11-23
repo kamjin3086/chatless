@@ -18,6 +18,7 @@ import {
 import { EmbeddingService } from '@/lib/embedding/EmbeddingService';
 import type { EmbeddingConfig, EmbeddingServiceOptions } from '@/lib/embedding/types';
 import { getKnowledgeBaseConfigManager } from '@/lib/knowledgeBaseConfig';
+import { useTranslation } from '@/i18n/useTranslation';
 
 interface EmbeddingServiceStatusProps {
   // 组件现在自管理配置，不需要外部 props
@@ -43,6 +44,7 @@ interface TestResult {
 }
 
 export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
+  const t = useTranslation();
   const [status, setStatus] = useState<ServiceStatus>({
     isConnected: false,
     isInitialized: false,
@@ -58,7 +60,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
   // 安全的模型名称处理函数：确保不会泄露任何路径信息
   const getSafeModelName = (config: EmbeddingConfig): string => {
     if (config.strategy === 'ollama') {
-      return config.modelName || 'Ollama 模型';
+      return config.modelName || t('settings.knowledge.embedding.ollamaModelFallback');
     }
 
     // 对于本地模型，只返回友好的名称，绝不返回路径
@@ -80,11 +82,11 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
           .replace(/l(\d+)/i, 'L$1')
           .replace(/-/g, ' ');
 
-        return displayName || '本地模型';
+        return displayName || t('settings.knowledge.embedding.localModelFallback');
       }
     }
 
-    return '本地模型';
+    return t('settings.knowledge.embedding.localModelFallback');
   };
 
   // 从配置管理器加载配置
@@ -175,7 +177,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         isConnected: false,
         isInitialized: false,
         strategy: currentConfig?.strategy || 'unknown',
-        error: error instanceof Error ? error.message : '未知错误'
+        error: error instanceof Error ? error.message : t('settings.knowledge.embedding.unknownError')
       });
     } finally {
       await embeddingService?.cleanup().catch((error) => console.warn('[EmbeddingServiceStatus] Probe cleanup failed:', error));
@@ -242,7 +244,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
         success: false,
         latency: 0,
         dimension: 0,
-        error: error instanceof Error ? error.message : '测试失败'
+        error: error instanceof Error ? error.message : t('settings.knowledge.embedding.testFailed')
       });
     } finally {
       await embeddingService?.cleanup().catch((error) => console.warn('[EmbeddingServiceStatus] Test cleanup failed:', error));
@@ -281,17 +283,17 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
   }, []);
 
   const getStatusBadge = () => {
-    if (isLoading || isTesting) return <Badge variant="outline" className="text-muted-foreground">检查中</Badge>;
+    if (isLoading || isTesting) return <Badge variant="outline" className="text-muted-foreground">{t('settings.knowledge.embedding.checking')}</Badge>;
     if (status.isInitialized && status.inferenceSource === 'unavailable') {
-      return <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">语义不可用（词法可用）</Badge>;
+      return <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">{t('settings.knowledge.embedding.semanticUnavailable')}</Badge>;
     }
     if (!status.isConnected) {
-      return <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">离线</Badge>;
+      return <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">{t('settings.knowledge.embedding.offline')}</Badge>;
     }
     if (!status.isInitialized) {
-      return <Badge variant="outline" className="text-amber-500 border-amber-300 bg-amber-50">未初始化</Badge>;
+      return <Badge variant="outline" className="text-amber-500 border-amber-300 bg-amber-50">{t('settings.knowledge.embedding.uninitialized')}</Badge>;
     }
-    return <Badge variant="outline" className="text-emerald-500 border-emerald-300 bg-emerald-50">正常</Badge>;
+    return <Badge variant="outline" className="text-emerald-500 border-emerald-300 bg-emerald-50">{t('settings.knowledge.embedding.ready')}</Badge>;
   };
 
   const getTestResultBadge = () => {
@@ -301,7 +303,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
     if (testResult.success) {
       return <Badge variant="outline" className="text-emerald-500 border-emerald-300 bg-emerald-50">{testResult.latency}ms</Badge>;
     }
-    return <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">失败</Badge>;
+    return <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">{t('settings.knowledge.embedding.failed')}</Badge>;
   };
 
   return (
@@ -310,7 +312,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Brain className="w-5 h-5 text-slate-500" />
-          <h3 className="text-lg font-medium">嵌入服务状态</h3>
+          <h3 className="text-lg font-medium">{t('settings.knowledge.embedding.status')}</h3>
           {getStatusBadge()}
         </div>
         <div className="flex items-center space-x-2">
@@ -320,7 +322,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
             size="sm"
             onClick={() => setShowDetails(!showDetails)}
             className="p-1 h-8 w-8"
-            title="查看详细信息"
+            title={t('settings.knowledge.embedding.viewDetails')}
           >
             <Info className="w-4 h-4" />
           </Button>
@@ -332,7 +334,7 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
             disabled={isLoading}
           >
             <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-            刷新
+            {t('settings.knowledge.embedding.refresh')}
           </Button>
         </div>
       </div>
@@ -340,45 +342,45 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
       {/* 详细信息（可折叠） */}
       {showDetails && (
         <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 space-y-2">
-          <h4 className="font-medium text-sm text-slate-900 dark:text-slate-100">服务详情</h4>
+          <h4 className="font-medium text-sm text-slate-900 dark:text-slate-100">{t('settings.knowledge.embedding.details')}</h4>
           <div className="space-y-1 text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-slate-600 dark:text-slate-400">服务类型</span>
+              <span className="text-slate-600 dark:text-slate-400">{t('settings.knowledge.embedding.serviceType')}</span>
               <span className="font-medium">{status.strategy}</span>
             </div>
 
             {status.inferenceSource && status.inferenceSource !== 'unknown' && (
               <div className="flex justify-between items-center">
-                <span className="text-slate-600 dark:text-slate-400">推理来源</span>
+                <span className="text-slate-600 dark:text-slate-400">{t('settings.knowledge.embedding.inferenceSource')}</span>
                 <span className={`font-medium ${status.inferenceSource === 'mock' || status.inferenceSource === 'unavailable' ? 'text-amber-600' : 'text-emerald-600'}`}>
                   {status.inferenceSource === 'real'
-                    ? '真实 ONNX'
+                    ? t('settings.knowledge.embedding.inference.real')
                     : status.inferenceSource === 'mock'
-                      ? '模拟向量（测试/回退）'
+                      ? t('settings.knowledge.embedding.inference.mock')
                       : status.inferenceSource === 'unavailable'
-                        ? '不可用（词法检索仍可用）'
-                        : 'Ollama'}
+                        ? t('settings.knowledge.embedding.inference.unavailable')
+                        : t('settings.knowledge.embedding.inference.ollama')}
                 </span>
               </div>
             )}
 
             {status.model && (
               <div className="flex justify-between items-center">
-                <span className="text-slate-600 dark:text-slate-400">当前模型</span>
+                <span className="text-slate-600 dark:text-slate-400">{t('settings.knowledge.embedding.currentModel')}</span>
                 <span className="font-medium">{status.model}</span>
               </div>
             )}
 
             {status.dimension && (
               <div className="flex justify-between items-center">
-                <span className="text-slate-600 dark:text-slate-400">向量维度</span>
+                <span className="text-slate-600 dark:text-slate-400">{t('settings.knowledge.embedding.dimension')}</span>
                 <span className="font-medium">{status.dimension}D</span>
               </div>
             )}
 
             {status.latency && (
               <div className="flex justify-between items-center">
-                <span className="text-slate-600 dark:text-slate-400">响应时间</span>
+                <span className="text-slate-600 dark:text-slate-400">{t('settings.knowledge.embedding.latency')}</span>
                 <span className="font-medium">{status.latency}ms</span>
               </div>
             )}
@@ -398,12 +400,12 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
       {/* 简洁的策略选择 */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-          嵌入服务类型
+          {t('settings.knowledge.embedding.serviceTypeLabel')}
         </label>
         <p className="text-sm text-slate-700 dark:text-slate-300">
-          {currentConfig?.strategy === 'local-onnx' ? '本地模型' : currentConfig?.strategy === 'ollama' ? 'Ollama 服务' : '未配置'}
+          {currentConfig?.strategy === 'local-onnx' ? t('settings.knowledge.embedding.serviceType.local') : currentConfig?.strategy === 'ollama' ? t('settings.knowledge.embedding.serviceType.ollama') : t('settings.knowledge.embedding.serviceType.unset')}
         </p>
-        <p className="text-xs text-muted-foreground">在上方模型管理器中激活模型以切换服务类型。</p>
+        <p className="text-xs text-muted-foreground">{t('settings.knowledge.embedding.serviceTypeHint')}</p>
       </div>
 
       {/* 功能测试 */}
@@ -424,12 +426,12 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
           {isTesting ? (
             <>
               <Clock className="w-4 h-4 mr-2 animate-spin" />
-              正在测试...
+              {t('settings.knowledge.embedding.testing')}
             </>
           ) : (
             <>
               <Zap className="w-4 h-4 mr-2" />
-              测试嵌入生成
+              {t('settings.knowledge.embedding.test')}
             </>
           )}
         </Button>
@@ -445,15 +447,15 @@ export function EmbeddingServiceStatus({}: EmbeddingServiceStatusProps) {
       <div className="flex items-center justify-center space-x-4 py-2">
         <div
           className={`w-2 h-2 rounded-full ${status.isConnected ? 'bg-emerald-400' : 'bg-red-400'}`}
-          title={status.isConnected ? '服务已连接' : '服务连接失败'}
+          title={status.isConnected ? t('settings.knowledge.embedding.connected') : t('settings.knowledge.embedding.connectionFailed')}
         />
         <div
           className={`w-2 h-2 rounded-full ${status.isInitialized ? 'bg-emerald-400' : 'bg-slate-400'}`}
-          title={status.isInitialized ? '服务已初始化' : '服务未初始化'}
+          title={status.isInitialized ? t('settings.knowledge.embedding.initialized') : t('settings.knowledge.embedding.notInitialized')}
         />
         <div
           className={`w-2 h-2 rounded-full ${testResult?.success ? 'bg-emerald-400' : 'bg-slate-400'}`}
-          title={testResult?.success ? '测试已通过' : '尚未测试'}
+          title={testResult?.success ? t('settings.knowledge.embedding.testPassed') : t('settings.knowledge.embedding.notTested')}
         />
       </div>
     </div>

@@ -37,21 +37,26 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useProviderManagement, ProviderWithStatus } from '@/hooks/useProviderManagement';
 import { cn } from "@/lib/utils"; // Assuming cn is used somewhere or will be
 import { AddProvidersDialog } from './AddProvidersDialog';
+import { formatProviderModelCount } from './providerModelPresentation';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useStableProviderIcon } from "./useStableProviderIcon";
+import { getHtmlLang, translate } from '@/i18n';
+import type { Locale, TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { useSearchParams } from "next/navigation";
 import { ContextMenu } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
-import { useLocaleStore } from '@/store/localeStore';
 // 头部过滤器已内化到表头，无需 Select 组件
 // duplicate import removed
 
-function formatLastChecked(timestamp?: number) {
-  if (!timestamp) return '从未检查';
+function formatLastChecked(locale: Locale, timestamp?: number) {
+  if (!timestamp) return translate(locale, 'provider.list.notCheckedYet');
   const diff = Date.now() - timestamp;
-  if (diff < 60000) return '刚刚检查';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
-  return `${Math.floor(diff / 86400000)}天前`;
+  if (diff < 60000) return translate(locale, 'provider.list.justChecked');
+  const relativeTime = new Intl.RelativeTimeFormat(getHtmlLang(locale));
+  if (diff < 3600000) return relativeTime.format(-Math.floor(diff / 60000), 'minute');
+  if (diff < 86400000) return relativeTime.format(-Math.floor(diff / 3600000), 'hour');
+  return relativeTime.format(-Math.floor(diff / 86400000), 'day');
 }
 
 interface SortableProviderRowProps {
@@ -67,6 +72,7 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
   onSelect,
   onRefresh,
 }: SortableProviderRowProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: provider.name });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -81,16 +87,16 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
   const menuItems = useMemo(() => [
     {
       id: 'refresh',
-      text: '刷新状态',
+      text: translate(locale, 'provider.list.refresh'),
       action: () => { onRefresh(provider); }
     },
     {
       id: 'copy-url',
-      text: '复制服务地址',
+      text: translate(locale, 'provider.list.copyUrl'),
       action: () => {
         const url = (provider as any).url || (provider as any).api_base_url || '';
         navigator.clipboard.writeText(url);
-        toast.success('已复制服务地址', { duration: 2000 });
+        toast.success(translate(locale, 'provider.list.urlCopied'), { duration: 2000 });
       }
     },
     {
@@ -100,23 +106,28 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
     },
     {
       id: 'toggle-visibility',
-      text: provider.isVisible ? '隐藏提供商' : '显示提供商',
+      text: provider.isVisible ? translate(locale, 'provider.list.hide') : translate(locale, 'provider.list.show'),
       action: async () => {
         try {
           const { providerRepository } = await import('@/lib/provider/ProviderRepository');
           await providerRepository.setVisibility(provider.name, !provider.isVisible);
-          toast.success(provider.isVisible ? '已隐藏提供商' : '已显示提供商', { duration: 2000 });
+          toast.success(provider.isVisible ? translate(locale, 'provider.list.hidden') : translate(locale, 'provider.list.shown'), { duration: 2000 });
         } catch (error) {
           console.error('切换可见性失败:', error);
-          toast.error('操作失败');
+          toast.error(translate(locale, 'provider.list.actionFailed'));
         }
       }
     }
-  ], [provider, onRefresh]);
+  ], [locale, provider, onRefresh]);
 
-  const tooltipContent = needsKey
-    ? `${provider.displayName || provider.name}\n未配置密钥\n${formatLastChecked(provider.lastCheckedAt)}\n${provider.models?.length || 0} 个模型`
-    : `${provider.displayName || provider.name}\n${formatLastChecked(provider.lastCheckedAt)}\n${provider.models?.length || 0} 个模型`;
+  const modelCount = provider.models?.length || 0;
+  const tooltipContent = [
+    provider.displayName || provider.name,
+    ...(needsKey ? [translate(locale, 'provider.connection.noKey')] : []),
+    formatLastChecked(locale, provider.lastCheckedAt),
+    translate(locale, modelCount === 1 ? 'provider.list.oneModel' : 'provider.list.modelCount')
+      .replace('{0}', String(modelCount)),
+  ].join('\n');
 
   return (
     <ContextMenu menuItems={menuItems}>
@@ -185,6 +196,7 @@ const MobileProviderRow = React.memo(function MobileProviderRow({
   onOpen: () => void;
 }) {
   const { iconSrc } = useStableProviderIcon(provider as any);
+  const t = useTranslation();
   const status = providerStatusChip(provider);
   const modelCount = provider.models?.length ?? 0;
 
@@ -212,15 +224,15 @@ const MobileProviderRow = React.memo(function MobileProviderRow({
           </span>
           {inUse && (
             <span className="shrink-0 rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-600 dark:text-blue-300">
-              使用中
+              {t('androidChat.inUse')}
             </span>
           )}
         </span>
         <span className="mt-1 flex items-center gap-1.5 text-xs">
           <span className={cn("size-1.5 shrink-0 rounded-full", status.dot)} />
-          <span className="text-slate-500 dark:text-slate-400">{status.label}</span>
+          <span className="text-slate-500 dark:text-slate-400">{t(status.labelKey)}</span>
           <span className="truncate text-slate-400 dark:text-slate-500">
-            · {modelCount} 个模型
+            · {formatProviderModelCount(t, modelCount)}
           </span>
         </span>
       </span>
@@ -241,8 +253,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
   startWithProviderPicker?: boolean;
   compact?: boolean;
 } = {}) {
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   const [providerPickerOpen, setProviderPickerOpen] = useState(startWithProviderPicker);
   // 使用自定义 Hook 获取状态和处理函数
   const {
@@ -439,12 +450,12 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
     try {
       const { providerRepository } = await import('@/lib/provider/ProviderRepository');
       await providerRepository.setUserOrder(next);
-      toast.success('已保存自定义排序',{
+      toast.success(translate(useLocaleStore.getState().locale, 'provider.list.orderSaved'), {
         duration: 2000,
       });
     } catch (e) {
       console.error(e);
-      toast.error('保存排序失败',{
+      toast.error(translate(useLocaleStore.getState().locale, 'provider.list.orderSaveFailed'), {
         duration: 2000,
       });
     }
@@ -481,7 +492,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
       />
     ) : (
       <div className="h-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
-        {compact ? t('chatStarter.noProvider') : '请从左侧选择一个提供商'}
+        {compact ? t('chatStarter.noProvider') : t('provider.list.selectProvider')}
       </div>
     );
 
@@ -498,7 +509,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
                 className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm text-slate-600 active:bg-muted dark:text-slate-300"
               >
                 <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
-                返回模型服务
+                {t('androidChat.backToProviders')}
               </button>
             </div>
             <div className="min-h-0 flex-1">{renderProviderDetail(openProvider)}</div>
@@ -513,7 +524,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
                 className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs text-slate-500 active:bg-muted dark:text-slate-400"
               >
                 <RotateCcw className="size-3.5" aria-hidden="true" />
-                刷新状态
+                {t('provider.list.refresh')}
               </button>
             </div>
             <ul className="space-y-2">
@@ -550,7 +561,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
           <SearchInput
             value={searchQuery}
             onChange={(e)=>setSearchQuery(e.target.value)}
-            placeholder="搜索"
+            placeholder={t('provider.list.search')}
             variant="withIcon"
             allowClear
             className="flex-1 min-w-0"
@@ -559,20 +570,20 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
             <DropdownMenuTrigger asChild>
               <button
                 className="inline-flex items-center gap-0.5 h-7 px-1.5 rounded-md text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-500/[0.08] dark:hover:bg-white/[0.06] focus:outline-none transition-colors whitespace-nowrap"
-                title="筛选状态"
+                title={t('provider.list.filter')}
               >
-                {statusFilter === 'all' && '全部'}
-                {statusFilter === 'recently_checked' && '已检查'}
-                {statusFilter === 'needs_key' && '无密钥'}
-                {statusFilter === 'never_checked' && '未检查'}
+                {statusFilter === 'all' && t('provider.list.all')}
+                {statusFilter === 'recently_checked' && t('provider.list.checked')}
+                {statusFilter === 'needs_key' && t('provider.list.needsKey')}
+                {statusFilter === 'never_checked' && t('provider.list.unchecked')}
                 <ChevronDown className="w-3 h-3 opacity-60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-24 p-1">
-              <DropdownMenuItem onClick={() => setStatusFilter('all')} className="text-[11px] py-1.5">全部</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('recently_checked')} className="text-[11px] py-1.5">最近检查</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('needs_key')} className="text-[11px] py-1.5">未配置密钥</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('never_checked')} className="text-[11px] py-1.5">未检查过</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter('all')} className="text-[11px] py-1.5">{t('provider.list.all')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter('recently_checked')} className="text-[11px] py-1.5">{t('provider.list.recentlyChecked')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter('needs_key')} className="text-[11px] py-1.5">{t('provider.connection.noKey')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter('never_checked')} className="text-[11px] py-1.5">{t('provider.list.neverChecked')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -582,7 +593,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
             trigger={
               <button
                 className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-500/[0.08] dark:hover:bg-white/[0.06] focus:outline-none transition-colors"
-                title="添加或管理提供商"
+                title={t('provider.chooser.title')}
               >
                 <ServerCog className="w-3.5 h-3.5" />
               </button>
@@ -618,7 +629,7 @@ export function AiModelSettings({ startWithProviderPicker = false, compact = fal
           {displayList.length === 0 && !isLoading && (
             <div className="px-3 py-12 text-center text-xs text-slate-500 dark:text-slate-400">
               <ServerCog className="w-7 h-7 mx-auto mb-2 opacity-35" />
-              <p>暂无匹配的提供商</p>
+              <p>{t('provider.list.noMatches')}</p>
             </div>
           )}
         </div>

@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
+import { getHtmlLang, translate } from '@/i18n';
+import type { Locale, TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
+import { getRiskLevelInfo } from '@/store/skillAuthStore';
 import { cn } from '@/lib/utils';
 import { useSkillExecutionPlanStore, type SkillExecutionPlanDraft } from '@/store/skillExecutionPlanStore';
 import { executeSkillTool } from '@/lib/skills/skillTools';
@@ -12,19 +16,21 @@ interface SkillExecutionPlanPanelProps {
   maxItems?: number;
 }
 
-function StatusBadge({ status }: { status: SkillExecutionPlanDraft['status'] }) {
+function StatusBadge({ status, locale }: { status: SkillExecutionPlanDraft['status']; locale: Locale }) {
   const cfg = (() => {
     switch (status) {
+      case 'draft':
+        return { label: translate(locale, 'skillPlan.status.draft'), cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' };
       case 'awaiting_approval':
-        return { label: '待执行', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' };
+        return { label: translate(locale, 'skillPlan.status.awaitingApproval'), cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' };
       case 'running':
-        return { label: '执行中', cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' };
+        return { label: translate(locale, 'skillPlan.status.running'), cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' };
       case 'completed':
-        return { label: '已完成', cls: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' };
+        return { label: translate(locale, 'skillPlan.status.completed'), cls: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' };
       case 'failed':
-        return { label: '失败', cls: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' };
+        return { label: translate(locale, 'skillPlan.status.failed'), cls: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' };
       case 'cancelled':
-        return { label: '已取消', cls: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' };
+        return { label: translate(locale, 'skillPlan.status.cancelled'), cls: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' };
       default:
         return { label: status, cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' };
     }
@@ -38,6 +44,8 @@ function StatusBadge({ status }: { status: SkillExecutionPlanDraft['status'] }) 
 }
 
 export function SkillExecutionPlanPanel({ className, floating = false, maxItems = 3 }: SkillExecutionPlanPanelProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const { getAllPlans, removePlan, updatePlan } = useSkillExecutionPlanStore();
   const plans = getAllPlans();
 
@@ -57,7 +65,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
       if (res?.success) {
         updatePlan(planId, { status: 'completed' });
       } else {
-        updatePlan(planId, { status: 'failed', errorMessage: String(res?.message || '执行失败') });
+        updatePlan(planId, { status: 'failed', errorMessage: String(res?.message || t('skillPlan.runFailed')) });
       }
     } finally {
       setRunningPlanId(null);
@@ -78,22 +86,24 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <ListChecks className="w-5 h-5 text-slate-700 dark:text-slate-300" />
-            <h3 className="font-semibold text-slate-800 dark:text-slate-200">Skill 执行计划</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200">{t('skillPlan.title')}</h3>
             <span className="px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
               {plans.length}
             </span>
           </div>
           {hasMore ? (
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">仅展示最近 {maxItems} 个</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('skillPlan.recentLimit').replace('{count}', String(maxItems))}</span>
           ) : null}
         </div>
         <p className="mt-1 text-[12px] text-slate-600 dark:text-slate-400">
-          这些计划通常由 instruction-only skills 编译生成，可在此手动触发执行
+          {t('skillPlan.description')}
         </p>
       </div>
 
       <div className="p-3 space-y-2 max-h-96 overflow-y-auto">
         {displayPlans.map((p) => {
+          const stepCount = p.steps.length;
+          const moreSteps = stepCount - 6;
           const expanded = expandedId === p.id;
           const isRunning = runningPlanId === p.id || p.status === 'running';
           const canRun = !isRunning && (p.status === 'awaiting_approval' || p.status === 'failed');
@@ -113,7 +123,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                     <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {p.skillId}
                     </span>
-                    <StatusBadge status={p.status} />
+                    <StatusBadge status={p.status} locale={locale} />
                     {Icon ? <Icon className="w-4 h-4" /> : null}
                   </div>
                   <div className="text-[12px] text-slate-600 dark:text-slate-400 truncate">
@@ -122,7 +132,7 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                 </div>
 
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  {p.steps.length} 步
+                  {t(stepCount === 1 ? 'skillPlan.stepCount.one' : 'skillPlan.stepCount.other').replace('{count}', String(stepCount))}
                 </span>
 
                 {expanded ? (
@@ -141,11 +151,11 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                   ) : null}
 
                   <div className="text-[12px] text-slate-600 dark:text-slate-400">
-                    最近更新时间：{new Date(p.createdAt).toLocaleString()}
+                    {t('skillPlan.createdAt').replace('{date}', new Date(p.createdAt).toLocaleString(getHtmlLang(locale)))}
                   </div>
 
                   <div className="rounded-md border border-slate-200/60 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-950/20 p-2">
-                    <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 mb-1">步骤预览</div>
+                    <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 mb-1">{t('skillPlan.stepPreview')}</div>
                     <ul className="text-[12px] text-slate-700 dark:text-slate-300 space-y-1">
                       {p.steps.slice(0, 6).map((s, idx) => (
                         <li key={s.id} className="flex items-center justify-between gap-2">
@@ -153,12 +163,12 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                             {idx + 1}. <span className="font-mono">{s.type}</span> · {s.name}
                           </span>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                            {s.riskLevel || 'medium'}
+                            {getRiskLevelInfo(s.riskLevel || 'medium', locale)?.label ?? s.riskLevel}
                           </span>
                         </li>
                       ))}
-                      {p.steps.length > 6 ? (
-                        <li className="text-[11px] text-slate-500 dark:text-slate-400">… 还有 {p.steps.length - 6} 步</li>
+                      {moreSteps > 0 ? (
+                        <li className="text-[11px] text-slate-500 dark:text-slate-400">{t(moreSteps === 1 ? 'skillPlan.moreSteps.one' : 'skillPlan.moreSteps.other').replace('{count}', String(moreSteps))}</li>
                       ) : null}
                     </ul>
                   </div>
@@ -167,10 +177,10 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                     <button
                       onClick={() => removePlan(p.id)}
                       className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-                      title="删除计划"
+                      title={t('skillPlan.deletePlan')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      删除
+                      {t('common.delete')}
                     </button>
 
                     <button
@@ -182,10 +192,10 @@ export function SkillExecutionPlanPanel({ className, floating = false, maxItems 
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
                           : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed'
                       )}
-                      title="执行计划"
+                      title={t('skillPlan.runPlan')}
                     >
                       {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                      执行
+                      {t('skillAction.run')}
                     </button>
                   </div>
                 </div>

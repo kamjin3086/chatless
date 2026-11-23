@@ -9,6 +9,10 @@ import {
   DropdownMenuSeparator 
 } from '@/components/ui/dropdown-menu';
 import type { KnowledgeBase } from '@/lib/knowledgeService';
+import { getHtmlLang, translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
+import { formatKnowledgeDocumentCount } from './formatKnowledgeDocumentCount';
 import { createKnowledgeMenuItems } from './knowledgeMenu';
 
 interface KnowledgeBaseCardProps {
@@ -23,9 +27,11 @@ interface KnowledgeBaseCardProps {
 }
 
 export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc, onDelete }: KnowledgeBaseCardProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const desc = (kb.description || '').replace(/(\\n|\\r|\\t)/g, ' ').replace(/(\r?\n|\r)/g, ' ').trim();
 
-  const menuItems = createKnowledgeMenuItems(kb, { onRename, onEditDesc, onDelete });
+  const menuItems = createKnowledgeMenuItems(kb, locale, { onRename, onEditDesc, onDelete });
 
   const handleCardClick = () => {
     onClick?.(kb);
@@ -56,16 +62,16 @@ export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc,
             </div>
             <p className="truncate font-medium text-xs flex-1 pr-6 text-slate-700 dark:text-slate-200">{kb.name}</p>
           </div>
-          <p className="line-clamp-2 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed flex-1">{desc || '暂无描述'}</p>
+          <p className="line-clamp-2 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed flex-1">{desc || t('knowledge.noDescription')}</p>
 
           <div className="mt-auto pt-2 flex items-center justify-between text-[10px] text-slate-400">
             <span className="flex items-center gap-1">
               <FileText className="h-2.5 w-2.5" />
-              {kb.documentCount ?? 0} 文档
+              {formatKnowledgeDocumentCount(locale, kb.documentCount ?? 0)}
             </span>
             <span className="flex items-center gap-1">
               <Clock className="h-2.5 w-2.5" />
-              {new Date(kb.updatedAt).toLocaleDateString('zh-CN')}
+              {new Date(kb.updatedAt).toLocaleDateString(getHtmlLang(locale))}
             </span>
           </div>
         </button>
@@ -86,14 +92,14 @@ export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc,
               className="flex items-center gap-2 cursor-pointer text-xs"
             >
               <Edit className="w-3 h-3" />
-              重命名
+              {t('knowledge.rename')}
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={(e) => handleMenuClick(e, () => onEditDesc?.(kb) ?? onRename?.(kb))}
               className="flex items-center gap-2 cursor-pointer text-xs"
             >
               <Edit className="w-3 h-3" />
-              修改描述
+              {t('knowledge.editDescription')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
@@ -101,7 +107,7 @@ export function KnowledgeBaseCard({ kb, onClick, onManage, onRename, onEditDesc,
               className="flex items-center gap-2 cursor-pointer text-xs text-red-500"
             >
               <Trash2 className="w-3 h-3" />
-              删除
+              {t('knowledge.delete')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
