@@ -186,7 +186,7 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
   (prev.provider.models?.length ?? 0) === (next.provider.models?.length ?? 0)
 ));
 
-const MobileProviderRow = React.memo(function MobileProviderRow({
+export const MobileProviderRow = React.memo(function MobileProviderRow({
   provider,
   inUse,
   onOpen,
