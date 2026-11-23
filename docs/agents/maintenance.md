@@ -195,6 +195,36 @@ Pick the check that would have caught the bug. "The process is alive" passed on
 why `verify-app-startup.sh` asserts that start-up *finishes* and that a resize
 still works (`docs/tauri-window-pitfalls.md`).
 
+## Release notes
+
+All SemVer releases after `v0.8.2` require a bilingual `CHANGELOG.md` entry,
+including prereleases of newer versions such as `v0.8.3-rc.1`. `v0.8.2` and
+older releases keep their existing notes format and fallback behavior. Use
+an exact version heading (without `v`), including the prerelease or build
+suffix when present:
+
+```markdown
+## [0.8.3] - YYYY-MM-DD
+
+### zh-CN
+
+- 修复了恢复工作区时的显示问题。
+
+### en-US
+
+- Fixed a display issue when restoring a workspace.
+```
+
+Write each locale heading once and provide content under both. Use `####` or
+lower for subsections. The published GitHub Release body ends with `## zh-CN`
+and `## en-US`, in that order. These exact headings are reserved for the
+publisher. Download and installation information stays above both sections.
+
+To check a version without building, tagging, or publishing, run
+`node scripts/extract-changelog.mjs --version 0.8.3`. Manual Release also reads
+`CHANGELOG.md` for new versions; its `release_notes` input applies only to
+legacy versions.
+
 ## Repo reality an agent needs to know
 - **A comment that names a symbol promises that symbol exists.** `pnpm check:comments`
   (`scripts/comment-symbols.mjs`) pulls the backticked lowerCamelCase names out of comments in

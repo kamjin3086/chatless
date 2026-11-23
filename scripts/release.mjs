@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 
 function run(cmd, opts = {}) {
   console.log(`$ ${cmd}`);
@@ -25,6 +25,12 @@ try {
   let tag = input.startsWith('v') ? input : `v${input}`;
   const version = tag.slice(1);
   assertSemver(version);
+
+  // Validate the changelog before writing version files, committing, or pushing.
+  execFileSync(process.execPath, ['scripts/extract-changelog.mjs'], {
+    env: { ...process.env, VERSION: version },
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
 
   // 1) set version in files
   run('node scripts/set-version.mjs', { env: { ...process.env, VERSION: version } });

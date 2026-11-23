@@ -1,5 +1,21 @@
 # 更新日志
 
+## [0.8.3] - 2026-11-22
+
+### zh-CN
+
+- 界面语言覆盖到全部页面：设置各分页、聊天与工具卡、知识库、资源、提示词、Skills、MCP、同步、统计、托盘与恢复页都会随语言立即切换，不需要重启。
+- 发布说明与应用内更新提示支持中英双语，按界面语言显示对应段落（见 `CHANGELOG.md` 的双语小节格式）。
+- 补全中英双语文档：README、安装指南、贡献指南与常见问题/故障排查互相链接。
+- 此前只显示中文的文案改为跟随界面语言：模型说明、关于页标语、更新提示与恢复页。
+
+### en-US
+
+- Interface language now reaches every screen: each settings tab, chat and tool cards, knowledge base, resources, prompts, skills, MCP, sync, analytics and the tray and recovery views switch immediately, without a restart.
+- Release notes and the in-app update prompt are bilingual and show the section that matches the interface language (see the bilingual entry format in `CHANGELOG.md`).
+- Added cross-linked bilingual documentation: README, installation guide, contributing guide, and the FAQ and troubleshooting pages.
+- Copy that used to be Chinese-only follows the interface language now: model descriptions, the About tagline, the update prompt and the recovery view.
+
 ## [0.8.2] - 2026-11-20
 
 ### 功能与体验

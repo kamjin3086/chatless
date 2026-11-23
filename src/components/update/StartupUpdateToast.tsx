@@ -4,8 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getUpdateAvailability, UPDATE_AVAILABILITY_EVENT, isVersionIgnored, setIgnoredVersion, checkForUpdatesSilently } from "@/lib/update/update-notifier";
+import { getUpdateAvailability, UPDATE_AVAILABILITY_EVENT, UNKNOWN_UPDATE_VERSION, isVersionIgnored, setIgnoredVersion, checkForUpdatesSilently, type UpdateAvailability } from "@/lib/update/update-notifier";
+import { translate } from "@/i18n";
+import { useTranslation } from "@/i18n/useTranslation";
 import { linkOpener } from "@/lib/utils/linkOpener";
+import { useLocaleStore } from "@/store/localeStore";
+import { UpdateNotesPreview } from "./UpdateNotesPreview";
 
 /**
  * 启动更新提示组件
@@ -45,7 +49,7 @@ export function StartupUpdateToast() {
     return () => { mounted = false; };
   }, []);
 
-  const showToastFor = useCallback(async (version: string) => {
+  const showToastFor = useCallback(async (version: string, body?: string) => {
     try {
       console.log('[StartupUpdateToast] showToastFor called with version:', version);
       if (await isVersionIgnored(version)) {
@@ -65,30 +69,12 @@ export function StartupUpdateToast() {
       (window as any)[lastShownKey] = now;
 
       const id = toast.raw(
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-semibold">发现新版本 v{version}</div>
-            <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">建议更新以获取最新功能与修复。</div>
-            <div className="flex items-center flex-wrap gap-3 mt-2">
-              <DownloadButton onlyCheck={onlyCheck} version={version} />
-              <Button
-                size="sm"
-                variant="link"
-                onClick={async () => { const ok = await linkOpener.openReleases(); if (!ok) toast.error('无法打开发布页'); }}
-                className="h-7 px-2 text-[12px]"
-              >查看发布页</Button>
-              <label className="inline-flex items-center gap-2 text-[12px] text-slate-600 dark:text-slate-300 select-none cursor-pointer">
-                <IgnoreCheckbox version={version} onIgnored={() => { toast.raw.dismiss(id); }} />
-                忽略此版本
-              </label>
-            </div>
-          </div>
-          <button
-            onClick={() => toast.raw.dismiss(id)}
-            className="ml-2 -mt-1 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors text-[12px]"
-            aria-label="关闭"
-          >×</button>
-        </div>,
+        <UpdateAvailableNotice
+          version={version}
+          body={body}
+          onlyCheck={onlyCheck}
+          onDismiss={() => toast.raw.dismiss(id)}
+        />,
         { duration: 60000 }
       );
     } catch (e) {
@@ -149,7 +135,7 @@ export function StartupUpdateToast() {
           const info = await checkForUpdatesSilently();
           if (!mounted) return;
           if (info.available && info.version) {
-            await showToastFor(info.version);
+            await showToastFor(info.version, info.body);
           }
           } catch {
             // 静默失败即可，兜底二次检查仍会执行
@@ -178,19 +164,19 @@ export function StartupUpdateToast() {
     if (typeof window === 'undefined') return;
     console.log('[StartupUpdateToast] attach UPDATE_AVAILABILITY_EVENT listener');
     const handler = async (ev: Event) => {
-      const ce = ev as CustomEvent<any>;
-      const versionFromEvent = ce?.detail?.version as string | undefined;
-      if (versionFromEvent === '新版本') {
+      const { detail } = ev as CustomEvent<UpdateAvailability>;
+      const versionFromEvent = detail?.version;
+      if (versionFromEvent === UNKNOWN_UPDATE_VERSION) {
         console.warn('[StartupUpdateToast] UPDATE_AVAILABILITY_EVENT without explicit version; will still show');
       }
       if (versionFromEvent) {
-        await showToastFor(versionFromEvent);
+        await showToastFor(versionFromEvent, detail.body);
         return;
       }
       // 兼容无 detail 的情况，回退到查询一次
       const info = await getUpdateAvailability();
       console.log('[StartupUpdateToast] event fallback getUpdateAvailability:', info);
-      if (info.available && info.version) await showToastFor(info.version);
+      if (info.available && info.version) await showToastFor(info.version, info.body);
     };
     window.addEventListener(UPDATE_AVAILABILITY_EVENT, handler as EventListener);
     return () => window.removeEventListener(UPDATE_AVAILABILITY_EVENT, handler as EventListener);
@@ -199,7 +185,78 @@ export function StartupUpdateToast() {
   return null;
 }
 
-function DownloadButton({ onlyCheck, version: _version }: { onlyCheck: boolean; version: string }) {
+async function openReleases() {
+  const ok = await linkOpener.openReleases();
+  if (!ok) toast.error(translate(useLocaleStore.getState().locale, 'update.releasePageFailed'));
+}
+
+function UpdateAvailableNotice({ version, body, onlyCheck, onDismiss }: {
+  version: string;
+  body?: string;
+  onlyCheck: boolean;
+  onDismiss: () => void;
+}) {
+  const t = useTranslation();
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-[12px] font-semibold">
+          {version === UNKNOWN_UPDATE_VERSION
+            ? t('update.available')
+            : t('update.availableVersion').replace('{0}', () => version)}
+        </div>
+        <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">{t('update.recommendation')}</div>
+        <UpdateNotesPreview body={body} />
+        <div className="flex items-center flex-wrap gap-3 mt-2">
+          <DownloadButton onlyCheck={onlyCheck} />
+          <Button size="sm" variant="link" onClick={openReleases} className="h-7 px-2 text-[12px]">
+            {t('update.viewReleases')}
+          </Button>
+          <label className="inline-flex items-center gap-2 text-[12px] text-slate-600 dark:text-slate-300 select-none cursor-pointer">
+            <IgnoreCheckbox version={version} onIgnored={onDismiss} />
+            {t('update.ignoreVersion')}
+          </label>
+        </div>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="ml-2 -mt-1 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors text-[12px]"
+        aria-label={t('common.close')}
+      >×</button>
+    </div>
+  );
+}
+
+function UpdateFailedNotice({ offline, onRetry }: { offline: boolean; onRetry: () => void }) {
+  const t = useTranslation();
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold">{t('update.downloadFailed')}</div>
+        <div className="text-[12px] text-slate-600 dark:text-slate-300 mt-1">
+          {t(offline ? 'update.offline' : 'update.downloadHelp')}
+        </div>
+        <div className="flex items-center gap-3 mt-2">
+          <Button size="sm" variant="dialogPrimary" onClick={onRetry} className="h-7 px-3 text-[12px]">
+            {t('error.retry')}
+          </Button>
+          <Button
+            size="sm"
+            variant="dialogSecondary"
+            onClick={async () => { try { const { relaunch } = await import('@tauri-apps/plugin-process'); relaunch(); } catch { /* noop */ } }}
+            className="h-7 px-3 text-[12px]"
+          >{t('update.restart')}</Button>
+          <Button size="sm" variant="link" onClick={openReleases} className="h-7 px-3 text-[12px]">
+            {t('update.viewReleases')}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DownloadButton({ onlyCheck }: { onlyCheck: boolean }) {
+  const t = useTranslation();
   const [loading, setLoading] = useState(false);
 
   const handleDownload = useCallback(async () => {
@@ -207,8 +264,7 @@ function DownloadButton({ onlyCheck, version: _version }: { onlyCheck: boolean; 
       setLoading(true);
       if (onlyCheck) {
         // 仅检查模式：跳转到发布页
-        const ok = await linkOpener.openReleases();
-        if (!ok) toast.error('无法打开发布页');
+        await openReleases();
         return;
       }
 
@@ -216,51 +272,23 @@ function DownloadButton({ onlyCheck, version: _version }: { onlyCheck: boolean; 
       const { check } = await import('@tauri-apps/plugin-updater');
       const update = await check({ timeout: 30_000 });
       if (!update || !(update as any).available) {
-        toast.success('已是最新版本');
+        toast.success(translate(useLocaleStore.getState().locale, 'update.upToDate'));
         return;
       }
       if ('downloadAndInstall' in update && typeof (update as any).downloadAndInstall === 'function') {
         await (update as any).downloadAndInstall();
         // 不再清理持久化的“可用版本”（已移除该存储）
-        toast.success('更新已安装，即将重启应用');
+        toast.success(translate(useLocaleStore.getState().locale, 'update.installed'));
         const { relaunch } = await import('@tauri-apps/plugin-process');
         relaunch();
       } else {
         // 兼容兜底
-        const ok = await linkOpener.openReleases();
-        if (!ok) toast.error('无法打开发布页');
+        await openReleases();
       }
     } catch (error) {
       console.error('下载或安装更新失败:', error);
-      const offline = typeof navigator !== 'undefined' && navigator && (navigator as any).onLine === false;
-      const desc = offline
-        ? '当前网络不可用，请检查网络连接后再试。'
-        : '可能是网络问题，请检查网络后重试，或前往发布页手动下载安装包。';
-
-      toast.raw(
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-semibold">下载或安装更新失败</div>
-            <div className="text-[12px] text-slate-600 dark:text-slate-300 mt-1">{desc}</div>
-            <div className="flex items-center gap-3 mt-2">
-              <Button size="sm" variant="dialogPrimary" onClick={handleDownload} className="h-7 px-3 text-[12px]">重试</Button>
-              <Button
-                size="sm"
-                variant="dialogSecondary"
-                onClick={async () => { try { const { relaunch } = await import('@tauri-apps/plugin-process'); relaunch(); } catch { /* noop */ } }}
-                className="h-7 px-3 text-[12px]"
-              >重启应用</Button>
-              <Button
-                size="sm"
-                variant="link"
-                onClick={async () => { const ok = await linkOpener.openReleases(); if (!ok) toast.error('无法打开发布页'); }}
-                className="h-7 px-3 text-[12px]"
-              >查看发布页</Button>
-            </div>
-          </div>
-        </div>,
-        { duration: 20000 }
-      );
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      toast.raw(<UpdateFailedNotice offline={offline} onRetry={handleDownload} />, { duration: 20000 });
     } finally {
       setLoading(false);
     }
@@ -268,7 +296,7 @@ function DownloadButton({ onlyCheck, version: _version }: { onlyCheck: boolean; 
 
   return (
     <Button size="sm" variant="dialogPrimary" onClick={handleDownload} disabled={loading} className="h-7 px-3 text-[12px]">
-      {loading ? '下载中…' : '下载更新'}
+      {t(loading ? 'update.downloading' : 'update.download')}
     </Button>
   );
 }
@@ -283,7 +311,6 @@ function IgnoreCheckbox({ version, onIgnored }: { version: string; onIgnored?: (
       try {
         await setIgnoredVersion(version);
         onIgnored?.();
-        //toast.success('已忽略此版本');
       } catch {
         // ignore
       }
