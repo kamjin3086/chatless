@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { ContextMenu, createMessageMenuItems } from '@/components/ui/context-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useChatStore } from '@/store/chatStore';
+import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { UserMessageBlock } from './UserMessageBlock';
 import { AIMessageBlock } from './AIMessageBlock';
 import {
@@ -57,7 +59,10 @@ interface ChatMessageProps {
   versionControls?: { current: number; total: number; onPrev: () => void; onNext: () => void } | null;
 }
 
-const formatTimestamp = (timestamp: string | undefined): string => {
+const formatTimestamp = (
+  timestamp: string | undefined,
+  yesterdayLabel: string,
+): string => {
   if (!timestamp) return '';
   try {
     const d = new Date(timestamp);
@@ -69,7 +74,7 @@ const formatTimestamp = (timestamp: string | undefined): string => {
     const two = (n: number) => (n < 10 ? `0${n}` : String(n));
     const hm = `${two(d.getHours())}:${two(d.getMinutes())}`;
     if (isSameDay) return hm; // 当天只显示时间
-    if (isYesterday) return `${hm} 昨日`;
+    if (isYesterday) return `${hm} ${yesterdayLabel}`;
     const md = `${two(d.getMonth() + 1)}-${two(d.getDate())}`;
     const y = d.getFullYear();
     const sameYear = y === now.getFullYear();
@@ -110,6 +115,8 @@ function ChatMessageComponent({
   const [isCopied, setIsCopied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const deleteMessage = useChatStore((s)=> s.deleteMessage);
+  const locale = useLocaleStore((s) => s.locale);
+  const t = useTranslation();
   
   // 🔑 检测当前消息是否处于 AgentLoop 运行状态
   const isAgentLoopRunning = useChatStore((s) => {
@@ -133,8 +140,12 @@ function ChatMessageComponent({
   const isUser = role === "user";
   const isStreaming = status === 'loading';
   const isError = status === 'error';
+  const isContinuation = status === 'aborted' || String(content || '').includes('[用户停止了生成]');
+  const retryLabel = t(isContinuation ? 'chatGeneration.continue' : 'chatGeneration.retry');
   // 生成期间不显示时间与模型，避免视觉抖动；完成后再显示
-  const formattedTime = isStreaming ? '' : formatTimestamp(timestamp);
+  const formattedTime = isStreaming
+    ? ''
+    : formatTimestamp(timestamp, t('chatMessage.yesterday'));
 
   // 🔑 修复：检测消息是否已经有实质内容（segments 或 content）
   // 如果已有内容，则标记为"已入场"，避免追问时重复触发入场动画
@@ -267,6 +278,7 @@ function ChatMessageComponent({
       )}>
         <ContextMenu
           menuItems={createMessageMenuItems(
+            locale,
             id,
             content,
             !isUser,
@@ -296,7 +308,7 @@ function ChatMessageComponent({
               {isError && !isUser && (
                 <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 mb-2 font-medium">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>生成失败</span>
+                  <span>{t('chatGeneration.failed')}</span>
                 </div>
               )}
               {messageContent}
@@ -308,16 +320,16 @@ function ChatMessageComponent({
         <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>删除这条消息？</AlertDialogTitle>
+              <AlertDialogTitle>{t('chatMessage.deleteTitle')}</AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div>
-                  此操作不可撤销，将永久从会话中移除该条消息。
-                </div>
+                <div>{t('chatMessage.deleteDescription')}</div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { setConfirmOpen(false); try { void deleteMessage(id); } catch { /* noop */ } }}>删除</AlertDialogAction>
+              <AlertDialogCancel>{t('chatMessage.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setConfirmOpen(false); try { void deleteMessage(id); } catch { /* noop */ } }}>
+                {t('chatMessage.delete')}
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -326,7 +338,7 @@ function ChatMessageComponent({
         {shouldShowAgentLoopIndicator && (
           <div className="flex items-center gap-1.5 text-[11px] text-blue-500 dark:text-blue-400 ml-1 mt-1.5 self-start">
             <Loader2 className="w-3 h-3 animate-spin" />
-            <span className="animate-pulse">处理中...</span>
+            <span className="animate-pulse">{t('chatMessage.processing')}</span>
           </div>
         )}
 
@@ -336,10 +348,10 @@ function ChatMessageComponent({
             <button
               onClick={onRetry}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-              aria-label="重试生成"
+              aria-label={t('chatGeneration.retryLabel')}
             >
               <RefreshCcw className="w-3 h-3" />
-              {String(content || '').includes('[用户停止了生成]') ? '继续' : '重试'}
+              {retryLabel}
             </button>
           </div>
         )}
@@ -373,8 +385,8 @@ function ChatMessageComponent({
                         ? "text-red-500 hover:text-red-600 dark:text-red-400"
                         : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                     )}
-                    title={String(content || '').includes('[用户停止了生成]') || status === 'aborted' ? '继续' : '重试'}
-                    aria-label={String(content || '').includes('[用户停止了生成]') || status === 'aborted' ? '继续任务' : '重试生成'}
+                    title={retryLabel}
+                    aria-label={t(isContinuation ? 'chatGeneration.continueLabel' : 'chatGeneration.retryLabel')}
                   >
                     <RefreshCcw className="w-3 h-3" />
                   </button>
@@ -387,16 +399,16 @@ function ChatMessageComponent({
                       ? "text-emerald-500"
                       : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                   )}
-                  title={isCopied ? "已复制" : "复制"}
-                  aria-label={isCopied ? "已复制" : "复制消息"}
+                  title={isCopied ? t('chatMessage.copied') : t('chatMessage.copy')}
+                  aria-label={isCopied ? t('chatMessage.copied') : t('chatMessage.copyMessage')}
                 >
                   {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 </button>
                 <button
                   onClick={() => setConfirmOpen(true)}
                   className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
-                  title="删除"
-                  aria-label="删除消息"
+                  title={t('chatMessage.delete')}
+                  aria-label={t('chatMessage.deleteMessage')}
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -404,8 +416,8 @@ function ChatMessageComponent({
                   <button
                     onClick={() => onStar(id)}
                     className="p-1 text-slate-400 hover:text-amber-500 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
-                    title="收藏"
-                    aria-label="收藏消息"
+                    title={t('chatMessage.star')}
+                    aria-label={t('chatMessage.starMessage')}
                   >
                     <Star className="w-3 h-3" />
                   </button>
@@ -430,8 +442,8 @@ function ChatMessageComponent({
                   e.stopPropagation();
                   versionControls.onPrev();
                 }}
-                title="上一版本"
-                aria-label="上一版本"
+                title={t('chatMessage.previousVersion')}
+                aria-label={t('chatMessage.previousVersion')}
               >
                 ‹
               </button>
@@ -449,8 +461,8 @@ function ChatMessageComponent({
                   e.stopPropagation();
                   versionControls.onNext();
                 }}
-                title="下一版本"
-                aria-label="下一版本"
+                title={t('chatMessage.nextVersion')}
+                aria-label={t('chatMessage.nextVersion')}
               >
                 ›
               </button>

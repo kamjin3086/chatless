@@ -43,7 +43,7 @@ describe('command preview', () => {
   });
 
   it('shows the command in full when the card is expanded', () => {
-    const card = presentToolCard({
+    const card = presentToolCard('zh', {
       server: 'shell_executor',
       tool: 'execute',
       args: { command: PS },
@@ -56,7 +56,7 @@ describe('command preview', () => {
 
 describe('external tool preview', () => {
   it('reads as a sentence about what was asked', () => {
-    const card = presentToolCard({
+    const card = presentToolCard('zh', {
       server: 'weather',
       tool: 'get_forecast',
       args: { city: '上海', units: 'metric', lang: 'zh-CN' },
@@ -71,7 +71,7 @@ describe('external tool preview', () => {
   });
 
   it('falls back to the meaningful scalars when no well-known key is present', () => {
-    const card = presentToolCard({
+    const card = presentToolCard('zh', {
       server: 'maps',
       tool: 'search_places',
       args: { search_query: '咖啡馆', max_results: 5, pretty_print: true },
@@ -81,7 +81,7 @@ describe('external tool preview', () => {
   });
 
   it('says nothing rather than dumping the argument object', () => {
-    const card = presentToolCard({
+    const card = presentToolCard('zh', {
       server: 'weather',
       tool: 'get_forecast',
       args: { units: 'imperial', page: 2, limit: 10 },
@@ -90,7 +90,7 @@ describe('external tool preview', () => {
   });
 
   it('never prints a credential held in the arguments', () => {
-    const card = presentToolCard({
+    const card = presentToolCard('zh', {
       server: 'crm',
       tool: 'list_contacts',
       args: { api_key: 'sk-live-abcdef123456', query: '张三' },
@@ -100,7 +100,7 @@ describe('external tool preview', () => {
   });
 
   it('still prefers a URL over guessing', () => {
-    const card = presentToolCard({
+    const card = presentToolCard('zh', {
       server: 'whatever',
       tool: 'open',
       args: { url: 'https://example.com/a/very/long/path/here' },
@@ -110,7 +110,11 @@ describe('external tool preview', () => {
   });
 
   it('quotes an unknown tool by name when there is nothing else to show', () => {
-    const card = presentToolCard({ server: 'weather', tool: 'ping', args: {} });
+    const card = presentToolCard('zh', {
+      server: 'weather',
+      tool: 'ping',
+      args: {},
+    });
     expect(card.titleLine).toBe('weather · ping');
     expect(card.detailLineShort ?? '').toBe('');
   });
@@ -119,8 +123,11 @@ describe('external tool preview', () => {
     // A confident wrong verb reads worse than `srvr · do_thing`, so the vocabulary stays
     // short and everything it does claim is pinned here.
     expect(
-      presentToolCard({ server: 'jira', tool: 'transition_issue', args: {} })
-        .titleLine,
+      presentToolCard('zh', {
+        server: 'jira',
+        tool: 'transition_issue',
+        args: {},
+      }).titleLine,
     ).toBe('jira · transition_issue');
   });
 });
@@ -135,41 +142,41 @@ describe('result preview', () => {
       ],
       isError: false,
     };
-    expect(previewResult(envelope)).toContain('上海：晴，28°C');
-    expect(previewResult(envelope)).not.toContain('AAAA');
-    expect(previewResult(envelope)).not.toContain('isError');
+    expect(previewResult('zh', envelope)).toContain('上海：晴，28°C');
+    expect(previewResult('zh', envelope)).not.toContain('AAAA');
+    expect(previewResult('zh', envelope)).not.toContain('isError');
   });
 
   it('unwraps a result carried one level deeper', () => {
     expect(
-      previewResult({
+      previewResult('zh', {
         result: { content: [{ type: 'text', text: 'Berlin: sunny' }] },
       }),
     ).toBe('Berlin: sunny');
   });
 
   it('handles a result that arrived as a JSON string', () => {
-    expect(previewResult('{"temp_c":28,"city":"上海"}')).toBe(
+    expect(previewResult('zh', '{"temp_c":28,"city":"上海"}')).toBe(
       'temp_c=28 · city=上海',
     );
   });
 
   it('shows the scalars of a plain object, not its braces', () => {
-    expect(previewResult({ temp_c: 28, city: '上海', hours: [1, 2, 3] })).toBe(
-      'temp_c=28 · city=上海 · hours=1、2、3',
-    );
+    expect(
+      previewResult('zh', { temp_c: 28, city: '上海', hours: [1, 2, 3] }),
+    ).toBe('temp_c=28 · city=上海 · hours=1、2、3');
   });
 
   it('counts a list instead of dumping it', () => {
-    expect(previewResult([{ id: 1 }, { id: 2 }, { id: 3 }])).toBe('3 项');
+    expect(previewResult('zh', [{ id: 1 }, { id: 2 }, { id: 3 }])).toBe('3 项');
   });
 
   it('leaves prose as prose', () => {
-    expect(previewResult('已找到 3 个文件')).toBe('已找到 3 个文件');
+    expect(previewResult('zh', '已找到 3 个文件')).toBe('已找到 3 个文件');
   });
 
   it('keeps a store-side truncation whole instead of squeezing it', () => {
-    const result = previewResult({
+    const result = previewResult('zh', {
       summary: 'Object(9000 chars)',
       preview: '{"lots":"of json"}',
     });
@@ -178,15 +185,168 @@ describe('result preview', () => {
   });
 
   it('keeps what it cannot understand rather than hiding it', () => {
-    expect(previewResult({ nested: { deep: { deeper: true } } })).toContain(
-      'deeper',
+    expect(
+      previewResult('zh', { nested: { deep: { deeper: true } } }),
+    ).toContain('deeper');
+  });
+});
+
+describe('localized tool card presentation', () => {
+  it.each([
+    [
+      {
+        server: 'shell_executor',
+        tool: 'execute',
+        args: { command: 'ls ~/资料' },
+      },
+      'Run',
+      'Command',
+      'ls ~/资料',
+    ],
+    [
+      {
+        server: 'filesystem',
+        tool: 'read_file',
+        args: { path: '/工作/notes.md' },
+      },
+      'Read file',
+      'Path',
+      '/工作/notes.md',
+    ],
+    [
+      { server: 'web', tool: 'search', args: { query: '上海 天气' } },
+      'Search the web',
+      'Query',
+      '上海 天气',
+    ],
+    [
+      { server: 'skill', tool: 'get_template', args: { name: '报告.md' } },
+      'Get template',
+      'File',
+      '报告.md',
+    ],
+    [
+      { server: 'system', tool: 'get_prompt', args: { name: '我的提示词' } },
+      'Get prompt',
+      'Name',
+      '我的提示词',
+    ],
+    [
+      {
+        server: 'weather',
+        tool: 'get_forecast',
+        args: { city: '上海', units: 'metric' },
+      },
+      'Check weather',
+      'Arguments',
+      '上海',
+    ],
+  ] as const)(
+    'translates %j without translating its detail value',
+    (params, titleLine, detailLineLabel, detailLineFull) => {
+      expect(presentToolCard('en', params)).toMatchObject({
+        titleLine,
+        detailLineLabel,
+        detailLineFull,
+      });
+      expect(presentToolCard('zh', params).detailLineFull).toBe(detailLineFull);
+    },
+  );
+
+  it('translates generated context and group summaries but preserves their arguments', () => {
+    expect(
+      presentToolCard('en', {
+        server: 'ctx',
+        tool: 'get',
+        args: { type: 'errors' },
+      }),
+    ).toMatchObject({
+      titleLine: 'Retrieve errors',
+      detailLineLabel: 'Type',
+      detailLineFull: 'errors',
+      detailLineShort: 'Errors',
+    });
+    expect(
+      presentToolCard('en', {
+        server: 'tools',
+        tool: 'load',
+        args: { group: 'fs_extra' },
+      }),
+    ).toMatchObject({
+      titleLine: 'Load tool group',
+      detailLineLabel: 'Group',
+      detailLineFull: 'fs_extra',
+      detailLineShort: 'File management',
+    });
+    expect(
+      presentToolCard('en', {
+        server: 'ctx',
+        tool: 'update_step',
+        args: { stepIndex: 2, status: 'blocked $& {index}' },
+      }),
+    ).toMatchObject({
+      titleLine: 'Update progress',
+      detailLineLabel: 'Step',
+      detailLineFull: 'Step 2: blocked $& {index}',
+      detailLineShort: 'Step 2',
+    });
+  });
+
+  it.each(['自定义 $&', 'constructor'])(
+    'preserves an unknown tool group %s in both locales',
+    (group) => {
+      const params = { server: 'tools', tool: 'load', args: { group } };
+      for (const locale of ['zh', 'en'] as const) {
+        expect(presentToolCard(locale, params)).toMatchObject({
+          detailLineFull: group,
+          detailLineShort: group,
+        });
+      }
+    },
+  );
+
+  it('preserves raw server names, tool names, paths, and URLs in fallbacks', () => {
+    const server = 'Service $&';
+    const tool = 'do_thing';
+    const path = '/资料/example.md';
+    const url = 'https://example.com/?key=$&';
+    expect(presentToolCard('en', { server, tool }).titleLine).toBe(
+      `${server} · ${tool}`,
     );
+    expect(
+      presentToolCard('en', { server, tool, args: { path } }),
+    ).toMatchObject({
+      titleLine: `${server} operation`,
+      detailLineFull: path,
+      detailLineShort: 'example.md',
+    });
+    expect(
+      presentToolCard('en', { server, tool, args: { url } }),
+    ).toMatchObject({
+      titleLine: 'Open link',
+      detailLineFull: url,
+      detailLineShort: url,
+    });
+  });
+
+  it('localizes generated result summaries, not tool-returned content', () => {
+    expect(previewResult('en', '[]')).toBe('0 items');
+    expect(previewResult('en', '[{"id":1}]')).toBe('1 item');
+    expect(previewResult('en', '[{"id":1},{"id":2}]')).toBe('2 items');
+    expect(previewResult('en', { places: ['上海', 'Berlin'] })).toBe(
+      'places=上海, Berlin',
+    );
+    expect(
+      previewResult('en', {
+        content: [{ type: 'text', text: '上海：晴，28°C' }],
+      }),
+    ).toBe('上海：晴，28°C');
   });
 });
 
 describe('the previews the owner said were fine', () => {
   it('lists a directory by the directory, unchanged', () => {
-    const card = presentToolCard({
+    const card = presentToolCard('zh', {
       server: 'filesystem',
       tool: 'list_directory',
       args: { path: 'C:/Users/User/Downloads' },

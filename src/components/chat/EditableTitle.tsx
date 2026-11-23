@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/i18n/useTranslation';
 
 interface EditableTitleProps {
   initialTitle: string;
@@ -21,6 +22,7 @@ export function EditableTitle({
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(initialTitle);
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = useTranslation();
 
   useEffect(() => {
     setTitle(initialTitle);
@@ -65,6 +67,7 @@ export function EditableTitle({
       <div className={cn("flex items-center gap-1 min-w-0 flex-1 max-w-[min(50vw,24rem)]", className)}>
         <input
           ref={inputRef}
+          aria-label={t('conversation.rename')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -80,7 +83,7 @@ export function EditableTitle({
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleConfirm}
           className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-          aria-label="确认"
+          aria-label={t('common.confirm')}
         >
           <Check className="h-3.5 w-3.5" />
         </button>
@@ -89,7 +92,7 @@ export function EditableTitle({
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleCancel}
           className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-          aria-label="取消"
+          aria-label={t('common.cancel')}
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -102,7 +105,7 @@ export function EditableTitle({
       className={cn("cursor-pointer truncate hover:text-slate-700 dark:hover:text-slate-200 transition-colors", className)}
       onClick={handleStartEditing}
       onDoubleClick={handleStartEditing}
-      title="点击编辑标题"
+      title={t('conversation.editTitle')}
     >
       {initialTitle}
     </span>

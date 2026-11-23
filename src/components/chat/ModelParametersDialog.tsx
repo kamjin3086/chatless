@@ -41,7 +41,7 @@ import {
   thinkingCacheNotice,
   validateThinkingRequest,
 } from '@/lib/chat/thinkingRequestValidation';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import type { TranslationKey } from '@/i18n/types';
 
 // 自定义参数接口
@@ -292,7 +292,7 @@ export function ModelParametersDialog({
   modelId,
   modelLabel,
 }: ModelParametersDialogProps) {
-  const t = useLocaleStore((s) => s.t);
+  const t = useTranslation();
   // Empty means the table has never seen this provider/model: the control says so
   // instead of offering tiers nobody verified.
   const thinkingTiers = supportedThinkingLevels(providerName, modelId);
@@ -455,7 +455,7 @@ export function ModelParametersDialog({
           setAdvancedJsonError('');
         }
       } catch (e: any) {
-        setAdvancedJsonError(e?.message || 'JSON 格式错误');
+        setAdvancedJsonError(e?.message || t('modelParams.invalidJson'));
         setIsLoading(false);
         return;
       }
@@ -649,9 +649,9 @@ export function ModelParametersDialog({
         setAdvancedJsonError('');
       }
     } catch (e: any) {
-      setAdvancedJsonError(e?.message || 'JSON 格式错误');
+      setAdvancedJsonError(e?.message || t('modelParams.invalidJson'));
     }
-  }, [advancedJsonText]);
+  }, [advancedJsonText, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -662,20 +662,20 @@ export function ModelParametersDialog({
             <Settings className="w-4 h-4 mt-0.5 shrink-0 text-slate-500 dark:text-slate-400" />
             <div className="min-w-0">
               <DialogTitle className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                模型参数设置
+                {t('modelParams.title')}
               </DialogTitle>
               <DialogDescription className="sr-only">
-                配置此模型的参数设置，这些设置将仅应用于此特定模型。
+                {t('modelParams.description')}
               </DialogDescription>
               <p
                 className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate"
                 title={modelLabel || modelId}
               >
                 {modelLabel || modelId}
-                {hasChanges ? ' · 已修改' : ''}
+                {hasChanges ? ` · ${t('modelParams.modified')}` : ''}
               </p>
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                此处设置为该模型的默认参数，影响所有会话。你仍可在「会话参数设置」中临时覆盖。
+                {t('modelParams.defaultsHelp')}
               </p>
             </div>
           </div>
@@ -690,7 +690,7 @@ export function ModelParametersDialog({
                 setParameters((prev) => ({ ...prev, enableTemperature: v }))
               }
               label="Temperature"
-              help="控制输出的随机性。数值越低越确定，越高越有创意。常用范围：0.5–1.0。"
+              help={t('modelParams.temperatureHelp')}
               min={MODEL_PARAMETER_LIMITS.temperature.min}
               max={MODEL_PARAMETER_LIMITS.temperature.max}
               step={MODEL_PARAMETER_LIMITS.temperature.step}
@@ -707,7 +707,7 @@ export function ModelParametersDialog({
                 setParameters((prev) => ({ ...prev, enableMaxTokens: v }))
               }
               label="Max Tokens"
-              help="限制单次回复能生成的最大 Token 数。默认“自动”：不下发该参数，由服务端决定能输出多久；拖动即为手动值（按上下文窗口收敛）；关闭则始终不下发。"
+              help={t('modelParams.maxTokensHelp')}
               min={MODEL_PARAMETER_LIMITS.maxTokens.min}
               max={MODEL_PARAMETER_LIMITS.maxTokens.max}
               step={MODEL_PARAMETER_LIMITS.maxTokens.step}
@@ -720,7 +720,7 @@ export function ModelParametersDialog({
             />
             <ParamSliderRow
               label="Context Window"
-              help="模型上下文窗口（tokens），只用于判断何时压缩历史。服务商上报的值会单独记录，实际按两者中较小的一个执行；都不知道时不压缩历史，也不会因此拦住发送。"
+              help={t('modelParams.contextWindowHelp')}
               min={MODEL_PARAMETER_LIMITS.contextWindow.min}
               max={MODEL_PARAMETER_LIMITS.contextWindow.max}
               step={MODEL_PARAMETER_LIMITS.contextWindow.step}
@@ -737,11 +737,13 @@ export function ModelParametersDialog({
             {typeof parameters.observedContextWindow === 'number' &&
               parameters.observedContextWindow > 0 && (
                 <div className="px-3 pb-2 text-[10px] text-slate-400 dark:text-slate-500">
-                  服务商上报：
-                  {parameters.observedContextWindow.toLocaleString()} tokens
+                  {t('modelParams.observedContextWindow').replace(
+                    '{0}',
+                    parameters.observedContextWindow.toLocaleString(),
+                  )}
                   {parameters.contextWindow &&
                   parameters.contextWindow !== parameters.observedContextWindow
-                    ? `；实际按 ${Math.min(parameters.contextWindow, parameters.observedContextWindow).toLocaleString()} 执行`
+                    ? ` · ${t('modelParams.effectiveContextWindow').replace('{0}', Math.min(parameters.contextWindow, parameters.observedContextWindow).toLocaleString())}`
                     : ''}
                 </div>
               )}
@@ -751,7 +753,7 @@ export function ModelParametersDialog({
                 setParameters((prev) => ({ ...prev, enableTopP: v }))
               }
               label="Top P"
-              help="从累计概率最高的候选中采样。越低越保守。与 Temperature 一般二选一调节。"
+              help={t('modelParams.topPHelp')}
               min={MODEL_PARAMETER_LIMITS.topP.min}
               max={MODEL_PARAMETER_LIMITS.topP.max}
               step={MODEL_PARAMETER_LIMITS.topP.step}
@@ -767,7 +769,7 @@ export function ModelParametersDialog({
                   setParameters((prev) => ({ ...prev, enableTopK: v }) as any)
                 }
                 label="Top K"
-                help="只考虑概率最高的 K 个候选词。与 Temperature 一般二选一调节。"
+                help={t('modelParams.topKHelp')}
                 min={MODEL_PARAMETER_LIMITS.topK.min}
                 max={MODEL_PARAMETER_LIMITS.topK.max}
                 step={MODEL_PARAMETER_LIMITS.topK.step}
@@ -788,7 +790,7 @@ export function ModelParametersDialog({
                   setParameters((prev) => ({ ...prev, enableMinP: v }) as any)
                 }
                 label="Min P"
-                help="设置最低概率阈值，低于此值的候选词会被过滤。"
+                help={t('modelParams.minPHelp')}
                 min={MODEL_PARAMETER_LIMITS.minP.min}
                 max={MODEL_PARAMETER_LIMITS.minP.max}
                 step={MODEL_PARAMETER_LIMITS.minP.step}
@@ -809,7 +811,7 @@ export function ModelParametersDialog({
                 }))
               }
               label="Frequency Penalty"
-              help="增大可降低重复词汇的概率。"
+              help={t('modelParams.frequencyPenaltyHelp')}
               min={MODEL_PARAMETER_LIMITS.frequencyPenalty.min}
               max={MODEL_PARAMETER_LIMITS.frequencyPenalty.max}
               step={MODEL_PARAMETER_LIMITS.frequencyPenalty.step}
@@ -826,7 +828,7 @@ export function ModelParametersDialog({
                 setParameters((prev) => ({ ...prev, enablePresencePenalty: v }))
               }
               label="Presence Penalty"
-              help="增大可鼓励模型引入新话题。"
+              help={t('modelParams.presencePenaltyHelp')}
               min={MODEL_PARAMETER_LIMITS.presencePenalty.min}
               max={MODEL_PARAMETER_LIMITS.presencePenalty.max}
               step={MODEL_PARAMETER_LIMITS.presencePenalty.step}
@@ -895,8 +897,8 @@ export function ModelParametersDialog({
                   (prev) => ({ ...prev, enableStreaming: v }) as any,
                 )
               }
-              label="流式响应"
-              help="启用后实时流式输出。关闭则等待全部生成完成后一次性返回。"
+              label={t('modelParams.stream')}
+              help={t('modelParams.streamHelp')}
               value={(parameters as any).streaming !== false}
               onValueChange={(v) =>
                 setParameters((prev) => ({ ...prev, streaming: v }) as any)
@@ -917,9 +919,9 @@ export function ModelParametersDialog({
                 />
                 <div className="flex items-center gap-1.5 w-44 shrink-0">
                   <Label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">
-                    输出格式
+                    {t('modelParams.format')}
                   </Label>
-                  <ParamHelp text='指定模型输出格式。选择 "json" 可强制返回 JSON。' />
+                  <ParamHelp text={t('modelParams.formatHelp')} />
                 </div>
                 <div className="flex-1" />
                 <select
@@ -939,7 +941,7 @@ export function ModelParametersDialog({
                   disabled={(parameters as any).enableFormat !== true}
                   className="h-7 px-2 text-xs rounded-md border border-slate-200/70 dark:border-slate-600/50 bg-transparent text-slate-700 dark:text-slate-200 disabled:opacity-40"
                 >
-                  <option value="none">无限制</option>
+                  <option value="none">{t('modelParams.formatAny')}</option>
                   <option value="json">JSON</option>
                 </select>
               </div>
@@ -959,13 +961,13 @@ export function ModelParametersDialog({
                 <Label className="text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">
                   Stop Sequences
                 </Label>
-                <ParamHelp text="当生成包含这些序列时停止生成。" />
+                <ParamHelp text={t('modelParams.stopSequencesHelp')} />
               </div>
               <Input
                 value={newStopSequence}
                 onChange={(e) => setNewStopSequence(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="输入停止序列…"
+                placeholder={t('modelParams.stopSequencePlaceholder')}
                 className="flex-1 h-7 min-w-0 text-xs"
                 disabled={parameters.enableStopSequences !== true}
               />
@@ -1006,7 +1008,7 @@ export function ModelParametersDialog({
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between gap-2">
                 <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  自定义参数
+                  {t('modelParams.customParameters')}
                 </Label>
                 <Button
                   type="button"
@@ -1016,13 +1018,13 @@ export function ModelParametersDialog({
                   onClick={addCustomParameter}
                 >
                   <Plus className="w-3.5 h-3.5 mr-1" />
-                  添加
+                  {t('provider.models.add')}
                 </Button>
               </div>
               {customParameters.map((param, index) => (
                 <div key={index} className="flex items-center gap-2 min-w-0">
                   <Input
-                    placeholder="名称"
+                    placeholder={t('modelParams.customParameterName')}
                     value={param.key}
                     onChange={(e) =>
                       updateCustomParameter(index, 'key', e.target.value)
@@ -1030,7 +1032,7 @@ export function ModelParametersDialog({
                     className="w-32 h-7 text-xs shrink-0"
                   />
                   <Input
-                    placeholder="值"
+                    placeholder={t('modelParams.customParameterValue')}
                     value={param.value}
                     onChange={(e) =>
                       updateCustomParameter(index, 'value', e.target.value)
@@ -1048,7 +1050,7 @@ export function ModelParametersDialog({
                         )
                       }
                     />
-                    字符串
+                    {t('modelParams.customParameterString')}
                   </label>
                   <Button
                     type="button"
@@ -1066,7 +1068,7 @@ export function ModelParametersDialog({
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  参数预览
+                  {t('modelParams.preview')}
                 </Label>
                 <span className="text-[10px] uppercase tracking-wide text-slate-400">
                   JSON
@@ -1081,9 +1083,9 @@ export function ModelParametersDialog({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Label className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                    高级设置
+                    {t('modelParams.advanced')}
                   </Label>
-                  <ParamHelp text="高级参数会直接合并到请求选项。仅在清楚目标模型支持字段时使用。" />
+                  <ParamHelp text={t('modelParams.advancedHelp')} />
                 </div>
                 <Button
                   variant="ghost"
@@ -1091,7 +1093,9 @@ export function ModelParametersDialog({
                   className="h-7 text-xs"
                   onClick={() => setAdvancedEditorOpen((v) => !v)}
                 >
-                  {advancedEditorOpen ? '收起' : '展开'}
+                  {advancedEditorOpen
+                    ? t('modelParams.collapseAdvanced')
+                    : t('modelParams.expandAdvanced')}
                 </Button>
               </div>
               {advancedEditorOpen && (
@@ -1110,11 +1114,14 @@ export function ModelParametersDialog({
               )}
               {advancedJsonError ? (
                 <p className="text-xs text-rose-500">
-                  JSON 格式错误：{advancedJsonError}
+                  {t('modelParams.invalidJsonDetail').replace(
+                    '{0}',
+                    () => advancedJsonError,
+                  )}
                 </p>
               ) : (
                 <p className="text-xs text-slate-400">
-                  将作为高级选项直接合并到请求中。
+                  {t('modelParams.advancedMergeHelp')}
                 </p>
               )}
             </div>
@@ -1130,7 +1137,7 @@ export function ModelParametersDialog({
               className="h-8 text-xs text-slate-600 dark:text-slate-300"
             >
               <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-              重置为系统默认
+              {t('modelParams.resetDefaults')}
             </Button>
             <Button
               variant="ghost"
@@ -1138,7 +1145,7 @@ export function ModelParametersDialog({
               onClick={handleClearSession}
               className="h-8 text-xs text-slate-600 dark:text-slate-300"
             >
-              清除模型参数
+              {t('modelParams.clear')}
             </Button>
             <div className="flex-1" />
             <Button
@@ -1149,12 +1156,12 @@ export function ModelParametersDialog({
               {isLoading ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  保存中...
+                  {t('provider.models.saving')}
                 </>
               ) : (
                 <>
                   <Check className="w-3.5 h-3.5" />
-                  应用
+                  {t('provider.models.apply')}
                 </>
               )}
             </Button>

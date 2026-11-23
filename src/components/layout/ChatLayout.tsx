@@ -10,7 +10,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ConversationViewMenu } from '@/components/chat/ConversationViewMenu';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { workspaceGroupName, workspacePath } from '@/lib/chat/conversationGroups';
 import { NEW_CONVERSATION_TITLE } from '@/lib/chat/TitleGenerator';
 import { toast } from '@/components/ui/sonner';
@@ -177,8 +177,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const archivedWorkspaces = useConversationAttachmentStore((state) => state.archivedWorkspaces);
   const archivedTarget = pendingWorkspace && archivedWorkspaces[pendingWorkspace.path];
   const archivedConversations = useConversationAttachmentStore((state) => state.archivedConversations);
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   
   const createConversation = useChatStore((state) => state.createConversation);
   const conversations = useChatStore((state) => state.conversations);
@@ -331,7 +330,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             <div className="flex w-full min-w-0 items-center gap-1">
               <div className="relative flex-1 min-w-0">
                 <SearchInput
-                  placeholder="搜索对话..."
+                  placeholder={t('chatSidebar.search')}
+                  aria-label={t('chatSidebar.search')}
                   value={searchQuery}
                   onChange={handleSearchChange}
                   className="h-8 w-full pr-6 text-sm placeholder:text-slate-600 dark:placeholder:text-slate-300"
@@ -340,7 +340,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                   <button
                     onClick={handleClearSearch}
                     className="absolute top-1/2 -translate-y-1/2 right-1 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                    aria-label="清除"
+                    aria-label={t('common.clearSearch')}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -383,8 +383,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             <div className="shrink-0 px-2 pt-1 pb-1">
               <div className="flex flex-wrap items-center gap-0.5 text-xs">
                 {!isSearching && ([
-                  ['recent', '最近', Clock],
-                  ['favorite', '收藏', Star],
+                  ['recent', 'chatSidebar.recent', Clock],
+                  ['favorite', 'chatSidebar.favorites', Star],
                 ] as const).map(([filter, label, Icon]) => (
                   <button
                     key={filter}
@@ -399,7 +399,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                     )}
                   >
                     <Icon aria-hidden="true" className={cn('size-3.5 shrink-0', filter === 'favorite' && activeFilter === filter && 'fill-current')} />
-                    {label}
+                    {t(label)}
                   </button>
                 ))}
                 {activeFilter === 'archived' && (
@@ -444,7 +444,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             {isDragging && (
               <button
                 ref={resetBtnRef}
-                title="恢复默认宽度"
+                title={t('chatSidebar.resetWidth')}
                 className="absolute -right-3 top-1/2 -translate-y-1/2 p-1 rounded-full bg-white dark:bg-slate-800 shadow-md hover:bg-slate-600 hover:text-white transition-colors pointer-events-none"
               >
                 <RotateCcw className="w-3 h-3" />

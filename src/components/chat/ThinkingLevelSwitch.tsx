@@ -35,7 +35,7 @@ import {
 } from '@/lib/chat/messageThinkingScope';
 import type { ThinkingLevel } from '@/lib/llm/thinkingLevels';
 import type { ModelParameters } from '@/types/model-params';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import type { TranslationKey } from '@/i18n/types';
 import { cn } from '@/lib/utils';
 
@@ -69,7 +69,7 @@ export function ThinkingLevelSwitch({
   onSessionParametersSaved,
   disabled = false,
 }: ThinkingLevelSwitchProps) {
-  const translate = useLocaleStore((s) => s.t);
+  const translate = useTranslation();
   // Level, scope and source names are picked from data, which a key union cannot express,
   // so the cast lives here at the boundary instead of blurring the whole function.
   const t = (key: string) => translate(key as TranslationKey);

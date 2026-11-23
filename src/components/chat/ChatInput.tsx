@@ -18,8 +18,11 @@ import { toast } from '@/components/ui/sonner';
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { AttachmentMenu } from './input/AttachmentMenu';
+import { documentAttachmentErrorDescription, documentAttachmentSizeLimit } from './input/documentAttachmentErrors';
 import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
+import { translate } from '@/i18n';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useLocaleStore } from '@/store/localeStore';
 import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
 import { WebSearchToggle } from './input/WebSearchToggle';
@@ -45,6 +48,8 @@ import {
 } from './input/inlineReferenceHighlight';
 import {
 } from "@/lib/mcp/chatIntegration";
+
+const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024; // Matches the native parser limit.
 
 interface EditingMessageData {
   content: string;
@@ -87,8 +92,7 @@ interface ChatInputProps {
   tokenCount?: number;
   disabled?: boolean;
   onStopGeneration?: () => void;
-  /** 停止按钮旁的提示文案（如二次确认强制中止） */
-  stopGenerationHint?: string | null;
+  isStoppingGeneration?: boolean;
   onBeforeSendMessage?: () => Promise<boolean>;
   selectedKnowledgeBaseId?: string; // 来自URL参数或父组件的知识库ID
   editingMessage?: EditingMessageData | null;
@@ -109,7 +113,7 @@ export function ChatInput({
   isLoading = false,
   disabled = false,
   onStopGeneration,
-  stopGenerationHint,
+  isStoppingGeneration = false,
   onBeforeSendMessage,
   selectedKnowledgeBaseId,
   tokenCount = 0,
@@ -161,8 +165,7 @@ export function ChatInput({
   // 会话参数设置弹窗：已迁移到右上角三点菜单统一入口（避免占用输入区空间）
 
   const _router = useRouter();
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const searchParams = useSearchParams();
   const consumeKnowledgeBaseDeepLink = useCallback(() => {
@@ -221,14 +224,19 @@ export function ChatInput({
 
   // 统一追加图片到附加区
   const appendImageFromBlob = async (blob: Blob, nameHint: string) => {
-    const dataUrl: string = await new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result as string);
-      fr.onerror = reject;
-      fr.readAsDataURL(blob);
-    });
-    const base64Data = dataUrl.split(',')[1];
-    setAttachedImages(prev => [...prev, { name: nameHint, dataUrl, base64Data, fileSize: blob.size }]);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      const base64Data = dataUrl.split(',')[1];
+      setAttachedImages(prev => [...prev, { name: nameHint, dataUrl, base64Data, fileSize: blob.size }]);
+    } catch (error) {
+      console.error('[ChatInput] Could not read image attachment:', error);
+      toast.error(translate(useLocaleStore.getState().locale, 'chatAttachment.imageReadFailed').replace('{name}', () => nameHint));
+    }
   };
 
   // === 会话内草稿：仅在切换会话/失焦/卸载时提交，避免输入过程中重渲染导致光标跳动 ===
@@ -720,22 +728,7 @@ export function ChatInput({
     if (files.length === 0) return;
 
     for (const file of files) {
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result as string);
-        fr.onerror = reject;
-        fr.readAsDataURL(file);
-      });
-
-      // 将Data URL转换为纯base64字符串（Ollama API要求）
-      const base64Data = dataUrl.split(',')[1];
-
-      setAttachedImages(prev => [...prev, {
-        name: file.name,
-        dataUrl, // 保留原始Data URL用于UI显示
-        base64Data, // 纯base64数据用于API调用
-        fileSize: file.size
-      }]);
+      await appendImageFromBlob(file, file.name);
     }
     e.target.value = "";
   };
@@ -747,9 +740,10 @@ export function ChatInput({
     // 检查是否是可解析的文档类型
     const fileExtension = file.name.toLowerCase().split('.').pop();
     const supportedTypes = ['pdf', 'docx', 'md', 'markdown', 'txt', 'json', 'csv', 'xlsx', 'xls', 'html', 'htm', 'rtf', 'epub'];
-    const MAX_SIZE = 20 * 1024 * 1024; // 20MB，与后端限制一致
-    if (file.size > MAX_SIZE) {
-      toast.error('文档过大', { description: `当前限制为 ${Math.round(MAX_SIZE/1024/1024)}MB，请拆分后再试` });
+    if (file.size > MAX_DOCUMENT_ATTACHMENT_BYTES) {
+      toast.error(t('chatAttachment.documentTooLarge'), {
+        description: documentAttachmentSizeLimit(useLocaleStore.getState().locale, MAX_DOCUMENT_ATTACHMENT_BYTES),
+      });
       e.target.value = "";
       return;
     }
@@ -770,7 +764,7 @@ export function ChatInput({
 
     try {
       const { DocumentParser } = await import('@/lib/documentParser');
-      const result = await DocumentParser.parseFileObject(file, { maxFileSize: 20 * 1024 * 1024, timeoutMs: 30_000 });
+      const result = await DocumentParser.parseFileObject(file, { maxFileSize: MAX_DOCUMENT_ATTACHMENT_BYTES, timeoutMs: 30_000 });
 
       if (result.success && result.content) {
         const summary = DocumentParser.getDocumentSummary(result.content, 150);
@@ -786,9 +780,11 @@ export function ChatInput({
           bytes: new Uint8Array(await file.arrayBuffer()),
         });
       } else {
-        // 解析失败，显示错误信息
-        toast.error(`文档解析失败`, {
-          description: result.error || '未知错误'
+        const currentLocale = useLocaleStore.getState().locale;
+        toast.error(translate(currentLocale, 'chatAttachment.documentParseFailed'), {
+          description: result.success
+            ? translate(currentLocale, 'chatAttachment.documentEmpty')
+            : documentAttachmentErrorDescription(currentLocale, result.failure),
         });
       }
 
@@ -799,8 +795,9 @@ export function ChatInput({
 
     } catch (error) {
       console.error('文档解析失败:', error);
-      toast.error(`文档解析失败`, {
-        description: error instanceof Error ? error.message : '未知错误'
+      const currentLocale = useLocaleStore.getState().locale;
+      toast.error(translate(currentLocale, 'chatAttachment.documentParseFailed'), {
+        description: error instanceof Error ? error.message : translate(currentLocale, 'error.unknown'),
       });
     } finally {
       setIsParsingDocument(false);
@@ -860,8 +857,8 @@ export function ChatInput({
       {/* 编辑模式提示栏 */}
       {editingMessage && (
         <div className="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-300 dark:border-yellow-700 text-xs text-yellow-800 dark:text-yellow-200 rounded-md px-3 py-1 mb-2">
-          <span>正在编辑之前的消息，发送后将作为新消息重新提交</span>
-          <button className="text-xs underline" onClick={onCancelEdit}>取消编辑</button>
+          <span>{t('chatComposer.editingMessage')}</span>
+          <button className="text-xs underline" onClick={onCancelEdit}>{t('chatComposer.cancelEdit')}</button>
         </div>
       )}
 
@@ -871,9 +868,10 @@ export function ChatInput({
         <div className="flex flex-wrap gap-2 mb-2">
           {attachedImages.map((img, idx) => (
             <div key={idx} className="relative group">
-              <img src={img.dataUrl} alt="img" className="w-24 h-24 object-cover rounded-md" />
+              <img src={img.dataUrl} alt={t('chatAttachment.image')} className="w-24 h-24 object-cover rounded-md" />
               <button
                 className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-xs hidden group-hover:block"
+                aria-label={t('chatAttachment.removeImage').replace('{name}', () => img.name)}
                 onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
               >
                 ×
@@ -1019,7 +1017,7 @@ export function ChatInput({
               }
               useChatStore.getState().updateConversation(currentConvId, { system_prompt_applied: { promptId: id, variableValues, mode } as any });
               pickComposerItem('');
-              toast.success(mode === 'oneOff' ? '已作为一次性系统提示词应用' : '已应用到当前会话');
+              toast.success(t(mode === 'oneOff' ? 'chatComposer.promptAppliedOnce' : 'chatComposer.promptApplied'));
             } catch {}
             closeComposerPanel();
           }}
@@ -1099,7 +1097,7 @@ export function ChatInput({
             }
           }}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? "请先选择模型" : "发送消息"}
+          placeholder={t(disabled ? 'chatComposer.chooseModelFirst' : 'chatComposer.sendMessage')}
           className={cn(
             "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
             (parsedPrompt || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-slate-900 dark:caret-slate-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-slate-900 dark:text-slate-100 tabular-nums"
@@ -1143,8 +1141,8 @@ export function ChatInput({
               "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-slate-100 dark:hover:bg-slate-800",
               planOnly && "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40"
             )}
-            title={planOnly ? "仅规划：关闭后才会执行写入和命令" : "仅规划"}
-            aria-label={planOnly ? "关闭仅规划" : "开启仅规划"}
+            title={t(planOnly ? 'chatComposer.planOnlyHint' : 'chatComposer.planOnly')}
+            aria-label={t(planOnly ? 'chatComposer.disablePlanOnly' : 'chatComposer.enablePlanOnly')}
           >
             <ListChecks className="w-4 h-4" />
           </Button>
@@ -1217,9 +1215,9 @@ export function ChatInput({
             )}
             {effectiveLoading ? (
               <div className="flex items-center gap-2">
-                {stopGenerationHint && (
+                {isStoppingGeneration && (
                   <span className="hidden sm:inline text-[10px] text-amber-600 dark:text-amber-400 max-w-[180px] leading-tight text-right">
-                    {stopGenerationHint}
+                    {t('chatComposer.stoppingGeneration')}
                   </span>
                 )}
                 <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 select-none">
@@ -1227,7 +1225,7 @@ export function ChatInput({
                     <span className="absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-60 animate-ping" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500" />
                   </span>
-                  {'处理中'}
+                  {t('chatComposer.processing')}
                 </span>
                 {(inputValue.trim() || attachedDocument) && (
                   <Button
@@ -1235,8 +1233,8 @@ export function ChatInput({
                     size="icon"
                     onClick={handleSend}
                     className="composer-tool h-8 w-8 rounded-md border-0 bg-transparent text-slate-600 shadow-none hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                    title="排队补充"
-                    aria-label="排队补充"
+                    title={t('chatComposer.queueSupplement')}
+                    aria-label={t('chatComposer.queueSupplement')}
                   >
                     <Send className="w-4 h-4" />
                   </Button>
@@ -1249,8 +1247,8 @@ export function ChatInput({
                     "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
                     "text-slate-600 dark:text-slate-300"
                   )}
-                  title={stopGenerationHint || "停止（停止生成/停止工具链路）"}
-                  aria-label={stopGenerationHint || "停止生成"}
+                  title={t(isStoppingGeneration ? 'chatComposer.stoppingGeneration' : 'chatComposer.stop')}
+                  aria-label={t(isStoppingGeneration ? 'chatComposer.stoppingGeneration' : 'chatComposer.stopGeneration')}
                 >
                   <StopCircle className="w-5 h-5" />
                 </Button>
@@ -1274,8 +1272,8 @@ export function ChatInput({
                     ? "pointer-events-none bg-transparent text-slate-300 dark:text-slate-600"
                     : "bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-white"
                 )}
-                title="发送 (Enter)"
-                aria-label="发送消息"
+                title={t('chatComposer.sendShortcut')}
+                aria-label={t('chatComposer.sendMessage')}
               >
                 <Send className="w-4 h-4" />
               </Button>

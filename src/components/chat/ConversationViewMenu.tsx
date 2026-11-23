@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useUiPreferences } from '@/store/uiPreferences';
 
 export function ConversationViewMenu({
@@ -19,8 +19,7 @@ export function ConversationViewMenu({
   archiveVisible: boolean;
   onArchiveVisibleChange: (visible: boolean) => void;
 }) {
-  const t = useLocaleStore((state) => state.t);
-  useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   const grouping = useUiPreferences((state) => state.conversationGrouping);
   const setGrouping = useUiPreferences(
     (state) => state.setConversationGrouping,

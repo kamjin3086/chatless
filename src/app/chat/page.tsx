@@ -102,7 +102,7 @@ export default function ChatPage() {
     isLoading,
     handleSendMessage,
     handleStopGeneration,
-    stopGenerationHint,
+    isStoppingGeneration,
     handleTitleChange,
     handleDeleteConversation,
     handleRetryMessage,
@@ -485,7 +485,7 @@ export default function ChatPage() {
                   disabled={!canSend}
                   onSendMessage={handleSendMessage}
                   onStopGeneration={handleStopGeneration}
-                  stopGenerationHint={stopGenerationHint}
+                  isStoppingGeneration={isStoppingGeneration}
                   onImageUpload={handleImageUpload}
                   onFileUpload={handleFileUpload}
                   selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}

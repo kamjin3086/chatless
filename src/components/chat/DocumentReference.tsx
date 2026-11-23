@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { FileText, ChevronDown, ChevronRight, File, FileType } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface DocumentReferenceProps {
   fileName: string;
@@ -58,6 +61,8 @@ export function DocumentReference({
   className,
   variant = 'default'
 }: DocumentReferenceProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [isExpanded, setIsExpanded] = useState(false);
   
   // 根据变体选择样式
@@ -142,12 +147,12 @@ export function DocumentReference({
               {isExpanded ? (
                 <>
                   <ChevronDown className="w-3.5 h-3.5" />
-                  收起完整内容
+                  {t('chatAttachment.collapseDocument')}
                 </>
               ) : (
                 <>
                   <ChevronRight className="w-3.5 h-3.5" />
-                  查看完整内容
+                  {t('chatAttachment.expandDocument')}
                 </>
               )}
             </button>
@@ -163,7 +168,7 @@ export function DocumentReference({
             ? "border-t border-blue-500/10 dark:border-blue-400/10"
             : "border-t border-slate-200 dark:border-slate-700"
         )}>
-          <div className={styles.expandedHeader}>文档完整内容：</div>
+          <div className={styles.expandedHeader}>{t('chatAttachment.fullDocument')}</div>
           <div className={styles.expandedContent}>
             <pre className="whitespace-pre-wrap break-words font-sans">{fullContent}</pre>
           </div>

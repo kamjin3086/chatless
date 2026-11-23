@@ -6,7 +6,7 @@ import { ArrowLeft, FileText, Folder, Settings } from 'lucide-react';
 import { getConnectedServers, getEnabledConfiguredServers, getGlobalEnabledServers } from '@/lib/mcp/chatIntegration';
 import { withOneShotGrant } from '@/lib/filesystemAllowlist/oneShotGrant';
 import { listDirectory, type FsEntry } from '@/lib/tauri/filesystemCommands';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { cn } from '@/lib/utils';
 import {
   calcPanelPosition,
@@ -33,8 +33,7 @@ type MentionItem =
   | { kind: 'entry'; entry: FsEntry };
 
 export function McpMentionPanel({ anchorRef, workspaceDirectory, onSelect, onSelectFile, onBrowse, onClose, filterQuery = '' }: McpMentionPanelProps) {
-  const t = useLocaleStore((s) => s.t);
-  useLocaleStore((s) => s.locale);
+  const t = useTranslation();
   const [servers, setServers] = useState<Extract<MentionItem, { kind: 'server' }>[]>([]);
   const [folders, setFolders] = useState<FsEntry[]>([]);
   const [listing, setListing] = useState<{ path: string; entries: FsEntry[]; truncated?: boolean; failed?: boolean } | null>(null);

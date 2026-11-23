@@ -14,6 +14,8 @@ import { ModelParametersDialog } from './ModelParametersDialog';
 import { PROVIDER_ICON_EXTS, getResolvedUrlForBase, isUrlKnownMissing, getModelBrandLogoSrc, prewarmModelBrandLogos } from '@/lib/utils/logoService';
 import { generateAvatarDataUrl } from '@/lib/avatar';
 import { selectSelectableProviders } from '@/lib/provider/modelPickerVisibility';
+import { translate } from '@/i18n';
+import { useLocaleStore } from '@/store/localeStore';
 
 interface ModelSelectorProps {
   currentModelId: string | null;
@@ -32,6 +34,7 @@ export function ModelSelector({
   currentProviderName,
   setupLabel,
 }: ModelSelectorProps) {
+  const locale = useLocaleStore((state) => state.locale);
   const [searchQuery, setSearchQuery] = useState('');
   const [recentModels, setRecentModels] = useState<Array<{provider: string; modelId: string}>>([]);
   const [globalDefaultModel, setGlobalDefaultModel] = useState<string | null>(null);
@@ -257,11 +260,13 @@ export function ModelSelector({
     if (globalDefaultModel === newDefaultIdentifier) {
       await specializedStorage.models.removeLastSelectedModelPair?.();
       setGlobalDefaultModel(null);
-      toast.info("默认模型已清除");
+      toast.info(translate(useLocaleStore.getState().locale, 'modelChooser.defaultCleared'));
     } else {
       await specializedStorage.models.setLastSelectedModelPair(providerName, modelName);
       setGlobalDefaultModel(newDefaultIdentifier);
-      toast.success(`${modelName} 已设为默认模型`);
+      toast.success(
+        translate(useLocaleStore.getState().locale, 'modelChooser.defaultSet').replace('{0}', () => modelName),
+      );
     }
   };
 
@@ -271,10 +276,10 @@ export function ModelSelector({
       const { useProviderMetaStore } = await import('@/store/providerMetaStore');
       const merged = metadataService.get();
       useProviderMetaStore.getState().setList(merged as any);
-      toast.success('模型列表已刷新');
+      toast.success(translate(useLocaleStore.getState().locale, 'modelChooser.refreshed'));
     } catch (e) {
       console.error('刷新模型列表失败', e);
-      toast.error('刷新模型列表失败');
+      toast.error(translate(useLocaleStore.getState().locale, 'modelChooser.refreshFailed'));
     }
   };
 
@@ -318,7 +323,7 @@ export function ModelSelector({
     ? (currentProviderLabel ? `${currentModelName} · ${currentProviderLabel}` : currentModelName)
     : undefined;
 
-  const triggerPlaceholder = allMetadata.length === 0 ? '加载中...' : '选择模型';
+  const triggerPlaceholder = translate(locale, allMetadata.length === 0 ? 'modelChooser.loading' : 'chatStarter.chooseModel');
 
   return (
     <>
@@ -331,7 +336,7 @@ export function ModelSelector({
         <SelectTrigger
           variant={setupLabel ? 'default' : 'ghost'}
           title={triggerTitle}
-          aria-label={setupLabel}
+          aria-label={setupLabel ?? triggerTitle ?? triggerPlaceholder}
           className={setupLabel ? undefined : 'h-7 max-w-[50vw] min-w-0 overflow-hidden rounded-lg border border-slate-200/70 bg-white/60 px-2 text-xs font-medium text-slate-600 shadow-none hover:border-slate-300/80 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10'}
         >
           <span className="flex min-w-0 max-w-full items-center gap-1.5">

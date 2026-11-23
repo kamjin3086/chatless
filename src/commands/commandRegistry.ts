@@ -4,7 +4,7 @@ export interface Command {
   id: string;
   titleI18n: string; // i18n key
   section: string;   // e.g. navigation / settings / action
-  hint?: string; // optional right side hint description
+  hintI18n?: string; // optional right side hint description (i18n key)
   keywords?: string[];
   icon?: LucideIcon;
   action: () => void | Promise<void>;

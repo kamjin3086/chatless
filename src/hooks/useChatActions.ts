@@ -4,9 +4,11 @@ import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { showSendErrorToast } from '@/lib/chat/showSendErrorToast';
 import { NEW_CONVERSATION_TITLE } from '@/lib/chat/TitleGenerator';
+import { ConversationPrompts } from '@/lib/prompts/SystemPrompts';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useChatStore } from '@/store/chatStore';
+import { useLocaleStore } from '@/store/localeStore';
 import { type Message as LlmMessage } from '@/lib/llm';
 import { HistoryBuilder } from '@/lib/chat/HistoryBuilder';
 import type { Message, Conversation } from '@/types/chat';
@@ -120,9 +122,7 @@ export const useChatActions = (
   const debouncedTokenUpdateRef = useRef<NodeJS.Timeout | null>(null);
 
   // stop 二次确认：第一次 stop 停生成/链路；短时间内再次 stop 则尝试强制取消正在运行的工具
-  const [stopGenerationHint, setStopGenerationHint] = useState<string | null>(
-    null,
-  );
+  const [isStoppingGeneration, setIsStoppingGeneration] = useState(false);
 
   const navigateToSettings = useCallback(
     (tab: string = 'localModels') => {
@@ -400,19 +400,22 @@ export const useChatActions = (
             attachmentDocumentIds,
           }))
         ) {
-          toast.info('补充已排队', {
-            description: '当前步骤完成后交给模型处理。',
+          toast.info(useLocaleStore.getState().t('chatUi.steeringQueued'), {
+            description: useLocaleStore
+              .getState()
+              .t('chatUi.steeringQueuedDescription'),
           });
           return;
         }
       }
 
+      const { t } = useLocaleStore.getState();
       const modelToUse = selectedModelId;
       if (!modelToUse) {
-        toast.error('请先选择一个AI模型', {
-          description: '点击此处前往设置页面选择模型',
+        toast.error(t('chatSendError.selectModel.title'), {
+          description: t('chatSendError.selectModel.description'),
           action: {
-            label: '前往设置',
+            label: t('chatSendError.openSettings'),
             onClick: () => navigateToSettings('localModels'),
           },
         });
@@ -420,8 +423,8 @@ export const useChatActions = (
       }
 
       if (!currentProviderName) {
-        toast.error('模型提供商信息丢失', {
-          description: '无法确定当前模型所属的提供商，请重新选择模型。',
+        toast.error(t('chatSendError.missingProvider.title'), {
+          description: t('chatSendError.missingProvider.description'),
         });
         return;
       }
@@ -444,10 +447,10 @@ export const useChatActions = (
         modelToUse,
       );
       if (!apiKeyValid) {
-        toast.error('API密钥无效', {
-          description: '请前往设置页面配置有效的API密钥',
+        toast.error(t('chatSendError.invalidKey.title'), {
+          description: t('chatSendError.invalidKey.description'),
           action: {
-            label: '前往设置',
+            label: t('chatSendError.openSettings'),
             onClick: () => navigateToSettings('localModels'),
           },
         });
@@ -479,8 +482,8 @@ export const useChatActions = (
             effectiveProvider,
           );
         } catch {
-          toast.error('创建对话失败', {
-            description: '无法创建新的对话，请重试。',
+          toast.error(t('chatSendError.createConversation.title'), {
+            description: t('chatSendError.createConversation.description'),
           });
           return;
         }
@@ -579,8 +582,8 @@ export const useChatActions = (
           } catch {
             /* noop */
           }
-          toast.error('未配置 API 密钥', {
-            description: '请在设置中配置有效的密钥后重试。',
+          toast.error(t('chatSendError.noKey.title'), {
+            description: t('chatSendError.keyRequired.description'),
           });
           return;
         }
@@ -744,8 +747,8 @@ export const useChatActions = (
           content: '未选择模型',
           thinking_duration: 0,
         });
-        toast.error('未选择模型', {
-          description: '在发送消息前，请先在顶部选择一个AI模型。',
+        toast.error(t('chatSendError.noModel.title'), {
+          description: t('chatSendError.noModel.description'),
         });
       }
     },
@@ -767,7 +770,7 @@ export const useChatActions = (
   );
 
   const handleStopGeneration = useCallback(() => {
-    setStopGenerationHint('正在停止生成…');
+    setIsStoppingGeneration(true);
     stopGenerationIdleWatch();
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
     if (debouncedTokenUpdateRef.current)
@@ -895,12 +898,7 @@ export const useChatActions = (
   }, [currentConversation, updateMessage, currentConversationId]);
 
   useEffect(() => {
-    if (!isLoading) {
-      setStopGenerationHint((prev) => {
-        if (prev === '正在停止生成…') return null;
-        return prev;
-      });
-    }
+    if (!isLoading) setIsStoppingGeneration(false);
   }, [isLoading]);
 
   // 清理函数
@@ -957,8 +955,9 @@ export const useChatActions = (
             content: content.trim() || '响应超时',
           });
         }
-        toast.error('响应超时', {
-          description: '模型长时间未返回数据，请检查网络或模型服务状态。',
+        const { t } = useLocaleStore.getState();
+        toast.error(t('chatSendError.timeout.title'), {
+          description: t('chatSendError.timeout.description'),
         });
         stopGenerationIdleWatch();
       },
@@ -986,7 +985,9 @@ export const useChatActions = (
   const handleDeleteConversation = useCallback(() => {
     if (currentConversationId) {
       void deleteConversation(currentConversationId).catch(() => {
-        toast.error('删除会话未完成，请重试。');
+        toast.error(
+          useLocaleStore.getState().t('chatUi.deleteConversationFailed'),
+        );
       });
     }
   }, [currentConversationId, deleteConversation]);
@@ -1082,8 +1083,9 @@ export const useChatActions = (
         modelToUse,
       );
       if (!apiKeyValid) {
-        toast.error('API密钥无效', {
-          description: '请前往设置页面配置有效的API密钥',
+        const { t } = useLocaleStore.getState();
+        toast.error(t('chatSendError.invalidKey.title'), {
+          description: t('chatSendError.invalidKey.description'),
         });
         // 占位转错误
         void updateMessage(newAssistantId, {
@@ -1137,7 +1139,7 @@ export const useChatActions = (
           originalUserContent: userMsg.content,
           continuationRunId: continueStoppedRun ? target.id : undefined,
           continuationPrompt: continueStoppedRun
-            ? '继续完成尚未完成的任务。不要重复已经完成的操作。'
+            ? ConversationPrompts.continueStoppedRun
             : undefined,
           // Regenerating revises the answer from the existing record.  It must
           // never silently repeat a prior write, shell command, or MCP action.
@@ -1208,7 +1210,7 @@ export const useChatActions = (
     isGenerating,
     handleSendMessage,
     handleStopGeneration,
-    stopGenerationHint,
+    isStoppingGeneration,
     handleTitleChange,
     handleDeleteConversation,
     handleRetryMessage,

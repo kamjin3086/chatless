@@ -8,9 +8,23 @@ import { useAuthorizationStore } from '@/store/authorizationStore';
 import { useConversationAccessStore } from '@/store/conversationAccessStore';
 import { useChatStore } from '@/store/chatStore';
 import { toast } from '@/components/ui/sonner';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { formatToolDuration, presentToolCard, previewResult } from './toolCardPresentation';
 
 type ToolCallStatus = 'success' | 'error' | 'running' | 'pending_auth' | 'stopped';
+
+const STATUS_LABELS: Record<ToolCallStatus, TranslationKey> = {
+  running: 'toolCall.status.running',
+  pending_auth: 'toolCall.status.pendingApproval',
+  success: 'toolCall.status.success',
+  error: 'toolCall.status.error',
+  stopped: 'toolCall.status.stopped',
+};
+
+// Keep the stored rejection unchanged; only the card's display is localized.
+const USER_REJECTED_MESSAGE = '用户拒绝';
 
 interface ToolCallCardProps {
   server: string;
@@ -27,8 +41,10 @@ interface ToolCallCardProps {
 }
 
 export function ToolCallCard({ server, tool, status, args, resultPreview, errorMessage, schemaHint, messageId, cardId, duration }: ToolCallCardProps) {
-  const presentation = React.useMemo(() => presentToolCard({ server, tool, args }), [server, tool, args]);
-  const durationLabel = formatToolDuration(duration);
+  const locale = useLocaleStore((state) => state.locale);
+  const t = React.useCallback((key: TranslationKey) => translate(locale, key), [locale]);
+  const presentation = React.useMemo(() => presentToolCard(locale, { server, tool, args }), [locale, server, tool, args]);
+  const durationLabel = formatToolDuration(locale, duration);
   const { approveAuthorization, rejectAuthorization, hasPendingAuthorization } = useAuthorizationStore();
   
   // 展开/折叠状态 - 默认折叠（预览模式）
@@ -44,55 +60,66 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   const filesystemScope = approvalScope?.kind === 'filesystem' ? approvalScope : undefined;
   const shellScope = approvalScope?.kind === 'shell' ? approvalScope : undefined;
   const directoryScope = filesystemScope?.op !== 'delete' ? filesystemScope?.directory : undefined;
-  const sessionLabel = shellScope ? '本会话允许命令工具'
-    : filesystemScope ? (filesystemScope.op === 'delete' ? '本会话允许此目标删除' : '本会话允许此目录读写')
-    : approvalScope?.automaticEligible ? (approvalScope.toolKey === 'knowledge:read' ? '本会话允许知识库读取' : '本会话允许该工具')
+  const knowledgeRead = approvalScope?.toolKey === 'knowledge:read';
+  const sessionLabel = shellScope ? t('toolCallApproval.conversationShell')
+    : filesystemScope ? t(filesystemScope.op === 'delete' ? 'toolCallApproval.conversationDelete' : 'toolCallApproval.conversationDirectory')
+    : approvalScope?.automaticEligible ? t(knowledgeRead ? 'toolCallApproval.conversationKnowledgeRead' : 'toolCallApproval.conversationTool')
     : undefined;
-  const sessionHint = shellScope ? '本会话自动批准命令；工作区与沙箱检查不变'
-    : filesystemScope ? (filesystemScope.op === 'delete' ? '只记住当前删除目标' : '只允许此目录内的读取、写入和创建，不含删除')
-    : `本会话允许${approvalScope?.label || '此工具'}；访问范围不变`;
+  const sessionHint = shellScope ? t('toolCallApproval.conversationShellHint')
+    : filesystemScope ? t(filesystemScope.op === 'delete' ? 'toolCallApproval.conversationDeleteHint' : 'toolCallApproval.conversationDirectoryHint')
+    : t('toolCallApproval.conversationToolHint').replace('{tool}', () => knowledgeRead
+      ? t('toolCallApproval.knowledgeReadTarget')
+      : approvalScope?.label || t('toolCallApproval.thisTool'));
 
   const rememberHint =
     isPendingAuth
       && String(server || '').toLowerCase() === 'shell_executor'
       && typeof (args as any)?.workingDir === 'string'
       && String((args as any).workingDir).trim()
-      ? '确认后会记住该目录'
+      ? t('toolCallApproval.rememberWorkingDirectory')
       : undefined;
+  const path = filesystemScope?.path;
+  const onceHint = rememberHint || (path
+    ? t('toolCallApproval.oncePathHint').replace('{path}', () => path)
+    : t('toolCallApproval.onceHint'));
+  const alwaysHint = shellScope
+    ? t('toolCallApproval.alwaysShellHint')
+    : directoryScope && t('toolCallApproval.alwaysDirectoryHint').replace('{directory}', () => directoryScope);
   
   const handleApprove = React.useCallback(() => {
     if (!authKey || !messageId || !cardId) return;
     const ok = approveAuthorization(authKey);
     if (!ok) {
-      toast.info('审批已失效', { description: '请点击“继续”重新检查权限。' });
+      toast.info(t('toolCallApproval.expired'), { description: t('toolCallApproval.checkPermissionsAgain') });
     }
-  }, [authKey, messageId, cardId, approveAuthorization]);
+  }, [authKey, messageId, cardId, approveAuthorization, t]);
 
   const handleApproveWith = React.useCallback((decision: 'always' | 'unrestricted') => {
     if (!authKey || !messageId || !cardId) return;
     const ok = approveAuthorization(authKey, decision);
     if (!ok) {
-      toast.info('审批已失效', { description: '请点击“继续”重新检查权限。' });
+      toast.info(t('toolCallApproval.expired'), { description: t('toolCallApproval.checkPermissionsAgain') });
       return;
     }
     if (decision === 'always') {
-      toast.success(shellScope ? '以后所有命令都不再询问' : '该文件夹已加入白名单，读写不再询问');
+      toast.success(t(shellScope ? 'toolCallApproval.shellAllowed' : 'toolCallApproval.directoryAllowed'));
       return;
     }
     // Turning prompts off must be as easy to undo as it was to enable.
     const conversationId = pendingAuth?.conversationId;
-    toast.info('审批通过后将应用本会话授权', {
+    toast.info(t('toolCallApproval.conversationGrantPending'), {
       action: conversationId
         ? {
-            label: '撤销会话授权',
+            label: t('toolCallApproval.revokeConversationGrant'),
             onClick: () => {
               useConversationAccessStore.getState().revoke(conversationId);
-              toast.info('已撤销本会话临时授权');
+              const currentLocale = useLocaleStore.getState().locale;
+              toast.info(translate(currentLocale, 'toolCallApproval.conversationGrantRevoked'));
             },
           }
         : undefined,
     });
-  }, [authKey, messageId, cardId, approveAuthorization, pendingAuth?.conversationId, shellScope]);
+  }, [authKey, messageId, cardId, approveAuthorization, pendingAuth?.conversationId, shellScope, t]);
   
   const handleReject = React.useCallback(() => {
     if (!authKey || !messageId || !cardId) return;
@@ -102,16 +129,16 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         server,
         tool,
         ok: false,
-        errorMessage: '用户拒绝',
+        errorMessage: USER_REJECTED_MESSAGE,
         cardId,
       } as any);
     } catch { /* ignore */ }
 
     const ok = rejectAuthorization(authKey);
     if (!ok) {
-      toast.info('已拒绝');
+      toast.info(t('toolCallApproval.rejected'));
     }
-  }, [authKey, messageId, cardId, server, tool, rejectAuthorization]);
+  }, [authKey, messageId, cardId, server, tool, rejectAuthorization, t]);
 
   // 状态样式
   const statusColor = isPendingAuth 
@@ -123,6 +150,8 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         : status === 'success' 
           ? 'text-emerald-500' 
           : 'text-red-500';
+
+  const statusLabel = t(STATUS_LABELS[status === 'running' ? status : isPendingAuth ? 'pending_auth' : status]);
 
   // 状态符号
   const StatusIcon = () => {
@@ -144,6 +173,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
   // 是否有详情可展开
   const hasDetails = (args && Object.keys(args).length > 0) || resultPreview || errorMessage;
   const resultUnknown = String(errorMessage || '').includes('EXECUTION_UNKNOWN');
+  const displayedError = errorMessage === USER_REJECTED_MESSAGE ? t('toolCall.userRejected') : errorMessage;
 
   return (
     <div className="text-xs">
@@ -170,7 +200,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
         )}
 
         {/* 状态图标 */}
-        <span className={cn("shrink-0", statusColor)}>
+        <span className={cn("shrink-0", statusColor)} role="img" title={statusLabel} aria-label={statusLabel}>
           <StatusIcon />
         </span>
 
@@ -193,7 +223,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {durationLabel && (
             <span
               className="shrink-0 text-slate-400 dark:text-slate-500 tabular-nums"
-              title={`用时 ${durationLabel}`}
+              title={t('toolCall.elapsed').replace('{duration}', durationLabel)}
             >
               · {durationLabel}
             </span>
@@ -202,7 +232,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {/* 错误简要提示 */}
           {status === 'error' && !expanded && (
             <span className="text-red-500 truncate ml-1">
-              {errorMessage && errorMessage.length > 30 ? errorMessage.slice(0, 30) + '…' : errorMessage}
+              {displayedError && displayedError.length > 30 ? displayedError.slice(0, 30) + '…' : displayedError}
             </span>
           )}
         </div>
@@ -219,9 +249,9 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
               data-approval-run={messageId}
               onClick={handleApprove}
               className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-              title={rememberHint || `只允许当前调用${filesystemScope?.path ? `：${filesystemScope.path}` : ''}`}
+              title={onceHint}
             >
-              仅本次
+              {t('toolCallApproval.once')}
             </button>
             {sessionLabel && (
               <button
@@ -230,7 +260,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
                 data-approval-run={messageId}
                 onClick={() => handleApproveWith('unrestricted')}
                 className="px-2 py-0.5 text-[10px] border border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-md transition-colors"
-                title={`${sessionHint}；可在聊天顶部撤销`}
+                title={t('toolCallApproval.conversationRevocable').replace('{scope}', () => sessionHint)}
               >
                 {sessionLabel}
               </button>
@@ -240,16 +270,16 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
                 type="button"
                 onClick={() => handleApproveWith('always')}
                 className="px-2 py-0.5 text-[10px] border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-                title={shellScope ? '以后所有命令都不再询问，可在设置里改回' : `把该文件夹加入白名单（不含删除）：${directoryScope}`}
+                title={alwaysHint}
               >
-                {shellScope ? '始终不再询问' : '以后都允许'}
+                {t(shellScope ? 'toolCallApproval.alwaysShell' : 'toolCallApproval.alwaysDirectory')}
               </button>
             )}
             <button
               onClick={handleReject}
               className="px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
             >
-              {approvalScope ? '拒绝' : '取消'}
+              {t(approvalScope ? 'toolCallApproval.reject' : 'common.cancel')}
             </button>
           </div>
         )}
@@ -267,7 +297,7 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {/* 参数 */}
           {args && Object.keys(args).length > 0 && (
             <div>
-              <div className="text-slate-400 dark:text-slate-500 mb-0.5">参数</div>
+              <div className="text-slate-400 dark:text-slate-500 mb-0.5">{t('toolCall.arguments')}</div>
               <pre className="text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/30 rounded-md p-1.5 overflow-auto max-h-28 whitespace-pre-wrap break-all font-mono text-[10px]">
                 {JSON.stringify(args, null, 2)}
               </pre>
@@ -277,9 +307,9 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
           {/* 成功结果 */}
           {status === 'success' && resultPreview && (
             <div>
-              <div className="text-emerald-500/80 mb-0.5">结果</div>
+              <div className="text-emerald-500/80 mb-0.5">{t('toolCall.result')}</div>
               <pre className="text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-800/30 rounded-md p-1.5 overflow-auto max-h-36 whitespace-pre-wrap break-all font-mono text-[10px]">
-                {previewResult(resultPreview)}
+                {previewResult(locale, resultPreview)}
               </pre>
             </div>
           )}
@@ -289,16 +319,16 @@ export function ToolCallCard({ server, tool, status, args, resultPreview, errorM
             <div>
               {resultUnknown && (
                 <div className="text-amber-600 dark:text-amber-400 bg-amber-50/70 dark:bg-amber-900/20 rounded-md p-1.5 mb-1 text-[10px]">
-                  执行结果未知。系统不会自动重试，请通过“继续”重新核对后再决定。
+                  {t('toolCall.resultUnknown')}
                 </div>
               )}
-              <div className="text-red-500/80 mb-0.5">错误</div>
+              <div className="text-red-500/80 mb-0.5">{t('toolCall.error')}</div>
               <div className="text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-900/10 rounded-md p-1.5 whitespace-pre-wrap break-all text-[10px]">
-                {errorMessage || '未知错误'}
+                {displayedError || t('toolCall.unknownError')}
               </div>
               {schemaHint && (
                 <div className="mt-1 text-slate-500 dark:text-slate-400 text-[10px]">
-                  <span className="text-slate-400">提示: </span>{schemaHint}
+                  <span className="text-slate-400">{t('toolCall.hint')}{' '}</span>{schemaHint}
                 </div>
               )}
             </div>

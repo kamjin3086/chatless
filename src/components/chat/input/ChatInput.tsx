@@ -5,6 +5,7 @@ import TextareaAutosize from "react-textarea-autosize";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ImageIcon, PaperclipIcon, Database, Send } from "lucide-react";
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface ChatInputProps {
   onSubmit: (content: string) => void;
@@ -17,6 +18,7 @@ export function ChatInput({
   onSelectKnowledge,
   disabled = false,
 }: ChatInputProps) {
+  const t = useTranslation();
   const [input, setInput] = useState("");
   const [showTip, setShowTip] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -49,7 +51,7 @@ export function ChatInput({
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder="输入消息..."
+          placeholder={t('chatUi.inputPlaceholder')}
           className={cn(
             "w-full resize-none bg-transparent py-3 pl-12 pr-14",
             "text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400",
@@ -109,7 +111,7 @@ export function ChatInput({
             disabled={disabled}
           >
             <Database className="w-4 h-4 mr-1" />
-            选择知识库
+            {t('chatUi.selectKnowledgeBase')}
           </Button>
 
           {/* 发送按钮 */}
@@ -135,7 +137,7 @@ export function ChatInput({
       {/* 底部提示 */}
       {showTip && (
         <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-          提示：按下 Enter 发送消息，Shift + Enter 换行
+          {t('chatUi.sendShortcutHint')}
         </div>
       )}
     </div>
