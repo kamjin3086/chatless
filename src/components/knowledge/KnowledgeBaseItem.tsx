@@ -1,7 +1,10 @@
+"use client";
+
 import { BrainCircuit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KnowledgeBase } from "@/lib/knowledgeService";
 import { ContextMenu } from '@/components/ui/context-menu';
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface KnowledgeBaseItemProps {
   kb: KnowledgeBase & { documentCount?: number };
@@ -12,18 +15,19 @@ interface KnowledgeBaseItemProps {
 }
 
 export function KnowledgeBaseItem({ kb, isActive, onClick, onRename, onDelete }: KnowledgeBaseItemProps) {
+  const t = useTranslation();
   const desc = (kb.description || "").replace(/(\\n|\\r|\\t)/g, " ").replace(/(\r?\n|\r)/g, " ").trim();
 
   const menuItems = [
     {
       id: 'rename',
-      text: '重命名',
+      text: t('knowledge.rename'),
       action: () => onRename?.(kb)
     },
     { id: 'separator', text: '', separator: true },
     {
       id: 'delete',
-      text: '删除',
+      text: t('knowledge.delete'),
       action: () => onDelete?.(kb)
     }
   ];
@@ -48,7 +52,7 @@ export function KnowledgeBaseItem({ kb, isActive, onClick, onRename, onDelete }:
         <div className="flex-1 overflow-hidden">
           <p className="truncate font-medium">{kb.name}</p>
           <p className="truncate text-xs text-slate-400 max-w-full">
-            {desc || "暂无描述"}
+            {desc || t('knowledge.noDescription')}
           </p>
         </div>
       </button>

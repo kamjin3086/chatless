@@ -5,6 +5,7 @@ import { PromptCard, Prompt } from "./PromptCard";
 import { PromptEditorDialog } from "./PromptEditorDialog";
 import { usePromptStore } from "@/store/promptStore";
 import { useChatStore } from "@/store/chatStore";
+import { useTranslation } from '@/i18n/useTranslation';
 import { toast } from "@/components/ui/sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -13,6 +14,7 @@ interface PromptListProps {
 }
 
 export function PromptList({ prompts }: PromptListProps) {
+  const t = useTranslation();
   const toggleFavorite = usePromptStore((s) => s.toggleFavorite);
   const updatePrompt = usePromptStore((s) => s.updatePrompt);
   const deletePrompt = usePromptStore((s) => s.deletePrompt);
@@ -46,13 +48,13 @@ export function PromptList({ prompts }: PromptListProps) {
 
   const applyToCurrentChat = (id: string) => {
     if (!currentConversationId) { 
-      toast.info('请先选择一个对话'); 
+      toast.info(t('prompts.selectConversation'));
       return; 
     }
     updateConversation(currentConversationId, { 
       system_prompt_applied: { promptId: id, mode: 'permanent' } as any 
     });
-    toast.success('已应用到当前对话');
+    toast.success(t('prompts.applied'));
   };
 
   return (
@@ -89,7 +91,7 @@ export function PromptList({ prompts }: PromptListProps) {
             favorite: data.favorite,
             shortcuts: (data as any).shortcuts,
           } as any);
-          toast.success('已保存修改');
+          toast.success(t('prompts.saved'));
         }}
         onDelete={() => {
           if (editingId) {
@@ -106,21 +108,19 @@ export function PromptList({ prompts }: PromptListProps) {
       <AlertDialog open={!!pendingDeleteId} onOpenChange={(o) => { if (!o) setPendingDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除提示词？</AlertDialogTitle>
-            <AlertDialogDescription>
-              删除后无法恢复，相关使用统计将一并移除。
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('prompts.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('prompts.deleteDescription')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingDeleteId(null)}>取消</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingDeleteId(null)}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => { 
               if (pendingDeleteId) { 
                 deletePrompt(pendingDeleteId); 
-                toast.success('已删除提示词'); 
+                toast.success(t('prompts.deleted'));
                 setPendingDeleteId(null); 
               } 
             }}>
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -5,8 +5,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, CheckCircle2, AlertCircle, FileText, Brain, Database } from "lucide-react";
-import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
+import { KnowledgeService, type KnowledgeBase, type KnowledgeIndexProgress } from '@/lib/knowledgeService';
 import { toast } from '@/components/ui/sonner';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
+import { formatKnowledgeChunkCount, formatKnowledgeIndexProgress } from '@/components/knowledge/formatKnowledgeIndexProgress';
 import { truncateDisplayName } from '@/lib/filesystem/safeFileName';
 
 interface AddToKnowledgeBaseProps {
@@ -26,13 +30,15 @@ export function AddToKnowledgeBase({
   onSuccess,
   preSelectedKnowledgeBaseId
 }: AddToKnowledgeBaseProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<TranslationKey | null>(null);
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<string | null>(preSelectedKnowledgeBaseId || null);
   const [adding, setAdding] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [progressMessage, setProgressMessage] = useState('');
+  const [progressUpdate, setProgressUpdate] = useState<KnowledgeIndexProgress | 'failed' | null>(null);
 
   // 加载知识库列表
   useEffect(() => {
@@ -44,7 +50,7 @@ export function AddToKnowledgeBase({
         setError(null);
       } catch (error) {
         console.error('加载知识库列表失败:', error);
-        setError('无法加载知识库列表');
+        setError('knowledge.import.loadDestinationsFailed');
       } finally {
         setLoading(false);
       }
@@ -63,30 +69,30 @@ export function AddToKnowledgeBase({
   // 确认添加文档到知识库
   const handleConfirm = async () => {
     if (!selectedKnowledgeBaseId) {
-      toast.error('请先选择一个知识库');
+      toast.error(t('knowledge.import.selectDestination'));
       return;
     }
 
     try {
       setAdding(true);
       setProgress(0);
-      setProgressMessage('开始处理...');
+      setProgressUpdate(null);
       
       const result = await KnowledgeService.addDocumentToKnowledgeBase(
         documentId, 
         selectedKnowledgeBaseId,
         {
-          onProgress: (progressPercent: number, message: string) => {
+          onProgress: (progressPercent, update) => {
             setProgress(progressPercent);
-            setProgressMessage(message);
-            console.log(`进度: ${progressPercent}% - ${message}`);
+            setProgressUpdate(update);
           }
         }
       );
       
       if (result) {
-        const chunksInfo = result.chunksProcessed ? ` (${result.chunksProcessed} 个片段)` : '';
-        toast.success(`文档已成功添加到知识库并完成索引${chunksInfo}`);
+        toast.success(result.chunksProcessed
+          ? t('knowledge.import.addedWithChunks').replace('{0}', formatKnowledgeChunkCount(locale, result.chunksProcessed))
+          : t('knowledge.import.addedToKnowledgeBase'));
         
         // 显示索引结果详情
         if (result.indexingResult) {
@@ -102,44 +108,49 @@ export function AddToKnowledgeBase({
           }
         }, 1500); // 延长显示时间让用户看到结果
       } else {
-        toast.error('添加文档失败：无返回结果');
+        toast.error(t('knowledge.import.noResult'));
       }
     } catch (error) {
       console.error('添加文档到知识库失败:', error);
       
       // 根据错误类型显示不同的提示
-      let errorMessage = '添加文档失败';
+      let errorKey: TranslationKey = 'knowledge.import.addFailed';
       if (error instanceof Error) {
         if (error.message.includes('嵌入服务')) {
-          errorMessage = '嵌入服务未配置或连接失败，请检查设置';
+          errorKey = 'knowledge.import.embeddingFailed';
         } else if (error.message.includes('文档不存在')) {
-          errorMessage = '文档文件不存在，请重新上传';
+          errorKey = 'knowledge.import.fileMissing';
         } else if (error.message.includes('索引失败')) {
-          errorMessage = '文档索引处理失败，请重试';
-        } else {
-          errorMessage = error.message;
+          errorKey = 'knowledge.import.indexFailed';
         }
       }
       
-      toast.error(errorMessage);
+      toast.error(t(errorKey));
       setProgress(100);
-      setProgressMessage('处理失败');
+      setProgressUpdate('failed');
     } finally {
       setAdding(false);
     }
   };
 
+  const [destinationPrefix, destinationSuffix] = t('knowledge.import.destination').split('{0}');
+  const progressMessage = progressUpdate === 'failed'
+    ? t('knowledge.import.processingFailed')
+    : progressUpdate ? formatKnowledgeIndexProgress(locale, progressUpdate) : t('knowledge.index.starting');
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent closeLabel={t('common.close')} className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>添加到知识库</DialogTitle>
+          <DialogTitle>{t('knowledge.import.addToKnowledgeBase')}</DialogTitle>
         </DialogHeader>
 
         <div className="py-4">
           {!adding ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 break-words">
-              将文档 <span className="font-medium text-slate-700 dark:text-slate-300" title={documentTitle}>"{truncateDisplayName(documentTitle, 56)}"</span> 添加到以下知识库:
+              {destinationPrefix}
+              <span className="font-medium text-slate-700 dark:text-slate-300" title={documentTitle}>{truncateDisplayName(documentTitle, 56)}</span>
+              {destinationSuffix}
             </p>
           ) : (
             <div className="mb-4">
@@ -148,7 +159,7 @@ export function AddToKnowledgeBase({
                   {progress < 20 && <FileText className="h-4 w-4 text-blue-500" />}
                   {progress >= 20 && progress < 90 && <Brain className="h-4 w-4 text-orange-500 animate-pulse" />}
                   {progress >= 90 && <Database className="h-4 w-4 text-green-500" />}
-                  <span className="text-sm font-medium">正在索引文档...</span>
+                  <span className="text-sm font-medium">{t('knowledge.import.indexingDocument')}</span>
                 </div>
                 <span className="text-xs text-slate-500">{Math.round(progress)}%</span>
               </div>
@@ -164,14 +175,14 @@ export function AddToKnowledgeBase({
           ) : !adding && error ? (
             <div className="flex items-center gap-2 text-destructive bg-destructive/10 p-4 rounded-md">
               <AlertCircle className="h-5 w-5" />
-              <p>{error}</p>
+              <p>{t(error)}</p>
             </div>
           ) : !adding && knowledgeBases.length === 0 ? (
             <div className="text-center py-8">
               <div className="w-12 h-12 mx-auto mb-4 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center">
                 <Database className="w-6 h-6 text-slate-400 dark:text-slate-500" strokeWidth={1.5} />
               </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">暂无知识库，请先创建知识库</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{t('knowledge.import.noDestinations')}</p>
               <Button 
                 onClick={() => {
                   onOpenChange(false);
@@ -180,7 +191,7 @@ export function AddToKnowledgeBase({
                 }}
                 className="bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-md transition-all duration-200 px-4 py-2 rounded-lg font-medium"
               >
-                创建知识库
+                {t('knowledge.create.title')}
               </Button>
             </div>
           ) : !adding ? (
@@ -220,7 +231,7 @@ export function AddToKnowledgeBase({
             onClick={() => onOpenChange(false)}
             disabled={adding}
           >
-            {adding ? '处理中...' : '取消'}
+            {t(adding ? 'knowledge.index.processing' : 'common.cancel')}
           </Button>
           <Button 
             variant="dialogPrimary"
@@ -228,7 +239,7 @@ export function AddToKnowledgeBase({
             disabled={!selectedKnowledgeBaseId || adding || loading}
           >
             {adding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {adding ? '索引中...' : '确认添加'}
+            {t(adding ? 'knowledge.import.indexing' : 'knowledge.import.confirmAdd')}
           </Button>
         </DialogFooter>
       </DialogContent>

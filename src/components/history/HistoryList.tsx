@@ -3,6 +3,13 @@
 import HistoryCard from './HistoryCard';
 import { useEffect, useMemo, useCallback, useState } from 'react';
 import { useHistoryStore } from '@/store/historyStore';
+import { useLocaleStore } from '@/store/localeStore';
+import { translate } from '@/i18n';
+import { useTranslation } from '@/i18n/useTranslation';
+import type { Locale, TranslationKey } from '@/i18n/types';
+import type { HistoryGroup } from '@/types/history';
+import { format, parseISO } from 'date-fns';
+import { enUS } from 'date-fns/locale';
 import { Loader2, Search, Archive } from 'lucide-react';
 // no-op
 import { useRouter } from 'next/navigation';
@@ -19,7 +26,25 @@ import {
 import { downloadService } from '@/lib/utils/downloadService';
 import { toast } from '@/components/ui/sonner';
 
+const historyGroupLabelKeys: Partial<Record<string, TranslationKey>> = {
+  today: 'chatSidebar.today',
+  yesterday: 'chatSidebar.yesterday',
+  thisWeek: 'history.thisWeek',
+  thisMonth: 'history.thisMonth',
+};
+
+function formatHistoryGroupLabel(group: HistoryGroup, locale: Locale) {
+  const key = historyGroupLabelKeys[group.date];
+  if (key) return translate(locale, key);
+  if (locale === 'en' && /^\d{4}-(0[1-9]|1[0-2])$/.test(group.date)) {
+    return format(parseISO(group.date), 'LLLL yyyy', { locale: enUS });
+  }
+  return group.displayName;
+}
+
 export default function HistoryList() {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = useTranslation();
   const {
     groupedHistory,
     isLoading,
@@ -105,16 +130,16 @@ export default function HistoryList() {
         const success = await downloadService.downloadMarkdown(fileName, content);
         
         if (success) {
-          toast.success('对话已成功导出');
+          toast.success(t('conversation.exportSucceeded'));
         }
       } else {
-        toast.error('导出失败，请稍后重试');
+        toast.error(t('conversation.exportFailed'));
       }
     } catch (error) {
       console.error('导出失败:', error);
-      toast.error('导出失败，请稍后重试');
+      toast.error(t('conversation.exportFailed'));
     }
-  }, [exportItem]);
+  }, [exportItem, t]);
 
   // 计算总对话数
   const totalConversations = useMemo(() => {
@@ -139,7 +164,7 @@ export default function HistoryList() {
       <div className="flex-1 flex items-center justify-center bg-slate-50/50">
         <div className="flex items-center gap-3 text-slate-500">
           <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">加载历史记录中...</span>
+          <span className="text-sm">{t('history.loading')}</span>
         </div>
       </div>
     );
@@ -153,17 +178,17 @@ export default function HistoryList() {
           {searchQuery ? (
             <>
               <Search className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-              <div className="text-lg font-medium mb-2">未找到匹配的对话</div>
+              <div className="text-lg font-medium mb-2">{t('history.noSearchResults')}</div>
               <div className="text-sm text-slate-400">
-                尝试使用不同的关键词或调整筛选条件
+                {t('history.noSearchResultsHint')}
               </div>
             </>
           ) : (
             <>
               <Archive className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-              <div className="text-lg font-medium mb-2">暂无历史记录</div>
+              <div className="text-lg font-medium mb-2">{t('history.empty')}</div>
               <div className="text-sm text-slate-400">
-                开始一个新对话来创建历史记录
+                {t('history.emptyHint')}
               </div>
             </>
           )}
@@ -179,15 +204,15 @@ export default function HistoryList() {
         <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/70 border-b border-slate-100 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-4">
             <span className="font-medium">
-              共 {totalConversations} 个对话
+              {t('history.conversationCount').replace('{count}', String(totalConversations))}
             </span>
             <span className="text-slate-400">
-              {groupedHistory.length} 个分组
+              {t('history.groupCount').replace('{count}', String(groupedHistory.length))}
             </span>
           </div>
           {selectedItems.length > 0 && (
             <span className="text-slate-700 font-medium bg-slate-200/50 px-2 py-1 rounded-md dark:text-slate-200 dark:bg-white/10">
-              已选择 {selectedItems.length} 个
+              {t('history.selectedCount').replace('{count}', String(selectedItems.length))}
             </span>
           )}
         </div>
@@ -199,11 +224,11 @@ export default function HistoryList() {
               {/* 分组标题 - 更清晰的设计 */}
               <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/60 history-sticky-header border-b border-slate-100 dark:border-slate-700">
                 <div className="text-sm font-semibold text-slate-700">
-                  {group.displayName}
+                  {formatHistoryGroupLabel(group, locale)}
                 </div>
                 <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700/70"></div>
                 <div className="text-xs text-slate-500 dark:text-slate-300 bg-white dark:bg-slate-800/60 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
-                  {group.items.length} 个
+                  {t('history.conversationCount').replace('{count}', String(group.items.length))}
                 </div>
               </div>
               
@@ -238,7 +263,7 @@ export default function HistoryList() {
           <button
             onClick={() => setDeleteDialogOpen(false)}
             className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
-            aria-label="关闭"
+            aria-label={t('common.close')}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -246,15 +271,15 @@ export default function HistoryList() {
           </button>
           
           <AlertDialogHeader className="pr-8">
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogTitle>{t('conversation.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除会话 "{itemToDelete?.title}" 吗？此操作无法撤销。
+              {t('conversation.deleteDescription').replace('{title}', () => itemToDelete?.title ?? '')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelDelete}>取消</AlertDialogCancel>
+            <AlertDialogCancel onClick={handleCancelDelete}>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete}>
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

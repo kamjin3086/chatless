@@ -1,12 +1,13 @@
 import { TrayIcon } from '@tauri-apps/api/tray';
-import { Menu } from '@tauri-apps/api/menu';
-import { PredefinedMenuItem } from '@tauri-apps/api/menu';
+import { Menu, MenuItem, PredefinedMenuItem } from '@tauri-apps/api/menu';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { resolveResource } from '@tauri-apps/api/path';
 import { Image } from '@tauri-apps/api/image';
 import { defaultWindowIcon } from '@tauri-apps/api/app';
 import { platform } from '@tauri-apps/plugin-os';
 import { translate } from '@/i18n';
+import type { Locale } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { restoreWindow, trayClickAction } from './trayClick';
 import {
   TRAY_MENU_ORDER,
@@ -15,42 +16,60 @@ import {
   trayItemRestoresWindow,
   type TrayMenuItemId,
 } from './trayMenu';
-import { useLocaleStore } from '@/store/localeStore';
+
+function waitForTrayLocale(): Promise<Locale> {
+  const { locale, initialized } = useLocaleStore.getState();
+  if (initialized) return Promise.resolve(locale);
+
+  return new Promise((resolve) => {
+    const unsubscribe = useLocaleStore.subscribe((state) => {
+      if (!state.initialized) return;
+      unsubscribe();
+      resolve(state.locale);
+    });
+  });
+}
 
 // 系统托盘管理类
 class SystemTrayManager {
   private tray: TrayIcon | null = null;
-  private isInitialized = false;
+  private initializing: Promise<void> | null = null;
 
   isReady(): boolean {
-    return this.isInitialized && this.tray !== null;
+    return this.tray !== null;
   }
 
-  // 初始化系统托盘
-  async initialize() {
-    if (this.isInitialized) return;
+  initialize(): Promise<void> {
+    if (this.initializing) return this.initializing;
+    if (this.tray) return Promise.resolve();
 
+    this.initializing = this.createTray().finally(() => {
+      this.initializing = null;
+    });
+    return this.initializing;
+  }
+
+  private async createTray() {
     try {
-      const locale = useLocaleStore.getState().locale;
-      const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+      const locale = await waitForTrayLocale();
 
-      // The menu is data (`lib/trayMenu.ts`): order, separators and which items bring the
-      // window back before running. A tray click on Linux only opens this menu, so the first
-      // item exists to get the window back in one more click.
-      const items: Array<Record<string, unknown> | PredefinedMenuItem> = [];
+      // Linux left click opens this menu, so Show Window stays first.
+      const items: Array<MenuItem | PredefinedMenuItem> = [];
+      const menuItems = new Map<TrayMenuItemId, MenuItem>();
       for (const id of TRAY_MENU_ORDER) {
-        items.push({
+        const item = await MenuItem.new({
           id,
-          text: t(trayItemLabelKey(id)),
+          text: translate(locale, trayItemLabelKey(id)),
           action: () => void this.runMenuItem(id),
         });
+        menuItems.set(id, item);
+        items.push(item);
         if (TRAY_SEPARATOR_AFTER.includes(id)) {
           items.push(await PredefinedMenuItem.new({ item: 'Separator' }));
         }
       }
-      const menu = await Menu.new({ items: items as any });
+      const menu = await Menu.new({ items });
 
-  
       let iconPath: string | undefined = undefined;
       try {
         // macos使用打包资源中额外的托盘图标，windows使用默认图标
@@ -83,7 +102,28 @@ class SystemTrayManager {
         }
       });
 
-      this.isInitialized = true;
+      // Relabel the attached menu in place and serialize writes so a slow native
+      // update cannot overwrite a newer locale selection.
+      let menuUpdate = Promise.resolve();
+      const updateMenuLocale = (nextLocale: Locale) => {
+        menuUpdate = menuUpdate
+          .then(async () => {
+            for (const [id, item] of menuItems) {
+              await item.setText(translate(nextLocale, trayItemLabelKey(id)));
+            }
+          })
+          .catch((error) =>
+            console.error('Could not update tray menu labels:', error),
+          );
+      };
+      useLocaleStore.subscribe((state, previous) => {
+        if (state.locale !== previous.locale) updateMenuLocale(state.locale);
+      });
+      // A selection may have landed while native tray creation was in flight.
+      const currentLocale = useLocaleStore.getState().locale;
+      if (currentLocale !== locale) updateMenuLocale(currentLocale);
+      await menuUpdate;
+
       console.log('系统托盘初始化成功');
     } catch (error) {
       console.error('系统托盘初始化失败:', error);
@@ -174,7 +214,7 @@ class SystemTrayManager {
 
   // 设置托盘图标
   async setIcon(iconPath: string) {
-    if (!this.tray || !this.isInitialized) return;
+    if (!this.tray) return;
 
     try {
       const path = iconPath.includes('/') || iconPath.includes('\\')
@@ -189,7 +229,7 @@ class SystemTrayManager {
 
   // 设置托盘工具提示
   async setTooltip(tooltip: string) {
-    if (!this.tray || !this.isInitialized) return;
+    if (!this.tray) return;
 
     try {
       await this.tray.setTooltip(tooltip);
@@ -199,8 +239,7 @@ class SystemTrayManager {
   }
 }
 
-// 创建全局实例
+// Single-flight initialization is scoped to this WebView; a full reload may leave the native tray alive.
 const trayManager = new SystemTrayManager();
 
-// 导出实例和类
-export { trayManager, SystemTrayManager }; 
+export { trayManager, SystemTrayManager };

@@ -1,13 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-
-const tabs = [
-  { id: 'my', name: '我的知识库', disabled: false },
-  { id: 'shared', name: '共享知识库', disabled: true },
-  { id: 'templates', name: '模板', disabled: true },
-  { id: 'query', name: '智能问答', disabled: true },
-];
+import { useTranslation } from "@/i18n/useTranslation";
 
 interface KnowledgeTabsProps {
   activeTab: string;
@@ -15,6 +9,14 @@ interface KnowledgeTabsProps {
 }
 
 export function KnowledgeTabs({ activeTab, onTabChange }: KnowledgeTabsProps) {
+  const t = useTranslation();
+  const tabs = [
+    { id: 'my', name: t('knowledge.tab.myLibrary'), disabled: false },
+    { id: 'shared', name: t('knowledge.tab.shared'), disabled: true },
+    { id: 'templates', name: t('knowledge.tab.templates'), disabled: true },
+    { id: 'query', name: t('knowledge.tab.query'), disabled: true },
+  ];
+
   return (
     <div className="flex border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 glass-surface">
       {tabs.map((tab) => (

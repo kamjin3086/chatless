@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Star, Clock, Calendar, CalendarDays, CalendarRange } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useHistoryStore } from '@/store/historyStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 type FilterType = 'all' | 'today' | 'week' | 'month' | 'favorite';
 
@@ -13,6 +14,7 @@ interface HistoryQuickFilterProps {
 }
 
 export default function HistoryQuickFilter({ onFilterChange = () => {} }: HistoryQuickFilterProps) {
+  const t = useTranslation();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const { setFilter, currentFilter } = useHistoryStore();
 
@@ -53,14 +55,14 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
       <div className="flex items-center gap-4 overflow-x-auto no-scrollbar">
         {/* 时间筛选组 */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 whitespace-nowrap mr-1">时间范围:</span>
+          <span className="text-xs font-medium text-slate-500 whitespace-nowrap mr-1">{t('history.dateRange')}</span>
           <Button 
             onClick={() => handleFilterClick('all')} 
             className={getButtonClasses('all')} 
             variant="ghost"
           >
             <Clock className="w-3.5 h-3.5" />
-            全部时间
+            {t('history.allTime')}
           </Button>
           <Button 
             onClick={() => handleFilterClick('today')} 
@@ -68,7 +70,7 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
             variant="ghost"
           >
             <Calendar className="w-3.5 h-3.5" />
-            今天
+            {t('chatSidebar.today')}
           </Button>
           <Button 
             onClick={() => handleFilterClick('week')} 
@@ -76,7 +78,7 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
             variant="ghost"
           >
             <CalendarDays className="w-3.5 h-3.5" />
-            本周
+            {t('history.thisWeek')}
           </Button>
           <Button 
             onClick={() => handleFilterClick('month')} 
@@ -84,7 +86,7 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
             variant="ghost"
           >
             <CalendarRange className="w-3.5 h-3.5" />
-            本月
+            {t('history.thisMonth')}
           </Button>
         </div>
         
@@ -93,14 +95,14 @@ export default function HistoryQuickFilter({ onFilterChange = () => {} }: Histor
         
         {/* 状态筛选组 */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 whitespace-nowrap mr-1">特殊标记:</span>
+          <span className="text-xs font-medium text-slate-500 whitespace-nowrap mr-1">{t('history.specialFilters')}</span>
           <Button 
             onClick={() => handleFilterClick('favorite')} 
             className={getButtonClasses('favorite')} 
             variant="ghost"
           >
             <Star className={cn("h-3.5 w-3.5", activeFilter === 'favorite' ? "text-slate-700 dark:text-slate-200" : "text-slate-500 dark:text-slate-400")}/>
-            收藏
+            {t('chatSidebar.favorites')}
           </Button>
         </div>
       </div>

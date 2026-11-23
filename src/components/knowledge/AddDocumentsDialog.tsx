@@ -5,9 +5,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Loader2, FileText, Database, AlertCircle, MessageSquare } from 'lucide-react';
 import { listKnowledgeDocumentChoices, type KnowledgeDocumentChoice } from '@/lib/knowledgeDocumentChoices';
-import { KnowledgeService, type KnowledgeBase } from '@/lib/knowledgeService';
+import { KnowledgeService, type KnowledgeBase, type KnowledgeIndexProgress } from '@/lib/knowledgeService';
 import { toast } from '@/components/ui/sonner';
 import { truncateDisplayName } from '@/lib/filesystem/safeFileName';
+import { getHtmlLang, translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
+import { formatKnowledgeIndexProgress } from './formatKnowledgeIndexProgress';
 
 interface AddDocumentsDialogProps {
   open: boolean;
@@ -19,13 +23,18 @@ interface AddDocumentsDialogProps {
 type DisplayFile = KnowledgeDocumentChoice;
 
 export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSuccess }: AddDocumentsDialogProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
+  const language = getHtmlLang(locale);
   const [files, setFiles] = useState<DisplayFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState(0);
   const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [progressMessage, setProgressMessage] = useState<string>('');
+  const [error, setError] = useState<TranslationKey | null>(null);
+  const [progressUpdate, setProgressUpdate] = useState<
+    KnowledgeIndexProgress | { fileName: string } | 'complete' | null
+  >(null);
 
   // 加载所有可用文档
   useEffect(() => {
@@ -40,7 +49,7 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
         
       } catch (error) {
         console.error('加载文件失败:', error);
-        setError('加载文件失败');
+        setError('knowledge.import.loadFilesFailed');
       } finally {
         setLoading(false);
       }
@@ -59,7 +68,7 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
 
   const handleConfirm = async () => {
     if (selected.size === 0) {
-      toast.error('请选择文件');
+      toast.error(t('knowledge.import.selectFiles'));
       return;
     }
 
@@ -73,33 +82,33 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
         
         if (!file) continue;
         
-        setProgressMessage(`正在处理: ${file.name}`);
+        setProgressUpdate({ fileName: file.name });
         
         // Both upload and chat choices carry durable document IDs and bytes.
         await KnowledgeService.addDocumentToKnowledgeBase(selectedId, knowledgeBase.id, {
-          onProgress: (p, msg) => {
+          onProgress: (p, update) => {
             const base = (i / selectedIds.length) * 100;
             const segment = p / selectedIds.length;
             setProgress(Math.min(99, Math.round(base + segment)));
-            setProgressMessage(msg);
+            setProgressUpdate(update);
           }
         });
       }
 
       setProgress(100);
-      setProgressMessage('完成');
-      toast.success('文档已成功添加并索引');
+      setProgressUpdate('complete');
+      toast.success(t('knowledge.import.addedDocuments'));
       
       if (onSuccess) onSuccess();
       onOpenChange(false);
       
     } catch (error) {
       console.error('添加过程出错:', error);
-      toast.error('添加过程出错');
+      toast.error(t('knowledge.import.addFailed'));
     } finally {
       setAdding(false);
       setProgress(0);
-      setProgressMessage('');
+      setProgressUpdate(null);
       setSelected(new Set());
     }
   };
@@ -119,7 +128,7 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
             {truncateDisplayName(file.name)}
           </span>
           <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md dark:bg-blue-900/30 dark:text-blue-400">
-            💬 聊天文件
+            💬 {t('knowledge.import.chatFile')}
           </span>
         </div>
       );
@@ -132,7 +141,7 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
         </span>
         {file.isAlreadyInKB && (
           <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-md dark:bg-green-900/30 dark:text-green-400">
-            已入库
+            {t('knowledge.import.alreadyAdded')}
           </span>
         )}
       </div>
@@ -141,9 +150,9 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[80vh] overflow-hidden rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-xl dark:bg-slate-900">
+      <DialogContent closeLabel={t('common.close')} className="max-w-xl max-h-[80vh] overflow-hidden rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-xl dark:bg-slate-900">
         <DialogHeader className="border-b border-slate-100/80 dark:border-slate-800/60 pb-3 bg-gradient-to-b from-slate-50/50 to-transparent dark:from-slate-900/30">
-          <DialogTitle className="text-lg font-semibold text-slate-900 dark:text-slate-100">添加文档到知识库</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('knowledge.import.addDocumentsTitle')}</DialogTitle>
         </DialogHeader>
 
         <div className="py-4">
@@ -154,13 +163,19 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
           ) : error ? (
             <div className="flex items-center gap-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span className="text-sm">{error}</span>
+              <span className="text-sm">{t(error)}</span>
             </div>
           ) : adding ? (
             <div className="space-y-4 py-4">
               <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <Database className="h-4 w-4 text-blue-500" />
-                {progressMessage || '正在添加文档...'}
+                {progressUpdate === 'complete'
+                  ? t('knowledge.import.complete')
+                  : !progressUpdate
+                    ? t('knowledge.import.addingDocuments')
+                    : 'fileName' in progressUpdate
+                      ? t('knowledge.import.processingFile').replace('{0}', () => progressUpdate.fileName)
+                      : formatKnowledgeIndexProgress(locale, progressUpdate)}
               </div>
               <Progress value={progress} className="h-2" />
             </div>
@@ -184,7 +199,7 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
                 <div className="text-center py-12">
                   <FileText className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    暂无可添加的文档
+                    {t('knowledge.import.noFiles')}
                   </p>
                 </div>
               )}
@@ -193,9 +208,11 @@ export function AddDocumentsDialog({ open, onOpenChange, knowledgeBase, onSucces
         </div>
 
         <DialogFooter className="border-t border-slate-100/80 dark:border-slate-800/60 pt-4 bg-gradient-to-t from-slate-50/30 to-transparent dark:from-slate-900/20">
-          <Button variant="dialogSecondary" onClick={() => onOpenChange(false)} disabled={loading} className="rounded-lg">取消</Button>
+          <Button variant="dialogSecondary" onClick={() => onOpenChange(false)} disabled={loading} className="rounded-lg">{t('common.cancel')}</Button>
           <Button variant="dialogPrimary" onClick={handleConfirm} disabled={adding || selected.size === 0} className="rounded-lg shadow-sm">
-            确认添加 {selected.size > 0 && `(${selected.size})`}
+            {selected.size > 0
+              ? t('knowledge.import.confirmAddCount').replace('{0}', selected.size.toLocaleString(language))
+              : t('knowledge.import.confirmAdd')}
           </Button>
         </DialogFooter>
       </DialogContent>

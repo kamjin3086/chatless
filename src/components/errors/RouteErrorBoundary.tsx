@@ -2,7 +2,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useLocaleStore } from '@/store/localeStore';
+import { useTranslation } from '@/i18n/useTranslation';
 import { reportClientFailure } from '@/lib/dev/reportClientFailure';
 import { RouteFailureView } from './RouteFailureView';
 import {
@@ -108,7 +108,7 @@ function RouteFailureContainer({
   componentStack: string | null;
   onRetry: () => void;
 }) {
-  const t = useLocaleStore((state) => state.t);
+  const t = useTranslation();
   const router = useRouter();
   const pathname = usePathname() ?? '';
   const details = describeRouteFailure(error, pathname, componentStack);

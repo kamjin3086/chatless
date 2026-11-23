@@ -1,6 +1,9 @@
 "use client";
 
 import React from 'react';
+import { translate } from '@/i18n';
+import type { TranslationKey } from '@/i18n/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { cn } from '@/lib/utils';
 import { useSkillAuthStore } from '@/store/skillAuthStore';
 import { SkillActionCard } from './SkillActionCard';
@@ -25,6 +28,8 @@ export function SkillApprovalPanel({
   floating = false,
   maxItems = 5,
 }: SkillApprovalPanelProps) {
+  const locale = useLocaleStore((state) => state.locale);
+  const t = (key: TranslationKey) => translate(locale, key);
   const { 
     getAllPendingActions, 
     clearAllPendingActions,
@@ -40,7 +45,7 @@ export function SkillApprovalPanel({
   }
 
   const displayActions = pendingActions.slice(0, maxItems);
-  const hasMore = pendingActions.length > maxItems;
+  const moreActions = pendingActions.length - maxItems;
 
   // 批量操作
   const handleApproveAll = () => {
@@ -67,7 +72,7 @@ export function SkillApprovalPanel({
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
             <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">
-              待审批操作
+              {t('skillApproval.title')}
             </h3>
             <span className="px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200">
               {pendingActions.length}
@@ -80,25 +85,25 @@ export function SkillApprovalPanel({
               <button
                 onClick={handleApproveAll}
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 transition-colors"
-                title="全部批准"
+                title={t('skillApproval.approveAll')}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                全部批准
+                {t('skillApproval.approveAll')}
               </button>
               <button
                 onClick={handleRejectAll}
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 transition-colors"
-                title="全部拒绝"
+                title={t('skillApproval.rejectAll')}
               >
                 <XCircle className="w-3.5 h-3.5" />
-                全部拒绝
+                {t('skillApproval.rejectAll')}
               </button>
             </div>
           )}
         </div>
         
         <p className="mt-1 text-[12px] text-yellow-700 dark:text-yellow-400">
-          以下操作需要您的确认才能执行
+          {t('skillApproval.description')}
         </p>
       </div>
 
@@ -119,10 +124,12 @@ export function SkillApprovalPanel({
         ))}
 
         {/* 更多提示 */}
-        {hasMore && (
+        {moreActions > 0 && (
           <div className="flex items-center justify-center gap-2 py-2 text-[12px] text-yellow-600 dark:text-yellow-400">
             <Clock className="w-4 h-4" />
-            <span>还有 {pendingActions.length - maxItems} 个待审批操作</span>
+            <span>
+              {t(moreActions === 1 ? 'skillApproval.moreActions.one' : 'skillApproval.moreActions.other').replace('{count}', String(moreActions))}
+            </span>
           </div>
         )}
       </div>
@@ -130,7 +137,7 @@ export function SkillApprovalPanel({
       {/* 底部提示 */}
       <div className="px-4 py-2 border-t border-yellow-200/60 dark:border-yellow-800/40 bg-yellow-100/30 dark:bg-yellow-900/10">
         <p className="text-[11px] text-yellow-600 dark:text-yellow-400 text-center">
-          提示：您可以点击卡片展开查看详细信息，或编辑命令后再执行
+          {t('skillApproval.tip')}
         </p>
       </div>
     </div>

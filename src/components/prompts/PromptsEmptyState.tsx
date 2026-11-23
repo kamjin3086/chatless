@@ -6,8 +6,10 @@ import { Bookmark, Search } from 'lucide-react';
 import { PromptEditorDialog } from './PromptEditorDialog';
 import { usePromptStore } from '@/store/promptStore';
 import { PromptImportExport } from './PromptImportExport';
+import { useTranslation } from '@/i18n/useTranslation';
 
 export function PromptsEmptyState() {
+  const t = useTranslation();
   const [open, setOpen] = useState(false);
   const createPrompt = usePromptStore((s) => s.createPrompt);
   const ui = usePromptStore((s) => s.ui);
@@ -21,13 +23,13 @@ export function PromptsEmptyState() {
             : <Bookmark className="w-6 h-6 text-slate-400 dark:text-slate-500" strokeWidth={1.5} />}
         </div>
         <div className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
-          {ui?.searchQuery ? '未找到匹配的提示词' : '暂无提示词'}
+          {t(ui?.searchQuery ? 'prompts.noMatches' : 'prompts.empty')}
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400">
-          {ui?.searchQuery ? '尝试调整关键词或筛选条件' : '创建或导入提示词，快速在聊天中复用'}
+          {t(ui?.searchQuery ? 'prompts.adjustFilters' : 'prompts.emptyHint')}
         </div>
         <div className="flex items-center justify-center gap-2 mt-4">
-          <Button size="sm" className="h-8 bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={() => setOpen(true)}>新建提示词</Button>
+          <Button size="sm" className="h-8 bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={() => setOpen(true)}>{t('prompts.editor.createTitle')}</Button>
           <PromptImportExport />
         </div>
       </div>

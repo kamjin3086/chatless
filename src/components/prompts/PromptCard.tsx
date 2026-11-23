@@ -3,6 +3,9 @@
 import { Star, MoreVertical, Trash2, Edit } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { cn } from "@/lib/utils";
+import { getHtmlLang } from '@/i18n';
+import { useTranslation } from '@/i18n/useTranslation';
+import { useLocaleStore } from '@/store/localeStore';
 
 export interface Prompt {
   id: string;
@@ -41,6 +44,8 @@ export function PromptCard({
   onDelete = () => {},
   onClick,
 }: PromptCardProps) {
+  const t = useTranslation();
+  const language = getHtmlLang(useLocaleStore((state) => state.locale));
 
   const handleCardClick = (e: React.MouseEvent) => {
     // 如果点击的是按钮或菜单区域，不触发卡片点击
@@ -71,9 +76,10 @@ export function PromptCard({
             onClick={(e) => { e.stopPropagation(); onApply(id); }}
             className="h-6 px-2 text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 rounded-md transition-colors"
           >
-            应用
+            {t('prompts.apply')}
           </button>
-          <button 
+          <button
+            aria-label={t(isFavorite ? 'prompts.removeFavorite' : 'prompts.addFavorite')}
             className={cn(
               "w-6 h-6 rounded-md flex items-center justify-center transition-colors",
               isFavorite 
@@ -86,7 +92,8 @@ export function PromptCard({
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button 
+              <button
+                aria-label={t('prompts.moreActions')}
                 className="w-6 h-6 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 flex items-center justify-center transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -95,11 +102,11 @@ export function PromptCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-28 text-xs">
               <DropdownMenuItem onClick={() => onEdit(id)} className="text-xs">
-                <Edit className="h-3 w-3 mr-2" /> 编辑
+                <Edit className="h-3 w-3 mr-2" /> {t('prompts.edit')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-xs text-red-500" onClick={() => onDelete(id)}>
-                <Trash2 className="h-3 w-3 mr-2" /> 删除
+                <Trash2 className="h-3 w-3 mr-2" /> {t('common.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -138,11 +145,16 @@ export function PromptCard({
             </span>
           ))}
           {tags.length > 2 && (
-            <span className="text-[10px] text-slate-400">+{tags.length - 2}</span>
+            <span className="text-[10px] text-slate-400">+{(tags.length - 2).toLocaleString(language)}</span>
           )}
         </div>
         <div className="text-[10px] text-slate-400 whitespace-nowrap">
-          {usageCount > 0 && <span>{usageCount}次 · </span>}
+          {usageCount > 0 && (
+            <span>
+              {t(usageCount === 1 ? 'prompts.useCount.one' : 'prompts.useCount.other')
+                .replace('{0}', usageCount.toLocaleString(language))} ·{' '}
+            </span>
+          )}
           {lastUpdated}
         </div>
       </div>

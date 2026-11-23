@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import type { Skill } from '@/lib/skills/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { SkillStatusBadge } from './SkillStatusBadge';
 import { Sparkles, User, Tag, FolderOpen } from 'lucide-react';
 
@@ -18,6 +19,8 @@ export function SkillCard({
   selected = false,
   className,
 }: SkillCardProps) {
+  const { t } = useLocaleStore();
+
   return (
     <button
       type="button"
@@ -57,14 +60,14 @@ export function SkillCard({
           {/* 来源标识 */}
           <div className="flex items-center gap-1 mt-0.5">
             <FolderOpen className="h-2.5 w-2.5 text-slate-400" />
-            <span className="text-[10px] text-slate-400">本地</span>
+            <span className="text-[10px] text-slate-400">{t('skills.local')}</span>
           </div>
         </div>
       </div>
 
       {/* 描述 */}
       <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mb-2 flex-1">
-        {skill.description || '暂无描述'}
+        {skill.description || t('skills.noDescription')}
       </p>
 
       {/* 标签 */}

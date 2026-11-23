@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import type { Skill } from '@/lib/skills/types';
+import { useLocaleStore } from '@/store/localeStore';
 import { SkillCard } from './SkillCard';
 import { Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -22,12 +23,14 @@ export function SkillGrid({
   error = null,
   className,
 }: SkillGridProps) {
+  const { t } = useLocaleStore();
+
   // 加载状态
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-400">
         <Loader2 className="h-5 w-5 animate-spin mb-2" />
-        <p className="text-xs">正在加载技能...</p>
+        <p className="text-xs">{t('skills.loading')}</p>
       </div>
     );
   }
@@ -37,7 +40,7 @@ export function SkillGrid({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-red-500 dark:text-red-400">
         <AlertCircle className="h-5 w-5 mb-2" />
-        <p className="text-xs font-medium">加载失败</p>
+        <p className="text-xs font-medium">{t('skills.loadFailed')}</p>
         <p className="text-[11px] text-slate-400 mt-1">{error}</p>
       </div>
     );
@@ -50,9 +53,9 @@ export function SkillGrid({
         <div className="flex items-center justify-center w-10 h-10 rounded-lg glass-inset mb-3">
           <Sparkles className="h-5 w-5" />
         </div>
-        <p className="text-xs font-medium text-slate-500">暂无技能</p>
+        <p className="text-xs font-medium text-slate-500">{t('skills.empty')}</p>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          尝试刷新或添加本地技能
+          {t('skills.emptyHint')}
         </p>
       </div>
     );

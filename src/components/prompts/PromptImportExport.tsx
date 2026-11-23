@@ -6,8 +6,13 @@ import { usePromptStore } from '@/store/promptStore';
 import { Download, Upload } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { downloadService } from '@/lib/utils/downloadService';
+import { getHtmlLang } from '@/i18n';
+import { useTranslation } from '@/i18n/useTranslation';
+import { useLocaleStore } from '@/store/localeStore';
 
 export function PromptImportExport() {
+  const t = useTranslation();
+  const language = getHtmlLang(useLocaleStore((state) => state.locale));
   const inputRef = useRef<HTMLInputElement>(null);
   const importPrompts = usePromptStore((s) => s.importPrompts);
   const exportPrompts = usePromptStore((s) => s.exportPrompts);
@@ -23,8 +28,8 @@ export function PromptImportExport() {
     const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
     
     if (!allowedExtensions.includes(fileExtension)) {
-      toast.error('不支持的文件格式', { 
-        description: `请选择 ${allowedExtensions.join(' 或 ')} 格式的文件` 
+      toast.error(t('prompts.import.unsupportedFormat'), {
+        description: t('prompts.import.selectFormat'),
       });
       return;
     }
@@ -37,8 +42,8 @@ export function PromptImportExport() {
         try {
           data = JSON.parse(text);
         } catch (parseError) {
-          toast.error('JSON文件格式错误', { 
-            description: '请检查JSON文件格式是否正确' 
+          toast.error(t('prompts.import.invalidJson'), {
+            description: t('prompts.import.checkJson'),
           });
           return;
         }
@@ -46,8 +51,8 @@ export function PromptImportExport() {
         // 简单 CSV 支持：name,content,tags
         const lines = text.split(/\r?\n/).filter(Boolean);
         if (lines.length < 2) {
-          toast.error('CSV文件格式错误', { 
-            description: 'CSV文件至少需要包含标题行和一行数据' 
+          toast.error(t('prompts.import.invalidCsv'), {
+            description: t('prompts.import.csvRows'),
           });
           return;
         }
@@ -57,8 +62,8 @@ export function PromptImportExport() {
         const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
         
         if (missingHeaders.length > 0) {
-          toast.error('CSV文件缺少必要字段', { 
-            description: `CSV文件必须包含以下字段：${missingHeaders.join(', ')}` 
+          toast.error(t('prompts.import.missingCsvFields'), {
+            description: t('prompts.import.requiredCsvFields').replace('{0}', missingHeaders.join(', ')),
           });
           return;
         }
@@ -76,8 +81,8 @@ export function PromptImportExport() {
       const arr = Array.isArray(data?.prompts) ? data.prompts : Array.isArray(data) ? data : [];
       
       if (arr.length === 0) {
-        toast.error('文件内容为空', { 
-          description: '文件中没有找到有效的提示词数据' 
+        toast.error(t('prompts.import.emptyFile'), {
+          description: t('prompts.import.noValidPrompts'),
         });
         return;
       }
@@ -90,9 +95,12 @@ export function PromptImportExport() {
       });
       
       const result = importPrompts(arr);
-      toast.success(`导入完成：新增 ${result.created}，更新 ${result.updated}，跳过 ${result.skipped}`);
+      toast.success(t('prompts.import.complete')
+        .replace('{0}', result.created.toLocaleString(language))
+        .replace('{1}', result.updated.toLocaleString(language))
+        .replace('{2}', result.skipped.toLocaleString(language)));
     } catch (e: any) {
-      toast.error('导入失败', { description: e?.message || '文件解析失败' });
+      toast.error(t('prompts.import.failed'), { description: e?.message || t('prompts.import.parseFailed') });
     } finally {
       if (inputRef.current) inputRef.current.value = '';
     }
@@ -111,12 +119,12 @@ export function PromptImportExport() {
       const success = await downloadService.downloadJson(fileName, data);
       
       if (success) {
-        toast.success('提示词已导出');
+        toast.success(t('prompts.export.complete'));
       }
       // 用户取消时不显示任何提示，静默处理
     } catch (error) {
       console.error('导出提示词失败:', error);
-      toast.error('导出失败', { description: '导出过程中发生错误' });
+      toast.error(t('prompts.export.failed'), { description: t('prompts.export.error') });
     }
   };
 
@@ -138,13 +146,13 @@ export function PromptImportExport() {
               className="h-7 px-2 text-xs text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors flex items-center gap-1"
             >
               <Upload className="w-3.5 h-3.5" />
-              导入
+              {t('prompts.import')}
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs text-xs">
             <div className="space-y-1">
-              <div className="font-medium">导入提示词</div>
-              <div>支持 .json 和 .csv 格式</div>
+              <div className="font-medium">{t('prompts.import.title')}</div>
+              <div>{t('prompts.import.supportedFormats')}</div>
             </div>
           </TooltipContent>
         </Tooltip>
@@ -156,11 +164,11 @@ export function PromptImportExport() {
               className="h-7 px-2 text-xs text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/40 rounded-md bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors flex items-center gap-1"
             >
               <Download className="w-3.5 h-3.5" />
-              导出
+              {t('prompts.export')}
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs text-xs">
-            导出为 .json 格式文件
+            {t('prompts.export.format')}
           </TooltipContent>
         </Tooltip>
       </div>

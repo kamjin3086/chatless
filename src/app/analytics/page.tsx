@@ -11,6 +11,7 @@ import HistoryToolbar from '@/components/history/HistoryToolbar';
 import HistoryQuickFilter from '@/components/history/HistoryQuickFilter';
 import HistoryList from '@/components/history/HistoryList';
 import { useHistoryStore } from '@/store/historyStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 // 统计组件
 import { AnalyticsToolbar } from "@/components/analytics/AnalyticsToolbar";
@@ -20,13 +21,13 @@ import { HistoryStats as HistoryStatsType } from "@/types/history";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-const tabs = [
-  { id: 'history', label: '历史', icon: <History className="w-4 h-4" /> },
-  { id: 'analytics', label: '统计', icon: <BarChart3 className="w-4 h-4" /> },
-];
-
 export default function AnalyticsPage() {
   const searchParams = useSearchParams();
+  const t = useTranslation();
+  const tabs = [
+    { id: 'history', label: t('history.tab'), icon: <History className="w-4 h-4" /> },
+    { id: 'analytics', label: t('nav.analytics'), icon: <BarChart3 className="w-4 h-4" /> },
+  ];
   
   // Tab 状态
   const [activeTab, setActiveTab] = useState<string>(() => {
