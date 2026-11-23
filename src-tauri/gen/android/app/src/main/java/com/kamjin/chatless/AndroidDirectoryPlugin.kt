@@ -91,9 +91,9 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
 
     @Command
     fun selection(invoke: Invoke) = runInBackground(invoke) { conversationId ->
-        val selection = getSelection(conversationId) ?: return@runInBackground status("none")
+        val selection = attached(conversationId) ?: return@runInBackground status("none")
         val root = openRoot(selection) ?: return@runInBackground status("revoked")
-        if (getSelection(conversationId) != selection) return@runInBackground status("revoked")
+        if (attached(conversationId) != selection) return@runInBackground status("revoked")
         ready(AndroidDirectoryInventory(selection.nonce).item(root))
     }
 
@@ -101,18 +101,20 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     fun forget(invoke: Invoke) = runInBackground(invoke) { conversationId ->
         synchronized(selections) {
             val selection = getSelection(conversationId) ?: return@synchronized status("none")
-            if (!selections.edit().remove(conversationId).commit()) {
+            // Detaching leaves the folder authorized for the app: the user granted it once, on
+            // purpose, and the next conversation gets it back without the picker. The marker is
+            // what keeps this conversation's "not here" choice from being overwritten.
+            if (!selections.edit().remove(conversationId).putString(detachedKey(conversationId), "1").commit()) {
                 selections.edit().putString(conversationId, selection.encode()).commit()
                 return@synchronized status("unavailable")
             }
-            releaseIfUnused(selection.uri)
             status("none")
         }
     }
 
     @Command
     fun inventory(invoke: Invoke) = runInBackground(invoke) { conversationId ->
-        val selection = getSelection(conversationId) ?: return@runInBackground status("none")
+        val selection = attached(conversationId) ?: return@runInBackground status("none")
         val root = openRoot(selection) ?: return@runInBackground status("revoked")
         val result = AndroidDirectoryInventory(selection.nonce).scan(root) { parentId, accept ->
             // Every query is made through the selected tree URI using IDs it supplied.
@@ -157,19 +159,58 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         synchronized(selections) {
             val previous = getSelection(conversationId)
             resolver.takePersistableUriPermission(uri, READ)
-            if (!selections.edit().putString(conversationId, selection.encode()).commit()) {
-                val rollback = selections.edit()
-                if (previous == null) rollback.remove(conversationId) else rollback.putString(conversationId, previous.encode())
-                rollback.commit()
+            val write = selections.edit()
+                .putString(conversationId, selection.encode())
+                .putString(LAST, selection.encode())
+                .remove(detachedKey(conversationId))
+            if (!write.commit()) {
                 releaseIfUnused(uri)
                 return status("unavailable")
             }
             if (previous != null && previous.uri != uri) releaseIfUnused(previous.uri)
+            retain(uri)
         }
         return ready(AndroidDirectoryInventory(selection.nonce).item(root))
     }
 
     private fun getSelection(conversationId: String): Selection? = selections.getString(conversationId, null)?.let(::decode)
+
+    /**
+     * The folder this conversation reads, attaching the last authorized one when it has no
+     * folder of its own.
+     *
+     * The OS grant is app-wide and survives a new conversation, so re-opening the system
+     * picker for every chat was our own limitation, not Android's. A conversation that chose
+     * to detach stays detached; a grant the user revoked in system settings is not reattached.
+     */
+    private fun attached(conversationId: String): Selection? {
+        getSelection(conversationId)?.let { return it }
+        if (selections.getString(detachedKey(conversationId), null) != null) return null
+        val last = selections.getString(LAST, null)?.let(::decode) ?: return null
+        if (!hasReadGrant(last.uri)) return null
+        selections.edit().putString(conversationId, last.encode()).commit()
+        return last
+    }
+
+    /** The granted trees kept readable without a picker, newest first. */
+    private fun retain(uri: Uri) {
+        val kept = retained().filter { it != uri.toString() }.toMutableList()
+        kept.add(0, uri.toString())
+        val dropped = kept.drop(MAX_RETAINED)
+        selections.edit().putString(RETAINED, JSONArray(kept.take(MAX_RETAINED)).toString()).commit()
+        dropped.forEach { releaseIfUnused(Uri.parse(it)) }
+    }
+
+    private fun retained(): List<String> =
+        selections.getString(RETAINED, null)?.let { encoded ->
+            try {
+                (0 until JSONArray(encoded).length()).map { JSONArray(encoded).getString(it) }
+            } catch (_: Exception) {
+                null
+            }
+        } ?: emptyList()
+
+    private fun detachedKey(conversationId: String) = "$conversationId$DETACHED"
 
     private fun decode(encoded: String): Selection? = try {
         val grant = JSONObject(encoded)
@@ -183,6 +224,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     private fun releaseIfUnused(uri: Uri) {
         // Android persists grants for the whole app, not an individual conversation.
         if (selections.all.values.any { it is String && decode(it)?.uri == uri }) return
+        if (selections.getString(LAST, null)?.let(::decode)?.uri == uri) return
         try {
             resolver.releasePersistableUriPermission(uri, READ)
         } catch (_: SecurityException) {
@@ -235,6 +277,10 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
 
     companion object {
         private const val READ = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        private const val LAST = "__last__"
+        private const val DETACHED = "#detached"
+        private const val RETAINED = "__retained__"
+        private const val MAX_RETAINED = 8
         private val executor = Executors.newFixedThreadPool(2)
         private val mimePattern = Regex("[a-z0-9][a-z0-9.+_-]{0,62}/[a-z0-9][a-z0-9.+_-]{0,62}")
         private val columns = arrayOf(
