@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  listAndroidAuthorizedRoots,
+  revokeAndroidRoot,
+  setAndroidRootAgent,
+  type AndroidAuthorizedRoot,
+} from '@/lib/documents/android/androidAuthorizedRoots';
+import {
   forgetAndroidPhotoBatch,
   getAndroidPhotoBatchSelection,
   pickAndroidPhotoBatch,
@@ -32,10 +38,18 @@ export type AndroidDirectoryState = {
 export type AndroidAttachmentSelections = {
   photoBatch: AndroidPhotoBatchState;
   directory: AndroidDirectoryState;
+  /**
+   * Every folder the app holds a grant for, with what the Agent may read. The list comes from
+   * Android, so it also shows folders authorized from another conversation.
+   */
+  roots: AndroidAuthorizedRoot[];
+  rootsWorking: boolean;
   pickPhotoBatch: () => void;
   forgetPhotoBatch: () => void;
   pickDirectory: () => void;
   forgetDirectory: () => void;
+  toggleRootAgent: (uri: string, agentEnabled: boolean) => void;
+  revokeRoot: (uri: string) => void;
 };
 
 const NO_PHOTO_BATCH: AndroidPhotoBatchState = {
@@ -96,8 +110,11 @@ export function useAndroidAttachmentSelections(
     useState<AndroidPhotoBatchState>(NO_PHOTO_BATCH);
   const [directory, setDirectory] =
     useState<AndroidDirectoryState>(NO_DIRECTORY);
+  const [roots, setRoots] = useState<AndroidAuthorizedRoot[]>([]);
+  const [rootsWorking, setRootsWorking] = useState(false);
   const photoPending = useRef(false);
   const directoryPending = useRef(false);
+  const rootsPending = useRef(false);
   const directoryRevision = useRef(0);
 
   useEffect(() => {
@@ -120,6 +137,8 @@ export function useAndroidAttachmentSelections(
       if (directoryPending.current || document.visibilityState !== 'visible')
         return;
       const request = ++directoryRevision.current;
+      const folders = await listAndroidAuthorizedRoots().catch(() => []);
+      if (current) setRoots(folders);
       const next = await getAndroidDirectorySelection(conversationId!).catch(
         () => ({ status: 'unavailable' as const }),
       );
@@ -206,6 +225,54 @@ export function useAndroidAttachmentSelections(
     [conversationId],
   );
 
+  const toggleRootAgent = useCallback(
+    async (uri: string, agentEnabled: boolean) => {
+      if (rootsPending.current) return;
+      rootsPending.current = true;
+      setRootsWorking(true);
+      setRoots((previous) =>
+        previous.map((root) =>
+          root.uri === uri ? { ...root, agentEnabled } : root,
+        ),
+      );
+      try {
+        await setAndroidRootAgent(uri, agentEnabled);
+      } catch {
+        // The switch is the app's own state; on failure read it back rather than leave
+        // a toggle showing something Android never accepted.
+        setRoots(await listAndroidAuthorizedRoots().catch(() => []));
+      } finally {
+        rootsPending.current = false;
+        setRootsWorking(false);
+      }
+    },
+    [],
+  );
+
+  const revokeRoot = useCallback(
+    async (uri: string) => {
+      if (rootsPending.current) return;
+      rootsPending.current = true;
+      setRootsWorking(true);
+      try {
+        await revokeAndroidRoot(uri);
+        setRoots(await listAndroidAuthorizedRoots().catch(() => []));
+        if (conversationId) {
+          const next = await getAndroidDirectorySelection(conversationId).catch(
+            () => ({ status: 'none' as const }),
+          );
+          setDirectory(directoryState(next));
+        }
+      } catch {
+        setRoots(await listAndroidAuthorizedRoots().catch(() => []));
+      } finally {
+        rootsPending.current = false;
+        setRootsWorking(false);
+      }
+    },
+    [conversationId],
+  );
+
   const pickPhotoBatch = useCallback(
     () => void changePhotoBatch('pick'),
     [changePhotoBatch],
@@ -226,9 +293,13 @@ export function useAndroidAttachmentSelections(
   return {
     photoBatch,
     directory,
+    roots,
+    rootsWorking,
     pickPhotoBatch,
     forgetPhotoBatch,
     pickDirectory,
     forgetDirectory,
+    toggleRootAgent,
+    revokeRoot,
   };
 }

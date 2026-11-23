@@ -42,6 +42,10 @@ function selections(
     forgetPhotoBatch: noop,
     pickDirectory: noop,
     forgetDirectory: noop,
+    roots: [],
+    rootsWorking: false,
+    toggleRootAgent: noop,
+    revokeRoot: noop,
     ...overrides,
   };
 }
@@ -321,5 +325,49 @@ describe('composer chips on Android', () => {
       },
     });
     expect(html).toContain(zh('androidDirectory.revoked'));
+  });
+});
+
+/**
+ * The folders Android still holds a grant for, listed where the user already goes to attach
+ * something: the switch is what the Agent may read, the revoke is the system grant itself.
+ */
+describe('authorized folder list', () => {
+  const folders = [
+    {
+      uri: 'content://com.android.externalstorage.documents/tree/primary%3ADownload%2F整理测试',
+      name: '整理测试',
+      agentEnabled: true,
+    },
+    {
+      uri: 'content://com.android.externalstorage.documents/tree/primary%3ADocuments',
+      name: 'Documents',
+      agentEnabled: false,
+    },
+  ];
+
+  function sheet(withRoots: boolean) {
+    return render(AndroidAttachmentActions, {
+      selections: selections(withRoots ? { roots: folders } : {}),
+      onPickPhoto: noop,
+      onAction: (action: () => void) => action(),
+    });
+  }
+
+  it('names each folder with its switch and a revoke', () => {
+    const html = sheet(true);
+    expect(html).toContain(zh('androidDirectory.rootsTitle'));
+    expect(html).toContain('整理测试');
+    expect(html).toContain('Documents');
+    expect(html.match(/role="switch"/g)).toHaveLength(2);
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('aria-checked="false"');
+    expect(
+      html.match(new RegExp(zh('androidDirectory.revokeRoot'), 'g')),
+    ).toHaveLength(2);
+  });
+
+  it('says nothing before a folder has been authorized', () => {
+    expect(sheet(false)).not.toContain(zh('androidDirectory.rootsTitle'));
   });
 });

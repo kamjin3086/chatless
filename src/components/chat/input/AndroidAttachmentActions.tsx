@@ -13,6 +13,10 @@ import {
 const ROW = 'min-h-12 rounded-none';
 /** One line between rows: the sheet is a list of choices, not a run of text. */
 const ROW_GROUP = 'divide-y divide-slate-100 dark:divide-slate-700/50';
+/** 44px: the authorized-folder controls are real targets, not inline text. */
+const ROOT_BUTTON =
+  'min-h-11 shrink-0 rounded-lg border border-slate-200 px-2 text-xs text-slate-600 active:scale-[0.98] disabled:opacity-50 dark:border-slate-600 dark:text-slate-300';
+const ROOT_BUTTON_ON = 'border-amber-500/60 text-amber-600 dark:text-amber-400';
 
 /** The document picker, when this build has one, as the sheet's last picker row. */
 export interface AndroidDocumentRow {
@@ -139,6 +143,57 @@ export function AndroidAttachmentActions({
               onClick={() => onAction(selections.forgetDirectory)}
             />
           )}
+        </div>
+      )}
+      {selections.roots.length > 0 && (
+        <div
+          className={cn(
+            'mt-2 border-t border-slate-100 pb-1 pt-1 dark:border-slate-700/50',
+            ROW_GROUP,
+          )}
+        >
+          <h3 className="px-2 pt-2 text-xs font-medium text-muted-foreground">
+            {t('androidDirectory.rootsTitle')}
+          </h3>
+          {selections.roots.map((root) => (
+            <div
+              key={root.uri}
+              className="flex min-h-12 items-center gap-2 px-2 py-1"
+            >
+              <FolderOpen
+                aria-hidden="true"
+                className="size-4 shrink-0 text-amber-500"
+              />
+              <span className="min-w-0 flex-1 break-words text-sm">
+                {root.name}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={root.agentEnabled}
+                disabled={selections.rootsWorking}
+                onClick={() =>
+                  onAction(() =>
+                    selections.toggleRootAgent(root.uri, !root.agentEnabled),
+                  )
+                }
+                className={cn(ROOT_BUTTON, root.agentEnabled && ROOT_BUTTON_ON)}
+              >
+                {t('androidDirectory.agentUse')}
+              </button>
+              <button
+                type="button"
+                disabled={selections.rootsWorking}
+                onClick={() => onAction(() => selections.revokeRoot(root.uri))}
+                className={ROOT_BUTTON}
+              >
+                {t('androidDirectory.revokeRoot')}
+              </button>
+            </div>
+          ))}
+          <p className="px-2 py-2 text-[11px] leading-snug text-muted-foreground">
+            {t('androidDirectory.rootsHint')}
+          </p>
         </div>
       )}
     </>

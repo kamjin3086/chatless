@@ -50,6 +50,12 @@ pub fn run() {
       #[cfg(target_os = "android")]
       android_directory::android_directory_selection,
       #[cfg(target_os = "android")]
+      android_directory::android_directory_roots,
+      #[cfg(target_os = "android")]
+      android_directory::set_android_directory_root,
+      #[cfg(target_os = "android")]
+      android_directory::revoke_android_directory_root,
+      #[cfg(target_os = "android")]
       android_directory::forget_android_directory,
       #[cfg(target_os = "android")]
       android_directory::inventory_android_directory,

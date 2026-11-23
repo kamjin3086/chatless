@@ -70,6 +70,11 @@ const enUS: TranslationDict = {
     'Folder access was lost. Reselect it or forget it to continue.',
   'androidDirectory.unavailable':
     'Could not access or update the folder selection. Try again.',
+  'androidDirectory.rootsTitle': 'Authorized folders',
+  'androidDirectory.agentUse': 'Agent access',
+  'androidDirectory.revokeRoot': 'Revoke',
+  'androidDirectory.rootsHint':
+    'These folders stay authorized for the app. Turning Agent access off only stops the model reading them; it does not revoke the system grant.',
   'androidDocument.attach': 'Attach document',
   'androidDocument.formats': 'Text PDF or plain text (UTF-8)',
   'androidDocument.remove': 'Remove document',

@@ -18,6 +18,7 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLDecoder
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -29,6 +30,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     }
 
     private val resolver = activity.contentResolver
+    private val agent = activity.getSharedPreferences("android_directory_agent", Context.MODE_PRIVATE)
     private val selections = activity.getSharedPreferences("android_directory_selections", Context.MODE_PRIVATE)
     private var activePicker: Invoke? = null
     // Tauri's shared activity-result callback is also used by other attachment pickers.
@@ -95,6 +97,78 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         val root = openRoot(selection) ?: return@runInBackground status("revoked")
         if (attached(conversationId) != selection) return@runInBackground status("revoked")
         ready(AndroidDirectoryInventory(selection.nonce).item(root))
+    }
+
+    /**
+     * Every folder this app still holds a read grant for, and what the Agent may do with each.
+     *
+     * The system owns the grant list, so this reads it back instead of keeping a parallel one:
+     * a folder the user revoked in system settings simply stops appearing here. Names come from
+     * the documents provider, not from the URI, because a tree URI spells a path the user never
+     * typed and a provider may not resolve it at all.
+     */
+    @Command
+    fun roots(invoke: Invoke) {
+        executor.execute {
+            val list = JSONArray()
+            try {
+                val seen = HashSet<String>()
+                for (grant in resolver.persistedUriPermissions) {
+                    val uri = grant.uri
+                    if (!grant.isReadPermission || !DocumentsContract.isTreeUri(uri)) continue
+                    if (!seen.add(uri.toString())) continue
+                    list.put(JSObject().apply {
+                        put("uri", uri.toString())
+                        put("name", readRoot(uri)?.name ?: displayNameOf(uri))
+                        put("agentEnabled", agentEnabled(uri))
+                    })
+                }
+            } catch (_: Exception) {
+                // A provider that will not answer is left out: the list is only what could be read.
+            }
+            invoke.resolve(JSObject().apply { put("roots", list) })
+        }
+    }
+
+    /**
+     * Whether the Agent may read one authorized folder.
+     *
+     * Two different questions get two answers here: what Android lets this app touch, and what
+     * the user is willing to let a model read from any conversation. A folder switched off stays
+     * authorized on the system side and is simply absent from the tool.
+     */
+    @Command
+    fun setRootAgent(invoke: Invoke) {
+        executor.execute {
+            val args = invoke.getArgs()
+            val uri = Uri.parse(args.getString("uri") ?: "")
+            agent.edit().putBoolean(uri.toString(), args.optBoolean("agentEnabled", true)).commit()
+            invoke.resolve(status(if (hasReadGrant(uri)) "ready" else "revoked"))
+        }
+    }
+
+    @Command
+    fun revokeRoot(invoke: Invoke) {
+        executor.execute {
+            val uri = Uri.parse(invoke.getArgs().getString("uri") ?: "")
+            synchronized(selections) {
+                try {
+                    resolver.releasePersistableUriPermission(uri, READ)
+                } catch (_: SecurityException) {
+                    // Already gone; the point of the call is the state afterwards.
+                }
+                agent.edit().remove(uri.toString()).commit()
+                val kept = JSONArray()
+                retained().filter { it != uri.toString() }.forEach { kept.put(it) }
+                val edit = selections.edit().putString(RETAINED, kept.toString())
+                selections.all.forEach { (key, value) ->
+                    if (value is String && decode(value)?.uri == uri) edit.remove(key)
+                }
+                if (selections.getString(LAST, null)?.let(::decode)?.uri == uri) edit.remove(LAST)
+                edit.commit()
+            }
+            invoke.resolve(status("ready"))
+        }
     }
 
     @Command
@@ -184,13 +258,15 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
      * to detach stays detached; a grant the user revoked in system settings is not reattached.
      */
     private fun attached(conversationId: String): Selection? {
-        getSelection(conversationId)?.let { return it }
+        getSelection(conversationId)?.let { return if (agentEnabled(it.uri)) it else null }
         if (selections.getString(detachedKey(conversationId), null) != null) return null
         val last = selections.getString(LAST, null)?.let(::decode) ?: return null
-        if (!hasReadGrant(last.uri)) return null
+        if (!hasReadGrant(last.uri) || !agentEnabled(last.uri)) return null
         selections.edit().putString(conversationId, last.encode()).commit()
         return last
     }
+
+    private fun agentEnabled(uri: Uri) = agent.getBoolean(uri.toString(), true)
 
     /** The granted trees kept readable without a picker, newest first. */
     private fun retain(uri: Uri) {
@@ -211,6 +287,17 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         } ?: emptyList()
 
     private fun detachedKey(conversationId: String) = "$conversationId$DETACHED"
+
+    /** The folder name for a tree URI when the provider cannot or will not answer. */
+    private fun displayNameOf(uri: Uri): String {
+        val raw = uri.lastPathSegment ?: return uri.toString()
+        val decoded = try {
+            URLDecoder.decode(raw, "UTF-8")
+        } catch (_: Exception) {
+            raw
+        }
+        return decoded.substringAfterLast('/').ifEmpty { decoded }
+    }
 
     private fun decode(encoded: String): Selection? = try {
         val grant = JSONObject(encoded)

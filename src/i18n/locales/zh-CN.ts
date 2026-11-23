@@ -64,6 +64,11 @@ const zhCN: TranslationDict = {
   'androidDirectory.revoked':
     '已无法访问此文件夹。请重新选择文件夹，或取消授权。',
   'androidDirectory.unavailable': '无法访问或更新文件夹选择，请重试。',
+  'androidDirectory.rootsTitle': '已授权文件夹',
+  'androidDirectory.agentUse': 'Agent 使用',
+  'androidDirectory.revokeRoot': '撤销授权',
+  'androidDirectory.rootsHint':
+    '这些文件夹已授权给本应用。关闭「Agent 使用」只是不再让模型读取，不会撤销系统授权。',
   'androidDocument.attach': '附加文档',
   'androidDocument.formats': '含文字的 PDF 或纯文本（UTF-8）',
   'androidDocument.remove': '移除文档',

@@ -57,6 +57,38 @@ pub(super) enum DirectoryReceipt {
   Cancelled,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EmptyRequest {}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UriRequest<'a> {
+  uri: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RootAgentRequest<'a> {
+  uri: &'a str,
+  agent_enabled: bool,
+}
+
+/// One folder the app holds a read grant for.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct AuthorizedRoot {
+  uri: String,
+  name: String,
+  agent_enabled: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct AuthorizedRoots {
+  roots: Vec<AuthorizedRoot>,
+}
+
 pub(super) struct AndroidDirectory(PluginHandle<Wry>);
 
 pub(super) fn init() -> TauriPlugin<Wry> {
@@ -101,6 +133,51 @@ pub(super) async fn forget_android_directory(
   conversation_id: String,
 ) -> Result<DirectoryReceipt, String> {
   directory.run("forget", &conversation_id).await
+}
+
+#[tauri::command]
+pub(super) async fn android_directory_roots(
+  directory: State<'_, AndroidDirectory>,
+) -> Result<AuthorizedRoots, String> {
+  android_plugin::call(
+    &directory.0,
+    "android_directory",
+    "roots",
+    EmptyRequest {},
+  )
+  .await
+}
+
+#[tauri::command]
+pub(super) async fn set_android_directory_root(
+  directory: State<'_, AndroidDirectory>,
+  uri: String,
+  agent_enabled: bool,
+) -> Result<DirectoryReceipt, String> {
+  android_plugin::call(
+    &directory.0,
+    "android_directory",
+    "setRootAgent",
+    RootAgentRequest {
+      uri: &uri,
+      agent_enabled,
+    },
+  )
+  .await
+}
+
+#[tauri::command]
+pub(super) async fn revoke_android_directory_root(
+  directory: State<'_, AndroidDirectory>,
+  uri: String,
+) -> Result<DirectoryReceipt, String> {
+  android_plugin::call(
+    &directory.0,
+    "android_directory",
+    "revokeRoot",
+    UriRequest { uri: &uri },
+  )
+  .await
 }
 
 #[tauri::command]
