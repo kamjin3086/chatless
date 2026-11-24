@@ -8,6 +8,7 @@
 import type { Skill, ISkillLoader, RemoteSkillInfo } from './types';
 import { parseSkillMd, extractDependencies, extractTitleFromContent, extractDescriptionFromContent } from './SkillMdParser';
 import { inferOriginKind, sha256Hex } from './integrity';
+import { invocationPolicyOf } from './invocation';
 
 /**
  * Anthropic Skills 仓库信息
@@ -248,6 +249,9 @@ export class RemoteSkillLoader implements ISkillLoader {
 
     // 解析
     const parseResult = parseSkillMd(content);
+    for (const warning of parseResult.warnings || []) {
+      console.warn(`[RemoteSkillLoader] ${info.id}: ${warning}`);
+    }
     const frontmatter = parseResult.frontmatter;
     const dependencies = extractDependencies(frontmatter);
     const actionTypes = parseResult.actions.map((a) => a.type);
@@ -278,6 +282,7 @@ export class RemoteSkillLoader implements ISkillLoader {
       author: frontmatter?.author,
       tags: frontmatter?.tags,
       category: frontmatter?.category,
+      invocation: invocationPolicyOf(frontmatter),
     };
 
     // 更新缓存

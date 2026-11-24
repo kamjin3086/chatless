@@ -354,6 +354,8 @@ export const useChatActions = (
         conversationId?: string;
         images?: string[];
         planOnly?: boolean;
+        /** Skills the composer's `/` panel named; stripped from the text, passed as a fact. */
+        explicitSkillIds?: string[];
       },
     ) => {
       // 运行中输入是当前任务的补充，而不是启动竞争的第二个循环。
@@ -687,6 +689,7 @@ export const useChatActions = (
             },
             options: composed,
             planOnly: options?.planOnly,
+            explicitSkillIds: options?.explicitSkillIds,
             runtimeHooks: {
               onAgentStart: () => {
                 lastActivityTimeRef.current = Date.now();

@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import type { Skill } from '@/lib/skills/types';
 import { useLocaleStore } from '@/store/localeStore';
 import { SkillStatusBadge } from './SkillStatusBadge';
+import { invocationFacts } from './invocationFacts';
 import { Sparkles, User, Tag, FolderOpen } from 'lucide-react';
 
 interface SkillCardProps {
@@ -20,6 +21,7 @@ export function SkillCard({
   className,
 }: SkillCardProps) {
   const { t } = useLocaleStore();
+  const invocation = invocationFacts(skill.invocation);
 
   return (
     <button
@@ -61,6 +63,13 @@ export function SkillCard({
           <div className="flex items-center gap-1 mt-0.5">
             <FolderOpen className="h-2.5 w-2.5 text-slate-400" />
             <span className="text-[10px] text-slate-400">{t('skills.local')}</span>
+            {/* 触发方式（作者声明，只读）：它只说谁会开始，不说能做什么 */}
+            <span
+              className="text-[10px] text-slate-400 truncate"
+              title={t(invocation.hintKey)}
+            >
+              · {t(invocation.labelKey)}
+            </span>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@
 import type { Skill, ISkillLoader, SkillDependency } from './types';
 import { parseSkillMd, extractDependencies, extractTitleFromContent, extractDescriptionFromContent } from './SkillMdParser';
 import { inferOriginKind, sha256Hex } from './integrity';
+import { invocationPolicyOf } from './invocation';
 
 /**
  * 默认本地技能目录名
@@ -189,6 +190,12 @@ export class LocalSkillLoader implements ISkillLoader {
       if (!parseResult.success && !parseResult.frontmatter) {
         console.warn(`[LocalSkillLoader] Failed to parse ${dirName}:`, parseResult.error);
       }
+      // A misspelled invocation key is not an error, it is an absent key: if it is not
+      // logged, the only way to notice is the model loading a skill that was meant to be
+      // user-only and then going back to read its SKILL.md.
+      for (const warning of parseResult.warnings || []) {
+        console.warn(`[LocalSkillLoader] ${dirName}: ${warning}`);
+      }
 
       const frontmatter = parseResult.frontmatter;
       const dependencies = extractDependencies(frontmatter);
@@ -224,6 +231,7 @@ export class LocalSkillLoader implements ISkillLoader {
         author: frontmatter?.author,
         tags: frontmatter?.tags,
         category: frontmatter?.category,
+        invocation: invocationPolicyOf(frontmatter),
       };
 
       return skill;

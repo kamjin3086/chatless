@@ -11,6 +11,7 @@ import { SHELL_EXECUTOR_TOOLS } from '@/lib/mcp/nativeTools/shellExecutor';
 import { WEB_SEARCH_TOOLS } from '@/lib/mcp/nativeTools/webSearch';
 import { KNOWLEDGE_TOOLS } from '@/lib/mcp/nativeTools/knowledge';
 import { SKILL_UNIFIED_TOOLS } from '@/lib/mcp/nativeTools/skillUnifiedTools';
+import { buildSkillIndex } from '@/lib/skills/skillIndex';
 import { SYSTEM_PROMPT_TOOLS } from '@/lib/mcp/nativeTools/systemPrompts';
 
 /**
@@ -70,6 +71,16 @@ describe('prompt language', () => {
     for (const platform of platforms) {
       expectAllEnglish(`shell guidance (${platform})`, getShellGuidance(platform));
     }
+  });
+
+  it('keeps the skill index English', () => {
+    // Built at runtime from the installed skills, but it is still prompt text.
+    const view = buildSkillIndex([
+      { id: 'pdf-forms', name: 'PDF forms', description: 'Fill PDF forms. Use when a PDF needs filling.' },
+      { id: 'deploy', name: 'Deploy', description: 'Deploy the app.', invocation: 'user-only' },
+    ]);
+    expectAllEnglish('skill index', [view.availabilityLine, view.indexText]);
+    expect(view.availabilityLine, 'the sample should exercise both texts').toBeTruthy();
   });
 
   it('keeps every native tool description English', () => {

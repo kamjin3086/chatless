@@ -33,6 +33,13 @@ export interface SkillMdParseResult {
   actions: SkillAction[];
   /** 错误信息 */
   error?: string;
+  /**
+   * Parsing succeeded, but a key did not mean what whoever wrote it thinks it means.
+   * Not validation: a misspelled `disable-model-invocatoin` is indistinguishable from an
+   * absent key in the result, so without saying so the mismatch only shows up as wrong
+   * behaviour later.
+   */
+  warnings?: string[];
 }
 
 /**
@@ -77,13 +84,14 @@ export function parseSkillMd(rawContent: string): SkillMdParseResult {
   const markdownContent = trimmed.slice(match[0].length).trim();
 
   try {
-    const { frontmatter, actions } = parseYamlFrontmatter(yamlContent);
+    const { frontmatter, actions, warnings } = parseYamlFrontmatter(yamlContent);
     return {
       success: true,
       frontmatter,
       content: markdownContent,
       rawContent,
       actions,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   } catch (error) {
     return {
@@ -103,6 +111,7 @@ export function parseSkillMd(rawContent: string): SkillMdParseResult {
 interface ParsedFrontmatterResult {
   frontmatter: SkillFrontmatter;
   actions: SkillAction[];
+  warnings: string[];
 }
 
 /**
@@ -124,6 +133,8 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
   let inActions = false;
   let currentAction: Record<string, any> | null = null;
   let indentLevel = 0;
+  // Collecting a YAML block scalar (`description: >` is common in SKILL.md files).
+  let pendingBlock: { key: string; fold: boolean } | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -137,35 +148,63 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     const leadingSpaces = line.match(/^(\s*)/)?.[1].length || 0;
     
     // 检查是否是顶级键值对
-    const topLevelKvMatch = line.match(/^(\w+):\s*(.*)$/);
+    // Keys may contain hyphens: the standard ones are `disable-model-invocation` and
+    // `allowed-tools`, and matching only `\w` dropped those lines in silence.
+    const topLevelKvMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
     if (topLevelKvMatch && leadingSpaces === 0) {
       const [, key, value] = topLevelKvMatch;
       const trimmedValue = value.trim();
       currentKey = key;
+      pendingBlock = null;
       
-      if (trimmedValue === '' || trimmedValue === '|' || trimmedValue === '>') {
-        // 多行值或数组/对象开始
+      if (trimmedValue === '' || trimmedValue === '|' || trimmedValue === '>' || /^[|>][-+]?\d*$/.test(trimmedValue)) {
+        // YAML 块标量（`|` 保留换行、`>` 折叠成行）或下面要接数组/对象
+        if (trimmedValue === '|' || trimmedValue === '>' || /^[|>][-+]?\d*$/.test(trimmedValue)) {
+          pendingBlock = { key, fold: trimmedValue.startsWith('>') };
+          result[key] = '';
+          currentArray = null;
+          currentObject = null;
+          inDependencies = false;
+          inActions = false;
+          currentAction = null;
+          continue;
+        }
+        // 空值：数组/对象开始
         currentArray = [];
         result[key] = currentArray;
         inDependencies = key === 'dependencies';
         inActions = key === 'actions';
         currentAction = null;
       } else {
-        // 单行值
+        // 单行值（可能后面还接缩进续行：YAML 的 plain 多行标量就是这么写的）
         currentArray = null;
         currentObject = null;
         inDependencies = false;
         inActions = false;
         currentAction = null;
+        pendingBlock = { key, fold: true };
         // 移除引号
         result[key] = trimmedValue.replace(/^["']|["']$/g, '');
       }
       continue;
     }
 
+    // YAML 块标量的正文：比键缩进、且不是 `key: value` 的行
+    if (pendingBlock && leadingSpaces > 0) {
+      const blockText = line.trim();
+      if (!/^>?\s*[A-Za-z0-9_.-]+:/.test(blockText)) {
+        const existing = String(result[pendingBlock.key] ?? '');
+        result[pendingBlock.key] = existing
+          ? (pendingBlock.fold ? `${existing} ${blockText}` : `${existing}\n${blockText}`)
+          : blockText;
+        continue;
+      }
+    }
+
     // 检查是否是数组项 (以 - 开头)
     const arrayMatch = line.match(/^(\s*)-\s*(.*)$/);
     if (arrayMatch && currentArray !== null) {
+      pendingBlock = null;
       const [, indent, value] = arrayMatch;
       const trimmedValue = value.trim();
       indentLevel = indent.length;
@@ -201,7 +240,7 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
 
     // 处理 action 对象的属性（缩进的键值对）
     if (inActions && currentAction !== null && leadingSpaces > 0) {
-      const nestedKvMatch = line.match(/^\s+(\w+):\s*(.*)$/);
+      const nestedKvMatch = line.match(/^\s+([A-Za-z0-9_-]+):\s*(.*)$/);
       if (nestedKvMatch) {
         const [, key, value] = nestedKvMatch;
         let parsedValue: any = value.trim().replace(/^["']|["']$/g, '');
@@ -218,8 +257,9 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     }
 
     // 处理普通缩进的键值对
-    const nestedKvMatch = line.match(/^\s+(\w+):\s*(.*)$/);
+    const nestedKvMatch = line.match(/^\s+([A-Za-z0-9_-]+):\s*(.*)$/);
     if (nestedKvMatch && currentKey && !inActions && !inDependencies) {
+      pendingBlock = null;
       const [, key, value] = nestedKvMatch;
       const trimmedValue = value.trim().replace(/^["']|["']$/g, '');
       
@@ -260,9 +300,100 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     } : undefined,
     // 触发关键词
     triggers: Array.isArray(result.triggers) ? result.triggers : undefined,
+    // The two invocation switches, keyed exactly as SKILL.md spells them. Only literal
+    // true/false counts: guessing a boolean is worse than treating the key as absent,
+    // because a guess gets believed.
+    'disable-model-invocation': parseFlag(result['disable-model-invocation']),
+    'user-invocable': parseFlag(result['user-invocable']),
+    // The author's suggested tool scope. Chatless grants nothing from it; it is kept as
+    // information only (ADR-0004).
+    'allowed-tools': parseToolList(result['allowed-tools']),
   };
 
-  return { frontmatter, actions };
+  return { frontmatter, actions, warnings: collectInvocationWarnings(result) };
+}
+
+/**
+ * These three keys decide who may start a skill, so the two silent failures below are
+ * worth saying out loud: a key misspelled by one letter is identical in the result to a
+ * key never written.
+ */
+const INVOCATION_KEYS = ['disable-model-invocation', 'user-invocable', 'allowed-tools'];
+
+/** Keys the parser actually reads (case counts: `Allowed-Tools` is not read). */
+const READ_KEYS = new Set([
+  'name', 'description', 'version', 'author', 'dependencies', 'tags', 'category',
+  'hooks', 'triggers', 'actions', ...INVOCATION_KEYS,
+]);
+
+function collectInvocationWarnings(result: Record<string, any>): string[] {
+  const warnings: string[] = [];
+
+  for (const key of Object.keys(result)) {
+    if (READ_KEYS.has(key)) continue;
+    const near = INVOCATION_KEYS
+      .map((known) => ({ known, distance: editDistance(key.toLowerCase(), known) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    // Only this family is reported: extra frontmatter keys are normal in other people's
+    // packages, and this is not a lint sweep.
+    if (near.distance > 2 && !/invoc|allowed[-_]?tool/i.test(key)) continue;
+    warnings.push(
+      `frontmatter key "${key}" is not read by Chatless; did you mean "${near.known}"? A key that is not read behaves as if it were absent.`,
+    );
+  }
+
+  for (const key of ['disable-model-invocation', 'user-invocable']) {
+    if (!(key in result)) continue;
+    const value = result[key];
+    if (value !== true && value !== false && value !== 'true' && value !== 'false') {
+      warnings.push(
+        `frontmatter key "${key}" must be true or false; ${JSON.stringify(value)} is read as absent, so the default applies.`,
+      );
+    }
+  }
+
+  if ('allowed-tools' in result && parseToolList(result['allowed-tools']) === undefined) {
+    warnings.push(
+      'frontmatter key "allowed-tools" is empty or unreadable; no tool scope was recorded.',
+    );
+  }
+
+  return warnings;
+}
+
+/** Two edits apart still counts as a typo; further than that is a different key. */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Literal values only; anything else returns undefined, which is the key being absent. */
+function parseFlag(value: unknown): boolean | undefined {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return undefined;
+}
+
+/** `allowed-tools` 在规范里是空格分隔的字符串；也接受 YAML 列表写法。 */
+function parseToolList(value: unknown): string[] | undefined {
+  const items = Array.isArray(value)
+    ? value.map((v) => String(v ?? '').trim())
+    : typeof value === 'string'
+      ? value.split(/[\s,]+/)
+      : [];
+  const cleaned = items.filter((s) => s.length > 0);
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 /**

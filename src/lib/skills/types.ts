@@ -57,7 +57,34 @@ export interface SkillFrontmatter {
   triggers?: string[];
   /** 交互式参数定义 */
   parameters?: SkillParameter[];
+  /**
+   * These three keys are spelled exactly as SKILL.md spells them - they are not
+   * Chatless-invented fields. `disable-model-invocation` and `user-invocable` come from
+   * the de facto Agent Skills convention (Claude Code); `allowed-tools` is the
+   * experimental field in the spec. Chatless reads them only to derive 触发方式 (see
+   * `invocation.ts`) and never derives authority from them: in the spec `allowed-tools`
+   * means "these tools need no approval", while approval here can only come from policy,
+   * the filesystem allowlist and the approval flow (ADR-0004). So it is an author's
+   * suggestion, and it grants nothing.
+   */
+  'disable-model-invocation'?: boolean;
+  'user-invocable'?: boolean;
+  'allowed-tools'?: string[];
 }
+
+/**
+ * Who may start a Skill. Derived from the two frontmatter switches and never stored on
+ * its own: the content decides it, and the user's enable/disable choice is a separate
+ * question.
+ *
+ * - `model-and-user`: the default. Visible in the index, the model decides when to load
+ *   it, and the user may also name it explicitly.
+ * - `user-only`: kept out of the model's index (it cannot load it), still selectable in
+ *   the conversation's `/` panel.
+ * - `model-only`: hidden from the `/` panel, used only when the model judges from the
+ *   description that it applies.
+ */
+export type SkillInvocationPolicy = 'model-and-user' | 'user-only' | 'model-only';
 
 /**
  * Skill 来源/审计信息（用于第三方 skills 治理）
@@ -128,6 +155,8 @@ export interface Skill {
   parameters?: SkillParameter[];
   /** 触发关键词 */
   triggers?: string[];
+  /** Who may start this Skill (derived from frontmatter; absent = `model-and-user`). */
+  invocation?: SkillInvocationPolicy;
 }
 
 /**
@@ -225,12 +254,14 @@ export interface SkillIndexEntry {
   id: string;
   /** 显示名称 */
   name: string;
-  /** 简短描述（截断至 200 字符） */
+  /** 简短描述（给索引用时截到 SKILL_DESCRIPTION_MAX_CHARS） */
   description: string;
+  /** 谁能触发（缺席 = 默认两者都可） */
+  invocation?: SkillInvocationPolicy;
   /** SKILL.md 总行数（用于按行范围读取） */
   lineCount?: number;
-  /** 触发关键词列表 */
-  triggers: string[];
+  /** Trigger keywords (keyword matching was deleted; parsing keeps them for now). */
+  triggers?: string[];
   /** 分类（可选） */
   category?: string;
 }

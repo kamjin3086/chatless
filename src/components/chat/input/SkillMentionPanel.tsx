@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { getSkillManager } from '@/lib/skills';
+import { userInvocableSkills } from '../skillsSlash';
 import type { Skill } from '@/lib/skills/types';
 import { Settings, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,9 @@ export function SkillMentionPanel({
     const loadSkills = async () => {
       const manager = getSkillManager();
       await manager.initialize();
-      setSkills(manager.getEnabledSkills());
+      // A skill written as `user-invocable: false` is knowledge for the model, not a menu
+      // item for the user.
+      setSkills(userInvocableSkills(manager.getEnabledSkills()));
       activeRef.current = 0;
     };
     

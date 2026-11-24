@@ -9,6 +9,7 @@ import { LocalSkillLoader, createLocalSkillLoader } from './LocalSkillLoader';
 import { RemoteSkillLoader, createRemoteSkillLoader } from './RemoteSkillLoader';
 import { useSkillStore } from '@/store/skillStore';
 import { inferOriginKind } from './integrity';
+import { buildSkillIndex, type SkillIndexFacts, type SkillIndexView } from './skillIndex';
 import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 
 /**
@@ -805,6 +806,7 @@ export class SkillManager {
       id: skill.id,
       name: skill.name,
       description: this.truncateText(skill.description, maxDescriptionLength),
+      invocation: skill.invocation,
       lineCount: (() => {
         try {
           const s = String((skill as any)?.skillMdContent || '');
@@ -842,39 +844,42 @@ export class SkillManager {
   }
 
   /**
-   * 构建用于注入的技能索引提示词
-   * 
-   * 这是注入到 System Prompt 的“极简版”技能列表：
-   * - 只注入 name + description（附带 id 便于调用）
-   * - SOP/调用规范由 tools description（厚工具描述）承载，避免重复占上下文
+   * The skill index the model sees (技能索引, see `GLOSSARY.md`).
+   *
+   * The provider does three things and no more: make sure skills are loaded, take the
+   * narrow view of them, hand that to the pure module that renders the text. Budget,
+   * ordering and invocation filtering live in `skillIndex.ts`, which is what makes them
+   * testable without Tauri - this seam already accumulated four paths nobody could test
+   * where they stood (`PR #230` deleted them), so a fifth untestable one is not welcome.
+   *
+   * Descriptions are passed through untruncated: the seam owns the cap and marks it with
+   * `…`. Truncating here as well - as `getSkillIndex` does for `skill__list` - would make
+   * the seam's marking unreachable in production.
+   *
+   * A failed read must not sink a conversation: when disk says nothing, the answer is no
+   * skills.
    */
-  buildSkillIndexPrompt(): string | null {
-    const index = this.getSkillIndex();
-    if (index.length === 0) return null;
-
-    const lines = index.map((s) => {
-      const id = String((s as any)?.id || '').trim();
-      const name = String((s as any)?.name || id || '').trim();
-      const desc = String((s as any)?.description || '').trim();
-      const lc = typeof (s as any)?.lineCount === 'number' ? (s as any).lineCount : undefined;
-      const lcText = (lc && Number.isFinite(lc) && lc > 0) ? ` (${lc} lines)` : '';
-      return `- **${name || id || '(unknown)'}** (${id ? `\`${id}\`` : '(unknown-id)'}${lcText}): ${desc || '(no description)'}`;
-    });
-
-    // 精简版规则：强调必须调用 skill__guide 获取操作指南
-    const header = `## Available skills
-
-⚠️ This list is names only - it does not contain the instructions.
-
-How to use one:
-1. skill__guide → read the guide (SKILL.md)
-2. Follow it; for templates or scripts inside the package use skill__list_resources + skill__get_template
-3. Do the work with shell__run and fs__*
-
-❌ Never: act on a skill without calling skill__guide first
-
-Enabled: `;
-    return header + '\n' + lines.join('\n');
+  async buildSkillIndexView(facts: SkillIndexFacts = {}): Promise<SkillIndexView> {
+    try {
+      await this.initialize();
+      const entries = this.getEnabledSkills().map((skill) => ({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        invocation: skill.invocation,
+      }));
+      return buildSkillIndex(entries, facts);
+    } catch (error) {
+      console.warn('[SkillManager] Skill index unavailable; continuing without it:', error);
+      return {
+        entries: [],
+        availabilityLine: null,
+        indexText: null,
+        overflowed: false,
+        userOnlyIds: [],
+        requested: [],
+      };
+    }
   }
 
   /**

@@ -126,3 +126,13 @@ _Avoid_: `as ModelParameters`——存储不能担保完整性，它只担保"�
 **清洗而非补齐 (sanitize, not complete)**:
 存储边界的职责：类型不对的值丢掉（等于没选过）、数字夹进界面允许的区间、未知字段不转发；缺席照原样保留。
 _Avoid_: 在别处再判一次类型（边界已做过），或在写入路径上悄悄改写用户手改的值
+
+### Skills
+
+**技能索引 (Skill index)**:
+模型在这一轮里能看见的那份 skill 清单（`buildSkillIndex` → `skill-availability` + `skills-index` 两个 block）。索引只给 id、名字和描述，**描述就是路由面**——模型靠"Use when …"决定要不要用它，所以宁可整份退回常驻行，也不给半份清单或截掉半句描述。读指南正文的入口是 `skill__guide(id)`；`skill__get_template` 读的是包内文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板不是路由。索引里的名字不算读过，正文也不会因为被点名就自动注入。
+_Avoid_: skill catalogue（"目录"已被 provider 清单和 `tools__search` 的目录占用）、技能列表、按关键词预加载正文
+
+**触发方式 (skill invocation policy)**:
+谁能启动一个 skill，由 SKILL.md 决定而不是用户偏好：默认双方都可；`disable-model-invocation: true` → 仅用户（模型侧索引里根本不出现，因此无从自动加载，但仍在对话的 `/` 面板里可选）；`user-invocable: false` → 仅模型（从 `/` 面板隐藏）。两个开关同时成立时按"仅用户"解，因为让模型自动加载是更该否掉的一侧。界面上只读显示，不提供覆盖——否则内容与偏好会各说一套，而同步出去的另一台设备内容还可能不一样。
+_Avoid_: 调用控制（本词汇表里"调用"已经是 ToolInvocation）、`triggers`/关键词匹配（已删，路由是描述的职责）、`allowed-tools`（规范里意味着免审批，Chatless 不从中授予任何东西，见 ADR-0004）

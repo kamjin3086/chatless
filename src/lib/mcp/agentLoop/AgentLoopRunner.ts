@@ -194,6 +194,7 @@ export class AgentLoopRunner {
         forceInject: true,
         locale: (await import('@/store/localeStore')).useLocaleStore.getState().locale,
         planOnly,
+        explicitSkillIds: params.explicitSkillIds,
       };
       const injection = await buildMcpSystemInjections(originalUserContent || '', conversationId, provider, model, promptOptions);
       const envelope = buildAgentPromptEnvelope(injection);

@@ -151,10 +151,10 @@ describe('skill row of the table tracks the tools the registry exposes', () => {
   });
 
   it('registers as read exactly the read-only tools of that group', () => {
-    for (const name of ['list', 'guide', 'check_deps']) {
+    for (const name of ['list', 'guide', 'list_resources', 'get_template', 'check_deps']) {
       expect(toolRisk('skill', name), name).toBe('read');
     }
-    for (const name of ['install', 'uninstall', 'enable', 'disable', 'update', 'edit_resource', 'list_resources', 'get_template']) {
+    for (const name of ['install', 'uninstall', 'enable', 'disable', 'update', 'edit_resource']) {
       expect(toolRisk('skill', name), name).toBe('unknown');
     }
   });

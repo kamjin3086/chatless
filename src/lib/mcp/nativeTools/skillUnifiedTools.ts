@@ -48,12 +48,6 @@ export const SKILL_LIST_TOOL: McpTool = {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search keywords' },
-        mode: {
-          type: 'string',
-          enum: ['task', 'admin'],
-          description: 'task = match to a task | admin = administration',
-        },
-        enabledOnly: { type: 'boolean', description: 'Enabled skills only (default true)' },
         limit: { type: 'number', description: 'Maximum entries (default 30)' },
       },
       required: [],
@@ -223,6 +217,19 @@ export const SKILL_CHECK_DEPS_TOOL: McpTool = {
 };
 
 // ============ 导出 ============
+
+/**
+ * The usage side (read-only): these four are all a model needs to know about or read a
+ * skill. They enter the tool list together with the skill index - the index tells the model
+ * to read `skill__guide`, so that tool has to be in the request, or the line is an
+ * instruction pointing at a ghost.
+ */
+export const SKILL_USAGE_TOOLS: McpTool[] = [
+  SKILL_LIST_TOOL,
+  SKILL_GUIDE_TOOL,
+  SKILL_LIST_RESOURCES_TOOL,
+  SKILL_GET_TEMPLATE_TOOL,
+];
 
 export const SKILL_UNIFIED_TOOLS: McpTool[] = [
   // 使用类（只读）

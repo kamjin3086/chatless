@@ -28,6 +28,9 @@ import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
 import { resolveToolTrack, shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
+import { getSkillManager } from '@/lib/skills';
+import { skillIndexBlocks, skillIndexUsable } from '@/lib/skills/skillIndex';
+import { SKILL_SERVER_NAME, SKILL_USAGE_TOOLS } from '@/lib/mcp/nativeTools/skillUnifiedTools';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { buildAgentContractBlock } from '@/lib/mcp/prompt/agentContract';
@@ -230,10 +233,21 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled;
 
-  // 构建原生工具定义（用于 native tool API 或文本注入）
+  // Skills: one read per run, from one place. The tool list, the standing line and the
+  // named-skill block must come from the same snapshot - two reads can describe two
+  // different disks, and installing or removing one skill mid-run is enough to make that
+  // happen. The track decides whether the run can act on skills at all: the standing line
+  // names `skill__guide`, so on the `disabled` track it would point at nothing.
+  const skillIndexView = await getSkillManager().buildSkillIndexView({
+    explicitIds: (context.explicitSkillIds || []).filter(Boolean),
+  });
+  const skillIndexOn = skillIndexUsable(track, !!skillIndexView.availabilityLine);
+
+  // Native tool definitions (native tool API, or the text injection fallback)
   const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
     servers: enabled,
     includeWebSearch: shouldExposeWebSearch,
+    includeSkillUsageTools: skillIndexOn && useNativeTools,
     userContent: context.userContent || '',
     conversationId: context.conversationId,
   });
@@ -300,6 +314,9 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
     ...(shouldExposeWebSearch ? [WEB_SEARCH_SERVER_NAME] : []),
     FILESYSTEM_SERVER_NAME,
     SHELL_EXECUTOR_SERVER_NAME,
+    // On the text-tool track the index is only honest if `skill` is one of the servers the
+    // protocol block advertises; naming skill__guide without it is a dead promise.
+    ...(skillIndexOn && track === 'prompt' ? [SKILL_SERVER_NAME] : []),
   ];
   
   if (allEnabled.length > 0) {
@@ -319,6 +336,14 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   // 7. 网络搜索策略（如果启用）
   if (shouldExposeWebSearch) {
     blocks.push({ id: 'web-search-policy', layer: 'conversation', order: 70, content: MCPPrompts.webSearchPolicy });
+  }
+
+  // 8. The skill index: the standing line and the list are two blocks, shaped in
+  // `skillIndexBlocks` where it can be tested without Tauri. Skipped when the run cannot
+  // call anything - a line that says "read skill__guide first" with no tools behind it is
+  // the failure mode the knowledge line guards against (#160).
+  if (skillIndexOn) {
+    blocks.push(...skillIndexBlocks(skillIndexView));
   }
   
 
@@ -371,12 +396,16 @@ async function injectTimeContext(
  * 2. 发现层：tools__search 分页返回完整能力目录
  * 3. 会话层：搜索匹配的能力组在下一模型步生效
  */
-async function buildNativeToolDefinitions(params: {
+interface NativeToolBuildOptions {
   servers: string[];
   includeWebSearch: boolean;
+  /** When skills are available, the four read-only tools the index points at must really be in the request. */
+  includeSkillUsageTools?: boolean;
   userContent?: string;
   conversationId?: string;
-}): Promise<NativeToolDefinition[]> {
+}
+
+async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promise<NativeToolDefinition[]> {
   const tools: NativeToolDefinition[] = [];
 
   const normalizeParams = (p: any): { type: 'object'; properties: Record<string, unknown>; required: string[] } => {
@@ -395,9 +424,10 @@ async function buildNativeToolDefinitions(params: {
   // 记录已加载文档的服务器，避免重复注入相同文档
   const loadedDocServers = new Set<string>();
   
-  const addToolsFromGroup = async (groupId: ToolGroupId) => {
-    const groupTools = getToolsForGroup(groupId);
-    for (const { server, tool } of groupTools) {
+  type ToolEntry = { server: string; tool: { name: string; description?: string | null } };
+
+  const addToolEntries = async (entries: ToolEntry[]) => {
+    for (const { server, tool } of entries) {
       const fullName = `${server}__${tool.name}`;
       
       // 同一服务器的工具只在第一个工具中注入完整文档
@@ -415,6 +445,10 @@ async function buildNativeToolDefinitions(params: {
     }
   };
 
+  const addToolsFromGroup = async (groupId: ToolGroupId) => {
+    await addToolEntries(getToolsForGroup(groupId));
+  };
+
   // ========== 1. 核心层：始终加载 ==========
   
   // 1.1 核心文件工具（read, write, ls）
@@ -423,6 +457,13 @@ async function buildNativeToolDefinitions(params: {
   if (!params.includeWebSearch) {
     tools.splice(coreToolStart, tools.length - coreToolStart,
       ...tools.slice(coreToolStart).filter((tool) => !tool.name.startsWith(`${WEB_SEARCH_SERVER_NAME}__`)));
+  }
+
+  // 1.1b If the index appears, the four read-only tools it points at must really be in the
+  // request: a line saying "read skill__guide first" that points at a missing tool is worse
+  // than no index. Management tools still come through tools__load.
+  if (params.includeSkillUsageTools) {
+    await addToolEntries(SKILL_USAGE_TOOLS.map((tool) => ({ server: SKILL_SERVER_NAME, tool })));
   }
   
   // 1.2 能力搜索工具（不预加载管理类工具）

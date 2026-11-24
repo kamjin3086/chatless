@@ -1,7 +1,9 @@
 # Skills 系统架构设计文档
 
-> **最后更新**: 2026-01-20  
-> **版本**: 3.0  
+> **状态（以 `main` 为准读这份文档）**：本文写于设计阶段，多处比代码先行。「渐进式披露机制」一节已按 2026-11 的实现重写（一条缝：`src/lib/skills/skillIndex.ts`）；「Hooks 生命周期管理」「SkillExecutor / 编排 / 沙箱」那几节描述的是**设计意图**，今天没有活路径走到它们。改这块之前先读代码，不要只读本文。
+>
+> **最后更新**: 2026-11-24  
+> **版本**: 3.1（渐进式披露一节为实现现状）  
 > **参考来源**:
 > - [Claude Cowork 架构拆解](https://claudecn.com/blog/claude-cowork-architecture/)
 > - [Claude Skills 架构拆解：渐进披露、运行时与安全沙箱](https://claudecn.com/blog/)
@@ -484,6 +486,8 @@ if (skill.allowed_tools && !skill.allowed_tools.includes(tool)) {
 
 ## Hooks 生命周期管理
 
+> **未接线**。本节是设计意图：`pre_execute` / `post_execute` / `on_error` / `verify` 的解析在 `SkillMdParser`，唯一会跑它们的是 `SkillExecutor`，而今天没有任何活路径会走到 `SkillExecutor`——`grep -rn "SkillExecutor" src --include=*.ts --include=*.tsx | grep -v __tests__` 只印出 `src/lib/skills/SkillExecutor.ts` 自己（agent 的一次 tool call 走 `ToolExecutionPipeline`，见 ADR-0001）。也就是说：写在 SKILL.md 里的 hook 今天不会执行。要么把这套引擎删掉，要么让它真的被调用——别把本节当现状读。
+
 参考 [Claude Code Hooks 参考](https://docs.anthropic.com/zh-CN/docs/claude-code/hooks)，实现完整的钩子系统：
 
 ```
@@ -567,120 +571,30 @@ hooks:
 
 ## 渐进式披露机制
 
-参考 [Claude Skills 架构拆解](https://claudecn.com/blog/)，实现**渐进式披露 (Progressive Disclosure)**，优化 Token 消耗：
+实际实现只有一条路径，入口是一个纯 module：`src/lib/skills/skillIndex.ts`。它不读 store、不碰文件系统，输入是已经加载好的窄视图，输出是要进 system prompt 的两段文本——所以「什么时候该出现、出现什么」是可以直接测的（`__tests__/skillIndex.test.ts`）。
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Progressive Disclosure                           │
-│                                                                      │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Stage 1: Index Loading (启动时)                            │    │
-│  │  ┌─────────────────────────────────────────────────────────┐│    │
-│  │  │ System Prompt 中仅包含技能索引:                         ││    │
-│  │  │                                                         ││    │
-│  │  │ Available Skills:                                       ││    │
-│  │  │ - pr-reviewer: 根据公司标准审查代码提交                 ││    │
-│  │  │ - code-formatter: 格式化代码文件                        ││    │
-│  │  │ - test-runner: 运行单元测试                             ││    │
-│  │  │                                                         ││    │
-│  │  │ 约 100-200 tokens / skill                               ││    │
-│  │  └─────────────────────────────────────────────────────────┘│    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                              │                                       │
-│                              ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Stage 2: Intent Matching (用户输入时)                      │    │
-│  │  ┌─────────────────────────────────────────────────────────┐│    │
-│  │  │ 用户: "帮我检查一下这个 PR 是否符合规范"                ││    │
-│  │  │                                                         ││    │
-│  │  │ 匹配算法:                                               ││    │
-│  │  │ - 关键词匹配: "检查", "PR", "规范"                      ││    │
-│  │  │ - 触发词匹配: triggers: ["review", "PR", "code check"]  ││    │
-│  │  │ - 语义相似度: description 与用户输入的相似度            ││    │
-│  │  │                                                         ││    │
-│  │  │ 结果: 匹配到 "pr-reviewer"                              ││    │
-│  │  └─────────────────────────────────────────────────────────┘│    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                              │                                       │
-│                              ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  Stage 3: Full Loading (按需加载)                           │    │
-│  │  ┌─────────────────────────────────────────────────────────┐│    │
-│  │  │ 将完整的 SKILL.md 内容注入上下文:                       ││    │
-│  │  │                                                         ││    │
-│  │  │ # PR Reviewer Skill                                     ││    │
-│  │  │                                                         ││    │
-│  │  │ ## 审查准则                                             ││    │
-│  │  │ 1. 检查是否存在硬编码凭证                               ││    │
-│  │  │ 2. 确保符合 TypeScript 严谨模式                         ││    │
-│  │  │ 3. 验证测试覆盖率...                                    ││    │
-│  │  │                                                         ││    │
-│  │  │ 约 500-2000 tokens / skill                              ││    │
-│  │  └─────────────────────────────────────────────────────────┘│    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                                                                      │
-│  优势:                                                               │
-│  - 减少 System Prompt 体积 (10个技能: ~1000 tokens vs ~15000)       │
-│  - 提高响应速度                                                      │
-│  - 降低 API 成本                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
+**第 1 层 — 常驻行 `skill-availability`（conversation / order 75）**
+只在「至少一个 skill 可用」时出现：这里有 skill、动手前先 `skill__guide`、skill 不授予任何权限。存在仅用户可触发的 skill 时，这里列出它们的名字（只列名字，不列描述——描述会诱导模型去读）。
 
-### 实现代码
+**第 2 层 — 索引 `skills-index`（conversation / order 80）**
+id + 名字 + 描述。按 `id` 排序（与 locale 无关，才不会换种界面语言就把 system prompt 的缓存前缀整段漂掉）；单条描述 ≤ 320 字符；整份预算 1200 字符——注意量的是 JS `string.length`（UTF-16 单元），不是字节：中文描述按 UTF-8 算占得更宽，线上体积因此可能高于这个数字。超预算**不是**截断，而是整份退回常驻行加一句「用 `skill__list(query)` 搜」——半份清单会让模型以为另外那些不存在。
 
-```typescript
-// SkillManager.ts
+**第 3 层 — 正文**
+读指南正文的入口是 `skill__guide(id)`（`skill__get_template` 能读包内任意文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板而不是路由）。索引指向的四个只读工具（`list` / `guide` / `list_resources` / `get_template`）随索引一起进入工具列表：让模型去调一个不在请求里的工具，比不给索引更坑。文本工具通道（`prompt` 轨）里 `skill` 也会一起出现在可用服务器列表里；`disabled` 轨整块不出现——一句「先读 `skill__guide`」在没有工具可调时就是空指。管理工具（install / uninstall / enable / disable / update / edit_resource）仍走 `tools__load`。
 
-/**
- * 获取技能索引（用于 System Prompt）
- * 仅包含名称和简短描述
- */
-getEnabledSkillsIndex(): SkillIndexEntry[] {
-  return this.skills
-    .filter(s => s.enabled)
-    .map(s => ({
-      id: s.id,
-      name: s.name,
-      description: s.description.slice(0, 200), // 截断至 200 字符
-      triggers: s.triggers || [],
-    }));
-}
+**第 4 层 — 包内文件**
+由指南自己指路：`skill__list_resources` 列出、`skill__get_template` 读取。
 
-/**
- * 根据用户意图匹配技能
- */
-matchSkillsByIntent(userInput: string): Skill[] {
-  const input = userInput.toLowerCase();
-  
-  return this.skills.filter(skill => {
-    // 触发词匹配
-    if (skill.triggers?.some(t => input.includes(t.toLowerCase()))) {
-      return true;
-    }
-    
-    // 描述关键词匹配
-    const keywords = skill.description.toLowerCase().split(/\s+/);
-    if (keywords.some(k => input.includes(k) && k.length > 3)) {
-      return true;
-    }
-    
-    return false;
-  });
-}
+**用户这一侧：`/` 面板与点名**
+`/` 面板只列 `invocableByUser` 为真的 skill（`user-invocable: false` 的从菜单里隐去）；选中后往输入框插入 `/<id> `。发送时 `components/chat/skillsSlash.ts` 认这个 token、把它从正文里剔掉，并把 id 作为事实一路传到注入层（`useChatActions` → `AgentLoopRunner` → `promptInjector` → `InjectionContext.explicitSkillIds`）——模型拿到的是请求本身，不是命令。被点名的 skill 另成一块 `skills-requested`（**turn 层**，order 15）：它不改写 conversation 层的索引，因为那样每换一次说法就会漂掉可缓存前缀。
 
-/**
- * 获取完整技能指令（按需加载）
- */
-async getSkillInstructions(skillId: string): Promise<string | null> {
-  const skill = this.skills.find(s => s.id === skillId);
-  if (!skill) return null;
-  
-  // 此时才加载完整的 SKILL.md 内容
-  return skill.skillMdContent || null;
-}
-```
+v3.0 里那套「按 `triggers` 关键词与用户措辞做意图匹配，再预注入正文」已经删掉：触发判断的职责在 `description`（写得像"Use when …"），不在匹配器；谁能触发见 `GLOSSARY.md` 的「触发方式 (skill invocation policy)」。
 
----
+还没实现的两件事，别照本节日益：
+
+- `references/` 子目录目前无法被 `skill__list_resources` 枚举（它过滤掉目录），所以第 4 层依赖指南写出确切文件名；
+- 正文尺寸没有策略（`skill__guide` 的上限是 200 000 字符），上下文压缩后正文是否还在也没有可依赖的事实——压缩摘要的提示词并不提到 skill。
+
 
 ## 执行流程
 

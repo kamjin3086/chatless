@@ -57,13 +57,16 @@ const FS_RISK: Record<string, ToolRisk> = {
  *
  * `skill` 那一行不含 `use` / `get` / `read_file` / `list_files` / `write_file`：那些
  * 是旧工具名的兼容别名，adapter 已不再路由它们，表里留着就是给无法路由的名字放行。
+ * `list_resources` and `get_template` were registered deliberately: they only read files
+ * inside the skill package, and the index now really does send the model to call them -
+ * reading a file a guide named should be allowed in plan mode.
  */
 const READ_TOOLS: Record<string, string[]> = {
   knowledge: ['list', 'search', 'read'],
   web_search: ['search', 'fetch'],
   tools: ['search'],
   tool_result: ['read'],
-  skill: ['list', 'guide', 'check_deps'],
+  skill: ['list', 'guide', 'list_resources', 'get_template', 'check_deps'],
   system: ['list_prompts', 'get_prompt'],
 };
 

@@ -79,6 +79,12 @@ export interface InjectionContext {
   locale?: string;
   /** Plan-only mode is a per-turn instruction block, not a run event. */
   planOnly?: boolean;
+  /**
+   * Skills the user named by hand this turn (`/id` in the composer). A fact, not text:
+   * the token is stripped from what the model sees, and the seam decides what the name
+   * is worth (GLOSSARY: 触发方式).
+   */
+  explicitSkillIds?: string[];
 }
 
 /**
