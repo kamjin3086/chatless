@@ -353,6 +353,7 @@ const enUS: TranslationDict = {
   'toolCall.send': 'Send',
   'toolCall.list': 'List',
   'toolCall.download': 'Download',
+  'toolCall.readSavedResult': 'Read the saved tool result',
   'toolCall.detail.skill': 'Skill',
   'toolCall.detail.file': 'File',
   'toolCall.detail.source': 'Source',

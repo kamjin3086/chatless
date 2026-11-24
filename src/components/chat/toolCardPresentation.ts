@@ -243,6 +243,13 @@ export function presentToolCard(locale: Locale, params: {
   const tl = tool.toLowerCase();
   const args = params.args || {};
 
+  // ---------- tool_result：大结果的后续分页 ----------
+  // 卡片如果写成 `tool_result · read`，用户看到的是一句内部术语：它读的不是文件，
+  // 是之前某条过长而被截断的工具结果。
+  if (srv === 'tool_result' && tl === 'read') {
+    return { titleLine: t('toolCall.readSavedResult'), kind: 'generic' };
+  }
+
 
   // ---------- skills (旧) / skill (新) ----------
   if (srv === 'skills' || srv === 'skill') {

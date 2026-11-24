@@ -303,6 +303,7 @@ export type TranslationKey =
   | 'toolCall.send'
   | 'toolCall.list'
   | 'toolCall.download'
+  | 'toolCall.readSavedResult'
   | 'toolCall.detail.skill'
   | 'toolCall.detail.file'
   | 'toolCall.detail.source'

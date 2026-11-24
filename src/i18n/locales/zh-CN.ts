@@ -324,6 +324,7 @@ const zhCN: TranslationDict = {
   'toolCall.send': '发送',
   'toolCall.list': '列出',
   'toolCall.download': '下载',
+  'toolCall.readSavedResult': '读取已保存的工具结果',
   'toolCall.detail.skill': '技能',
   'toolCall.detail.file': '文件',
   'toolCall.detail.source': '来源',

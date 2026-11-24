@@ -15,8 +15,13 @@ const USER_INTENT_WINDOW = 700;
 const PROGRAMMATIC_SCROLL_WINDOW = 250;
 /** 手势收敛等待时间：滚轮停下来之后再判断方向。 */
 const GESTURE_SETTLE_MS = 140;
-/** 向上累计超过这个距离，视为"用户想往上读"。用累计值过滤回弹与惯性噪音。 */
+/** 向上累计超过这个距离，视为“用户想往上读”。用累计值过滤回弹与惯性噪音。 */
 const UPWARD_INTENT_PX = 12;
+/**
+ * 手指往下拖多少像素就立刻停止跟随。逐帧贴底和手指抢屏幕是最难看的抖法：
+ * 等手势结束再判方向的话，整个拖动过程都会被打回底部。
+ */
+const TOUCH_STOP_FOLLOW_PX = 20;
 
 export const useScrollManagement = (
     messagesContainerRef: React.RefObject<HTMLDivElement | null>, 
@@ -49,6 +54,8 @@ export const useScrollManagement = (
   const programmaticScrollRef = useRef<{ top: number; at: number } | null>(null);
   /** shouldFollowOutput 的同步镜像，供事件回调立即读取（state 更新是异步的）。 */
   const followingRef = useRef(true);
+  /** 手指是否按在消息区：按住期间不做逐帧贴底，否则拖动会被一路拽回底部。 */
+  const touchActiveRef = useRef(false);
 
   const isNearBottom = useCallback((container: HTMLElement) => {
     const { scrollTop, scrollHeight, clientHeight } = container;
@@ -194,6 +201,7 @@ export const useScrollManagement = (
     let touchStartY = 0;
     const handleTouchStart = (event: TouchEvent) => {
       touchStartY = event.touches[0].clientY;
+      touchActiveRef.current = true;
       markUserIntent();
     };
 
@@ -201,11 +209,23 @@ export const useScrollManagement = (
       const touchY = event.touches[0].clientY;
       const diff = touchY - touchStartY;
       // 手指往下拖动 = 内容往上滚 = 向上意图
-      if (diff > 0) markUserIntent(diff);
+      if (diff > 0) {
+        markUserIntent(diff);
+        // 意图够了就先让开，不等手势结束：跟随不停手的话，手指和贴底会互相拽出剧烈抖动。
+        if (
+          upwardIntentRef.current >= TOUCH_STOP_FOLLOW_PX &&
+          followingRef.current
+        ) {
+          setFollowing(false);
+        }
+      }
       touchStartY = touchY;
     };
 
-    const handleTouchEnd = () => scheduleSettle();
+    const handleTouchEnd = () => {
+      touchActiveRef.current = false;
+      scheduleSettle();
+    };
 
     // 键盘翻页也能停止跟随
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -235,6 +255,7 @@ export const useScrollManagement = (
     container.addEventListener('touchstart', handleTouchStart, { passive: true });
     container.addEventListener('touchmove', handleTouchMove, { passive: true });
     container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchEnd, { passive: true });
     container.addEventListener('keydown', handleKeyDown);
     container.addEventListener('pointerdown', handlePointerDown, { passive: true });
     window.addEventListener('pointerup', handlePointerUp, { passive: true });
@@ -246,6 +267,7 @@ export const useScrollManagement = (
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchEnd);
       container.removeEventListener('keydown', handleKeyDown);
       container.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointerup', handlePointerUp);
@@ -314,7 +336,8 @@ export const useScrollManagement = (
     let rafId: number | null = null;
     const tick = () => {
       const container = messagesContainerRef.current;
-      if (container && followingRef.current) pinToBottom(container);
+      // 手指按着的时候不贴底：那段时间位置归用户，贴一次就抖一次。
+      if (container && followingRef.current && !touchActiveRef.current) pinToBottom(container);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);

@@ -409,6 +409,23 @@ describe('Android tool cards', () => {
     ).toBe('Review selected photos');
   });
 
+  it('names the paged read of a large saved result, instead of internal vocabulary', () => {
+    // `tool_result · read` is what the raw server and tool names make, and a person reading
+    // the card has no idea that is a second page of an earlier result.
+    const zh = presentToolCard('zh', {
+      server: 'tool_result',
+      tool: 'read',
+      args: { attachmentId: 'att-1', offset: 8192 },
+    });
+    expect(zh.titleLine).toBe('读取已保存的工具结果');
+    const en = presentToolCard('en', {
+      server: 'tool_result',
+      tool: 'read',
+      args: { attachmentId: 'att-1' },
+    });
+    expect(en.titleLine).toBe('Read the saved tool result');
+  });
+
   it('leaves the desktop cards it already knew alone', () => {
     const card = presentToolCard('zh', {
       server: 'filesystem',
