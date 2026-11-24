@@ -152,21 +152,21 @@ export function ChatHeader({
       <div
         className={cn(
           'app-topbar shrink-0 border-b border-slate-200/60 dark:border-white/10 flex items-center justify-between glass-surface',
-          androidNavigation ? 'flex-wrap px-2 pb-1' : 'h-9 px-3',
+          androidNavigation ? 'h-12 gap-0 px-1' : 'h-9 px-3',
         )}
       >
         {/* 左侧：侧栏开关 + 标题 */}
         <div
           className={cn(
             'flex items-center gap-1 flex-1 min-w-0',
-            androidNavigation && 'basis-full',
+            androidNavigation && 'gap-0',
           )}
         >
           {androidNavigation ? (
             <IconButton
               icon={ArrowLeft}
               title={t('androidChat.conversations')}
-              className="size-12 shrink-0"
+              className="size-11 shrink-0"
               onClick={androidNavigation.showConversations}
             />
           ) : (
@@ -215,7 +215,9 @@ export function ChatHeader({
             onTitleChange={onTitleChange}
             className={cn(
               'text-[13px] font-medium text-slate-600 dark:text-slate-300 ml-0.5 min-w-0',
-              androidNavigation ? 'flex-1' : 'max-w-[min(40vw,20rem)]',
+              androidNavigation
+                ? 'min-w-0 basis-[4.5rem] max-w-[6rem] shrink'
+                : 'max-w-[min(40vw,20rem)]',
             )}
             inputClassName="text-[13px]"
           />
@@ -237,7 +239,9 @@ export function ChatHeader({
         <div
           className={cn(
             'flex items-center gap-0.5',
-            androidNavigation ? 'min-w-0 flex-wrap' : 'shrink-0',
+            androidNavigation
+              ? 'min-w-0 flex-1 justify-end gap-0 [&_button:not([data-model-trigger])]:min-h-11 [&_button:not([data-model-trigger])]:min-w-11 [&_button:not([data-model-trigger])]:shrink-0'
+              : 'shrink-0',
           )}
         >
           {!hideModelSelector && (
@@ -268,24 +272,26 @@ export function ChatHeader({
           )}
 
           {/* 消息导航：长会话里跳转到指定消息。放在头部而不是悬浮在消息上，避免遮挡内容 */}
-          {onNavigateToMessage && (navigationMessages?.length || 0) >= 2 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
-                  title={t('chatUi.messageNavigation')}
-                  aria-label={t('chatUi.messageNavigation')}
-                >
-                  <LocateFixed className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                </button>
-              </DropdownMenuTrigger>
-              <MessageNavigationMenu
-                messages={navigationMessages || []}
-                onNavigateToMessage={onNavigateToMessage}
-                onClose={() => {}}
-              />
-            </DropdownMenu>
-          )}
+          {onNavigateToMessage &&
+            !androidNavigation &&
+            (navigationMessages?.length || 0) >= 2 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-1.5 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors"
+                    title={t('chatUi.messageNavigation')}
+                    aria-label={t('chatUi.messageNavigation')}
+                  >
+                    <LocateFixed className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <MessageNavigationMenu
+                  messages={navigationMessages || []}
+                  onNavigateToMessage={onNavigateToMessage}
+                  onClose={() => {}}
+                />
+              </DropdownMenu>
+            )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

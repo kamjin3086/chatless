@@ -397,7 +397,12 @@ export function ModelSelector({
           <Button
             type="button"
             variant={setupLabel ? 'default' : 'outline'}
-            className={setupLabel ? 'h-11' : 'h-10 max-w-[42vw] gap-1 rounded-lg px-2 text-xs'}
+            data-model-trigger=""
+            className={
+              setupLabel
+                ? 'h-11'
+                : 'h-11 min-w-0 max-w-[10rem] basis-[6rem] grow gap-1 rounded-lg px-2 text-xs'
+            }
             title={triggerTitle}
             disabled={disabled}
           >
