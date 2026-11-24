@@ -1860,15 +1860,22 @@ html[data-android-runtime] .app-topbar button {
 
 /*
  * User-message actions (编辑 / 复制 / 删除) float outside the bubble on desktop hover.
- * A phone has no hover and no room to the left of the bubble, so on Android the row
- * joins the message and stays visible.
+ * A phone has no hover and no room to the left of the bubble, so on Android the row joins the
+ * message - but only after a tap on that message, and only for one message at a time. Hidden
+ * with `display: none` rather than faded, so a bubble is no taller than the text inside it.
  */
 html[data-android-runtime] [data-user-msg-tools] {
   position: static;
   transform: none;
-  opacity: 1;
+  display: none;
   justify-content: flex-end;
   padding-top: 0.25rem;
+}
+
+html[data-android-runtime] [data-user-msg-tools][data-open],
+html[data-android-runtime] [data-user-msg-tools]:focus-within {
+  display: flex;
+  opacity: 1;
 }
 
 html[data-android-runtime] [data-user-msg-tools] > button {
