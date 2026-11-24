@@ -96,12 +96,24 @@ describe('invocation policy at the index', () => {
     expect(view.availabilityLine).toContain('Do not load one unasked');
   });
 
+  it('does not order the model to read what it may not load', () => {
+    // Only user-startable skills: "read one with skill__guide before acting" two lines
+    // before "do not load one unasked" left the model to resolve a contradiction.
+    const view = buildSkillIndex([
+      skill('deploy', 'Deploy', 'Deploys the app.', 'user-only'),
+    ]);
+    expect(view.indexText).toBeNull();
+    expect(view.availabilityLine).toContain('/deploy');
+    expect(view.availabilityLine).not.toMatch(/before acting on it/);
+  });
+
   it('lets the user name a user-invoked skill through it', () => {
     const view = buildSkillIndex(
       [skill('deploy', 'Deploy', 'Deploys the app.', 'user-only')],
       { explicitIds: ['deploy'] },
     );
-    // 常驻清单仍是模型自己那一半：点名是本轮的事，不该把清单改写。
+    // The standing list stays the model's own half: naming is this turn's business and
+    // must not rewrite the list.
     expect(view.entries).toEqual([]);
     expect(view.requested.map((e) => e.id)).toEqual(['deploy']);
     const turn = skillIndexBlocks(view).find(
@@ -133,14 +145,16 @@ describe('what the user asked for this turn', () => {
     const turn = blocks.find((b) => b.id === 'skills-requested');
     expect(turn?.layer).toBe('turn');
     expect(turn?.content).toContain('`deploy`');
-    // 本轮事实不得推动可缓存前缀：同一份条目、多一个名字，conversation 两块必须逐字相同。
+    // A turn's facts may not push the cacheable prefix: same entries plus one name must
+    // leave the two conversation blocks byte-for-byte identical.
     expect(blocks.filter((b) => b.layer === 'conversation')).toEqual(
       skillIndexBlocks(buildSkillIndex(entries)),
     );
   });
 
   it('one call is the whole run', () => {
-    // 上一版叫调用方读两次（一次不含本轮事实、一次含），两次异读就能让两块来自两个世界。
+    // An earlier shape made the caller read twice (once without this turn's facts, once
+    // with); two reads are two worlds where the blocks came from. One call is the fix.
     const view = buildSkillIndex(entries, { explicitIds: ['deploy'] });
     expect(skillIndexBlocks(view).map((b) => [b.id, b.layer])).toEqual([
       ['skill-availability', 'conversation'],

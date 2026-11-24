@@ -50,7 +50,8 @@ export function SkillMentionPanel({
     const loadSkills = async () => {
       const manager = getSkillManager();
       await manager.initialize();
-      // `user-invocable: false` 的 skill 是给模型看的知识，不是给用户选的菜单项。
+      // A skill written as `user-invocable: false` is knowledge for the model, not a menu
+      // item for the user.
       setSkills(userInvocableSkills(manager.getEnabledSkills()));
       activeRef.current = 0;
     };

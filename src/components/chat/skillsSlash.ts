@@ -1,5 +1,6 @@
 import { invocableByUser } from '@/lib/skills/invocation';
-import type { Skill } from '@/lib/skills/types';
+import { compareById } from '@/lib/skills/skillIndex';
+import type { Skill, SkillInvocationPolicy } from '@/lib/skills/types';
 
 /**
  * The `/` panel is the user's half of 触发方式 (skill invocation policy, GLOSSARY):
@@ -10,7 +11,7 @@ import type { Skill } from '@/lib/skills/types';
 export function userInvocableSkills(skills: Skill[]): Skill[] {
   return skills
     .filter((skill) => invocableByUser(skill.invocation))
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    .sort(compareById);
 }
 
 /**
@@ -21,13 +22,23 @@ export function userInvocableSkills(skills: Skill[]): Skill[] {
  * The token is removed from what the model is asked. A bare `/pdf-forms` carries no
  * instruction, and leaving it in makes the model guess whether it is a path, a command,
  * or noise; the id reaches the prompt as a fact instead.
+ *
+ * The policy filter belongs here, not at the call site: a caller that forgets it turns a
+ * `model-only` skill into something the user appears to have asked for, and the panel
+ * already hid it. Typing the name of a skill the author took away from the user stays
+ * prose.
  */
 export function takeSkillCommands(
   text: string,
-  knownIds: string[],
+  skills: readonly { id: string; invocation?: SkillInvocationPolicy }[],
 ): { text: string; explicitIds: string[] } {
-  if (!text.trim() || knownIds.length === 0) return { text, explicitIds: [] };
-  const byLower = new Map(knownIds.map((id) => [id.toLowerCase(), id]));
+  const known = (skills || []).filter(
+    (skill) => skill?.id && invocableByUser(skill.invocation),
+  );
+  if (!text.trim() || known.length === 0) return { text, explicitIds: [] };
+  const byLower = new Map(
+    known.map((skill) => [skill.id.toLowerCase(), skill.id]),
+  );
   const explicit: string[] = [];
   // A slash counts only at the start or after whitespace, so paths (`src/lib/x`) and
   // inline fractions stay untouched.

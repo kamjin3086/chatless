@@ -57,8 +57,9 @@ export interface SkillIndexView {
   /** Ids the user may name but the model must not load on its own. */
   userOnlyIds: string[];
   /**
-   * 本轮被用户点名、且在输入里查得到的那些（已排序）。「查不到」就呰不掉：名字不存在
-   * 时什么都不说，而不是让模型去猜一个不存在的 id。
+   * Skills the user named in this message that resolve to something installed (sorted).
+   * A name that resolves to nothing is dropped rather than reported: better to say nothing
+   * than to send the model off to guess at an id that does not exist.
    */
   requested: SkillIndexEntryView[];
 }
@@ -96,8 +97,9 @@ function indexLine(entry: SkillIndexEntryView): string {
 }
 
 /**
- * 用户点名那条的写法。标注不是修辞：名字在索引里已经出现过的那条，模型需要知道它
- * 这轮是**被要求的**，不是可以自己拿叉去用的。
+ * How a named skill is written. The mark is not decoration: when the name already appears
+ * in the index, the model needs to know this turn *asked for it*, rather than it being one
+ * more thing the model may pick up on its own.
  */
 function requestedLine(entry: SkillIndexEntryView): string {
   const name = String(entry.name || entry.id).trim();
@@ -155,10 +157,20 @@ export function buildSkillIndex(
   }
 
   if (sorted.length === 0) {
+    // Nothing here that the model may load by itself. "Read one with skill__guide before
+    // acting on it" two lines before "do not load one unasked" is a contradiction left for
+    // the model to resolve, so the user-only case gets its own wording.
+    const userOnlyLine =
+      userOnlyIds.length > 0
+        ? [
+            '[Skills]',
+            `Only the user may start a skill here: ${userOnlyIds.map((id) => `/${id}`).join(', ')}. Do not load one unasked.`,
+            'A guide says how to combine the tools you already have, and it grants nothing - approval works as usual.',
+          ].join('\n')
+        : null;
     return {
       entries: [],
-      availabilityLine:
-        userOnlyIds.length > 0 ? availabilityLines.join('\n') : null,
+      availabilityLine: userOnlyLine,
       indexText: null,
       overflowed: false,
       userOnlyIds,

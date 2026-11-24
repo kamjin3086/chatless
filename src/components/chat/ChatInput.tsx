@@ -568,7 +568,8 @@ export function ChatInput({
     }
 
     let userMessage = inputValue.trim();
-    // “用户亲手打的那段字”与“模板嘣出来的那段字”要分开： skill 的点名只认前者。
+    // Text the user typed and text a template produced are different things: naming a
+    // skill only counts in the former.
     let shortcutRendered = false;
 
     // Render an exact saved shortcut when submitted without choosing from the panel.
@@ -630,7 +631,7 @@ export function ChatInput({
         await skillManager.initialize();
         const taken = takeSkillCommands(
           userMessage,
-          skillManager.getEnabledSkills().map((skill) => skill.id),
+          skillManager.getEnabledSkills(),
         );
         if (taken.explicitIds.length > 0) {
           explicitSkillIds = taken.explicitIds;

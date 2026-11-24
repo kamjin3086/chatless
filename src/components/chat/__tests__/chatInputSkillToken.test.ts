@@ -41,9 +41,12 @@ describe('who a leading token belongs to', () => {
     expect(SOURCE).toMatch(/if\s*\(\s*!shortcutRendered\s*\)/);
   });
 
-  it('matches shortcuts on #, so the two prefixes cannot collide', () => {
-    // The behaviour side is pinned in skillsSlash.test.ts; this pins the other half,
-    // where a shortcut token is read.
-    expect(SOURCE).toContain('text.match(/^(\\s*)#(');
+  it('gives picked skills the / prefix that the reader recognises', () => {
+    // The behaviour side is pinned in skillsSlash.test.ts; this pins the composer's half:
+    // what the panel inserts is what the send path reads back. A file reference is inserted
+    // with `@`, so the two prefixes cannot collide - the shortcut prefix `#` is matched
+    // elsewhere and pinned there, not by regex shape here.
+    expect(SOURCE).toContain('pickComposerItem(`/${skill.id} `)');
+    expect(SOURCE).toContain('pickComposerItem(`@${name} `)');
   });
 });
