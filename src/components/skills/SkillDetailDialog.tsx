@@ -7,6 +7,7 @@ import { useLocaleStore } from '@/store/localeStore';
 import { SkillStatusBadge } from './SkillStatusBadge';
 import { SkillMdRenderer } from './SkillMdRenderer';
 import { SkillFileTree } from './SkillFileTree';
+import { invocationFacts } from './invocationFacts';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -43,6 +44,8 @@ export function SkillDetailDialog({
   onOpenFolder,
 }: SkillDetailDialogProps) {
   const { locale, t } = useLocaleStore();
+  // 调用方会先拿 null 探一眼这个弹窗（SkillGrid 在未选中时也渲染它），所以不能假设 skill 在。
+  const invocation = invocationFacts(skill?.invocation);
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showFileTree, setShowFileTree] = useState(false);
@@ -242,6 +245,13 @@ export function SkillDetailDialog({
                 </span>
               </div>
             )}
+            {/* 触发方式是包作者声明的事实，这里只读；它不授予权限（ADR-0004） */}
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">{t('skills.invocation')}</span>
+              <span className="text-slate-600 dark:text-slate-300" title={t(invocation.hintKey)}>
+                {t(invocation.labelKey)}
+              </span>
+            </div>
           </div>
         </div>
 
