@@ -8,6 +8,7 @@
 import type { Skill, ISkillLoader, RemoteSkillInfo } from './types';
 import { parseSkillMd, extractDependencies, extractTitleFromContent, extractDescriptionFromContent } from './SkillMdParser';
 import { inferOriginKind, sha256Hex } from './integrity';
+import { invocationPolicyOf } from './invocation';
 
 /**
  * Anthropic Skills 仓库信息
@@ -278,6 +279,7 @@ export class RemoteSkillLoader implements ISkillLoader {
       author: frontmatter?.author,
       tags: frontmatter?.tags,
       category: frontmatter?.category,
+      invocation: invocationPolicyOf(frontmatter),
     };
 
     // 更新缓存

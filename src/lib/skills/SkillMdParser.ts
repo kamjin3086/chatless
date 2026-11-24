@@ -124,6 +124,8 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
   let inActions = false;
   let currentAction: Record<string, any> | null = null;
   let indentLevel = 0;
+  // 正在收集 YAML 块标量（`description: >` 这种写法在已有的 SKILL.md 里很常见）
+  let pendingBlock: { key: string; fold: boolean } | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -137,35 +139,63 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     const leadingSpaces = line.match(/^(\s*)/)?.[1].length || 0;
     
     // 检查是否是顶级键值对
-    const topLevelKvMatch = line.match(/^(\w+):\s*(.*)$/);
+    // 键名可以带连字符：事实标准的键就是 `disable-model-invocation`、`allowed-tools`，
+    // 只认 `\w` 会把它们整行静丢掉。
+    const topLevelKvMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
     if (topLevelKvMatch && leadingSpaces === 0) {
       const [, key, value] = topLevelKvMatch;
       const trimmedValue = value.trim();
       currentKey = key;
+      pendingBlock = null;
       
-      if (trimmedValue === '' || trimmedValue === '|' || trimmedValue === '>') {
-        // 多行值或数组/对象开始
+      if (trimmedValue === '' || trimmedValue === '|' || trimmedValue === '>' || /^[|>][-+]?\d*$/.test(trimmedValue)) {
+        // YAML 块标量（`|` 保留换行、`>` 折叠成行）或下面要接数组/对象
+        if (trimmedValue === '|' || trimmedValue === '>' || /^[|>][-+]?\d*$/.test(trimmedValue)) {
+          pendingBlock = { key, fold: trimmedValue.startsWith('>') };
+          result[key] = '';
+          currentArray = null;
+          currentObject = null;
+          inDependencies = false;
+          inActions = false;
+          currentAction = null;
+          continue;
+        }
+        // 空值：数组/对象开始
         currentArray = [];
         result[key] = currentArray;
         inDependencies = key === 'dependencies';
         inActions = key === 'actions';
         currentAction = null;
       } else {
-        // 单行值
+        // 单行值（可能后面还接缩进续行：YAML 的 plain 多行标量就是这么写的）
         currentArray = null;
         currentObject = null;
         inDependencies = false;
         inActions = false;
         currentAction = null;
+        pendingBlock = { key, fold: true };
         // 移除引号
         result[key] = trimmedValue.replace(/^["']|["']$/g, '');
       }
       continue;
     }
 
+    // YAML 块标量的正文：比键缩进、且不是 `key: value` 的行
+    if (pendingBlock && leadingSpaces > 0) {
+      const blockText = line.trim();
+      if (!/^>?\s*[A-Za-z0-9_.-]+:/.test(blockText)) {
+        const existing = String(result[pendingBlock.key] ?? '');
+        result[pendingBlock.key] = existing
+          ? (pendingBlock.fold ? `${existing} ${blockText}` : `${existing}\n${blockText}`)
+          : blockText;
+        continue;
+      }
+    }
+
     // 检查是否是数组项 (以 - 开头)
     const arrayMatch = line.match(/^(\s*)-\s*(.*)$/);
     if (arrayMatch && currentArray !== null) {
+      pendingBlock = null;
       const [, indent, value] = arrayMatch;
       const trimmedValue = value.trim();
       indentLevel = indent.length;
@@ -201,7 +231,7 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
 
     // 处理 action 对象的属性（缩进的键值对）
     if (inActions && currentAction !== null && leadingSpaces > 0) {
-      const nestedKvMatch = line.match(/^\s+(\w+):\s*(.*)$/);
+      const nestedKvMatch = line.match(/^\s+([A-Za-z0-9_-]+):\s*(.*)$/);
       if (nestedKvMatch) {
         const [, key, value] = nestedKvMatch;
         let parsedValue: any = value.trim().replace(/^["']|["']$/g, '');
@@ -218,8 +248,9 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     }
 
     // 处理普通缩进的键值对
-    const nestedKvMatch = line.match(/^\s+(\w+):\s*(.*)$/);
+    const nestedKvMatch = line.match(/^\s+([A-Za-z0-9_-]+):\s*(.*)$/);
     if (nestedKvMatch && currentKey && !inActions && !inDependencies) {
+      pendingBlock = null;
       const [, key, value] = nestedKvMatch;
       const trimmedValue = value.trim().replace(/^["']|["']$/g, '');
       
@@ -260,9 +291,33 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     } : undefined,
     // 触发关键词
     triggers: Array.isArray(result.triggers) ? result.triggers : undefined,
+    // 触发方式的两个开关（键名与 SKILL.md 一致）。只认字面 true/false，
+    // 其它写法等于没写：猜一个布尔比丢掉它更容易让人信错东西。
+    'disable-model-invocation': parseFlag(result['disable-model-invocation']),
+    'user-invocable': parseFlag(result['user-invocable']),
+    // 作者建议的工具范围。Chatless 不从中授予权限，仅作为信息保留。
+    'allowed-tools': parseToolList(result['allowed-tools']),
   };
 
   return { frontmatter, actions };
+}
+
+/** 只认字面量；未识别的写法返回 undefined，等于该键没写。 */
+function parseFlag(value: unknown): boolean | undefined {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return undefined;
+}
+
+/** `allowed-tools` 在规范里是空格分隔的字符串；也接受 YAML 列表写法。 */
+function parseToolList(value: unknown): string[] | undefined {
+  const items = Array.isArray(value)
+    ? value.map((v) => String(v ?? '').trim())
+    : typeof value === 'string'
+      ? value.split(/[\s,]+/)
+      : [];
+  const cleaned = items.filter((s) => s.length > 0);
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 /**

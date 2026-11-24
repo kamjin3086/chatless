@@ -8,6 +8,7 @@
 import type { Skill, ISkillLoader, SkillDependency } from './types';
 import { parseSkillMd, extractDependencies, extractTitleFromContent, extractDescriptionFromContent } from './SkillMdParser';
 import { inferOriginKind, sha256Hex } from './integrity';
+import { invocationPolicyOf } from './invocation';
 
 /**
  * 默认本地技能目录名
@@ -224,6 +225,7 @@ export class LocalSkillLoader implements ISkillLoader {
         author: frontmatter?.author,
         tags: frontmatter?.tags,
         category: frontmatter?.category,
+        invocation: invocationPolicyOf(frontmatter),
       };
 
       return skill;
