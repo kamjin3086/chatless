@@ -44,7 +44,8 @@ export function SkillDetailDialog({
   onOpenFolder,
 }: SkillDetailDialogProps) {
   const { locale, t } = useLocaleStore();
-  // 调用方会先拿 null 探一眼这个弹窗（SkillGrid 在未选中时也渲染它），所以不能假设 skill 在。
+  // The caller probes this dialog with a null skill (SkillGrid renders it even when
+  // nothing is selected), so it may not assume one is here.
   const invocation = invocationFacts(skill?.invocation);
   const [isGitRepo, setIsGitRepo] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);

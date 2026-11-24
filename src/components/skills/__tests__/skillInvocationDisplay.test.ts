@@ -43,9 +43,10 @@ function cardFor(policy: SkillInvocationPolicy | undefined): string {
 }
 
 /**
- * 触发方式在界面上只读，所以这条测试管两件事：三种策略要能分辨开（混在一起就等于没有
- * 这个字段），以及缺席时显示默认而不是「未知」——旧记录里没这个字段，而 `invocableByModel`
- * 把缺席当成「两者都可」，界面不能给出另一个答案。
+ * 触发方式 is read-only in the UI, so this test guards two things: that the three policies
+ * tell each other apart (blur them and the field may as well not exist), and that an absent
+ * one shows the default rather than "unknown" - older records have no such field,
+ * `invocableByModel` reads absence as "both allowed", and the UI must not answer otherwise.
  */
 describe('invocation policy display', () => {
   it('names the three policies apart', () => {
@@ -58,6 +59,23 @@ describe('invocation policy display', () => {
     expect(invocationFacts('model-only').labelKey).toBe(
       'skills.invocation.modelOnly',
     );
+    // A mapping that collapsed two policies would still pass the three checks above.
+    const keys = new Set([
+      invocationFacts('model-and-user').labelKey,
+      invocationFacts('user-only').labelKey,
+      invocationFacts('model-only').labelKey,
+    ]);
+    expect(keys.size).toBe(3);
+  });
+
+  it('lives in the skills.invocation namespace that the docs claim', () => {
+    // The repo convention is dot-separated namespaces (`skills.*`), which is also how
+    // `flat-messages.test.ts` finds keys; a flat key would resolve and still sit wrong.
+    for (const key of KEYS) {
+      const inNamespace =
+        key === 'skills.invocation' || key.startsWith('skills.invocation.');
+      expect(inNamespace, key).toBe(true);
+    }
   });
 
   it('shows the default for a record written before the field existed', () => {
@@ -81,6 +99,17 @@ describe('invocation policy display', () => {
     expect(translate('en', 'skills.invocation.hint.modelAndUser')).toContain(
       'grants no',
     );
+  });
+
+  it('says the three labels differently, in both languages', () => {
+    for (const language of ['zh', 'en'] as Locale[]) {
+      const labels = [
+        'skills.invocation.modelAndUser',
+        'skills.invocation.userOnly',
+        'skills.invocation.modelOnly',
+      ].map((key) => translate(language, key as TranslationKey));
+      expect(new Set(labels).size, `${language} blurs the policies`).toBe(3);
+    }
   });
 
   it('renders the label and the explanation on the card', () => {
