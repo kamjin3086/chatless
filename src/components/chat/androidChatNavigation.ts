@@ -45,7 +45,9 @@ export function useAndroidChatNavigation() {
 
 export function useAndroidChatSurfaces(android: boolean) {
   const [view, setView] = useState<AndroidChatView>({
-    surface: 'conversations',
+    // A phone opens on the conversation you were last in. The list is a drawer you pull out on
+    // purpose, not a wall between you and the chat you came back to read.
+    surface: 'chat',
   });
   const showConversations = () => setView({ surface: 'conversations' });
   const showChat = () => setView({ surface: 'chat' });

@@ -18,7 +18,6 @@ import { translate } from '@/i18n';
 import { useLocaleStore } from '@/store/localeStore';
 
 import { Button } from '@/components/ui/button';
-import { ChevronDown } from 'lucide-react';
 import { AndroidModelPicker } from './AndroidModelPicker';
 import { useAndroidChatNavigation } from './androidChatNavigation';
 
@@ -396,18 +395,17 @@ export function ModelSelector({
         trigger={(
           <Button
             type="button"
-            variant={setupLabel ? 'default' : 'outline'}
+            variant="ghost"
             data-model-trigger=""
             className={
               setupLabel
                 ? 'h-11'
-                : 'h-11 min-w-0 max-w-[10rem] basis-[6rem] grow gap-1 rounded-lg px-2 text-xs'
+                : 'h-11 min-w-0 max-w-[62vw] basis-[6rem] grow gap-1.5 rounded-none px-1 text-left text-xs'
             }
             title={triggerTitle}
             disabled={disabled}
           >
             {triggerContent}
-            <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
           </Button>
         )}
         models={filteredModels}
