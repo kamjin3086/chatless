@@ -146,7 +146,7 @@ describe('naming one subfolder of an authorized folder', () => {
     expect(result.error?.code).toBe('SUBFOLDER_NOT_FOUND');
     const message = result.error?.message ?? '';
     expect(message).toContain('证件, 发票2024');
-    expect(message).toContain('drop `under`');
+    expect(message).toContain('omit it to read the folder as a whole');
   });
 
   it('points at one subfolder at a time when the listing hits its cap', async () => {

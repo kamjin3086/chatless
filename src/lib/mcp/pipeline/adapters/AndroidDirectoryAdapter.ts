@@ -252,7 +252,7 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
         'SUBFOLDER_NOT_FOUND',
         `No subfolder matches "${receipt.under ?? underArg}". Subfolders that do exist - ${
           choices || 'none'
-        }. Read a path segment exactly as listed (for example under "合同"), or drop \`under\` to read the folder as a whole.`,
+        }. Pass \`under\` exactly as one of those names, or as a path of such names; omit it to read the folder as a whole.`,
       );
     }
     if (receipt?.status === 'none')
