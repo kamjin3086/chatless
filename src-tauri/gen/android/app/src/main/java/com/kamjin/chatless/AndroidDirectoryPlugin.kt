@@ -1060,6 +1060,115 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         } ?: throw IllegalStateException("no stream")
     }
 
+    /**
+     * Renaming and moving are what turns a pile of downloads into an organised folder, and they are
+     * the two operations a listing cannot do. Both keep the file where Android wants it kept: a
+     * rename is a rename, not a copy, and a move that the provider refuses says so instead of
+     * leaving the file in two places.
+     */
+    @Command
+    fun rename(invoke: Invoke) {
+        val args = invoke.getArgs()
+        val conversationId = args.getString("conversationId")
+        val rootSelector = rootName(args.optString("root"))
+        val path = pathSelector(args.optString("under"))
+        val newName = plain(args.optString("name")) ?: ""
+        executor.execute {
+            val reply = try {
+                val all = agentRoots(conversationId)
+                val targets = if (rootSelector.isEmpty()) all else matched(all, rootSelector)
+                when {
+                    all.isEmpty() -> status("none")
+                    targets.isEmpty() -> status("root_not_found").apply { put("roots", JSONArray(all.map { it.name })) }
+                    path.isEmpty() || newName.isEmpty() || newName.contains('/') ->
+                        status("unavailable")
+                    targets.size != 1 -> status("ambiguous").apply { put("roots", JSONArray(targets.map { it.name })) }
+                    else -> renameOne(targets.first(), path, newName)
+                }
+            } catch (_: Exception) {
+                status("unavailable")
+            }
+            invoke.resolve(reply)
+        }
+    }
+
+    @Command
+    fun move(invoke: Invoke) {
+        val args = invoke.getArgs()
+        val conversationId = args.getString("conversationId")
+        val rootSelector = rootName(args.optString("root"))
+        val path = pathSelector(args.optString("under"))
+        val destination = pathSelector(args.optString("to"))
+        executor.execute {
+            val reply = try {
+                val all = agentRoots(conversationId)
+                val targets = if (rootSelector.isEmpty()) all else matched(all, rootSelector)
+                when {
+                    all.isEmpty() -> status("none")
+                    targets.isEmpty() -> status("root_not_found").apply { put("roots", JSONArray(all.map { it.name })) }
+                    path.isEmpty() || targets.size != 1 -> status("ambiguous").apply { put("roots", JSONArray(targets.map { it.name })) }
+                    else -> moveOne(targets.first(), path, destination)
+                }
+            } catch (_: Exception) {
+                status("unavailable")
+            }
+            invoke.resolve(reply)
+        }
+    }
+
+    private fun renameOne(target: RootEntry, path: String, newName: String): JSObject {
+        val selection = target.selection
+        if (!hasWriteGrant(selection.uri)) return status("read_only")
+        val located = locate(selection, path) ?: return status("no_such_file").apply { put("path", path) }
+        val segments = path.split('/')
+        val parent = segments.dropLast(1)
+        val newPath = (parent + newName).joinToString("/")
+        if (newName != segments.last() && locate(selection, newPath) != null) {
+            return status("exists").apply { put("path", newPath) }
+        }
+        val uri = DocumentsContract.buildDocumentUriUsingTree(selection.uri, located.row.documentId)
+        val renamed = DocumentsContract.renameDocument(resolver, uri, newName)
+        if (renamed == null) return status("refused").apply { put("path", path) }
+        return status("renamed").apply {
+            put("path", path)
+            put("to", newPath)
+            put("directory", located.row.directory)
+        }
+    }
+
+    private fun moveOne(target: RootEntry, path: String, destination: String): JSObject {
+        val selection = target.selection
+        if (!hasWriteGrant(selection.uri)) return status("read_only")
+        val located = locate(selection, path) ?: return status("no_such_file").apply { put("path", path) }
+        val segments = path.split('/')
+        val name = segments.last()
+        val from = located.parentDocumentId ?: DocumentsContract.getTreeDocumentId(selection.uri)
+        val folders = destination.split('/').filter(String::isNotEmpty)
+        if (destination == segments.dropLast(1).joinToString("/")) {
+            return status("moved").apply {
+                put("path", path)
+                put("to", path)
+            }
+        }
+        val parentUri =
+            if (destination.isEmpty()) {
+                DocumentsContract.buildDocumentUriUsingTree(selection.uri, DocumentsContract.getTreeDocumentId(selection.uri))
+            } else {
+                ensureFolders(selection, folders) ?: return status("unavailable")
+            }
+        val to = (folders + name).joinToString("/")
+        if (to != path && locate(selection, to) != null) return status("exists").apply { put("path", to) }
+        val uri = DocumentsContract.buildDocumentUriUsingTree(selection.uri, located.row.documentId)
+        val sourceParent = DocumentsContract.buildDocumentUriUsingTree(selection.uri, from)
+        val moved = DocumentsContract.moveDocument(resolver, uri, sourceParent, parentUri)
+        if (moved == null) return status("refused").apply { put("path", path) }
+        return status("moved").apply {
+            put("path", path)
+            put("to", to)
+            put("directory", located.row.directory)
+        }
+    }
+
     /** Folders along a write path are created on the way, which is what "存到 笔记/2026" means. */
     private fun ensureFolders(selection: Selection, segments: List<String>): Uri? {
         var parent = DocumentsContract.buildDocumentUriUsingTree(selection.uri, DocumentsContract.getTreeDocumentId(selection.uri))

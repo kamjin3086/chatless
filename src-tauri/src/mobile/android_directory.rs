@@ -389,6 +389,73 @@ pub(super) async fn summarize_android_directory(
   android_plugin::call(&directory.0, "android_directory", "summarize", request).await
 }
 
+/// Renaming and moving live in the same grant: they are the two things a listing cannot do, and the
+/// provider either does them or refuses - there is no half state to explain afterwards.
+#[tauri::command]
+pub(super) async fn rename_android_directory(
+  directory: State<'_, AndroidDirectory>,
+  conversation_id: String,
+  root: Option<String>,
+  under: String,
+  name: String,
+) -> Result<serde_json::Value, String> {
+  let folder = blank(&root);
+  android_plugin::call(
+    &directory.0,
+    "android_directory",
+    "rename",
+    RenameRequest {
+      conversation_id: &conversation_id,
+      root: folder.as_deref(),
+      under: &under,
+      name: &name,
+    },
+  )
+  .await
+}
+
+#[tauri::command]
+pub(super) async fn move_android_directory(
+  directory: State<'_, AndroidDirectory>,
+  conversation_id: String,
+  root: Option<String>,
+  under: String,
+  to: Option<String>,
+) -> Result<serde_json::Value, String> {
+  let folder = blank(&root);
+  let destination = blank(&to);
+  android_plugin::call(
+    &directory.0,
+    "android_directory",
+    "move",
+    MoveRequest {
+      conversation_id: &conversation_id,
+      root: folder.as_deref(),
+      under: &under,
+      to: destination.as_deref(),
+    },
+  )
+  .await
+}
+
+#[derive(Serialize)]
+struct RenameRequest<'a> {
+  #[serde(rename = "conversationId")]
+  conversation_id: &'a str,
+  root: Option<&'a str>,
+  under: &'a str,
+  name: &'a str,
+}
+
+#[derive(Serialize)]
+struct MoveRequest<'a> {
+  #[serde(rename = "conversationId")]
+  conversation_id: &'a str,
+  root: Option<&'a str>,
+  under: &'a str,
+  to: Option<&'a str>,
+}
+
 /// A file's text, read through the folder's grant. The answer is loose on purpose: the plugin
 /// says what kind of answer it is (text, binary, missing) and TypeScript only relays it.
 #[tauri::command]

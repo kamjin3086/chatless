@@ -222,12 +222,78 @@ export const ANDROID_DIRECTORY_WRITE_FILE: McpTool = {
   },
 };
 
+export const ANDROID_DIRECTORY_RENAME: McpTool = {
+  name: 'rename',
+  description:
+    'Rename a file or a folder inside an authorized folder, by the name path a listing shows. Renaming is how a download called IMG_20240101_混乱文件1.txt becomes 发票/一月.pdf - it moves nothing across folders and keeps everything the user already has. Fails with EXISTS if the new name is taken; a folder authorized read-only cannot be renamed (ask them to 开启写入).',
+  input_schema: {
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        root: {
+          type: 'string',
+          maxLength: 120,
+          description:
+            'Authorized folder holding it. Omit when one folder is authorized.',
+        },
+        under: {
+          type: 'string',
+          maxLength: 240,
+          description: 'Name path of the file or folder to rename.',
+        },
+        name: {
+          type: 'string',
+          maxLength: 120,
+          description:
+            'The new name alone, without a path - use android_directory__move to change the folder.',
+        },
+      },
+      required: ['under', 'name'],
+    },
+  },
+};
+
+export const ANDROID_DIRECTORY_MOVE: McpTool = {
+  name: 'move',
+  description:
+    'Move a file or folder into another folder inside the same authorized folder - the organising half of the job: put 报告 v3 final.docx into 报告/2026/. Missing destination folders are created. Say the new path afterwards. An authorized read-only folder refuses (开启写入).',
+  input_schema: {
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        root: {
+          type: 'string',
+          maxLength: 120,
+          description:
+            'Authorized folder holding it. Omit when one folder is authorized.',
+        },
+        under: {
+          type: 'string',
+          maxLength: 240,
+          description: 'Name path of the file or folder to move.',
+        },
+        to: {
+          type: 'string',
+          maxLength: 240,
+          description:
+            'Destination folder as a name path, e.g. "报告/2026". Empty or omitted means the top of the authorized folder.',
+        },
+      },
+      required: ['under'],
+    },
+  },
+};
+
 export const ANDROID_DIRECTORY_TOOLS: McpTool[] = [
   ANDROID_DIRECTORY_INVENTORY,
   ANDROID_DIRECTORY_SUMMARIZE,
   ANDROID_DIRECTORY_EXPORT,
   ANDROID_DIRECTORY_READ_FILE,
   ANDROID_DIRECTORY_WRITE_FILE,
+  ANDROID_DIRECTORY_RENAME,
+  ANDROID_DIRECTORY_MOVE,
 ];
 
 /** Kept as the single shape for callers that only ever meant the listing tool. */

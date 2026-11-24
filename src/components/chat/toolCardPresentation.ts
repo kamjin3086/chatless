@@ -489,6 +489,17 @@ export function presentToolCard(locale: Locale, params: {
         kind: 'path',
       };
     }
+    if (tl === 'rename' || tl === 'move') {
+      const path = pickArg(args, 'under');
+      const target = pickArg(args, 'name') || pickArg(args, 'to');
+      return {
+        titleLine: tl === 'rename' ? t('toolCall.androidFileRename') : t('toolCall.androidFileMove'),
+        detailLineLabel: path ? t('toolCall.detail.path') : undefined,
+        detailLineFull: [path, target].filter(Boolean).join(' → ') || undefined,
+        detailLineShort: path ? truncate([path, target].filter(Boolean).join(' → '), 28) : undefined,
+        kind: 'path',
+      };
+    }
     const mime = pickArg(args, 'mimeType');
     return {
       titleLine: t('toolCall.androidFolderInventory'),

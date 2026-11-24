@@ -67,6 +67,8 @@ pub fn run() {
       android_directory::read_android_directory_file,
       #[cfg(target_os = "android")]
       android_directory::write_android_directory_file,
+            android_directory::rename_android_directory,
+            android_directory::move_android_directory,
       #[cfg(target_os = "android")]
       android_directory::authorize_android_directory_write,
       #[cfg(target_os = "android")]

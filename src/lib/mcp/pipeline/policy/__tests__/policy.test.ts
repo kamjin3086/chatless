@@ -173,7 +173,7 @@ describe('decideServerCall answers the Android capability table', () => {
       ['android_photos', 'delete'],
       ['android_photos', 'move'],
       ['android_document', 'write'],
-      ['android_directory', 'rename'],
+      ['android_directory', 'delete'],
       ['android_countdown', 'set_alarm'],
       ['android_photos_extra', 'group'],
     ]) {

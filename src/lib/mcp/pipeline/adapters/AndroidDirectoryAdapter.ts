@@ -139,6 +139,8 @@ type FileReceipt = {
   bytes?: number;
   mode?: string;
   created?: boolean;
+  to?: string;
+  directory?: boolean;
   roots?: string[];
   name?: string;
   under?: string;
@@ -263,6 +265,8 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
     if (tool === 'export') return this.export(invocation);
     if (tool === 'read_file') return this.readFile(invocation);
     if (tool === 'write_file') return this.writeFile(invocation);
+    if (tool === 'rename') return this.rename(invocation);
+    if (tool === 'move') return this.move(invocation);
     return this.inventory(invocation);
   }
 
@@ -569,6 +573,105 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
           ) ?? failure('WRITE_FAILED', 'The file could not be written.')
         );
     }
+  }
+
+  /**
+   * Renaming and moving are one shape: find the thing, ask the device to relabel it, and answer
+   * with the path it has now, because that is what the user will look for on screen.
+   */
+  private async rename(invocation: ToolInvocation) {
+    const args = invocation.args ?? {};
+    const under = normalizeUnderName(args.under);
+    const name = typeof args.name === 'string' ? args.name.trim() : '';
+    const rootArg = normalizeRootName(args.root);
+    if (under === undefined || !under)
+      return failure(
+        'INVALID_PATH',
+        '`under` is the name path of what to rename.',
+      );
+    if (!name || name.includes('/'))
+      return failure(
+        'INVALID_NAME',
+        '`name` is the new name on its own, with no path in it.',
+      );
+    if (rootArg === undefined)
+      return failure('INVALID_ROOT', '`root` names one authorized folder.');
+    return this.relocate(
+      'rename_android_directory',
+      invocation,
+      rootArg,
+      under,
+      { name },
+    );
+  }
+
+  private async move(invocation: ToolInvocation) {
+    const args = invocation.args ?? {};
+    const under = normalizeUnderName(args.under);
+    const rootArg = normalizeRootName(args.root);
+    const to = normalizeUnderName(args.to) ?? '';
+    if (under === undefined || !under)
+      return failure(
+        'INVALID_PATH',
+        '`under` is the name path of what to move.',
+      );
+    if (rootArg === undefined)
+      return failure('INVALID_ROOT', '`root` names one authorized folder.');
+    return this.relocate('move_android_directory', invocation, rootArg, under, {
+      to,
+    });
+  }
+
+  private async relocate(
+    command: string,
+    invocation: ToolInvocation,
+    rootArg: string | undefined,
+    under: string,
+    extra: Record<string, unknown>,
+  ) {
+    const receipt = await invoke<FileReceipt>(command, {
+      conversationId: invocation.conversationId,
+      root: rootArg || null,
+      under,
+      ...extra,
+    }).catch(() => undefined);
+    const done =
+      receipt?.status === 'renamed'
+        ? 'renamed'
+        : receipt?.status === 'moved'
+          ? 'moved'
+          : '';
+    if (done)
+      return {
+        ok: true,
+        [done]: true,
+        path: receipt?.path,
+        to: receipt?.to,
+        directory: receipt?.directory,
+        hint: `Tell the user the ${receipt?.directory ? 'folder' : 'file'} is now at ${receipt?.to}.`,
+      };
+    if (receipt?.status === 'exists')
+      return failure(
+        'EXISTS',
+        `"${receipt.path}" already sits there. Ask the user what to do with it - rename it first, or pick another name.`,
+      );
+    if (receipt?.status === 'read_only')
+      return failure(
+        'FOLDER_IS_READ_ONLY',
+        'That folder was authorized for reading only. Renaming and writing need it turned on for writing (附件 → 已授权文件夹 → 开启写入).',
+      );
+    if (receipt?.status === 'refused')
+      return failure(
+        'REFUSED',
+        'The folder would not accept the change. Cloud folders and some system places allow reading only.',
+      );
+    return (
+      this.failureFor(
+        (receipt ?? { status: 'unavailable' }) as Inventory,
+        rootArg ?? '',
+        under,
+      ) ?? failure('RELOCATE_FAILED', 'The name could not be changed.')
+    );
   }
 
   private async inventory(invocation: ToolInvocation) {

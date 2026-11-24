@@ -83,3 +83,18 @@ Emulator, `Qwen3.8-Flash-Next`, `Download/整理测试`:
   `created: false` and no duplicate folder. An early build created `2026 (1)` beside `2026`: the path
   walker handed the previous level to the next child query, so nested lookups missed and a write
   created a fresh folder; the walker now hands the folder it just matched.
+
+### Renaming and sorting files (next commit)
+
+Writing a file is half of organising; the other half is that `IMG_20240101_混乱文件1.txt` stops
+being called that. `rename` takes a new name, `move` takes a destination folder path inside the same
+authorized folder and creates missing folders on the way. Both need the write grant, both refuse a
+name that is already taken (`EXISTS`) rather than displacing it, and neither is read-only to the
+policy, so plan mode holds them back.
+
+- Rename `测试笔记.md` → `周记.md`: on disk after the call, and a rename onto a taken name
+  (`笔记/2026/周报.md` → `周记.md`, where `周记.md` already lived there) answered `EXISTS` and left
+  both files alone - the model then listed the ways out instead of guessing.
+- Move `周记.md` → `笔记/2026/周记.md`, then `说明.txt` → `归档/11月/说明.txt`: `归档` and
+  `归档/11月` did not exist and were created; `ls` shows the file in the new place and gone from the
+  old one.

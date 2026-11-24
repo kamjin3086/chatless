@@ -385,6 +385,61 @@ describe('Android directory tool scope', () => {
     });
   });
 
+  it('renames and moves answer with where the file ended up', async () => {
+    mocks.ask.mockResolvedValue({
+      approved: true,
+      decision: 'once',
+      revision: 0,
+    });
+    mocks.invoke.mockResolvedValue({
+      status: 'renamed',
+      path: 'IMG_20240101_混乱文件1.txt',
+      to: '发票-一月.txt',
+    });
+    expect(
+      await run({
+        tool: 'rename',
+        args: { under: 'IMG_20240101_混乱文件1.txt', name: '发票-一月.txt' },
+      }),
+    ).toMatchObject({ ok: true, renamed: true, to: '发票-一月.txt' });
+
+    mocks.invoke.mockResolvedValue({
+      status: 'moved',
+      path: '发票-一月.txt',
+      to: '发票/一月.txt',
+    });
+    expect(
+      await run({ tool: 'move', args: { under: '发票-一月.txt', to: '发票' } }),
+    ).toMatchObject({
+      ok: true,
+      moved: true,
+      to: '发票/一月.txt',
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'move_android_directory',
+      expect.objectContaining({ under: '发票-一月.txt', to: '发票' }),
+    );
+  });
+
+  it('does not let one name land on top of another', async () => {
+    mocks.ask.mockResolvedValue({
+      approved: true,
+      decision: 'once',
+      revision: 0,
+    });
+    mocks.invoke.mockResolvedValue({ status: 'exists', path: '发票/一月.txt' });
+    expect(
+      await run({ tool: 'move', args: { under: '一月.txt', to: '发票' } }),
+    ).toMatchObject({ error: { code: 'EXISTS' } });
+
+    // A path in the new name is the model reaching for the move tool by mistake.
+    const bad = (await run({
+      tool: 'rename',
+      args: { under: '一月.txt', name: '发票/一月.txt' },
+    })) as { error?: { code?: string } };
+    expect(bad.error?.code).toBe('INVALID_NAME');
+  });
+
   it('reads a file as text and hands back where the rest starts', async () => {
     mocks.invoke.mockResolvedValue({
       status: 'file',
@@ -526,7 +581,10 @@ describe('Android directory tool scope', () => {
       ok: false,
       error: { code: 'DIRECTORY_ACCESS_LOST' },
     });
-    expect(await run({ tool: 'move' })).toMatchObject({ error: 'NO_ADAPTER' });
+    // Deleting is not on the menu yet: an unknown verb must not reach the device at all.
+    expect(await run({ tool: 'delete' })).toMatchObject({
+      error: 'NO_ADAPTER',
+    });
     expect(await run({ tool: 'forget' })).toMatchObject({
       error: 'NO_ADAPTER',
     });

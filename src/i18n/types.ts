@@ -278,6 +278,8 @@ export type TranslationKey =
   | 'toolCall.androidFileWrite'
   | 'toolCall.androidFileOverwrite'
   | 'toolCall.androidFileAppend'
+  | 'toolCall.androidFileRename'
+  | 'toolCall.androidFileMove'
   | 'toolCall.androidDocumentSearch'
   | 'toolCall.androidDocumentExcerpt'
   | 'toolCall.androidPhotoGroups'

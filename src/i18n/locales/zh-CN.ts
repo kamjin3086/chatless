@@ -299,6 +299,8 @@ const zhCN: TranslationDict = {
   'toolCall.androidFileRead': '读取文件内容',
   'toolCall.androidFileWrite': '写入文件',
   'toolCall.androidFileOverwrite': '覆盖文件',
+  'toolCall.androidFileRename': '重命名',
+  'toolCall.androidFileMove': '移动文件',
   'toolCall.androidFileAppend': '追加到文件',
   'toolCall.androidDocumentSearch': '在附加文档中查找',
   'toolCall.androidDocumentExcerpt': '读取附加文档片段',

@@ -329,6 +329,8 @@ const enUS: TranslationDict = {
   'toolCall.androidFileRead': 'Read the file',
   'toolCall.androidFileWrite': 'Write the file',
   'toolCall.androidFileOverwrite': 'Replace the file',
+  'toolCall.androidFileRename': 'Rename',
+  'toolCall.androidFileMove': 'Move a file',
   'toolCall.androidFileAppend': 'Add to the file',
   'toolCall.androidDocumentSearch': 'Search attached document',
   'toolCall.androidDocumentExcerpt': 'Read document excerpt',
