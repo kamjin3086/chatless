@@ -44,6 +44,11 @@ export default function ChatPage() {
   const [photoHandoff] = useState(createAndroidPhotoDraftHandoff);
   const [isClient, setIsClient] = useState(false);
   const [isInputAreaHovered, setIsInputAreaHovered] = useState(false);
+  // The phone's start panel hands its text to the composer through here.
+  const [starterSeed, setStarterSeed] = useState<{
+    text: string;
+    at: number;
+  } | null>(null);
   const ensureMessagesLoaded = useChatStore(
     (state) => state.ensureMessagesLoaded,
   );
@@ -476,6 +481,7 @@ export default function ChatPage() {
               {showStarter && (
                 <ChatEmptyState
                   setupState={setupState}
+                  onStarter={(text) => setStarterSeed({ text, at: Date.now() })}
                   modelPicker={{
                     allMetadata,
                     currentModelId: selectedModelId,
@@ -511,6 +517,7 @@ export default function ChatPage() {
                   onSessionParametersChange={handleSessionParametersChange}
                   conversationId={currentConversationId}
                   showStarterActions={showStarter}
+                  starterSeed={starterSeed}
                 />
               </div>
             </div>

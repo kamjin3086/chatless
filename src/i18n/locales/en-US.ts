@@ -175,6 +175,11 @@ const enUS: TranslationDict = {
   'prompts.export.failed': 'Export failed',
   'prompts.export.error': 'An error occurred while exporting prompts',
   'chatStarter.title': 'Start a conversation',
+  'chatStarter.mobileHint': 'Say what you need, or start from one of these.',
+  'chatStarter.starterFolders': 'See what is in my authorized folders',
+  'chatStarter.starterTimer': 'Set a 10-minute timer',
+  'chatStarter.starterSearch': 'Search today’s tech news',
+
   'chatStarter.initializing': 'Getting models ready…',
   'chatStarter.noProvider': 'Add a provider to start chatting',
   'chatStarter.noSelection': 'Choose a model for this conversation',

@@ -111,7 +111,9 @@ interface ChatInputProps {
   modelId?: string;
   modelLabel?: string;
   conversationId?: string; // 添加会话ID参数
-  showStarterActions?: boolean;
+   showStarterActions?: boolean;
+  /** Text to drop into the composer when the start panel is tapped. Change `at` to re-send. */
+  starterSeed?: { text: string; at: number } | null;
   onSessionParametersChange?: (parameters: ModelParameters) => void;
 }
 
@@ -134,6 +136,7 @@ export function ChatInput({
   onSessionParametersChange: _onSessionParametersChange,
   conversationId,
   showStarterActions = false,
+  starterSeed,
   androidPhotoHandoff,
 }: ChatInputProps) {
   const android = Boolean(useAndroidChatNavigation());
@@ -507,6 +510,15 @@ export function ChatInput({
       el.focus();
     });
   };
+
+  // A starter is tapped outside the composer, so the seed is how the start panel hands its text
+  // in. Keyed on `at` so tapping the same starter twice still lands.
+  const seedAt = starterSeed?.at;
+  useEffect(() => {
+    if (seedAt === undefined || !starterSeed) return;
+    setComposerText(starterSeed.text, starterSeed.text.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedAt]);
   const openComposerPanel = (trigger: ComposerTrigger) => {
     const el = textareaRef.current;
     if (!el || el.disabled) return;
@@ -1395,7 +1407,7 @@ export function ChatInput({
         enabledMcpServers={[]}
       />
 
-      {showStarterActions && !disabled && !effectiveLoading && (
+      {showStarterActions && !android && !disabled && !effectiveLoading && (
         <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5" data-chat-starter-actions>
           <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
             className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
