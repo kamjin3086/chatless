@@ -219,9 +219,10 @@ export const SKILL_CHECK_DEPS_TOOL: McpTool = {
 // ============ 导出 ============
 
 /**
- * 使用面（只读）：模型只要想知道/读一个 skill，这四个就够了。
- * 技能索引出现时这四个工具会一起进入工具列表——索引让模型去读 `skill__guide`，
- * 那个工具就必须真在请求里，否则就是一行指向幽灵工具的指示。
+ * The usage side (read-only): these four are all a model needs to know about or read a
+ * skill. They enter the tool list together with the skill index - the index tells the model
+ * to read `skill__guide`, so that tool has to be in the request, or the line is an
+ * instruction pointing at a ghost.
  */
 export const SKILL_USAGE_TOOLS: McpTool[] = [
   SKILL_LIST_TOOL,

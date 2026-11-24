@@ -5,42 +5,65 @@ import { buildSkillIndex, skillIndexBlocks } from '../skillIndex';
 import type { SkillIndexEntryView } from '../skillIndex';
 
 /**
- * `skillIndex.ts` 值钱的地方是它纯：输入进来，文本出去，没有第三个世界。
+ * What is valuable about `skillIndex.ts` is that it is pure: entries in, text out, no
+ * third world involved.
  *
- * 这不是一句风格偏好。这条缝上原来躺着四条走不通的路，每条都是「顺手在这里读一下
- * store / 盘」换来的：读一次就多一次时机问题，而时机问题在 prompt 里表现为某个用户的
- * 清单和别人不一样，最难查。所以这里把「纯」变成断言——把 import 加回来的人会先撞到
- * 这条测试和这段解释，而不是在集成测试里发现索引变得不可预期。
+ * That is not a style preference. Four paths into this area never worked, and each one was
+ * paid for by someone reading the store or the disk from inside the renderer: every extra
+ * read adds a timing question, and a timing question in a prompt shows up as one user's
+ * index differing from another's - the hardest class of report to trace. So purity is
+ * asserted here rather than commented: whoever adds an import back runs into this test and
+ * the explanation, instead of discovering in integration that the index has become
+ * unpredictable.
  */
 const SOURCE = readFileSync(
   resolve(process.cwd(), 'src/lib/skills/skillIndex.ts'),
   'utf8',
 );
 
-// 上面的解释本身提到了 `SkillManager`，所以扫描的是去注释后的代码：这条测试管的是
-// 真的 import 了什么，不是文件里提到了什么名字。
+// Comments mention `SkillManager` by name (the seam's other side), so the scan runs on the
+// code with comments removed: this test is about what is actually imported, not about which
+// words appear in prose.
 const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(
   /(^|[^:])\/\/.*$/gm,
   '$1',
 );
 
-/** 允许 import 的东西。加一条要在这里加，那一步就是让「读盘」重新变成一次决定。 */
+/** Everything the module may import. Adding a line here is the moment "read from disk" becomes a decision again. */
 const ALLOWED_IMPORTS = [
-  '@/lib/mcp/prompt/composition', // 只为 PromptBlock 的类型
+  '@/lib/mcp/prompt/composition', // type only: PromptBlock
   './types',
   './invocation',
 ];
 
-const FORBIDDEN = [
+/** Dependencies that would put a world behind the seam: disk, store, Tauri, loaders. */
+const FORBIDDEN_IMPORTS = [
   'node:fs',
+  'node:path',
   '@tauri-apps',
-  'SkillManager',
-  'useSkillStore',
+  './SkillManager',
+  './LocalSkillLoader',
+  './RemoteSkillLoader',
+  '@/store',
+];
+
+/** Reads that make the same input produce different bytes. */
+const FORBIDDEN_CALLS = [
   'Date.now',
   'Math.random',
   'process.env',
   'localStorage',
 ];
+
+function importSources(): string[] {
+  const statics = [...CODE.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(
+    (m) => m[1],
+  );
+  const dynamics = [...CODE.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)].map(
+    (m) => m[1],
+  );
+  return [...statics, ...dynamics];
+}
 
 describe('the skill index stays a pure module', () => {
   it('reads a real file, so a rename fails here rather than passing vacuously', () => {
@@ -48,9 +71,7 @@ describe('the skill index stays a pure module', () => {
   });
 
   it('imports nothing but the prompt block type, the policy and its own types', () => {
-    const sources = [...CODE.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(
-      (m) => m[1],
-    );
+    const sources = importSources();
 
     expect(sources.length).toBeGreaterThan(0);
     for (const source of sources) {
@@ -61,13 +82,23 @@ describe('the skill index stays a pure module', () => {
     }
   });
 
-  it('touches no filesystem, no store, no Tauri, no clock, no randomness', () => {
-    for (const needle of FORBIDDEN) {
+  it('names and refuses the dependencies that would put a world behind the seam', () => {
+    const sources = importSources();
+    for (const forbidden of FORBIDDEN_IMPORTS) {
+      expect(
+        sources.some((s) => s.startsWith(forbidden)),
+        `skillIndex.ts reached for ${forbidden}`,
+      ).toBe(false);
+    }
+  });
+
+  it('touches no clock and no randomness, so a call cannot depend on when it happens', () => {
+    for (const needle of FORBIDDEN_CALLS) {
       expect(CODE, `skillIndex.ts reached for ${needle}`).not.toContain(needle);
     }
   });
 
-  it('is synchronous, so a call cannot depend on when it happens', () => {
+  it('is synchronous', () => {
     expect(CODE).not.toMatch(/\basync\b/);
     expect(CODE).not.toMatch(/\bawait\b/);
     expect(CODE).not.toMatch(/\bPromise\b/);
@@ -82,7 +113,8 @@ describe('the skill index stays a pure module', () => {
     const twice = skillIndexBlocks(buildSkillIndex(entries));
 
     expect(twice).toEqual(once);
-    // 排序也不许看 locale：两台机器同一份清单必须发出同一串字节。
+    // Sorting may not consult locale either: two machines with the same skills must send
+    // the same bytes.
     const shuffled = skillIndexBlocks(buildSkillIndex([...entries].reverse()));
     expect(shuffled).toEqual(once);
   });

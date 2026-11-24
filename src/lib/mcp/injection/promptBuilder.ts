@@ -29,7 +29,7 @@ import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
 import { resolveToolTrack, shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { getSkillManager } from '@/lib/skills';
-import { skillIndexBlocks } from '@/lib/skills/skillIndex';
+import { skillIndexBlocks, skillIndexUsable } from '@/lib/skills/skillIndex';
 import { SKILL_SERVER_NAME, SKILL_USAGE_TOOLS } from '@/lib/mcp/nativeTools/skillUnifiedTools';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
@@ -233,15 +233,19 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled;
 
-  // Skills: 一次 run 只读一次。工具列表与索引必须同源，否则会出现「索引让模型
-  // 去调一个不在请求里的工具」——那就是技能索引被关掉期间一直 latent 的那个幽灵。
+  // Skills: read once per run, and read from one place. The tool list and the index must
+  // come from the same snapshot, or the index can tell the model to call a tool that is
+  // not in the request - the exact ghost that stayed latent while the index was switched
+  // off. The track decides whether the run can act on skills at all: the standing line
+  // names `skill__guide`, so on the `disabled` track it would point at nothing.
   const skillIndexView = await getSkillManager().buildSkillIndexView();
+  const skillIndexOn = skillIndexUsable(track, !!skillIndexView.availabilityLine);
 
-  // 构建原生工具定义（用于 native tool API 或文本注入）
+  // Native tool definitions (native tool API, or the text injection fallback)
   const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
     servers: enabled,
     includeWebSearch: shouldExposeWebSearch,
-    includeSkillUsageTools: !!skillIndexView.availabilityLine,
+    includeSkillUsageTools: skillIndexOn && useNativeTools,
     userContent: context.userContent || '',
     conversationId: context.conversationId,
   });
@@ -308,6 +312,9 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
     ...(shouldExposeWebSearch ? [WEB_SEARCH_SERVER_NAME] : []),
     FILESYSTEM_SERVER_NAME,
     SHELL_EXECUTOR_SERVER_NAME,
+    // On the text-tool track the index is only honest if `skill` is one of the servers the
+    // protocol block advertises; naming skill__guide without it is a dead promise.
+    ...(skillIndexOn && track === 'prompt' ? [SKILL_SERVER_NAME] : []),
   ];
   
   if (allEnabled.length > 0) {
@@ -329,9 +336,13 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
     blocks.push({ id: 'web-search-policy', layer: 'conversation', order: 70, content: MCPPrompts.webSearchPolicy });
   }
 
-  // 8. 技能索引（skill index）：常驻行与清单分成两个 block，由 `skillIndexBlocks`
-  // 决定形状（那里能脱开 Tauri 被直接测）。
-  blocks.push(...skillIndexBlocks(skillIndexView));
+  // 8. The skill index: the standing line and the list are two blocks, shaped in
+  // `skillIndexBlocks` where it can be tested without Tauri. Skipped when the run cannot
+  // call anything - a line that says "read skill__guide first" with no tools behind it is
+  // the failure mode the knowledge line guards against (#160).
+  if (skillIndexOn) {
+    blocks.push(...skillIndexBlocks(skillIndexView));
+  }
   
 
   // Plan-only is a per-turn instruction: the user can toggle it between turns.
@@ -386,7 +397,7 @@ async function injectTimeContext(
 interface NativeToolBuildOptions {
   servers: string[];
   includeWebSearch: boolean;
-  /** 有 skill 可用时，索引指向的那四个只读工具得真在请求里。 */
+  /** When skills are available, the four read-only tools the index points at must really be in the request. */
   includeSkillUsageTools?: boolean;
   userContent?: string;
   conversationId?: string;
@@ -446,8 +457,9 @@ async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promi
       ...tools.slice(coreToolStart).filter((tool) => !tool.name.startsWith(`${WEB_SEARCH_SERVER_NAME}__`)));
   }
 
-  // 1.1b 只要索引要出现，它指向的那四个只读工具就必须真在请求里：一行「先去
-  // skill__guide」指着一个不存在的工具，比不给索引更坑。管理工具仍走 tools__load。
+  // 1.1b If the index appears, the four read-only tools it points at must really be in the
+  // request: a line saying "read skill__guide first" that points at a missing tool is worse
+  // than no index. Management tools still come through tools__load.
   if (params.includeSkillUsageTools) {
     await addToolEntries(SKILL_USAGE_TOOLS.map((tool) => ({ server: SKILL_SERVER_NAME, tool })));
   }

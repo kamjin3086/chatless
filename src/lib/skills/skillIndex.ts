@@ -3,25 +3,36 @@ import type { SkillInvocationPolicy } from './types';
 import { invocableByModel, invocableByUser } from './invocation';
 
 /**
- * 技能索引（Skill index）：模型在本机上能看见的那份 skill 清单。
+ * 技能索引 (Skill index, see `GLOSSARY.md`): the list of skills the model can see on this
+ * machine.
  *
- * 这是缝的一侧，另一侧是 provider（`SkillManager`，管磁盘、来源与启用态）。这里不读
- * store、不碰文件系统、不 import Tauri：输入是已经加载好的窄视图，输出是要进 system
- * prompt 的两段文本。索引因此可以脱离应用被直接测试——而它一旦不能被直接测试，这条缝
- * 上就已经积累过四条没人走通的路径。
+ * This is the pure side of a seam; the other side is the provider (`SkillManager`, which
+ * owns disk, sources and enabled state). Nothing here reads the store, touches the
+ * filesystem or imports Tauri: the input is a narrow view of already-loaded entries, the
+ * output is the text that goes into the system prompt, which is what lets the index be
+ * tested without an application. That testability is the whole reason it is a seam - the
+ * paths into this area that never worked (`PR #230` deleted them: the keyword matcher, the
+ * switched-off injection branch, the dead command hook, the stale adapter aliases) each
+ * died of being untestable in place.
  *
- * 两条正交的事分开判：
- * - 「谁能触发」由 `invocableByModel` 判（来自 frontmatter，见 invocation.ts）；
- * - 「这台机器能不能用」将来由适用性判（平台/能力），目前还没有需求，所以这里不留空转的参数位。
+ * Two orthogonal questions stay separate:
+ * - who may start a skill: `invocableByModel`, derived from frontmatter (`invocation.ts`);
+ * - whether this machine can run one: applicability (platform, capabilities). No need
+ *   exists for it yet, so no idle parameter slot is reserved for it here.
  */
 
-/** 单条描述的上限：再短就切掉 "Use when …"，那正是路由用的半句。 */
+/** Per-description cap. Shorter cuts "Use when …", which is the routing half of the line. */
 export const SKILL_DESCRIPTION_MAX_CHARS = 320;
 
-/** 索引正文的字节预算。超了不是截断，是整份退回常驻行——半份清单会诱导误选。 */
+/**
+ * Budget for the index body, counted in UTF-16 code units (JS string length), not bytes:
+ * a CJK description costs more than one byte per character, so the wire size of a
+ * Chinese-heavy index is above this figure. Over budget is not a truncation - the whole
+ * list falls back to the standing line, because a half list invites wrong picks.
+ */
 export const SKILL_INDEX_BUDGET_CHARS = 1200;
 
-/** 缝看到的窄视图，不是持久化里的 23 字段记录。 */
+/** The narrow view the seam sees - not the 23-field persisted record. */
 export interface SkillIndexEntryView {
   id: string;
   name: string;
@@ -30,21 +41,39 @@ export interface SkillIndexEntryView {
 }
 
 export interface SkillIndexFacts {
-  /** 本条消息里用户点名的 skill（用户指定只活到它所属的那次发送）。 */
+  /** Skills the user named in this message (a named skill lives only as long as the send). */
   explicitIds?: string[];
 }
 
 export interface SkillIndexView {
-  /** 模型可见的那些（已过滤、已排序）。 */
+  /** What the model may see (filtered, sorted). */
   entries: SkillIndexEntryView[];
-  /** 常驻行：有 skill 可用时才有内容。 */
+  /** The standing line: only present when skills are available at all. */
   availabilityLine: string | null;
-  /** 索引正文；超出预算时为 null，此时只保留常驻行。 */
+  /** The index body; null when it is over budget, in which case only the line remains. */
   indexText: string | null;
-  /** 为什么没有索引正文。 */
+  /** Why there is no index body. */
   overflowed: boolean;
-  /** 用户可点名、但模型不该自动加载的那些 id。 */
+  /** Ids the user may name but the model must not load on its own. */
   userOnlyIds: string[];
+}
+
+/**
+ * Sort by id: locale-independent and byte-stable, so two machines with the same skills
+ * send the same bytes and the cached prompt prefix does not drift. `localeCompare` on
+ * `name` does neither.
+ */
+export function compareById(a: { id: string }, b: { id: string }): number {
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
+ * Can a run act on the index at all? The standing line tells the model to call
+ * `skill__guide`, so it must not appear on a track where nothing can be called
+ * (`disabled`): that is the same failure #160 guards for the knowledge line.
+ */
+export function skillIndexUsable(track: string, hasIndex: boolean): boolean {
+  return hasIndex && track !== 'disabled';
 }
 
 function descriptionOf(entry: SkillIndexEntryView): string {
@@ -65,10 +94,7 @@ function lineFor(entry: SkillIndexEntryView, requested: Set<string>): string {
 }
 
 /**
- * 由已启用的 skill 构造模型可见的索引。
- *
- * 排序按 `id`：它稳定、与 locale 无关，所以 system prompt 的缓存前缀不会因为界面换了
- * 语言就整段漂移（`name.localeCompare` 就做不到这一点）。
+ * Build the index the model sees from the enabled skills.
  */
 export function buildSkillIndex(
   skills: readonly SkillIndexEntryView[],
@@ -77,20 +103,14 @@ export function buildSkillIndex(
   const requested = new Set(
     (facts.explicitIds || []).map((id) => String(id).trim()).filter(Boolean),
   );
-  const byId = new Map<string, SkillIndexEntryView>();
-  for (const skill of skills) {
-    if (skill?.id) byId.set(skill.id, skill);
-  }
-
-  // 用户点名的那些必须到达模型，哪怕它的策略本来不让模型自己加载。
+  // A skill the user named has to reach the model even if its policy keeps it out of the
+  // model's own reach.
   const visible = (skills || []).filter(
     (skill) =>
       skill?.id &&
       (invocableByModel(skill.invocation) || requested.has(skill.id)),
   );
-  const sorted = [...visible].sort((a, b) =>
-    a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
-  );
+  const sorted = [...visible].sort(compareById);
 
   const userOnlyIds = (skills || [])
     .filter(
@@ -153,12 +173,14 @@ export function buildSkillIndex(
 }
 
 /**
- * 索引要变成哪两个 prompt block。
+ * Which prompt blocks the index becomes.
  *
- * 分开两块不是因为它们是两段不同的重要文本，而是为了让 `changedBlockIds` 能说出
- * 是哪部分变了：合成一块后，任何一处改变都只报「这块变了」，而这两块的变化频率本来
- * 就不同（前者只在有无 skill 之间变，后者随清单内容变）。两条都在 conversation 层：
- * 它们与本轮措辞无关，放 turn 层每轮重拼只会白白打断缓存前缀。
+ * Two blocks rather than one is not about two pieces of important text: it lets
+ * `changedBlockIds` say which part moved. Merged, any change reports the same single
+ * block, while these two change at different rates (the line only flips between "skills
+ * exist" and "none do"; the body follows the list). Both live in the conversation layer:
+ * neither depends on this turn's wording, and putting them in the turn layer would break
+ * the cached prefix on every turn for nothing.
  */
 export function skillIndexBlocks(view: SkillIndexView): PromptBlock[] {
   const blocks: PromptBlock[] = [];

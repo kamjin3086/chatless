@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSkillIndex,
   skillIndexBlocks,
+  skillIndexUsable,
   SKILL_DESCRIPTION_MAX_CHARS,
   SKILL_INDEX_BUDGET_CHARS,
   type SkillIndexEntryView,
@@ -122,5 +123,24 @@ describe('the text is a prompt', () => {
     expect(first.availabilityLine).toBe(second.availabilityLine);
     expect(first.indexText).not.toMatch(CJK);
     expect(first.availabilityLine).not.toMatch(CJK);
+  });
+});
+
+describe('whether a run may be told about skills at all', () => {
+  // The standing line tells the model to call `skill__guide`. On a track with no way to
+  // call anything, that is an instruction pointing at nothing - the same failure #160
+  // guards for the knowledge line.
+  it('appears on the tracks that can call a tool', () => {
+    expect(skillIndexUsable('native', true)).toBe(true);
+    expect(skillIndexUsable('prompt', true)).toBe(true);
+  });
+
+  it('stays silent on the track with nothing to call', () => {
+    expect(skillIndexUsable('disabled', true)).toBe(false);
+  });
+
+  it('stays silent when there is no index to point at', () => {
+    expect(skillIndexUsable('native', false)).toBe(false);
+    expect(skillIndexUsable('disabled', false)).toBe(false);
   });
 });

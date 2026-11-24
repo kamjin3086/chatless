@@ -77,8 +77,9 @@ export class SkillUnifiedAdapter implements ToolAdapter {
   // ========================================
 
   private async listSkills(args: Record<string, unknown>): Promise<unknown> {
-    // 只问 manager：它是磁盘与启用态的 provider，store 只是它写给 UI 的视图缓存。
-    // 从 store 直接读，模型看见的就是「上一次界面刷新时」的世界，而不是盘上的事实。
+    // Ask the manager only: it is the provider of disk state and enabled state, and the
+    // store is the view it writes for the UI. Reading the store directly would show the
+    // model "whatever the interface last refreshed" instead of what is on disk.
     const manager = getSkillManager();
     await manager.initialize();
     const query = String(args.query || '').trim().toLowerCase();

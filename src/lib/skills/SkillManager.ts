@@ -9,7 +9,7 @@ import { LocalSkillLoader, createLocalSkillLoader } from './LocalSkillLoader';
 import { RemoteSkillLoader, createRemoteSkillLoader } from './RemoteSkillLoader';
 import { useSkillStore } from '@/store/skillStore';
 import { inferOriginKind } from './integrity';
-import { buildSkillIndex, SKILL_DESCRIPTION_MAX_CHARS, type SkillIndexFacts, type SkillIndexView } from './skillIndex';
+import { buildSkillIndex, type SkillIndexFacts, type SkillIndexView } from './skillIndex';
 import { ensureAllowlistedDirectory } from '@/lib/filesystemAllowlist';
 
 /**
@@ -844,22 +844,29 @@ export class SkillManager {
   }
 
   /**
-   * 模型可见的那份技能索引（skill index）。
+   * The skill index the model sees (技能索引, see `GLOSSARY.md`).
    *
-   * provider 只做三件事：确保已加载、取窄视图、把窄视图交给纯 module 拼文本。
-   * 预算、排序、触发方式过滤这些规则全部在 skillIndex.ts 里，所以它们能脱离 Tauri
-   * 被直接测——这条缝上已经积过四条没人走通的路径，不能再加一条测不了的。
+   * The provider does three things and no more: make sure skills are loaded, take the
+   * narrow view of them, hand that to the pure module that renders the text. Budget,
+   * ordering and invocation filtering live in `skillIndex.ts`, which is what makes them
+   * testable without Tauri - this seam already accumulated four paths nobody could test
+   * where they stood (`PR #230` deleted them), so a fifth untestable one is not welcome.
    *
-   * 读盘失败不能拖垮一次对话：拿不到就当作没有 skill。
+   * Descriptions are passed through untruncated: the seam owns the cap and marks it with
+   * `…`. Truncating here as well - as `getSkillIndex` does for `skill__list` - would make
+   * the seam's marking unreachable in production.
+   *
+   * A failed read must not sink a conversation: when disk says nothing, the answer is no
+   * skills.
    */
   async buildSkillIndexView(facts: SkillIndexFacts = {}): Promise<SkillIndexView> {
     try {
       await this.initialize();
-      const entries = this.getSkillIndex(SKILL_DESCRIPTION_MAX_CHARS).map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        description: entry.description,
-        invocation: entry.invocation,
+      const entries = this.getEnabledSkills().map((skill) => ({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        invocation: skill.invocation,
       }));
       return buildSkillIndex(entries, facts);
     } catch (error) {
