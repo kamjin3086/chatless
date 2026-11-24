@@ -149,6 +149,7 @@ export function getShellGuidance(platform: RuntimePlatform): {
         'There is no home directory and no "~". Paths like ~/Downloads, ~\Download or C:\\Users do not exist on this device.',
         'Files are reachable only through the tools this chat gives you (the folder, photo and document tools). A folder is readable only after the user hands it over from the attachment menu.',
         'An authorized folder is named by the user, not by the file system. Call android_directory__inventory with no arguments to see which folders exist and what they are called; pass `root` only with a name from that list - never a path, and never an empty string.',
+        'Every entry carries a `path` under its folder, so nested folders are visible. To read inside one subfolder, pass `under` with that name path (for example "合同/2024") or a folder handle from a previous result; a wrong name answers with the subfolders that exist. A listing stopped at its entry limit says so: read subfolders one at a time instead of reading the whole folder again.',
         'When the user asks about a directory you cannot see, say which folder you need and ask them to attach it. Do not guess paths, and do not retry a path that just failed.',
       ],
       commandExamples: {},

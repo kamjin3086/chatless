@@ -207,7 +207,7 @@ describe('Android directory tool scope', () => {
     });
     expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
       'inventory_android_directory',
-      { conversationId: selectedChat, root: null },
+      { conversationId: selectedChat, root: null, under: null },
     );
     expect(mocks.ask).not.toHaveBeenCalled();
   });

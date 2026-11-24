@@ -200,6 +200,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     fun inventory(invoke: Invoke) {
         val conversationId = invoke.getArgs().getString("conversationId")
         val selector = rootName(invoke.getArgs().optString("root"))
+        val under = rootName(invoke.getArgs().optString("under"))
         executor.execute {
             val receipt = try {
                 val all = agentRoots(conversationId)
@@ -209,13 +210,91 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
                     targets.isEmpty() -> status("root_not_found").apply {
                         put("roots", JSONArray(all.map { it.name }))
                     }
-                    else -> sectionsOf(targets)
+                    under.isEmpty() -> sectionsOf(targets, "")
+                    else -> scopedSections(targets, under)
                 }
             } catch (_: Exception) {
                 status("unavailable")
             }
             invoke.resolve(receipt)
         }
+    }
+
+    /**
+     * `under` reads one subdirectory instead of the whole folder: a name path the user would
+     * recognize (`合同/2024`), or a folder handle from an earlier listing. A folder can hold
+     * thousands of items, and one flat listing of the top of it answers nothing.
+     */
+    private fun scopedSections(targets: List<RootEntry>, under: String): JSObject {
+        val missing = mutableListOf<JSObject>()
+        for (target in targets) {
+            val root = openRoot(target.selection) ?: continue
+            val nonce = target.selection.nonce
+            when (val found = resolveUnder(target.selection, root, under, nonce)) {
+                is UnderMatch.Found -> {
+                    val result = AndroidDirectoryInventory(nonce).scan(found.row) { parentId, accept ->
+                        queryChildren(target.selection, parentId, accept)
+                    } ?: continue
+                    return status("ready").apply {
+                        val section = JSObject().apply {
+                            put("folder", result.folder.toJson())
+                            put("entries", entriesOf(result))
+                            put("omissions", omissionsOf(result))
+                        }
+                        put("sections", JSONArray(listOf(section)))
+                        put("folder", section.getJSONObject("folder"))
+                        put("entries", section.getJSONArray("entries"))
+                        put("omissions", section.getJSONArray("omissions"))
+                    }
+                }
+                is UnderMatch.Missing -> missing.add(
+                    JSObject().apply {
+                        put("folder", target.name)
+                        put("segment", found.segment)
+                        put("available", JSONArray(found.available))
+                    },
+                )
+            }
+        }
+        return status("subfolder_not_found").apply {
+            put("under", under)
+            put("choices", JSONArray(missing))
+        }
+    }
+
+    private sealed class UnderMatch {
+        data class Found(val row: DirectoryRow) : UnderMatch()
+        data class Missing(val segment: String, val available: List<String>) : UnderMatch()
+    }
+
+    /** Walks the path one level at a time, so a wrong segment names what was there instead. */
+    private fun resolveUnder(
+        selection: Selection,
+        root: DirectoryRow,
+        under: String,
+        nonce: String,
+    ): UnderMatch {
+        val byHandle = Regex("^[0-9a-f]{32}$").matches(under)
+        val segments = if (byHandle) listOf(under) else under.split('/', '\\', '／').map(String::trim).filter(String::isNotEmpty)
+        var current = root
+        for (segment in segments) {
+            val children = mutableListOf<DirectoryRow>()
+            queryChildren(selection, current.documentId) { row ->
+                if (row != null) children.add(row)
+                true
+            }
+            val directories = children.filter(DirectoryRow::directory)
+            val next = if (byHandle) {
+                directories.firstOrNull { AndroidDirectoryInventory(nonce).item(it).handle == segment }
+            } else {
+                directories.firstOrNull { it.name.equals(segment, ignoreCase = true) }
+            }
+            if (next == null) {
+                return UnderMatch.Missing(segment, directories.map(DirectoryRow::name))
+            }
+            current = next
+        }
+        return UnderMatch.Found(current)
     }
 
     /**
@@ -240,7 +319,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         return if (partial.size == 1) partial else emptyList()
     }
 
-    private fun sectionsOf(targets: List<RootEntry>): JSObject {
+    private fun sectionsOf(targets: List<RootEntry>, under: String): JSObject {
         val sections = JSONArray()
         for (entry in targets) {
             val row = openRoot(entry.selection) ?: continue
@@ -281,6 +360,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     private fun entriesOf(result: DirectoryInventory) = JSONArray(result.entries.map { entry ->
         entry.item.toJson().apply {
             put("parentHandle", entry.parentHandle)
+            put("path", entry.path)
             put("kind", if (entry.directory) "directory" else "file")
             put("mimeType", entry.mimeType ?: JSONObject.NULL)
             put("sizeBytes", entry.sizeBytes ?: JSONObject.NULL)

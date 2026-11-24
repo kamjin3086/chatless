@@ -15,6 +15,8 @@ data class DirectoryItem(val handle: String, val name: String)
 data class DirectoryEntry(
     val item: DirectoryItem,
     val parentHandle: String,
+    /** Name path from the scanned root, e.g. `合同/2024/报告.pdf`. Handles cannot say that. */
+    val path: String,
     val directory: Boolean,
     val mimeType: String?,
     val sizeBytes: Long?,
@@ -28,7 +30,7 @@ class AndroidDirectoryInventory(
     private val maxEntries: Int = 200,
     private val maxDepth: Int = 8,
 ) {
-    private data class Branch(val id: String, val item: DirectoryItem, val parentHandle: String, val depth: Int)
+    private data class Branch(val id: String, val item: DirectoryItem, val parentHandle: String, val path: String, val depth: Int)
 
     fun item(row: DirectoryRow): DirectoryItem {
         // The random nonce changes on reselect and never crosses the native boundary.
@@ -42,7 +44,7 @@ class AndroidDirectoryInventory(
     fun scan(root: DirectoryRow, readChildren: (String, (DirectoryRow?) -> Boolean) -> Boolean): DirectoryInventory {
         val rootItem = item(root)
         val pending = ArrayDeque<Branch>()
-        pending.add(Branch(root.documentId, rootItem, rootItem.handle, 0))
+        pending.add(Branch(root.documentId, rootItem, rootItem.handle, "", 0))
         val visited = mutableSetOf(root.documentId)
         val entries = mutableListOf<DirectoryEntry>()
         val omissions = mutableListOf<DirectoryOmission>()
@@ -63,11 +65,12 @@ class AndroidDirectoryInventory(
                         if (!visited.add(row.documentId)) {
                             omissions.add(DirectoryOmission("duplicate_or_cycle", branch.item.handle, item))
                         } else {
-                            entries.add(DirectoryEntry(item, branch.item.handle, row.directory, row.mimeType, row.sizeBytes, row.modifiedAt))
+                            val path = if (branch.path.isEmpty()) item.name else "${branch.path}/${item.name}"
+                            entries.add(DirectoryEntry(item, branch.item.handle, path, row.directory, row.mimeType, row.sizeBytes, row.modifiedAt))
                             if (row.directory) {
                                 val depth = branch.depth + 1
                                 if (depth == maxDepth) omissions.add(DirectoryOmission("depth_limit", branch.item.handle, item))
-                                else pending.add(Branch(row.documentId, item, branch.item.handle, depth))
+                                else pending.add(Branch(row.documentId, item, branch.item.handle, path, depth))
                             }
                         }
                     }

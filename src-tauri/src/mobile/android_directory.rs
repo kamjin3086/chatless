@@ -17,6 +17,9 @@ pub(super) struct DirectoryEntry {
   handle: String,
   parent_handle: String,
   name: String,
+  /// Name path from the scanned folder, so a nested item can be named and then asked for.
+  #[serde(default)]
+  path: Option<String>,
   kind: DirectoryKind,
   mime_type: Option<String>,
   size_bytes: Option<u64>,
@@ -49,6 +52,8 @@ struct InventoryRequest<'a> {
   /// "null", which reads like a folder called that.
   #[serde(skip_serializing_if = "Option::is_none")]
   root: Option<&'a str>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  under: Option<&'a str>,
 }
 
 /// One authorized folder's inventory.
@@ -75,6 +80,13 @@ pub(super) enum DirectoryReceipt {
   RootNotFound {
     #[serde(skip_serializing_if = "Option::is_none")]
     roots: Option<Vec<String>>,
+  },
+  /// `under` named no subfolder: `choices` says what each authorized folder holds at that level.
+  SubfolderNotFound {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    under: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    choices: Option<serde_json::Value>,
   },
   None,
   Revoked,
@@ -210,6 +222,7 @@ pub(super) async fn inventory_android_directory(
   directory: State<'_, AndroidDirectory>,
   conversation_id: String,
   root: Option<String>,
+  under: Option<String>,
 ) -> Result<DirectoryReceipt, String> {
   android_plugin::call(
     &directory.0,
@@ -218,6 +231,7 @@ pub(super) async fn inventory_android_directory(
     InventoryRequest {
       conversation_id: &conversation_id,
       root: root.as_deref().filter(|value| !value.is_empty()),
+      under: under.as_deref().filter(|value| !value.is_empty()),
     },
   )
   .await

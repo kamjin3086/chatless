@@ -18,6 +18,7 @@ vi.mock('@/lib/utils/runtimePlatform', () => ({
 import {
   AndroidDirectoryAdapter,
   normalizeRootName,
+  normalizeUnderName,
 } from '../adapters/AndroidDirectoryAdapter';
 
 const authorized = {
@@ -60,6 +61,7 @@ describe('the folder name a model passes', () => {
     expect(invoke).toHaveBeenCalledWith('inventory_android_directory', {
       conversationId: 'chat-a',
       root: null,
+      under: null,
     });
   });
 
@@ -69,6 +71,7 @@ describe('the folder name a model passes', () => {
     expect(invoke).toHaveBeenCalledWith('inventory_android_directory', {
       conversationId: 'chat-a',
       root: '整理测试',
+      under: null,
     });
   });
 
@@ -84,5 +87,76 @@ describe('the folder name a model passes', () => {
     expect(message).toContain('整理测试, 照片备份');
     expect(message).toContain('/sdcard/Download');
     expect(message).toContain('with no `root`');
+  });
+});
+
+describe('naming one subfolder of an authorized folder', () => {
+  beforeEach(() => {
+    invoke.mockReset();
+  });
+
+  it('keeps the path separators a name path needs', () => {
+    expect(normalizeUnderName(' 合同 / 2024 ')).toBe('合同/2024');
+    expect(normalizeUnderName('合同\\2024')).toBe('合同/2024');
+    expect(normalizeUnderName('合同／')).toBe('合同');
+    expect(normalizeUnderName('“合同”')).toBe('合同');
+    expect(normalizeUnderName('   ')).toBe('');
+    expect(normalizeUnderName(undefined)).toBe('');
+    expect(normalizeUnderName(7)).toBeUndefined();
+    expect(normalizeUnderName('x'.repeat(241))).toBeUndefined();
+  });
+
+  it('carries the path down to the command', async () => {
+    invoke.mockResolvedValue(authorized);
+    await call({ root: '整理测试', under: '合同' });
+    expect(invoke).toHaveBeenCalledWith('inventory_android_directory', {
+      conversationId: 'chat-a',
+      root: '整理测试',
+      under: '合同',
+    });
+  });
+
+  it('refuses a path that is not a name path', async () => {
+    invoke.mockResolvedValue(authorized);
+    const result = (await call({ under: 7 })) as {
+      ok: boolean;
+      error?: { code?: string };
+    };
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_UNDER');
+  });
+
+  it('answers a wrong subfolder with the ones that exist', async () => {
+    invoke.mockResolvedValue({
+      status: 'subfolder_not_found',
+      under: '合同',
+      choices: [
+        {
+          folder: '整理测试',
+          segment: '合同',
+          available: ['证件', '发票2024'],
+        },
+      ],
+    });
+    const result = (await call({ under: '“合同”' })) as {
+      ok: boolean;
+      error?: { code?: string; message?: string };
+    };
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('SUBFOLDER_NOT_FOUND');
+    const message = result.error?.message ?? '';
+    expect(message).toContain('证件, 发票2024');
+    expect(message).toContain('drop `under`');
+  });
+
+  it('points at one subfolder at a time when the listing hits its cap', async () => {
+    invoke.mockResolvedValue({
+      status: 'ready',
+      folder: { handle: 'root', name: 'Download' },
+      entries: [],
+      omissions: [{ reason: 'entry_limit', parentHandle: 'root' }],
+    });
+    const result = (await call({})) as Record<string, unknown>;
+    expect(String(result.hint)).toContain('under');
   });
 });

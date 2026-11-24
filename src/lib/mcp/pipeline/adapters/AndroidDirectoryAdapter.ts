@@ -13,6 +13,8 @@ import type { ToolInvocation } from '../ToolInvocation';
 
 type Entry = AndroidDirectoryFolder & {
   parentHandle: string;
+  /** Name path from the scanned folder, e.g. `合同/2024/报告.pdf`. */
+  path?: string;
   kind: 'directory' | 'file';
   mimeType: string | null;
   sizeBytes: number | null;
@@ -32,6 +34,11 @@ type Inventory =
       sections?: Section[];
     })
   | { status: 'root_not_found'; roots?: string[] }
+  | {
+      status: 'subfolder_not_found';
+      under?: string;
+      choices?: { folder: string; segment: string; available: string[] }[];
+    }
   | Exclude<AndroidDirectorySelection, { status: 'ready' }>;
 
 type Section = {
@@ -50,6 +57,7 @@ type Filters = {
 };
 const allowedKeys = [
   'root',
+  'under',
   'mimeType',
   'minBytes',
   'maxBytes',
@@ -80,6 +88,25 @@ export function normalizeRootName(value: unknown): string | undefined {
     .replace(/\s+/g, ' ')
     .trim();
   return text.length > 120 ? undefined : text;
+}
+
+/**
+ * `under` is a path of folder names, so it keeps its separators; everything else is the same
+ * chat-mess cleanup as a folder name. A handle is allowed too, because a listing gives handles
+ * for everything it could not name well.
+ */
+export function normalizeUnderName(value: unknown): string | undefined {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') return undefined;
+  const text = value
+    .normalize('NFKC')
+    .replace(/[“”„«»『』「」【】"'`]/g, '')
+    .replace(/[\\／]/g, '/')
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s+/g, ' ')
+    .replace(/\/+$/, '')
+    .trim();
+  return text.length > 240 ? undefined : text;
 }
 
 function parseFilters(args: Record<string, unknown>): Filters | undefined {
@@ -185,6 +212,7 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
         'Use valid metadata filters only. The folder comes from the current chat, not from paths, URIs or handles.',
       );
     const rootArg = normalizeRootName(invocation.args?.root);
+    const underArg = normalizeUnderName(invocation.args?.under);
     if (
       'root' in (invocation.args ?? {}) &&
       (rootArg === undefined || rootArg.length > 120)
@@ -193,9 +221,18 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
         'INVALID_ROOT',
         '`root` is the name of one authorized folder, at most 120 characters, or omitted to read all of them.',
       );
+    if (
+      'under' in (invocation.args ?? {}) &&
+      (underArg === undefined || underArg.length > 240)
+    )
+      return failure(
+        'INVALID_UNDER',
+        '`under` is a subfolder name path inside the folder (for example "合同/2024") or a folder handle from an earlier result, at most 240 characters.',
+      );
     const receipt = await invoke<Inventory>('inventory_android_directory', {
       conversationId: invocation.conversationId,
       root: rootArg || null,
+      under: underArg || null,
     }).catch(() => undefined);
     if (receipt?.status === 'root_not_found')
       return failure(
@@ -204,6 +241,20 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
           (receipt.roots ?? []).join(', ') || 'none'
         }. Read again with one of those names exactly as written, or with no \`root\` to read all of them. A folder is named by the user, so a path such as /sdcard/Download is not a name.`,
       );
+    if (receipt?.status === 'subfolder_not_found') {
+      const choices = (receipt.choices ?? [])
+        .map(
+          (choice) =>
+            `${choice.folder}: ${choice.available.slice(0, 12).join(', ') || 'no subfolders'}`,
+        )
+        .join(' | ');
+      return failure(
+        'SUBFOLDER_NOT_FOUND',
+        `No subfolder matches "${receipt.under ?? underArg}". Subfolders that do exist - ${
+          choices || 'none'
+        }. Read a path segment exactly as listed (for example under "合同"), or drop \`under\` to read the folder as a whole.`,
+      );
+    }
     if (receipt?.status === 'none')
       return failure(
         'DIRECTORY_NOT_SELECTED',
@@ -270,6 +321,11 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
         }
       }
     }
+    // A folder stopped at the entry cap is the case where one flat re-read helps nobody: say
+    // what to do instead of letting the model pull the same folder again.
+    const truncated = omissions.some(
+      (omission) => omission.reason === 'entry_limit',
+    );
     return {
       ok: true,
       folder: sections[0].folder,
@@ -279,6 +335,10 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
       omissions,
       filteredOut,
       excludedForUnknownMetadata,
+      hint:
+        truncated && !underArg
+          ? 'This listing stopped at the entry limit. Read one subfolder at a time with `under` (a name from `folders` or a `path`), rather than reading the whole folder again.'
+          : undefined,
     };
   }
 }
