@@ -84,7 +84,7 @@ Emulator, `Qwen3.8-Flash-Next`, `Download/整理测试`:
   walker handed the previous level to the next child query, so nested lookups missed and a write
   created a fresh folder; the walker now hands the folder it just matched.
 
-### Renaming and sorting files (next commit)
+### Renaming and sorting files (`a83c89f`)
 
 Writing a file is half of organising; the other half is that `IMG_20240101_混乱文件1.txt` stops
 being called that. `rename` takes a new name, `move` takes a destination folder path inside the same
