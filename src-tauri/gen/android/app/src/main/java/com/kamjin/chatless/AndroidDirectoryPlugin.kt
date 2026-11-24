@@ -222,11 +222,15 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
      * A model passes whatever the person called the folder, often with the chat's own quotes
      * around it, and an empty string means it has no name rather than "match that".
      */
-    private fun rootName(value: String?): String =
-        (value ?: "")
+    private fun rootName(value: String?): String {
+        // A missing argument reaches a Kotlin plugin as the text "null", and an empty one means
+        // the model had no name to give. Neither is a folder called that.
+        val text = (value ?: "")
             .replace(Regex("[“”„«»『』「」【】\"']"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
+        return if (text.isEmpty() || text.equals("null", true) || text.equals("undefined", true)) "" else text
+    }
 
     /** Exact name first; a name that contains it counts only when it is the only candidate. */
     private fun matched(roots: List<RootEntry>, selector: String): List<RootEntry> {

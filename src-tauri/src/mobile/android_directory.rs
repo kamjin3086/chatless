@@ -45,6 +45,9 @@ pub(super) struct DirectoryOmission {
 #[serde(rename_all = "camelCase")]
 struct InventoryRequest<'a> {
   conversation_id: &'a str,
+  /// Omitted entirely when there is no name: a JSON `null` arrives in Kotlin as the string
+  /// "null", which reads like a folder called that.
+  #[serde(skip_serializing_if = "Option::is_none")]
   root: Option<&'a str>,
 }
 
