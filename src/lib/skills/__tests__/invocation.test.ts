@@ -6,8 +6,9 @@ import {
 } from '../invocation';
 
 /**
- * 触发方式由 frontmatter 推导，不是用户偏好。两个开关同时成立时取 `user-only`：
- * 让模型自动加载是更危险的那一侧，先否掉它。
+ * 触发方式 (invocation policy) is derived from frontmatter, not from a user preference.
+ * When both switches hold, `user-only` wins: letting the model load something unasked is
+ * the more dangerous side, so it is the one refused first.
  */
 describe('invocationPolicyOf', () => {
   it('defaults to both when nothing is declared', () => {

@@ -34,9 +34,10 @@ export interface SkillMdParseResult {
   /** 错误信息 */
   error?: string;
   /**
-   * 解析活了、但某个键没被读成写的人以为的那个意思。不是检验：拼错的
-   * `disable-model-invocatoin` 与「没写这个键」在解析结果里长得一模一样，不提醒
-   * 就只能到行为不对时才发现。
+   * Parsing succeeded, but a key did not mean what whoever wrote it thinks it means.
+   * Not validation: a misspelled `disable-model-invocatoin` is indistinguishable from an
+   * absent key in the result, so without saying so the mismatch only shows up as wrong
+   * behaviour later.
    */
   warnings?: string[];
 }
@@ -132,7 +133,7 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
   let inActions = false;
   let currentAction: Record<string, any> | null = null;
   let indentLevel = 0;
-  // 正在收集 YAML 块标量（`description: >` 这种写法在已有的 SKILL.md 里很常见）
+  // Collecting a YAML block scalar (`description: >` is common in SKILL.md files).
   let pendingBlock: { key: string; fold: boolean } | null = null;
 
   for (let i = 0; i < lines.length; i++) {
@@ -147,8 +148,8 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     const leadingSpaces = line.match(/^(\s*)/)?.[1].length || 0;
     
     // 检查是否是顶级键值对
-    // 键名可以带连字符：事实标准的键就是 `disable-model-invocation`、`allowed-tools`，
-    // 只认 `\w` 会把它们整行静丢掉。
+    // Keys may contain hyphens: the standard ones are `disable-model-invocation` and
+    // `allowed-tools`, and matching only `\w` dropped those lines in silence.
     const topLevelKvMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
     if (topLevelKvMatch && leadingSpaces === 0) {
       const [, key, value] = topLevelKvMatch;
@@ -299,11 +300,13 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     } : undefined,
     // 触发关键词
     triggers: Array.isArray(result.triggers) ? result.triggers : undefined,
-    // 触发方式的两个开关（键名与 SKILL.md 一致）。只认字面 true/false，
-    // 其它写法等于没写：猜一个布尔比丢掉它更容易让人信错东西。
+    // The two invocation switches, keyed exactly as SKILL.md spells them. Only literal
+    // true/false counts: guessing a boolean is worse than treating the key as absent,
+    // because a guess gets believed.
     'disable-model-invocation': parseFlag(result['disable-model-invocation']),
     'user-invocable': parseFlag(result['user-invocable']),
-    // 作者建议的工具范围。Chatless 不从中授予权限，仅作为信息保留。
+    // The author's suggested tool scope. Chatless grants nothing from it; it is kept as
+    // information only (ADR-0004).
     'allowed-tools': parseToolList(result['allowed-tools']),
   };
 
@@ -311,12 +314,13 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
 }
 
 /**
- * 这三个键决定谁能启动一个 skill，所以下面两条静默失效贵到要喊一声：
- * 键名写错一个字母，与根本没写，在解析结果里一模一样。
+ * These three keys decide who may start a skill, so the two silent failures below are
+ * worth saying out loud: a key misspelled by one letter is identical in the result to a
+ * key never written.
  */
 const INVOCATION_KEYS = ['disable-model-invocation', 'user-invocable', 'allowed-tools'];
 
-/** 解析器真正读过的键（写错大小写也算没读，所以这里比对的是原样）。 */
+/** Keys the parser actually reads (case counts: `Allowed-Tools` is not read). */
 const READ_KEYS = new Set([
   'name', 'description', 'version', 'author', 'dependencies', 'tags', 'category',
   'hooks', 'triggers', 'actions', ...INVOCATION_KEYS,
@@ -330,7 +334,8 @@ function collectInvocationWarnings(result: Record<string, any>): string[] {
     const near = INVOCATION_KEYS
       .map((known) => ({ known, distance: editDistance(key.toLowerCase(), known) }))
       .sort((a, b) => a.distance - b.distance)[0];
-    // 只对这一族报：别人的 frontmatter 里多几个键是常态，这不是 lint。
+    // Only this family is reported: extra frontmatter keys are normal in other people's
+    // packages, and this is not a lint sweep.
     if (near.distance > 2 && !/invoc|allowed[-_]?tool/i.test(key)) continue;
     warnings.push(
       `frontmatter key "${key}" is not read by Chatless; did you mean "${near.known}"? A key that is not read behaves as if it were absent.`,
@@ -356,7 +361,7 @@ function collectInvocationWarnings(result: Record<string, any>): string[] {
   return warnings;
 }
 
-/** 两字以内算“写错了”，再远就是另一个键了。 */
+/** Two edits apart still counts as a typo; further than that is a different key. */
 function editDistance(a: string, b: string): number {
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
@@ -373,7 +378,7 @@ function editDistance(a: string, b: string): number {
   return prev[b.length];
 }
 
-/** 只认字面量；未识别的写法返回 undefined，等于该键没写。 */
+/** Literal values only; anything else returns undefined, which is the key being absent. */
 function parseFlag(value: unknown): boolean | undefined {
   if (value === true || value === 'true') return true;
   if (value === false || value === 'false') return false;

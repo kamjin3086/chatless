@@ -190,8 +190,9 @@ export class LocalSkillLoader implements ISkillLoader {
       if (!parseResult.success && !parseResult.frontmatter) {
         console.warn(`[LocalSkillLoader] Failed to parse ${dirName}:`, parseResult.error);
       }
-      // 写错的触发方式键不报错，它等于没写：不 logged 就只能等模型自己加载了一个
-      // 本该 user-only 的 skill，再回头翻 SKILL.md。
+      // A misspelled invocation key is not an error, it is an absent key: if it is not
+      // logged, the only way to notice is the model loading a skill that was meant to be
+      // user-only and then going back to read its SKILL.md.
       for (const warning of parseResult.warnings || []) {
         console.warn(`[LocalSkillLoader] ${dirName}: ${warning}`);
       }

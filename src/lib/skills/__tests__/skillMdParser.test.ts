@@ -108,7 +108,8 @@ describe('frontmatter that fails silently', () => {
     const result = parse(`name: deploy
 description: Deploy the app.
 disable-model-invocatoin: true`);
-    // 说清楚它没能当成什么：读错的人需要知道结果是「等于没写」。
+    // Say what it was not read as: whoever mistyped needs to know the result is "as if
+    // the key were absent".
     expect(
       result.warnings?.some((w) => w.includes('disable-model-invocation')),
     ).toBe(true);

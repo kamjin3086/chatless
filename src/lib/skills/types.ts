@@ -58,12 +58,14 @@ export interface SkillFrontmatter {
   /** 交互式参数定义 */
   parameters?: SkillParameter[];
   /**
-   * 以下三个键的拼写与 SKILL.md 里一致，不是 Chatless 自造的字段名。
-   * `disable-model-invocation` 与 `user-invocable` 来自 Agent Skills 生态里的事实
-   * 标准（Claude Code），`allowed-tools` 是规范里的实验字段。Chatless 只读它们来
-   * 决定「触发方式」（见 invocation.ts），不从中得出权限：`allowed-tools` 在规范里
-   * 的含义是「这些工具免审批」，而本应用的授权只能来自策略/允许名单/审批（ADR-0004），
-   * 所以它在这里是一条作者建议，不授予任何东西。
+   * These three keys are spelled exactly as SKILL.md spells them - they are not
+   * Chatless-invented fields. `disable-model-invocation` and `user-invocable` come from
+   * the de facto Agent Skills convention (Claude Code); `allowed-tools` is the
+   * experimental field in the spec. Chatless reads them only to derive 触发方式 (see
+   * `invocation.ts`) and never derives authority from them: in the spec `allowed-tools`
+   * means "these tools need no approval", while approval here can only come from policy,
+   * the filesystem allowlist and the approval flow (ADR-0004). So it is an author's
+   * suggestion, and it grants nothing.
    */
   'disable-model-invocation'?: boolean;
   'user-invocable'?: boolean;
@@ -71,12 +73,16 @@ export interface SkillFrontmatter {
 }
 
 /**
- * 谁能触发一个 Skill。由 frontmatter 的两个开关推导，不单独存储：内容决定它，
- * 用户偏好（启用/禁用）是另一回事。
+ * Who may start a Skill. Derived from the two frontmatter switches and never stored on
+ * its own: the content decides it, and the user's enable/disable choice is a separate
+ * question.
  *
- * - `model-and-user`：默认。索引里可见，模型自己决定加载，用户也能显式指定。
- * - `user-only`：不进模型索引（模型无从自动加载），仍在对话里的 `/` 面板可选。
- * - `model-only`：从 `/` 面板隐藏，只能由模型按 description 判断使用。
+ * - `model-and-user`: the default. Visible in the index, the model decides when to load
+ *   it, and the user may also name it explicitly.
+ * - `user-only`: kept out of the model's index (it cannot load it), still selectable in
+ *   the conversation's `/` panel.
+ * - `model-only`: hidden from the `/` panel, used only when the model judges from the
+ *   description that it applies.
  */
 export type SkillInvocationPolicy = 'model-and-user' | 'user-only' | 'model-only';
 
@@ -149,7 +155,7 @@ export interface Skill {
   parameters?: SkillParameter[];
   /** 触发关键词 */
   triggers?: string[];
-  /** 谁能触发这个 Skill（由 frontmatter 推导，缺席 = `model-and-user`） */
+  /** Who may start this Skill (derived from frontmatter; absent = `model-and-user`). */
   invocation?: SkillInvocationPolicy;
 }
 
@@ -252,7 +258,7 @@ export interface SkillIndexEntry {
   description: string;
   /** SKILL.md 总行数（用于按行范围读取） */
   lineCount?: number;
-  /** 触发关键词列表（关键词匹配已删，仅解析层保留） */
+  /** Trigger keywords (keyword matching was deleted; parsing keeps them for now). */
   triggers?: string[];
   /** 分类（可选） */
   category?: string;
