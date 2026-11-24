@@ -1,4 +1,13 @@
-import { Camera, FileText, FolderOpen, Image, Images, X } from 'lucide-react';
+import {
+  PenLine,
+  Camera,
+  FileText,
+  FolderOpen,
+  Image,
+  Images,
+  X,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { ActionPanelItem } from '@/components/ui/action-panel';
 import { cn } from '@/lib/utils';
 import { translate } from '@/i18n';
@@ -166,7 +175,41 @@ export function AndroidAttachmentActions({
               />
               <span className="min-w-0 flex-1 break-words text-sm">
                 {root.name}
+                {!root.writable && (
+                  <span className="ms-2 text-[11px] text-muted-foreground">
+                    {t('androidDirectory.readOnly')}
+                  </span>
+                )}
               </span>
+              {!root.writable && (
+                <button
+                  type="button"
+                  disabled={selections.rootsWorking}
+                  onClick={() => {
+                    void selections
+                      .authorizeRootWrite(root.uri)
+                      .then((result) => {
+                        if (result === 'ready') return;
+                        toast.error(
+                          t(
+                            result === 'different'
+                              ? 'androidDirectory.writeDifferent'
+                              : result === 'refused'
+                                ? 'androidDirectory.writeRefused'
+                                : 'androidDirectory.writeFailed',
+                          ),
+                        );
+                      });
+                  }}
+                  className={ROOT_BUTTON}
+                >
+                  <PenLine
+                    aria-hidden="true"
+                    className="me-1 inline size-3.5"
+                  />
+                  {t('androidDirectory.authorizeWrite')}
+                </button>
+              )}
               <button
                 type="button"
                 role="switch"

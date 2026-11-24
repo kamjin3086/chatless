@@ -67,6 +67,12 @@ const zhCN: TranslationDict = {
   'androidDirectory.rootsTitle': '已授权文件夹',
   'androidDirectory.agentUse': 'Agent 使用',
   'androidDirectory.revokeRoot': '撤销授权',
+  'androidDirectory.readOnly': '只读',
+  'androidDirectory.authorizeWrite': '开启写入',
+  'androidDirectory.writeDifferent':
+    '刚才选的是别的文件夹，这个文件夹仍是只读。',
+  'androidDirectory.writeRefused': '这个位置不允许写入（云盘或只读目录常见）。',
+  'androidDirectory.writeFailed': '没能开启写入，请再试一次。',
   'androidDirectory.rootsHint':
     '这些文件夹已授权给本应用。关闭「Agent 使用」只是不再让模型读取，不会撤销系统授权。',
   'androidDocument.attach': '附加文档',
@@ -290,6 +296,10 @@ const zhCN: TranslationDict = {
   'toolCall.androidFolderInventory': '读取附加文件夹',
   'toolCall.androidFolderSummarize': '统计文件夹里的文件',
   'toolCall.androidFolderExport': '把文件清单写成文件',
+  'toolCall.androidFileRead': '读取文件内容',
+  'toolCall.androidFileWrite': '写入文件',
+  'toolCall.androidFileOverwrite': '覆盖文件',
+  'toolCall.androidFileAppend': '追加到文件',
   'toolCall.androidDocumentSearch': '在附加文档中查找',
   'toolCall.androidDocumentExcerpt': '读取附加文档片段',
   'toolCall.androidPhotoGroups': '查看所选照片',

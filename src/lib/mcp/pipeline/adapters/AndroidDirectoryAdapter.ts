@@ -124,6 +124,32 @@ const integerKeys = [
 ] as const;
 const PAGE_DEFAULT = 200;
 const PAGE_MAX = 1000;
+const WRITE_MAX_CHARS = 500_000;
+
+type FileReceipt = {
+  status: string;
+  path?: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  offset?: number;
+  text?: string;
+  chars?: number;
+  truncated?: boolean;
+  nextOffset?: number;
+  bytes?: number;
+  mode?: string;
+  created?: boolean;
+  roots?: string[];
+  name?: string;
+  under?: string;
+  choices?: { folder: string; segment: string; available: string[] }[];
+};
+
+function numberArg(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : fallback;
+}
 
 /**
  * What a model passes for `root` is whatever the user called the folder, typed through a
@@ -235,6 +261,8 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
     const tool = (invocation.tool ?? '').trim().toLowerCase();
     if (tool === 'summarize') return this.summarize(invocation);
     if (tool === 'export') return this.export(invocation);
+    if (tool === 'read_file') return this.readFile(invocation);
+    if (tool === 'write_file') return this.writeFile(invocation);
     return this.inventory(invocation);
   }
 
@@ -385,6 +413,162 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
     );
     if (problem) return { failed: true, result: problem };
     return { failed: false, receipt: answer };
+  }
+
+  /**
+   * What a file says, as opposed to what it is called. A window comes back with the offset of the
+   * rest, because a reply cannot hold a log and a model that reads one whole pays for it twice.
+   */
+  private async readFile(invocation: ToolInvocation) {
+    const args = invocation.args ?? {};
+    const under = normalizeUnderName(args.under);
+    const rootArg = normalizeRootName(args.root);
+    if (under === undefined || !under)
+      return failure(
+        'INVALID_PATH',
+        '`under` is the name path of the file inside the authorized folder, for example "笔记/三月.md". Take the names from a listing.',
+      );
+    if (rootArg === undefined)
+      return failure(
+        'INVALID_ROOT',
+        '`root` is the name of one authorized folder, at most 120 characters.',
+      );
+    const offset = numberArg(args.offset, 0);
+    const limit = numberArg(args.limit, 8000);
+    const receipt = await invoke<FileReceipt>('read_android_directory_file', {
+      conversationId: invocation.conversationId,
+      root: rootArg || null,
+      under,
+      offset,
+      limit,
+    }).catch(() => undefined);
+    switch (receipt?.status) {
+      case 'file':
+        return {
+          ok: true,
+          path: receipt.path,
+          mimeType: receipt.mimeType ?? null,
+          sizeBytes: receipt.sizeBytes ?? null,
+          offset: receipt.offset,
+          text: receipt.text,
+          truncated: receipt.truncated,
+          nextOffset: receipt.nextOffset,
+          hint: receipt.truncated
+            ? `The file continues past this window: read the rest with \`offset: ${receipt.nextOffset}\`.`
+            : undefined,
+        };
+      case 'binary':
+        return failure(
+          'NOT_TEXT',
+          `"${under}" is ${receipt.mimeType ?? 'not a text file'}, so its contents cannot be read here. Names, sizes and dates come from android_directory__inventory.`,
+        );
+      case 'not_a_file':
+        return failure(
+          'NOT_A_FILE',
+          `"${under}" is a folder. List it with android_directory__inventory (\`under\`) or count it with __summarize.`,
+        );
+      case 'no_such_file':
+        return failure(
+          'NO_SUCH_FILE',
+          `Nothing matches "${under}". A path is made of the names a listing shows, folder by folder; check one level with android_directory__inventory \`under\`, or count the folder with __summarize.`,
+        );
+      default:
+        return (
+          this.failureFor(
+            (receipt ?? { status: 'unavailable' }) as Inventory,
+            rootArg,
+            under,
+          ) ?? failure('DIRECTORY_UNAVAILABLE', 'The file could not be read.')
+        );
+    }
+  }
+
+  /**
+   * One text file written where the user's own files live. Replacing is the case that can lose
+   * something, so it is a mode the model has to choose on purpose rather than a default.
+   */
+  private async writeFile(invocation: ToolInvocation) {
+    const args = invocation.args ?? {};
+    const under = normalizeUnderName(args.under);
+    const rootArg = normalizeRootName(args.root);
+    const mode = String(args.mode ?? 'create')
+      .trim()
+      .toLowerCase();
+    const content = typeof args.content === 'string' ? args.content : '';
+    if (under === undefined || !under)
+      return failure(
+        'INVALID_PATH',
+        '`under` is the name path of the file to write, for example "笔记/三月.md".',
+      );
+    if (rootArg === undefined)
+      return failure(
+        'INVALID_ROOT',
+        '`root` is the name of one authorized folder.',
+      );
+    if (!['create', 'overwrite', 'append'].includes(mode))
+      return failure('INVALID_MODE', '`mode` is create, overwrite or append.');
+    if (content.length > WRITE_MAX_CHARS)
+      return failure(
+        'TOO_LARGE',
+        `This call holds ${content.length} characters, over the ${WRITE_MAX_CHARS} limit. Write it in pieces with mode "append".`,
+      );
+    const receipt = await invoke<FileReceipt>('write_android_directory_file', {
+      conversationId: invocation.conversationId,
+      root: rootArg || null,
+      under,
+      content,
+      mode,
+    }).catch(() => undefined);
+    switch (receipt?.status) {
+      case 'written':
+        return {
+          ok: true,
+          written: true,
+          path: receipt.path,
+          bytes: receipt.bytes,
+          mode: receipt.mode,
+          created: receipt.created,
+          hint: `Tell the user the file was ${receipt.created ? 'created' : 'updated'} at ${receipt.path} in their authorized folder.`,
+        };
+      case 'exists':
+        return failure(
+          'EXISTS',
+          `"${under}" already exists. Ask before replacing it, then call again with mode "overwrite", or add to it with mode "append".`,
+        );
+      case 'read_only':
+        return failure(
+          'FOLDER_IS_READ_ONLY',
+          'That folder was authorized for reading only. Ask the user to turn writing on for it (附件 → 已授权文件夹 → 开启写入); until then nothing can be written there.',
+        );
+      case 'is_a_folder':
+        return failure(
+          'IS_A_FOLDER',
+          `"${under}" is a folder. Give a file name path, for example "${under}/新笔记.md".`,
+        );
+      case 'too_large':
+        return failure(
+          'TOO_LARGE',
+          'The device refused a write this size. Write it in pieces with mode "append".',
+        );
+      case 'ambiguous':
+        return failure(
+          'ROOT_REQUIRED',
+          `Several folders are authorized (${(receipt.roots ?? []).join(', ')}). Pass the one to write into as \`root\`.`,
+        );
+      case 'refused':
+        return failure(
+          'WRITE_REFUSED',
+          `The folder would not accept the write. Some places on the phone (and most cloud folders) allow reading but not writing; offer the file in 下载 through android_directory__export instead.`,
+        );
+      default:
+        return (
+          this.failureFor(
+            (receipt ?? { status: 'unavailable' }) as Inventory,
+            rootArg,
+            under,
+          ) ?? failure('WRITE_FAILED', 'The file could not be written.')
+        );
+    }
   }
 
   private async inventory(invocation: ToolInvocation) {

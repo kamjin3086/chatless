@@ -385,6 +385,124 @@ describe('Android directory tool scope', () => {
     });
   });
 
+  it('reads a file as text and hands back where the rest starts', async () => {
+    mocks.invoke.mockResolvedValue({
+      status: 'file',
+      path: '笔记/三月.md',
+      mimeType: 'text/markdown',
+      sizeBytes: 20000,
+      offset: 0,
+      text: '# 三月\n\n开头',
+      chars: 8000,
+      truncated: true,
+      nextOffset: 8000,
+    });
+    expect(
+      await run({ tool: 'read_file', args: { under: '笔记/三月.md' } }),
+    ).toMatchObject({
+      ok: true,
+      path: '笔记/三月.md',
+      text: '# 三月\n\n开头',
+      truncated: true,
+      nextOffset: 8000,
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'read_android_directory_file',
+      expect.objectContaining({
+        conversationId: selectedChat,
+        under: '笔记/三月.md',
+        offset: 0,
+      }),
+    );
+    // Reading is reading: a plan-mode pass allows it.
+    expect(mocks.ask).not.toHaveBeenCalled();
+  });
+
+  it('says a photo is not text instead of returning noise', async () => {
+    mocks.invoke.mockResolvedValue({
+      status: 'binary',
+      path: 'IMG_1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    expect(
+      await run({ tool: 'read_file', args: { under: 'IMG_1.jpg' } }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'NOT_TEXT' },
+    });
+  });
+
+  it('answers a path that matches nothing with how to find it', async () => {
+    mocks.invoke.mockResolvedValue({
+      status: 'no_such_file',
+      path: '报告/四月.md',
+    });
+    const result = (await run({
+      tool: 'read_file',
+      args: { under: '报告/四月.md' },
+    })) as {
+      error?: { code?: string; message?: string };
+    };
+    expect(result.error?.code).toBe('NO_SUCH_FILE');
+    expect(result.error?.message).toContain('under');
+  });
+
+  it('writes a note into the folder and says where it went', async () => {
+    mocks.ask.mockResolvedValue({
+      approved: true,
+      decision: 'once',
+      revision: 0,
+    });
+    mocks.invoke.mockResolvedValue({
+      status: 'written',
+      path: '笔记/2026-11 周记.md',
+      bytes: 312,
+      mode: 'create',
+      created: true,
+    });
+    expect(
+      await run({
+        tool: 'write_file',
+        args: { under: '笔记/2026-11 周记.md', content: '# 周记' },
+      }),
+    ).toMatchObject({
+      ok: true,
+      written: true,
+      path: '笔记/2026-11 周记.md',
+      created: true,
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'write_android_directory_file',
+      expect.objectContaining({
+        under: '笔记/2026-11 周记.md',
+        mode: 'create',
+      }),
+    );
+  });
+
+  it('will not overwrite what the user made without being asked', async () => {
+    mocks.ask.mockResolvedValue({
+      approved: true,
+      decision: 'once',
+      revision: 0,
+    });
+    mocks.invoke.mockResolvedValue({ status: 'exists', path: '说明.txt' });
+    const exists = (await run({
+      tool: 'write_file',
+      args: { under: '说明.txt', content: 'x' },
+    })) as { error?: { code?: string } };
+    expect(exists.error?.code).toBe('EXISTS');
+
+    // A folder authorized for reading only is a fact the user can change, not a dead end.
+    mocks.invoke.mockResolvedValue({ status: 'read_only' });
+    expect(
+      await run({
+        tool: 'write_file',
+        args: { under: '笔记.md', content: 'x' },
+      }),
+    ).toMatchObject({ error: { code: 'FOLDER_IS_READ_ONLY' } });
+  });
+
   it.each([
     { path: '/sdcard/Downloads' },
     { uri: 'content://external/tree/elsewhere' },

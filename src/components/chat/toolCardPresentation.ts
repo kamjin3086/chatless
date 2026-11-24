@@ -463,6 +463,32 @@ export function presentToolCard(locale: Locale, params: {
     if (tl === 'export') {
       return { titleLine: t('toolCall.androidFolderExport'), kind: 'path' };
     }
+    if (tl === 'read_file') {
+      const path = pickArg(args, 'under');
+      return {
+        titleLine: t('toolCall.androidFileRead'),
+        detailLineLabel: path ? t('toolCall.detail.path') : undefined,
+        detailLineFull: path || undefined,
+        detailLineShort: path ? truncate(path, 28) : undefined,
+        kind: 'path',
+      };
+    }
+    if (tl === 'write_file') {
+      const path = pickArg(args, 'under');
+      const mode = pickArg(args, 'mode');
+      return {
+        titleLine:
+          mode === 'append'
+            ? t('toolCall.androidFileAppend')
+            : mode === 'overwrite'
+              ? t('toolCall.androidFileOverwrite')
+              : t('toolCall.androidFileWrite'),
+        detailLineLabel: path ? t('toolCall.detail.path') : undefined,
+        detailLineFull: path || undefined,
+        detailLineShort: path ? truncate(path, 28) : undefined,
+        kind: 'path',
+      };
+    }
     const mime = pickArg(args, 'mimeType');
     return {
       titleLine: t('toolCall.androidFolderInventory'),

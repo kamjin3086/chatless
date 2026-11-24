@@ -52,3 +52,34 @@ from whatever the walk happened to reach, and says "没有子目录" about a fol
 - A walk that stopped says so: `totals.stopped` and a hint pointing at `offset`, `under` or
   `summarize`, so a partial page is never read as the whole folder.
 
+## Reading and writing files (#212 follow-up)
+
+Reading a listing is not the job; the user wants a file read and a note written. Two tools do that,
+and both address files by the `path` names a listing shows - a device path is not what the folder
+grant means.
+
+- `read_file` returns text with an offset and `nextOffset`, so a long file can be read in parts.
+  A photo answers `NOT_TEXT` instead of a page of noise; a path that matches nothing says how to
+  find it (`NO_SUCH_FILE`).
+- `write_file` has `create` / `overwrite` / `append`, creates missing folders on the way, and never
+  replaces a file silently: `create` on an existing name answers `EXISTS` and the model asks first.
+  Text is capped at 500k characters, because a write is the model typing, not the tool copying.
+- Writing needs a write grant, which Android only hands over when the person picks the folder again.
+  New picks ask for read and write together; a folder authorized before this answers
+  `FOLDER_IS_READ_ONLY`, and the attachment sheet offers 已授权文件夹 → 开启写入 to fix it.
+- `read_file` and `read`/`inventory`/`summarize` are read-only to the policy; `write_file` and
+  `export` create and are gated by the approval mode.
+
+Emulator, `Qwen3.8-Flash-Next`, `Download/整理测试`:
+
+- 说明.txt read back whole (13 bytes), card titled 读取文件内容 · 说明.txt.
+- First write attempt on a read-only folder: `FOLDER_IS_READ_ONLY`, and the model asked the user to
+  turn writing on and offered the Downloads alternative instead of failing silently.
+- Tapping 开启写入 reopened the picker inside that folder (USE THIS FOLDER → ALLOW); the row lost its
+  只读 badge, and the same write then landed: `cat` on `/sdcard/Download/整理测试/测试笔记.md` shows
+  exactly `写入测试`, and after an append `写入测试\n第二行`.
+- `笔记/2026/周报.md` with create wrote both missing folders and the file, and `cat` confirms it.
+  A second `create` answered `EXISTS` and left the file alone; `overwrite` replaced it in place with
+  `created: false` and no duplicate folder. An early build created `2026 (1)` beside `2026`: the path
+  walker handed the previous level to the next child query, so nested lookups missed and a write
+  created a fresh folder; the walker now hands the folder it just matched.

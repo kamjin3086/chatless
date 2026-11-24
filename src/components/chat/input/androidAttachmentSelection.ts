@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  authorizeAndroidDirectoryWrite,
   listAndroidAuthorizedRoots,
   revokeAndroidRoot,
   setAndroidRootAgent,
@@ -50,7 +51,16 @@ export type AndroidAttachmentSelections = {
   forgetDirectory: () => void;
   toggleRootAgent: (uri: string, agentEnabled: boolean) => void;
   revokeRoot: (uri: string) => void;
+  /** Hands one read-only folder back to Android for write access; reports what came back. */
+  authorizeRootWrite: (uri: string) => Promise<WriteGrantResult>;
 };
+
+export type WriteGrantResult =
+  | 'ready'
+  | 'different'
+  | 'refused'
+  | 'cancelled'
+  | 'unavailable';
 
 const NO_PHOTO_BATCH: AndroidPhotoBatchState = {
   count: null,
@@ -273,6 +283,28 @@ export function useAndroidAttachmentSelections(
     [conversationId],
   );
 
+  /**
+   * Writing needs the folder handed over again, so this is a picker round rather than a switch.
+   * The caller reports what came back: a different folder is not the fix the user came for.
+   */
+  const authorizeRootWrite = useCallback(
+    async (uri: string): Promise<WriteGrantResult> => {
+      if (rootsPending.current) return 'unavailable' as const;
+      rootsPending.current = true;
+      setRootsWorking(true);
+      try {
+        const result: WriteGrantResult =
+          await authorizeAndroidDirectoryWrite(uri);
+        setRoots(await listAndroidAuthorizedRoots().catch(() => []));
+        return result;
+      } finally {
+        rootsPending.current = false;
+        setRootsWorking(false);
+      }
+    },
+    [],
+  );
+
   const pickPhotoBatch = useCallback(
     () => void changePhotoBatch('pick'),
     [changePhotoBatch],
@@ -301,5 +333,6 @@ export function useAndroidAttachmentSelections(
     forgetDirectory,
     toggleRootAgent,
     revokeRoot,
+    authorizeRootWrite,
   };
 }

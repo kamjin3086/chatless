@@ -144,10 +144,90 @@ export const ANDROID_DIRECTORY_EXPORT: McpTool = {
   },
 };
 
+export const ANDROID_DIRECTORY_READ_FILE: McpTool = {
+  name: 'read_file',
+  description:
+    'Read the text of one file inside an authorized folder, by name path ("笔记/2026-11 周记.md") - this is how you see what a file says, as opposed to what it is called. Returns a window of the file with `nextOffset` for the rest; call again with that offset rather than guessing. Text files only (Markdown, txt, csv, json, code): a photo or a Word file answers that it is not text instead of returning noise. It reads only what the user authorized, and it never writes.',
+  input_schema: {
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        root: {
+          type: 'string',
+          maxLength: 120,
+          description:
+            'Authorized folder holding the file. Omit when one folder is authorized.',
+        },
+        under: {
+          type: 'string',
+          maxLength: 240,
+          description:
+            'Name path of the file inside the folder, folders included, e.g. "报告/三月.md". Take names from a previous listing.',
+        },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            'Bytes to skip; use the `nextOffset` of the previous answer to continue a long file.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 40000,
+          description:
+            'Bytes to read, default 8000. Prefer several smaller reads over one huge one.',
+        },
+      },
+      required: ['under'],
+    },
+  },
+};
+
+export const ANDROID_DIRECTORY_WRITE_FILE: McpTool = {
+  name: 'write_file',
+  description:
+    'Write a text file inside an authorized folder: create a new file, replace one, or append to one. Folders along the way are created, so "把周报存到 笔记/2026 里" is one call. Use it for notes, summaries, checklists and exports the user wants kept where their own files live - and say the path you wrote to afterwards. It cannot touch a folder the user authorized read-only (ask them to 开启写入), it is text rather than binary, and replacing an existing file is the one thing here that can lose what they wrote: call with mode "create" first, and only overwrite what they agreed to.',
+  input_schema: {
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        root: {
+          type: 'string',
+          maxLength: 120,
+          description:
+            'Authorized folder to write into. Omit when one folder is authorized.',
+        },
+        under: {
+          type: 'string',
+          maxLength: 240,
+          description:
+            'Name path of the file to write, folders included, e.g. "笔记/2026-11 周记.md".',
+        },
+        content: {
+          type: 'string',
+          description:
+            'The file content, as text. Long material goes in across several calls with mode "append" instead of one enormous one.',
+        },
+        mode: {
+          type: 'string',
+          enum: ['create', 'overwrite', 'append'],
+          description:
+            'create (default) fails if the file exists; overwrite replaces it; append adds to the end. Default: create.',
+        },
+      },
+      required: ['under', 'content'],
+    },
+  },
+};
+
 export const ANDROID_DIRECTORY_TOOLS: McpTool[] = [
   ANDROID_DIRECTORY_INVENTORY,
   ANDROID_DIRECTORY_SUMMARIZE,
   ANDROID_DIRECTORY_EXPORT,
+  ANDROID_DIRECTORY_READ_FILE,
+  ANDROID_DIRECTORY_WRITE_FILE,
 ];
 
 /** Kept as the single shape for callers that only ever meant the listing tool. */

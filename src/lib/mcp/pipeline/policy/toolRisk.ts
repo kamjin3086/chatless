@@ -64,7 +64,7 @@ const FS_RISK: Record<string, ToolRisk> = {
 const READ_TOOLS: Record<string, string[]> = {
   // Reading a folder and counting one are both read-only; `export` creates a new file in
   // Downloads, which is a create and gets the approval it deserves.
-  [ANDROID_DIRECTORY_SERVER]: ['inventory', 'summarize'],
+  [ANDROID_DIRECTORY_SERVER]: ['inventory', 'summarize', 'read_file'],
   [ANDROID_PHOTOS_SERVER]: [ANDROID_PHOTOS_TOOL.name],
   [ANDROID_DOCUMENT_SERVER]: ['search', 'excerpt'],
   knowledge: ['list', 'search', 'read'],

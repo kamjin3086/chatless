@@ -46,6 +46,7 @@ function selections(
     rootsWorking: false,
     toggleRootAgent: noop,
     revokeRoot: noop,
+    authorizeRootWrite: () => Promise.resolve('ready' as const),
     ...overrides,
   };
 }
@@ -338,11 +339,13 @@ describe('authorized folder list', () => {
       uri: 'content://com.android.externalstorage.documents/tree/primary%3ADownload%2F整理测试',
       name: '整理测试',
       agentEnabled: true,
+      writable: true,
     },
     {
       uri: 'content://com.android.externalstorage.documents/tree/primary%3ADocuments',
       name: 'Documents',
       agentEnabled: false,
+      writable: false,
     },
   ];
 
@@ -362,6 +365,10 @@ describe('authorized folder list', () => {
     expect(html.match(/role="switch"/g)).toHaveLength(2);
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('aria-checked="false"');
+    // A folder authorized before writing existed says so and offers the fix, rather than failing
+    // a write mid-answer.
+    expect(html).toContain(zh('androidDirectory.readOnly'));
+    expect(html).toContain(zh('androidDirectory.authorizeWrite'));
     expect(
       html.match(new RegExp(zh('androidDirectory.revokeRoot'), 'g')),
     ).toHaveLength(2);

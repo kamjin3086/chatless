@@ -64,6 +64,12 @@ pub fn run() {
       #[cfg(target_os = "android")]
       android_directory::export_android_directory,
       #[cfg(target_os = "android")]
+      android_directory::read_android_directory_file,
+      #[cfg(target_os = "android")]
+      android_directory::write_android_directory_file,
+      #[cfg(target_os = "android")]
+      android_directory::authorize_android_directory_write,
+      #[cfg(target_os = "android")]
       android_photo::acquire_android_photo,
       #[cfg(target_os = "android")]
       android_photo_batch::pick_android_photo_batch,

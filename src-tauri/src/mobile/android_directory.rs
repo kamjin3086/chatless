@@ -191,6 +191,28 @@ struct RootAgentRequest<'a> {
   agent_enabled: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadFileRequest<'a> {
+  conversation_id: &'a str,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  root: Option<&'a str>,
+  under: &'a str,
+  offset: i64,
+  limit: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WriteFileRequest<'a> {
+  conversation_id: &'a str,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  root: Option<&'a str>,
+  under: &'a str,
+  content: &'a str,
+  mode: &'a str,
+}
+
 /// One folder the app holds a read grant for.
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -198,6 +220,10 @@ pub(super) struct AuthorizedRoot {
   uri: String,
   name: String,
   agent_enabled: bool,
+  /// Whether the grant the person gave covers writing. A folder picked before this existed is
+  /// readable only until they hand it over again, and the UI says so instead of failing mid-call.
+  #[serde(default)]
+  writable: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -361,6 +387,69 @@ pub(super) async fn summarize_android_directory(
     &None,
   );
   android_plugin::call(&directory.0, "android_directory", "summarize", request).await
+}
+
+/// A file's text, read through the folder's grant. The answer is loose on purpose: the plugin
+/// says what kind of answer it is (text, binary, missing) and TypeScript only relays it.
+#[tauri::command]
+pub(super) async fn read_android_directory_file(
+  directory: State<'_, AndroidDirectory>,
+  conversation_id: String,
+  root: Option<String>,
+  under: String,
+  offset: Option<i64>,
+  limit: Option<i64>,
+) -> Result<serde_json::Value, String> {
+  let folder = blank(&root);
+  let request = ReadFileRequest {
+    conversation_id: &conversation_id,
+    root: folder.as_deref(),
+    under: &under,
+    offset: offset.unwrap_or(0).max(0),
+    limit: limit.unwrap_or(8000).clamp(1, 40000),
+  };
+  android_plugin::call(&directory.0, "android_directory", "readFile", request).await
+}
+
+#[tauri::command]
+pub(super) async fn write_android_directory_file(
+  directory: State<'_, AndroidDirectory>,
+  conversation_id: String,
+  root: Option<String>,
+  under: String,
+  content: String,
+  mode: Option<String>,
+) -> Result<serde_json::Value, String> {
+  let mode = match blank(&mode).as_deref() {
+    Some("overwrite") => "overwrite",
+    Some("append") => "append",
+    _ => "create",
+  };
+  let folder = blank(&root);
+  let request = WriteFileRequest {
+    conversation_id: &conversation_id,
+    root: folder.as_deref(),
+    under: &under,
+    content: &content,
+    mode,
+  };
+  android_plugin::call(&directory.0, "android_directory", "writeFile", request).await
+}
+
+/// Hands one already-readable folder back to Android for write access, which needs the person
+/// to pick it again; the plugin reports whether that is what happened.
+#[tauri::command]
+pub(super) async fn authorize_android_directory_write(
+  directory: State<'_, AndroidDirectory>,
+  uri: String,
+) -> Result<serde_json::Value, String> {
+  android_plugin::call(
+    &directory.0,
+    "android_directory",
+    "authorizeWrite",
+    UriRequest { uri: &uri },
+  )
+  .await
 }
 
 #[tauri::command]

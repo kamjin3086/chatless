@@ -42,6 +42,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     private val nonces = activity.getSharedPreferences("android_directory_nonces", Context.MODE_PRIVATE)
     private val selections = activity.getSharedPreferences("android_directory_selections", Context.MODE_PRIVATE)
     private var activePicker: Invoke? = null
+    private var pendingWriteFor: Uri? = null
     // Tauri's shared activity-result callback is also used by other attachment pickers.
     private val treePicker by lazy {
         (activity as ComponentActivity).activityResultRegistry.register(
@@ -59,7 +60,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
             activePicker = invoke
             try {
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
-                    READ or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
+                    READ or WRITE or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
                 )
                 treePicker.launch(intent)
             } catch (_: Exception) {
@@ -73,6 +74,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         val invoke = activePicker ?: return
         val data = result.data
         val uri = data?.data
+        val writing = pendingWriteFor
         if (result.resultCode == Activity.RESULT_CANCELED) {
             activePicker = null
             invoke.resolve(status("cancelled"))
@@ -86,6 +88,13 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
             return
         }
 
+        if (writing != null) {
+            val target = writing
+            pendingWriteFor = null
+            activePicker = null
+            executor.execute { invoke.resolve(writeAuthorized(uri, target)) }
+            return
+        }
         val conversationId = invoke.getArgs().getString("conversationId")
         executor.execute {
             val reply = try {
@@ -130,6 +139,7 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
                         put("uri", uri.toString())
                         put("name", readRoot(uri)?.name ?: displayNameOf(uri))
                         put("agentEnabled", agentEnabled(uri))
+                        put("writable", resolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission })
                     })
                 }
             } catch (_: Exception) {
@@ -698,7 +708,13 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
         val selection = Selection(uri, UUID.randomUUID().toString())
         synchronized(selections) {
             val previous = getSelection(conversationId)
-            resolver.takePersistableUriPermission(uri, READ)
+            try {
+                // New picks take write as well: a folder the user handed over is where the Agent
+                // is allowed to write, and asking again later costs the user another dialog.
+                resolver.takePersistableUriPermission(uri, READ or WRITE)
+            } catch (_: Exception) {
+                resolver.takePersistableUriPermission(uri, READ)
+            }
             val write = selections.edit()
                 .putString(conversationId, selection.encode())
                 .putString(LAST, selection.encode())
@@ -828,8 +844,309 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     private fun ready(folder: DirectoryItem) = status("ready").apply { put("folder", folder.toJson()) }
     private fun status(value: String) = JSObject().apply { put("status", value) }
 
+    /**
+     * Re-authorizing one folder for writing.
+     *
+     * Android will not let an app add write to a grant on its own: the person has to hand the
+     * folder over again. This opens the picker for exactly that, and takes both flags when they
+     * do. A folder picked at random in the wrong place is refused rather than silently authorized,
+     * because the user came here to fix one specific folder.
+     */
+    @Command
+    fun authorizeWrite(invoke: Invoke) {
+        val target = Uri.parse(invoke.getArgs().getString("uri") ?: "")
+        activity.runOnUiThread {
+            if (activePicker != null) {
+                invoke.resolve(status("unavailable"))
+                return@runOnUiThread
+            }
+            if (target.toString().isEmpty()) {
+                invoke.resolve(status("unavailable"))
+                return@runOnUiThread
+            }
+            if (hasWriteGrant(target)) {
+                invoke.resolve(status("ready"))
+                return@runOnUiThread
+            }
+            pendingWriteFor = target
+            activePicker = invoke
+            try {
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).putExtra(DocumentsContract.EXTRA_INITIAL_URI, target)
+                    .addFlags(READ or WRITE or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+                treePicker.launch(intent)
+            } catch (_: Exception) {
+                pendingWriteFor = null
+                activePicker = null
+                invoke.resolve(status("unavailable"))
+            }
+        }
+    }
+
+    private fun writeAuthorized(uri: Uri, target: Uri): JSObject {
+        if (uri != target) {
+            return status("different").apply { put("name", readRoot(uri)?.name ?: displayNameOf(uri)) }
+        }
+        return try {
+            resolver.takePersistableUriPermission(uri, READ or WRITE)
+            status("ready")
+        } catch (_: Exception) {
+            // A provider that refuses write leaves the read grant exactly as it was.
+            status("refused")
+        }
+    }
+
+    /**
+     * One file's text, read through the same grant as everything else here. A window is returned
+     * rather than the file: a note is worth quoting in a reply, a 200 MB log is not.
+     */
+    @Command
+    fun readFile(invoke: Invoke) {
+        val args = invoke.getArgs()
+        val conversationId = args.getString("conversationId")
+        val rootSelector = rootName(args.optString("root"))
+        val path = pathSelector(args.optString("under"))
+        val offset = args.optLong("offset", 0).coerceAtLeast(0)
+        val limit = args.optInt("limit", READ_DEFAULT).coerceIn(1, READ_MAX)
+        executor.execute {
+            val reply = try {
+                val all = agentRoots(conversationId)
+                val targets = if (rootSelector.isEmpty()) all else matched(all, rootSelector)
+                when {
+                    all.isEmpty() -> status("none")
+                    targets.isEmpty() -> status("root_not_found").apply { put("roots", JSONArray(all.map { it.name })) }
+                    path.isEmpty() -> status("no_path")
+                    else -> readOne(targets, path, offset, limit)
+                }
+            } catch (_: Exception) {
+                status("unavailable")
+            }
+            invoke.resolve(reply)
+        }
+    }
+
+    /**
+     * One text file written into an authorized folder: created, replaced, or appended to.
+     *
+     * Missing folders along the way are created, because "把笔记存到 笔记/2026 里" should not need
+     * a second call. Replacing is the only case that can lose something the user made, and it is
+     * the one the pipeline has to put in front of them first.
+     */
+    @Command
+    fun writeFile(invoke: Invoke) {
+        val args = invoke.getArgs()
+        val conversationId = args.getString("conversationId")
+        val rootSelector = rootName(args.optString("root"))
+        val path = pathSelector(args.optString("under"))
+        val content = args.optString("content")
+        val mode = (plain(args.optString("mode")) ?: "create").lowercase(Locale.ROOT)
+        executor.execute {
+            val reply = try {
+                val all = agentRoots(conversationId)
+                val targets = if (rootSelector.isEmpty()) all else matched(all, rootSelector)
+                when {
+                    all.isEmpty() -> status("none")
+                    targets.isEmpty() -> status("root_not_found").apply { put("roots", JSONArray(all.map { it.name })) }
+                    path.isEmpty() || !mode.isOneOf("create", "overwrite", "append") -> status("unavailable")
+                    content.length > WRITE_MAX_CHARS -> status("too_large").apply { put("chars", content.length) }
+                    targets.size != 1 -> status("ambiguous").apply { put("roots", JSONArray(targets.map { it.name })) }
+                    else -> writeOne(targets.first(), path, content, mode)
+                }
+            } catch (_: Exception) {
+                status("unavailable")
+            }
+            invoke.resolve(reply)
+        }
+    }
+
+    private fun readOne(targets: List<RootEntry>, path: String, offset: Long, limit: Int): JSObject {
+        for (target in targets) {
+            val located = locate(target.selection, path) ?: continue
+            if (located.row.directory) return status("not_a_file").apply { put("path", path) }
+            if (!isTextual(located.row)) {
+                return status("binary").apply {
+                    put("path", path)
+                    put("mimeType", located.row.mimeType ?: JSONObject.NULL)
+                }
+            }
+            val uri = DocumentsContract.buildDocumentUriUsingTree(target.selection.uri, located.row.documentId)
+            val body = try {
+                resolver.openInputStream(uri)?.use { input ->
+                    var skipped = 0L
+                    while (skipped < offset) {
+                        val count = input.skip(offset - skipped)
+                        if (count <= 0) break
+                        skipped += count
+                    }
+                    val buffer = ByteArray(limit)
+                    var read = 0
+                    while (read < limit) {
+                        val count = input.read(buffer, read, limit - read)
+                        if (count < 0) break
+                        read += count
+                    }
+                    val more = read == limit && input.read() >= 0
+                    Triple(String(buffer, 0, read, Charsets.UTF_8), read, more)
+                } ?: return status("unavailable")
+            } catch (_: Exception) {
+                return status("unavailable")
+            }
+            return status("file").apply {
+                put("path", path)
+                put("mimeType", located.row.mimeType ?: JSONObject.NULL)
+                put("sizeBytes", located.row.sizeBytes ?: JSONObject.NULL)
+                put("offset", offset)
+                put("text", body.first)
+                put("chars", body.second)
+                put("truncated", body.third)
+                put("nextOffset", offset + body.second)
+            }
+        }
+        return status("no_such_file").apply { put("path", path) }
+    }
+
+    private fun writeOne(target: RootEntry, path: String, content: String, mode: String): JSObject {
+        val selection = target.selection
+        if (!hasWriteGrant(selection.uri)) return status("read_only")
+        val segments = path.split('/').filter { it.isNotEmpty() }
+        val parent = segments.dropLast(1)
+        val name = segments.last()
+        val located = locate(selection, path)
+        val uri: Uri = if (located != null) {
+            if (located.row.directory) return status("is_a_folder").apply { put("path", path) }
+            if (mode == "create") return status("exists").apply { put("path", path) }
+            DocumentsContract.buildDocumentUriUsingTree(selection.uri, located.row.documentId)
+        } else {
+            val parentUri = ensureFolders(selection, parent) ?: return status("unavailable")
+            DocumentsContract.createDocument(resolver, parentUri, mimeFor(name), name)
+                ?: return status("refused").apply { put("path", path) }
+        }
+        val bytes = content.toByteArray()
+        val wrote = try {
+            when {
+                mode == "append" && located != null -> appendTo(uri, bytes)
+                located != null -> resolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
+                    ?: throw IllegalStateException("no stream")
+                else -> resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: throw IllegalStateException("no stream")
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+        if (!wrote) return status("refused").apply { put("path", path) }
+        return status("written").apply {
+            put("path", path)
+            put("bytes", bytes.size)
+            put("mode", mode)
+            put("created", located == null)
+        }
+    }
+
+    /** Appending is a provider favour, not a guarantee: rewriting with the extra text gives the
+     * same result the user asked for. */
+    private fun appendTo(uri: Uri, bytes: ByteArray) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                resolver.openOutputStream(uri, "wa")?.use { it.write(bytes) }
+                return
+            } catch (_: Exception) {
+                // fall through to read-and-rewrite
+            }
+        }
+        val existing = resolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+        resolver.openOutputStream(uri, "w")?.use {
+            it.write(existing)
+            it.write(bytes)
+        } ?: throw IllegalStateException("no stream")
+    }
+
+    /** Folders along a write path are created on the way, which is what "存到 笔记/2026" means. */
+    private fun ensureFolders(selection: Selection, segments: List<String>): Uri? {
+        var parent = DocumentsContract.buildDocumentUriUsingTree(selection.uri, DocumentsContract.getTreeDocumentId(selection.uri))
+        val walked = mutableListOf<String>()
+        for (segment in segments) {
+            walked.add(segment)
+            val found = locate(selection, walked.joinToString("/"))
+            parent = if (found != null) {
+                DocumentsContract.buildDocumentUriUsingTree(selection.uri, found.row.documentId)
+            } else {
+                DocumentsContract.createDocument(resolver, parent, Document.MIME_TYPE_DIR, segment)
+                    ?: return null
+            }
+        }
+        return parent
+    }
+
+    /** A named path inside a folder, ending at a file or a folder; handles work like names. */
+    private fun locate(selection: Selection, path: String): Located? {
+        val segments = path.split('/', '\\', '／').map(String::trim).filter(String::isNotEmpty)
+        if (segments.isEmpty()) return null
+        val root = openRoot(selection) ?: return null
+        var parent: String? = null
+        var current: DirectoryRow? = root
+        for (segment in segments) {
+            val children = mutableListOf<DirectoryRow>()
+            val folder = parent ?: DocumentsContract.getTreeDocumentId(selection.uri)
+            queryChildren(selection, folder) { row ->
+                if (row != null) children.add(row)
+                true
+            }
+            val next = children.firstOrNull { it.name.equals(segment, ignoreCase = true) } ?: return null
+            parent = next.documentId
+            current = next
+        }
+        val row = current ?: return null
+        return Located(row, parent)
+    }
+
+    private class Located(val row: DirectoryRow, val parentDocumentId: String?)
+
+    private fun pathSelector(value: String?): String {
+        val text = (value ?: "")
+            .replace(Regex("[“”„«»『』「」【】\"']"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (text.isEmpty() || text.equals("null", true) || text.equals("undefined", true)) return ""
+        return text.replace(Regex("\\s*/\\s*"), "/").trim('/')
+    }
+
+    private fun hasWriteGrant(uri: Uri) =
+        resolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }
+
+    private fun String.isOneOf(vararg options: String) = options.contains(this)
+
+    private fun isTextual(row: DirectoryRow): Boolean {
+        val mime = row.mimeType?.lowercase(Locale.ROOT) ?: ""
+        if (mime.isEmpty() || mime == "application/octet-stream") return TEXT_BY_EXTENSION.contains(GroupKey.extension(row.name))
+        if (mime.startsWith("text/")) return true
+        return TEXT_BY_MIME.contains(mime) || TEXT_BY_EXTENSION.contains(GroupKey.extension(row.name))
+    }
+
+    private fun mimeFor(name: String): String {
+        val ext = GroupKey.extension(name) ?: return "application/octet-stream"
+        return MIME_BY_EXTENSION[ext] ?: "application/octet-stream"
+    }
+
     companion object {
         private const val READ = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        private const val WRITE = Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        private const val READ_DEFAULT = 8000
+        private const val READ_MAX = 40000
+        private const val WRITE_MAX_CHARS = 500000
+        private val TEXT_BY_MIME = setOf(
+            "application/json", "application/xml", "application/yaml", "application/x-yaml",
+            "application/javascript", "application/sql", "application/rtf",
+        )
+        private val TEXT_BY_EXTENSION = setOf(
+            "md", "markdown", "txt", "csv", "tsv", "json", "yaml", "yml", "xml", "html", "log",
+            "ini", "conf", "sql", "js", "ts", "py", "kt", "java", "sh", "ini", "srt", "vtt",
+        )
+        private val MIME_BY_EXTENSION = mapOf(
+            "md" to "text/markdown", "markdown" to "text/markdown", "txt" to "text/plain",
+            "csv" to "text/csv", "tsv" to "text/tab-separated-values", "json" to "application/json",
+            "yaml" to "application/yaml", "yml" to "application/yaml", "xml" to "application/xml",
+            "html" to "text/html", "log" to "text/plain", "sql" to "application/sql",
+        )
         private const val LAST = "__last__"
         private const val DETACHED = "#detached"
         private const val RETAINED = "__retained__"

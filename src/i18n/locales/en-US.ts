@@ -72,6 +72,13 @@ const enUS: TranslationDict = {
     'Could not access or update the folder selection. Try again.',
   'androidDirectory.rootsTitle': 'Authorized folders',
   'androidDirectory.agentUse': 'Agent access',
+  'androidDirectory.readOnly': 'read-only',
+  'androidDirectory.authorizeWrite': 'Allow writing',
+  'androidDirectory.writeDifferent':
+    'That was a different folder, so this one is still read-only.',
+  'androidDirectory.writeRefused':
+    'This location does not allow writing (common for cloud folders).',
+  'androidDirectory.writeFailed': 'Writing could not be turned on. Try again.',
   'androidDirectory.revokeRoot': 'Revoke',
   'androidDirectory.rootsHint':
     'These folders stay authorized for the app. Turning Agent access off only stops the model reading them; it does not revoke the system grant.',
@@ -319,6 +326,10 @@ const enUS: TranslationDict = {
   'toolCall.androidFolderInventory': 'Read attached folder',
   'toolCall.androidFolderSummarize': 'Summarize the folder',
   'toolCall.androidFolderExport': 'Write the file list to a file',
+  'toolCall.androidFileRead': 'Read the file',
+  'toolCall.androidFileWrite': 'Write the file',
+  'toolCall.androidFileOverwrite': 'Replace the file',
+  'toolCall.androidFileAppend': 'Add to the file',
   'toolCall.androidDocumentSearch': 'Search attached document',
   'toolCall.androidDocumentExcerpt': 'Read document excerpt',
   'toolCall.androidPhotoGroups': 'Review selected photos',
