@@ -39,16 +39,17 @@ async function getSkillPath(skillId: string): Promise<string> {
 
   const skill = await manager.getSkill(skillId);
   if (!skill?.path) {
-    // 给出“可纠错”的强提示：skillId 必须来自 skills.list_available_skills
+    // 给出「可纠错」的强提示：这条文本会被模型看到，所以它得说出名字还存在的那个工具。
     let validIds: string[] = [];
     try {
       validIds = (manager.getSkillIndex?.() || []).map((s: any) => String(s.id)).filter(Boolean);
     } catch {
       validIds = [];
     }
-    const hint = validIds.length > 0 ? `Valid skillId: ${validIds.join(', ')}` : 'Valid skillId: (unknown)';
+    const hint =
+      validIds.length > 0 ? `Installed skill ids: ${validIds.join(', ')}` : 'No skill is installed.';
     throw new Error(
-      `Invalid skillId "${skillId}". skillId 必须来自 skills.list_available_skills 返回的 id；resourcePath 只是文件名（例如 "docx-js.md"）。 ${hint}`
+      `Invalid skillId "${skillId}". Use an id from skill__list; resourcePath is a file name inside the skill package (for example "docx-js.md"). ${hint}`,
     );
   }
   return skill.path;

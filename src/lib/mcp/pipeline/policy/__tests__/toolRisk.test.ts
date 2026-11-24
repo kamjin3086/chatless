@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeServerName } from '@/lib/mcp/toolNaming';
+import { SKILL_UNIFIED_TOOLS } from '@/lib/mcp/nativeTools/skillUnifiedTools';
 import { filesystemOp, isPlanOnlyAllowed, isReplayableRead, toolRisk } from '../toolRisk';
 
 /**
@@ -59,10 +60,21 @@ const TOOLS = [
   'write_user_file', 'logs', 'stop', '', 'unknown_tool', 'READ_FILE', ' Search ',
 ];
 
+/**
+ * The oracle loop above proves the table matches the cascades it replaced. Three
+ * `skill` names no longer match, and deliberately so: `use`, `read_file` and
+ * `list_files` were compatibility aliases in `SkillUnifiedAdapter.execute`, and an
+ * adapter branch that nothing routes must not stay plan-allowed once it is gone.
+ * The loop skips exactly these three; the narrowing test below owns them.
+ */
+const NARROWED_SKILL_ALIASES = ['use', 'read_file', 'list_files'];
+
 describe('toolRisk table reproduces the predicates it replaces', () => {
   it('agrees with the old plan-only allow list on every combination', () => {
     for (const server of SERVERS) {
       for (const tool of TOOLS) {
+        const tl = String(tool || '').toLowerCase();
+        if (normalizeServerName(server).toLowerCase() === 'skill' && NARROWED_SKILL_ALIASES.includes(tl)) continue;
         expect(isPlanOnlyAllowed(server, tool), `planOnly ${server}/${tool}`).toBe(
           oldIsPlanOnlyAllowed(server, tool),
         );
@@ -104,13 +116,46 @@ describe('toolRisk classification itself', () => {
   });
 
   it('keeps skill__use an explicit plan-mode exception rather than a fake read', () => {
+    // The alias is gone (see NARROWED_SKILL_ALIASES); `guide` answers the same need.
     expect(toolRisk('skill', 'use')).toBe('unknown');
-    expect(isPlanOnlyAllowed('skill', 'use')).toBe(true);
+    expect(isPlanOnlyAllowed('skill', 'use')).toBe(false);
+    expect(isPlanOnlyAllowed('skill', 'guide')).toBe(true);
+  });
+
+  it('drops the removed skill aliases out of both predicates', () => {
+    // Search that proved the names are unroutable:
+    //   grep -n "case '" src/lib/mcp/pipeline/adapters/SkillUnifiedAdapter.ts
+    // lists every name the adapter can still route.
+    for (const name of NARROWED_SKILL_ALIASES) {
+      expect(toolRisk('skill', name), name).toBe('unknown');
+      expect(isPlanOnlyAllowed('skill', name), name).toBe(false);
+      expect(isReplayableRead('skill', name), name).toBe(false);
+    }
   });
 
   it('leaves the skills server as closed as it always was', () => {
     // normalizeServerName does not fold skills -> skill, and never did.
     expect(isPlanOnlyAllowed('skills', 'list')).toBe(false);
     expect(toolRisk('skills', 'list')).toBe('unknown');
+  });
+});
+
+describe('skill row of the table tracks the tools the registry exposes', () => {
+  it('names exactly the tools skillUnifiedTools still publishes', () => {
+    // A tool added or renamed in skillUnifiedTools lands here, so the table cannot
+    // keep a name nothing exposes (zombie names stay plan-allowed forever).
+    expect(SKILL_UNIFIED_TOOLS.map((t) => t.name).sort()).toEqual([
+      'check_deps', 'disable', 'edit_resource', 'enable', 'get_template', 'guide',
+      'install', 'list', 'list_resources', 'uninstall', 'update',
+    ]);
+  });
+
+  it('registers as read exactly the read-only tools of that group', () => {
+    for (const name of ['list', 'guide', 'check_deps']) {
+      expect(toolRisk('skill', name), name).toBe('read');
+    }
+    for (const name of ['install', 'uninstall', 'enable', 'disable', 'update', 'edit_resource', 'list_resources', 'get_template']) {
+      expect(toolRisk('skill', name), name).toBe('unknown');
+    }
   });
 });

@@ -27,7 +27,6 @@ import {
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
-import { getSkillManager } from '@/lib/skills';
 import { resolveToolTrack, shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
@@ -84,7 +83,7 @@ export function buildToolChannelBlock(servers: readonly string[]): string {
  *   attachments          working directory, then the retrieval rules (only when tools are callable)
  *   capabilities         the enabled-server line
  *   tool channel         the prompt-track protocol block - only on that track, once
- *   web search / skills  policy block, then the skills index
+ *   web search           policy block
  *   plan-only            a per-turn block, added last
  */
 export async function buildInitialPrompt(
@@ -228,15 +227,12 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   }
   enabledServers.push(...enabled);
   
-  // Skills 通过 tools__search / tools__load 按需发现，不根据用户措辞预加载。
-  const shouldExposeSkills = false;
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled;
 
   // 构建原生工具定义（用于 native tool API 或文本注入）
   const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
     servers: enabled,
-    includeSkills: shouldExposeSkills,
     includeWebSearch: shouldExposeWebSearch,
     userContent: context.userContent || '',
     conversationId: context.conversationId,
@@ -304,7 +300,6 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
     ...(shouldExposeWebSearch ? [WEB_SEARCH_SERVER_NAME] : []),
     FILESYSTEM_SERVER_NAME,
     SHELL_EXECUTOR_SERVER_NAME,
-    ...(shouldExposeSkills ? ['skill'] : []),
   ];
   
   if (allEnabled.length > 0) {
@@ -326,10 +321,6 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
     blocks.push({ id: 'web-search-policy', layer: 'conversation', order: 70, content: MCPPrompts.webSearchPolicy });
   }
   
-  // 8. Skills 索引注入（始终）
-  if (shouldExposeSkills) {
-    await injectSkillsIndex(blocks);
-  }
 
   // Plan-only is a per-turn instruction: the user can toggle it between turns.
   if (context.planOnly) {
@@ -383,7 +374,6 @@ async function injectTimeContext(
 async function buildNativeToolDefinitions(params: {
   servers: string[];
   includeWebSearch: boolean;
-  includeSkills: boolean;
   userContent?: string;
   conversationId?: string;
 }): Promise<NativeToolDefinition[]> {
@@ -522,36 +512,4 @@ async function buildNativeToolDefinitions(params: {
 
 // Native-only：WebSearch 以原生 tool schema 暴露（见 buildNativeToolDefinitions），无需文本描述注入。
 
-// ================================
-// Skills 渐进式披露相关函数
-// ================================
 
-/**
- * 注入 Skills 索引到系统消息
- * 
- * 实现渐进式披露策略：
- * - 仅注入技能索引（名称 + 简短描述），约 100 tokens/skill
- * - AI 需要详细说明时，通过 get_skill_instructions 工具获取
- * - 可节省约 70-75% 的 Token 消耗
- */
-async function injectSkillsIndex(
-  blocks: PromptBlock[]
-): Promise<void> {
-  try {
-    const manager = getSkillManager();
-    
-    // 确保 manager 已初始化
-    await manager.initialize();
-    
-    // 获取技能索引提示词
-    const skillsPrompt = manager.buildSkillIndexPrompt();
-
-    
-    if (skillsPrompt) {
-      blocks.push({ id: 'skills-index', layer: 'conversation', order: 80, content: skillsPrompt });
-    }
-  } catch (error) {
-    console.warn('[PromptBuilder] Skills 索引注入失败:', error);
-    // 不阻塞主流程
-  }
-}

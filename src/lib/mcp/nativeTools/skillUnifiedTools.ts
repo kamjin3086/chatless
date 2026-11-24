@@ -188,10 +188,6 @@ export const SKILL_GET_TEMPLATE_TOOL: McpTool = {
   },
 };
 
-// 保留旧名称的兼容性别名（内部映射到新工具）
-export const SKILL_LIST_FILES_TOOL = SKILL_LIST_RESOURCES_TOOL;
-export const SKILL_READ_FILE_TOOL = SKILL_GET_TEMPLATE_TOOL;
-
 // ============ 编辑 skill 包（需用户明确指示） ============
 
 export const SKILL_EDIT_RESOURCE_TOOL: McpTool = {
@@ -244,8 +240,3 @@ export const SKILL_UNIFIED_TOOLS: McpTool[] = [
   // 编辑类（需用户明确指示）
   SKILL_EDIT_RESOURCE_TOOL,
 ];
-
-// 兼容性导出（保留旧名称的别名）
-export const SKILL_USE_TOOL = SKILL_GUIDE_TOOL;
-export const SKILL_GET_TOOL = SKILL_GUIDE_TOOL;
-export const SKILL_WRITE_FILE_TOOL = SKILL_EDIT_RESOURCE_TOOL; // 兼容旧名称

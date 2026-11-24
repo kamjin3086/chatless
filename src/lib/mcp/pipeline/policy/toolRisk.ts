@@ -54,13 +54,16 @@ const FS_RISK: Record<string, ToolRisk> = {
  *
  * 注意 `skill` 与 `skills` 是两个不同的 server 名，normalizeServerName 不会把它们
  * 归一。今天计划模式只放行 `skill`，`skills` 整条被禁——此处照原样保留，没有顺手"修好"。
+ *
+ * `skill` 那一行不含 `use` / `get` / `read_file` / `list_files` / `write_file`：那些
+ * 是旧工具名的兼容别名，adapter 已不再路由它们，表里留着就是给无法路由的名字放行。
  */
 const READ_TOOLS: Record<string, string[]> = {
   knowledge: ['list', 'search', 'read'],
   web_search: ['search', 'fetch'],
   tools: ['search'],
   tool_result: ['read'],
-  skill: ['list', 'guide', 'read_file', 'list_files', 'check_deps'],
+  skill: ['list', 'guide', 'check_deps'],
   system: ['list_prompts', 'get_prompt'],
 };
 
@@ -71,12 +74,11 @@ const READ_TOOLS: Record<string, string[]> = {
 const REPLAYABLE_SERVERS = new Set(['fs', 'knowledge', 'web_search', 'tools']);
 
 /**
- * 计划模式下额外放行的非读操作。`skill__use` 是查资料用的执行入口，不是读操作，
- * 但计划模式今天放行它——写成显式例外，而不是把它的风险谎报成 `read`。
+ * 计划模式下额外放行的非读操作。`skill__use` 曾是查资料用的执行入口，不是读操作，
+ * 所以计划模式为它写过显式例外；那个别名已随 adapter 一起删掉，例外也就没有了成员。
+ * 保留这张空表：它的含义是"计划模式的额外放行有单一去处"，而不是"还没有例外"。
  */
-const PLAN_ALLOWED_EXTRAS: Record<string, string[]> = {
-  skill: ['use'],
-};
+const PLAN_ALLOWED_EXTRAS: Record<string, string[]> = {};
 
 function canonical(server: unknown): string {
   return normalizeServerName(server).toLowerCase();

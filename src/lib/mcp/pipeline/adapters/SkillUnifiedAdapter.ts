@@ -35,9 +35,7 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       // 列表和查询
       case 'list':
         return this.listSkills(args || {});
-      case 'guide':  // 推荐名称
-      case 'use':    // 兼容旧名称
-      case 'get':    // 兼容旧名称
+      case 'guide':
         return this.getSkillGuide(args || {});
 
       // 安装和卸载
@@ -57,16 +55,13 @@ export class SkillUnifiedAdapter implements ToolAdapter {
         return this.updateSkill(args || {});
 
       // 资源获取（只读）
-      case 'list_resources':  // 新名称
-      case 'list_files':      // 兼容旧名称
+      case 'list_resources':
         return this.listResources(args || {});
-      case 'get_template':    // 新名称
-      case 'read_file':       // 兼容旧名称
+      case 'get_template':
         return this.getTemplate(args || {});
-      
+
       // 编辑 skill 包资源（需用户明确指示）
-      case 'edit_resource':   // 新名称（推荐）
-      case 'write_file':      // 兼容旧名称
+      case 'edit_resource':
         return this.editResource(args || {});
 
       // 依赖检查
@@ -125,7 +120,6 @@ export class SkillUnifiedAdapter implements ToolAdapter {
           enabled: s.enabled,
           category: s.category,
           tags: s.tags,
-          pathAlias: `@skill:${s.id}`,
           repoUrl: s.repoUrl,
           installedAt: s.installedAt,
         })),
@@ -143,7 +137,6 @@ export class SkillUnifiedAdapter implements ToolAdapter {
           id: s.id,
           name: s.name,
           description: (s.description || '').slice(0, 100),
-          pathAlias: `@skill:${s.id}`,
           triggers: index?.triggers || [],
         };
       }),
@@ -186,7 +179,6 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       return { error: 'Skill not found', id, name };
     }
 
-    const pathAlias = `@skill:${skill.id}`;
     const result: Record<string, unknown> = {
       id: skill.id,
       name: skill.name,
@@ -200,7 +192,6 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       tags: skill.tags,
       repoUrl: skill.repoUrl,
       installedAt: skill.installedAt,
-      pathAlias,
     };
 
     // 获取 SKILL.md 内容

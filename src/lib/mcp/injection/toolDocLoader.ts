@@ -65,7 +65,7 @@ export async function getToolDoc(params: {
     if (key.startsWith('web_search__')) {
       return await fetchText('/tool-docs/web.txt');
     }
-    if (key.startsWith('skills__')) {
+    if (key.startsWith('skill__')) {
       return await fetchText('/tool-docs/skills.txt');
     }
     return '';

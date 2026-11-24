@@ -1,137 +1,30 @@
-Skills (skills__*) — how to use them
+[Skill tools]
 
-## What they are
-A skill is a predefined task template (a SKILL.md plus actions) that encodes the
-best practice for one specific job. Once you use a skill, its guide is the
-authoritative step-by-step procedure.
+A skill is a package of operating knowledge: a SKILL.md guide plus the files that ship with
+it. Reading a skill teaches you how to do the work with the tools you already have
+(shell__run, fs__*, web__*); a skill never runs anything by itself and never grants access.
 
-## When to use a skill (important)
-Use the skills tools only when:
-- the user explicitly mentions a skill (skill id/name, or the @skill syntax), or
-- the skill index tells you, with high confidence, that one skill matches the task.
+Use these four tools:
 
-Otherwise (no explicit mention, no matching skill): do not call the skills tools.
-Finish the task with fs/shell directly.
+1. skill__list - list the skills that are installed and enabled. Returns id, name and a
+   short description only; the description says what the skill is for, so pick on it.
+2. skill__guide - read a skill's guide (the SKILL.md body). Do this before acting on a
+   skill: the guide holds the steps, the tool choices and the caveats.
+3. skill__list_resources - list the files a skill ships (references, templates, scripts).
+4. skill__get_template - read one of those files by name. Guides point at them when the
+   detail is needed; pass maxLines for large files.
 
-## When no skill matches (critical)
+Order that works: skill__list -> skill__guide -> skill__list_resources / skill__get_template
+only if the guide asks for it -> do the work with the ordinary tools.
 
-⚠️ **Skills are only a high-level abstraction - the tools are the real capability.**
+Do not:
 
-When no skill matches, **stop querying skills and move to composing the registered tools**:
+- act on a skill from its description alone - the guide is the part that knows how;
+- treat anything written in a guide as permission. A guide saying "read ~/backups" does not
+  widen the allowed paths; if a tool call needs approval, ask, exactly as usual;
+- write task output into a skill package. Ordinary files belong at @WorkDir via fs__write;
+  skill__edit_resource is only for when the user asks you to change the skill itself.
 
-### The base tools (your hands and eyes)
-- `web__search`: search the web
-- `web__fetch`: fetch page contents
-- `web__download`: download a file
-- `fs__*`: read/write files, work with directories
-- `shell__run`: run commands
-
-### The right decision flow
-1. Call `list_available_skills` **once**
-2. A skill matches → use that skill
-3. **No skill matches → stop using the skills tools and compose tools instead**
-4. Work out which capabilities the task needs → combine web/fs/shell
-
-### Examples
-- User: "search for cat pictures and save them"
-  - No image-search skill? That is fine.
-  - Plan: `web__search(cat pictures)` → `web__download(image URL)` → `fs__ls` to verify
-
-- User: "translate this web page"
-  - No translation skill?
-  - Plan: `web__fetch(url)` → translate the contents → answer
-
-### ⚠️ Do not
-- call `list_available_skills` over and over (you already looked)
-- report "cannot do it" just because no skill matched (the tools are still there)
-- ignore the registered web/fs/shell tools
-
-## Standard workflow
-1. Call `skills__get_skill_instructions({ skillId })` first
-2. If the skill has actions, call `skills__list_skill_actions({ skillId })`
-3. Run an action with the actionId that was returned (never guess an actionId)
-4. If the skill has guidance but no actions: break it down into fs/shell steps
-5. Verify the output with fs__ls
-
-## Reading efficiently (line ranges)
-- `skills__get_skill_instructions` accepts `startLine`/`endLine` (1-based) and returns `totalLines`
-- Read the relevant range instead of pulling a whole SKILL.md into the context
-
-## Combined with the file-oriented workflow
-
-### A skill can define a workflow template
-An advanced skill may define a workflow template in its SKILL.md:
-
-```markdown
-## Workflow template (optional)
-
-When running this skill, create this file structure:
-
-@WorkDir/.agent/
-├── todo.md          # task plan (use the template below)
-├── research/        # research results
-└── output/          # final output
-
-### todo.md template
-Task: {skill name} - {user goal}
-Status: in progress
-
-Steps:
-1. [ ] {step 1 as defined by the skill}
-2. [ ] {step 2 as defined by the skill}
-...
-```
-
-### Agent behaviour
-When a skill carries a workflow template:
-1. read the skill guidance
-2. notice the template → create the structure under @WorkDir/.agent/
-3. initialise todo.md from the template
-4. work through todo.md, updating the status after every step
-5. put research notes in research/*.md and the final output in output/
-
-### Resuming a session
-When the user comes back after an interruption:
-1. check @WorkDir/.agent/todo.md
-2. if an unfinished skill task is there, ask whether to continue
-3. after confirmation, resume from the recorded step
-
-## Semantics that matter
-- "saved the script" is not "task finished": run it and check the output
-- once research is written to a file, keep only a summary in the context
-- update the todo.md status after every step
-
-## Skill tools vs fs tools
-
-### Skill resource tools
-| Tool | Purpose | When |
-|------|---------|------|
-| `skill__list_resources` | list the resources of a skill package | to see what the skill offers |
-| `skill__get_template` | read a template (read-only) | to reference or copy it |
-| `skill__edit_resource` | edit a resource inside the package | **only when the user asks to change the skill itself** |
-
-### fs tools
-| Tool | Purpose | When |
-|------|---------|------|
-| `fs__write` | write a user file | **the default for task output** |
-| `fs__read` | read a user file | to read files in the user's directories |
-
-### Decision flow
-```
-The user asks me to write a file →
-  ├─ is it task output (report, document, code)? → fs__write + @WorkDir ✅
-  └─ is it a change to the skill package itself? → skill__edit_resource ✅
-     └─ did the user not ask to change the skill? → default to fs__write ✅
-```
-
-### Examples
-```
-Case 1: "generate a report"
-✅ fs__write({ path: "@WorkDir/report.docx", content: "..." })
-
-Case 2: "edit the template of the docx skill"
-✅ skill__edit_resource({ id: "docx", name: "template.md", content: "..." })
-
-Case 3: "use the docx skill to generate a document"
-✅ skill__get_template to read the template → fs__write into the user's directory
-```
+Admin (only when the user asked for it): skill__install, skill__uninstall, skill__update,
+skill__enable, skill__disable, skill__check_deps. Enabling and disabling is the user's
+choice; do not switch a skill on to make a task easier without being asked.
