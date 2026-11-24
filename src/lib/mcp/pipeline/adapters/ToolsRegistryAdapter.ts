@@ -9,6 +9,7 @@ import { getToolsForGroup, TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGro
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { getEnabledConfiguredServers } from '@/lib/mcp/chatIntegration';
 import { persistentCache } from '@/lib/mcp/persistentCache';
+import { isAndroidRuntime } from '@/lib/utils/runtimePlatform';
 import { isReservedMcpServerName } from '@/lib/mcp/serverNamePolicy';
 
 interface CatalogItem {
@@ -83,7 +84,28 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       results: page,
       nextCursor: offset + page.length < matches.length ? offset + page.length : null,
       total: matches.length,
-      hint: page.length ? 'The matching capability becomes available in the next model step.' : 'No tools matched.',
+      hint: page.length
+        ? 'The matching capability becomes available in the next model step.'
+        : androidHint(android),
     };
   }
+}
+
+/**
+ * An empty search on a phone used to answer "No tools matched", which reads as "search
+ * differently" and costs two more rounds. On Android the honest answer is that whole families do
+ * not exist here, and that files arrive only when the user hands them over.
+ */
+function androidHint(android: { directory?: boolean }): string {
+  if (!isAndroidRuntime())
+    return 'No tools matched.';
+  return (
+    'No tools matched. This is an Android phone: there is no filesystem or shell tool here, so '
+    + 'searching for one will keep returning nothing. Files come from a folder the user attaches '
+    + '(android_directory__inventory), from photos they pick (android_photos__group), and from '
+    + 'documents this chat already holds (android_document__search). '
+    + (android.directory
+      ? 'Folders are already authorized: call android_directory__inventory.'
+      : 'Ask the user to attach the folder from the attachment menu.')
+  );
 }

@@ -64,6 +64,24 @@ const integerKeys = [
   'modifiedBefore',
 ] as const;
 
+/**
+ * What a model passes for `root` is whatever the user called the folder, typed through a
+ * chatbot: full-width quotes around it, a trailing space, or an empty string when it has no
+ * name to give. None of that means "look for a folder literally called that". Normalize it into
+ * either a name or no name, so the answer the model gets is about the folders that exist.
+ * `undefined` means the value cannot be a name at all (a number, an object, too long).
+ */
+export function normalizeRootName(value: unknown): string | undefined {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') return undefined;
+  const text = value
+    .normalize('NFKC')
+    .replace(/[“”„«»『』「」【】"'`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > 120 ? undefined : text;
+}
+
 function parseFilters(args: Record<string, unknown>): Filters | undefined {
   if (Object.keys(args).some((key) => !allowedKeys.includes(key))) return;
   const { mimeType, groupBy } = args;
@@ -166,13 +184,10 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
         'INVALID_FILTER',
         'Use valid metadata filters only. The folder comes from the current chat, not from paths, URIs or handles.',
       );
-    const rootArg =
-      typeof invocation.args?.root === 'string'
-        ? invocation.args.root.trim()
-        : '';
+    const rootArg = normalizeRootName(invocation.args?.root);
     if (
       'root' in (invocation.args ?? {}) &&
-      (typeof rootArg !== 'string' || rootArg.length > 120)
+      (rootArg === undefined || rootArg.length > 120)
     )
       return failure(
         'INVALID_ROOT',
@@ -185,7 +200,9 @@ export class AndroidDirectoryAdapter implements ToolAdapter {
     if (receipt?.status === 'root_not_found')
       return failure(
         'ROOT_NOT_FOUND',
-        `No authorized folder is named "${rootArg}". Authorized: ${(receipt.roots ?? []).join(', ') || 'none'}. Call again with one of those names, or omit \`root\` to read all of them.`,
+        `No authorized folder matches "${rootArg}". Authorized: ${
+          (receipt.roots ?? []).join(', ') || 'none'
+        }. Read again with one of those names exactly as written, or with no \`root\` to read all of them. A folder is named by the user, so a path such as /sdcard/Download is not a name.`,
       );
     if (receipt?.status === 'none')
       return failure(

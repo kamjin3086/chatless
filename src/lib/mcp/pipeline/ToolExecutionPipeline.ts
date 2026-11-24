@@ -50,6 +50,48 @@ function isDirectoryScopedFilesystemTool(tool: string): boolean {
  *
  * 多工具顺序和下一模型步由 AgentLoopRunner 统一承担；Pipeline 只负责一次调用。
  */
+/**
+ * One line per tool call into the console, which is what the phone's log export carries.
+ *
+ * Before this, an exported log could say that a run happened but not which call failed or with
+ * what answer, so a report from a phone that is not plugged in could not be read. Failures are
+ * the interesting half, so they keep the code and the message the model was handed; successes
+ * stay one short line each.
+ */
+function logToolCall(
+  invocation: ToolInvocation,
+  result: unknown,
+  ms: number,
+): void {
+  const name = `${invocation.server}__${invocation.tool}`;
+  const record = result as
+    | { error?: { code?: string; message?: string }; skipped?: boolean; reason?: string }
+    | null;
+  if (record?.error) {
+    console.warn(
+      `[tool] ${name} FAILED ${ms}ms ${record.error.code ?? 'ERROR'} :: ${clip(record.error.message ?? '', 300)}`,
+    );
+    return;
+  }
+  if (record?.skipped) {
+    console.info(`[tool] ${name} skipped ${ms}ms ${record.reason ?? ''}`.trim());
+    return;
+  }
+  console.info(`[tool] ${name} ok ${ms}ms args=${clip(safeArgs(invocation.args), 160)}`);
+}
+
+function clip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
+}
+
+function safeArgs(args: unknown): string {
+  try {
+    return JSON.stringify(args ?? {});
+  } catch {
+    return '{…}';
+  }
+}
+
 export class ToolExecutionPipeline {
   private coordinator = ToolCallCoordinator.getInstance();
   private adapters: ToolAdapter[];
@@ -66,6 +108,13 @@ export class ToolExecutionPipeline {
   }
 
   async run(invocation: ToolInvocation): Promise<unknown> {
+    const started = Date.now();
+    const result = await this.runInner(invocation);
+    logToolCall(invocation, result, Date.now() - started);
+    return result;
+  }
+
+  private async runInner(invocation: ToolInvocation): Promise<unknown> {
     const { assistantMessageId, server, tool, args, callId } = invocation;
     if (this.coordinator.isMessageCancelled(assistantMessageId)) {
       return { skipped: true, reason: 'CANCELLED', messageId: assistantMessageId };

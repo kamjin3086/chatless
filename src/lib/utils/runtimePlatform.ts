@@ -148,6 +148,7 @@ export function getShellGuidance(platform: RuntimePlatform): {
         'There is no shell here: do not call shell__run, do not run ls / cat / mkdir / find, and do not ssh somewhere to reach the user\'s files.',
         'There is no home directory and no "~". Paths like ~/Downloads, ~\Download or C:\\Users do not exist on this device.',
         'Files are reachable only through the tools this chat gives you (the folder, photo and document tools). A folder is readable only after the user hands it over from the attachment menu.',
+        'An authorized folder is named by the user, not by the file system. Call android_directory__inventory with no arguments to see which folders exist and what they are called; pass `root` only with a name from that list - never a path, and never an empty string.',
         'When the user asks about a directory you cannot see, say which folder you need and ask them to attach it. Do not guess paths, and do not retry a path that just failed.',
       ],
       commandExamples: {},

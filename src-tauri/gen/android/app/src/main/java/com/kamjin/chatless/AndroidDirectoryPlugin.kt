@@ -199,13 +199,11 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
     @Command
     fun inventory(invoke: Invoke) {
         val conversationId = invoke.getArgs().getString("conversationId")
-        val selector = invoke.getArgs().optString("root").trim()
+        val selector = rootName(invoke.getArgs().optString("root"))
         executor.execute {
             val receipt = try {
                 val all = agentRoots(conversationId)
-                val targets = if (selector.isEmpty()) all else all.filter {
-                    it.name.equals(selector, ignoreCase = true)
-                }
+                val targets = if (selector.isEmpty()) all else matched(all, selector)
                 when {
                     all.isEmpty() -> status("none")
                     targets.isEmpty() -> status("root_not_found").apply {
@@ -218,6 +216,24 @@ class AndroidDirectoryPlugin(private val activity: Activity) : Plugin(activity) 
             }
             invoke.resolve(receipt)
         }
+    }
+
+    /**
+     * A model passes whatever the person called the folder, often with the chat's own quotes
+     * around it, and an empty string means it has no name rather than "match that".
+     */
+    private fun rootName(value: String?): String =
+        (value ?: "")
+            .replace(Regex("[“”„«»『』「」【】\"']"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+    /** Exact name first; a name that contains it counts only when it is the only candidate. */
+    private fun matched(roots: List<RootEntry>, selector: String): List<RootEntry> {
+        val exact = roots.filter { it.name.equals(selector, ignoreCase = true) }
+        if (exact.isNotEmpty()) return exact
+        val partial = roots.filter { it.name.contains(selector, ignoreCase = true) }
+        return if (partial.size == 1) partial else emptyList()
     }
 
     private fun sectionsOf(targets: List<RootEntry>): JSObject {
