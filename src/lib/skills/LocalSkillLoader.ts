@@ -190,6 +190,11 @@ export class LocalSkillLoader implements ISkillLoader {
       if (!parseResult.success && !parseResult.frontmatter) {
         console.warn(`[LocalSkillLoader] Failed to parse ${dirName}:`, parseResult.error);
       }
+      // 写错的触发方式键不报错，它等于没写：不 logged 就只能等模型自己加载了一个
+      // 本该 user-only 的 skill，再回头翻 SKILL.md。
+      for (const warning of parseResult.warnings || []) {
+        console.warn(`[LocalSkillLoader] ${dirName}: ${warning}`);
+      }
 
       const frontmatter = parseResult.frontmatter;
       const dependencies = extractDependencies(frontmatter);

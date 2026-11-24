@@ -96,3 +96,56 @@ hooks:
     });
   });
 });
+
+describe('frontmatter that fails silently', () => {
+  const parse = (md: string) => {
+    const result = parseSkillMd(`---\n${md}\n---\nBody here.\n`);
+    expect(result.success, result.error).toBe(true);
+    return result;
+  };
+
+  it('warns when an invocation key is misspelled, and stays absent', () => {
+    const result = parse(`name: deploy
+description: Deploy the app.
+disable-model-invocatoin: true`);
+    // 说清楚它没能当成什么：读错的人需要知道结果是「等于没写」。
+    expect(
+      result.warnings?.some((w) => w.includes('disable-model-invocation')),
+    ).toBe(true);
+    expect(result.frontmatter?.['disable-model-invocation']).toBeUndefined();
+  });
+
+  it('warns when a switch is written with a value Chatless does not read', () => {
+    const result = parse(`name: deploy
+description: Deploy the app.
+user-invocable: yes`);
+    expect(result.warnings?.some((w) => w.includes('"yes"'))).toBe(true);
+    expect(result.frontmatter?.['user-invocable']).toBeUndefined();
+  });
+
+  it('warns when allowed-tools is present but empty', () => {
+    const result = parse(`name: deploy
+description: Deploy the app.
+allowed-tools:`);
+    expect(result.warnings?.some((w) => w.includes('allowed-tools'))).toBe(
+      true,
+    );
+  });
+
+  it('says nothing about a clean file', () => {
+    const result = parse(`name: deploy
+description: Deploy the app.
+disable-model-invocation: true
+allowed-tools: Read Grep`);
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it('does not turn into a lint sweep over somebody else', () => {
+    const result = parse(`name: deploy
+description: Deploy the app.
+license: MIT
+metadata:
+  version: 3`);
+    expect(result.warnings).toBeUndefined();
+  });
+});

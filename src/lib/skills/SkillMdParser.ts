@@ -33,6 +33,12 @@ export interface SkillMdParseResult {
   actions: SkillAction[];
   /** 错误信息 */
   error?: string;
+  /**
+   * 解析活了、但某个键没被读成写的人以为的那个意思。不是检验：拼错的
+   * `disable-model-invocatoin` 与「没写这个键」在解析结果里长得一模一样，不提醒
+   * 就只能到行为不对时才发现。
+   */
+  warnings?: string[];
 }
 
 /**
@@ -77,13 +83,14 @@ export function parseSkillMd(rawContent: string): SkillMdParseResult {
   const markdownContent = trimmed.slice(match[0].length).trim();
 
   try {
-    const { frontmatter, actions } = parseYamlFrontmatter(yamlContent);
+    const { frontmatter, actions, warnings } = parseYamlFrontmatter(yamlContent);
     return {
       success: true,
       frontmatter,
       content: markdownContent,
       rawContent,
       actions,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   } catch (error) {
     return {
@@ -103,6 +110,7 @@ export function parseSkillMd(rawContent: string): SkillMdParseResult {
 interface ParsedFrontmatterResult {
   frontmatter: SkillFrontmatter;
   actions: SkillAction[];
+  warnings: string[];
 }
 
 /**
@@ -299,7 +307,70 @@ function parseYamlFrontmatter(yaml: string): ParsedFrontmatterResult {
     'allowed-tools': parseToolList(result['allowed-tools']),
   };
 
-  return { frontmatter, actions };
+  return { frontmatter, actions, warnings: collectInvocationWarnings(result) };
+}
+
+/**
+ * 这三个键决定谁能启动一个 skill，所以下面两条静默失效贵到要喊一声：
+ * 键名写错一个字母，与根本没写，在解析结果里一模一样。
+ */
+const INVOCATION_KEYS = ['disable-model-invocation', 'user-invocable', 'allowed-tools'];
+
+/** 解析器真正读过的键（写错大小写也算没读，所以这里比对的是原样）。 */
+const READ_KEYS = new Set([
+  'name', 'description', 'version', 'author', 'dependencies', 'tags', 'category',
+  'hooks', 'triggers', 'actions', ...INVOCATION_KEYS,
+]);
+
+function collectInvocationWarnings(result: Record<string, any>): string[] {
+  const warnings: string[] = [];
+
+  for (const key of Object.keys(result)) {
+    if (READ_KEYS.has(key)) continue;
+    const near = INVOCATION_KEYS
+      .map((known) => ({ known, distance: editDistance(key.toLowerCase(), known) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    // 只对这一族报：别人的 frontmatter 里多几个键是常态，这不是 lint。
+    if (near.distance > 2 && !/invoc|allowed[-_]?tool/i.test(key)) continue;
+    warnings.push(
+      `frontmatter key "${key}" is not read by Chatless; did you mean "${near.known}"? A key that is not read behaves as if it were absent.`,
+    );
+  }
+
+  for (const key of ['disable-model-invocation', 'user-invocable']) {
+    if (!(key in result)) continue;
+    const value = result[key];
+    if (value !== true && value !== false && value !== 'true' && value !== 'false') {
+      warnings.push(
+        `frontmatter key "${key}" must be true or false; ${JSON.stringify(value)} is read as absent, so the default applies.`,
+      );
+    }
+  }
+
+  if ('allowed-tools' in result && parseToolList(result['allowed-tools']) === undefined) {
+    warnings.push(
+      'frontmatter key "allowed-tools" is empty or unreadable; no tool scope was recorded.',
+    );
+  }
+
+  return warnings;
+}
+
+/** 两字以内算“写错了”，再远就是另一个键了。 */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[b.length];
 }
 
 /** 只认字面量；未识别的写法返回 undefined，等于该键没写。 */
