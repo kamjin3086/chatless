@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { getSkillManager } from '@/lib/skills';
+import { userInvocableSkills } from '../skillsSlash';
 import type { Skill } from '@/lib/skills/types';
 import { Settings, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,8 @@ export function SkillMentionPanel({
     const loadSkills = async () => {
       const manager = getSkillManager();
       await manager.initialize();
-      setSkills(manager.getEnabledSkills());
+      // `user-invocable: false` 的 skill 是给模型看的知识，不是给用户选的菜单项。
+      setSkills(userInvocableSkills(manager.getEnabledSkills()));
       activeRef.current = 0;
     };
     

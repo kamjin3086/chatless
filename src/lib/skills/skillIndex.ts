@@ -56,6 +56,11 @@ export interface SkillIndexView {
   overflowed: boolean;
   /** Ids the user may name but the model must not load on its own. */
   userOnlyIds: string[];
+  /**
+   * 本轮被用户点名、且在输入里查得到的那些（已排序）。「查不到」就呰不掉：名字不存在
+   * 时什么都不说，而不是让模型去猜一个不存在的 id。
+   */
+  requested: SkillIndexEntryView[];
 }
 
 /**
@@ -85,12 +90,18 @@ function descriptionOf(entry: SkillIndexEntryView): string {
   return `${raw.slice(0, SKILL_DESCRIPTION_MAX_CHARS - 1).trimEnd()}…`;
 }
 
-function lineFor(entry: SkillIndexEntryView, requested: Set<string>): string {
+function indexLine(entry: SkillIndexEntryView): string {
   const name = String(entry.name || entry.id).trim();
-  const mark = requested.has(entry.id)
-    ? ' [user requested - read this guide first]'
-    : '';
-  return `- ${name} (\`${entry.id}\`)${mark}: ${descriptionOf(entry)}`;
+  return `- ${name} (\`${entry.id}\`): ${descriptionOf(entry)}`;
+}
+
+/**
+ * 用户点名那条的写法。标注不是修辞：名字在索引里已经出现过的那条，模型需要知道它
+ * 这轮是**被要求的**，不是可以自己拿叉去用的。
+ */
+function requestedLine(entry: SkillIndexEntryView): string {
+  const name = String(entry.name || entry.id).trim();
+  return `- ${name} (\`${entry.id}\`) [user requested - read this guide first]: ${descriptionOf(entry)}`;
 }
 
 /**
@@ -100,17 +111,27 @@ export function buildSkillIndex(
   skills: readonly SkillIndexEntryView[],
   facts: SkillIndexFacts = {},
 ): SkillIndexView {
-  const requested = new Set(
+  const wanted = new Set(
     (facts.explicitIds || []).map((id) => String(id).trim()).filter(Boolean),
   );
-  // A skill the user named has to reach the model even if its policy keeps it out of the
-  // model's own reach.
-  const visible = (skills || []).filter(
-    (skill) =>
-      skill?.id &&
-      (invocableByModel(skill.invocation) || requested.has(skill.id)),
-  );
-  const sorted = [...visible].sort(compareById);
+  const byId = new Map<string, SkillIndexEntryView>();
+  for (const skill of skills) {
+    if (skill?.id) byId.set(skill.id, skill);
+  }
+
+  // The standing list is only what the model may load by itself; what the user named goes
+  // in its own block.
+  const sorted = (skills || [])
+    .filter((skill) => skill?.id && invocableByModel(skill.invocation))
+    .sort(compareById);
+
+  // A named skill must reach the model even if its policy keeps it out of the model's own
+  // reach. Only names that resolve count: a name nobody installed is dropped whole, rather
+  // than handing the model an id that would return nothing.
+  const requested: SkillIndexEntryView[] = [...wanted]
+    .map((id) => byId.get(id))
+    .filter((entry): entry is SkillIndexEntryView => !!entry)
+    .sort(compareById);
 
   const userOnlyIds = (skills || [])
     .filter(
@@ -121,16 +142,6 @@ export function buildSkillIndex(
     )
     .map((skill) => skill.id)
     .sort();
-
-  if (sorted.length === 0) {
-    return {
-      entries: [],
-      availabilityLine: null,
-      indexText: null,
-      overflowed: false,
-      userOnlyIds: [],
-    };
-  }
 
   const availabilityLines = [
     '[Skills]',
@@ -143,10 +154,22 @@ export function buildSkillIndex(
     );
   }
 
+  if (sorted.length === 0) {
+    return {
+      entries: [],
+      availabilityLine:
+        userOnlyIds.length > 0 ? availabilityLines.join('\n') : null,
+      indexText: null,
+      overflowed: false,
+      userOnlyIds,
+      requested,
+    };
+  }
+
   const body = [
     '[Skills installed here]',
     'Names only - the instructions are not here.',
-    ...sorted.map((entry) => lineFor(entry, requested)),
+    ...sorted.map(indexLine),
   ].join('\n');
 
   const overflowed = body.length > SKILL_INDEX_BUDGET_CHARS;
@@ -160,6 +183,7 @@ export function buildSkillIndex(
       indexText: null,
       overflowed: true,
       userOnlyIds,
+      requested,
     };
   }
 
@@ -169,6 +193,7 @@ export function buildSkillIndex(
     indexText: body,
     overflowed: false,
     userOnlyIds,
+    requested,
   };
 }
 
@@ -181,6 +206,14 @@ export function buildSkillIndex(
  * exist" and "none do"; the body follows the list). Both live in the conversation layer:
  * neither depends on this turn's wording, and putting them in the turn layer would break
  * the cached prefix on every turn for nothing.
+ *
+ * A skill the user named goes to the turn layer: that is this turn's fact, and the
+ * conversation layer sits inside the cacheable prefix - rewriting a conversation block
+ * because "the user named one this turn" drifts the whole system prompt on every
+ * rewording. So one call carries both halves: the conversation blocks are decided purely
+ * by who may load skills (they never read `explicitIds`), and the named part is its own
+ * block. One call is the whole run - two views would be two worlds, and a run must not
+ * live between worlds.
  */
 export function skillIndexBlocks(view: SkillIndexView): PromptBlock[] {
   const blocks: PromptBlock[] = [];
@@ -198,6 +231,18 @@ export function skillIndexBlocks(view: SkillIndexView): PromptBlock[] {
       layer: 'conversation',
       order: 80,
       content: view.indexText,
+    });
+  }
+  if (view.requested.length > 0) {
+    blocks.push({
+      id: 'skills-requested',
+      layer: 'turn',
+      order: 15,
+      content: [
+        '[Skill the user named for this turn]',
+        'skill__guide(id) before acting on it:',
+        ...view.requested.map(requestedLine),
+      ].join('\n'),
     });
   }
   return blocks;

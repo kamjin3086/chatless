@@ -28,6 +28,8 @@ import { ActiveCapabilitiesBar } from './input/ActiveCapabilitiesBar';
 import { WebSearchToggle } from './input/WebSearchToggle';
 import { McpQuickToggle } from './input/McpQuickToggle';
 import type { Skill } from '@/lib/skills/types';
+import { getSkillManager } from '@/lib/skills';
+import { takeSkillCommands } from './skillsSlash';
 import type { ModelParameters } from '@/types/model-params';
 import { createSafePreview } from '@/lib/utils/tokenBudget';
 import { getCurrentKnowledgeBaseConfig } from '@/lib/knowledgeBaseConfig';
@@ -84,7 +86,7 @@ interface ChatInputProps {
       id: string;
       name: string;
     },
-    options?: { images?: string[]; planOnly?: boolean }
+    options?: { images?: string[]; planOnly?: boolean; explicitSkillIds?: string[] }
   ) => void | Promise<void>;
   onImageUpload?: (file: File) => void;
   onFileUpload?: (file: File) => void;
@@ -566,6 +568,8 @@ export function ChatInput({
     }
 
     let userMessage = inputValue.trim();
+    // “用户亲手打的那段字”与“模板嘣出来的那段字”要分开： skill 的点名只认前者。
+    let shortcutRendered = false;
 
     // Render an exact saved shortcut when submitted without choosing from the panel.
     if (userMessage.startsWith('#')) {
@@ -606,6 +610,7 @@ export function ChatInput({
           if (rendered && rendered.trim()) {
             // 同步“发送”动作的行为：若存在“| ”后的文本且模板未显式消化它，也要附加到末尾
             userMessage = `${rendered.trim()}${afterTail}`;
+            shortcutRendered = true;
             // 计数一次使用（兜底渲染也算使用）
             try { usePromptStore.getState().touchUsage(matched.id as string); } catch {}
           }
@@ -613,9 +618,32 @@ export function ChatInput({
       } catch { /* noop */ }
     }
 
+    // A `/skill-id` is how the user names a skill. The model gets the request, not the
+    // token: a bare `/pdf-forms` carries no instruction, and leaving it in has the model
+    // guess whether it is a path or a command. The name reaches the prompt as a fact.
+    // Skipped when a shortcut rendered: `/api` sitting in somebody's saved template is
+    // not that user naming a skill called `api`.
+    let explicitSkillIds: string[] = [];
+    try {
+      if (!shortcutRendered) {
+        const skillManager = getSkillManager();
+        await skillManager.initialize();
+        const taken = takeSkillCommands(
+          userMessage,
+          skillManager.getEnabledSkills().map((skill) => skill.id),
+        );
+        if (taken.explicitIds.length > 0) {
+          explicitSkillIds = taken.explicitIds;
+          userMessage = taken.text;
+        }
+      }
+    } catch {
+      /* no skills available: send the text as typed */
+    }
+
     if (attachedImages.length > 0) {
       const imagesData = attachedImages.map(img => img.base64Data);
-      await onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData, planOnly });
+      await onSendMessage(userMessage || '[图片]', undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { images: imagesData, planOnly, explicitSkillIds });
     } else if (editingMessage) {
       // 编辑模式下，保留原引用信息
       const docRef = editingMessage.documentReference
@@ -628,7 +656,7 @@ export function ChatInput({
         userMessage,
         docRef,
         editingMessage.knowledgeBaseReference,
-        { planOnly }
+        { planOnly, explicitSkillIds }
       );
       // 退出编辑模式
       onCancelEdit?.();
@@ -653,10 +681,10 @@ export function ChatInput({
         contextData: attachedDocument.content,
         sourceContent: attachedDocument.fullContent,
         sourceBytes: attachedDocument.bytes,
-      }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
+      }, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly, explicitSkillIds });
     } else {
       // 普通消息，如果有选中的知识库则传递
-      await onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly });
+      await onSendMessage(userMessage, undefined, selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined, { planOnly, explicitSkillIds });
     }
 
     // onSendMessage only resolves after the supplement and its attachments are

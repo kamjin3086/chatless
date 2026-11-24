@@ -585,6 +585,9 @@ id + 名字 + 描述。按 `id` 排序（与 locale 无关，才不会换种界�
 **第 4 层 — 包内文件**
 由指南自己指路：`skill__list_resources` 列出、`skill__get_template` 读取。
 
+**用户这一侧：`/` 面板与点名**
+`/` 面板只列 `invocableByUser` 为真的 skill（`user-invocable: false` 的从菜单里隐去）；选中后往输入框插入 `/<id> `。发送时 `components/chat/skillsSlash.ts` 认这个 token、把它从正文里剔掉，并把 id 作为事实一路传到注入层（`useChatActions` → `AgentLoopRunner` → `promptInjector` → `InjectionContext.explicitSkillIds`）——模型拿到的是请求本身，不是命令。被点名的 skill 另成一块 `skills-requested`（**turn 层**，order 15）：它不改写 conversation 层的索引，因为那样每换一次说法就会漂掉可缓存前缀。
+
 v3.0 里那套「按 `triggers` 关键词与用户措辞做意图匹配，再预注入正文」已经删掉：触发判断的职责在 `description`（写得像"Use when …"），不在匹配器；谁能触发见 `GLOSSARY.md` 的「触发方式 (skill invocation policy)」。
 
 还没实现的两件事，别照本节日益：

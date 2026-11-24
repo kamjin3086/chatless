@@ -59,7 +59,7 @@ export async function buildMcpSystemInjections(
   currentConversationId?: string, 
   providerName?: string,
   modelName?: string,
-  options?: { forceInject?: boolean; locale?: string; planOnly?: boolean }
+  options?: { forceInject?: boolean; locale?: string; planOnly?: boolean; explicitSkillIds?: string[] }
 ): Promise<InjectionResult> {
   const result = await InjectionManager.inject({
     userContent: content,
@@ -70,6 +70,7 @@ export async function buildMcpSystemInjections(
     forceInject: options?.forceInject,
     locale: options?.locale,
     planOnly: options?.planOnly,
+    explicitSkillIds: options?.explicitSkillIds,
   });
   
   return {

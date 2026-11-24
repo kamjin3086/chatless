@@ -871,7 +871,14 @@ export class SkillManager {
       return buildSkillIndex(entries, facts);
     } catch (error) {
       console.warn('[SkillManager] Skill index unavailable; continuing without it:', error);
-      return { entries: [], availabilityLine: null, indexText: null, overflowed: false, userOnlyIds: [] };
+      return {
+        entries: [],
+        availabilityLine: null,
+        indexText: null,
+        overflowed: false,
+        userOnlyIds: [],
+        requested: [],
+      };
     }
   }
 

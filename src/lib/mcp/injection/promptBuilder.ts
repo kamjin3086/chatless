@@ -233,12 +233,14 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled;
 
-  // Skills: read once per run, and read from one place. The tool list and the index must
-  // come from the same snapshot, or the index can tell the model to call a tool that is
-  // not in the request - the exact ghost that stayed latent while the index was switched
-  // off. The track decides whether the run can act on skills at all: the standing line
+  // Skills: one read per run, from one place. The tool list, the standing line and the
+  // named-skill block must come from the same snapshot - two reads can describe two
+  // different disks, and installing or removing one skill mid-run is enough to make that
+  // happen. The track decides whether the run can act on skills at all: the standing line
   // names `skill__guide`, so on the `disabled` track it would point at nothing.
-  const skillIndexView = await getSkillManager().buildSkillIndexView();
+  const skillIndexView = await getSkillManager().buildSkillIndexView({
+    explicitIds: (context.explicitSkillIds || []).filter(Boolean),
+  });
   const skillIndexOn = skillIndexUsable(track, !!skillIndexView.availabilityLine);
 
   // Native tool definitions (native tool API, or the text injection fallback)

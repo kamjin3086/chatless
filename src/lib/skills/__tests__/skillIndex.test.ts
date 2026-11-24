@@ -101,8 +101,14 @@ describe('invocation policy at the index', () => {
       [skill('deploy', 'Deploy', 'Deploys the app.', 'user-only')],
       { explicitIds: ['deploy'] },
     );
-    expect(view.entries.map((e) => e.id)).toEqual(['deploy']);
-    expect(view.indexText).toContain('user requested');
+    // 常驻清单仍是模型自己那一半：点名是本轮的事，不该把清单改写。
+    expect(view.entries).toEqual([]);
+    expect(view.requested.map((e) => e.id)).toEqual(['deploy']);
+    const turn = skillIndexBlocks(view).find(
+      (b) => b.id === 'skills-requested',
+    );
+    expect(turn?.layer).toBe('turn');
+    expect(turn?.content).toContain('[user requested - read this guide first]');
   });
 
   it('leaves a model-only skill in the index', () => {
@@ -111,6 +117,47 @@ describe('invocation policy at the index', () => {
     ]);
     expect(view.entries.map((e) => e.id)).toEqual(['background']);
     expect(view.userOnlyIds).toEqual([]);
+  });
+});
+
+describe('what the user asked for this turn', () => {
+  const entries = [
+    skill('deploy', 'Deploy', 'Deploys the app.', 'user-only'),
+    skill('notes', 'Notes', 'Read notes.'),
+  ];
+
+  it('is its own turn block, never a rewrite of the index', () => {
+    const blocks = skillIndexBlocks(
+      buildSkillIndex(entries, { explicitIds: ['deploy'] }),
+    );
+    const turn = blocks.find((b) => b.id === 'skills-requested');
+    expect(turn?.layer).toBe('turn');
+    expect(turn?.content).toContain('`deploy`');
+    // 本轮事实不得推动可缓存前缀：同一份条目、多一个名字，conversation 两块必须逐字相同。
+    expect(blocks.filter((b) => b.layer === 'conversation')).toEqual(
+      skillIndexBlocks(buildSkillIndex(entries)),
+    );
+  });
+
+  it('one call is the whole run', () => {
+    // 上一版叫调用方读两次（一次不含本轮事实、一次含），两次异读就能让两块来自两个世界。
+    const view = buildSkillIndex(entries, { explicitIds: ['deploy'] });
+    expect(skillIndexBlocks(view).map((b) => [b.id, b.layer])).toEqual([
+      ['skill-availability', 'conversation'],
+      ['skills-index', 'conversation'],
+      ['skills-requested', 'turn'],
+    ]);
+  });
+
+  it('says nothing about a name that matches no skill', () => {
+    const view = buildSkillIndex([skill('notes', 'Notes', 'Read notes.')], {
+      explicitIds: ['ghost'],
+    });
+    expect(view.requested).toEqual([]);
+    expect(skillIndexBlocks(view).map((b) => b.id)).toEqual([
+      'skill-availability',
+      'skills-index',
+    ]);
   });
 });
 

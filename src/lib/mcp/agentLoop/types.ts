@@ -43,6 +43,8 @@ export type AgentLoopRunParams = {
   options?: Record<string, unknown>;
   /** Planning mode permits bounded reads/searches but blocks side effects. */
   planOnly?: boolean;
+  /** Skills the user named with `/id` in the composer; a prompt fact, not message text. */
+  explicitSkillIds?: string[];
   /** UI/监控侧 hook：用于复用 useChatActions 的超时监控、性能监控、token 计数等 */
   runtimeHooks?: AgentLoopRuntimeHooks;
 };
