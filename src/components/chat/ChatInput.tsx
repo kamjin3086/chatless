@@ -18,6 +18,14 @@ import { toast } from '@/components/ui/sonner';
 import { McpMentionPanel } from './input/McpMentionPanel';
 import { SkillMentionPanel } from './input/SkillMentionPanel';
 import { AttachmentMenu } from './input/AttachmentMenu';
+import { AndroidDocumentAttachmentStatus, useAndroidDocumentAttachment } from './input/AndroidDocumentAttachment';
+import { useAndroidChatNavigation } from './androidChatNavigation';
+import { AndroidPhotoPreview } from './input/AndroidPhotoPreview';
+import { useAndroidPhotoDraft } from './input/useAndroidPhotoDraft';
+import { AndroidAttachmentChips } from './input/AndroidAttachmentChips';
+import { useAndroidAttachmentSelections } from './input/androidAttachmentSelection';
+import { type AndroidPhotoSendCallbacks, type AndroidPhotoSendOptions, shouldClearPhotoDraft } from '@/lib/android/androidPhotoSend';
+import type { AndroidPhotoDraftHandoff } from '@/lib/android/androidPhotoDraftHandoff';
 import { documentAttachmentErrorDescription, documentAttachmentSizeLimit } from './input/documentAttachmentErrors';
 import { findComposerQuery, insertComposerTrigger, replaceComposerQuery, type ComposerTrigger } from './input/composerTriggers';
 import { useConversationAttachmentStore } from '@/store/conversationAttachmentStore';
@@ -84,8 +92,9 @@ interface ChatInputProps {
       id: string;
       name: string;
     },
-    options?: { images?: string[]; planOnly?: boolean }
+    options?: Partial<AndroidPhotoSendOptions> & AndroidPhotoSendCallbacks & { planOnly?: boolean }
   ) => void | Promise<void>;
+  androidPhotoHandoff?: AndroidPhotoDraftHandoff;
   onImageUpload?: (file: File) => void;
   onFileUpload?: (file: File) => void;
   isLoading?: boolean;
@@ -102,7 +111,9 @@ interface ChatInputProps {
   modelId?: string;
   modelLabel?: string;
   conversationId?: string; // 添加会话ID参数
-  showStarterActions?: boolean;
+   showStarterActions?: boolean;
+  /** Text to drop into the composer when the start panel is tapped. Change `at` to re-send. */
+  starterSeed?: { text: string; at: number } | null;
   onSessionParametersChange?: (parameters: ModelParameters) => void;
 }
 
@@ -119,13 +130,17 @@ export function ChatInput({
   tokenCount = 0,
   editingMessage = null,
   onCancelEdit,
-  providerName: _providerName,
-  modelId: _modelId,
+  providerName,
+  modelId,
   modelLabel: _modelLabel,
   onSessionParametersChange: _onSessionParametersChange,
   conversationId,
   showStarterActions = false,
+  starterSeed,
+  androidPhotoHandoff,
 }: ChatInputProps) {
+  const android = Boolean(useAndroidChatNavigation());
+  const androidDocument = useAndroidDocumentAttachment(android ? conversationId : undefined);
   const [inputValue, setInputValue] = useState("");
   const [composerSelection, setComposerSelection] = useState<{ text: string; caret: number } | null>(null);
   // 直接应用提示词，无需弹窗
@@ -190,7 +205,13 @@ export function ChatInput({
     });
   }, [hasLoadedConversations, disabled, isParsingDocument]);
   const currentConvId = conversationId || storedConversationId;
+  // The photo batch and folder of this chat: the chips above the composer show them, the
+  // attachment sheet is the only place that picks or forgets them.
+  const androidAttachments = useAndroidAttachmentSelections(
+    android ? currentConvId ?? undefined : undefined,
+  );
   const workspaceDirectory = useConversationAttachmentStore((s) => {
+    if (android) return undefined;
     if (!currentConvId) return undefined;
     return s.mountedDirByConversation[currentConvId] ?? (s.workspaceExistsByConversation[currentConvId]
       ? s.sessionDirByConversation[currentConvId]
@@ -279,6 +300,20 @@ export function ChatInput({
     setComposerSelection(null);
   }, [currentConvId]);
 
+  const clearAndroidPhotoText = useCallback((id: string) => {
+    setInputValue('');
+    historyRef.current = composerHistory('');
+    clearInputDraft(id);
+  }, [clearInputDraft]);
+  const androidPhoto = useAndroidPhotoDraft(
+    currentConvId, inputValue, android ? providerName : undefined, modelId,
+    android ? androidPhotoHandoff : undefined, setInputValue, clearAndroidPhotoText,
+  );
+  const photoConflictsWithDraft = Boolean(attachedDocument || editingMessage || isParsingDocument);
+  const photoSendBlocked = androidPhoto.acquiring || androidPhoto.sending || Boolean(
+    androidPhoto.snapshot && (!androidPhoto.recipient || effectiveLoading || photoConflictsWithDraft),
+  );
+
   // 组件卸载时：提交当前草稿
   useEffect(() => {
     return () => {
@@ -292,7 +327,15 @@ export function ChatInput({
   // 在“真正开始流”时再清空输入框，避免瞬间清空带来的不佳体验
   const streamStartCounter = useChatStore((s)=> s.streamStartCounter || 0);
   const lastStreamConvId = useChatStore((s)=> s.lastStreamConvId);
+  const ignoredPhotoStreamStart = useRef<number | null>(null);
   useEffect(()=>{
+    if (android) {
+      if (ignoredPhotoStreamStart.current === streamStartCounter) return;
+      if (!shouldClearPhotoDraft(androidPhoto.snapshot)) {
+        ignoredPhotoStreamStart.current = streamStartCounter;
+        return;
+      }
+    }
     const convId = conversationId || useChatStore.getState().currentConversationId;
     if (lastStreamConvId && convId && lastStreamConvId === convId) {
       setInputValue("");
@@ -331,7 +374,7 @@ export function ChatInput({
         }
       }
     }
-  }, [streamStartCounter, lastStreamConvId, conversationId, manualHeight, sessionManualHeight, clearInputDraft]);
+  }, [android, androidPhoto.snapshot, streamStartCounter, lastStreamConvId, conversationId, manualHeight, sessionManualHeight, clearInputDraft]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -467,6 +510,15 @@ export function ChatInput({
       el.focus();
     });
   };
+
+  // A starter is tapped outside the composer, so the seed is how the start panel hands its text
+  // in. Keyed on `at` so tapping the same starter twice still lands.
+  const seedAt = starterSeed?.at;
+  useEffect(() => {
+    if (seedAt === undefined || !starterSeed) return;
+    setComposerText(starterSeed.text, starterSeed.text.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedAt]);
   const openComposerPanel = (trigger: ComposerTrigger) => {
     const el = textareaRef.current;
     if (!el || el.disabled) return;
@@ -554,7 +606,7 @@ export function ChatInput({
   }, []);
 
   const handleSend = async () => {
-    if (!inputValue.trim() && !attachedDocument) return;
+    if (photoSendBlocked || (!inputValue.trim() && !attachedDocument && !androidPhoto.snapshot)) return;
 
     // 发送前检查
     if (onBeforeSendMessage) {
@@ -611,6 +663,20 @@ export function ChatInput({
           }
         }
       } catch { /* noop */ }
+    }
+
+    if (androidPhoto.snapshot) {
+      await androidPhoto.submit(
+        androidPhoto.snapshot,
+        userMessage || t('androidPhoto.message'),
+        (content, options) => onSendMessage(
+          content,
+          undefined,
+          selectedKnowledgeBase ? { id: selectedKnowledgeBase.id, name: selectedKnowledgeBase.name } : undefined,
+          { ...options, planOnly },
+        ),
+      );
+      return;
     }
 
     if (attachedImages.length > 0) {
@@ -714,7 +780,7 @@ export function ChatInput({
       });
       return;
     }
-    if (!isComposing && e.key === "Enter" && !e.shiftKey) {
+    if (!android && !isComposing && e.key === "Enter" && !e.shiftKey) {
       if (composerQuery) { e.preventDefault(); return; }
       e.preventDefault();
       handleSend();
@@ -810,7 +876,7 @@ export function ChatInput({
 
   useEffect(() => {
     const el = textareaRef.current;
-    if (!el) return;
+    if (android || !el) return;
     const onPaste = async (e: ClipboardEvent) => {
       try {
         if (!e.clipboardData) return;
@@ -847,7 +913,7 @@ export function ChatInput({
       el.removeEventListener('dragover', onDragOver as any);
       el.removeEventListener('drop', onDrop as any);
     };
-  }, [textareaRef.current]);
+  }, [android, textareaRef.current]);
 
   return (
     <div className={cn(
@@ -862,8 +928,27 @@ export function ChatInput({
         </div>
       )}
 
+      {android && (
+        <AndroidDocumentAttachmentStatus
+          state={androidDocument.state}
+          disabled={disabled || effectiveLoading}
+          onRemove={androidDocument.remove}
+        />
+      )}
+
       {/* 已移除输入框上方“长条附加项”（知识库/工作目录/文档），仅在下方彩色标签条展示 */}
 
+      {android && (
+        <AndroidPhotoPreview
+          photo={androidPhoto.snapshot?.photo}
+          providerName={providerName}
+          modelId={modelId}
+          status={androidPhoto.support}
+          feedback={androidPhoto.acquiring ? 'acquiring' : androidPhoto.snapshot && effectiveLoading ? 'busy' : androidPhoto.snapshot && photoConflictsWithDraft ? 'other_attachment' : androidPhoto.feedback}
+          disabled={androidPhoto.acquiring || androidPhoto.sending}
+          onRemove={androidPhoto.remove}
+        />
+      )}
       {attachedImages.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {attachedImages.map((img, idx) => (
@@ -883,9 +968,18 @@ export function ChatInput({
 
       {/* 文档附加展示已移至下方彩色标签条 */}
 
+      {/* 本对话的附件选择状态：紧凑 chips，选择/更换/取消都在附件面板里 */}
+      {android && (
+        <AndroidAttachmentChips
+          photoBatch={androidAttachments.photoBatch}
+          directory={androidAttachments.directory}
+        />
+      )}
+
       <div
         className="relative flex w-full overflow-hidden rounded-2xl border border-slate-300/40 dark:border-slate-600/40 bg-white/30 dark:bg-slate-900/35 hover:border-slate-400/50 dark:hover:border-slate-500/50 focus-within:border-sky-400/45 dark:focus-within:border-sky-400/40 focus-within:ring-0 transition-colors duration-200 composer-box"
         onDragOver={(e) => {
+          if (android) return;
           const dt = (e as React.DragEvent).dataTransfer;
           if (!dt) return;
           const hasFile = Array.from(dt.items || []).some((it) => it.kind === "file");
@@ -895,6 +989,7 @@ export function ChatInput({
           }
         }}
         onDrop={async (e) => {
+          if (android) return;
           const dt = (e as React.DragEvent).dataTransfer;
           if (!dt) return;
           const files = Array.from(dt.files || []);
@@ -920,7 +1015,7 @@ export function ChatInput({
       >
         {/* 顶部拖拽手柄：按住可向上/下调整高度，封顶 60vh */}
         <div
-          className="absolute top-0 left-0 right-0 h-2 cursor-n-resize z-[3]"
+          className={cn("absolute top-0 left-0 right-0 h-2 cursor-n-resize z-[3]", android && "hidden")}
           onMouseDown={(e) => {
             if (disabled) return;
             const el = textareaRef.current; if (!el) return;
@@ -990,8 +1085,10 @@ export function ChatInput({
                   setInputValue(`${rendered}${after}`);
                   // 计数一次使用
                   try { usePromptStore.getState().touchUsage(id); } catch {}
-                  // 立即发送
-                  setTimeout(() => { handleSend(); }, 0);
+                  // A draft photo is sent only through the explicit Send button.
+                  if (!androidPhoto.snapshot && !androidPhoto.acquiring) {
+                    setTimeout(() => { handleSend(); }, 0);
+                  }
                 }
               }
               closeComposerPanel();
@@ -1097,6 +1194,7 @@ export function ChatInput({
             }
           }}
           onKeyDown={handleKeyDown}
+          enterKeyHint={android ? "enter" : undefined}
           placeholder={t(disabled ? 'chatComposer.chooseModelFirst' : 'chatComposer.sendMessage')}
           className={cn(
             "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
@@ -1152,12 +1250,17 @@ export function ChatInput({
             open={attachmentMenuOpen}
             onOpenChange={setAttachmentMenuOpen}
             disabled={disabled || effectiveLoading}
-            isParsingDocument={isParsingDocument}
+            isParsingDocument={android ? androidDocument.state?.busy : isParsingDocument}
             hasDocument={!!attachedDocument}
             selectedKnowledgeBase={selectedKnowledgeBase}
             onOpenComposerPanel={openComposerPanel}
-            onPickImage={() => imageInputRef.current?.click()}
-            onPickDocument={() => fileInputRef.current?.click()}
+            onPickImage={android ? () => void androidPhoto.acquire('pick') : () => imageInputRef.current?.click()}
+            onCapturePhoto={android ? () => void androidPhoto.acquire('capture') : undefined}
+            photoActionsDisabled={androidPhoto.acquiring || androidPhoto.sending}
+            androidAttachments={android ? androidAttachments : undefined}
+            onPickDocument={android ? androidDocument.pick : () => fileInputRef.current?.click()}
+            documentLabel={android ? t('androidDocument.attach') : undefined}
+            documentDescription={android ? t('androidDocument.formats') : undefined}
             onSelectKnowledgeBase={(kb) => {
               if (kb) {
                 selectKnowledgeBase(kb);
@@ -1190,24 +1293,28 @@ export function ChatInput({
           {/* 输入框齿轮按钮已移除：会话参数入口迁移到右上角三点菜单 */}
 
           {/* 隐藏的文件输入 */}
-          <input
-            type="file"
-            ref={imageInputRef}
-            onChange={handleImageUpload}
-            className="hidden"
-            accept="image/*"
-            disabled={disabled}
-          />
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            className="hidden"
-            accept=".pdf, .docx, .md, .markdown, .txt, .json, .csv, .xlsx, .xls, .html, .htm, .rtf, .epub"
-            disabled={disabled}
-          />
+          {!android && (
+            <>
+              <input
+                type="file"
+                ref={imageInputRef}
+                onChange={handleImageUpload}
+                className="hidden"
+                accept="image/*"
+                disabled={disabled}
+              />
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                className="hidden"
+                accept=".pdf, .docx, .md, .markdown, .txt, .json, .csv, .xlsx, .xls, .html, .htm, .rtf, .epub"
+                disabled={disabled}
+              />
+            </>
+          )}
         </div>
-        <div className="absolute right-2 sm:right-3 bottom-2.5 z-[2] flex items-center gap-1.5 sm:gap-2">
+        <div className={cn("absolute right-2 sm:right-3 z-[2] flex items-center gap-1.5 sm:gap-2", android ? "bottom-1" : "bottom-2.5")} data-composer-send>
             {tokenCount > 0 && (
               <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-1 select-none font-mono tabular-nums hidden sm:inline">
                 T:{tokenCount}
@@ -1227,12 +1334,12 @@ export function ChatInput({
                   </span>
                   {t('chatComposer.processing')}
                 </span>
-                {(inputValue.trim() || attachedDocument) && (
+                {!photoSendBlocked && (inputValue.trim() || attachedDocument) && (
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={handleSend}
-                    className="composer-tool h-8 w-8 rounded-md border-0 bg-transparent text-slate-600 shadow-none hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className={cn("composer-tool rounded-md border-0 bg-transparent text-slate-600 shadow-none hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800", android ? "size-10" : "size-8")}
                     title={t('chatComposer.queueSupplement')}
                     aria-label={t('chatComposer.queueSupplement')}
                   >
@@ -1244,7 +1351,8 @@ export function ChatInput({
                   size="icon"
                   onClick={onStopGeneration}
                   className={cn(
-                    "composer-tool h-8 w-8 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                    "composer-tool rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+                    android ? "size-10" : "size-8",
                     "text-slate-600 dark:text-slate-300"
                   )}
                   title={t(isStoppingGeneration ? 'chatComposer.stoppingGeneration' : 'chatComposer.stop')}
@@ -1265,14 +1373,15 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={handleSend}
-                disabled={!inputValue.trim() && !attachedDocument}
+                disabled={photoSendBlocked || (!inputValue.trim() && !attachedDocument && !androidPhoto.snapshot)}
                 className={cn(
-                  "composer-tool composer-send h-8 w-8 rounded-md border-0 shadow-none transition-colors",
-                  (!inputValue.trim() && !attachedDocument)
+                  "composer-tool composer-send rounded-md border-0 shadow-none transition-colors",
+                  android ? "size-10" : "size-8",
+                  (photoSendBlocked || (!inputValue.trim() && !attachedDocument && !androidPhoto.snapshot))
                     ? "pointer-events-none bg-transparent text-slate-300 dark:text-slate-600"
                     : "bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-white"
                 )}
-                title={t('chatComposer.sendShortcut')}
+                title={android ? t('chatComposer.send') : t('chatComposer.sendShortcut')}
                 aria-label={t('chatComposer.sendMessage')}
               >
                 <Send className="w-4 h-4" />
@@ -1298,7 +1407,7 @@ export function ChatInput({
         enabledMcpServers={[]}
       />
 
-      {showStarterActions && !disabled && !effectiveLoading && (
+      {showStarterActions && !android && !disabled && !effectiveLoading && (
         <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5" data-chat-starter-actions>
           <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
             className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
@@ -1307,13 +1416,16 @@ export function ChatInput({
             {t(workspaceDirectory ? 'chatStarter.workspaceFiles' : 'chatStarter.attach')}
             {workspaceDirectory && <kbd className="rounded border border-border px-1 text-[11px] leading-4">@</kbd>}
           </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
-            className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => openComposerPanel('#')}>
-            <Bookmark aria-hidden="true" className="size-3.5" />
-            {t('chatStarter.prompts')}
-            <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>
-          </Button>
+          {/* Prompt templates insert a '#' trigger that only the desktop composer resolves. */}
+          {!android && (
+            <Button type="button" variant="ghost" size="sm" disabled={isParsingDocument}
+              className="gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => openComposerPanel('#')}>
+              <Bookmark aria-hidden="true" className="size-3.5" />
+              {t('chatStarter.prompts')}
+              <kbd className="rounded border border-border px-1 text-[11px] leading-4">#</kbd>
+            </Button>
+          )}
         </div>
       )}
     </div>

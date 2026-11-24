@@ -17,6 +17,10 @@ import { selectSelectableProviders } from '@/lib/provider/modelPickerVisibility'
 import { translate } from '@/i18n';
 import { useLocaleStore } from '@/store/localeStore';
 
+import { Button } from '@/components/ui/button';
+import { AndroidModelPicker } from './AndroidModelPicker';
+import { useAndroidChatNavigation } from './androidChatNavigation';
+
 interface ModelSelectorProps {
   currentModelId: string | null;
   allMetadata: ProviderMetadata[];
@@ -34,6 +38,8 @@ export function ModelSelector({
   currentProviderName,
   setupLabel,
 }: ModelSelectorProps) {
+  const androidNavigation = useAndroidChatNavigation();
+  const android = Boolean(androidNavigation);
   const locale = useLocaleStore((state) => state.locale);
   const [searchQuery, setSearchQuery] = useState('');
   const [recentModels, setRecentModels] = useState<Array<{provider: string; modelId: string}>>([]);
@@ -175,10 +181,11 @@ export function ModelSelector({
       ...provider,
       models: provider.models.filter(modelMeta =>
         modelMeta.name.toLowerCase().includes(query) ||
-        provider.name.toLowerCase().includes(query)
+        provider.name.toLowerCase().includes(query) ||
+        (android && (provider.displayName?.toLowerCase().includes(query) || modelMeta.label?.toLowerCase().includes(query)))
       )
     })).filter(provider => provider.models.length > 0);
-  }, [visibleProviders, searchQuery]);
+  }, [visibleProviders, searchQuery, android]);
 
   const recentModelDetails = useMemo(() => {
     const result: { provider: ProviderMetadata, model: ModelMetadata }[] = [];
@@ -226,7 +233,6 @@ export function ModelSelector({
 
   const handleOpenChange = (open: boolean) => {
     if (open) {
-      // 打开时由子组件内部聚焦输入框
       // 后台预热当前可见 provider 的品牌 logo（非阻塞）
       try {
         const modelsToWarm: Array<{ modelId: string; providerName?: string }> = [];
@@ -325,6 +331,95 @@ export function ModelSelector({
 
   const triggerPlaceholder = translate(locale, allMetadata.length === 0 ? 'modelChooser.loading' : 'chatStarter.chooseModel');
 
+  const triggerContent = (
+    <span className="flex min-w-0 max-w-full items-center gap-1.5">
+      {currentProvider && currentModelId ? (
+        !useProviderIcon ? (
+          <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
+          <ModelBrandLogo
+            modelId={currentModelId}
+            providerName={currentProvider.name}
+            size={14}
+            fallbackSrc={providerCatalogSrc || providerAvatarSrc}
+            className="w-4 h-4 rounded-sm"
+          />
+          </div>
+        ) : (
+          isImgSrc(providerCatalogSrc) ? (
+            <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
+            <Image
+              src={providerCatalogSrc}
+              alt={currentProvider.name}
+              width={14}
+              height={14}
+              className="w-4 h-4 rounded-sm"
+              onError={() => {
+                if (providerIsCatalog && providerExtIdx < iconExts.length - 1) {
+                  setProviderExtIdx(i => i + 1);
+                }
+              }}
+            />
+            </div>
+          ) : (
+            <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
+            <Image
+              src={providerAvatarSrc}
+              alt={currentProvider.name}
+              width={14}
+              height={14}
+              className="w-4 h-4 rounded-sm"
+            />
+            </div>
+          )
+        )
+      ) : null}
+      {currentModelId ? (
+        <>
+          <span className="min-w-0 truncate">{currentModelName}</span>
+          {!android && currentProviderLabel ? (
+            <>
+              <span className="shrink-0 text-slate-400 dark:text-slate-500">·</span>
+              <span className="shrink-0 truncate">{currentProviderLabel}</span>
+            </>
+          ) : null}
+        </>
+      ) : (
+        <span>{setupLabel ?? triggerPlaceholder}</span>
+      )}
+    </span>
+  );
+
+  if (androidNavigation) {
+    return (
+      <AndroidModelPicker
+        trigger={(
+          <Button
+            type="button"
+            variant="ghost"
+            data-model-trigger=""
+            className={
+              setupLabel
+                ? 'h-11'
+                : 'h-11 min-w-0 max-w-[62vw] basis-[6rem] grow gap-1.5 rounded-none px-1 text-left text-xs'
+            }
+            title={triggerTitle}
+            disabled={disabled}
+          >
+            {triggerContent}
+          </Button>
+        )}
+        models={filteredModels}
+        recent={recentModelDetails}
+        selection={pairSelection}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        onOpenChange={handleOpenChange}
+        onSelect={handleInternalModelChange}
+        onSettings={androidNavigation.openModelSettings}
+      />
+    );
+  }
+
   return (
     <>
       <Select
@@ -339,61 +434,7 @@ export function ModelSelector({
           aria-label={setupLabel ?? triggerTitle ?? triggerPlaceholder}
           className={setupLabel ? undefined : 'h-7 max-w-[50vw] min-w-0 overflow-hidden rounded-lg border border-slate-200/70 bg-white/60 px-2 text-xs font-medium text-slate-600 shadow-none hover:border-slate-300/80 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/10'}
         >
-          <span className="flex min-w-0 max-w-full items-center gap-1.5">
-            {currentProvider && currentModelId ? (
-              !useProviderIcon ? (
-                <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
-                <ModelBrandLogo
-                  modelId={currentModelId}
-                  providerName={currentProvider.name}
-                  size={14}
-                  fallbackSrc={providerCatalogSrc || providerAvatarSrc}
-                  className="w-4 h-4 rounded-sm"
-                />
-                </div>
-              ) : (
-                isImgSrc(providerCatalogSrc) ? (
-                  <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
-                  <Image
-                    src={providerCatalogSrc}
-                    alt={currentProvider.name}
-                    width={14}
-                    height={14}
-                    className="w-4 h-4 rounded-sm"
-                    onError={() => {
-                      if (providerIsCatalog && providerExtIdx < iconExts.length - 1) {
-                        setProviderExtIdx(i => i + 1);
-                      }
-                    }}
-                  />
-                  </div>
-                ) : (
-                  <div className="w-4 h-4 flex-shrink-0 overflow-hidden rounded-sm">
-                  <Image
-                    src={providerAvatarSrc}
-                    alt={currentProvider.name}
-                    width={14}
-                    height={14}
-                    className="w-4 h-4 rounded-sm"
-                  />
-                  </div>
-                )
-              )
-            ) : null}
-            {currentModelId ? (
-              <>
-                <span className="min-w-0 truncate">{currentModelName}</span>
-                {currentProviderLabel ? (
-                  <>
-                    <span className="shrink-0 text-slate-400 dark:text-slate-500">·</span>
-                    <span className="shrink-0 truncate">{currentProviderLabel}</span>
-                  </>
-                ) : null}
-              </>
-            ) : (
-              <span>{setupLabel ?? triggerPlaceholder}</span>
-            )}
-          </span>
+          {triggerContent}
         </SelectTrigger>
         
         <ModelSelectContent

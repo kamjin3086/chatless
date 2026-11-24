@@ -14,6 +14,10 @@ it('formats the same reference timestamp for each app locale', () => {
 });
 
 it('leaves an unrecognized timestamp unchanged', () => {
-  expect(formatResourceReferenceTime('invalid timestamp', 'en')).toBe('invalid timestamp');
-  expect(formatResourceReferenceTime('invalid timestamp', 'zh')).toBe('invalid timestamp');
+  expect(formatResourceReferenceTime('invalid timestamp', 'en')).toBe(
+    'invalid timestamp',
+  );
+  expect(formatResourceReferenceTime('invalid timestamp', 'zh')).toBe(
+    'invalid timestamp',
+  );
 });

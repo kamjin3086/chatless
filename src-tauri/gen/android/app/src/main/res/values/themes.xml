@@ -1,0 +1,15 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.chatless" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- MainActivity insets the WebView below the bars, so the bars and the window behind
+             them are what the user reads as app chrome: the app surface, not the default
+             purple status bar. values-night flips both colours and both icon contrasts. -->
+        <item name="android:windowBackground">@color/app_surface</item>
+        <item name="android:statusBarColor">@color/app_surface</item>
+        <item name="android:navigationBarColor">@color/app_surface</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
+        <!-- Light surface: dark status and navigation icons. -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+    </style>
+</resources>

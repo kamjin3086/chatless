@@ -8,7 +8,13 @@ import { CSS } from '@dnd-kit/utilities';
 // import { SettingsSectionHeader } from "./SettingsSectionHeader";
 // import { ModelCard } from "./ModelCard"; // 不再使用 ModelCard
 import { ProviderSettings } from "./ProviderSettings";
-import { ServerCog, GripVertical, ChevronDown } from "lucide-react";
+import { ServerCog, GripVertical, ChevronDown, ChevronLeft, ChevronRight, FileDown, RotateCcw } from "lucide-react";
+import { useChatStore } from "@/store/chatStore";
+import { specializedStorage } from "@/lib/storage";
+import {
+  providerStatusChip,
+  sortProvidersForMobileList,
+} from "@/lib/provider/providerListStatus";
 // 导入新模块
 /* Commenting out for now due to persistent linter error
 import {
@@ -31,12 +37,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useProviderManagement, ProviderWithStatus } from '@/hooks/useProviderManagement';
 import { cn } from "@/lib/utils"; // Assuming cn is used somewhere or will be
 import { AddProvidersDialog } from './AddProvidersDialog';
+import { formatProviderModelCount } from './providerModelPresentation';
+import { exportAndroidLogs } from '@/lib/android/androidLogExport';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useStableProviderIcon } from "./useStableProviderIcon";
 import { getHtmlLang, translate } from '@/i18n';
 import type { Locale, TranslationKey } from '@/i18n/types';
 import { useLocaleStore } from '@/store/localeStore';
 import { useSearchParams } from "next/navigation";
 import { ContextMenu } from "@/components/ui/context-menu";
+import { Button } from "@/components/ui/button";
 // 头部过滤器已内化到表头，无需 Select 组件
 // duplicate import removed
 
@@ -177,9 +187,74 @@ const SortableProviderRow = React.memo(function SortableProviderRow({
   (prev.provider.models?.length ?? 0) === (next.provider.models?.length ?? 0)
 ));
 
-export function AiModelSettings({ startWithProviderPicker = false }: { startWithProviderPicker?: boolean } = {}) {
-  const locale = useLocaleStore((state) => state.locale);
-  const t = (key: TranslationKey) => translate(locale, key);
+export const MobileProviderRow = React.memo(function MobileProviderRow({
+  provider,
+  inUse,
+  onOpen,
+}: {
+  provider: ProviderWithStatus;
+  inUse: boolean;
+  onOpen: () => void;
+}) {
+  const { iconSrc } = useStableProviderIcon(provider as any);
+  const t = useTranslation();
+  const status = providerStatusChip(provider);
+  const modelCount = provider.models?.length ?? 0;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2 text-start transition-colors active:bg-muted",
+        inUse ? "border-blue-500/40 bg-blue-500/[0.06]" : "border-border bg-background",
+      )}
+    >
+      <Image
+        src={iconSrc}
+        alt=""
+        width={28}
+        height={28}
+        className="size-7 shrink-0 object-contain"
+        draggable={false}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-foreground">
+            {provider.displayName || provider.name}
+          </span>
+          {inUse && (
+            <span className="shrink-0 rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-600 dark:text-blue-300">
+              {t('androidChat.inUse')}
+            </span>
+          )}
+        </span>
+        <span className="mt-1 flex items-center gap-1.5 text-xs">
+          <span className={cn("size-1.5 shrink-0 rounded-full", status.dot)} />
+          <span className="text-slate-500 dark:text-slate-400">{t(status.labelKey)}</span>
+          <span className="truncate text-slate-400 dark:text-slate-500">
+            · {formatProviderModelCount(t, modelCount)}
+          </span>
+        </span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
+    </button>
+  );
+}, (prev, next) =>
+  prev.provider.name === next.provider.name &&
+  prev.provider.displayName === next.provider.displayName &&
+  prev.provider.displayStatus === next.provider.displayStatus &&
+  prev.provider.lastResult === next.provider.lastResult &&
+  prev.provider.configStatus === next.provider.configStatus &&
+  (prev.provider.models?.length ?? 0) === (next.provider.models?.length ?? 0) &&
+  prev.inUse === next.inUse &&
+  prev.onOpen === next.onOpen);
+
+export function AiModelSettings({ startWithProviderPicker = false, compact = false }: {
+  startWithProviderPicker?: boolean;
+  compact?: boolean;
+} = {}) {
+  const t = useTranslation();
   const [providerPickerOpen, setProviderPickerOpen] = useState(startWithProviderPicker);
   // 使用自定义 Hook 获取状态和处理函数
   const {
@@ -211,6 +286,71 @@ export function AiModelSettings({ startWithProviderPicker = false }: { startWith
 
   const searchParams = useSearchParams();
   const providerFromUrl = searchParams.get('provider');
+
+  // 手机上进管理页先看列表：哪一家在用、哪一家连得上，一眼看见，而不是先选一个下拉。
+  const conversationProviderName = useChatStore((state) => {
+    const id = state.currentConversationId;
+    const conv = id ? state.conversations.find((c: any) => c.id === id) : null;
+    return conv?.model_provider ?? null;
+  });
+  const [lastUsedPair, setLastUsedPair] = useState<{ provider: string; modelId: string } | null>(null);
+  useEffect(() => {
+    if (!compact) return;
+    let alive = true;
+    void specializedStorage.models
+      .getLastSelectedModelPair()
+      .then((pair: any) => {
+        if (alive && pair?.provider) setLastUsedPair(pair);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [compact]);
+  const inUseProviderName = conversationProviderName ?? lastUsedPair?.provider ?? null;
+  const [openProviderName, setOpenProviderName] = useState<string | null>(null);
+  // 「日志导出」：手机不接 adb 时靠它把现场带走
+  const [exportingLogs, setExportingLogs] = useState(false);
+  const exportLogs = useCallback(async () => {
+    setExportingLogs(true);
+    try {
+      const outcome = await exportAndroidLogs();
+      switch (outcome.kind) {
+        case 'shared':
+          toast.success(t('androidLogs.shared'));
+          break;
+        case 'saved':
+          toast.success(t('androidLogs.saved').replace('{0}', outcome.name));
+          break;
+        case 'clipboard':
+          toast.success(t('androidLogs.copied'));
+          break;
+        case 'empty':
+          toast.info(t('androidLogs.empty'));
+          break;
+        case 'cancelled':
+          break;
+        default:
+          toast.error(t('androidLogs.failed'));
+      }
+    } catch (error) {
+      console.error('[androidLogs] 导出失败', error);
+      toast.error(t('androidLogs.failed'));
+    } finally {
+      setExportingLogs(false);
+    }
+  }, [t]);
+  // 系统返回先收起服务详情、回到列表，而不是直接退出管理页。
+  useEffect(() => {
+    if (!compact || !openProviderName) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      setOpenProviderName(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [compact, openProviderName]);
 
   // 搜索与过滤 state
   const [searchQuery, setSearchQuery] = useState("");
@@ -289,6 +429,41 @@ export function AiModelSettings({ startWithProviderPicker = false }: { startWith
     setSelectedId(name);
   }, []);
 
+  // 手机列表的顺序：使用中 > 已连接 > 需要密钥 > 无法连接 > 未检查（同档内保持用户排序）
+  const mobileProviders = useMemo(
+    () => sortProvidersForMobileList(displayList, inUseProviderName),
+    [displayList, inUseProviderName],
+  );
+
+  const openProvider = useMemo(
+    () =>
+      openProviderName
+        ? displayList.find((p) => p.name === openProviderName) ?? null
+        : null,
+    [displayList, openProviderName],
+  );
+
+  // 列表页得给出有得住的状态，不能整屏「未检查」：进来先按列表顺序跑一轮检查，
+  // 「刷新状态」手动重跑。没密钥的跳过——再试一次答案也是同一个。
+  const [statusSweep, setStatusSweep] = useState(0);
+  const lastSweepRef = useRef(-1);
+  const sweepTargetsRef = useRef<ProviderWithStatus[]>([]);
+  sweepTargetsRef.current = mobileProviders;
+  const hasProviders = mobileProviders.length > 0;
+  useEffect(() => {
+    if (!compact || !hasProviders) return;
+    if (lastSweepRef.current === statusSweep) return;
+    lastSweepRef.current = statusSweep;
+    // 不能在这里取消：每检完一家列表就重新渲染，一取消就把下一家掐掉，而这一轮已经记账了。
+    void (async () => {
+      for (const target of sweepTargetsRef.current) {
+        if (target.configStatus) continue;
+        const fresh = sweepTargetsRef.current.find((p) => p.name === target.name) ?? target;
+        await Promise.resolve(handleSingleProviderRefresh(fresh, false)).catch(() => {});
+      }
+    })();
+  }, [compact, hasProviders, statusSweep, handleSingleProviderRefresh]);
+
   // dnd-kit 传感器
   // 调高触发距离，减少误触；限定触发元素为拖拽把手
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -329,9 +504,90 @@ export function AiModelSettings({ startWithProviderPicker = false }: { startWith
     (selectedIdResolved && displayList.find((p) => p.name === selectedIdResolved)) ||
     null;
 
+  // 手机和桌面用同一份详情，只是放进去的位置不同。
+  const renderProviderDetail = (provider: ProviderWithStatus | null) =>
+    provider ? (
+      <ProviderSettings
+        key={provider.name}
+        compact={compact}
+        provider={provider}
+        isConnecting={provider.displayStatus === 'CONNECTING'}
+        isInitialChecking={isLoading}
+        onUrlChange={handleServiceUrlChange}
+        onDefaultApiKeyChange={handleProviderDefaultApiKeyChange}
+        onDefaultApiKeyBlur={handleDefaultApiKeyBlur}
+        onModelApiKeyChange={(modelName, apiKey) => handleModelApiKeyChange(provider.name, modelName, apiKey)}
+        onModelApiKeyBlur={handleModelApiKeyBlur}
+        onRefresh={handleSingleProviderRefresh}
+        onPreferenceChange={handlePreferenceChange}
+        open
+      />
+    ) : (
+      <div className="h-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
+        {compact ? t('chatStarter.noProvider') : t('provider.list.selectProvider')}
+      </div>
+    );
+
   // --- 渲染逻辑 ---
   return (
-    <div className="h-full min-h-0 flex overflow-hidden">
+    <div className={cn("h-full min-h-0 flex overflow-hidden", compact && "flex-col")}>
+      {compact ? (
+        openProvider ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex shrink-0 items-center gap-1 border-b border-border px-1 py-1">
+              <button
+                type="button"
+                onClick={() => setOpenProviderName(null)}
+                className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm text-slate-600 active:bg-muted dark:text-slate-300"
+              >
+                <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
+                {t('androidChat.backToProviders')}
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">{renderProviderDetail(openProvider)}</div>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h2 className="text-xs text-slate-500 dark:text-slate-400">{t('androidChat.providers')}</h2>
+              <button
+                type="button"
+                onClick={() => setStatusSweep((n) => n + 1)}
+                className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs text-slate-500 active:bg-muted dark:text-slate-400"
+              >
+                <RotateCcw className="size-3.5" aria-hidden="true" />
+                {t('provider.list.refresh')}
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {mobileProviders.map((provider) => (
+                <li key={provider.name}>
+                  <MobileProviderRow
+                    provider={provider}
+                    inUse={provider.name === inUseProviderName}
+                    onOpen={() => setOpenProviderName(provider.name)}
+                  />
+                </li>
+              ))}
+            </ul>
+            {mobileProviders.length === 0 && !isLoading && (
+              <div className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                {t('chatStarter.noProvider')}
+              </div>
+            )}
+            <AddProvidersDialog
+              open={providerPickerOpen}
+              onOpenChange={setProviderPickerOpen}
+              compact
+              trigger={
+                <Button type="button" variant="outline" className="mt-3 h-12 w-full">
+                  {t('chatStarter.addProvider')}
+                </Button>
+              }
+            />
+          </div>
+        )
+      ) : (
       <div className="provider-rail w-52 shrink-0 flex flex-col min-h-0 border-r border-slate-200/50 dark:border-slate-700/40">
         <div className="flex-shrink-0 px-2 pt-2.5 pb-2 flex items-center gap-0.5">
           <SearchInput
@@ -411,28 +667,26 @@ export function AiModelSettings({ startWithProviderPicker = false }: { startWith
         </div>
       </div>
 
-      <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
-        {selectedProvider ? (
-          <ProviderSettings
-            key={selectedProvider.name}
-            provider={selectedProvider}
-            isConnecting={selectedProvider.displayStatus === 'CONNECTING'}
-            isInitialChecking={isLoading}
-            onUrlChange={handleServiceUrlChange}
-            onDefaultApiKeyChange={handleProviderDefaultApiKeyChange}
-            onDefaultApiKeyBlur={handleDefaultApiKeyBlur}
-            onModelApiKeyChange={(modelName, apiKey) => handleModelApiKeyChange(selectedProvider.name, modelName, apiKey)}
-            onModelApiKeyBlur={handleModelApiKeyBlur}
-            onRefresh={handleSingleProviderRefresh}
-            onPreferenceChange={handlePreferenceChange}
-            open
-          />
-        ) : (
-          <div className="h-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
-            {t('provider.list.selectProvider')}
-          </div>
-        )}
-      </div>
+      )}
+
+      {!compact && (
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+          {renderProviderDetail(selectedProvider)}
+        </div>
+      )}
+
+      {compact && (
+        // 临时调试用：手机不接 adb 时，这是把日志带出手机的唯一入口。
+        <button
+          type="button"
+          onClick={() => void exportLogs()}
+          disabled={exportingLogs}
+          className="fixed bottom-24 right-4 z-50 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border bg-background/95 px-4 text-sm text-foreground shadow-lg backdrop-blur active:scale-[0.98] disabled:opacity-60"
+        >
+          <FileDown className="size-4 shrink-0" aria-hidden="true" />
+          {exportingLogs ? t('androidLogs.exporting') : t('androidLogs.export')}
+        </button>
+      )}
     </div>
   );
 } 

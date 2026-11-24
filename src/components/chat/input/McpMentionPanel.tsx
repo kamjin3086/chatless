@@ -109,7 +109,7 @@ export function McpMentionPanel({ anchorRef, workspaceDirectory, onSelect, onSel
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.target !== anchorRef.current || e.isComposing) return;
-      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'Escape') { if (!e.defaultPrevented) { e.preventDefault(); onClose(); } return; }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         const item = items[activeIndex];

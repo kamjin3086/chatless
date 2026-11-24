@@ -31,6 +31,14 @@ import { ToolCallCoordinator } from '@/lib/mcp/ToolCallCoordinator';
 import { AgentLoopRunner } from '@/lib/mcp/agentLoop';
 import { useAuthorizationStore } from '@/store/authorizationStore';
 import { getProcessSandbox } from '@/lib/skills/sandbox';
+import {
+  type AndroidPhotoSendCallbacks,
+  type AndroidPhotoSendOptions,
+  AndroidPhotoSendRejection,
+  guardAndroidPhotoSend,
+  resolveAndroidPhotoRoute,
+  trackAndroidPhotoResponse,
+} from '@/lib/android/androidPhotoSend';
 // 动态导入 Title 相关函数，避免静态未用告警
 
 // type StoreMessage = any;
@@ -349,39 +357,45 @@ export const useChatActions = (
         sourceBytes?: Uint8Array;
       },
       knowledgeBase?: { id: string; name: string },
-      options?: {
-        conversation?: Conversation;
-        conversationId?: string;
-        images?: string[];
-        planOnly?: boolean;
-      },
+      options?: Partial<AndroidPhotoSendOptions> &
+        AndroidPhotoSendCallbacks & {
+          conversation?: Conversation;
+          conversationId?: string;
+          planOnly?: boolean;
+        },
     ) => {
-      // 运行中输入是当前任务的补充，而不是启动竞争的第二个循环。
+      const expectedPhoto = options?.expectedAndroidPhotoRecipient;
       const steeringConversationId =
         options?.conversationId || currentConversationId;
-      if (steeringConversationId) {
+      const activeAssistantId = () => {
+        if (!steeringConversationId) return undefined;
         const state = useChatStore.getState();
-        const activeConversation = state.conversations.find(
-          (c) => c.id === steeringConversationId,
-        );
         const activeRunId = Object.entries(state.agentRuns || {}).find(
           ([, run]) =>
             run.running && run.conversationId === steeringConversationId,
         )?.[0];
-        const activeAssistant = activeRunId
-          ? { id: activeRunId }
-          : [...(activeConversation?.messages || [])]
-              .reverse()
-              .find(
-                (message: any) =>
-                  message?.role === 'assistant' &&
-                  message?.status === 'loading',
-              );
+        const activeConversation = state.conversations.find(
+          (c) => c.id === steeringConversationId,
+        );
+        return (
+          activeRunId ??
+          [...(activeConversation?.messages || [])]
+            .reverse()
+            .find(
+              (message) =>
+                message?.role === 'assistant' && message?.status === 'loading',
+            )?.id
+        );
+      };
+
+      // A photo is addressed to the selected model, not to an already running turn.
+      if (!expectedPhoto && steeringConversationId) {
+        const activeId = activeAssistantId();
         const steeringContent = documentData?.contextData
           ? `${content.trim()}\n\n[补充资料]\n${documentData.contextData.slice(0, 12000)}`.trim()
           : content;
         let attachmentDocumentIds: string[] | undefined;
-        if (activeAssistant?.id && documentData?.sourceBytes?.length) {
+        if (activeId && documentData?.sourceBytes?.length) {
           const { attachDocumentToConversation } = await import(
             '@/lib/documents/conversationDocumentService'
           );
@@ -393,8 +407,8 @@ export const useChatActions = (
           attachmentDocumentIds = [attached.documentId];
         }
         if (
-          activeAssistant?.id &&
-          (await AgentLoopRunner.steer(activeAssistant.id, {
+          activeId &&
+          (await AgentLoopRunner.steer(activeId, {
             text: steeringContent,
             images: options?.images,
             attachmentDocumentIds,
@@ -412,6 +426,8 @@ export const useChatActions = (
       const { t } = useLocaleStore.getState();
       const modelToUse = selectedModelId;
       if (!modelToUse) {
+        if (expectedPhoto)
+          throw new AndroidPhotoSendRejection('recipient_changed');
         toast.error(t('chatSendError.selectModel.title'), {
           description: t('chatSendError.selectModel.description'),
           action: {
@@ -423,6 +439,8 @@ export const useChatActions = (
       }
 
       if (!currentProviderName) {
+        if (expectedPhoto)
+          throw new AndroidPhotoSendRejection('recipient_changed');
         toast.error(t('chatSendError.missingProvider.title'), {
           description: t('chatSendError.missingProvider.description'),
         });
@@ -446,6 +464,15 @@ export const useChatActions = (
         effectiveProvider,
         modelToUse,
       );
+      if (expectedPhoto) {
+        await guardAndroidPhotoSend(
+          expectedPhoto,
+          effectiveProvider,
+          modelToUse,
+          resolveAndroidPhotoRoute,
+          () => Boolean(activeAssistantId()),
+        );
+      }
       if (!apiKeyValid) {
         toast.error(t('chatSendError.invalidKey.title'), {
           description: t('chatSendError.invalidKey.description'),
@@ -454,6 +481,7 @@ export const useChatActions = (
             onClick: () => navigateToSettings('localModels'),
           },
         });
+        if (expectedPhoto) throw new AndroidPhotoSendRejection('not_accepted');
         return;
       }
 
@@ -485,11 +513,16 @@ export const useChatActions = (
           toast.error(t('chatSendError.createConversation.title'), {
             description: t('chatSendError.createConversation.description'),
           });
+          if (expectedPhoto)
+            throw new AndroidPhotoSendRejection('not_accepted');
           return;
         }
       }
 
       const finalConversationId = conversationId;
+      if (expectedPhoto && !steeringConversationId) {
+        options?.onAndroidPhotoConversationCreated?.(finalConversationId);
+      }
 
       if (currentConversation?.model_id !== modelToUse && finalConversationId) {
         void updateConversation(finalConversationId, { model_id: modelToUse });
@@ -509,6 +542,9 @@ export const useChatActions = (
           .getState()
           .getKnowledgeBase(finalConversationId);
 
+      if (expectedPhoto && activeAssistantId()) {
+        throw new AndroidPhotoSendRejection('busy');
+      }
       const now = Date.now();
       const userMessageId = uuidv4();
       const newMessage: Message = {
@@ -626,6 +662,12 @@ export const useChatActions = (
       // 调试信息已移除，避免控制台噪音
 
       let sendErrorNotified = false;
+      let photoRejection: AndroidPhotoSendRejection | undefined;
+      const photoResponse = expectedPhoto
+        ? trackAndroidPhotoResponse(() =>
+            options?.onAndroidPhotoAccepted?.(finalConversationId),
+          )
+        : null;
 
       if (modelToUse) {
         // 参数优先级：会话参数（可覆盖/可显式禁用） > 模型级参数 > 系统默认
@@ -669,7 +711,7 @@ export const useChatActions = (
           );
 
           try {
-            notifyStreamStart(finalConversationId);
+            if (!expectedPhoto) notifyStreamStart(finalConversationId);
           } catch {
             /* noop */
           }
@@ -686,6 +728,7 @@ export const useChatActions = (
               attachmentDocumentIds,
             },
             options: composed,
+            androidPhotoRecipient: expectedPhoto,
             planOnly: options?.planOnly,
             runtimeHooks: {
               onAgentStart: () => {
@@ -697,11 +740,18 @@ export const useChatActions = (
                   pendingUpdate: false,
                 };
               },
-              onStreamError: () => {
+              onStreamError: (error) => {
+                if (
+                  expectedPhoto &&
+                  error instanceof AndroidPhotoSendRejection
+                ) {
+                  photoRejection = error;
+                }
                 sendErrorNotified = true;
                 stopGenerationIdleWatch();
               },
               onStreamEvent: (event: any) => {
+                photoResponse?.event(event);
                 lastActivityTimeRef.current = Date.now();
 
                 const t = String(event?.type || '');
@@ -728,7 +778,15 @@ export const useChatActions = (
               },
             },
           });
-          return;
+          if (photoResponse && !photoResponse.accepted) {
+            const assistant = useChatStore
+              .getState()
+              .conversations.find(
+                (conversation) => conversation.id === finalConversationId,
+              )
+              ?.messages?.find((message) => message.id === assistantMessageId);
+            photoResponse.complete(assistant?.status);
+          }
         } catch (err) {
           if (!sendErrorNotified) {
             showSendErrorToast(err, { providerName: effectiveProvider });
@@ -738,8 +796,11 @@ export const useChatActions = (
             status: 'error',
             content: `发送失败：${msg}`,
           });
-          return;
         }
+        if (photoResponse && !photoResponse.accepted) {
+          throw photoRejection ?? new AndroidPhotoSendRejection('not_accepted');
+        }
+        return;
       } else {
         // 未选择模型
         void updateMessage(assistantMessageId, {

@@ -8,6 +8,10 @@ import { WebSearchAdapter } from './WebSearchAdapter';
 import { KnowledgeAdapter } from './KnowledgeAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 import { ToolResultAdapter } from './ToolResultAdapter';
+import { AndroidCountdownAdapter } from './AndroidCountdownAdapter';
+import { AndroidDirectoryAdapter } from './AndroidDirectoryAdapter';
+import { AndroidDocumentAdapter } from './AndroidDocumentAdapter';
+import { AndroidPhotosAdapter } from './AndroidPhotosAdapter';
 
 /**
  * 默认 adapters
@@ -28,6 +32,10 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new ShellExecutorAdapter(),
     new KnowledgeAdapter(),
     new SystemToolAdapter(),
+    new AndroidCountdownAdapter(),
+    new AndroidDocumentAdapter(),
+    new AndroidDirectoryAdapter(),
+    new AndroidPhotosAdapter(),
     new McpAdapter(),
   ];
 }

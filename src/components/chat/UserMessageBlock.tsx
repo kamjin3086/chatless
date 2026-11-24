@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Pencil, Check, Trash2 } from 'lucide-react';
 import { DocumentReference } from './DocumentReference';
 import { cn } from '@/lib/utils';
@@ -8,9 +8,11 @@ import { translate } from '@/i18n';
 import type { TranslationKey } from '@/i18n/types';
 import { useLocaleStore } from '@/store/localeStore';
 
+/** Opens one message's actions at a time: the detail is the message that asked to stay open. */
+const USER_MSG_TOOLS_EVENT = 'chatless:user-message-tools';
+
 // 帮助函数: 检查文档引用是否有效
-const isValidDocumentReference = (ref: any): boolean => {
-  if (!ref || typeof ref !== 'object' || Array.isArray(ref)) {
+const isValidDocumentReference = (ref: any): boolean => {  if (!ref || typeof ref !== 'object' || Array.isArray(ref)) {
     return false;
   }
   
@@ -89,6 +91,28 @@ export const UserMessageBlock = ({
   const t = (key: TranslationKey) => translate(locale, key);
   const [isCopied, setIsCopied] = useState(false);
 
+  /*
+   * A phone has no hover, so the actions come out on a tap of the message - for one message at
+   * a time. Left always visible they cost the bubble a row of height and turn every chat into a
+   * strip of icons; left to hover only they are unreachable on touch.
+   */
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolKey = id ?? content;
+  const toggleTools = () => {
+    document.dispatchEvent(
+      new CustomEvent(USER_MSG_TOOLS_EVENT, { detail: toolKey }),
+    );
+    setToolsOpen((open) => !open);
+  };
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const close = (event: Event) => {
+      if ((event as CustomEvent).detail !== toolKey) setToolsOpen(false);
+    };
+    document.addEventListener(USER_MSG_TOOLS_EVENT, close);
+    return () => document.removeEventListener(USER_MSG_TOOLS_EVENT, close);
+  }, [toolsOpen, toolKey]);
+
   const handleCopy = async (content: string) => {
     try {
       if (onCopy) {
@@ -104,7 +128,10 @@ export const UserMessageBlock = ({
   };
 
   return (
-    <div className="relative max-w-full will-change-auto">
+    <div
+      className="relative max-w-full will-change-auto"
+      onClick={toggleTools}
+    >
       {/* 去除内层气泡底色与边框，避免与外层气泡叠加造成“深外浅内”的观感 */}
       <div className="max-w-full text-blue-900 dark:text-blue-50 transition-all duration-200">
         {/* 知识库引用部分 - 使用 flex 和 truncate 优化布局 */}
@@ -165,12 +192,18 @@ export const UserMessageBlock = ({
       </div>
       
       {/* 操作按钮 - 轻量设计 */}
-      <div className="absolute top-1/2 -translate-y-1/2 -left-2 transform -translate-x-full flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+      <div
+        className="absolute top-1/2 -translate-y-1/2 -left-2 transform -translate-x-full flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+        data-user-msg-tools
+        data-open={toolsOpen ? '' : undefined}
+        onClick={(event) => event.stopPropagation()}
+      >
         {onEdit && id && (
           <button
             onClick={() => onEdit(id)}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
             title={t('chatUi.userMessage.edit')}
+            aria-label={t('chatUi.userMessage.edit')}
           >
             <Pencil className="w-3 h-3" />
           </button>
@@ -185,6 +218,7 @@ export const UserMessageBlock = ({
                 : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             )}
             title={isCopied ? t('chatUi.userMessage.copied') : t('chatUi.userMessage.copy')}
+            aria-label={isCopied ? t('chatUi.userMessage.copied') : t('chatUi.userMessage.copy')}
           >
             {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
@@ -194,6 +228,7 @@ export const UserMessageBlock = ({
             onClick={() => onDelete()}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
             title={t('chatUi.userMessage.delete')}
+            aria-label={t('chatUi.userMessage.delete')}
           >
             <Trash2 className="w-3 h-3" />
           </button>

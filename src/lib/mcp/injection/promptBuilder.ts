@@ -13,6 +13,7 @@
  * 4. **外部化提示词**: 追问提示词从 txt 文件加载，便于维护
  */
 
+import { androidCapabilities } from '@/lib/android/androidCapabilities';
 import type { InjectionContext, InjectionResult, InjectionSignals, NativeToolDefinition } from './types';
 import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
@@ -29,7 +30,7 @@ import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
 import { getSkillManager } from '@/lib/skills';
 import { resolveToolTrack, shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
-import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
+import { isReservedMcpServerName } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { buildAgentContractBlock } from '@/lib/mcp/prompt/agentContract';
 import type { PromptBlock } from '@/lib/mcp/prompt/composition';
@@ -126,20 +127,18 @@ export async function buildInitialPrompt(
       .map(([op, cmd]) => `  ${op}: ${cmd}`)
       .join('\n');
     
+    // 手机没有 shell 可说，也没有 fs__mkdir 可用，所以那两行只在桌面端出现。
+    const pieces = [`[Runtime environment - ${g.platformLabel} (binding)]`, ''];
+    if (g.preferredShell) pieces.push(`Shell: ${g.preferredShell}`, '');
+    pieces.push('Rules:', ...g.rules.map((r) => `- ${r}`), '');
+    pieces.push(cmdExamples ? `Common commands:\n${cmdExamples}` : '', '');
+    if (g.toolNote) pieces.push(g.toolNote);
+
     blocks.push({
       id: 'runtime-environment',
       layer: 'conversation',
       order: 10,
-      content: `[Runtime environment - ${g.platformLabel} (binding)]
-
-Shell: ${g.preferredShell}
-
-Rules:
-${g.rules.map((r) => `- ${r}`).join('\n')}
-
-${cmdExamples ? `Common commands:\n${cmdExamples}` : ''}
-
-Prefer fs__mkdir over a shell command when creating a directory.`,
+      content: pieces.join('\n').replace(/\s+$/, ''),
     });
   } catch {
     // ignore
@@ -210,8 +209,7 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
       .map((n) => serverMap.get(n.toLowerCase()))
       .filter((n): n is string => Boolean(n))
       .filter((n) => globalEnabled.includes(n))
-      // 内置保留 server（filesystem/skills/web_search/shell_executor）不走外部 mcp 连接列表
-      .filter((n) => !RESERVED_MCP_SERVER_NAMES.has(String(n || '').toLowerCase()));
+      .filter((name) => !isReservedMcpServerName(name));
 
     enabled = mentionedEnabled;
   }
@@ -405,8 +403,9 @@ async function buildNativeToolDefinitions(params: {
   // 记录已加载文档的服务器，避免重复注入相同文档
   const loadedDocServers = new Set<string>();
   
+  const android = await androidCapabilities(params.conversationId);
   const addToolsFromGroup = async (groupId: ToolGroupId) => {
-    const groupTools = getToolsForGroup(groupId);
+    const groupTools = getToolsForGroup(groupId, android);
     for (const { server, tool } of groupTools) {
       const fullName = `${server}__${tool.name}`;
       
@@ -493,7 +492,7 @@ async function buildNativeToolDefinitions(params: {
   // ========== 4. MCP 服务器工具（外部服务） ==========
   
   for (const server of params.servers) {
-    if (RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase())) {
+    if (isReservedMcpServerName(server)) {
       continue;
     }
     try {

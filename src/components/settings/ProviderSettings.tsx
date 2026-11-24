@@ -18,11 +18,13 @@ import { useStableProviderIcon } from './useStableProviderIcon';
 import { useRecentModelsHint } from './useRecentModelsHint';
 import { getProviderKeyDocLink } from '@/lib/provider/keyDocLinks';
 import { useProviderMetaStore } from '@/store/providerMetaStore';
+import { cn } from '@/lib/utils';
 
 // 导入 ProviderWithStatus 类型
 import type { ProviderWithStatus } from '@/hooks/useProviderManagement';
 
 interface ProviderSettingsProps {
+  compact?: boolean;
   provider: ProviderWithStatus;
   isConnecting: boolean; // 单个 Provider 是否正在连接 (用于 Loading 状态)
   isInitialChecking: boolean; // 是否处于全局初始检查状态 (用于禁用按钮)
@@ -39,6 +41,7 @@ interface ProviderSettingsProps {
 }
 
 function ProviderSettingsImpl({
+  compact,
   provider,
   isConnecting: _isConnecting,
   isInitialChecking,
@@ -272,7 +275,7 @@ function ProviderSettingsImpl({
 
   return (
     <>
-      <div className="provider-detail h-full min-h-0 flex flex-col overflow-hidden">
+      <div className={cn("provider-detail h-full min-h-0 flex flex-col", compact ? "overflow-y-auto" : "overflow-hidden")}>
         <ProviderHeader
           provider={provider}
           isConnecting={checking}
@@ -285,7 +288,7 @@ function ProviderSettingsImpl({
           onResetUrl={handleResetUrl}
         />
 
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className={cn("flex flex-col", compact ? "flex-none" : "flex-1 min-h-0 overflow-hidden")}>
           <div className="px-5 pt-3 pb-2 shrink-0">
             <ProviderConnectionSection
               provider={provider}
@@ -303,7 +306,7 @@ function ProviderSettingsImpl({
             />
           </div>
 
-          <div className="px-5 pb-5 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className={cn("px-5 pb-5 flex-1 flex flex-col overflow-hidden", compact ? "min-h-52" : "min-h-0")}>
             <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex-1 min-h-0 flex flex-col overflow-hidden">
               {isMultiStrategyProvider && (
                 <ProviderStrategySelector providerName={provider.name} value={defaultStrategy as any} onChange={(v)=>setDefaultStrategy(v)} />
@@ -367,6 +370,7 @@ export const ProviderSettings = React.memo(ProviderSettingsImpl, (prev, next) =>
   );
   return (
     sameProviderCore &&
+    prev.compact === next.compact &&
     prev.isConnecting === next.isConnecting &&
     prev.isInitialChecking === next.isInitialChecking
   );

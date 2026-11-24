@@ -5,6 +5,98 @@ const enUS: TranslationDict = {
   'nav.switchPage': 'Switch page',
   'nav.collapse': 'Hide app navigation',
   'nav.expand': 'Show app navigation',
+  'androidChat.conversationActions': 'Conversation actions',
+  'androidChat.conversations': 'Conversations',
+  'androidChat.searchConversations': 'Search conversations',
+  'androidChat.back': 'Back',
+  'androidChat.providers': 'Providers',
+  'androidChat.searchModels': 'Search models or providers',
+  'androidChat.availableModels': 'Available models',
+  'androidChat.recentModels': 'Recently used',
+  'androidChat.noModels': 'No matching models',
+  'androidChat.inUse': 'In use',
+  'androidChat.backToProviders': 'Back to model services',
+  'androidLogs.export': 'Export logs',
+  'androidLogs.exporting': 'Exporting…',
+  'androidLogs.shared':
+    'Logs handed to the share sheet — pick an app to send them',
+  'androidLogs.saved': 'Logs saved: {0}',
+  'androidLogs.copied': 'Logs copied to the clipboard',
+  'androidLogs.empty': 'No logs yet — reproduce the problem first',
+  'androidLogs.failed': 'Could not export logs',
+  'androidPhoto.capture': 'Take a photo',
+  'androidPhoto.pick': 'Choose a photo',
+  'androidPhoto.preview': 'Selected photo preview',
+  'androidPhoto.remove': 'Remove photo',
+  'androidPhoto.recipient': 'Photo recipient',
+  'androidPhoto.checking': 'Checking whether this model accepts photos…',
+  'androidPhoto.supported':
+    'Accepts photos. The photo is shared with this provider only when you tap Send.',
+  'androidPhoto.unsupported':
+    'Photo sending is unavailable for this model or request strategy. Try a vision model on OpenAI-compatible Chat Completions (not strict OpenAI), Gemini, or Ollama, or remove the photo.',
+  'androidPhoto.busy':
+    'Wait for the current reply to finish or stop it before sending the photo.',
+  'androidPhoto.other_attachment':
+    'Remove the document or finish editing before sending the photo.',
+  'androidPhoto.acquiring': 'Opening photo…',
+  'androidPhoto.unavailable':
+    'Android could not open the camera or photo picker. Try the other option.',
+  'androidPhoto.unreadable':
+    'Could not prepare this photo. Try taking or choosing a different or smaller image.',
+  'androidPhoto.too_large':
+    'That photo is larger than 32 MB. Choose a smaller one.',
+  'androidPhoto.recipient_changed':
+    'The photo recipient or its image support changed. Reselect the model and try again.',
+  'androidPhoto.not_accepted':
+    'The photo is still in your draft. Retry, choose a smaller image, or try a photo-capable model with a larger context window.',
+  'androidPhoto.message': '[Photo]',
+  'androidPhotos.forget': 'Forget photos',
+  'androidPhotos.preparing': 'Preparing selected photos…',
+  'androidPhotos.disclosure':
+    'Choosing photos doesn’t upload them. Photo organization needs a tool-capable model and shares file names, sizes and grouping with its provider, never photo contents.',
+  'androidPhotos.unavailable':
+    'Could not access the selected photos. Choose them again.',
+  'androidPhotos.batchPick': 'Organize photos',
+  'androidPhotos.countUnitOne': 'photo',
+  'androidPhotos.countUnitMany': 'photos',
+  'androidAttachments.label': 'Attachments for this chat',
+  'androidAttachmentSheet.title': 'Attachments',
+  'androidDirectory.choose': 'Choose folder',
+  'androidDirectory.forget': 'Forget folder',
+  'androidDirectory.disclosure':
+    'Picking a folder doesn’t upload anything. Folder requests use a tool-capable model and share names and metadata with its provider, not file contents.',
+  'androidDirectory.chipPrefix': 'Folder: ',
+  'androidDirectory.revoked':
+    'Folder access was lost. Reselect it or forget it to continue.',
+  'androidDirectory.unavailable':
+    'Could not access or update the folder selection. Try again.',
+  'androidDirectory.rootsTitle': 'Authorized folders',
+  'androidDirectory.agentUse': 'Agent access',
+  'androidDirectory.readOnly': 'read-only',
+  'androidDirectory.authorizeWrite': 'Allow writing',
+  'androidDirectory.writeDifferent':
+    'That was a different folder, so this one is still read-only.',
+  'androidDirectory.writeRefused':
+    'This location does not allow writing (common for cloud folders).',
+  'androidDirectory.writeFailed': 'Writing could not be turned on. Try again.',
+  'androidDirectory.revokeRoot': 'Revoke',
+  'androidDirectory.rootsHint':
+    'These folders stay authorized for the app. Turning Agent access off only stops the model reading them; it does not revoke the system grant.',
+  'androidDocument.attach': 'Attach document',
+  'androidDocument.formats': 'Text PDF or plain text (UTF-8)',
+  'androidDocument.remove': 'Remove document',
+  'androidDocument.working': 'Preparing document…',
+  'androidDocument.disclosure':
+    'Chatless does not upload the file when you pick it. Document questions require a tool-capable model; relevant excerpts go to the selected provider.',
+  'androidDocument.empty': 'This text file is empty. Choose another file.',
+  'androidDocument.inaccessible':
+    'Could not access the document. Try choosing it again.',
+  'androidDocument.oversized':
+    'This document is too large. Limits: 8 MB per file, 200 PDF pages, and 1 MB of extracted text.',
+  'androidDocument.scanned':
+    'This PDF has no extractable text. Scanned pages need OCR, which is not supported here.',
+  'androidDocument.unsupported':
+    'Choose a readable text PDF or UTF-8 plain text file.',
   'prompts.search': 'Search prompts…',
   'prompts.filterByTag': 'Filter by tag',
   'prompts.allTags': 'All tags',
@@ -90,6 +182,11 @@ const enUS: TranslationDict = {
   'prompts.export.failed': 'Export failed',
   'prompts.export.error': 'An error occurred while exporting prompts',
   'chatStarter.title': 'Start a conversation',
+  'chatStarter.mobileHint': 'Say what you need, or start from one of these.',
+  'chatStarter.starterFolders': 'See what is in my authorized folders',
+  'chatStarter.starterTimer': 'Set a 10-minute timer',
+  'chatStarter.starterSearch': 'Search today’s tech news',
+
   'chatStarter.initializing': 'Getting models ready…',
   'chatStarter.noProvider': 'Add a provider to start chatting',
   'chatStarter.noSelection': 'Choose a model for this conversation',
@@ -168,12 +265,16 @@ const enUS: TranslationDict = {
     'Add this folder to the allowlist (excluding deletion): {directory}',
   'toolCallApproval.reject': 'Reject',
   'toolCallApproval.expired': 'Approval expired',
-  'toolCallApproval.checkPermissionsAgain': 'Select “Continue” to check permissions again.',
+  'toolCallApproval.checkPermissionsAgain':
+    'Select “Continue” to check permissions again.',
   'toolCallApproval.shellAllowed': 'Prompts for all commands are now disabled',
-  'toolCallApproval.directoryAllowed': 'Folder added to the allowlist. Reads and writes no longer require approval.',
-  'toolCallApproval.conversationGrantPending': 'Access for this conversation will apply once approval goes through',
+  'toolCallApproval.directoryAllowed':
+    'Folder added to the allowlist. Reads and writes no longer require approval.',
+  'toolCallApproval.conversationGrantPending':
+    'Access for this conversation will apply once approval goes through',
   'toolCallApproval.revokeConversationGrant': 'Revoke conversation access',
-  'toolCallApproval.conversationGrantRevoked': 'Temporary access for this conversation revoked',
+  'toolCallApproval.conversationGrantRevoked':
+    'Temporary access for this conversation revoked',
   'toolCallApproval.rejected': 'Rejected',
   'toolCall.status.running': 'Running',
   'toolCall.status.pendingApproval': 'Awaiting approval',
@@ -185,7 +286,8 @@ const enUS: TranslationDict = {
   'toolCall.arguments': 'Arguments',
   'toolCall.result': 'Result',
   'toolCall.error': 'Error',
-  'toolCall.resultUnknown': 'The outcome is unknown. The app will not retry automatically. Select “Continue” to check again before deciding what to do.',
+  'toolCall.resultUnknown':
+    'The outcome is unknown. The app will not retry automatically. Select “Continue” to check again before deciding what to do.',
   'toolCall.unknownError': 'Unknown error',
   'toolCall.userRejected': 'User rejected the call',
   'toolCall.hint': 'Hint:',
@@ -221,6 +323,21 @@ const enUS: TranslationDict = {
   'toolCall.discoverTools': 'Discover tools',
   'toolCall.loadToolGroup': 'Load tool group',
   'toolCall.manageTools': 'Manage tools',
+  'toolCall.androidFolderInventory': 'Read attached folder',
+  'toolCall.androidFolderSummarize': 'Summarize the folder',
+  'toolCall.androidFolderExport': 'Write the file list to a file',
+  'toolCall.androidFileRead': 'Read the file',
+  'toolCall.androidFileWrite': 'Write the file',
+  'toolCall.androidFileOverwrite': 'Replace the file',
+  'toolCall.androidFileRename': 'Rename',
+  'toolCall.androidFileMove': 'Move a file',
+  'toolCall.androidFileAppend': 'Add to the file',
+  'toolCall.androidDocumentSearch': 'Search attached document',
+  'toolCall.androidDocumentExcerpt': 'Read document excerpt',
+  'toolCall.androidPhotoGroups': 'Review selected photos',
+  'toolCall.androidTimer': 'Set a timer',
+  'toolCall.detail.mime': 'Type',
+  'toolCall.detail.duration': 'Duration',
   'toolCall.group.files': 'File management',
   'toolCall.group.shell': 'Command execution',
   'toolCall.group.web': 'Web tools',
@@ -251,6 +368,7 @@ const enUS: TranslationDict = {
   'toolCall.send': 'Send',
   'toolCall.list': 'List',
   'toolCall.download': 'Download',
+  'toolCall.readSavedResult': 'Read the saved tool result',
   'toolCall.detail.skill': 'Skill',
   'toolCall.detail.file': 'File',
   'toolCall.detail.source': 'Source',
@@ -292,6 +410,7 @@ const enUS: TranslationDict = {
   'chatComposer.cancelEdit': 'Cancel editing',
   'chatComposer.chooseModelFirst': 'Choose a model first',
   'chatComposer.sendMessage': 'Send a message',
+  'chatComposer.send': 'Send',
   'chatComposer.sendShortcut': 'Send (Enter)',
   'chatComposer.planOnly': 'Plan only',
   'chatComposer.planOnlyHint':
@@ -1332,6 +1451,12 @@ const enUS: TranslationDict = {
   'provider.models.supportsReasoning': 'Supports reasoning',
   'provider.models.supportsTools': 'Supports tool calling',
   'provider.models.supportsVision': 'Supports vision',
+  'provider.models.visionManualOn': 'Supports vision (set manually)',
+  'provider.models.visionManualOff': 'No vision support (set manually)',
+  'provider.models.visionMenu': 'Vision',
+  'provider.models.visionFollow': 'Detect automatically',
+  'provider.models.visionOn': 'Supports vision (accepts images)',
+  'provider.models.visionOff': 'No vision support',
   'provider.models.currentOverride': 'Current strategy override: {0}',
   'provider.models.default': 'Default',
   'provider.models.check.success': 'Model {0} is available',
@@ -1455,14 +1580,16 @@ const enUS: TranslationDict = {
   'knowledge.detail.loading': 'Loading knowledge base…',
   'knowledge.detail.loadFailed': 'Could not load the knowledge base',
   'knowledge.detail.useInChat': 'Use in chat',
-  'knowledge.detail.useInChatHint': 'Use this knowledge base in the current chat',
+  'knowledge.detail.useInChatHint':
+    'Use this knowledge base in the current chat',
   'knowledge.detail.moreActions': 'More actions',
   'knowledge.detail.renameTitle': 'Rename knowledge base',
   'knowledge.detail.editDetails': 'Edit details',
   'knowledge.detail.information': 'Knowledge base information',
   'knowledge.detail.documents': 'Documents',
   'knowledge.detail.emptyDocuments': 'No documents yet',
-  'knowledge.detail.emptyDocumentsHint': 'Use the Add documents button above to get started',
+  'knowledge.detail.emptyDocumentsHint':
+    'Use the Add documents button above to get started',
   'knowledge.detail.unnamedDocument': 'Untitled document',
   'knowledge.detail.updatedAt': 'Last updated',
   'knowledge.detail.documentCount': 'Document count',
@@ -1474,19 +1601,25 @@ const enUS: TranslationDict = {
   'knowledge.detail.notEncrypted': 'Not encrypted',
   'knowledge.detail.iconLabel': 'Icon:',
   'knowledge.detail.updatedAtLabel': 'Last updated (date and time):',
-  'knowledge.detail.documentMissing': 'Could not find the original document. It may have been deleted.',
+  'knowledge.detail.documentMissing':
+    'Could not find the original document. It may have been deleted.',
   'knowledge.detail.viewFailed': 'Could not open the document',
-  'knowledge.detail.downloadUnavailable': 'Document downloads are still in development',
+  'knowledge.detail.downloadUnavailable':
+    'Document downloads are still in development',
   'knowledge.detail.downloadFailed': 'Could not download the document',
   'knowledge.detail.removeDocumentTitle': 'Remove document?',
-  'knowledge.detail.removeDocumentDescription': 'Remove “{0}” from this knowledge base?',
-  'knowledge.detail.documentRemoved': 'Document removed from the knowledge base',
+  'knowledge.detail.removeDocumentDescription':
+    'Remove “{0}” from this knowledge base?',
+  'knowledge.detail.documentRemoved':
+    'Document removed from the knowledge base',
   'knowledge.detail.removeDocumentFailed': 'Could not remove the document',
   'knowledge.index.rebuild': 'Rebuild index',
   'knowledge.index.rebuildNeeded': 'Index needs rebuilding',
-  'knowledge.index.summary': 'Pending: {pending} · Failed: {failed} · Keyword indexed: {indexed}/{total}. Documents without an index won’t appear in search results.',
+  'knowledge.index.summary':
+    'Pending: {pending} · Failed: {failed} · Keyword indexed: {indexed}/{total}. Documents without an index won’t appear in search results.',
   'knowledge.index.rebuildTitle': 'Rebuild the index?',
-  'knowledge.index.rebuildDescription': 'This rebuilds the index for every document in this knowledge base and may take some time.',
+  'knowledge.index.rebuildDescription':
+    'This rebuilds the index for every document in this knowledge base and may take some time.',
   'knowledge.index.startRebuild': 'Start rebuild',
   'knowledge.index.rebuilding': 'Rebuilding…',
   'knowledge.index.rebuildFailed': 'Could not rebuild the knowledge base index',
@@ -1502,7 +1635,8 @@ const enUS: TranslationDict = {
   'knowledge.index.processing': 'Processing…',
   'knowledge.index.updating': 'Updating index status…',
   'knowledge.index.complete': 'Document indexed ({0})',
-  'knowledge.index.preparingRebuild': 'Preparing to reindex document {current} of {total}…',
+  'knowledge.index.preparingRebuild':
+    'Preparing to reindex document {current} of {total}…',
   'knowledge.index.rebuildComplete': 'Knowledge base index rebuilt',
   'knowledge.import.addDocuments': 'Add documents',
   'knowledge.import.addDocumentsTitle': 'Add documents to knowledge base',
@@ -1523,15 +1657,19 @@ const enUS: TranslationDict = {
   'knowledge.import.loadDestinationsFailed': 'Could not load knowledge bases',
   'knowledge.import.selectDestination': 'Select a knowledge base first',
   'knowledge.import.addedToKnowledgeBase': 'Added to the knowledge base',
-  'knowledge.import.resourceAdded': 'The resource was added to the knowledge base',
+  'knowledge.import.resourceAdded':
+    'The resource was added to the knowledge base',
   'knowledge.import.addedWithChunks': 'Document added and indexed ({0})',
   'knowledge.import.noResult': 'Could not add the document: no result returned',
-  'knowledge.import.embeddingFailed': 'The embedding service is unavailable. Check your settings.',
-  'knowledge.import.fileMissing': 'The document file is missing. Upload it again.',
+  'knowledge.import.embeddingFailed':
+    'The embedding service is unavailable. Check your settings.',
+  'knowledge.import.fileMissing':
+    'The document file is missing. Upload it again.',
   'knowledge.import.indexFailed': 'Could not index the document. Try again.',
   'knowledge.import.processingFailed': 'Processing failed',
   'knowledge.import.indexingDocument': 'Indexing document…',
-  'knowledge.import.noDestinations': 'Create a knowledge base before adding a document',
+  'knowledge.import.noDestinations':
+    'Create a knowledge base before adding a document',
   'knowledge.import.indexing': 'Indexing…',
   'knowledge.import.chooseUpload': 'Choose files to upload',
   'knowledge.import.uploading': 'Uploading…',
@@ -1539,9 +1677,11 @@ const enUS: TranslationDict = {
   'knowledge.import.dropzone': 'Drop files here or click to upload',
   'knowledge.import.uploadSuccess': 'Upload complete',
   'knowledge.import.uploadCount': 'Files uploaded: {0}',
-  'knowledge.import.uploadPartialCount': 'Files uploaded: {uploaded}. Uploads failed: {failed}.',
+  'knowledge.import.uploadPartialCount':
+    'Files uploaded: {uploaded}. Uploads failed: {failed}.',
   'knowledge.import.uploadFailed': 'Upload failed',
-  'knowledge.import.uploadAllFailed': 'No files were uploaded. Check the file types and permissions.',
+  'knowledge.import.uploadAllFailed':
+    'No files were uploaded. Check the file types and permissions.',
   'knowledge.import.resourcesUpdated': 'Resources refreshed',
   'knowledge.import.resourceCount': 'Total resources: {0}',
   'knowledge.resource.keywordReady': 'Keyword ready',
@@ -1588,36 +1728,42 @@ const enUS: TranslationDict = {
   'resources.empty.files': 'No files',
   'resources.empty.chat': 'No chat attachments',
   'resources.empty.knowledge': 'No indexed resources',
-  'resources.empty.uploadHint': 'Drop files into the area above to upload them.',
-  'resources.empty.chatHint': 'Files attached in chat appear here automatically.',
-  'resources.empty.knowledgeHint': 'Choose “Add to knowledge base” to index a resource.',
+  'resources.empty.uploadHint':
+    'Drop files into the area above to upload them.',
+  'resources.empty.chatHint':
+    'Files attached in chat appear here automatically.',
+  'resources.empty.knowledgeHint':
+    'Choose “Add to knowledge base” to index a resource.',
   'resources.references.title': 'Recent references',
   'resources.references.empty': 'No recent references',
   'resources.references.unnamedFile': 'File',
   'resources.unknownKnowledgeBase': 'Unknown knowledge base',
-  'resources.loadFailed': 'Couldn\'t load documents',
+  'resources.loadFailed': "Couldn't load documents",
   'resources.loadFailedHint': 'Check permissions or try again later.',
-  'resources.openConversationFailed': 'Couldn\'t open conversation',
-  'resources.openConversationFailedHint': 'The associated conversation couldn\'t be opened.',
+  'resources.openConversationFailed': "Couldn't open conversation",
+  'resources.openConversationFailedHint':
+    "The associated conversation couldn't be opened.",
   'resources.note.title': 'Add a resource note',
   'resources.note.description': 'Add a note for {0}:',
   'resources.note.placeholder': 'Enter a note…',
   'resources.note.unavailableTitle': 'Resource notes',
-  'resources.note.unavailable': 'Document notes will be available in a future version.',
-  'resources.note.saveFailed': 'Couldn\'t save note',
+  'resources.note.unavailable':
+    'Document notes will be available in a future version.',
+  'resources.note.saveFailed': "Couldn't save note",
   'resources.note.saveFailedHint': 'Try saving the note again later.',
   'resources.delete.title': 'Confirm deletion',
   'resources.delete.description': 'Delete {0}? This cannot be undone.',
   'resources.delete.success': 'Document deleted',
   'resources.delete.successDetails': 'Deleted document: {0}',
-  'resources.delete.failed': 'Couldn\'t delete document',
+  'resources.delete.failed': "Couldn't delete document",
   'resources.delete.failedHint': 'Try deleting the document again later.',
   'resources.comment.title': 'Comments',
-  'resources.comment.unavailable': 'Comments will be available in a future version.',
-  'fileOpener.openFailed': 'Couldn\'t open file',
+  'resources.comment.unavailable':
+    'Comments will be available in a future version.',
+  'fileOpener.openFailed': "Couldn't open file",
   'fileOpener.emptyPath': 'The path is empty.',
   'fileOpener.notFound': 'File not found',
-  'fileOpener.notFoundDetails': 'Couldn\'t find file: {0}',
+  'fileOpener.notFoundDetails': "Couldn't find file: {0}",
   'fileOpener.opened': 'Document opened',
   'fileOpener.openedDetails': 'Opened with the default app: {0}',
   'fileOpener.document': 'Document',
@@ -1626,11 +1772,14 @@ const enUS: TranslationDict = {
   'settings.network.proxyUrl': 'Proxy address',
   'settings.network.useSystemProxy': 'Use system proxy',
   'settings.network.offline': 'Offline mode',
-  'settings.network.offlineHelp': 'Block network requests and use local models only',
-  'settings.webSearch.description': 'Configure search providers, result counts, regional language and safe-search policy.',
+  'settings.network.offlineHelp':
+    'Block network requests and use local models only',
+  'settings.webSearch.description':
+    'Configure search providers, result counts, regional language and safe-search policy.',
   'settings.webSearch.configuration': 'Search configuration',
   'settings.webSearch.autoAuthorize': 'Authorize web search automatically',
-  'settings.webSearch.autoAuthorizeHelp': 'Let the model run web searches during a conversation without asking each time.',
+  'settings.webSearch.autoAuthorizeHelp':
+    'Let the model run web searches during a conversation without asking each time.',
   'settings.webSearch.defaultProvider': 'Default search provider',
   'settings.webSearch.apiKey': 'API key',
   'settings.webSearch.googleCseId': 'Programmable Search Engine ID',
@@ -1644,10 +1793,14 @@ const enUS: TranslationDict = {
   'settings.webSearch.topic.general': 'General',
   'settings.webSearch.topic.news': 'News',
   'settings.webSearch.topic.finance': 'Finance',
-  'settings.webSearch.includeDomains': 'Include domains (comma or space separated)',
-  'settings.webSearch.excludeDomains': 'Exclude domains (comma or space separated)',
-  'settings.webSearch.countryCode': 'Country code (for example CN or US; optional)',
-  'settings.webSearch.searchLanguage': 'Search language (for example zh-hans or en; optional)',
+  'settings.webSearch.includeDomains':
+    'Include domains (comma or space separated)',
+  'settings.webSearch.excludeDomains':
+    'Exclude domains (comma or space separated)',
+  'settings.webSearch.countryCode':
+    'Country code (for example CN or US; optional)',
+  'settings.webSearch.searchLanguage':
+    'Search language (for example zh-hans or en; optional)',
   'settings.webSearch.safeSearch': 'Safe search',
   'settings.webSearch.safeSearch.off': 'Off',
   'settings.webSearch.safeSearch.moderate': 'Moderate',
@@ -1661,7 +1814,8 @@ const enUS: TranslationDict = {
   'settings.webSearch.timeRange.day': 'Past day',
   'settings.webSearch.timeRange.month': 'Past month',
   'settings.webSearch.timeRange.year': 'Past year',
-  'settings.webSearch.regionLanguage': 'Region and language (for example cn-zh or us-en)',
+  'settings.webSearch.regionLanguage':
+    'Region and language (for example cn-zh or us-en)',
   'settings.webSearch.acceptLanguage': 'Accept-Language (optional)',
   'settings.webSearch.restrictToSite': 'Restrict to site (optional)',
   'settings.webSearch.available': 'Available now: {0}',
@@ -1683,10 +1837,269 @@ const enUS: TranslationDict = {
   'settings.advanced.reportExported': 'Performance report exported',
   'settings.advanced.exportFailed': 'Export failed',
   'settings.privacySecurity.title': 'Privacy and security',
-  'settings.privacySecurity.description': 'Data protection, file access control and command execution permissions.',
-  'settings.privacy.dataAndBackup': 'Data and backup',  'settings.privacy.importBackup': 'Import backup',  'settings.privacy.importing': 'Importing…',  'settings.privacy.exportRecords': 'Export records',  'settings.privacy.exporting': 'Exporting…',  'settings.privacy.dangerZone': 'Danger zone',  'settings.privacy.cancel': 'Cancel',  'settings.privacy.clearing': 'Clearing…',  'settings.privacy.confirmDelete': 'Delete',  'settings.privacy.resetting': 'Resetting…',  'settings.privacy.confirmReset': 'Reset',  'settings.privacy.clearChats': 'Clear chat history',  'settings.privacy.clearChatsTitle': 'Clear all chat history?',  'settings.privacy.clearChatsWarning': 'The following actions will be performed and ',  'settings.privacy.clearChatsItemConversations': 'Delete all conversations',  'settings.privacy.clearChatsItemMessages': 'Delete every chat message',  'settings.privacy.clearChatsItemStats': 'Reset recent chat model statistics',  'settings.privacy.clearChatsConfirmPrefix': 'Type ',  'settings.privacy.clearChatsConfirmSuffix': ' to continue.',  'settings.privacy.clearChatsPlaceholder': 'Type DELETE to confirm',  'settings.privacy.clearKnowledge': 'Clear knowledge base data',  'settings.privacy.clearKnowledgeTitle': 'Clear all knowledge base data?',  'settings.privacy.clearKnowledgeWarning': 'This will delete the following and ',  'settings.privacy.clearKnowledgeItemDocs': 'Uploaded or crawled document files',  'settings.privacy.clearKnowledgeItemIndex': 'Delete the knowledge base index and cache',  'settings.privacy.clearKnowledgeItemConfig': 'Knowledge base configuration',  'settings.privacy.clearKnowledgeConfirmPrefix': 'If you are sure, type ',  'settings.privacy.clearKnowledgeConfirmSuffix': ' to continue.',  'settings.privacy.clearKnowledgePlaceholder': 'Type CLEAR KB to confirm',  'settings.privacy.clearModelCache': 'Clear model cache',  'settings.privacy.clearModelCacheTitle': 'Clear all local model cache?',  'settings.privacy.clearModelCacheWarning': 'The following will be deleted:',  'settings.privacy.clearModelCacheItemDownloaded': 'Model files downloaded through the app',  'settings.privacy.clearModelCacheItemProgress': 'Model download progress and cache records',  'settings.privacy.clearModelCacheConfirmPrefix': 'This does not affect models you placed manually. Type ',  'settings.privacy.clearModelCacheConfirmSuffix': ' to continue.',  'settings.privacy.clearModelCachePlaceholder': 'Type CLEAR MODEL',  'settings.privacy.factoryReset': 'Factory reset',  'settings.privacy.factoryResetTitle': 'Factory reset the app?',  'settings.privacy.factoryResetWarning': 'This is extremely destructive. It will perform the following steps and ',  'settings.privacy.factoryResetDeletePrefix': 'Delete ',  'settings.privacy.factoryResetItemChats': 'all chat history',  'settings.privacy.factoryResetItemKnowledge': 'all knowledge base documents and indexes',  'settings.privacy.factoryResetItemModels': 'local model cache',  'settings.privacy.factoryResetItemSettingsPrefix': 'Clear all API keys, interface preferences and other ',  'settings.privacy.factoryResetItemSettingsEmphasis': 'personal settings',  'settings.privacy.factoryResetItemCache': 'Clear all app cache files',  'settings.privacy.factoryResetItemRestart': 'The app then restarts automatically to its initial state',  'settings.privacy.factoryResetConfirmPrefix': 'If you are sure, type ',  'settings.privacy.factoryResetConfirmSuffix': ' to continue.',  'settings.privacy.factoryResetPlaceholder': 'Type RESET APP',  'settings.privacy.irreversible': 'cannot be undone',  'settings.privacy.unrecoverable': 'cannot be recovered',  'settings.privacy.warningColon': ':',  'settings.privacy.chatsCleared': 'All chat history cleared',  'settings.privacy.knowledgeCleared': 'Knowledge base documents and index cleared',  'settings.privacy.modelCacheCleared': 'Local model cache cleared',  'settings.privacy.factoryResetDone': 'Factory reset complete. The app will reload',  'settings.privacy.chatsExported': 'Chat history exported',  'settings.privacy.importDone': 'Imported {0} conversations',  'settings.privacy.importDefaultTitle': 'Imported conversation',  'settings.privacy.unknownError': 'Unknown error',  'settings.privacy.clearChatsFailed': 'Failed to clear chat history: {0}',  'settings.privacy.clearKnowledgeFailed': 'Failed to clear knowledge base: {0}',  'settings.privacy.clearModelCacheFailed': 'Failed to clear model cache: {0}',  'settings.privacy.factoryResetFailed': 'Factory reset failed: {0}',  'settings.privacy.exportFailed': 'Export failed: {0}',  'settings.privacy.importFailed': 'Import failed: {0}',  'settings.privacy.importInvalidType': 'Please choose a JSON file',  'settings.privacy.importInvalidFormat': 'Invalid file format. Make sure it is a chat backup exported from Chatless',
-  'settings.security.askEveryTime': 'Ask every time',  'settings.security.neverAsk': 'Never ask',  'settings.security.shell.title': 'Command execution',  'settings.security.shell.description': 'Commands run with your current system user\'s permissions. Working-directory limits are not an OS sandbox.',  'settings.security.shell.askBeforeRun': 'Ask before running',  'settings.security.shell.unrestrictedHint': 'Stop asking — good for long unattended tasks; destructive commands are still blocked by the sandbox.',  'settings.security.shell.askHint': 'Show a confirmation card with options for just this run, the rest of this conversation, or always.',  'settings.security.shell.conversationOverrideNotice': 'Command confirmation is turned off for this conversation.',  'settings.security.shell.restoreAsk': 'Restore confirmation',  'settings.security.fs.title': 'File access allowlist',  'settings.security.fs.description': 'Manage directories the AI is allowed to access. Give each directory a recognizable alias.',  'settings.security.fs.outsideAllowlist': 'Operations outside the allowlist',  'settings.security.fs.unrestrictedHint': 'Stop asking — file reads, writes and deletions run directly (good for long unattended tasks).',  'settings.security.fs.askHint': 'Show a confirmation card with options for just this run, always allow, or the rest of this conversation.',  'settings.security.fs.conversationOverrideNotice': 'File-operation confirmation is turned off for this conversation.',  'settings.security.fs.restoreAsk': 'Restore confirmation',  'settings.security.fs.addDirectory': 'Add directory',  'settings.security.fs.count': '{0}',  'settings.security.fs.empty': 'No allowlisted directories yet',  'settings.security.fs.unknownDirectory': 'Unknown directory',  'settings.security.fs.source.manual': 'Manual',  'settings.security.fs.source.skills': 'Skill',  'settings.security.fs.source.attachment': 'Attachment',  'settings.security.fs.perm.read': 'Read',  'settings.security.fs.perm.write': 'Write',  'settings.security.fs.perm.create': 'Create',  'settings.security.fs.perm.delete': 'Delete',  'settings.security.fs.editAlias': 'Edit alias',  'settings.security.fs.toggleWrite': 'Toggle write permission',  'settings.security.fs.toggleDelete': 'Toggle delete permission',  'settings.security.fs.remove': 'Remove',  'settings.security.fs.promptAliasAdd': 'Set an alias for this directory (recommended, for easy recognition).',  'settings.security.fs.promptAliasEdit': 'Set an alias (for easy recognition).',  'settings.security.workspace.title': 'Conversation artifacts',  'settings.security.workspace.description': 'Conversations without a bound workspace write files to "Documents/Chatless/<title>-<summary>" by default; this directory is created on demand. Conversations with a bound workspace work inside the selected project directory, and file access is still approved under the existing rules. Open, export and clean actions only affect conversation artifacts; they never change a sidebar workspace\'s directory or conversation ownership. Cleaning moves artifacts to the system trash.',  'settings.security.workspace.currentConversation': 'Current conversation',  'settings.security.workspace.revealTitle': 'Open this conversation\'s workspace directory in the file manager',  'settings.security.workspace.reveal': 'Open directory',  'settings.security.workspace.export': 'Export',  'settings.security.workspace.errorUnavailable': 'Workspace directory unavailable: {0}',  'settings.security.workspace.retry': 'Retry',  'settings.security.workspace.selectConversations': 'Select conversations',  'settings.security.workspace.selectAll': 'Select all',  'settings.security.workspace.deselectAll': 'Deselect all',  'settings.security.workspace.selectedCount': '{0} selected',  'settings.security.workspace.exportSelected': 'Export selected',  'settings.security.workspace.moveToTrash': 'Move to system trash',  'settings.security.workspace.cleanSelected': 'Clean selected',  'settings.security.workspace.cleanAll': 'Clean all conversation artifacts',  'settings.security.workspace.separator': ', ',  'settings.security.workspace.unnamedConversation': 'Untitled conversation',  'settings.security.workspace.toast.selectToExport': 'Select conversations to export',  'settings.security.workspace.dialog.exportLocation': 'Choose export location',  'settings.security.workspace.toast.exportPartialFailure': '{0} conversations failed to export',  'settings.security.workspace.toast.exportFailureItem': '{0}: {1}',  'settings.security.workspace.toast.nothingToExport': 'Nothing to export',  'settings.security.workspace.toast.nothingToExportDescription': 'These conversations haven\'t produced files yet; the workspace directory is created the first time a file or command is used.',  'settings.security.workspace.toast.exportComplete': 'Export complete: {0} files ({1})',  'settings.security.workspace.toast.exportFailed': 'Export failed: {0}',  'settings.security.workspace.toast.selectToClean': 'Select conversations to clean',  'settings.security.workspace.toast.runningBlocked': 'These conversations are still running; stop them before cleaning.',  'settings.security.workspace.toast.cleanPartialFailure': '{0} workspaces failed to clean',  'settings.security.workspace.toast.cleanComplete': 'Moved to trash: artifacts from {0} conversations',  'settings.security.workspace.toast.cleanFailed': 'Clean failed: {0}',  'settings.security.workspace.toast.allRunningBlocked': 'A conversation is still running; stop it before cleaning all conversation artifacts.',  'settings.security.workspace.confirmClearAll': 'Move artifacts from all conversations to the system trash? Sidebar workspaces and conversations are unaffected.',  'settings.security.workspace.toast.cleanAllComplete': 'Cleaned all conversation artifacts ({0} directories, all in the trash)',  'settings.security.workspace.toast.revealFailed': 'Could not open the workspace directory',  'settings.security.workspace.toast.ready': 'Workspace directory is ready',  'settings.security.workspace.toast.retryFailed': 'Still unable to prepare the workspace directory',
-  'settings.knowledge.title': 'Knowledge Base',  'settings.knowledge.description': 'Add or edit knowledge base configuration; pick a connected knowledge base during chats.',  'settings.knowledge.loading': 'Loading configuration…',  'settings.knowledge.embeddingSection': 'Embedding model management',  'settings.knowledge.documentProcessing': 'Document processing',  'settings.knowledge.maxFileSize': 'Maximum file size',  'settings.knowledge.maxFileSizeHelp': 'Maximum size limit for a single document (MB)',  'settings.knowledge.supportedFileTypes': 'Supported file types',  'settings.knowledge.documentSettings': 'Document settings',  'settings.knowledge.autoAttachPreview': 'Attach document previews to messages automatically',  'settings.knowledge.autoAttachPreviewHelp': 'When sending a message, append the parsed document preview (token-limited) to the end of the prompt. Off by default; knowledge base/RAG is recommended.',  'settings.knowledge.previewTokenLimit': 'Preview token limit',  'settings.knowledge.previewTokenLimitHelp': 'Maximum token count for the preview when auto-attach is on; text is trimmed by sentence when exceeded.',  'settings.knowledge.previewKeepTailRatio': 'Preview tail retention ratio',  'settings.knowledge.previewKeepTailRatioHelp': 'When truncating, keep a portion of the tail in addition to the head, from 0 to 0.5.',  'settings.knowledge.bigFileSizeMb': 'Large document size threshold (MB)',  'settings.knowledge.bigFileSizeMbHelp': 'Files larger than this prompt “move to the knowledge base and reference it”.',  'settings.knowledge.bigTokenThreshold': 'Large document token threshold',  'settings.knowledge.bigTokenThresholdHelp': 'Documents estimated above this many tokens prompt “move to the knowledge base and reference it”.',  'settings.knowledge.storage': 'Storage',  'settings.knowledge.enableAutoCleanup': 'Enable automatic cleanup',  'settings.knowledge.enableAutoCleanupHelp': 'Periodically clean expired index caches and temporary files',  'settings.knowledge.cleanupInterval': 'Cleanup interval (days)',  'settings.knowledge.cleanupIntervalHelp': 'How often automatic cleanup runs',  'settings.knowledge.enableBackup': 'Enable automatic backup',  'settings.knowledge.enableBackupHelp': 'Periodically back up knowledge base data to prevent data loss',  'settings.knowledge.backupInterval': 'Backup interval (hours)',  'settings.knowledge.backupIntervalHelp': 'How often automatic backup runs',  'settings.knowledge.reset': 'Reset defaults',  'settings.knowledge.resetTitle': 'Reset to default settings',  'settings.knowledge.resetDescription': 'All knowledge base configuration will be reset to its defaults and cannot be undone. Continue?',  'settings.knowledge.resetSuccess': 'Default configuration restored',  'settings.knowledge.resetFailed': 'Failed to restore default configuration',  'settings.knowledge.resetFailedRetry': 'Please try again',  'settings.knowledge.embedding.status': 'Embedding service status',  'settings.knowledge.embedding.checking': 'Checking',  'settings.knowledge.embedding.semanticUnavailable': 'Semantics unavailable (lexical available)',  'settings.knowledge.embedding.offline': 'Offline',  'settings.knowledge.embedding.uninitialized': 'Not initialized',  'settings.knowledge.embedding.ready': 'Ready',  'settings.knowledge.embedding.failed': 'Failed',  'settings.knowledge.embedding.viewDetails': 'View details',  'settings.knowledge.embedding.refresh': 'Refresh',  'settings.knowledge.embedding.details': 'Service details',  'settings.knowledge.embedding.serviceType': 'Service type',  'settings.knowledge.embedding.inferenceSource': 'Inference source',  'settings.knowledge.embedding.inference.real': 'Real ONNX',  'settings.knowledge.embedding.inference.mock': 'Mock vectors (test/fallback)',  'settings.knowledge.embedding.inference.unavailable': 'Unavailable (lexical retrieval still works)',  'settings.knowledge.embedding.inference.ollama': 'Ollama',  'settings.knowledge.embedding.currentModel': 'Current model',  'settings.knowledge.embedding.dimension': 'Vector dimensions',  'settings.knowledge.embedding.latency': 'Latency',  'settings.knowledge.embedding.serviceTypeLabel': 'Embedding service type',  'settings.knowledge.embedding.serviceType.local': 'Local model',  'settings.knowledge.embedding.serviceType.ollama': 'Ollama service',  'settings.knowledge.embedding.serviceType.unset': 'Not configured',  'settings.knowledge.embedding.serviceTypeHint': 'Activate a model in the model manager above to switch service types.',  'settings.knowledge.embedding.testing': 'Testing…',  'settings.knowledge.embedding.test': 'Test embedding generation',  'settings.knowledge.embedding.connected': 'Service connected',  'settings.knowledge.embedding.connectionFailed': 'Service connection failed',  'settings.knowledge.embedding.initialized': 'Service initialized',  'settings.knowledge.embedding.notInitialized': 'Service not initialized',  'settings.knowledge.embedding.testPassed': 'Test passed',  'settings.knowledge.embedding.notTested': 'Not tested yet',
+  'settings.privacySecurity.description':
+    'Data protection, file access control and command execution permissions.',
+  'settings.privacy.dataAndBackup': 'Data and backup',
+  'settings.privacy.importBackup': 'Import backup',
+  'settings.privacy.importing': 'Importing…',
+  'settings.privacy.exportRecords': 'Export records',
+  'settings.privacy.exporting': 'Exporting…',
+  'settings.privacy.dangerZone': 'Danger zone',
+  'settings.privacy.cancel': 'Cancel',
+  'settings.privacy.clearing': 'Clearing…',
+  'settings.privacy.confirmDelete': 'Delete',
+  'settings.privacy.resetting': 'Resetting…',
+  'settings.privacy.confirmReset': 'Reset',
+  'settings.privacy.clearChats': 'Clear chat history',
+  'settings.privacy.clearChatsTitle': 'Clear all chat history?',
+  'settings.privacy.clearChatsWarning':
+    'The following actions will be performed and ',
+  'settings.privacy.clearChatsItemConversations': 'Delete all conversations',
+  'settings.privacy.clearChatsItemMessages': 'Delete every chat message',
+  'settings.privacy.clearChatsItemStats': 'Reset recent chat model statistics',
+  'settings.privacy.clearChatsConfirmPrefix': 'Type ',
+  'settings.privacy.clearChatsConfirmSuffix': ' to continue.',
+  'settings.privacy.clearChatsPlaceholder': 'Type DELETE to confirm',
+  'settings.privacy.clearKnowledge': 'Clear knowledge base data',
+  'settings.privacy.clearKnowledgeTitle': 'Clear all knowledge base data?',
+  'settings.privacy.clearKnowledgeWarning':
+    'This will delete the following and ',
+  'settings.privacy.clearKnowledgeItemDocs':
+    'Uploaded or crawled document files',
+  'settings.privacy.clearKnowledgeItemIndex':
+    'Delete the knowledge base index and cache',
+  'settings.privacy.clearKnowledgeItemConfig': 'Knowledge base configuration',
+  'settings.privacy.clearKnowledgeConfirmPrefix': 'If you are sure, type ',
+  'settings.privacy.clearKnowledgeConfirmSuffix': ' to continue.',
+  'settings.privacy.clearKnowledgePlaceholder': 'Type CLEAR KB to confirm',
+  'settings.privacy.clearModelCache': 'Clear model cache',
+  'settings.privacy.clearModelCacheTitle': 'Clear all local model cache?',
+  'settings.privacy.clearModelCacheWarning': 'The following will be deleted:',
+  'settings.privacy.clearModelCacheItemDownloaded':
+    'Model files downloaded through the app',
+  'settings.privacy.clearModelCacheItemProgress':
+    'Model download progress and cache records',
+  'settings.privacy.clearModelCacheConfirmPrefix':
+    'This does not affect models you placed manually. Type ',
+  'settings.privacy.clearModelCacheConfirmSuffix': ' to continue.',
+  'settings.privacy.clearModelCachePlaceholder': 'Type CLEAR MODEL',
+  'settings.privacy.factoryReset': 'Factory reset',
+  'settings.privacy.factoryResetTitle': 'Factory reset the app?',
+  'settings.privacy.factoryResetWarning':
+    'This is extremely destructive. It will perform the following steps and ',
+  'settings.privacy.factoryResetDeletePrefix': 'Delete ',
+  'settings.privacy.factoryResetItemChats': 'all chat history',
+  'settings.privacy.factoryResetItemKnowledge':
+    'all knowledge base documents and indexes',
+  'settings.privacy.factoryResetItemModels': 'local model cache',
+  'settings.privacy.factoryResetItemSettingsPrefix':
+    'Clear all API keys, interface preferences and other ',
+  'settings.privacy.factoryResetItemSettingsEmphasis': 'personal settings',
+  'settings.privacy.factoryResetItemCache': 'Clear all app cache files',
+  'settings.privacy.factoryResetItemRestart':
+    'The app then restarts automatically to its initial state',
+  'settings.privacy.factoryResetConfirmPrefix': 'If you are sure, type ',
+  'settings.privacy.factoryResetConfirmSuffix': ' to continue.',
+  'settings.privacy.factoryResetPlaceholder': 'Type RESET APP',
+  'settings.privacy.irreversible': 'cannot be undone',
+  'settings.privacy.unrecoverable': 'cannot be recovered',
+  'settings.privacy.warningColon': ':',
+  'settings.privacy.chatsCleared': 'All chat history cleared',
+  'settings.privacy.knowledgeCleared':
+    'Knowledge base documents and index cleared',
+  'settings.privacy.modelCacheCleared': 'Local model cache cleared',
+  'settings.privacy.factoryResetDone':
+    'Factory reset complete. The app will reload',
+  'settings.privacy.chatsExported': 'Chat history exported',
+  'settings.privacy.importDone': 'Imported {0} conversations',
+  'settings.privacy.importDefaultTitle': 'Imported conversation',
+  'settings.privacy.unknownError': 'Unknown error',
+  'settings.privacy.clearChatsFailed': 'Failed to clear chat history: {0}',
+  'settings.privacy.clearKnowledgeFailed':
+    'Failed to clear knowledge base: {0}',
+  'settings.privacy.clearModelCacheFailed': 'Failed to clear model cache: {0}',
+  'settings.privacy.factoryResetFailed': 'Factory reset failed: {0}',
+  'settings.privacy.exportFailed': 'Export failed: {0}',
+  'settings.privacy.importFailed': 'Import failed: {0}',
+  'settings.privacy.importInvalidType': 'Please choose a JSON file',
+  'settings.privacy.importInvalidFormat':
+    'Invalid file format. Make sure it is a chat backup exported from Chatless',
+  'settings.security.askEveryTime': 'Ask every time',
+  'settings.security.neverAsk': 'Never ask',
+  'settings.security.shell.title': 'Command execution',
+  'settings.security.shell.description':
+    "Commands run with your current system user's permissions. Working-directory limits are not an OS sandbox.",
+  'settings.security.shell.askBeforeRun': 'Ask before running',
+  'settings.security.shell.unrestrictedHint':
+    'Stop asking — good for long unattended tasks; destructive commands are still blocked by the sandbox.',
+  'settings.security.shell.askHint':
+    'Show a confirmation card with options for just this run, the rest of this conversation, or always.',
+  'settings.security.shell.conversationOverrideNotice':
+    'Command confirmation is turned off for this conversation.',
+  'settings.security.shell.restoreAsk': 'Restore confirmation',
+  'settings.security.fs.title': 'File access allowlist',
+  'settings.security.fs.description':
+    'Manage directories the AI is allowed to access. Give each directory a recognizable alias.',
+  'settings.security.fs.outsideAllowlist': 'Operations outside the allowlist',
+  'settings.security.fs.unrestrictedHint':
+    'Stop asking — file reads, writes and deletions run directly (good for long unattended tasks).',
+  'settings.security.fs.askHint':
+    'Show a confirmation card with options for just this run, always allow, or the rest of this conversation.',
+  'settings.security.fs.conversationOverrideNotice':
+    'File-operation confirmation is turned off for this conversation.',
+  'settings.security.fs.restoreAsk': 'Restore confirmation',
+  'settings.security.fs.addDirectory': 'Add directory',
+  'settings.security.fs.count': '{0}',
+  'settings.security.fs.empty': 'No allowlisted directories yet',
+  'settings.security.fs.unknownDirectory': 'Unknown directory',
+  'settings.security.fs.source.manual': 'Manual',
+  'settings.security.fs.source.skills': 'Skill',
+  'settings.security.fs.source.attachment': 'Attachment',
+  'settings.security.fs.perm.read': 'Read',
+  'settings.security.fs.perm.write': 'Write',
+  'settings.security.fs.perm.create': 'Create',
+  'settings.security.fs.perm.delete': 'Delete',
+  'settings.security.fs.editAlias': 'Edit alias',
+  'settings.security.fs.toggleWrite': 'Toggle write permission',
+  'settings.security.fs.toggleDelete': 'Toggle delete permission',
+  'settings.security.fs.remove': 'Remove',
+  'settings.security.fs.promptAliasAdd':
+    'Set an alias for this directory (recommended, for easy recognition).',
+  'settings.security.fs.promptAliasEdit':
+    'Set an alias (for easy recognition).',
+  'settings.security.workspace.title': 'Conversation artifacts',
+  'settings.security.workspace.description':
+    'Conversations without a bound workspace write files to "Documents/Chatless/<title>-<summary>" by default; this directory is created on demand. Conversations with a bound workspace work inside the selected project directory, and file access is still approved under the existing rules. Open, export and clean actions only affect conversation artifacts; they never change a sidebar workspace\'s directory or conversation ownership. Cleaning moves artifacts to the system trash.',
+  'settings.security.workspace.currentConversation': 'Current conversation',
+  'settings.security.workspace.revealTitle':
+    "Open this conversation's workspace directory in the file manager",
+  'settings.security.workspace.reveal': 'Open directory',
+  'settings.security.workspace.export': 'Export',
+  'settings.security.workspace.errorUnavailable':
+    'Workspace directory unavailable: {0}',
+  'settings.security.workspace.retry': 'Retry',
+  'settings.security.workspace.selectConversations': 'Select conversations',
+  'settings.security.workspace.selectAll': 'Select all',
+  'settings.security.workspace.deselectAll': 'Deselect all',
+  'settings.security.workspace.selectedCount': '{0} selected',
+  'settings.security.workspace.exportSelected': 'Export selected',
+  'settings.security.workspace.moveToTrash': 'Move to system trash',
+  'settings.security.workspace.cleanSelected': 'Clean selected',
+  'settings.security.workspace.cleanAll': 'Clean all conversation artifacts',
+  'settings.security.workspace.separator': ', ',
+  'settings.security.workspace.unnamedConversation': 'Untitled conversation',
+  'settings.security.workspace.toast.selectToExport':
+    'Select conversations to export',
+  'settings.security.workspace.dialog.exportLocation': 'Choose export location',
+  'settings.security.workspace.toast.exportPartialFailure':
+    '{0} conversations failed to export',
+  'settings.security.workspace.toast.exportFailureItem': '{0}: {1}',
+  'settings.security.workspace.toast.nothingToExport': 'Nothing to export',
+  'settings.security.workspace.toast.nothingToExportDescription':
+    "These conversations haven't produced files yet; the workspace directory is created the first time a file or command is used.",
+  'settings.security.workspace.toast.exportComplete':
+    'Export complete: {0} files ({1})',
+  'settings.security.workspace.toast.exportFailed': 'Export failed: {0}',
+  'settings.security.workspace.toast.selectToClean':
+    'Select conversations to clean',
+  'settings.security.workspace.toast.runningBlocked':
+    'These conversations are still running; stop them before cleaning.',
+  'settings.security.workspace.toast.cleanPartialFailure':
+    '{0} workspaces failed to clean',
+  'settings.security.workspace.toast.cleanComplete':
+    'Moved to trash: artifacts from {0} conversations',
+  'settings.security.workspace.toast.cleanFailed': 'Clean failed: {0}',
+  'settings.security.workspace.toast.allRunningBlocked':
+    'A conversation is still running; stop it before cleaning all conversation artifacts.',
+  'settings.security.workspace.confirmClearAll':
+    'Move artifacts from all conversations to the system trash? Sidebar workspaces and conversations are unaffected.',
+  'settings.security.workspace.toast.cleanAllComplete':
+    'Cleaned all conversation artifacts ({0} directories, all in the trash)',
+  'settings.security.workspace.toast.revealFailed':
+    'Could not open the workspace directory',
+  'settings.security.workspace.toast.ready': 'Workspace directory is ready',
+  'settings.security.workspace.toast.retryFailed':
+    'Still unable to prepare the workspace directory',
+  'settings.knowledge.title': 'Knowledge Base',
+  'settings.knowledge.description':
+    'Add or edit knowledge base configuration; pick a connected knowledge base during chats.',
+  'settings.knowledge.loading': 'Loading configuration…',
+  'settings.knowledge.embeddingSection': 'Embedding model management',
+  'settings.knowledge.documentProcessing': 'Document processing',
+  'settings.knowledge.maxFileSize': 'Maximum file size',
+  'settings.knowledge.maxFileSizeHelp':
+    'Maximum size limit for a single document (MB)',
+  'settings.knowledge.supportedFileTypes': 'Supported file types',
+  'settings.knowledge.documentSettings': 'Document settings',
+  'settings.knowledge.autoAttachPreview':
+    'Attach document previews to messages automatically',
+  'settings.knowledge.autoAttachPreviewHelp':
+    'When sending a message, append the parsed document preview (token-limited) to the end of the prompt. Off by default; knowledge base/RAG is recommended.',
+  'settings.knowledge.previewTokenLimit': 'Preview token limit',
+  'settings.knowledge.previewTokenLimitHelp':
+    'Maximum token count for the preview when auto-attach is on; text is trimmed by sentence when exceeded.',
+  'settings.knowledge.previewKeepTailRatio': 'Preview tail retention ratio',
+  'settings.knowledge.previewKeepTailRatioHelp':
+    'When truncating, keep a portion of the tail in addition to the head, from 0 to 0.5.',
+  'settings.knowledge.bigFileSizeMb': 'Large document size threshold (MB)',
+  'settings.knowledge.bigFileSizeMbHelp':
+    'Files larger than this prompt “move to the knowledge base and reference it”.',
+  'settings.knowledge.bigTokenThreshold': 'Large document token threshold',
+  'settings.knowledge.bigTokenThresholdHelp':
+    'Documents estimated above this many tokens prompt “move to the knowledge base and reference it”.',
+  'settings.knowledge.storage': 'Storage',
+  'settings.knowledge.enableAutoCleanup': 'Enable automatic cleanup',
+  'settings.knowledge.enableAutoCleanupHelp':
+    'Periodically clean expired index caches and temporary files',
+  'settings.knowledge.cleanupInterval': 'Cleanup interval (days)',
+  'settings.knowledge.cleanupIntervalHelp': 'How often automatic cleanup runs',
+  'settings.knowledge.enableBackup': 'Enable automatic backup',
+  'settings.knowledge.enableBackupHelp':
+    'Periodically back up knowledge base data to prevent data loss',
+  'settings.knowledge.backupInterval': 'Backup interval (hours)',
+  'settings.knowledge.backupIntervalHelp': 'How often automatic backup runs',
+  'settings.knowledge.reset': 'Reset defaults',
+  'settings.knowledge.resetTitle': 'Reset to default settings',
+  'settings.knowledge.resetDescription':
+    'All knowledge base configuration will be reset to its defaults and cannot be undone. Continue?',
+  'settings.knowledge.resetSuccess': 'Default configuration restored',
+  'settings.knowledge.resetFailed': 'Failed to restore default configuration',
+  'settings.knowledge.resetFailedRetry': 'Please try again',
+  'settings.knowledge.embedding.status': 'Embedding service status',
+  'settings.knowledge.embedding.checking': 'Checking',
+  'settings.knowledge.embedding.semanticUnavailable':
+    'Semantics unavailable (lexical available)',
+  'settings.knowledge.embedding.offline': 'Offline',
+  'settings.knowledge.embedding.uninitialized': 'Not initialized',
+  'settings.knowledge.embedding.ready': 'Ready',
+  'settings.knowledge.embedding.failed': 'Failed',
+  'settings.knowledge.embedding.viewDetails': 'View details',
+  'settings.knowledge.embedding.refresh': 'Refresh',
+  'settings.knowledge.embedding.details': 'Service details',
+  'settings.knowledge.embedding.serviceType': 'Service type',
+  'settings.knowledge.embedding.inferenceSource': 'Inference source',
+  'settings.knowledge.embedding.inference.real': 'Real ONNX',
+  'settings.knowledge.embedding.inference.mock': 'Mock vectors (test/fallback)',
+  'settings.knowledge.embedding.inference.unavailable':
+    'Unavailable (lexical retrieval still works)',
+  'settings.knowledge.embedding.inference.ollama': 'Ollama',
+  'settings.knowledge.embedding.currentModel': 'Current model',
+  'settings.knowledge.embedding.dimension': 'Vector dimensions',
+  'settings.knowledge.embedding.latency': 'Latency',
+  'settings.knowledge.embedding.serviceTypeLabel': 'Embedding service type',
+  'settings.knowledge.embedding.serviceType.local': 'Local model',
+  'settings.knowledge.embedding.serviceType.ollama': 'Ollama service',
+  'settings.knowledge.embedding.serviceType.unset': 'Not configured',
+  'settings.knowledge.embedding.serviceTypeHint':
+    'Activate a model in the model manager above to switch service types.',
+  'settings.knowledge.embedding.testing': 'Testing…',
+  'settings.knowledge.embedding.test': 'Test embedding generation',
+  'settings.knowledge.embedding.connected': 'Service connected',
+  'settings.knowledge.embedding.connectionFailed': 'Service connection failed',
+  'settings.knowledge.embedding.initialized': 'Service initialized',
+  'settings.knowledge.embedding.notInitialized': 'Service not initialized',
+  'settings.knowledge.embedding.testPassed': 'Test passed',
+  'settings.knowledge.embedding.notTested': 'Not tested yet',
   'settings.providerHeader.iconAlt': '{0} icon',
   'settings.providerHeader.fetchDebugger': 'Model fetch debugger',
   'settings.providerHeader.settings': 'Provider settings',
@@ -1694,8 +2107,10 @@ const enUS: TranslationDict = {
   'settings.providerHeader.advancedOptions': 'Advanced options',
   'settings.universalModels.strategy.ollama': 'Ollama service',
   'settings.universalModels.strategy.local': 'Local model',
-  'settings.universalModels.strategy.ollamaDescription': 'Online inference served by Ollama; requires a running Ollama service',
-  'settings.universalModels.strategy.localDescription': 'Local offline inference model; fully offline, no external service required',
+  'settings.universalModels.strategy.ollamaDescription':
+    'Online inference served by Ollama; requires a running Ollama service',
+  'settings.universalModels.strategy.localDescription':
+    'Local offline inference model; fully offline, no external service required',
   'settings.universalModels.strategy.unknown': 'Unknown strategy',
   'settings.universalModels.status.installed': 'Installed',
   'settings.universalModels.status.downloading': 'Downloading',
@@ -1709,7 +2124,8 @@ const enUS: TranslationDict = {
   'settings.universalModels.activated': 'Activated',
   'settings.universalModels.activate': 'Activate',
   'settings.universalModels.delete': 'Delete',
-  'settings.universalModels.deleteDisabledTitle': 'Cannot delete the model currently in use',
+  'settings.universalModels.deleteDisabledTitle':
+    'Cannot delete the model currently in use',
   'settings.universalModels.deleteTitle': 'Delete model',
   'settings.universalModels.retry': 'Retry',
   'settings.universalModels.testFailed': 'Failed',
@@ -1725,32 +2141,47 @@ const enUS: TranslationDict = {
   'settings.universalModels.download.preparing': 'Preparing model download…',
   'settings.universalModels.download.fallback': 'Downloading…',
   'settings.universalModels.toast.selectModelFirst': 'Select a model first',
-  'settings.universalModels.toast.ollamaConnected': 'Connected to Ollama, found {0} models',
-  'settings.universalModels.toast.ollamaConnectFailed': 'Could not connect to Ollama',
+  'settings.universalModels.toast.ollamaConnected':
+    'Connected to Ollama, found {0} models',
+  'settings.universalModels.toast.ollamaConnectFailed':
+    'Could not connect to Ollama',
   'settings.universalModels.toast.ollamaStatus': 'Status code {0}',
-  'settings.universalModels.toast.ollamaTagsUnavailable': 'Cannot access /api/tags',
+  'settings.universalModels.toast.ollamaTagsUnavailable':
+    'Cannot access /api/tags',
   'settings.universalModels.toast.networkError': 'Network error',
   'settings.universalModels.toast.installed': 'Model {0} installed!',
-  'settings.universalModels.toast.downloadIncomplete': 'Download may be incomplete; check the model status or retry',
-  'settings.universalModels.toast.installFailed': 'Model installation failed: {0}',
-  'settings.universalModels.toast.modelFilesMissing': 'Model files not found; install first',
+  'settings.universalModels.toast.downloadIncomplete':
+    'Download may be incomplete; check the model status or retry',
+  'settings.universalModels.toast.installFailed':
+    'Model installation failed: {0}',
+  'settings.universalModels.toast.modelFilesMissing':
+    'Model files not found; install first',
   'settings.universalModels.toast.selected': 'Model selected: {0}',
   'settings.universalModels.toast.saveFailed': 'Failed to save configuration',
-  'settings.universalModels.toast.testSuccess': 'Embedding service test passed! Latency: {0}ms, dimensions: {1}',
-  'settings.universalModels.toast.testFailed': 'Embedding service test failed: {0}',
+  'settings.universalModels.toast.testSuccess':
+    'Embedding service test passed! Latency: {0}ms, dimensions: {1}',
+  'settings.universalModels.toast.testFailed':
+    'Embedding service test failed: {0}',
   'settings.universalModels.toast.unknownError': 'Unknown error',
   'settings.universalModels.hint.ollamaTitle': 'Using Ollama',
-  'settings.universalModels.hint.ollamaLine1': 'Connect to a local or remote Ollama API service',
-  'settings.universalModels.hint.ollamaLine2': 'Configure the Ollama service address and port in Settings → AI Models',
-  'settings.universalModels.hint.ollamaLine3': 'Models are downloaded and cached on first call, then run offline',
+  'settings.universalModels.hint.ollamaLine1':
+    'Connect to a local or remote Ollama API service',
+  'settings.universalModels.hint.ollamaLine2':
+    'Configure the Ollama service address and port in Settings → AI Models',
+  'settings.universalModels.hint.ollamaLine3':
+    'Models are downloaded and cached on first call, then run offline',
   'settings.universalModels.hint.localTitle': 'Local offline inference',
-  'settings.universalModels.hint.localLine1': 'Fully local inference producing high-quality embedding vectors',
-  'settings.universalModels.hint.localLine2': 'For offline environments or scenarios with strict data-privacy requirements',
-  'settings.universalModels.hint.localLine3': 'No external service or network connection required',
+  'settings.universalModels.hint.localLine1':
+    'Fully local inference producing high-quality embedding vectors',
+  'settings.universalModels.hint.localLine2':
+    'For offline environments or scenarios with strict data-privacy requirements',
+  'settings.universalModels.hint.localLine3':
+    'No external service or network connection required',
   'settings.universalModels.hint.localLine4': 'Ready for production use',
   'chatMessage.yesterday': 'yesterday',
   'chatMessage.deleteTitle': 'Delete this message?',
-  'chatMessage.deleteDescription': 'This action cannot be undone and permanently removes this message from the conversation.',
+  'chatMessage.deleteDescription':
+    'This action cannot be undone and permanently removes this message from the conversation.',
   'chatMessage.cancel': 'Cancel',
   'chatMessage.delete': 'Delete',
   'chatMessage.processing': 'Processing...',
@@ -1770,7 +2201,8 @@ const enUS: TranslationDict = {
   'chatMessage.openFailed': 'Failed to open',
   'chatMessage.imageAlt': 'Generated image',
   'settings.sessionParameters.title': 'Session Parameters',
-  'settings.sessionParameters.hintPrefix': 'Applies to this conversation only. Parameters that are off or unchanged are ',
+  'settings.sessionParameters.hintPrefix':
+    'Applies to this conversation only. Parameters that are off or unchanged are ',
   'settings.sessionParameters.hintEmphasis': 'not sent',
   'settings.sessionParameters.hintSuffix': ', so model defaults apply.',
   'settings.sessionParameters.tabPrompt': 'Prompt',
@@ -1786,54 +2218,76 @@ const enUS: TranslationDict = {
   'settings.sessionParameters.promptNameLabel': 'Prompt name',
   'settings.sessionParameters.promptNamePlaceholder': 'Enter a prompt name',
   'settings.sessionParameters.systemPromptLabel': 'System prompt',
-  'settings.sessionParameters.systemPromptPlaceholder': 'Set a system prompt for this conversation. You can save it to your prompt list',
+  'settings.sessionParameters.systemPromptPlaceholder':
+    'Set a system prompt for this conversation. You can save it to your prompt list',
   'settings.sessionParameters.saveAndApply': 'Save and apply',
-  'settings.sessionParameters.applyToAllMessages': 'The prompt applies to all messages in this conversation',
-  'settings.sessionParameters.temperatureHelp': 'Controls randomness. Higher values are more creative; lower values are more predictable.',
-  'settings.sessionParameters.maxTokensHelp': 'Limits the maximum tokens generated in a single reply.',
-  'settings.sessionParameters.topPHelp': 'Samples from the most probable candidates. Lower values are more conservative.',
-  'settings.sessionParameters.frequencyPenaltyHelp': 'Higher values make repeated words less likely.',
-  'settings.sessionParameters.presencePenaltyHelp': 'Higher values encourage the model to introduce new topics.',
-  'settings.sessionParameters.topKHelp': 'Chooses from the K most likely candidates. Lower values are more conservative.',
-  'settings.sessionParameters.minPHelp': 'Minimum probability threshold; candidates below it are filtered out.',
+  'settings.sessionParameters.applyToAllMessages':
+    'The prompt applies to all messages in this conversation',
+  'settings.sessionParameters.temperatureHelp':
+    'Controls randomness. Higher values are more creative; lower values are more predictable.',
+  'settings.sessionParameters.maxTokensHelp':
+    'Limits the maximum tokens generated in a single reply.',
+  'settings.sessionParameters.topPHelp':
+    'Samples from the most probable candidates. Lower values are more conservative.',
+  'settings.sessionParameters.frequencyPenaltyHelp':
+    'Higher values make repeated words less likely.',
+  'settings.sessionParameters.presencePenaltyHelp':
+    'Higher values encourage the model to introduce new topics.',
+  'settings.sessionParameters.topKHelp':
+    'Chooses from the K most likely candidates. Lower values are more conservative.',
+  'settings.sessionParameters.minPHelp':
+    'Minimum probability threshold; candidates below it are filtered out.',
   'settings.sessionParameters.streamingLabel': 'Stream responses',
-  'settings.sessionParameters.streamingHelp': 'When enabled, the model streams its output in real time.',
+  'settings.sessionParameters.streamingHelp':
+    'When enabled, the model streams its output in real time.',
   'settings.sessionParameters.streamingEnabled': 'Enabled',
   'settings.sessionParameters.streamingDisabled': 'Disabled',
   'settings.sessionParameters.streamingOn': 'On',
   'settings.sessionParameters.streamingOff': 'Off',
   'settings.sessionParameters.formatLabel': 'Output format',
-  'settings.sessionParameters.formatHelp': 'Choose the output format. Select "json" to request JSON output.',
+  'settings.sessionParameters.formatHelp':
+    'Choose the output format. Select "json" to request JSON output.',
   'settings.sessionParameters.formatAny': 'Any format',
   'settings.sessionParameters.customParametersLabel': 'Custom parameters',
   'settings.sessionParameters.addParameter': 'Add parameter',
   'settings.sessionParameters.parameterNamePlaceholder': 'Parameter name',
   'settings.sessionParameters.parameterValuePlaceholder': 'Value',
   'settings.sessionParameters.asString': 'String',
-  'settings.sessionParameters.inheritedFromModel': 'Inherited from model (not overridden)',
+  'settings.sessionParameters.inheritedFromModel':
+    'Inherited from model (not overridden)',
   'settings.sessionParameters.override': 'Override',
   'settings.sessionParameters.previewLabel': 'Parameter preview',
-  'settings.sessionParameters.previewHelp': 'Complete parameter configuration sent to the LLM (enabled parameters only)',
+  'settings.sessionParameters.previewHelp':
+    'Complete parameter configuration sent to the LLM (enabled parameters only)',
   'settings.sessionParameters.resetToModelDefault': 'Reset to model defaults',
   'settings.sessionParameters.resetToSystemDefault': 'Reset to system defaults',
   'settings.sessionParameters.resetPrompt': 'Reset prompt',
   'settings.sessionParameters.manageSavedPrompts': 'Manage saved prompts',
-  'settings.sessionParameters.paramsLiveHint': 'Parameter changes apply immediately',
+  'settings.sessionParameters.paramsLiveHint':
+    'Parameter changes apply immediately',
   'settings.sessionParameters.promptSaveHint': 'Prompts apply only when saved',
   'settings.sessionParameters.source.session': 'Session',
   'settings.sessionParameters.source.model': 'Model default',
   'settings.sessionParameters.source.default': 'System default',
-  'settings.sessionParameters.toast.enterPrompt': 'Enter a system prompt to save',
+  'settings.sessionParameters.toast.enterPrompt':
+    'Enter a system prompt to save',
   'settings.sessionParameters.toast.savedToPrompts': 'Saved to prompt list',
-  'settings.sessionParameters.toast.savePromptFailed': 'Failed to save the prompt',
-  'settings.sessionParameters.toast.appliedToConversation': 'Applied to this conversation',
-  'settings.sessionParameters.toast.applyPromptFailed': 'Failed to apply the prompt',
-  'settings.sessionParameters.toast.clearedPrompt': 'Cleared the conversation prompt',
+  'settings.sessionParameters.toast.savePromptFailed':
+    'Failed to save the prompt',
+  'settings.sessionParameters.toast.appliedToConversation':
+    'Applied to this conversation',
+  'settings.sessionParameters.toast.applyPromptFailed':
+    'Failed to apply the prompt',
+  'settings.sessionParameters.toast.clearedPrompt':
+    'Cleared the conversation prompt',
   'settings.sessionParameters.toast.enterPromptName': 'Enter a prompt name',
-  'settings.sessionParameters.toast.overwrotePrompt': 'Overwrote the original prompt',
+  'settings.sessionParameters.toast.overwrotePrompt':
+    'Overwrote the original prompt',
   'settings.sessionParameters.toast.overwriteFailed': 'Overwrite failed',
-  'settings.sessionParameters.confirmOverwrite': 'Content or name has changed. Confirm to overwrite the original prompt, or cancel to save it as a new prompt.',
-  'settings.sessionParameters.promptSavedDescription': 'Saved from Session Parameters',
+  'settings.sessionParameters.confirmOverwrite':
+    'Content or name has changed. Confirm to overwrite the original prompt, or cancel to save it as a new prompt.',
+  'settings.sessionParameters.promptSavedDescription':
+    'Saved from Session Parameters',
   'settings.sessionParameters.defaultPromptName': 'System prompt',
   'command.dialogTitle': 'Command Palette',
   'command.dialogDescription': 'Search and execute commands',
@@ -1870,8 +2324,7 @@ const enUS: TranslationDict = {
     'Learn about product information and the latest updates',
   'app.about.websiteLink': 'Visit website →',
   'app.about.community': 'Community',
-  'app.about.communityDescription':
-    'Exchange tips and tricks with other users',
+  'app.about.communityDescription': 'Exchange tips and tricks with other users',
   'app.about.communityLink': 'Join community →',
   'app.about.terms': 'Terms of Service',
   'app.about.privacy': 'Privacy Policy',
@@ -1913,7 +2366,8 @@ const enUS: TranslationDict = {
   'settings.providerRow.unknown': 'Unknown',
   'settings.providerRow.checking': 'Checking status…',
   'settings.providerRow.recheckHint': 'Click to re-check status',
-  'settings.providerRow.editDescription': 'Rename, service URL, strategy and more',
+  'settings.providerRow.editDescription':
+    'Rename, service URL, strategy and more',
   'settings.providerRow.advancedDescription':
     'Advanced options such as network request mode',
   'settings.providerRow.collapseDetails': 'Collapse details',
@@ -2041,7 +2495,8 @@ const enUS: TranslationDict = {
   'analytics.refresh': 'Refresh',
   'mcpCache.title': 'MCP cache',
   'mcpCache.loading': 'Loading cache information…',
-  'mcpCache.description': 'Cache MCP tool information locally to speed up connections',
+  'mcpCache.description':
+    'Cache MCP tool information locally to speed up connections',
   'mcpCache.cachedServers': 'Cached servers',
   'mcpCache.cacheSize': 'Cache size',
   'mcpCache.lastUpdated': 'Last updated: {0}',
@@ -2050,8 +2505,10 @@ const enUS: TranslationDict = {
   'mcpCache.refresh': 'Refresh',
   'mcpCache.clearAll': 'Clear all caches',
   'mcpCache.helpExpire': 'Entries expire after 24 hours',
-  'mcpCache.helpOffline': 'Cached tool information stays available while a server is offline',
-  'mcpCache.helpRefresh': 'After a reset the next connection fetches tool information again',
+  'mcpCache.helpOffline':
+    'Cached tool information stays available while a server is offline',
+  'mcpCache.helpRefresh':
+    'After a reset the next connection fetches tool information again',
   'conversation.newTitle': 'New chat',
   'ui.searchPlaceholder': 'Search…',
   'ui.recentUsed': 'Recently used',
@@ -2128,7 +2585,8 @@ const enUS: TranslationDict = {
   'chatUi.markdownTheme.github.name': 'GitHub style',
   'chatUi.markdownTheme.github.description': 'GitHub Markdown styling',
   'conversation.approxPrefix': '',
-  'app.about.tagline': 'A focused AI chat client with multi-model support and a knowledge base.',
+  'app.about.tagline':
+    'A focused AI chat client with multi-model support and a knowledge base.',
 };
 
 export default enUS;

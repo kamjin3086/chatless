@@ -6,12 +6,15 @@ import { ResourceUploader } from '../ResourceUploader';
 
 const settings = vi.hoisted(() => ({ locale: 'zh' as Locale }));
 vi.mock('@/store/localeStore', () => ({
-  useLocaleStore: (select: (state: typeof settings) => Locale) => select(settings),
+  useLocaleStore: (select: (state: typeof settings) => Locale) =>
+    select(settings),
 }));
 
 beforeAll(() => vi.stubGlobal('React', React));
 afterAll(() => vi.unstubAllGlobals());
-afterEach(() => { settings.locale = 'zh'; });
+afterEach(() => {
+  settings.locale = 'zh';
+});
 
 it.each(['button', 'dropzone'] as const)(
   'keeps a mounted multi-file input for the %s picker',
@@ -44,8 +47,13 @@ it('exposes the dropzone as a keyboard-operable upload button', () => {
 it('localizes the English file input and dropzone button', () => {
   settings.locale = 'en';
   const html = renderToStaticMarkup(
-    createElement(ResourceUploader, { displayType: 'dropzone', onUploadSuccess: vi.fn() }),
+    createElement(ResourceUploader, {
+      displayType: 'dropzone',
+      onUploadSuccess: vi.fn(),
+    }),
   );
   expect(html).toContain('aria-label="Choose files to upload"');
-  expect(html).toMatch(/<button\b[^>]*>[\s\S]*Drop files here or click to upload[\s\S]*<\/button>/);
+  expect(html).toMatch(
+    /<button\b[^>]*>[\s\S]*Drop files here or click to upload[\s\S]*<\/button>/,
+  );
 });

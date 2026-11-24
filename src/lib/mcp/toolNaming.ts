@@ -6,6 +6,12 @@
  * - 后续改名只需要改这一处
  */
 
+import { ANDROID_COUNTDOWN_SERVER } from './nativeTools/androidCountdown';
+import { ANDROID_DIRECTORY_SERVER } from './nativeTools/androidDirectory';
+import { ANDROID_DOCUMENT_SERVER } from './nativeTools/androidDocument';
+import { ANDROID_PHOTOS_SERVER } from './nativeTools/androidPhotos';
+import { isAndroidTauri } from '@/lib/utils/runtimePlatform';
+
 export type CanonicalServerName =
   | 'fs'
   | 'shell'
@@ -72,7 +78,11 @@ export function isBuiltinServer(server: unknown): boolean {
     s === 'skills_fs' ||
     s === 'user_fs' ||
     s === 'ctx' ||
-    s === 'tools'
+    s === 'tools' ||
+    s === ANDROID_DOCUMENT_SERVER ||
+    s === ANDROID_DIRECTORY_SERVER ||
+    s === ANDROID_PHOTOS_SERVER ||
+    (s === ANDROID_COUNTDOWN_SERVER && isAndroidTauri())
   );
 }
 

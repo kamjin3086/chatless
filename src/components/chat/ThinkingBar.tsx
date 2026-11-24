@@ -104,6 +104,7 @@ export const ThinkingBar = ({
     <div className="my-1">
       <button
         type="button"
+        data-reasoning-toggle
         onClick={() => hasContent && setIsExpanded(!isExpanded)}
         className={cn(
           "inline-flex items-center gap-1 max-w-full text-left text-xs text-slate-400 dark:text-slate-500",

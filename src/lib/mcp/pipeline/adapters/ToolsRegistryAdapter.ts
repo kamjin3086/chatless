@@ -2,13 +2,15 @@
  * Capability directory. It intentionally has one operation: search the whole
  * enabled directory, then expose the selected capability on the next turn.
  */
+import { androidCapabilities } from '@/lib/android/androidCapabilities';
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
-import { TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
+import { getToolsForGroup, TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { getEnabledConfiguredServers } from '@/lib/mcp/chatIntegration';
 import { persistentCache } from '@/lib/mcp/persistentCache';
-import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
+import { isAndroidRuntime } from '@/lib/utils/runtimePlatform';
+import { isReservedMcpServerName } from '@/lib/mcp/serverNamePolicy';
 
 interface CatalogItem {
   source: 'builtin' | 'mcp';
@@ -38,7 +40,8 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
     if (!query) return { ok: false, error: 'query is required' };
 
-    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => group.tools.map(({ server, tool }) => ({
+    const android = await androidCapabilities(conversationId);
+    const builtin: CatalogItem[] = TOOL_GROUPS.flatMap((group) => getToolsForGroup(group.id, android).map(({ server, tool }) => ({
       source: 'builtin' as const,
       group: group.id,
       server,
@@ -49,7 +52,7 @@ export class ToolsRegistryAdapter implements ToolAdapter {
     // A failing remote server only omits its own entries. Local discovery must
     // remain usable when a configured MCP endpoint is unavailable.
     const enabledServers = (await getEnabledConfiguredServers())
-      .filter((server) => !RESERVED_MCP_SERVER_NAMES.has(String(server || '').toLowerCase()));
+      .filter((server) => !isReservedMcpServerName(server));
     const external = await Promise.all(enabledServers.map(async (server): Promise<CatalogItem[]> => {
       try {
         const tools = await persistentCache.getToolsWithCache(server);
@@ -81,7 +84,28 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       results: page,
       nextCursor: offset + page.length < matches.length ? offset + page.length : null,
       total: matches.length,
-      hint: page.length ? 'The matching capability becomes available in the next model step.' : 'No tools matched.',
+      hint: page.length
+        ? 'The matching capability becomes available in the next model step.'
+        : androidHint(android),
     };
   }
+}
+
+/**
+ * An empty search on a phone used to answer "No tools matched", which reads as "search
+ * differently" and costs two more rounds. On Android the honest answer is that whole families do
+ * not exist here, and that files arrive only when the user hands them over.
+ */
+function androidHint(android: { directory?: boolean }): string {
+  if (!isAndroidRuntime())
+    return 'No tools matched.';
+  return (
+    'No tools matched. This is an Android phone: there is no filesystem or shell tool here, so '
+    + 'searching for one will keep returning nothing. Files come from a folder the user attaches '
+    + '(android_directory__inventory, or __summarize to count a big one), from photos they pick '
+    + '(android_photos__group), and from documents this chat already holds (android_document__search). '
+    + (android.directory
+      ? 'Folders are already authorized: android_directory__inventory for entries, android_directory__summarize for what a folder holds as a set, android_directory__export to write a long list out as a file.'
+      : 'Ask the user to attach the folder from the attachment menu.')
+  );
 }

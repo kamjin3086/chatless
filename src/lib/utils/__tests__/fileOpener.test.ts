@@ -7,9 +7,15 @@ import { FileOpener } from '../fileOpener';
 
 vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn() }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openPath: vi.fn() }));
-vi.mock('@/components/ui/sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/lib/filesystemAllowlist/displayPathAliases', () => ({ resolveAliasPath: ({ path }: { path: string }) => path }));
-vi.mock('@/lib/filesystemAllowlist/openCheckedPath', () => ({ openCheckedPath: vi.fn() }));
+vi.mock('@/components/ui/sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+vi.mock('@/lib/filesystemAllowlist/displayPathAliases', () => ({
+  resolveAliasPath: ({ path }: { path: string }) => path,
+}));
+vi.mock('@/lib/filesystemAllowlist/openCheckedPath', () => ({
+  openCheckedPath: vi.fn(),
+}));
 
 beforeEach(() => vi.resetAllMocks());
 
@@ -41,5 +47,7 @@ it('localizes missing-file feedback without changing the filename or attempting 
 it('keeps the existing default locale for callers outside Resources', async () => {
   expect(await FileOpener.openFile('')).toBe(false);
   expect(exists).not.toHaveBeenCalled();
-  expect(toast.error).toHaveBeenCalledWith('打开文件失败', { description: '路径为空' });
+  expect(toast.error).toHaveBeenCalledWith('打开文件失败', {
+    description: '路径为空',
+  });
 });

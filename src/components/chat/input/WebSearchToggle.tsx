@@ -95,6 +95,7 @@ export function WebSearchToggle({
       <ActionPanelContent width="md" maxHeight="20rem">
         <ActionPanelHeader
           title={t('chatComposer.webSearch')}
+          aria-label={t('chatComposer.webSearch')}
           icon={<Globe className={cn("w-4 h-4", isEnabled ? "text-sky-600 dark:text-sky-400" : "text-slate-400")} />}
           action={
             <div className="flex items-center gap-2">

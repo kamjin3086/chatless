@@ -355,3 +355,84 @@ describe('the previews the owner said were fine', () => {
     expect(card.detailLineShort).toBe('Downloads');
   });
 });
+
+/**
+ * The phone's own tools have no desktop twin to hide behind, and their wire names -
+ * `android_directory · inventory` - are the internal seam. A reader on a six-inch screen
+ * did not ask to decode it.
+ */
+describe('Android tool cards', () => {
+  it('says what the folder call did instead of printing its server name', () => {
+    const card = presentToolCard('zh', {
+      server: 'android_directory',
+      tool: 'inventory',
+      args: {},
+    });
+    expect(card.titleLine).toBe('读取附加文件夹');
+    expect(card.titleLine).not.toContain('android_');
+    expect(card.detailLineFull ?? '').toBe('');
+  });
+
+  it('keeps the filter the model actually asked for', () => {
+    const card = presentToolCard('zh', {
+      server: 'android_directory',
+      tool: 'inventory',
+      args: { mimeType: 'image/' },
+    });
+    expect(card.detailLineLabel).toBe('类型');
+    expect(card.detailLineFull).toBe('image/');
+  });
+
+  it('shows the document query and the timer that was set', () => {
+    const search = presentToolCard('zh', {
+      server: 'android_document',
+      tool: 'search',
+      args: { query: '发票' },
+    });
+    expect(search.titleLine).toBe('在附加文档中查找');
+    expect(search.detailLineFull).toBe('发票');
+
+    const timer = presentToolCard('zh', {
+      server: 'android_countdown',
+      tool: 'start',
+      args: { durationSeconds: 90 },
+    });
+    expect(timer.titleLine).toBe('设置计时器');
+    expect(timer.detailLineFull).toBe('90 秒');
+
+    expect(
+      presentToolCard('en', {
+        server: 'android_photos',
+        tool: 'group',
+        args: {},
+      }).titleLine,
+    ).toBe('Review selected photos');
+  });
+
+  it('names the paged read of a large saved result, instead of internal vocabulary', () => {
+    // `tool_result · read` is what the raw server and tool names make, and a person reading
+    // the card has no idea that is a second page of an earlier result.
+    const zh = presentToolCard('zh', {
+      server: 'tool_result',
+      tool: 'read',
+      args: { attachmentId: 'att-1', offset: 8192 },
+    });
+    expect(zh.titleLine).toBe('读取已保存的工具结果');
+    const en = presentToolCard('en', {
+      server: 'tool_result',
+      tool: 'read',
+      args: { attachmentId: 'att-1' },
+    });
+    expect(en.titleLine).toBe('Read the saved tool result');
+  });
+
+  it('leaves the desktop cards it already knew alone', () => {
+    const card = presentToolCard('zh', {
+      server: 'filesystem',
+      tool: 'ls',
+      args: { path: '/tmp/x' },
+    });
+    expect(card.titleLine).not.toContain('filesystem');
+    expect(card.titleLine).not.toBe('读取附加文件夹');
+  });
+});

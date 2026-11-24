@@ -26,6 +26,7 @@ interface ConversationSidebarProps {
   searchQuery?: string;
   filter: 'recent' | 'favorite' | 'archived';
   onCreateInWorkspace: (path: string | null) => Promise<void>;
+  onOpenConversation?: () => void;
 }
 
 export function ConversationSidebar({ 
@@ -34,6 +35,7 @@ export function ConversationSidebar({
   searchQuery = '',
   filter,
   onCreateInWorkspace,
+  onOpenConversation,
 }: ConversationSidebarProps) {
   const storeConversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore((state) => state.currentConversationId);
@@ -46,7 +48,8 @@ export function ConversationSidebar({
   const isLoading = useChatStore((state) => state.isLoadingConversations);
 
   const conversationsToShow = filteredConversations ?? storeConversations;
-  const grouping = useUiPreferences((state) => state.conversationGrouping);
+  const savedGrouping = useUiPreferences((state) => state.conversationGrouping);
+  const grouping = onOpenConversation ? 'time' : savedGrouping;
   const mountedDirectories = useConversationAttachmentStore((state) => state.mountedDirByConversation);
   const locale = useLocaleStore((state) => state.locale);
   const t = useTranslation();
@@ -138,9 +141,15 @@ export function ConversationSidebar({
     setRenameInputValue(conv.title);
   };
 
+  const selectConversation = (id: string) => {
+    setCurrentConversation(id);
+    onOpenConversation?.();
+  };
+
   const handleTitleClick = (e: any, conv: Conversation) => {
     if (e?.preventDefault) e.preventDefault();
-    setCurrentConversation(conv.id);
+    if (onOpenConversation) e.stopPropagation();
+    selectConversation(conv.id);
   };
 
   const handleRenameSubmit = async () => {
@@ -338,7 +347,8 @@ export function ConversationSidebar({
                 isCurrent={currentConversationId === conv.id}
                 isRenaming={renamingConversationId === conv.id}
                 renameInputValue={renameInputValue}
-                onSelect={setCurrentConversation}
+                onSelect={selectConversation}
+                touch={Boolean(onOpenConversation)}
                 onRenameStart={handleTitleDoubleClick}
                 onTitleClick={handleTitleClick}
                 onRenameChange={setRenameInputValue}

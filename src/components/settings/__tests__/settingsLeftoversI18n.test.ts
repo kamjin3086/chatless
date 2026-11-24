@@ -29,11 +29,7 @@ it.each([
     nativeToolLabel: '命令执行确认',
     nativeToolTooltip:
       '是否在运行命令前弹出确认。全局默认可在 MCP 高级设置中调整。',
-    nativeToolOptions: [
-      '跟随默认（每次确认）',
-      '每次确认',
-      '自动授权',
-    ],
+    nativeToolOptions: ['跟随默认（每次确认）', '每次确认', '自动授权'],
   },
   {
     locale: 'en',

@@ -1,6 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
+  "platforms": ["linux", "macOS", "windows"],
   "description": "Capability for the main window",
   "windows": [
     "main"
@@ -50,6 +51,9 @@
         },
         {
           "url": "https://*"
+        },
+        {
+          "url": "https://*:*"
         },
         {
           "url": "http://*:*"

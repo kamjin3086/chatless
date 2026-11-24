@@ -114,3 +114,18 @@ describe('toolRisk classification itself', () => {
     expect(toolRisk('skills', 'list')).toBe('unknown');
   });
 });
+
+describe('the Android folder tools', () => {
+  it('reads without asking and writes through the gate', () => {
+    for (const tool of ['inventory', 'summarize', 'read_file']) {
+      expect(toolRisk('android_directory', tool), tool).toBe('read');
+      expect(isPlanOnlyAllowed('android_directory', tool), tool).toBe(true);
+    }
+    // Writing, exporting, renaming and moving all change what is on the phone, so plan mode
+    // holds them back; reading a folder is what a plan is for.
+    for (const tool of ['write_file', 'export', 'rename', 'move']) {
+      expect(toolRisk('android_directory', tool), tool).not.toBe('read');
+      expect(isPlanOnlyAllowed('android_directory', tool), tool).toBe(false);
+    }
+  });
+});

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
+import {
+  ANDROID_CAPABILITIES,
+  NO_ANDROID_CAPABILITIES,
+  type AndroidCapabilities,
+  type AndroidCapabilityId,
+} from '@/lib/android/androidCapabilities';
 import { decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from '../policy';
 
 const dir = (permissions: Partial<AllowlistDirectory['permissions']>): AllowlistDirectory => ({
@@ -120,6 +126,69 @@ describe('decideServerCall reproduces needsAuthorization', () => {
           expect(decideServerCall({ server, tool, autoAuthorize }), `${server}/${tool}/${autoAuthorize}`)
             .toBe(expected);
         }
+      }
+    }
+  });
+});
+
+/**
+ * ADR 0003: which names a table carries is security-relevant, because membership is what
+ * decides whether the gate recognises a call at all. The Android table is read through one
+ * capability object, so the answers below are the advertised set seen from the policy side.
+ */
+describe('decideServerCall answers the Android capability table', () => {
+  const only = (id: AndroidCapabilityId): AndroidCapabilities => ({
+    ...NO_ANDROID_CAPABILITIES,
+    [id]: true,
+  });
+
+  it('allows a catalog tool exactly when its own capability is on', () => {
+    for (const { id, server, tools } of ANDROID_CAPABILITIES) {
+      for (const tool of tools) {
+        expect(decideServerCall({ server, tool: tool.name, autoAuthorize: false, android: only(id) }), `${id}/${tool.name}`)
+          .toBe('allow');
+        expect(decideServerCall({ server, tool: tool.name, autoAuthorize: false, android: NO_ANDROID_CAPABILITIES }), `${id}/${tool.name} off`)
+          .toBe('ask');
+      }
+    }
+  });
+
+  it('does not let one capability answer for another', () => {
+    for (const { id, server, tools } of ANDROID_CAPABILITIES) {
+      for (const other of ANDROID_CAPABILITIES.filter((entry) => entry.id !== id)) {
+        for (const tool of tools) {
+          expect(decideServerCall({ server, tool: tool.name, autoAuthorize: false, android: only(other.id) }), `${id} asked via ${other.id}`)
+            .toBe('ask');
+        }
+      }
+    }
+  });
+
+  it('asks for an Android server name the catalog does not carry', () => {
+    const all: AndroidCapabilities = Object.fromEntries(
+      ANDROID_CAPABILITIES.map(({ id }) => [id, true]),
+    ) as AndroidCapabilities;
+
+    for (const [server, tool] of [
+      ['android_photos', 'delete'],
+      ['android_photos', 'move'],
+      ['android_document', 'write'],
+      ['android_directory', 'delete'],
+      ['android_countdown', 'set_alarm'],
+      ['android_photos_extra', 'group'],
+    ]) {
+      expect(decideServerCall({ server, tool, autoAuthorize: false, android: all }), `${server}/${tool}`)
+        .toBe('ask');
+    }
+  });
+
+  it('keeps the desktop answer: an Android name is an unknown server without the capability object', () => {
+    for (const { server, tools } of ANDROID_CAPABILITIES) {
+      for (const tool of tools) {
+        expect(decideServerCall({ server, tool: tool.name, autoAuthorize: false }), `${server}/${tool.name}`)
+          .toBe('ask');
+        expect(decideServerCall({ server, tool: tool.name, autoAuthorize: true, android: NO_ANDROID_CAPABILITIES }), `${server}/${tool.name}`)
+          .toBe('allow');
       }
     }
   });

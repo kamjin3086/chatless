@@ -1,3 +1,4 @@
+import type { AndroidPhotoRecipient } from '@/lib/android/androidPhotoSend';
 import type { Message as LlmMessage } from '@/lib/llm/types';
 
 export type RunInput = {
@@ -41,6 +42,11 @@ export type AgentLoopRunParams = {
   regenerationParentRunId?: string;
   /** 透传给 provider 的 options（温度/最大tokens/会话参数等） */
   options?: Record<string, unknown>;
+  /**
+   * 这一轮寻址到的照片收件人。它不走 options：线上路由的复核需要它，别的东西不该看见它，
+   * 也不能让它变成一个可能被拼进请求体的 option 键。
+   */
+  androidPhotoRecipient?: AndroidPhotoRecipient;
   /** Planning mode permits bounded reads/searches but blocks side effects. */
   planOnly?: boolean;
   /** UI/监控侧 hook：用于复用 useChatActions 的超时监控、性能监控、token 计数等 */

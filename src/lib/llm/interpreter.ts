@@ -14,6 +14,7 @@ import { GoogleAIProvider } from './providers/GoogleAIProvider';
 import { AnthropicProvider } from './providers/AnthropicProvider';
 import { DeepSeekProvider } from './providers/DeepSeekProvider';
 import type { ToolDefinition } from './types/tool-schema';
+import { type AndroidPhotoRecipient, AndroidPhotoSendRejection, guardAndroidPhotoWireRoute } from '@/lib/android/androidPhotoSend';
 
 /**
  * 简化版 LLMInterpreter：
@@ -174,6 +175,9 @@ export class LLMInterpreter {
 
   /**
    * 统一流式聊天接口，仅通过 ProviderRegistry 调度。
+   *
+   * `androidPhotoRecipient` 是一个具名参数而不是 options 里的键：它要在线路复核里被看见，
+   * 也不该成为可以透传进请求体的 option。
    */
   async streamChat(
     provider: string,
@@ -181,6 +185,7 @@ export class LLMInterpreter {
     messages: Message[],
     callbacksIn: StreamCallbacks,
     options: ChatOptions = {},
+    androidPhotoRecipient?: AndroidPhotoRecipient,
   ): Promise<void> {
     const requestId =
       typeof (options as any).__requestId === 'string' &&
@@ -188,6 +193,7 @@ export class LLMInterpreter {
         ? (options as any).__requestId
         : '__legacy__';
     const useProvider = provider; // 不做魔法纠正，维持调用方选择
+    const photoRecipient = androidPhotoRecipient;
 
     // #101: one wrap point for cost accounting. It observes only - the request that leaves
     // is built by the code below, untouched. The context is a getter because the provider
@@ -246,6 +252,11 @@ export class LLMInterpreter {
       | 'gemini'
       | 'deepseek'
       | null = null;
+    const checkPhotoRoute = (adapter: BaseProvider, wireModel: string) => {
+      if (photoRecipient) {
+        guardAndroidPhotoWireRoute(photoRecipient, useProvider, wireModel, adapter, effectiveStrategy);
+      }
+    };
     try {
       try {
         const { specializedStorage } = await import('@/lib/storage');
@@ -352,6 +363,7 @@ export class LLMInterpreter {
           (originalProvider as any).strategy !== 'multi'
         ) {
           // 如果原始Provider不需要API密钥，直接使用原始Provider，不进行委派
+          checkPhotoRoute(strategy, requestModel);
           await this.runProviderStream(
             requestId,
             strategy,
@@ -407,6 +419,7 @@ export class LLMInterpreter {
             (delegate as any).aliasProviderName = display;
             break;
         }
+        checkPhotoRoute(delegate, model);
         await this.runProviderStream(
           requestId,
           delegate,
@@ -419,6 +432,7 @@ export class LLMInterpreter {
       }
 
       // 默认：使用原始 Provider
+      checkPhotoRoute(strategy, requestModel);
       await this.runProviderStream(
         requestId,
         strategy,
@@ -428,6 +442,10 @@ export class LLMInterpreter {
         refined,
       );
     } catch (e: any) {
+      if (e instanceof AndroidPhotoSendRejection) {
+        callbacks.onError?.(e);
+        throw e;
+      }
       const strategyLabel = effectiveStrategy
         ? (effectiveStrategy as string)
         : '(未设置)';

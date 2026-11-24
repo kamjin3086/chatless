@@ -16,6 +16,8 @@ import { KnowledgeService, KnowledgeBase } from "@/lib/knowledgeService";
 import { cn } from "@/lib/utils";
 import { useTranslation } from '@/i18n/useTranslation';
 import { composerTriggers, type ComposerTrigger } from './composerTriggers';
+import { AndroidAttachmentSheet, AndroidAttachmentSheetContent } from './AndroidAttachmentSheet';
+import type { AndroidAttachmentSelections } from './androidAttachmentSelection';
 import {
   ActionPanel,
   ActionPanelTrigger,
@@ -36,7 +38,13 @@ interface AttachmentMenuProps {
   selectedKnowledgeBase?: KnowledgeBase | null;
   onOpenComposerPanel: (trigger: ComposerTrigger) => void;
   onPickImage: () => void;
-  onPickDocument: () => void;
+  onCapturePhoto?: () => void;
+  photoActionsDisabled?: boolean;
+  /** Android: the batch and folder pickers, with their disclosures, belong to this sheet. */
+  androidAttachments?: AndroidAttachmentSelections;
+  onPickDocument?: () => void;
+  documentLabel?: string;
+  documentDescription?: string;
   onSelectKnowledgeBase: (kb: KnowledgeBase | null) => void;
 }
 
@@ -49,7 +57,12 @@ export function AttachmentMenu({
   selectedKnowledgeBase,
   onOpenComposerPanel,
   onPickImage,
+  onCapturePhoto,
+  photoActionsDisabled,
+  androidAttachments,
   onPickDocument,
+  documentLabel,
+  documentDescription,
   onSelectKnowledgeBase,
 }: AttachmentMenuProps) {
   const t = useTranslation();
@@ -97,6 +110,7 @@ export function AttachmentMenu({
     <>
       <ActionPanelHeader
         title={t('chatAttachment.add')}
+        aria-label={t('chatAttachment.add')}
         icon={<Plus className="w-4 h-4 text-slate-400" />}
       />
 
@@ -118,23 +132,28 @@ export function AttachmentMenu({
           />
         ))}
         <ActionPanelDivider />
-        {/* 图片 - 粉色系 */}
         <ActionPanelItem
           icon={<Image className="w-4 h-4 text-pink-500" />}
           title={t('chatAttachment.uploadImage')}
           description="JPG, PNG, GIF, WebP"
+          disabled={photoActionsDisabled}
           onClick={() => handleAction(onPickImage)}
         />
 
         {/* 文档 - 橙色系 */}
-        <ActionPanelItem
-          icon={<FileText className={cn("w-4 h-4", hasDocument ? "text-amber-500" : "text-amber-400")} />}
-          title={t('chatAttachment.attachDocument')}
-          description={t(hasDocument ? 'chatAttachment.documentAttached' : 'chatAttachment.documentFormats')}
-          disabled={hasDocument}
-          selected={hasDocument}
-          onClick={() => handleAction(onPickDocument)}
-        />
+        {onPickDocument && (
+          <ActionPanelItem
+            icon={<FileText className={cn("w-4 h-4", hasDocument ? "text-amber-500" : "text-amber-400")} />}
+            title={documentLabel ?? t('chatAttachment.attachDocument')}
+            description={
+              documentDescription ??
+              t(hasDocument ? 'chatAttachment.documentAttached' : 'chatAttachment.documentFormats')
+            }
+            disabled={hasDocument}
+            selected={hasDocument}
+            onClick={() => handleAction(onPickDocument)}
+          />
+        )}
 
         <ActionPanelDivider />
 
@@ -235,29 +254,62 @@ export function AttachmentMenu({
     </>
   );
 
+  const trigger = (
+    <Button
+      variant="ghost"
+      size="icon"
+      disabled={disabled}
+      className={cn(
+        "composer-tool h-8 w-8 shrink-0 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
+        hasAnyAttachment
+          ? "glass-chip-ok"
+          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+      )}
+      title={t('chatAttachment.add')}
+      aria-label={t('chatAttachment.add')}
+    >
+      {isParsingDocument ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (
+        <Plus className="w-4 h-4" />
+      )}
+    </Button>
+  );
+
+  // Android gets a bottom sheet of the pickers this build can actually run; the desktop
+  // popover below keeps its entries, chevron view and behaviour untouched.
+  if (androidAttachments) {
+    return (
+      <AndroidAttachmentSheet
+        open={open}
+        onOpenChange={setOpen}
+        trigger={trigger}
+        title={t('androidAttachmentSheet.title')}
+      >
+        <AndroidAttachmentSheetContent
+          selections={androidAttachments}
+          document={
+            onPickDocument
+              ? {
+                  label: documentLabel ?? t('chatAttachment.attachDocument'),
+                  description: documentDescription,
+                  attached: hasDocument,
+                  onPick: onPickDocument,
+                }
+              : undefined
+          }
+          photoActionsDisabled={photoActionsDisabled}
+          onCapturePhoto={onCapturePhoto}
+          onPickPhoto={onPickImage}
+          onAction={handleAction}
+        />
+      </AndroidAttachmentSheet>
+    );
+  }
+
   return (
     <ActionPanel open={open} onOpenChange={setOpen}>
-      <ActionPanelTrigger>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          className={cn(
-            "composer-tool h-8 w-8 shrink-0 rounded-md border-0 bg-transparent shadow-none hover:bg-transparent dark:hover:bg-transparent",
-            hasAnyAttachment
-              ? "glass-chip-ok"
-              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-          )}
-          title={t('chatAttachment.add')}
-          aria-label={t('chatAttachment.add')}
-        >
-          {isParsingDocument ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Plus className="w-4 h-4" />
-          )}
-        </Button>
-      </ActionPanelTrigger>
+      <ActionPanelTrigger>{trigger}</ActionPanelTrigger>
 
       <ActionPanelContent
         width="md"

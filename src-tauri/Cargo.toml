@@ -29,10 +29,9 @@ tauri-plugin-http = { version = "2.4.3", features = ["dangerous-settings", "cook
 tauri-plugin-store = "2"
 tauri-plugin-upload = "2"
 tauri-plugin-dialog = "2"
-tauri-plugin-updater = "2"
 # 使用 rustls (默认)
 # 启用压缩解码以自动处理 gzip/deflate/brotli 响应体
-reqwest = { version = "0.12", features = ["stream", "json", "gzip", "brotli", "deflate"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json", "gzip", "brotli", "deflate"] }
 # 如需切换到 native-tls 以解决 TLS 指纹问题，请使用以下配置：
 # reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls", "stream"] }
 futures-util = "0.3"
@@ -56,7 +55,6 @@ dashmap = "5.5"
 
 
 # —— 嵌入推理相关 ——
-ort = { version = "2.0.0-rc.10", features = [ "load-dynamic" ] }
 tokenizers = { version = "0.19.1", default-features = false, features = ["onig"] }
 ndarray = { version = "0.15", features = ["serde"] }
 ndarray-stats = "0.5.1"
@@ -74,8 +72,6 @@ docx-rust = "0.1.10"
 pulldown-cmark = "0.9.3"
 sha2 = "0.10"
 hex = "0.4"
-# 清理会话工作目录时移入系统回收站（可撤销），不做永久删除。
-trash = "5.2.9"
 jieba-rs = { version = "0.7", default-features = false, features = ["default-dict"] }
 tauri-plugin-log = "2"
 log = "0.4"
@@ -85,17 +81,13 @@ html2text = "0.12"
 epub = "2"
 tauri-plugin-process = "2"
 tauri-plugin-os = "2"
-readability = "0.3.0"
+# Android has no OpenSSL sysroot; this crate's optional reqwest/native-tls fetcher is unused
+# (the reader path only needs the caller-supplied cursor + url).
+readability = { version = "0.3.0", default-features = false }
 kuchiki = "0.8"
 tauri-plugin-shell = "2"
 
-# 仅在Windows平台添加windows依赖
-# The window is transparent so the macOS corners can be rounded in CSS (a
-# borderless window is square). That needs Tauri's private-API feature, which
-# would otherwise change what the Windows/Linux builds compile in, so it is
-# scoped to the macOS target.
 [target.'cfg(target_os = "macos")'.dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
 # Needed to touch NSWindow/NSView/CALayer directly for the window corners; see
 # src/macos_window.rs.
 objc = "0.2"
@@ -106,8 +98,15 @@ objc = "0.2"
 windows = { version = "=0.61.1", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_ProcessStatus"] }
 webview2-com-sys = "=0.37.0"
 
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+[target.'cfg(not(target_os = "android"))'.dependencies]
 tauri-plugin-window-state = "2"
+tauri-plugin-updater = "2"
+ort = { version = "2.0.0-rc.10", features = ["load-dynamic"] }
+# Move discarded session workspaces to the system trash rather than deleting them.
+trash = "5.2.9"
+# Desktop keeps its original native-tls behaviour; Android resolves reqwest with rustls
+# only (base dependency above), so no OpenSSL sysroot is required there.
+reqwest = { version = "0.12", features = ["default-tls"] }
 
 
 [features]

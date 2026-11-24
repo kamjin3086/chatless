@@ -13,6 +13,11 @@ import { getHtmlLang } from "@/i18n";
 import type { TranslationKey } from "@/i18n/types";
 import { useLocaleStore } from "@/store/localeStore";
 import { getModelCapabilities } from "@/lib/provider/staticModels";
+import {
+  getModelCapabilityOverrides,
+  onModelCapabilitiesChanged,
+  setModelCapabilityOverride,
+} from "@/lib/provider/modelCapabilityOverrides";
 import { inferStrategyFromModelId } from "@/lib/provider/strategyInference";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useModelCheckStore } from '@/store/modelCheckStore';
@@ -85,6 +90,29 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
 
   // 控制“模型级 API Key”输入展开/收起
   const [editingModelKey, setEditingModelKey] = useState(false);
+  // 视觉能力覆盖：undefined = 还没读到，null = 跟随自动判断。
+  const [visionOverride, setVisionOverride] = useState<boolean | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      void getModelCapabilityOverrides(providerName, model.name).then((overrides) => {
+        if (alive) setVisionOverride(overrides.vision ?? null);
+      });
+    };
+    load();
+    const unsubscribe = onModelCapabilitiesChanged((detail) => {
+      if (
+        detail.providerName === providerName &&
+        detail.modelId === model.name &&
+        detail.capability === 'vision'
+      )
+        load();
+    });
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, [providerName, model.name]);
   const modelKeyRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     function onDocMouseDown(e: MouseEvent) {
@@ -117,16 +145,35 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
 
         {/* 能力图标 */}
         {(() => {
-          const caps = getModelCapabilities(model.name);
-          const items: Array<{ ok: boolean; Icon: any; title: string }> = [
-            { ok: !!caps.supportsThinking, Icon: Brain, title: t('provider.models.supportsReasoning') },
-            { ok: !!caps.supportsFunctionCalling, Icon: Workflow, title: t('provider.models.supportsTools') },
-            { ok: !!caps.supportsVision, Icon: Camera, title: t('provider.models.supportsVision') },
+          const inferred = getModelCapabilities(model.name);
+          const visionManual = visionOverride !== undefined && visionOverride !== null;
+          const supportsVision = visionManual ? !!visionOverride : !!inferred.supportsVision;
+          const items: Array<{
+            show: boolean;
+            muted?: boolean;
+            Icon: any;
+            title: string;
+          }> = [
+            { show: !!inferred.supportsThinking, Icon: Brain, title: t('provider.models.supportsReasoning') },
+            { show: !!inferred.supportsFunctionCalling, Icon: Workflow, title: t('provider.models.supportsTools') },
+            {
+              // 手动选了「不支持」也亮着、但置灰：不然用户看不出这里被管过。
+              show: supportsVision || visionManual,
+              muted: !supportsVision,
+              Icon: Camera,
+              title: visionManual
+                ? t(supportsVision ? 'provider.models.visionManualOn' : 'provider.models.visionManualOff')
+                : t('provider.models.supportsVision'),
+            },
           ];
           return (
             <span className="inline-flex items-center gap-0.5 text-slate-400">
-              {items.filter(i=>i.ok).map((i, idx) => (
-                <i.Icon key={idx} className="w-3.5 h-3.5" title={i.title} />
+              {items.filter((i) => i.show).map((i, idx) => (
+                <i.Icon
+                  key={idx}
+                  className={`w-3.5 h-3.5${i.muted ? ' opacity-40' : ''}`}
+                  title={i.title}
+                />
               ))}
             </span>
           );
@@ -318,6 +365,33 @@ function ProviderModelItemBase(props: ProviderModelItemProps) {
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             )}
+
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Camera />{t('provider.models.visionMenu')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-52">
+                {/* 名字推断认不出本地服务上的视觉模型，也没法推翻误判，这里让人接手。 */}
+                <DropdownMenuItem
+                  onClick={() => void setModelCapabilityOverride(providerName, model.name, 'vision', null)}
+                >
+                  <span className="flex-1">{t('provider.models.visionFollow')}</span>
+                  {visionOverride === null && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => void setModelCapabilityOverride(providerName, model.name, 'vision', true)}
+                >
+                  <span className="flex-1">{t('provider.models.visionOn')}</span>
+                  {visionOverride === true && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => void setModelCapabilityOverride(providerName, model.name, 'vision', false)}
+                >
+                  <span className="flex-1">{t('provider.models.visionOff')}</span>
+                  {visionOverride === false && <Check className="w-3.5 h-3.5 text-blue-500" />}
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
 
             <DropdownMenuSeparator />
 

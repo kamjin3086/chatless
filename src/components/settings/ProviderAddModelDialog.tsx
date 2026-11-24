@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
+import { mergeManualModels } from "@/lib/provider/manualModelAdd";
 import { useTranslation } from "@/i18n/useTranslation";
 import { inferStrategyFromModelId } from "@/lib/provider/strategyInference";
 import { formatProviderModelCount, translateProviderModelNotification } from "./providerModelPresentation";
@@ -20,6 +22,10 @@ const STRATEGY_OPTIONS: Array<{ value: Exclude<Strategy, 'default' | 'auto'>; la
   { value: 'gemini', label: 'Google Gemini (generateContent)' },
   { value: 'deepseek', label: 'DeepSeek (chat/completions)' },
 ];
+
+// 手机上字段独占一行、输入框吃到 40px 高；sm 以上恢复原来的 32px 密集排版
+const FIELD_CLASS = "w-full h-10 px-3 rounded-md border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800/60 text-sm sm:h-8 sm:px-2.5 sm:text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400/50 transition-colors hover:border-slate-300 dark:hover:border-slate-600";
+const FIELD_LABEL_CLASS = "mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-400 sm:hidden";
 
 export function ProviderAddModelDialog({ providerName, onAdded }: { providerName: string; onAdded?: () => void }) {
   const t = useTranslation();
@@ -42,19 +48,10 @@ export function ProviderAddModelDialog({ providerName, onAdded }: { providerName
     try {
       const { modelRepository } = await import('@/lib/provider/ModelRepository');
       const { specializedStorage } = await import('@/lib/storage');
-      const list = (await modelRepository.get(providerName)) || [];
+      const existing = (await modelRepository.get(providerName)) || [];
 
       // 以覆盖为准：存在则更新 label，不存在则追加
-      const idToIndex = new Map(list.map((m: any, i: number) => [String(m.name).toLowerCase(), i]));
-      for (const r of payload) {
-        const key = r.id.toLowerCase();
-        if (idToIndex.has(key)) {
-          const i = idToIndex.get(key)!;
-          list[i] = { ...list[i], label: r.label || list[i].label };
-        } else {
-          list.push({ provider: providerName, name: r.id, label: r.label || undefined, aliases: [r.id] } as any);
-        }
-      }
+      const list = mergeManualModels(providerName, existing, payload);
 
       await modelRepository.save(providerName, list);
 
@@ -84,13 +81,13 @@ export function ProviderAddModelDialog({ providerName, onAdded }: { providerName
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant="outline" className="h-8 px-3 text-xs rounded-lg">{t('provider.models.add')}</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[720px] border-slate-200/80 dark:border-slate-700/80 shadow-lg">
+      <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-h-none sm:overflow-visible sm:max-w-[720px] border-slate-200/80 dark:border-slate-700/80 shadow-lg">
         <DialogHeader className="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
           <DialogTitle className="text-base font-semibold text-slate-800 dark:text-slate-100">{t('provider.models.addTitle')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          {/* 表头仅显示一次，避免每行重复列名 */}
-          <div className="grid grid-cols-12 gap-2 items-center px-1">
+          {/* 列名仅在宽屏显示一次；手机上每个字段自带标题，窄列会把中文挤成半行 */}
+          <div className="hidden sm:grid grid-cols-12 gap-2 items-center px-1">
             <div className="col-span-4 text-[11px] font-medium text-slate-600 dark:text-slate-400">{t('provider.models.optionalDisplayName')}</div>
             <div className="col-span-4 text-[11px] font-medium text-slate-600 dark:text-slate-400">{t('provider.models.id')}</div>
             <div className="col-span-3 text-[11px] font-medium text-slate-600 dark:text-slate-400">{t('provider.models.requestStrategy')}</div>
@@ -98,26 +95,38 @@ export function ProviderAddModelDialog({ providerName, onAdded }: { providerName
           </div>
 
           {rows.map((row, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-              <div className="col-span-4">
+            <div
+              key={idx}
+              className={cn(
+                "flex flex-col gap-2",
+                idx > 0 && "border-t border-slate-200/60 pt-3 dark:border-slate-700/60",
+                "sm:grid sm:grid-cols-12 sm:items-center sm:gap-2 sm:border-t-0 sm:pt-0"
+              )}
+            >
+              <div className="sm:col-span-4">
+                <label htmlFor={`add-model-label-${idx}`} className={FIELD_LABEL_CLASS}>{t('provider.models.optionalDisplayName')}</label>
                 <input
-                  className="w-full h-8 px-2.5 rounded-md border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800/60 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400/50 transition-colors hover:border-slate-300 dark:hover:border-slate-600"
+                  id={`add-model-label-${idx}`}
+                  className={FIELD_CLASS}
                   aria-label={t('provider.models.optionalDisplayName')}
                   value={row.label}
                   onChange={e=>setRows(prev=> prev.map((r,i)=> i===idx? { ...r, label: e.target.value } : r))}
                   placeholder={t('provider.models.nameExample')} />
               </div>
-              <div className="col-span-4">
+              <div className="sm:col-span-4">
+                <label htmlFor={`add-model-id-${idx}`} className={FIELD_LABEL_CLASS}>{t('provider.models.id')}</label>
                 <input
-                  className="w-full h-8 px-2.5 rounded-md border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800/60 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400/50 transition-colors hover:border-slate-300 dark:hover:border-slate-600"
+                  id={`add-model-id-${idx}`}
+                  className={FIELD_CLASS}
                   aria-label={t('provider.models.id')}
                   value={row.id}
                   onChange={e=>setRows(prev=> prev.map((r,i)=> i===idx? { ...r, id: e.target.value } : r))}
                   placeholder={t('provider.models.idExample')} />
               </div>
-              <div className="col-span-3">
+              <div className="sm:col-span-3">
+                <span className={FIELD_LABEL_CLASS} aria-hidden>{t('provider.models.requestStrategy')}</span>
                 <Select value={row.strategy} onValueChange={(v:any)=>setRows(prev=> prev.map((r,i)=> i===idx? { ...r, strategy: v } : r))}>
-                  <SelectTrigger aria-label={t('provider.models.requestStrategy')} className="h-8 text-[11px] w-full truncate border-slate-200/70 dark:border-slate-700/70">
+                  <SelectTrigger aria-label={t('provider.models.requestStrategy')} className="h-10 w-full truncate text-xs border-slate-200/70 dark:border-slate-700/70 sm:h-8 sm:text-[11px]">
                     <SelectValue placeholder={t('provider.models.followDefault')} className="truncate" />
                   </SelectTrigger>
                   <SelectContent className="max-w-[360px]">
@@ -129,19 +138,21 @@ export function ProviderAddModelDialog({ providerName, onAdded }: { providerName
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-1 flex items-center gap-1 justify-end">
-                <Button type="button" aria-label={t('provider.models.addRow')} variant="outline" className="h-7 w-7 rounded-md p-0" onClick={addRow}>+</Button>
-                <Button type="button" aria-label={t('provider.models.removeRow')} variant="outline" className="h-7 w-7 rounded-md text-slate-500 dark:text-slate-400 border-slate-200/70 dark:border-slate-700/70 p-0 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={()=>removeRow(idx)} disabled={rows.length<=1}>−</Button>
+              <div className="flex items-center justify-end gap-2 sm:col-span-1 sm:gap-1">
+                <Button type="button" aria-label={t('provider.models.addRow')} variant="outline" className="h-9 w-9 rounded-md p-0 sm:h-7 sm:w-7" onClick={addRow}>+</Button>
+                <Button type="button" aria-label={t('provider.models.removeRow')} variant="outline" className="h-9 w-9 rounded-md text-slate-500 dark:text-slate-400 border-slate-200/70 dark:border-slate-700/70 p-0 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors sm:h-7 sm:w-7" onClick={()=>removeRow(idx)} disabled={rows.length<=1}>−</Button>
               </div>
             </div>
           ))}
         </div>
         <DialogFooter className="border-t border-slate-200/60 dark:border-slate-700/60 pt-3 gap-2">
-          <Button variant="outline" className="h-8 px-3 text-xs border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={()=>setOpen(false)} disabled={saving}>{t('common.cancel')}</Button>
-          <Button className="h-8 px-3 text-xs" onClick={submit} disabled={saving || !canSubmit}>{saving ? t('provider.models.saving') : t('provider.models.addOrUpdate')}</Button>
+          {/* 桌面保持原来的描边按钮与「取消 在左、主操作 在右」排列 */}
+          <Button variant="outline" className="hidden h-8 px-3 text-xs border-slate-200/70 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors sm:inline-flex" onClick={()=>setOpen(false)} disabled={saving}>{t('common.cancel')}</Button>
+          {/* 手机：取消退成文字按钮，主操作整宽压在下面（DialogFooter 在窄屏是 column-reverse） */}
+          <Button variant="ghost" className="h-10 w-full text-sm text-slate-600 dark:text-slate-300 sm:hidden" onClick={()=>setOpen(false)} disabled={saving}>{t('common.cancel')}</Button>
+          <Button className="h-11 w-full text-sm sm:h-8 sm:w-auto sm:px-3 sm:text-xs" onClick={submit} disabled={saving || !canSubmit}>{saving ? t('provider.models.saving') : t('provider.models.addOrUpdate')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-

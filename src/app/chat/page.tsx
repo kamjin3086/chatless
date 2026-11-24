@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { useAndroidChatNavigation } from '@/components/chat/androidChatNavigation';
+import { createAndroidPhotoDraftHandoff } from '@/lib/android/androidPhotoDraftHandoff';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { NewMessageIndicator } from '@/components/chat/NewMessageIndicator';
 import { ScrollToBottomButton } from '@/components/chat/ScrollToBottomButton';
@@ -12,6 +14,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { ChatInitializing } from '@/components/chat/ChatInitializing';
 import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
+import { starterLayout } from '@/components/chat/starterLayout';
 import { cn } from '@/lib/utils';
 import { EmptyChatView } from '@/components/chat/EmptyChatView';
 import { ChatMessageList } from '@/components/chat/ChatMessageList';
@@ -37,8 +40,15 @@ interface Conversation {
 }
 
 export default function ChatPage() {
+  const android = Boolean(useAndroidChatNavigation());
+  const [photoHandoff] = useState(createAndroidPhotoDraftHandoff);
   const [isClient, setIsClient] = useState(false);
   const [isInputAreaHovered, setIsInputAreaHovered] = useState(false);
+  // The phone's start panel hands its text to the composer through here.
+  const [starterSeed, setStarterSeed] = useState<{
+    text: string;
+    at: number;
+  } | null>(null);
   const ensureMessagesLoaded = useChatStore(
     (state) => state.ensureMessagesLoaded,
   );
@@ -339,6 +349,7 @@ export default function ChatPage() {
     selectedModelId,
   );
   const canSend = setupState === 'ready';
+  const starter = starterLayout(android, canSend);
 
   if (!isClient) {
     return <ChatInitializing />;
@@ -352,6 +363,8 @@ export default function ChatPage() {
         onModelChange={handleModelChange}
         isLoading={isLoading}
         llmInitialized={llmInitialized}
+        providerName={currentProviderName}
+        androidPhotoHandoff={android ? photoHandoff : undefined}
         onSendMessage={handleSendMessage}
         onStopGeneration={handleStopGeneration}
         selectedKnowledgeBaseId={selectedKnowledgeBaseId || undefined}
@@ -398,14 +411,17 @@ export default function ChatPage() {
               className="absolute inset-0 custom-scrollbar"
               ref={attachScrollContainer}
               onMouseEnter={() => {
-                if (scrollContainerRef.current)
+                if (!android && scrollContainerRef.current)
                   scrollContainerRef.current.style.overflowY = 'auto';
               }}
               onMouseLeave={() => {
-                if (scrollContainerRef.current)
+                if (!android && scrollContainerRef.current)
                   scrollContainerRef.current.style.overflowY = 'hidden';
               }}
-              style={{ overflowY: 'hidden', scrollbarGutter: 'stable' }}
+              style={{
+                overflowY: android ? 'auto' : 'hidden',
+                scrollbarGutter: android ? undefined : 'stable',
+              }}
             >
               {scrollParent && !showStarter && (
                 <ChatMessageList
@@ -457,20 +473,15 @@ export default function ChatPage() {
             </div>
           </div>
           <div
-            className={cn(
-              'bg-transparent',
-              showStarter &&
-                'flex min-h-0 flex-1 flex-col justify-center-safe overflow-y-auto',
-            )}
+            className={cn('bg-transparent', showStarter && starter.column)}
             onMouseEnter={() => setIsInputAreaHovered(true)}
             onMouseLeave={() => setIsInputAreaHovered(false)}
           >
-            <div
-              className={cn('mx-auto w-full', showStarter && 'max-w-3xl py-6')}
-            >
+            <div className={cn('mx-auto w-full', showStarter && starter.block)}>
               {showStarter && (
                 <ChatEmptyState
                   setupState={setupState}
+                  onStarter={(text) => setStarterSeed({ text, at: Date.now() })}
                   modelPicker={{
                     allMetadata,
                     currentModelId: selectedModelId,
@@ -495,6 +506,7 @@ export default function ChatPage() {
                   // 会话参数相关
                   providerName={currentProviderName}
                   modelId={selectedModelId || undefined}
+                  androidPhotoHandoff={android ? photoHandoff : undefined}
                   modelLabel={
                     allMetadata
                       ?.find((p) =>
@@ -505,6 +517,7 @@ export default function ChatPage() {
                   onSessionParametersChange={handleSessionParametersChange}
                   conversationId={currentConversationId}
                   showStarterActions={showStarter}
+                  starterSeed={starterSeed}
                 />
               </div>
             </div>

@@ -1807,6 +1807,91 @@ html.custom-titlebar:not(.glass-ui) .glass-nav {
   height: calc(100vh - var(--titlebar-height)) !important;
 }
 
+html[data-android-runtime] .window-titlebar {
+  display: none;
+}
+
+/*
+ * Touch targets. The desktop sizes are mouse sizes: the same 20-32px controls
+ * under a thumb miss more than they hit. Only the phone build gets the floor;
+ * desktop keeps its compact layout.
+ */
+html[data-android-runtime] .app-topbar button,
+html[data-android-runtime] .composer-tool,
+html[data-android-runtime] [data-composer-send] > button,
+html[data-android-runtime] [data-msg-actions] > button {
+  min-height: 2.75rem;
+}
+
+html[data-android-runtime] .composer-tool,
+html[data-android-runtime] [data-composer-send] > button {
+  width: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html[data-android-runtime] [data-msg-actions] > button {
+  min-width: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The reasoning disclosure is a line of text on desktop; on a phone it needs a row. */
+html[data-android-runtime] [data-reasoning-toggle] {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The model toolbar packs eight controls into one row; on a phone row it overflowed
+ * and clipped 批量, so it wraps now and each control gets a thumb-sized box. */
+html[data-android-runtime] [data-model-tools] > button,
+html[data-android-runtime] [data-model-tools] > div > button {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+}
+
+/* The icon chips in the header are narrow buttons; a thumb needs width too. */
+html[data-android-runtime] .app-topbar button {
+  min-width: 2.5rem;
+}
+
+/*
+ * User-message actions (编辑 / 复制 / 删除) float outside the bubble on desktop hover.
+ * A phone has no hover and no room to the left of the bubble, so on Android the row joins the
+ * message - but only after a tap on that message, and only for one message at a time. Hidden
+ * with `display: none` rather than faded, so a bubble is no taller than the text inside it.
+ */
+html[data-android-runtime] [data-user-msg-tools] {
+  position: static;
+  transform: none;
+  display: none;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+html[data-android-runtime] [data-user-msg-tools][data-open],
+html[data-android-runtime] [data-user-msg-tools]:focus-within {
+  display: flex;
+  opacity: 1;
+}
+
+html[data-android-runtime] [data-user-msg-tools] > button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The attached-document chip is one line tall on desktop; its remove button is a
+ * thumb target on a phone. */
+html[data-android-runtime] [data-doc-chip-remove] {
+  min-height: 2.75rem;
+}
+
 .window-titlebar {
   position: fixed;
   top: 0;

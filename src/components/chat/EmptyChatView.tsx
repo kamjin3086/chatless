@@ -1,6 +1,12 @@
+"use client";
+
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import type { ComponentProps } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
+import { useAndroidChatNavigation } from '@/components/chat/androidChatNavigation';
+import { starterLayout } from '@/components/chat/starterLayout';
+import { cn } from '@/lib/utils';
 import { ProviderMetadata } from '@/lib/metadata/types';
 import { resolveChatSetupState } from '@/lib/chat/resolveChatSetupState';
 
@@ -10,7 +16,9 @@ interface EmptyChatViewProps {
   onModelChange: (modelId: string) => void;
   isLoading: boolean;
   llmInitialized: boolean;
-  onSendMessage: (content: string, documentData?: any, knowledgeBase?: any) => Promise<void>;
+  onSendMessage: ComponentProps<typeof ChatInput>['onSendMessage'];
+  providerName?: string;
+  androidPhotoHandoff?: ComponentProps<typeof ChatInput>['androidPhotoHandoff'];
   onStopGeneration: () => void;
   tokenCount?: number;
   selectedKnowledgeBaseId?: string;
@@ -25,6 +33,8 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
   isLoading,
   llmInitialized,
   onSendMessage,
+  providerName,
+  androidPhotoHandoff,
   onStopGeneration,
   selectedKnowledgeBaseId,
   onImageUpload,
@@ -33,6 +43,7 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
 }) => {
   const setupState = resolveChatSetupState(llmInitialized, allMetadata, selectedModelId);
   const canSend = setupState === 'ready';
+  const starter = starterLayout(Boolean(useAndroidChatNavigation()), canSend);
 
   return (
     <div className="flex flex-col h-full min-w-0 glass-surface">
@@ -50,14 +61,17 @@ export const EmptyChatView: React.FC<EmptyChatViewProps> = ({
         tokenCount={tokenCount}
       />
 
-      <main className="flex min-h-0 flex-1 flex-col justify-center-safe overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl py-6">
+      <main className={starter.column}>
+        <div className={cn('mx-auto w-full', starter.block)}>
           <ChatEmptyState setupState={setupState} modelPicker={{
             allMetadata, currentModelId: selectedModelId, onModelChange, disabled: isLoading,
           }} />
           <div hidden={!canSend}>
             <ChatInput
               onSendMessage={onSendMessage}
+              providerName={providerName}
+              modelId={selectedModelId || undefined}
+              androidPhotoHandoff={androidPhotoHandoff}
               onImageUpload={onImageUpload}
               onFileUpload={onFileUpload}
               isLoading={isLoading}

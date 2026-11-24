@@ -4,7 +4,10 @@ import React, { useMemo } from 'react';
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ContextMenu, createConversationMenuItems } from "@/components/ui/context-menu";
-import { Star } from "lucide-react";
+import { Ellipsis, Star } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { IconButton } from '@/components/ui/icon-button';
+import { useTranslation } from '@/i18n/useTranslation';
 import { formatDistanceToNow } from 'date-fns';
 import { enUS, zhCN } from 'date-fns/locale';
 import { translate } from '@/i18n';
@@ -16,6 +19,7 @@ import type { Conversation } from "@/types/chat";
 interface ConversationItemProps {
   conversation: Conversation;
   locale: Locale;
+  touch?: boolean;
   isCurrent: boolean;
   isRenaming: boolean;
   renameInputValue: string;
@@ -37,6 +41,7 @@ interface ConversationItemProps {
 function ConversationItemImpl({
   conversation,
   locale,
+  touch,
   isCurrent,
   isRenaming,
   renameInputValue,
@@ -73,23 +78,23 @@ function ConversationItemImpl({
       : formattedTime;
   }, [updatedAtTimestamp, locale]);
 
-  return (
-    <ContextMenu
-      menuItems={createConversationMenuItems(
-        locale,
-        conversation.id,
-        (conversation as any).is_favorite,
-        (_id) => onRenameStart({ stopPropagation: () => {} } as React.MouseEvent, conversation),
-        (_id) => onDelete({ stopPropagation: () => {} } as React.MouseEvent, conversation),
-        onStar,
-        onDuplicate,
-        onExport,
-        { text: archiveLabel, action: onArchive },
-      )}
-    >
+  const t = useTranslation();
+  const actions = createConversationMenuItems(
+    locale,
+    conversation.id,
+    (conversation as any).is_favorite,
+    (_id) => onRenameStart({ stopPropagation: () => {} } as React.MouseEvent, conversation),
+    (_id) => onDelete({ stopPropagation: () => {} } as React.MouseEvent, conversation),
+    onStar,
+    onDuplicate,
+    onExport,
+    { text: archiveLabel, action: onArchive },
+  );
+  const row = (
       <li
         className={cn(
-          "group relative flex min-h-9 min-w-0 items-center rounded-md px-2 py-1.5 transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-600 dark:focus-visible:outline-sky-400 motion-reduce:transition-none",
+          "group relative flex min-w-0 items-center rounded-md px-2 py-1.5 transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-600 dark:focus-visible:outline-sky-400 motion-reduce:transition-none",
+          touch ? "min-h-12" : "min-h-9",
           isCurrent
             ? "bg-sky-600/10 text-slate-950 dark:bg-sky-400/12 dark:text-slate-50"
             : "text-slate-800 hover:bg-slate-500/[0.07] dark:text-slate-200 dark:hover:bg-white/[0.07]"
@@ -136,21 +141,38 @@ function ConversationItemImpl({
                 className={cn('min-w-0 flex-1 truncate text-sm leading-5', isCurrent ? 'font-semibold' : 'font-medium')}
                 title={[displayTitle, conversation.model_full_id || conversation.model_id].filter(Boolean).join('\n')}
                 onClick={(e) => onTitleClick(e, conversation)}
-                onDoubleClick={(e) => onRenameStart(e, conversation)}
+                onDoubleClick={touch ? undefined : (e) => onRenameStart(e, conversation)}
               >
                 {displayTitle}
               </div>
               {compactTime && (
-                <span className="pointer-events-none hidden max-w-[50%] shrink-0 truncate text-xs leading-5 text-slate-600 group-hover:block group-focus-visible:block dark:text-slate-300">
+                <span className={cn("pointer-events-none max-w-[50%] shrink-0 truncate text-xs leading-5 text-slate-600 dark:text-slate-300", !touch && "hidden group-hover:block group-focus-visible:block")}>
                   {compactTime}
                 </span>
               )}
             </div>
           )}
         </div>
+        {touch && !isRenaming && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <IconButton icon={Ellipsis} title={t('androidChat.conversationActions')} className="size-12 shrink-0" onClick={(event) => event.stopPropagation()} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+              {actions.filter(({ id }) => id !== 'export' && id !== 'separator-1b').map((action) => (
+                action.separator ? <DropdownMenuSeparator key={action.id} /> : (
+                  <DropdownMenuItem key={action.id} className="min-h-12" disabled={action.enabled === false}
+                    variant={action.id === 'delete' ? 'destructive' : 'default'} onSelect={action.action}>
+                    {action.text}
+                  </DropdownMenuItem>
+                )
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </li>
-    </ContextMenu>
   );
+  return touch ? row : <ContextMenu menuItems={actions}>{row}</ContextMenu>;
 }
 
 // 防止列表滚动时的重复渲染：仅在关键属性变更时更新
@@ -167,6 +189,7 @@ export const ConversationItem = React.memo(ConversationItemImpl, (prev, next) =>
   return (
     sameConv
     && prev.locale === next.locale
+    && prev.touch === next.touch
     && prev.archiveLabel === next.archiveLabel
     && prev.isCurrent === next.isCurrent
     && prev.isRenaming === next.isRenaming

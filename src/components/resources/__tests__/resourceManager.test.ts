@@ -6,11 +6,13 @@ import { ResourceManager } from '../ResourceManager';
 
 const settings = vi.hoisted(() => ({ locale: 'en' as Locale }));
 vi.mock('@/store/localeStore', () => ({
-  useLocaleStore: (select: (state: typeof settings) => Locale) => select(settings),
+  useLocaleStore: (select: (state: typeof settings) => Locale) =>
+    select(settings),
 }));
 vi.mock('@/store/chatStore', () => ({
-  useChatStore: (select: (state: { setCurrentConversation: () => void }) => unknown) =>
-    select({ setCurrentConversation: vi.fn() }),
+  useChatStore: (
+    select: (state: { setCurrentConversation: () => void }) => unknown,
+  ) => select({ setCurrentConversation: vi.fn() }),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/unifiedFileService', () => ({ UnifiedFileService: {} }));
@@ -19,10 +21,14 @@ vi.mock('@/lib/knowledgeService', () => ({ KnowledgeService: {} }));
 
 beforeAll(() => vi.stubGlobal('React', React));
 afterAll(() => vi.unstubAllGlobals());
-afterEach(() => { settings.locale = 'en'; });
+afterEach(() => {
+  settings.locale = 'en';
+});
 
 function render(totalFileCount: number) {
-  return renderToStaticMarkup(createElement(ResourceManager, { totalFileCount }));
+  return renderToStaticMarkup(
+    createElement(ResourceManager, { totalFileCount }),
+  );
 }
 
 it('localizes toolbar, categories and recent-reference empty state without changing sort keys', () => {

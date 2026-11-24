@@ -243,6 +243,13 @@ export function presentToolCard(locale: Locale, params: {
   const tl = tool.toLowerCase();
   const args = params.args || {};
 
+  // ---------- tool_result：大结果的后续分页 ----------
+  // 卡片如果写成 `tool_result · read`，用户看到的是一句内部术语：它读的不是文件，
+  // 是之前某条过长而被截断的工具结果。
+  if (srv === 'tool_result' && tl === 'read') {
+    return { titleLine: t('toolCall.readSavedResult'), kind: 'generic' };
+  }
+
 
   // ---------- skills (旧) / skill (新) ----------
   if (srv === 'skills' || srv === 'skill') {
@@ -444,6 +451,94 @@ export function presentToolCard(locale: Locale, params: {
       return { titleLine: t('toolCall.optimizePrompt'), detailLineLabel: 'ID', detailLineFull: id, detailLineShort: truncate(id, 20), kind: 'generic' };
     }
     return { titleLine: t('toolCall.systemOperation'), detailLineLabel: t('toolCall.detail.tool'), detailLineFull: tool, detailLineShort: truncate(tool, 25), kind: 'generic' };
+  }
+
+  // ---------- Android 手机能力 ----------
+  // 这些工具没有桌面同名物，不映射就会落到 `android_directory · inventory` 这种
+  // 内部名字上，手机上阅读卡片的人看不懂。
+  if (srv === 'android_directory') {
+    if (tl === 'summarize') {
+      return { titleLine: t('toolCall.androidFolderSummarize'), kind: 'path' };
+    }
+    if (tl === 'export') {
+      return { titleLine: t('toolCall.androidFolderExport'), kind: 'path' };
+    }
+    if (tl === 'read_file') {
+      const path = pickArg(args, 'under');
+      return {
+        titleLine: t('toolCall.androidFileRead'),
+        detailLineLabel: path ? t('toolCall.detail.path') : undefined,
+        detailLineFull: path || undefined,
+        detailLineShort: path ? truncate(path, 28) : undefined,
+        kind: 'path',
+      };
+    }
+    if (tl === 'write_file') {
+      const path = pickArg(args, 'under');
+      const mode = pickArg(args, 'mode');
+      return {
+        titleLine:
+          mode === 'append'
+            ? t('toolCall.androidFileAppend')
+            : mode === 'overwrite'
+              ? t('toolCall.androidFileOverwrite')
+              : t('toolCall.androidFileWrite'),
+        detailLineLabel: path ? t('toolCall.detail.path') : undefined,
+        detailLineFull: path || undefined,
+        detailLineShort: path ? truncate(path, 28) : undefined,
+        kind: 'path',
+      };
+    }
+    if (tl === 'rename' || tl === 'move') {
+      const path = pickArg(args, 'under');
+      const target = pickArg(args, 'name') || pickArg(args, 'to');
+      return {
+        titleLine: tl === 'rename' ? t('toolCall.androidFileRename') : t('toolCall.androidFileMove'),
+        detailLineLabel: path ? t('toolCall.detail.path') : undefined,
+        detailLineFull: [path, target].filter(Boolean).join(' → ') || undefined,
+        detailLineShort: path ? truncate([path, target].filter(Boolean).join(' → '), 28) : undefined,
+        kind: 'path',
+      };
+    }
+    const mime = pickArg(args, 'mimeType');
+    return {
+      titleLine: t('toolCall.androidFolderInventory'),
+      detailLineLabel: mime ? t('toolCall.detail.mime') : undefined,
+      detailLineFull: mime || undefined,
+      detailLineShort: mime || undefined,
+      kind: 'path',
+    };
+  }
+  if (srv === 'android_photos') {
+    return { titleLine: t('toolCall.androidPhotoGroups'), kind: 'path' };
+  }
+  if (srv === 'android_document') {
+    if (tl === 'excerpt') {
+      return {
+        titleLine: t('toolCall.androidDocumentExcerpt'),
+        kind: 'path',
+      };
+    }
+    const query = pickArg(args, 'query');
+    return {
+      titleLine: t('toolCall.androidDocumentSearch'),
+      detailLineLabel: t('toolCall.detail.query'),
+      detailLineFull: query,
+      detailLineShort: truncate(query, 25),
+      kind: 'query',
+    };
+  }
+  if (srv === 'android_countdown') {
+    const seconds = typeof args?.durationSeconds === 'number' && args.durationSeconds > 0
+      ? Math.round(args.durationSeconds)
+      : 0;
+    return {
+      titleLine: t('toolCall.androidTimer'),
+      detailLineLabel: seconds ? t('toolCall.detail.duration') : undefined,
+      detailLineFull: seconds ? t('toolCall.duration').replace('{seconds}', String(seconds)) : undefined,
+      detailLineShort: seconds ? t('toolCall.duration').replace('{seconds}', String(seconds)) : undefined,
+      kind: 'generic',
+    };
   }
 
   // ---------- generic fallback ----------

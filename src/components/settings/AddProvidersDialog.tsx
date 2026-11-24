@@ -36,6 +36,7 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
   /** 当为 true 时，仅展示“编辑提供商”对话框，而不渲染外层“添加/管理提供商”对话框 */
   editOnly?: boolean;
+  compact?: boolean;
 };
 
 // 统一的小图标：优先 png → svg；利用预加载的命中映射/失败清单，避免重复 404
@@ -88,7 +89,7 @@ function ProviderIcon({ id, name, size = 18, src }: { id?: string; name: string;
 }
 
 
-export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, onOpenChange, editOnly }: Props) {
+export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, onOpenChange, editOnly, compact }: Props) {
   const locale = useLocaleStore((state) => state.locale);
   const t = (key: TranslationKey) => translate(locale, key);
   const translateNotification = (key: TranslationKey) => translate(useLocaleStore.getState().locale, key);
@@ -451,7 +452,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-[92vw] w-[92vw] sm:w-auto sm:max-w-xl box-border p-4 sm:p-5 overflow-hidden max-h-[85vh]">
+      <DialogContent className={`max-w-[92vw] w-[92vw] sm:w-auto sm:max-w-xl box-border p-4 sm:p-5 ${compact ? 'max-h-[calc(100dvh-1rem)] overflow-y-auto' : 'overflow-hidden max-h-[85vh]'}`}>
         <DialogHeader>
           <DialogTitle className="text-[15px] font-medium text-slate-700 dark:text-slate-200">{t('provider.chooser.title')}</DialogTitle>
         </DialogHeader>
@@ -577,7 +578,7 @@ export function AddProvidersDialog({ trigger, editProvider, open: externalOpen, 
         {/* 二级弹窗：新增/编辑自定义 Provider */}
         {customModalOpen && (
           <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={compact ? "w-[92vw] max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-md" : "sm:max-w-md"}>
               <DialogHeader>
               <DialogTitle>{isEditMode ? t('provider.chooser.editCustom') : t('provider.chooser.addCustom')}</DialogTitle>
               </DialogHeader>
