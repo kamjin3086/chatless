@@ -48,12 +48,6 @@ export const SKILL_LIST_TOOL: McpTool = {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search keywords' },
-        mode: {
-          type: 'string',
-          enum: ['task', 'admin'],
-          description: 'task = match to a task | admin = administration',
-        },
-        enabledOnly: { type: 'boolean', description: 'Enabled skills only (default true)' },
         limit: { type: 'number', description: 'Maximum entries (default 30)' },
       },
       required: [],
@@ -223,6 +217,18 @@ export const SKILL_CHECK_DEPS_TOOL: McpTool = {
 };
 
 // ============ 导出 ============
+
+/**
+ * 使用面（只读）：模型只要想知道/读一个 skill，这四个就够了。
+ * 技能索引出现时这四个工具会一起进入工具列表——索引让模型去读 `skill__guide`，
+ * 那个工具就必须真在请求里，否则就是一行指向幽灵工具的指示。
+ */
+export const SKILL_USAGE_TOOLS: McpTool[] = [
+  SKILL_LIST_TOOL,
+  SKILL_GUIDE_TOOL,
+  SKILL_LIST_RESOURCES_TOOL,
+  SKILL_GET_TEMPLATE_TOOL,
+];
 
 export const SKILL_UNIFIED_TOOLS: McpTool[] = [
   // 使用类（只读）

@@ -254,8 +254,10 @@ export interface SkillIndexEntry {
   id: string;
   /** 显示名称 */
   name: string;
-  /** 简短描述（截断至 200 字符） */
+  /** 简短描述（给索引用时截到 SKILL_DESCRIPTION_MAX_CHARS） */
   description: string;
+  /** 谁能触发（缺席 = 默认两者都可） */
+  invocation?: SkillInvocationPolicy;
   /** SKILL.md 总行数（用于按行范围读取） */
   lineCount?: number;
   /** Trigger keywords (keyword matching was deleted; parsing keeps them for now). */

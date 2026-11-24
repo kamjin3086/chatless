@@ -28,6 +28,9 @@ import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
 import { getGlobalEnabledServers, getAllConfiguredServers, getEnabledConfiguredServers } from '../chatIntegration';
 import { resolveToolTrack, shouldUseNativeToolCalls, getToolCallStrategy } from '@/lib/llm/types/tool-capability';
+import { getSkillManager } from '@/lib/skills';
+import { skillIndexBlocks } from '@/lib/skills/skillIndex';
+import { SKILL_SERVER_NAME, SKILL_USAGE_TOOLS } from '@/lib/mcp/nativeTools/skillUnifiedTools';
 import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 import { getRuntimePlatform, getShellGuidance } from '@/lib/utils/runtimePlatform';
 import { buildAgentContractBlock } from '@/lib/mcp/prompt/agentContract';
@@ -230,10 +233,15 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   const shouldExposeWebSearch =
     !!signals.webSearchEnabled;
 
+  // Skills: 一次 run 只读一次。工具列表与索引必须同源，否则会出现「索引让模型
+  // 去调一个不在请求里的工具」——那就是技能索引被关掉期间一直 latent 的那个幽灵。
+  const skillIndexView = await getSkillManager().buildSkillIndexView();
+
   // 构建原生工具定义（用于 native tool API 或文本注入）
   const nativeTools: InjectionResult['nativeTools'] = await buildNativeToolDefinitions({
     servers: enabled,
     includeWebSearch: shouldExposeWebSearch,
+    includeSkillUsageTools: !!skillIndexView.availabilityLine,
     userContent: context.userContent || '',
     conversationId: context.conversationId,
   });
@@ -320,6 +328,10 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
   if (shouldExposeWebSearch) {
     blocks.push({ id: 'web-search-policy', layer: 'conversation', order: 70, content: MCPPrompts.webSearchPolicy });
   }
+
+  // 8. 技能索引（skill index）：常驻行与清单分成两个 block，由 `skillIndexBlocks`
+  // 决定形状（那里能脱开 Tauri 被直接测）。
+  blocks.push(...skillIndexBlocks(skillIndexView));
   
 
   // Plan-only is a per-turn instruction: the user can toggle it between turns.
@@ -371,12 +383,16 @@ async function injectTimeContext(
  * 2. 发现层：tools__search 分页返回完整能力目录
  * 3. 会话层：搜索匹配的能力组在下一模型步生效
  */
-async function buildNativeToolDefinitions(params: {
+interface NativeToolBuildOptions {
   servers: string[];
   includeWebSearch: boolean;
+  /** 有 skill 可用时，索引指向的那四个只读工具得真在请求里。 */
+  includeSkillUsageTools?: boolean;
   userContent?: string;
   conversationId?: string;
-}): Promise<NativeToolDefinition[]> {
+}
+
+async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promise<NativeToolDefinition[]> {
   const tools: NativeToolDefinition[] = [];
 
   const normalizeParams = (p: any): { type: 'object'; properties: Record<string, unknown>; required: string[] } => {
@@ -395,9 +411,10 @@ async function buildNativeToolDefinitions(params: {
   // 记录已加载文档的服务器，避免重复注入相同文档
   const loadedDocServers = new Set<string>();
   
-  const addToolsFromGroup = async (groupId: ToolGroupId) => {
-    const groupTools = getToolsForGroup(groupId);
-    for (const { server, tool } of groupTools) {
+  type ToolEntry = { server: string; tool: { name: string; description?: string | null } };
+
+  const addToolEntries = async (entries: ToolEntry[]) => {
+    for (const { server, tool } of entries) {
       const fullName = `${server}__${tool.name}`;
       
       // 同一服务器的工具只在第一个工具中注入完整文档
@@ -415,6 +432,10 @@ async function buildNativeToolDefinitions(params: {
     }
   };
 
+  const addToolsFromGroup = async (groupId: ToolGroupId) => {
+    await addToolEntries(getToolsForGroup(groupId));
+  };
+
   // ========== 1. 核心层：始终加载 ==========
   
   // 1.1 核心文件工具（read, write, ls）
@@ -423,6 +444,12 @@ async function buildNativeToolDefinitions(params: {
   if (!params.includeWebSearch) {
     tools.splice(coreToolStart, tools.length - coreToolStart,
       ...tools.slice(coreToolStart).filter((tool) => !tool.name.startsWith(`${WEB_SEARCH_SERVER_NAME}__`)));
+  }
+
+  // 1.1b 只要索引要出现，它指向的那四个只读工具就必须真在请求里：一行「先去
+  // skill__guide」指着一个不存在的工具，比不给索引更坑。管理工具仍走 tools__load。
+  if (params.includeSkillUsageTools) {
+    await addToolEntries(SKILL_USAGE_TOOLS.map((tool) => ({ server: SKILL_SERVER_NAME, tool })));
   }
   
   // 1.2 能力搜索工具（不预加载管理类工具）

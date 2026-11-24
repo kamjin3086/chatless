@@ -13,7 +13,6 @@ import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 import { SKILL_SERVER_NAME } from '@/lib/mcp/nativeTools/skillUnifiedTools';
 import { getSkillManager } from '@/lib/skills/SkillManager';
-import { useSkillStore } from '@/store/skillStore';
 import { parseSkillMd } from '@/lib/skills/SkillMdParser';
 import {
   listSkillResources,
@@ -77,80 +76,36 @@ export class SkillUnifiedAdapter implements ToolAdapter {
   // 列表和查询
   // ========================================
 
-  private listSkills(args: Record<string, unknown>): unknown {
-    const store = useSkillStore.getState();
+  private async listSkills(args: Record<string, unknown>): Promise<unknown> {
+    // 只问 manager：它是磁盘与启用态的 provider，store 只是它写给 UI 的视图缓存。
+    // 从 store 直接读，模型看见的就是「上一次界面刷新时」的世界，而不是盘上的事实。
     const manager = getSkillManager();
-    const mode = String(args.mode || 'task');
-    const enabledOnly = args.enabledOnly !== false; // 默认 true
+    await manager.initialize();
     const query = String(args.query || '').trim().toLowerCase();
     const limit = Math.min(Math.max(Number(args.limit) || 30, 1), 200);
 
-    let skills = [...store.skills];
-
-    // 仅已启用
-    if (enabledOnly) {
-      skills = skills.filter((s) => s.enabled);
-    }
-
-    // 搜索过滤
+    let entries = manager.getSkillIndex();
     if (query) {
-      skills = skills.filter((s) => {
-        const name = (s.name || '').toLowerCase();
-        const desc = (s.description || '').toLowerCase();
-        const tags = (s.tags || []).join(' ').toLowerCase();
-        return name.includes(query) || desc.includes(query) || tags.includes(query);
+      entries = entries.filter((entry) => {
+        const haystack = `${entry.name} ${entry.id} ${entry.description} ${entry.category || ''}`.toLowerCase();
+        return haystack.includes(query);
       });
     }
 
-    skills = skills.slice(0, limit);
+    const total = entries.length;
+    const shown = entries.slice(0, limit);
 
-    if (mode === 'admin') {
-      // 管理模式：返回完整元数据
-      return {
-        total: skills.length,
-        mode: 'admin',
-        skills: skills.map((s) => ({
-          id: s.id,
-          name: s.name,
-          description: (s.description || '').slice(0, 200),
-          version: s.version,
-          author: s.author,
-          status: s.status,
-          source: s.source,
-          enabled: s.enabled,
-          category: s.category,
-          tags: s.tags,
-          repoUrl: s.repoUrl,
-          installedAt: s.installedAt,
-        })),
-      };
-    }
-
-    // 任务模式：返回简要列表 + 触发词
-    const skillIndex = manager.getSkillIndex();
     return {
-      total: skills.length,
-      mode: 'task',
-      skills: skills.map((s) => {
-        const index = skillIndex.find((i) => i.id === s.id);
-        return {
-          id: s.id,
-          name: s.name,
-          description: (s.description || '').slice(0, 100),
-          triggers: index?.triggers || [],
-        };
-      }),
-      // 注意：nextStep 和 toolsReminder 会被 stripInternalFields 过滤，仅 warning 会保留
-      nextStep:
-        skills.length > 0
-          ? '调用 skill__guide 获取操作指南'
-          : '未找到匹配技能。请直接组合 shell/fs/web 等工具完成任务。',
+      total,
+      skills: shown.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        description: (entry.description || '').slice(0, 200),
+      })),
       warning:
-        skills.length > 0
-          ? '此列表仅含名称。调用 skill__guide 获取完整操作指南后再执行。'
-          : undefined,
-      toolsReminder:
-        '调用 skill__guide 获取操作指南，指南包含所有所需信息，无需再读取其他文件。',
+        shown.length > 0
+          ? 'These are names only. Call skill__guide with an id before acting on a skill.'
+          : 'No enabled skill matches. Compose the ordinary tools (fs__*, shell__run, web__*) instead.',
     };
   }
 
@@ -168,8 +123,7 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       skill = await manager.getSkill(id);
     }
     if (!skill && name) {
-      const store = useSkillStore.getState();
-      const found = store.skills.find((s) => (s.name || '').toLowerCase() === name);
+      const found = manager.getEnabledSkills().find((s) => (s.name || '').toLowerCase() === name);
       if (found) {
         skill = await manager.getSkill(found.id);
       }
@@ -221,12 +175,12 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       }
     }
 
-    // 执行指南：告诉 AI 如何按照 SKILL.md 完成任务
+    // 执行指南：告诉模型如何按 SKILL.md 把活干完
     result.howToUse = {
-      step1: '阅读 content 中的操作指南',
-      step2: '如需 skill 包内的模板/示例，用 skill__list_resources 查看，skill__get_template 读取',
-      step3: '使用 shell__run、fs__write（配合 @WorkDir）等工具执行任务',
-      important: '用户文件必须用 fs__write 写入 @WorkDir，不要写入 skill 包',
+      step1: 'Follow the guide in content.',
+      step2: 'If it points at files inside the package, list them with skill__list_resources and read one with skill__get_template.',
+      step3: 'Do the work with the ordinary tools: shell__run, and fs__write under @WorkDir.',
+      important: 'Task output goes to @WorkDir with fs__write, never into the skill package.',
     };
 
     return result;
@@ -291,7 +245,7 @@ export class SkillUnifiedAdapter implements ToolAdapter {
   // 启用和禁用
   // ========================================
 
-  private enableSkill(args: Record<string, unknown>): unknown {
+  private async enableSkill(args: Record<string, unknown>): Promise<unknown> {
     const manager = getSkillManager();
     const id = String(args.id || '').trim();
 
@@ -299,8 +253,7 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       return { error: 'id is required' };
     }
 
-    const store = useSkillStore.getState();
-    const skill = store.skills.find((s) => s.id === id);
+    const skill = await manager.getSkill(id);
     if (!skill) {
       return { error: 'Skill not found', id };
     }
@@ -309,7 +262,7 @@ export class SkillUnifiedAdapter implements ToolAdapter {
     return { success: true, id, message: `Skill "${skill.name}" enabled` };
   }
 
-  private disableSkill(args: Record<string, unknown>): unknown {
+  private async disableSkill(args: Record<string, unknown>): Promise<unknown> {
     const manager = getSkillManager();
     const id = String(args.id || '').trim();
 
@@ -317,8 +270,7 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       return { error: 'id is required' };
     }
 
-    const store = useSkillStore.getState();
-    const skill = store.skills.find((s) => s.id === id);
+    const skill = await manager.getSkill(id);
     if (!skill) {
       return { error: 'Skill not found', id };
     }
@@ -339,8 +291,7 @@ export class SkillUnifiedAdapter implements ToolAdapter {
       return { error: 'id is required' };
     }
 
-    const store = useSkillStore.getState();
-    const skill = store.skills.find((s) => s.id === id);
+    const skill = await manager.getSkill(id);
     if (!skill) {
       return { error: 'Skill not found', id };
     }

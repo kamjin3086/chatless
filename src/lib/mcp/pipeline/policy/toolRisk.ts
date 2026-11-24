@@ -57,13 +57,15 @@ const FS_RISK: Record<string, ToolRisk> = {
  *
  * `skill` 那一行不含 `use` / `get` / `read_file` / `list_files` / `write_file`：那些
  * 是旧工具名的兼容别名，adapter 已不再路由它们，表里留着就是给无法路由的名字放行。
+ * `list_resources` 与 `get_template` 是登记上去的：它们只读 skill 包内的文件，而
+ * 索引现在真的会让模型去调它们——计划模式里读一个指南指名的文件应当是允许的。
  */
 const READ_TOOLS: Record<string, string[]> = {
   knowledge: ['list', 'search', 'read'],
   web_search: ['search', 'fetch'],
   tools: ['search'],
   tool_result: ['read'],
-  skill: ['list', 'guide', 'check_deps'],
+  skill: ['list', 'guide', 'list_resources', 'get_template', 'check_deps'],
   system: ['list_prompts', 'get_prompt'],
 };
 
