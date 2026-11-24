@@ -9,7 +9,10 @@ export type AndroidChatView =
 
 function previousView(view: AndroidChatView): AndroidChatView {
   if (view.surface === 'models') return { surface: view.from };
-  if (view.surface === 'chat') return { surface: 'conversations' };
+  // The list is a drawer over the chat now, so back puts the drawer away instead of treating the
+  // chat as a page to flee; from the chat itself there is nothing left to close, and the system
+  // keeps the key.
+  if (view.surface === 'conversations') return { surface: 'chat' };
   return view;
 }
 

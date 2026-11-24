@@ -45,10 +45,12 @@ describe('Android chat Back after the native IME is dismissed', () => {
     expect(next).toEqual({ surface: 'chat' });
   });
 
-  it('returns from chat to the conversation list when no panel consumes Back', () => {
+  it('leaves Back to Android from the chat, where nothing is open', () => {
+    // The list is a drawer, not the page behind the chat: with the drawer closed the chat is the
+    // bottom of the stack, and Android keeps the key.
     expect(pressBack({ surface: 'chat' })).toMatchObject({
-      handled: true,
-      next: { surface: 'conversations' },
+      handled: false,
+      next: { surface: 'chat' },
     });
   });
 
@@ -64,10 +66,10 @@ describe('Android chat Back after the native IME is dismissed', () => {
     },
   );
 
-  it('leaves Back to Android when already at the conversation list', () => {
+  it('closes the conversation drawer before Android gets Back', () => {
     expect(pressBack({ surface: 'conversations' })).toMatchObject({
-      handled: false,
-      next: { surface: 'conversations' },
+      handled: true,
+      next: { surface: 'chat' },
     });
   });
 });

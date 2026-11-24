@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import {
-  ArrowLeft,
   Ellipsis,
   FolderOpen,
   MessageSquarePlus,
@@ -164,8 +163,9 @@ export function ChatHeader({
         >
           {androidNavigation ? (
             <IconButton
-              icon={ArrowLeft}
-              title={t('androidChat.conversations')}
+              icon={PanelLeft}
+              title={t('chatSidebar.toggle')}
+              aria-label={t('chatSidebar.toggle')}
               className="size-11 shrink-0"
               onClick={androidNavigation.showConversations}
             />

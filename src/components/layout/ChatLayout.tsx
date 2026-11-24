@@ -319,17 +319,43 @@ export function ChatLayout({ children }: ChatLayoutProps) {
     try { window.localStorage.setItem(SIDEBAR_PX_KEY, String(DEFAULT_SIDEBAR_WIDTH)); } catch { /* noop */ }
   }, []);
 
+  // On a phone the conversation list is a drawer over the chat, not a page that replaces it:
+  // the conversation you were reading stays behind it, so the list is context rather than a trip
+  // to another screen.
+  const drawerOpen = android && view.surface === 'conversations';
+
   return (
     <AndroidChatNavigationContext.Provider value={android ? { showConversations, openModelSettings } : null}>
       <SidebarContext.Provider value={{ isSidebarOpen, toggleSidebar, newConversation: handleNewChat }}>
       <div className="flex min-h-0 h-full relative">
+        {/* Tap the chat again to put the drawer away. */}
+        {android && (
+          <button
+            type="button"
+            aria-label={t('chatSidebar.toggle')}
+            tabIndex={drawerOpen ? 0 : -1}
+            onClick={showChat}
+            className={cn(
+              // Above the chat's own layers (its header carries a translucent panel of its own),
+              // below the drawer and below any dialog opened from inside it.
+              'absolute inset-0 z-[45] bg-slate-900/45 transition-opacity duration-300 ease-out',
+              drawerOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+          />
+        )}
         {/* 左侧会话列表侧边栏 */}
         <aside
           style={android ? undefined : { width: isSidebarOpen ? sidebarWidth : 0 }}
+          aria-hidden={android ? !drawerOpen : undefined}
+          inert={android && !drawerOpen}
           className={cn(
             "chat-rail bg-white dark:bg-slate-900 flex flex-col min-h-0 flex-shrink-0 glass-surface",
             android
-              ? (view.surface === 'conversations' ? 'w-full' : 'hidden')
+              ? cn(
+                  'absolute inset-y-0 left-0 z-[50] w-[min(78%,20rem)] border-r border-slate-200/60 shadow-[1.25rem_0_2.5rem_-1rem_rgba(15,23,42,0.5)] dark:border-white/10',
+                  'transition-[transform,visibility] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                  drawerOpen ? 'translate-x-0 visible' : 'invisible -translate-x-full',
+                )
               : cn(
                   mounted ? 'transition-all duration-300' : 'transition-none',
                   isSidebarOpen
@@ -485,7 +511,15 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         )}
 
         {/* Keep chat mounted across Android surfaces so local composer state is not reset. */}
-        <main className={cn("flex-1 flex-col min-h-0 min-w-0 glass-surface", android && view.surface !== 'chat' ? "hidden" : "flex")}>
+        <main
+          className={cn(
+            "flex-1 flex-col min-h-0 min-w-0 glass-surface",
+            android && view.surface === 'models' ? "hidden" : "flex",
+            // The drawer is over the chat: the chat stops taking taps until it is put away, so a
+            // stray tap cannot answer a message that is already behind a panel.
+            drawerOpen && 'pointer-events-none',
+          )}
+        >
           {/* 聊天内容区域 - 使用flex-1和min-h-0确保正确滚动 */}
           <div className="flex-1 min-h-0 overflow-auto">
             {/* Keep the conversation list outside this boundary: a chat-page failure
