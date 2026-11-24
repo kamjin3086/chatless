@@ -58,11 +58,23 @@ const omission = {
   handle: 'opaque-locked',
   name: 'Locked',
 };
+const totals = {
+  scanned: 3,
+  matched: 3,
+  files: 2,
+  directories: 0,
+  bytes: 1600,
+  unknownMetadata: 1,
+  stopped: '',
+  elapsedMs: 12,
+};
 const snapshot = {
   status: 'ready',
   folder,
   entries: [image, unknownSize, text],
   omissions: [omission],
+  totals,
+  groups: [],
 };
 const selectedChat = 'with-directory';
 let turn = 0;
@@ -164,21 +176,35 @@ describe('Android directory tool scope', () => {
         description: expect.stringMatching(/proposal.*omissions/i),
       }),
     );
-    expect(await search(selectedChat)).toMatchObject({
-      results: [
-        { server: 'android_directory', name: 'inventory', source: 'builtin' },
-      ],
-    });
+    expect(
+      ((await search(selectedChat)) as { results: unknown }).results,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          server: 'android_directory',
+          name: 'inventory',
+        }),
+        expect.objectContaining({
+          server: 'android_directory',
+          name: 'summarize',
+        }),
+        expect.objectContaining({
+          server: 'android_directory',
+          name: 'export',
+        }),
+      ]),
+    );
     // Authorized folders belong to the app: another conversation reads them without picking
     // again, which is the whole point of #227/#228.
     expect((await buildCatalog('other')).nativeTools).toContainEqual(
       expect.objectContaining({ name: 'android_directory__inventory' }),
     );
-    expect(await search('other')).toMatchObject({
-      results: [
-        { server: 'android_directory', name: 'inventory', source: 'builtin' },
-      ],
-    });
+    expect(((await search('other')) as { results: unknown }).results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'inventory' }),
+        expect.objectContaining({ name: 'summarize' }),
+      ]),
+    );
     mocks.platform.mockReturnValue('linux');
     mocks.invoke.mockClear();
     expect(await search(selectedChat)).toMatchObject({ results: [] });
@@ -186,7 +212,19 @@ describe('Android directory tool scope', () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
-  it('filters and groups only metadata from the conversation selection and reports omissions in plan mode', async () => {
+  it('sends the filters down and answers with what the device read', async () => {
+    // Filtering belongs to the walk: a folder of thousands filtered after a row cap answers
+    // "none" for matches sitting past the cap. TypeScript no longer filters anything itself.
+    mocks.invoke.mockResolvedValue({
+      status: 'ready',
+      folder,
+      entries: [image],
+      omissions: [omission],
+      groups: [
+        { label: 'image/png', count: 1, bytes: 800, samples: ['holiday.png'] },
+      ],
+      totals: { ...totals, scanned: 4000, matched: 1, files: 4000 },
+    });
     expect(
       await run({
         args: { mimeType: 'image/', minBytes: 100, groupBy: 'type' },
@@ -195,49 +233,155 @@ describe('Android directory tool scope', () => {
     ).toMatchObject({
       ok: true,
       folder,
-      entries: [image],
-      groups: [{ label: 'image/png', handles: [image.handle] }],
+      entries: [{ handle: image.handle }],
+      groups: [{ label: 'image/png', count: 1 }],
       omissions: [omission],
-      excludedForUnknownMetadata: [
-        expect.objectContaining({
-          handle: unknownSize.handle,
-          name: unknownSize.name,
-        }),
-      ],
+      totals: { scanned: 4000, matched: 1 },
     });
-    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
+    expect(mocks.invoke).toHaveBeenCalledWith(
       'inventory_android_directory',
-      { conversationId: selectedChat, root: null, under: null },
+      expect.objectContaining({
+        conversationId: selectedChat,
+        root: null,
+        under: null,
+        mimeType: 'image/',
+        minBytes: 100,
+        groupBy: 'type',
+        limit: 200,
+        offset: 0,
+      }),
     );
     expect(mocks.ask).not.toHaveBeenCalled();
   });
 
-  it('groups by size band or UTC month without mislabeling missing metadata', async () => {
-    const missing = { ...unknownSize, modifiedAt: null };
-    const newer = {
-      ...text,
-      sizeBytes: 10 * 1024 * 1024,
-      modifiedAt: Date.UTC(2026, 1, 1),
-    };
+  it('pages with the arguments it was given and says when a page is not the folder', async () => {
     mocks.invoke.mockResolvedValue({
       ...snapshot,
-      entries: [image, missing, newer],
+      totals: { ...totals, stopped: 'limit', matched: 200 },
     });
-    expect(await run({ args: { groupBy: 'size' } })).toMatchObject({
+    const result = await run({ args: { limit: 200, offset: 200 } });
+    expect(result).toMatchObject({ totals: { stopped: 'limit' } });
+    expect(String((result as { hint?: string }).hint)).toContain('offset');
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'inventory_android_directory',
+      expect.objectContaining({ limit: 200, offset: 200 }),
+    );
+  });
+
+  it('answers a folder as counts when the chat asks for its shape', async () => {
+    mocks.invoke.mockResolvedValue({
+      status: 'ready',
+      folder,
+      entries: [],
+      omissions: [],
       groups: [
-        { label: 'Under 1 MiB', handles: [image.handle] },
-        { label: 'Unknown size', handles: [missing.handle] },
-        { label: '10 MiB or more', handles: [newer.handle] },
+        {
+          label: 'jpg file',
+          count: 2312,
+          bytes: 1_200_000_000,
+          samples: ['IMG_1.jpg'],
+        },
+        {
+          label: 'png file',
+          count: 1804,
+          bytes: 900_000_000,
+          samples: ['截图.png'],
+        },
       ],
+      largest: [
+        {
+          handle: image.handle,
+          path: '录像/旅行.mp4',
+          sizeBytes: 800,
+          modifiedAt: 1,
+        },
+      ],
+      newest: [
+        {
+          handle: image.handle,
+          path: '报告.docx',
+          sizeBytes: 800,
+          modifiedAt: 2,
+        },
+      ],
+      oldest: [],
+      totals: {
+        scanned: 5100,
+        matched: 5000,
+        files: 5000,
+        directories: 100,
+        bytes: 2_100_000_000,
+        unknownMetadata: 0,
+        stopped: '',
+        elapsedMs: 900,
+      },
+    });
+    const summary = await run({ tool: 'summarize' });
+    expect(summary).toMatchObject({
+      ok: true,
+      groups: [
+        { label: 'jpg file', count: 2312, bytes: 1_200_000_000 },
+        { label: 'png file', count: 1804 },
+      ],
+      totals: { files: 5000, directories: 100, stopped: '' },
+      newest: [{ path: '报告.docx' }],
+      folders: [{ name: 'Inbox' }],
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'summarize_android_directory',
+      expect.objectContaining({ conversationId: selectedChat, groupBy: null }),
+    );
+  });
+
+  it('writes a listing out instead of reciting it into the chat', async () => {
+    // A new file in Downloads is a create, so it goes through approval like one.
+    mocks.ask.mockResolvedValue({
+      approved: true,
+      decision: 'once',
+      revision: 0,
+    });
+    mocks.invoke.mockResolvedValue({
+      status: 'saved',
+      name: '文件清单-20261124-1310.md',
+      uri: 'content://media/external/downloads/7',
+      count: 5000,
+      bytes: 2_100_000_000,
+      format: 'md',
+      columns: ['path', 'size', 'date'],
+      stopped: '',
     });
     expect(
-      await run({ args: { groupBy: 'date', modifiedFrom: newer.modifiedAt } }),
+      await run({ tool: 'export', args: { title: '文件清单' } }),
     ).toMatchObject({
-      groups: [{ label: '2026-02', handles: [newer.handle] }],
-      filteredOut: 1,
-      excludedForUnknownMetadata: [
-        expect.objectContaining({ handle: missing.handle }),
-      ],
+      ok: true,
+      written: true,
+      file: '文件清单-20261124-1310.md',
+      count: 5000,
+      format: 'md',
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'export_android_directory',
+      expect.objectContaining({
+        title: '文件清单',
+        format: 'md',
+        columns: null,
+      }),
+    );
+  });
+
+  it('says nothing was written when nothing matched, instead of failing at the model', async () => {
+    mocks.ask.mockResolvedValue({
+      approved: true,
+      decision: 'once',
+      revision: 0,
+    });
+    mocks.invoke.mockResolvedValue({ status: 'empty' });
+    expect(
+      await run({ tool: 'export', args: { nameContains: 'xyz' } }),
+    ).toMatchObject({
+      ok: true,
+      empty: true,
+      written: false,
     });
   });
 

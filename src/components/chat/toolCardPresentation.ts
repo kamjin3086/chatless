@@ -457,6 +457,12 @@ export function presentToolCard(locale: Locale, params: {
   // 这些工具没有桌面同名物，不映射就会落到 `android_directory · inventory` 这种
   // 内部名字上，手机上阅读卡片的人看不懂。
   if (srv === 'android_directory') {
+    if (tl === 'summarize') {
+      return { titleLine: t('toolCall.androidFolderSummarize'), kind: 'path' };
+    }
+    if (tl === 'export') {
+      return { titleLine: t('toolCall.androidFolderExport'), kind: 'path' };
+    }
     const mime = pickArg(args, 'mimeType');
     return {
       titleLine: t('toolCall.androidFolderInventory'),

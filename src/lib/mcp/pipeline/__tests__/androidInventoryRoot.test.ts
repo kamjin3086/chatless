@@ -58,21 +58,27 @@ describe('the folder name a model passes', () => {
   it('sends no filter when the model had no name to give', async () => {
     invoke.mockResolvedValue(authorized);
     expect(await call({ root: '' })).toBeTruthy();
-    expect(invoke).toHaveBeenCalledWith('inventory_android_directory', {
-      conversationId: 'chat-a',
-      root: null,
-      under: null,
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      'inventory_android_directory',
+      expect.objectContaining({
+        conversationId: 'chat-a',
+        root: null,
+        under: null,
+      }),
+    );
   });
 
   it('sends the cleaned name when there is one', async () => {
     invoke.mockResolvedValue(authorized);
     await call({ root: '“整理测试”' });
-    expect(invoke).toHaveBeenCalledWith('inventory_android_directory', {
-      conversationId: 'chat-a',
-      root: '整理测试',
-      under: null,
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      'inventory_android_directory',
+      expect.objectContaining({
+        conversationId: 'chat-a',
+        root: '整理测试',
+        under: null,
+      }),
+    );
   });
 
   it('answers a name that matches nothing with the names that do exist', async () => {
@@ -109,11 +115,14 @@ describe('naming one subfolder of an authorized folder', () => {
   it('carries the path down to the command', async () => {
     invoke.mockResolvedValue(authorized);
     await call({ root: '整理测试', under: '合同' });
-    expect(invoke).toHaveBeenCalledWith('inventory_android_directory', {
-      conversationId: 'chat-a',
-      root: '整理测试',
-      under: '合同',
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      'inventory_android_directory',
+      expect.objectContaining({
+        conversationId: 'chat-a',
+        root: '整理测试',
+        under: '合同',
+      }),
+    );
   });
 
   it('refuses a path that is not a name path', async () => {
@@ -154,7 +163,18 @@ describe('naming one subfolder of an authorized folder', () => {
       status: 'ready',
       folder: { handle: 'root', name: 'Download' },
       entries: [],
-      omissions: [{ reason: 'entry_limit', parentHandle: 'root' }],
+      omissions: [],
+      // The walk says where it stopped; the adapter turns that into what to do next.
+      totals: {
+        scanned: 20000,
+        matched: 1200,
+        files: 19000,
+        directories: 1000,
+        bytes: 9,
+        unknownMetadata: 0,
+        stopped: 'row_limit',
+        elapsedMs: 8000,
+      },
     });
     const result = (await call({})) as Record<string, unknown>;
     expect(String(result.hint)).toContain('under');

@@ -46,23 +46,85 @@ pub(super) struct DirectoryOmission {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct InventoryRequest<'a> {
-  conversation_id: &'a str,
+struct InventoryRequest {
+  conversation_id: String,
   /// Omitted entirely when there is no name: a JSON `null` arrives in Kotlin as the string
   /// "null", which reads like a folder called that.
   #[serde(skip_serializing_if = "Option::is_none")]
-  root: Option<&'a str>,
+  root: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  under: Option<&'a str>,
+  under: Option<String>,
+  /// Filters ride down to the walk: a folder of thousands filtered after a row cap answers
+  /// "none" for matches that were sitting past the cap.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  name_contains: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  mime_type: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  min_bytes: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  max_bytes: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  modified_from: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  modified_before: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  group_by: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  limit: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  offset: Option<i64>,
 }
 
-/// One authorized folder's inventory.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportRequest {
+  conversation_id: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  root: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  under: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  name_contains: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  mime_type: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  min_bytes: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  max_bytes: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  modified_from: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  modified_before: Option<i64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  title: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  format: Option<String>,
+  /// A comma separated list; the plugin picks the columns and the order they print in.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  columns: Option<String>,
+}
+
+/// One authorized folder's inventory or summary. Shapes that only the summary fills stay loose:
+/// the plugin owns them, and a model reads them straight through.
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct DirectorySection {
   folder: DirectoryItem,
+  #[serde(default)]
   entries: Vec<DirectoryEntry>,
+  #[serde(default)]
   omissions: Vec<DirectoryOmission>,
+  #[serde(default)]
+  groups: Option<serde_json::Value>,
+  #[serde(default)]
+  totals: Option<serde_json::Value>,
+  #[serde(default)]
+  largest: Option<serde_json::Value>,
+  #[serde(default)]
+  newest: Option<serde_json::Value>,
+  #[serde(default)]
+  oldest: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -76,6 +138,10 @@ pub(super) enum DirectoryReceipt {
     omissions: Option<Vec<DirectoryOmission>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     sections: Option<Vec<DirectorySection>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    groups: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    totals: Option<serde_json::Value>,
   },
   RootNotFound {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -88,6 +154,20 @@ pub(super) enum DirectoryReceipt {
     #[serde(skip_serializing_if = "Option::is_none")]
     choices: Option<serde_json::Value>,
   },
+  /// A listing written out to the shared Downloads folder instead of recited into the chat.
+  Saved {
+    name: String,
+    uri: String,
+    count: i64,
+    bytes: i64,
+    format: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    columns: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stopped: Option<String>,
+  },
+  /// Nothing matched, so no file was written: an empty清单 is a dead end for a user.
+  Empty,
   None,
   Revoked,
   Unavailable,
@@ -218,21 +298,148 @@ pub(super) async fn revoke_android_directory_root(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn inventory_android_directory(
   directory: State<'_, AndroidDirectory>,
   conversation_id: String,
   root: Option<String>,
   under: Option<String>,
+  name_contains: Option<String>,
+  mime_type: Option<String>,
+  min_bytes: Option<i64>,
+  max_bytes: Option<i64>,
+  modified_from: Option<i64>,
+  modified_before: Option<i64>,
+  group_by: Option<String>,
+  limit: Option<i64>,
+  offset: Option<i64>,
 ) -> Result<DirectoryReceipt, String> {
-  android_plugin::call(
-    &directory.0,
-    "android_directory",
-    "inventory",
-    InventoryRequest {
-      conversation_id: &conversation_id,
-      root: root.as_deref().filter(|value| !value.is_empty()),
-      under: under.as_deref().filter(|value| !value.is_empty()),
-    },
-  )
-  .await
+  let request = inventory_request(
+    conversation_id,
+    &root,
+    &under,
+    &name_contains,
+    &mime_type,
+    &min_bytes,
+    &max_bytes,
+    &modified_from,
+    &modified_before,
+    &group_by,
+    &limit,
+    &offset,
+  );
+  android_plugin::call(&directory.0, "android_directory", "inventory", request).await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn summarize_android_directory(
+  directory: State<'_, AndroidDirectory>,
+  conversation_id: String,
+  root: Option<String>,
+  under: Option<String>,
+  name_contains: Option<String>,
+  mime_type: Option<String>,
+  min_bytes: Option<i64>,
+  max_bytes: Option<i64>,
+  modified_from: Option<i64>,
+  modified_before: Option<i64>,
+  group_by: Option<String>,
+) -> Result<DirectoryReceipt, String> {
+  let request = inventory_request(
+    conversation_id,
+    &root,
+    &under,
+    &name_contains,
+    &mime_type,
+    &min_bytes,
+    &max_bytes,
+    &modified_from,
+    &modified_before,
+    &group_by,
+    &None,
+    &None,
+  );
+  android_plugin::call(&directory.0, "android_directory", "summarize", request).await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn export_android_directory(
+  directory: State<'_, AndroidDirectory>,
+  conversation_id: String,
+  root: Option<String>,
+  under: Option<String>,
+  name_contains: Option<String>,
+  mime_type: Option<String>,
+  min_bytes: Option<i64>,
+  max_bytes: Option<i64>,
+  modified_from: Option<i64>,
+  modified_before: Option<i64>,
+  title: Option<String>,
+  format: Option<String>,
+  columns: Option<String>,
+) -> Result<DirectoryReceipt, String> {
+  let request = ExportRequest {
+    conversation_id,
+    root: blank(&root),
+    under: blank(&under),
+    name_contains: blank(&name_contains),
+    mime_type: blank(&mime_type),
+    min_bytes: bytes(&min_bytes),
+    max_bytes: bytes(&max_bytes),
+    modified_from: stamp(&modified_from),
+    modified_before: stamp(&modified_before),
+    title: blank(&title),
+    format: blank(&format),
+    columns: blank(&columns),
+  };
+  android_plugin::call(&directory.0, "android_directory", "export", request).await
+}
+
+/// Filters arrive from a chat, so empty strings mean "no filter" rather than "match this".
+fn blank(value: &Option<String>) -> Option<String> {
+  value
+    .as_deref()
+    .map(str::trim)
+    .filter(|text| !text.is_empty() && *text != "null")
+    .map(str::to_string)
+}
+
+fn bytes(value: &Option<i64>) -> Option<i64> {
+  value.filter(|value| *value >= 0)
+}
+
+fn stamp(value: &Option<i64>) -> Option<i64> {
+  value.filter(|value| *value > 0)
+}
+
+pub(super) fn inventory_request(
+  conversation_id: String,
+  root: &Option<String>,
+  under: &Option<String>,
+  name_contains: &Option<String>,
+  mime_type: &Option<String>,
+  min_bytes: &Option<i64>,
+  max_bytes: &Option<i64>,
+  modified_from: &Option<i64>,
+  modified_before: &Option<i64>,
+  group_by: &Option<String>,
+  limit: &Option<i64>,
+  offset: &Option<i64>,
+) -> InventoryRequest {
+  InventoryRequest {
+    conversation_id,
+    root: blank(root),
+    under: blank(under),
+    name_contains: blank(name_contains),
+    mime_type: blank(mime_type),
+    min_bytes: bytes(min_bytes),
+    max_bytes: bytes(max_bytes),
+    modified_from: stamp(modified_from),
+    modified_before: stamp(modified_before),
+    group_by: blank(group_by),
+    limit: (*limit).filter(|value| (1..=1000).contains(value)),
+    offset: (*offset).filter(|value| *value > 0),
+  }
 }

@@ -60,6 +60,10 @@ pub fn run() {
       #[cfg(target_os = "android")]
       android_directory::inventory_android_directory,
       #[cfg(target_os = "android")]
+      android_directory::summarize_android_directory,
+      #[cfg(target_os = "android")]
+      android_directory::export_android_directory,
+      #[cfg(target_os = "android")]
       android_photo::acquire_android_photo,
       #[cfg(target_os = "android")]
       android_photo_batch::pick_android_photo_batch,

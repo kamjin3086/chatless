@@ -1,7 +1,4 @@
-import {
-  ANDROID_DIRECTORY_SERVER,
-  ANDROID_DIRECTORY_TOOL,
-} from '@/lib/mcp/nativeTools/androidDirectory';
+import { ANDROID_DIRECTORY_SERVER } from '@/lib/mcp/nativeTools/androidDirectory';
 import { ANDROID_DOCUMENT_SERVER } from '@/lib/mcp/nativeTools/androidDocument';
 import {
   ANDROID_PHOTOS_SERVER,
@@ -65,7 +62,9 @@ const FS_RISK: Record<string, ToolRisk> = {
  * 归一。今天计划模式只放行 `skill`，`skills` 整条被禁——此处照原样保留，没有顺手"修好"。
  */
 const READ_TOOLS: Record<string, string[]> = {
-  [ANDROID_DIRECTORY_SERVER]: [ANDROID_DIRECTORY_TOOL.name],
+  // Reading a folder and counting one are both read-only; `export` creates a new file in
+  // Downloads, which is a create and gets the approval it deserves.
+  [ANDROID_DIRECTORY_SERVER]: ['inventory', 'summarize'],
   [ANDROID_PHOTOS_SERVER]: [ANDROID_PHOTOS_TOOL.name],
   [ANDROID_DOCUMENT_SERVER]: ['search', 'excerpt'],
   knowledge: ['list', 'search', 'read'],

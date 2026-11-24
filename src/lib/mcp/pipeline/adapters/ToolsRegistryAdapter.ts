@@ -102,10 +102,10 @@ function androidHint(android: { directory?: boolean }): string {
   return (
     'No tools matched. This is an Android phone: there is no filesystem or shell tool here, so '
     + 'searching for one will keep returning nothing. Files come from a folder the user attaches '
-    + '(android_directory__inventory), from photos they pick (android_photos__group), and from '
-    + 'documents this chat already holds (android_document__search). '
+    + '(android_directory__inventory, or __summarize to count a big one), from photos they pick '
+    + '(android_photos__group), and from documents this chat already holds (android_document__search). '
     + (android.directory
-      ? 'Folders are already authorized: call android_directory__inventory.'
+      ? 'Folders are already authorized: android_directory__inventory for entries, android_directory__summarize for what a folder holds as a set, android_directory__export to write a long list out as a file.'
       : 'Ask the user to attach the folder from the attachment menu.')
   );
 }

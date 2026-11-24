@@ -267,6 +267,8 @@ export type TranslationKey =
   | 'toolCall.loadToolGroup'
   | 'toolCall.manageTools'
   | 'toolCall.androidFolderInventory'
+  | 'toolCall.androidFolderSummarize'
+  | 'toolCall.androidFolderExport'
   | 'toolCall.androidDocumentSearch'
   | 'toolCall.androidDocumentExcerpt'
   | 'toolCall.androidPhotoGroups'

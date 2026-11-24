@@ -30,3 +30,25 @@ To walk it on a device:
 
 The registry with its own 已授权文件夹 surface (per-folder Agent switch, explicit revoke) is #227;
 reading several folders in one call is #228.
+
+## A folder of thousands (#212 follow-up)
+
+A folder is a tree and can hold five thousand files, so reading it has three shapes and each one is
+checked separately. The case these guard: a model given one flat listing of a big folder answers
+from whatever the walk happened to reach, and says "没有子目录" about a folder full of them.
+
+- `inventory` walks with the filters applied *during* the walk, returns a page (`limit`, `offset`)
+  and `totals` saying how far it got. On an emulator folder of 1,982 files, asking for files over
+  3 KiB answered 410 - the same number a local `find` over the same files gives, where the old
+  post-cap filter could only see the first 200 rows.
+- Every entry carries a `path` under its folder, and `under` reads one subfolder by name path or
+  handle; a wrong name answers with the subfolders that exist.
+- `summarize` walks the whole folder and returns counts: 1,989 files / 3.69 MB / 8 subfolders, and
+  a per-kind table whose every number matched a local recount. It answers "what kinds of files are
+  in here" in one call instead of paging for a minute.
+- `export` writes a listing into 下载 instead of reciting it into the chat. Exporting the same
+  1,982 files produced a CSV whose rows matched the source exactly - 0 missing, 0 size mismatches,
+  181 of them nested paths - with raw bytes and ISO dates for a spreadsheet to read.
+- A walk that stopped says so: `totals.stopped` and a hint pointing at `offset`, `under` or
+  `summarize`, so a partial page is never read as the whole folder.
+

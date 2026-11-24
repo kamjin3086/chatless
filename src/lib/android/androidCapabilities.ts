@@ -17,7 +17,7 @@ import {
 } from '@/lib/mcp/nativeTools/androidCountdown';
 import {
   ANDROID_DIRECTORY_SERVER,
-  ANDROID_DIRECTORY_TOOL,
+  ANDROID_DIRECTORY_TOOLS,
   isAndroidDirectoryTool,
 } from '@/lib/mcp/nativeTools/androidDirectory';
 import {
@@ -72,7 +72,7 @@ export const ANDROID_CAPABILITIES: readonly AndroidCapability[] = [
   {
     id: 'directory',
     server: ANDROID_DIRECTORY_SERVER,
-    tools: [ANDROID_DIRECTORY_TOOL],
+    tools: ANDROID_DIRECTORY_TOOLS,
     matches: isAndroidDirectoryTool,
     // Authorized folders belong to the app, not to one chat: a folder the user authorized once
     // is readable from any conversation unless they switched it off (#228).

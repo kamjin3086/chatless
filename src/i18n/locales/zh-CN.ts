@@ -288,6 +288,8 @@ const zhCN: TranslationDict = {
   'toolCall.loadToolGroup': '加载工具组',
   'toolCall.manageTools': '工具管理',
   'toolCall.androidFolderInventory': '读取附加文件夹',
+  'toolCall.androidFolderSummarize': '统计文件夹里的文件',
+  'toolCall.androidFolderExport': '把文件清单写成文件',
   'toolCall.androidDocumentSearch': '在附加文档中查找',
   'toolCall.androidDocumentExcerpt': '读取附加文档片段',
   'toolCall.androidPhotoGroups': '查看所选照片',

@@ -317,6 +317,8 @@ const enUS: TranslationDict = {
   'toolCall.loadToolGroup': 'Load tool group',
   'toolCall.manageTools': 'Manage tools',
   'toolCall.androidFolderInventory': 'Read attached folder',
+  'toolCall.androidFolderSummarize': 'Summarize the folder',
+  'toolCall.androidFolderExport': 'Write the file list to a file',
   'toolCall.androidDocumentSearch': 'Search attached document',
   'toolCall.androidDocumentExcerpt': 'Read document excerpt',
   'toolCall.androidPhotoGroups': 'Review selected photos',
