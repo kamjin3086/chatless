@@ -27,8 +27,10 @@ export const SKILL_DESCRIPTION_MAX_CHARS = 320;
 /**
  * Budget for the index body, counted in UTF-16 code units (JS string length), not bytes:
  * a CJK description costs more than one byte per character, so the wire size of a
- * Chinese-heavy index is above this figure. Over budget is not a truncation - the whole
- * list falls back to the standing line, because a half list invites wrong picks.
+ * Chinese-heavy index is above this figure. Over budget is not a truncation and not a
+ * cliff: the list falls to names without descriptions, and only then to the standing line
+ * plus `skill__list(query)`. A half list is the one shape that is never sent, because it
+ * makes the missing skills look absent.
  */
 export const SKILL_INDEX_BUDGET_CHARS = 1200;
 
@@ -45,15 +47,22 @@ export interface SkillIndexFacts {
   explicitIds?: string[];
 }
 
+/**
+ * Which rung the index fits on: names with descriptions, names alone, or no list at all.
+ * One value rather than flags, because "over budget" and "names only" are two rungs of one
+ * ladder and any pairing of two booleans invites a state that never exists.
+ */
+export type SkillIndexRung = 'full' | 'names' | 'none';
+
 export interface SkillIndexView {
   /** What the model may see (filtered, sorted). */
   entries: SkillIndexEntryView[];
   /** The standing line: only present when skills are available at all. */
   availabilityLine: string | null;
-  /** The index body; null when it is over budget, in which case only the line remains. */
+  /** The index body; null on the `none` rung, in which case only the standing line remains. */
   indexText: string | null;
-  /** Why there is no index body. */
-  overflowed: boolean;
+  /** Which rung the list fits on. `none` means the budget could not hold even the names. */
+  rung: SkillIndexRung;
   /** Ids the user may name but the model must not load on its own. */
   userOnlyIds: string[];
   /**
@@ -65,12 +74,19 @@ export interface SkillIndexView {
 }
 
 /**
- * Sort by id: locale-independent and byte-stable, so two machines with the same skills
- * send the same bytes and the cached prompt prefix does not drift. `localeCompare` on
- * `name` does neither.
+ * Sort by id, tie-broken by name: locale-independent and total, so two machines with the
+ * same skills send the same bytes and the cached prompt prefix does not drift.
+ * `localeCompare` on `name` is neither. The tie-break matters on the rare duplicate id -
+ * without it two orders of one input can render different text.
  */
-export function compareById(a: { id: string }, b: { id: string }): number {
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+export function compareById(
+  a: { id: string; name?: string },
+  b: { id: string; name?: string },
+): number {
+  if (a.id !== b.id) return a.id < b.id ? -1 : 1;
+  const an = String(a.name ?? '');
+  const bn = String(b.name ?? '');
+  return an === bn ? 0 : an < bn ? -1 : 1;
 }
 
 /**
@@ -104,6 +120,11 @@ function indexLine(entry: SkillIndexEntryView): string {
 function requestedLine(entry: SkillIndexEntryView): string {
   const name = String(entry.name || entry.id).trim();
   return `- ${name} (\`${entry.id}\`) [user requested - read this guide first]: ${descriptionOf(entry)}`;
+}
+
+function nameLine(entry: SkillIndexEntryView): string {
+  const name = String(entry.name || entry.id).trim();
+  return `- ${name} (\`${entry.id}\`)`;
 }
 
 /**
@@ -172,41 +193,62 @@ export function buildSkillIndex(
       entries: [],
       availabilityLine: userOnlyLine,
       indexText: null,
-      overflowed: false,
+      rung: 'none',
       userOnlyIds,
       requested,
     };
   }
 
-  const body = [
+  const asRung = (
+    indexText: string | null,
+    rung: SkillIndexRung,
+    note?: string,
+  ) => {
+    if (note) availabilityLines.push(note);
+    return {
+      entries: sorted,
+      availabilityLine: availabilityLines.join('\n'),
+      indexText,
+      rung,
+      userOnlyIds,
+      requested,
+    };
+  };
+
+  const fullBody = [
     '[Skills installed here]',
     'Names only - the instructions are not here.',
     ...sorted.map(indexLine),
   ].join('\n');
 
-  const overflowed = body.length > SKILL_INDEX_BUDGET_CHARS;
-  if (overflowed) {
-    availabilityLines.push(
-      `The list is long (${sorted.length} skills): skill__list(query) searches it.`,
-    );
-    return {
-      entries: sorted,
-      availabilityLine: availabilityLines.join('\n'),
-      indexText: null,
-      overflowed: true,
-      userOnlyIds,
-      requested,
-    };
+  if (fullBody.length <= SKILL_INDEX_BUDGET_CHARS) {
+    return asRung(fullBody, 'full');
   }
 
-  return {
-    entries: sorted,
-    availabilityLine: availabilityLines.join('\n'),
-    indexText: body,
-    overflowed: false,
-    userOnlyIds,
-    requested,
-  };
+  // Descriptions are the expensive half of the budget, and an id carries routing weight of
+  // its own: `/pdf-forms` needs no essay. Dropping them keeps every skill present, which is
+  // what a half list never does.
+  const namesBody = [
+    '[Skills installed here]',
+    'Descriptions did not fit - names only. skill__guide(id) reads one.',
+    ...sorted.map(nameLine),
+  ].join('\n');
+
+  if (namesBody.length <= SKILL_INDEX_BUDGET_CHARS) {
+    // The standing line is emitted above the index block, so "below" is the honest word:
+    // a prompt that misdescribes its own layout is one the model cannot navigate.
+    return asRung(
+      namesBody,
+      'names',
+      `The list is long (${sorted.length} skills): the block below names them without descriptions, and skill__guide(id) reads one.`,
+    );
+  }
+
+  return asRung(
+    null,
+    'none',
+    `The list is long (${sorted.length} skills): skill__list(query) searches it.`,
+  );
 }
 
 /**
@@ -214,8 +256,9 @@ export function buildSkillIndex(
  *
  * Two blocks rather than one is not about two pieces of important text: it lets
  * `changedBlockIds` say which part moved. Merged, any change reports the same single
- * block, while these two change at different rates (the line only flips between "skills
- * exist" and "none do"; the body follows the list). Both live in the conversation layer:
+ * block, while these two change at different rates: the line only varies with which
+ * rungs exist (skills present or not, and what the list fell back to), while the body
+ * follows the list itself. Both live in the conversation layer:
  * neither depends on this turn's wording, and putting them in the turn layer would break
  * the cached prefix on every turn for nothing.
  *

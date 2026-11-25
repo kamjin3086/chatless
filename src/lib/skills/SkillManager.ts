@@ -875,7 +875,7 @@ export class SkillManager {
         entries: [],
         availabilityLine: null,
         indexText: null,
-        overflowed: false,
+        rung: 'none',
         userOnlyIds: [],
         requested: [],
       };
