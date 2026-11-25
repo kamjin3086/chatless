@@ -1,6 +1,8 @@
 # Skills 系统架构设计文档
 
-> **状态（以 `main` 为准读这份文档）**：本文写于设计阶段，多处比代码先行。「渐进式披露机制」一节已按 2026-11 的实现重写（一条缝：`src/lib/skills/skillIndex.ts`）；「Hooks 生命周期管理」「SkillExecutor / 编排 / 沙箱」那几节描述的是**设计意图**，今天没有活路径走到它们。改这块之前先读代码，不要只读本文。
+> **状态（以 `main` 为准读这份文档）**：本文写于设计阶段，多处比代码先行。「渐进式披露机制」一节已按 2026-11 的实现重写（一条缝：`src/lib/skills/skillIndex.ts`）。
+>
+> **那套并行执行引擎已经删掉了（#237）**：`SkillExecutor`、`SkillOrchestrator`、`ActionRouter`、`skillTools` 的工具清单，以及它们的 UI（执行计划面板、动作审批面板、动作卡片、调用卡片、参数表单、执行确认对话框）和三个 store。删的理由不是"没接线所以没用"，而是它的前提——一个 skill 有自己的计划、在 Agent Loop 之外运行——正是设计决定否掉的东西：Skill 是操作知识，不是第二套 workflow 引擎。今天读 skill 用 `skill__guide`，用它说的办法做事走 Agent Loop / `ToolExecutionPipeline`（ADR-0001）。本文「Hooks 生命周期管理」「SkillExecutor / 编排」那些小节因此是**历史设计**，不是现状；沙箱那一层只有 `ProcessSandbox` 留下（shell 执行在用），`ConfirmationManager` / `ExecutionPlanManager` 同批删除。改这块之前先读代码，不要只读本文。
 >
 > **最后更新**: 2026-11-24  
 > **版本**: 3.1（渐进式披露一节为实现现状）  
@@ -88,7 +90,7 @@ Claude Cowork 的设计核心在于将 AI 从 **Oracle 模式（被动问答）*
 
 ### 本项目的实现
 
-我们采用 **Agentic Loop** 模式，通过 `SkillExecutor` 实现：
+我们采用 **Agentic Loop** 模式，当年通过 `SkillExecutor` 实现（已删除，#237；今天由对话侧的 Agent Loop 承担）：
 
 ```
 感知 (Observe)   ──▶  检测环境依赖、读取上下文
@@ -127,6 +129,8 @@ Claude Cowork 的设计核心在于将 AI 从 **Oracle 模式（被动问答）*
 │  ├────────────────────────────────────────────────────────────────┤│
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ ││
 │  │  │ SkillManager│  │SkillExecutor│  │ DependencyChecker       │ ││
+
+> 图里的 `SkillExecutor` 已删除（#237）；这一层现在只有 `SkillManager` 与 `DependencyChecker` 活着。
 │  │  │ - load      │  │ - execute   │  │ - checkPython           │ ││
 │  │  │ - install   │  │ - plan      │  │ - checkNode             │ ││
 │  │  │ - enable    │  │ - verify    │  │ - installGuide          │ ││
@@ -179,7 +183,7 @@ src/lib/skills/
 ├── index.ts                 # 模块导出
 ├── types.ts                 # 类型定义
 ├── SkillManager.ts          # 技能管理器
-├── SkillExecutor.ts         # 技能执行器 (Agentic Loop)
+├── SkillExecutor.ts         # 技能执行器 (Agentic Loop) —— 已删除 #237
 ├── SkillMdParser.ts         # SKILL.md 解析器
 ├── LocalSkillLoader.ts      # 本地技能加载器
 ├── RemoteSkillLoader.ts     # 远程技能加载器
@@ -273,7 +277,7 @@ const index = manager.getEnabledSkillsIndex();
 const instructions = await manager.getSkillInstructions('pr-reviewer');
 ```
 
-### 2. SkillExecutor
+### 2. SkillExecutor（已删除，#237）
 
 技能执行引擎，实现完整的 **Agentic Loop**：
 
@@ -486,7 +490,7 @@ if (skill.allowed_tools && !skill.allowed_tools.includes(tool)) {
 
 ## Hooks 生命周期管理
 
-> **未接线**。本节是设计意图：`pre_execute` / `post_execute` / `on_error` / `verify` 的解析在 `SkillMdParser`，唯一会跑它们的是 `SkillExecutor`，而今天没有任何活路径会走到 `SkillExecutor`——`grep -rn "SkillExecutor" src --include=*.ts --include=*.tsx | grep -v __tests__` 只印出 `src/lib/skills/SkillExecutor.ts` 自己（agent 的一次 tool call 走 `ToolExecutionPipeline`，见 ADR-0001）。也就是说：写在 SKILL.md 里的 hook 今天不会执行。要么把这套引擎删掉，要么让它真的被调用——别把本节当现状读。
+> **没有执行者**。`pre_execute` / `post_execute` / `on_error` / `verify` 的解析留在 `SkillMdParser`（skill 的格式仍然包含它们），但唯一会跑这些 hook 的是 `SkillExecutor`，而它已随 #237 删除——agent 的一次 tool call 走 `ToolExecutionPipeline`（见 ADR-0001）。也就是说：写在 SKILL.md 里的 hook 今天不会执行，别把本节当现状读；要恢复 hook，先有一个愿意跑它们的路径。
 
 参考 [Claude Code Hooks 参考](https://docs.anthropic.com/zh-CN/docs/claude-code/hooks)，实现完整的钩子系统：
 

@@ -39,20 +39,4 @@ export {
   resetProcessSandbox,
 } from './ProcessSandbox';
 
-// 确认管理器导出
-export {
-  ConfirmationManager,
-  ConsoleConfirmationHandler,
-  getConfirmationManager,
-  resetConfirmationManager,
-} from './ConfirmationManager';
-
-// 执行计划管理器导出
-export {
-  ExecutionPlanManager,
-  createStep,
-  createPlan,
-  getExecutionPlanManager,
-  resetExecutionPlanManager,
-} from './ExecutionPlanManager';
 

@@ -15,8 +15,6 @@ import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
 import { cn } from '@/lib/utils';
 import { EmptyChatView } from '@/components/chat/EmptyChatView';
 import { ChatMessageList } from '@/components/chat/ChatMessageList';
-import { FloatingSkillApprovalPanel } from '@/components/skills/SkillApprovalPanel';
-import { FloatingSkillExecutionPlanPanel } from '@/components/skills/SkillExecutionPlanPanel';
 
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { useChatActions } from '@/hooks/useChatActions';
@@ -513,8 +511,6 @@ export default function ChatPage() {
       </div>
 
       {/* Skills 审批与计划面板（浮动） */}
-      <FloatingSkillExecutionPlanPanel />
-      <FloatingSkillApprovalPanel />
 
       {/* 会话参数设置弹窗：统一挂载在页面层（右上角三点菜单/标签条共用） */}
       {currentProviderName && selectedModelId && currentConversationId && (

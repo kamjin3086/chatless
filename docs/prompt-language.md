@@ -47,6 +47,9 @@ Translating a prompt never changes what the user reads.
   `src/lib/mcp/nativeTools/systemSkills.ts`, `src/lib/mcp/providerAdapters.ts`,
   `src/lib/mcp/schemaHints.ts`, the `SkillsToolAdapter`/`SkillsFsAdapter` files
   and `src/lib/skills/skillFileTools.ts`.
-- `src/lib/skills/skillTools.ts` is still imported by the skill execution plan
-  panel in the chat page, so it stays; the model no longer receives those tools
-  (it gets `skill__*` instead), which makes its Chinese strings UI-side only.
+- The parallel skill execution engine went with it: `src/lib/skills/skillTools.ts`,
+  `SkillExecutor.ts`, `SkillOrchestrator.ts`, `ActionRouter.ts`, their UI
+  (`SkillExecutionPlanPanel`, `SkillApprovalPanel`, `SkillActionCard`,
+  `SkillInvocationCard`, `SkillParameterForm`, `ExecutionConfirmDialog`) and their
+  stores. Nothing outside those files could reach them - `executeSkillTool` had no
+  production caller - and the live path is `skill__*` plus the Agent Loop (#237).
