@@ -39,7 +39,7 @@ If `429` persists, check the provider dashboard for rate limits, remaining quota
 ## How do I report a problem that I couldn't resolve?
 
 1. Find your version under **Settings → About** (`关于`). Note the OS version, processor architecture, steps to reproduce, expected behavior, and actual error. For model issues, include the provider name, model ID, and what you've already tried.
-2. If you need logs, choose **Export logs** (`导出日志`) in **Settings → Advanced** (`高级`) **→ Logging** (`日志系统`). Keep only the excerpt around the time of the error. **Debug** (`调试`) can record full request bodies. If you enabled it temporarily, restore the previous level after reproducing the problem.
+2. If you need logs, choose **Export logs** (`导出日志`) in **Settings → Advanced** (`高级`) **→ Logging** (`日志系统`). Keep only the excerpt around the time of the error. The **Debug** (`调试`) level writes the request body sent to the model into the log, truncated after about 20,000 characters, and that body contains your own conversation text. If you enabled it temporarily, restore the previous level after reproducing the problem.
 3. Before posting, remove API keys, tokens, private messages, file paths, and other sensitive information from logs, screenshots, and error text. Do not upload a full log export or your database.
 4. [Search existing issues](https://github.com/kamjin3086/chatless/issues), then select **Bug report** on the [template chooser](https://github.com/kamjin3086/chatless/issues/new/choose). You can also open the feedback page from **Settings → About** (`关于`) **→ Submit feedback** (`提交反馈`). Write in whichever language lets you describe the problem accurately. No translation is required.
 

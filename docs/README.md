@@ -5,9 +5,9 @@ who keeps it true:
 
 - **live** - describes today's code. `pnpm check:docs-symbols` fails if it names a path or a
   member the tree no longer has; its *claims* are kept true by whoever changes the code.
-- **frozen** - a dated snapshot (filename date, or under `docs/architecture/`,
-  `docs/acceptance/`, `docs/history/`). Excluded from that gate on purpose: a snapshot is not
-  corrected when the tree moves, it is superseded by a newer one.
+- **frozen** - a dated snapshot (a filename ending in `-YYYY-MM-DD.md`, or anything under
+  `docs/architecture/`, `docs/acceptance/`, `docs/history/`). Excluded from that gate on
+  purpose: a snapshot is not corrected when the tree moves, it is superseded by a newer one.
 - **user-facing** - shipped to users, written twice (Chinese and English), neither version
   replaces the other. See `docs/agents/language.md`.
 
@@ -48,15 +48,18 @@ ones that touch the area you are in; contradicting one means surfacing it, not o
 
 - [`architecture/`](architecture/) - the 2026-10-24 map and two review passes. Start at
   `final-review-2026-10-24.md`, whose **Status re-check — 2026-11-25** section says which
-  findings are fixed, which are open, and which probes have drifted from the code. The nine
-  `.probe.ts` / `.config.ts` files beside them are re-runnable (the commands are in that
-  section) but are not collected by `pnpm test` and are not type-checked by anything.
+  findings are fixed, which are open, and which probes have drifted from the code. The seven
+  `.probe.ts` / `.config.ts` files beside them are type-checked by `pnpm typecheck` (they are
+  `.ts` like everything else) but are collected by no test run: `pnpm test` does not see them,
+  so re-running them is manual - the commands are in that section.
 - [`acceptance/`](acceptance/) - real-run evidence: the knowledge/semantic report and runbook,
   plus the audit tests and fixtures `pnpm test` collects (`*.audit.test.ts`,
   `retrieval-eval.sqlite`). Evidence, not specification.
 - [`history/`](history/) - superseded records: one-off acceptance runs, one triage pass,
-  finished plans, and the semantics that now live in `agents/subsystems.md`. Each opens with an
-  archive banner. Useful as precedent, never as current status.
+  finished plans, and the semantics that now live in `agents/subsystems.md`. The four that were
+  undated open with an archive banner pointing at the document that carries the subject today;
+  the dated ones are recognizable by their filename. Useful as precedent, never as current
+  status.
 
 ## Adding a document
 

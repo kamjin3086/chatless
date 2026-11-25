@@ -1,9 +1,13 @@
 # Windows 免安装 ZIP
 
 发布流水线在 Windows x64 构建后生成 `Chatless_<版本>_windows_x64_portable.zip`
-和 SHA-256 校验文件。解压整个 ZIP，再运行 `Chatless.exe`，不要单独移动 EXE（旁边那些 DLL 与 `onnxruntime.dll` 是它
-运行时要找的）。系统需已安装 Microsoft Edge WebView2 Runtime——[安装版](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-那一路会引导安装它，ZIP 里不会带这个引导，缺了就直接打不开。
+和 SHA-256 校验文件。解压整个 ZIP，再运行 `Chatless.exe`，不要单独移动 EXE：脚本只把 `Chatless.exe`、配置里声明的
+`onnxruntime.dll`、构建目录里的全部 `*.dll`（WebView2Loader 就在其中）和一个 `README.txt` 放进包里，
+少一样就跑不起来。
+
+系统需已安装 Microsoft Edge [WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703)。
+本仓库没有配 `webviewInstallMode`，所以走 Tauri 的默认值：NSIS 那个 `setup.exe` 会引导安装它，MSI 不引导，
+免安装 ZIP 更是什么都不带（打包脚本的清单里没有引导）。缺运行库时表现就是双击没反应或一闪退出。
 
 这是免安装分发方式，数据仍写入与安装版相同的位置（数据库在 `%APPDATA%\com.kamjin.chatless\`，
 日志在 `%LOCALAPPDATA%\com.kamjin.chatless\logs\logs.log`；三平台的完整对照见
