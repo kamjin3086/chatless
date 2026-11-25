@@ -19,7 +19,7 @@ and hold the `NSWindow` pointer captured once in `setup` (see
 
 ## 2. Never query the window from inside a resize handler
 
-`window.onResized(() => window.isMaximized())` looks harmless but is a feedback
+`window.onResized(() => window.isMaximized())` looks harmless but was a feedback
 loop on macOS: AppKit recomputes the zoom state while the resize is still being
 delivered, and the query makes it emit another resize. Measured: **2101 resize
 events in 6 seconds**, a pinned core, and a window that could not be closed,
@@ -27,24 +27,36 @@ resized or clicked (moving it still worked, because the window server moves
 windows without the app). tao even carries an `is_checking_zoomed_in` flag for
 this.
 
-Defer the query out of the notification (a short timeout is enough) - see
-`WindowTitleBar.tsx` and `appCleanup.ts`.
+What `945e794` actually did: the loop was cut on the Rust side - `macos_window.rs`
+stopped making Tauri calls from the event path (pitfall 1) - and the one JS
+listener that was deferred is gone with it (`appCleanup.ts` used to debounce a
+minimize-to-tray resize query by 200 ms; that preference no longer exists, so
+grep finds no `onResized` there today). Do not read the fix as "the JS handlers are
+now all deferred": `src/components/layout/WindowTitleBar.tsx` still calls
+`isMaximized()` directly inside `onResized`, and whether that still storms on the
+current tao/AppKit has not been re-measured. The guard for this class of bug is the
+resize check in `scripts/verify-app-startup.sh` below, not the prose here.
 
 ## 3. A restored "hidden" state produces an invisible app
 
 `tauri-plugin-window-state` restores a saved `visible: false` regardless of the
 configured `StateFlags`, so hiding the window to the tray and quitting left a
-later launch running with no window at all. Show the window explicitly at
-start-up (`lib.rs`) and do not persist the visible flag.
+later launch running with no window at all. Both halves are in `src-tauri/src/lib.rs`:
+the window is shown explicitly at start-up, and `persisted_window_state_flags()`
+saves SIZE / POSITION / MAXIMIZED ... without `VISIBLE`.
 
 ## Client-side exceptions in dev
 
 Before reloading a failed window, copy the first `[dev-client-failure]` line from the
 Tauri dev terminal or the app's `logs.log` (Linux: `$XDG_DATA_HOME/com.kamjin.chatless/logs`,
-defaulting to `~/.local/share`). The frontend reports once per page load, including errors
-caught by Chatless's route and shell boundaries. The line carries an error category, known
-route and source positions when available, not error messages or a full stack. Existing
-application logs are not sanitized by this reporter; do not share the entire file.
+defaulting to `~/.local/share`; the three-platform table is in `docs/llm-troubleshooting.md`).
+`src/lib/dev/reportClientFailure.ts` reports once per page load, development builds only,
+including errors caught by Chatless's route and shell boundaries, and writes them at error
+level so they survive the log file's level limit. The line carries `kind`, a known route
+(`src/lib/dev/clientFailure.ts` keeps an allowlist and prints `[other]` for anything else),
+an error name from a fixed set, and up to six bundle positions - deliberately no message
+text, no eval frames and no query strings, since those carry user and provider data.
+The rest of the log is not sanitized by this reporter; do not share the whole file.
 
 Check `agent-browser` compatibility with `pi-agent-browser-doctor` before a UI verification
 batch. If unavailable, use an isolated browser/WebKit profile to verify routing, and keep the
