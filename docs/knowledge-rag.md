@@ -20,8 +20,16 @@
 ```
 
 - **SourceBlock**：heading / paragraph / list / table / code / caption，带 locator（page / sectionPath / 行号）。
-- **RetrievalChunk**：同一 section 连续 block 合并约 400–600 token；`searchText` = 标题 + heading path + 原文。
-- **Evidence**：当前回答中的临时 ID（E1…），不单独建表。`vector_embeddings.id` = `retrieval_chunks.id`。
+- **RetrievalChunk**：同一 section 的连续 block 合并，目标 500 token、上限 800
+  （`src/lib/rag/constants.ts` 的 `DEFAULT_CHUNK_TARGET_TOKENS` / `DEFAULT_CHUNK_MAX_TOKENS`）；
+  `searchText` = 标题 + heading path + 原文。
+- **Evidence**：当前回答里的临时 ID（E1…）。它不是"什么都不落库"——回答用过的证据会被快照进
+  `agent_delivered_evidence`（迁移 020，写入在 `src/lib/rag/evidenceSnapshots.ts`），为的是历史消息
+  的引用在重新索引之后仍然指得回当时的原文。
+- **chunk 与向量的关联**走 `document_chunk_embeddings.chunk_id` → `document_chunks.id`，并按 embedding
+  fingerprint 与索引批次（active batch）筛，`src/lib/retrieval/RetrievalService.ts` 是唯一读法。旧文档里
+  `vector_embeddings.id` = `retrieval_chunks.id` 那句描述的是上一代表：两张表在 `schema.ts` 与迁移 012
+  里还留着，但没有活的读写方，别照着它加查询。
 
 ## 查询
 
@@ -34,6 +42,16 @@
 
 Reranker、LLM Contextual Chunk、HyDE、Query Rewrite、GraphRAG、PageIndex、Docling/MinerU、更换 Vector Store、文档历史版本库。
 
-## 版本字段
+## 什么时候算"过期"
 
-文档变化或下列字段变化需重建索引：`fileHash`、`parserVersion`、`chunkSchemaVersion`、embedding 模型/维度。
+真正参与判定的是两样：文档内容 `fileHash`（`src/lib/mcp/pipeline/adapters/KnowledgeAdapter.ts`）与 embedding 侧的
+fingerprint / active batch（`src/lib/rag/evidenceStore.ts`，模型与维度都编在 fingerprint 里）。
+`parserVersion` 与 `chunkSchemaVersion`（`src/lib/rag/constants.ts`）目前只是**记录**在 chunk 上，
+全仓没有读回它们做重建决定的地方——想让解析器改动触发重建，得自己去加那条比较，别以为改了常量就自动生效。
+
+## 实现在哪
+
+检索 `src/lib/retrieval/`（`RetrievalService.ts` 汇总 Dense + `LexicalRetriever.ts` 的 FTS5 BM25 +
+`RRFFusion.ts`，没有 embedding 时只走词法那一路）；证据与快照 `src/lib/rag/`；索引 `src/lib/indexing/`；
+向量扫描在 Rust 侧 `src-tauri/src/lib/agent_runtime.rs`。跑过一轮真实评测的证据在
+`docs/acceptance/`（是证据，不是规格）。

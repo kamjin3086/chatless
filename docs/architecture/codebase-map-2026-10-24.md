@@ -1,5 +1,28 @@
 # Codebase map and source index — 2026-10-24
 
+## Status re-check — 2026-11-25 (`main` at `0716bc9`)
+
+Frozen at `35613a2`; the navigation value is intact, the following rows have moved and
+must not be quoted as today:
+
+- **Inventory**: `src` is now **1,018 TS/TSX files / 180,315 lines** (was 898 / 162,853;
+  count `git ls-files src | grep -E '\.tsx?$'` - a `src/**/*.ts` style glob drops `src/instrumentation-client.ts`);
+  `src-tauri/src` is **34 Rust files / 13,340 lines** (was 33 / 12,257). Published
+  releases have reached v0.8.2, so every `file:line` anchor in this map is ~1 month
+  off - reopen the file before citing a line.
+- **Migrations** run through **020** now (`019_semantic_model_identity`,
+  `020_delivered_evidence`), not 001–018.
+- **Skills**: `SkillOrchestrator` is gone - the parallel skill engine was deleted (#237).
+  The live path is the index in `src/lib/skills/skillIndex.ts` plus the `skill__*` tools
+  through `src/lib/mcp/pipeline/adapters/SkillUnifiedAdapter.ts`. See
+  [`docs/skills-architecture.md`](../skills-architecture.md).
+- **CI**: `.github/workflows/ci.yml` now **does** have a `push` trigger on `main` (with
+  `fetch-depth: 0`), and `frontend-checks` runs seven commands - `lint:ci`, `typecheck`,
+  `typecheck:tests`, `check:comments`, `check:docs-symbols`, `check:i18n-unused`, `test`
+  - against the two this map recorded. The three `test-tauri-*` jobs are still `if: false`.
+- Findings: see [`final-review-2026-10-24.md`](final-review-2026-10-24.md) for the
+  2026-11-25 re-check of R1–R8 (R1/R3/R5/R8 fixed, R2 open, R4/R6 probes drifted).
+
 ## Baseline and evidence limits
 
 - Repository: `kamjin3086/chatless`; version in package.json: `0.7.4`.
@@ -167,7 +190,7 @@ Historical records are hypotheses to re-check at HEAD. They often describe a spe
 
 | Theme | Evidence | Interpretation for the next review |
 |---|---|---|
-| Runtime durability and unknown side effects | `docs/agent-chat-path-comparison.md` (2026-09-16); `docs/agent-knowledge-final-audit-2026-09-21.md`; commits `6f3299e`, `7f07ed5`, `b8822ad` | Native run/event/approval methods and checkpoints now exist and are wired; exact crash recovery and safe continuation still require execution evidence |
+| Runtime durability and unknown side effects | `docs/history/agent-chat-path-comparison.md` (2026-09-16); `docs/history/agent-knowledge-final-audit-2026-09-21.md`; commits `6f3299e`, `7f07ed5`, `b8822ad` | Native run/event/approval methods and checkpoints now exist and are wired; exact crash recovery and safe continuation still require execution evidence |
 | Knowledge calls on compatible endpoints | [#156](https://github.com/kamjin3086/chatless/issues/156), technical [#160](https://github.com/kamjin3086/chatless/issues/160); HEAD fix `35613a2` / PR #167 | Both issues remain open; implementation changed. Read latest reporter evidence and reproduce before reporting the original cause as current |
 | Parameter representation | [#140](https://github.com/kamjin3086/chatless/issues/140), decision [#172](https://github.com/kamjin3086/chatless/issues/172), work #173–175 | Stored inherit/override/do-not-send semantics have an explicit owner decision dependency; latest wire fixes do not imply migration design is settled |
 | Provider field table | [#142](https://github.com/kamjin3086/chatless/issues/142); commits `2620875`, `e83e776` | Request path now reads the field table; open issue state alone is stale implementation evidence |
@@ -181,7 +204,7 @@ Historical records are hypotheses to re-check at HEAD. They often describe a spe
 | Repo tooling | #159 comment doc-path validation; #157 dev-theme setup; commits `a12900f`, `f882e4e` | Historical Windows script load failures and stale-symbol checks have later fixes; do not copy old maintenance notes as current failures |
 | Product boundary | [#72](https://github.com/kamjin3086/chatless/issues/72) mobile request | Open request does not override explicit current non-goal |
 
-Additional reading: `docs/issue-triage-2026-09-30.md`, `docs/llm-troubleshooting.md`, `docs/streaming-render-acceptance-2026-09-24.md`, `docs/workspace-budget-acceptance-2026-09-22.md`, `docs/model-parameters-semantics-2026-09-24.md`, `docs/skills-architecture.md`, `docs/sync-architecture.md`, `docs/tauri-window-pitfalls.md`.
+Additional reading: `docs/history/issue-triage-2026-09-30.md`, `docs/llm-troubleshooting.md`, `docs/history/streaming-render-acceptance-2026-09-24.md`, `docs/history/workspace-budget-acceptance-2026-09-22.md`, `docs/history/model-parameters-semantics-2026-09-24.md`, `docs/skills-architecture.md`, `docs/sync-architecture.md`, `docs/tauri-window-pitfalls.md`.
 
 ## Coverage ledger and next review order
 

@@ -2,6 +2,8 @@
 
 Final adjudication: [final review](final-review-2026-10-24.md) supersedes priorities below, strengthens R1, downgrades R2, and adds permission/synchronization findings. The original evidence is preserved here.
 
+2026-11-25 re-check of every finding - which probes still run, what they print today, and what was fixed since - is in the Status section of that final review.
+
 ## Scope and baseline
 
 Baseline: `35613a2a242757a2b47f91cb16cbbbbf08efc2ff`, unchanged during this pass. Navigation: [codebase map](codebase-map-2026-10-24.md).

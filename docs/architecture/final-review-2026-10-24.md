@@ -1,5 +1,42 @@
 # Final review and adjudication — 2026-10-24
 
+## Status re-check — 2026-11-25, `main` at `0716bc9`
+
+This document is a frozen snapshot of what was true at `35613a2`. The probes are still
+runnable, and they are the only part of `docs/architecture/` that can be re-executed:
+
+```bash
+npx vitest run --config docs/architecture/review-probes-2026-10-24.config.ts
+npx vitest run --config docs/architecture/final-review-2026-10-24.config.ts
+```
+
+Neither config is collected by `pnpm test` (its include list is `src/**/__tests__`,
+`docs/acceptance/*.audit.test.ts`, `scripts/__tests__/**`), and nothing type-checks these
+files: `tsconfig.tests.json` covers `src` and `docs/acceptance` only. A red probe is
+therefore not a CI signal - re-read the code before quoting one.
+
+Observed on the re-check, and what each line means:
+
+| Probe | Today | Reading |
+| --- | --- | --- |
+| `settles approval when Stop happens during approval persistence` | passes | **R1 is fixed**: `src/lib/mcp/pipeline/approvalWait.ts` now registers the card before writing the pending row and checks `isCancelled` around every await |
+| `marks a returned MCP isError result as failure` | passes | **R3 is fixed** |
+| `final-review-sync` (2 tests) | passes | **R8 is fixed** the stronger way: `src/lib/sync/core/SyncManager.ts` refuses a metadata write without a strong ETag and retries as compare-and-swap, so a 412 no longer rolls newer remote metadata backward |
+| `preserves uncertainty when filesystem transport rejects after dispatch` | fails - classifies `failed`, probe expects `unknown` | **R2 is still open**, as this report's own downgrade said ("P2 hardening candidate"); nothing has been implemented since |
+| `control: a current evidence range is readable` | fails | probe drift, not evidence: R4's repair assertion (`rejects a stale evidence range after re-indexing`) passes while its own control does not - the fixture no longer matches today's evidence registry |
+| `rolls back an already installed grant if another registration fails` | fails on the error text only (`Backend filesystem scope authorization failed` instead of the injected `second grant failed`) | **R6 is fixed**: `src/lib/filesystemAllowlist/backendSync.ts` waits for every registration (`Promise.allSettled`), aggregates the failure, and calls `revokeScope()` before rethrowing, so a partially installed scope loses nothing. Only the probe's expected message drifted |
+| `retries an unchanged allowlist after a failed synchronization` | passes | **R7 is fixed**: the same file serializes backend allowlist updates on a queue, clears `lastSyncedKey` before the native call and only advances it on acknowledgement, and keeps the chain usable after a rejection - so a failed sync no longer suppresses a retry with identical input |
+| `Stop during native approval insertion releases the real loop` | times out at 5 s | probe drift; the same race is covered green on the frontend branch above |
+
+What the re-check could confirm in code without a probe: **R5 is fixed** - a call-scoped
+grant is now matched to the operation that registered it (`grant.run_id` **and**
+`grant.call_id`, `src-tauri/src/filesystem/state.rs`), which was the missing owner
+identity. R6 and R7 were re-verified through their own probes above and in
+`src/lib/filesystemAllowlist/backendSync.ts`; neither is open.
+
+For the current seam map rather than this snapshot, read
+[`docs/agents/subsystems.md`](../agents/subsystems.md).
+
 Baseline: `35613a2a242757a2b47f91cb16cbbbbf08efc2ff`. This report supersedes the priorities in the [primary review](primary-review-2026-10-24.md); the [codebase map](codebase-map-2026-10-24.md) remains the navigation index.
 
 This pass challenged the four original findings, followed their downstream effects, and sampled native filesystem authorization, permission synchronization, managed-process ownership and WebDAV conflict recovery. Only audit documents/probes were added or edited. The pre-existing edit to `docs/agents/constraints.md` has unknown authorship and was not touched. No product fix, commit, external comment or live user-data operation was performed.
