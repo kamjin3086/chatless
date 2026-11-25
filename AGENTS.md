@@ -42,6 +42,11 @@ bar, the gh operations and the verification matrix: `docs/agents/maintenance.md`
 Reviewing a diff instead of writing one: `CODING_STANDARDS.md` - which also says what
 a review agent has to be able to *run*, because a read-only reviewer guesses.
 
+## Documentation
+
+`docs/README.md` indexes every document under `docs/` and says which are live, which are frozen
+snapshots, and which are user-facing. Add your document to that index when you add one.
+
 ## Agent skills
 
 ### Issue tracker
