@@ -21,7 +21,7 @@ Translating a prompt never changes what the user reads.
 | Text injected as messages | `src/lib/mcp/pipeline/context/ConversationEventLog.ts` (tool results, run notes), `src/lib/mcp/agentLoop/AgentLoopRunner.ts`, `src/lib/mcp/pipeline/context/ContextWindowManager.ts` (summaries), adapters under `src/lib/mcp/pipeline/adapters/` |
 | Retrieval / evidence | `src/lib/rag/*` |
 | Title generation | `src/lib/chat/TitleService.ts` (English prompt, the title itself follows the user's message) |
-| Skill index | `src/lib/skills/SkillManager.ts` (`buildSkillIndexPrompt`) |
+| Skill index | `src/lib/skills/skillIndex.ts` (`buildSkillIndex`, `skillIndexBlocks`) |
 
 ## What stays in the interface language
 
@@ -52,4 +52,4 @@ Translating a prompt never changes what the user reads.
   (`SkillExecutionPlanPanel`, `SkillApprovalPanel`, `SkillActionCard`,
   `SkillInvocationCard`, `SkillParameterForm`, `ExecutionConfirmDialog`) and their
   stores. Nothing outside those files could reach them - `executeSkillTool` had no
-  production caller - and the live path is `skill__*` plus the Agent Loop (#237).
+  production caller - and the live path is `skill__*` plus the Agent Loop (#237). To reproduce: `grep -rn "executeSkillTool" src` is empty, and `grep -rn "list_available_skills" src` prints only the display table, its test and history comments.
