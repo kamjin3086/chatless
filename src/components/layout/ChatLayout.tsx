@@ -463,8 +463,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             </RouteErrorBoundary>
           </div>
         </main>
-
-        {/* 全局审批浮层：用于 Skills/Sandbox 高风险动作的 Human-in-the-loop 确认 */}
       </div>
     </SidebarContext.Provider>
   );

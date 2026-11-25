@@ -22,22 +22,13 @@ export type {
   SkillHooks,
   SkillExtended,
   SkillExample,
-  SkillExecutionContext,
-  SkillExecutionResult,
-  // 动作执行系统类型
+  // SKILL.md frontmatter 里动作/依赖的解析类型（SkillMdParser 在用；执行它们的那套引擎已删）
   SkillRiskLevel,
   SkillActionType,
   ScriptRuntime,
   FileOperationType,
   SkillFileOperation,
   SkillAction,
-  SkillActionStatus,
-  SkillActionResult,
-  PendingSkillAction,
-  SkillActionExecutionContext,
-  SkillExecutionPlan,
-  SkillActionProgressEvent,
-  ISkillActionListener,
 } from './types';
 
 // 解析器

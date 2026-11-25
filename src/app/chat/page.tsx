@@ -510,8 +510,6 @@ export default function ChatPage() {
         </main>
       </div>
 
-      {/* Skills 审批与计划面板（浮动） */}
-
       {/* 会话参数设置弹窗：统一挂载在页面层（右上角三点菜单/标签条共用） */}
       {currentProviderName && selectedModelId && currentConversationId && (
         <SessionParametersDialog

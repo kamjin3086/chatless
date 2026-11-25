@@ -333,21 +333,6 @@ const enUS: TranslationDict = {
   'chatComposer.connectMcp': 'Connect',
   'chatComposer.insertMention': 'Insert @mention',
   'chatComposer.mentionAction': '@Mention',
-  'skillRisk.safe': 'Safe',
-  'skillRisk.safeDescription':
-    'This is a safe action and will not affect the system.',
-  'skillRisk.low': 'Low risk',
-  'skillRisk.lowDescription':
-    'This action is low risk and usually only reads data.',
-  'skillRisk.medium': 'Medium risk',
-  'skillRisk.mediumDescription':
-    'This action may modify files or install packages.',
-  'skillRisk.high': 'High risk',
-  'skillRisk.highDescription':
-    'This action requires administrator privileges or may affect system settings.',
-  'skillRisk.critical': 'Critical risk',
-  'skillRisk.criticalDescription':
-    'This action may cause irreversible system changes.',
   'chatAttachment.add': 'Add attachments',
   'chatAttachment.uploadImage': 'Upload image',
   'chatAttachment.image': 'Attached image',
