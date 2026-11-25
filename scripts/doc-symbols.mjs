@@ -173,6 +173,23 @@ export function deletedNames(root, since) {
   }
 }
 
+/**
+ * How many commits this checkout can see. A shallow clone cannot answer what was deleted,
+ * which is a fact the check has to print rather than act like it knows.
+ */
+export function historyDepth(root) {
+  try {
+    return Number(
+      execFileSync('git', ['rev-list', '--count', 'HEAD'], {
+        cwd: root,
+        encoding: 'utf8',
+      }).trim(),
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** Every tracked file, so `src/lib/foo.ts` resolves without a stat storm. */
 function trackedFiles(root) {
   try {
@@ -195,6 +212,7 @@ export function main(
     write = (line) => process.stdout.write(`doc-symbols: ${line}\n`),
     resolvesMember,
     deleted,
+    depth,
   } = {},
 ) {
   const files =
@@ -218,7 +236,17 @@ export function main(
         return [];
       }
     });
-  const names = deleted ?? deletedNames(root, since);
+  // An axis that silently does nothing is worse than one that admits it: on a depth-1 checkout
+  // `git log --diff-filter=D` returns nothing, which would read as "no stale names anywhere".
+  // CI therefore checks this job out with `fetch-depth: 0`.
+  const history = depth ?? historyDepth(root);
+  const shallow = !deleted && Number.isFinite(history) && history < 2;
+  const names = deleted ?? (shallow ? new Set() : deletedNames(root, since));
+  if (shallow) {
+    write(
+      `history is ${history} commit(s) deep: the deleted-name axis is skipped (checkout needs fetch-depth: 0)`,
+    );
+  }
   const tracked = trackedFiles(root);
   const memberDefined =
     resolvesMember ??

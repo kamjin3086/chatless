@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { deletedNames, docClaims, main, proseFiles } from '../doc-symbols.mjs';
+import {
+  deletedNames,
+  historyDepth,
+  docClaims,
+  main,
+  proseFiles,
+} from '../doc-symbols.mjs';
 
 /**
  * `comment-symbols.mjs` watches code comments; the prose was left to chance, and the chance did
@@ -120,7 +126,23 @@ describe('what a document promises', () => {
 
 describe('the deleted-name set', () => {
   it('comes from what the repository deleted, not from a list someone maintains', () => {
-    const names = deletedNames(process.cwd(), '1 year ago');
-    expect(names.size).toBeGreaterThan(0);
+    const names = deletedNames(process.cwd(), '2 years ago');
+    // A shallow checkout (CI before this file's fetch-depth: 0) legitimately sees one commit
+    // and no deletions; the depth guard is what keeps this honest instead of environment-fragile.
+    if (historyDepth(process.cwd()) > 1) expect(names.size).toBeGreaterThan(0);
+    expect(names instanceof Set).toBe(true);
+  });
+
+  it('admits when the history is too shallow to know what was deleted', () => {
+    // An axis that silently does nothing reads as "clean". A depth-1 CI clone was exactly this
+    // until the checkout was fixed, and the test that caught it asserted on live history instead.
+    const written = [];
+    const code = main([], {
+      root: process.cwd(),
+      depth: 1,
+      write: (l) => written.push(l),
+    });
+    expect(code).toBe(0);
+    expect(written.join('\n')).toContain('deleted-name axis is skipped');
   });
 });

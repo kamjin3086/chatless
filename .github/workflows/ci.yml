@@ -77,6 +77,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        # doc-symbols reads deletions out of history; a depth-1 clone knows none of them.
+        with:
+          fetch-depth: 0
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
