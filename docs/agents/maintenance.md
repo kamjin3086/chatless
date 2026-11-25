@@ -241,7 +241,8 @@ legacy versions.
   and then the doc that recounted the stale-pointer story was what certified the pointer alive.
   Reproduce the shape with a file whose only content is a comment naming a function that does
   not exist: `node scripts/comment-symbols.mjs <that file>` exits 1.
-- **`pnpm typecheck` excludes `src-tauri/target`, and that exclude is load-bearing.** A
+- **`pnpm typecheck` excludes the generated tree under `src-tauri/target/**`, via `tsconfig.json`,
+  and that exclude is load-bearing.** A
   `cargo build` / `tauri build` drops generated `tauri-codegen-assets/*.ts` into
   `src-tauri/target/debug/build/**/out/tauri-codegen-assets`, and those are binary-ish blobs: compile them and `tsc` answers
   `TS1490 File appears to be binary` for every one, in a tree that has nothing wrong with it.
@@ -382,7 +383,8 @@ legacy versions.
   a warm-up: it requests `/` then `/chat` as soon as the server answers, so turbopack compiles while
   the cargo build runs instead of while the window sits blank (cold `/` ~11 s, `/chat` longer).
   Opt-in; plain `pnpm dev` is unchanged.
-- **Frontend-only iteration does not need a rebuild.** The debug binary in `src-tauri/target/debug/chatless`
+- **Frontend-only iteration does not need a rebuild.** The debug binary the cargo build leaves in
+  `src-tauri/target/debug/**`
     loads `http://localhost:3000` directly; run it next to `pnpm dev` instead of `pnpm tauri dev`
     when only CSS or TSX changed (a Rust rebuild is minutes, a restart is seconds).
   - `pnpm test` reports six `scripts/__tests__/*.mjs` files as load failures on Windows
@@ -407,10 +409,11 @@ legacy versions.
   them, and each names what it wants: the two Qwen files want an endpoint,
   `docs/acceptance/thinking-alias.audit.test.ts` wants a live provider catalog, and
   `docs/acceptance/real-semantic.audit.test.ts` wants `CHATLESS_KB_SESSION_ID` (it drives a real
-  desktop session). `docs/acceptance/retrieval-eval.audit.test.ts` no longer waits on a missing
-  fixture - `docs/acceptance/retrieval-eval.sqlite` is committed - but its two heavy cases still
-  gate on `CHATLESS_LEXICAL_PERF_REPORT`. So "skipped" in that runner means "waiting on an
-  external", never "broken".
+  desktop session). `docs/acceptance/retrieval-eval.audit.test.ts` wants a corpus that is not in
+  the repository: `*.sqlite` under `docs/acceptance/` is gitignored, and without it the suite
+  skips and prints `python docs/acceptance/build-eval-db.py`; its two heavy cases then gate on
+  `CHATLESS_LEXICAL_PERF_REPORT`. So "skipped" in that runner means "waiting on an external",
+  never "broken".
   The Qwen harness fails fast rather than measuring nothing: a task filter that matches
   no task is an error, a model the endpoint does not list is named before any task runs,
   and both rules are tested by `docs/acceptance/answerChecks.audit.test.ts`, which needs
