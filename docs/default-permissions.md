@@ -7,8 +7,8 @@
 
 | 范围 | 默认 |
 |------|------|
-| `$APPDATA`（应用数据、日志、`file-history`） | 应用自身读写 |
-| 会话工作目录 `文档/Chatless/<标题>-<短ID>`（旧会话沿用 `$APPDATA/workspaces/<id>`） | 会话内读写；**按调用授权**，不写入持久白名单 |
+| 应用自己的目录（`$APPDATA` 一类：数据库、`file-history`、白名单持久化） | 应用自身读写；三平台的确切位置见 `docs/llm-troubleshooting.md` 的表——macOS 的日志不在应用数据目录里，数据库在 config 目录而不是 data 目录 |
+| 会话工作目录 `文档/Chatless/<标题>-<会话摘要>`（目录名在 `src-tauri/src/workspace/naming.rs`；旧会话沿用 `workspaces/<会话 id>`） | 会话内读写；**按调用授权**，不写入持久白名单，且这类授权只给 read/write/create——`delete` 为 false（`src/lib/mcp/pipeline/ToolExecutionPipeline.ts`） |
 | 侧栏工作区目录 | 已绑定会话的 `@WorkDir` 和命令默认目录；打开目录、在其中新建会话或用 `@` 插入路径都不授予 Agent 读写权限 |
 | Desktop / Downloads / 其他路径 | 不默认开放；越界访问弹出审批卡片（仅本次 / 以后都允许） |
 | 删除 | 始终需要单独审批，且默认工作目录条目不含 delete 权限 |
@@ -39,10 +39,13 @@
 
 ## HTTP
 
-- `dangerous.all`：未启用。
-- 仍允许 `http://*:*` / `https://*:*`（Provider 与模型下载兼容）；收紧需动态 capability，
-  单独里程碑处理。
+- `dangerous.all`：未启用（`src-tauri/capabilities/main.json` 里没有这一项）。
+- `http:default` 的允许名单是四条：`http://localhost:*`、`http://127.0.0.1:*`、`https://*`、
+  `http://*:*`。也就是说 https 侧目前是开放的，http 侧只按主机与端口形状收紧过；再往下收需要
+  动态 capability，另立里程碑，不在默认权限里顺手做。
 
 ## 退出清理
 
-- 前端 `cleanup_on_exit` → Rust `release_onnx_session`，释放 ONNX session。
+- 前端在退出时调 `cleanup_on_exit`（`src/lib/services/appCleanup.ts`），Rust 侧走
+  `clear_onnx_sessions` 释放全部 ONNX session。单个会话的释放是另一条命令
+  `release_onnx_session`（`src/lib/embedding/strategies/OrtEmbeddingStrategy.ts` 用），别把两者混为一句。
