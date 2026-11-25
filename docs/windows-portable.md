@@ -1,7 +1,10 @@
 # Windows 免安装 ZIP
 
 发布流水线在 Windows x64 构建后生成 `Chatless_<版本>_windows_x64_portable.zip`
-和 SHA-256 校验文件。解压整个 ZIP，再运行 `Chatless.exe`，不要单独移动 EXE：脚本只把 `Chatless.exe`、配置里声明的
+和 SHA-256 校验文件。构建失败会不会让发布变红，两个平台不一样：Tauri 那一步是
+`continue-on-error: true`，自己失败不红；Windows 紧跟一个 **Require a successful Windows build**
+步骤（构建没成功就 `exit 1`），加上上传步骤的 `if-no-files-found: error`，缺 ZIP 或缺 `.sha256` 都会红。
+macOS 没有那个"要求构建成功"的步骤（见 `docs/macos-signing.md`）。解压整个 ZIP，再运行 `Chatless.exe`，不要单独移动 EXE：脚本只把 `Chatless.exe`、配置里声明的
 `onnxruntime.dll`、构建目录里的全部 `*.dll`（WebView2Loader 就在其中）和一个 `README.txt` 放进包里，
 少一样就跑不起来。
 

@@ -241,6 +241,13 @@ legacy versions.
   and then the doc that recounted the stale-pointer story was what certified the pointer alive.
   Reproduce the shape with a file whose only content is a comment naming a function that does
   not exist: `node scripts/comment-symbols.mjs <that file>` exits 1.
+- **`pnpm typecheck` excludes `src-tauri/target`, and that exclude is load-bearing.** A
+  `cargo build` / `tauri build` drops generated `tauri-codegen-assets/*.ts` into
+  `src-tauri/target/.../out/`, and those are binary-ish blobs: compile them and `tsc` answers
+  `TS1490 File appears to be binary` for every one, in a tree that has nothing wrong with it.
+  A clean CI checkout has no `target/`, so CI stays green while any machine that has built the
+  Rust side goes red - including the pre-commit hook, which runs the same `tsc -p tsconfig.json`.
+  `tsconfig.tests.json` already excluded `src-tauri`; the root config now does too.
 - **Formatting is judged per file, and only where HEAD already conformed.** main is largely
   unformatted: `for f in $(git ls-files 'src/**/*.ts' 'src/**/*.tsx'); do npx biome format
   "$f" >/dev/null 2>&1 || echo "$f"; done` fails **756 of 1,017** tracked files under src
@@ -249,7 +256,10 @@ legacy versions.
   the change (one commit produced 2,191 lines of it) or `git commit --no-verify` - and both
   were happening. So `scripts/format-policy.mjs`, which is what the hook now calls, holds a
   file to biome only if the version being committed already satisfied it: today that is the
-  ~261 conforming files, and nothing else. `pnpm fmt <files>` is the daily command; it
+  ~261 conforming files, and nothing else. `pnpm fmt <files…>` is the daily command and
+  `pnpm fmt:check <files…>` is the same judgement without writing - **both need file names**: a
+  bare `pnpm fmt:check` exits 2 (`name the files; no directory, no tree-wide formatting`),
+  because there is deliberately no tree-wide mode to wait on. It
   refuses a directory, refuses to reflow pre-existing dirt unless `--allow-reflow`, and
   treats a biome that could not run as an error rather than as a pass. The refusal is now
   two-way: a file HEAD left unformatted that your staged version has fully formatted is a
@@ -363,8 +373,11 @@ legacy versions.
     while a dev server is up leaves both stuck - the build prints "Creating an optimized
     production build ..." for a quarter of an hour and the dev server then serves 500s because
     the export wrote half a directory over its state. Stop the dev server first; deleting `dist`
-    recovers dev. Separately, `next build` on this machine takes ~17 minutes of real compile time
-    (recorded in `scripts/perf/build-frontend.log`), so budget for it rather than calling it hung.
+    recovers dev. Separately, `next build` on this machine takes ~18 minutes of real compile time,
+    so budget for it rather than calling it hung. That number is a local measurement, not a
+    recorded artifact - an earlier version of this line cited `scripts/perf/build-frontend.log`,
+    which is not in the tree - so re-measure with `time pnpm build:frontend` (dev server stopped)
+    before repeating it.
   - **The first page load is the slowest thing in a dev session.** `pnpm dev:warm` is `pnpm dev` plus
   a warm-up: it requests `/` then `/chat` as soon as the server answers, so turbopack compiles while
   the cargo build runs instead of while the window sits blank (cold `/` ~11 s, `/chat` longer).
@@ -390,9 +403,14 @@ legacy versions.
   `pnpm test:acceptance` (`vitest run --config docs/acceptance/vitest.config.ts`).
   There `docs/acceptance/qwen-acceptance.audit.test.ts` and
   `docs/acceptance/reasoning-stream.audit.test.ts` skip unless their endpoint is
-  enabled (`CHATLESS_QWEN=1`, `CHATLESS_QWEN_URL`, ...), and
-  `docs/acceptance/retrieval-eval.audit.test.ts` skips, printing
-  `run python docs/acceptance/build-eval-db.py first`, until the fixture exists.
+  enabled (`CHATLESS_QWEN=1`, `CHATLESS_QWEN_URL`, ...). A green default run skips four of
+  them, and each names what it wants: the two Qwen files want an endpoint,
+  `docs/acceptance/thinking-alias.audit.test.ts` wants a live provider catalog, and
+  `docs/acceptance/real-semantic.audit.test.ts` wants `CHATLESS_KB_SESSION_ID` (it drives a real
+  desktop session). `docs/acceptance/retrieval-eval.audit.test.ts` no longer waits on a missing
+  fixture - `docs/acceptance/retrieval-eval.sqlite` is committed - but its two heavy cases still
+  gate on `CHATLESS_LEXICAL_PERF_REPORT`. So "skipped" in that runner means "waiting on an
+  external", never "broken".
   The Qwen harness fails fast rather than measuring nothing: a task filter that matches
   no task is an error, a model the endpoint does not list is named before any task runs,
   and both rules are tested by `docs/acceptance/answerChecks.audit.test.ts`, which needs
@@ -413,7 +431,7 @@ legacy versions.
 - Default permission scope is a product decision, not a convenience knob
   (`docs/default-permissions.md`). Widening FS/HTTP/opener defaults needs the
   owner, not a PR.
-- A triage sweep is written up as `docs/issue-triage-YYYY-MM-DD.md`, English, one
+- A triage sweep is written up as `docs/history/issue-triage-YYYY-MM-DD.md`, English, one
   row per item, each row carrying evidence and a disposition - precedent:
   `docs/history/issue-triage-2026-09-30.md`.
 - GitHub numbers are shared between issues and PRs: `gh pr view <n>` first, fall

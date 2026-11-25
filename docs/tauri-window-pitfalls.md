@@ -78,4 +78,7 @@ custom title-bar component in a scratch checkout, then remove the throw before u
 initialisation *finishes* (MCP servers connect) and that CPU stays low at idle
 **and after a window resize** - the last part is the one that catches the
 resize-loop above. It needs Accessibility permission for the terminal; without
-it the resize checks report SKIP instead of PASS.
+it the resize checks report SKIP instead of PASS - and SKIP does not change the exit code: the
+script ends with `[ "$fail" = "0" ]`, so a run that checked nothing about windows still exits 0.
+Nothing runs it in CI either; it is a manual gate, and it only means something with accessibility
+permission granted.

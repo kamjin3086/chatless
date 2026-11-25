@@ -43,9 +43,11 @@
 2. **看得到请求体吗**：设置 → 高级设置 → 日志级别 → **调试**；级别会持久化，重启后仍生效
    （构建期设了 `NEXT_PUBLIC_LLM_DEBUG=true` 时无视级别直接开）。OpenAI-compatible 的请求体以
    `[llm-debug] request ...` 写出，单条在约 2 万字符处截断（`src/lib/llm/debugLog.ts`），内容含
-   用户原文。它是 debug 级，而日志文件那一路建链时的分发上限是 Info（`src-tauri/src/lib.rs`），
-   本机日志里一条 debug 行也没有——所以**日志里没有 `[llm-debug]` 不等于请求没发出去**，别在这儿
-   下结论，接着看下一条。请求体被截断也别当成模型只收到这些：截的是 dump，不是请求。
+   用户原文。它是 debug 级，而 Info 上限挂在**整条分发链的根节点**上（`src-tauri/src/lib.rs` 建链时
+   `.level(Info)`，stdout / webview / 文件三个 target 都在它下面），事后抬 `set_max_level` 抬不过它——
+   debug 记录只进开发者工具的 `console.debug`，哪儿都不落，本机日志里一条 debug 行也没有。
+   所以**日志里没有 `[llm-debug]` 不等于请求没发出去**，别在这儿下结论，接着看下一条。
+   （`src/lib/llm/debugLog.ts` 的头注释说这些 dump 会落进日志文件，那是旧说法，已改。）请求体被截断也别当成模型只收到这些：截的是 dump，不是请求。
 
 3. **看 `[llm] upstream model emitted a chat-template turn boundary` 警告**。
    出现它说明上游把模型的**原始 chat template 输出**当成正文返回了：模型在自己吐出 `<|im_end|>` 之后继续“自导自演”下一轮对话，客户端把这段续写丢掉了（保留边界之前的内容）。

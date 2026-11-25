@@ -19,6 +19,8 @@ Translating a prompt never changes what the user reads.
 | Tool descriptions (native schemas) | `src/lib/mcp/nativeTools/*.ts` - the `fs` tools (`read`, `write`, `ls`, `mkdir`, `rm`, `mv`, `edit`, `search`) are described in `src/lib/mcp/nativeTools/mcpFilesystem.ts`; `nativeTools/filesystem.ts` is a deprecated re-export kept only so old imports still resolve |
 | Tool documentation (appended to descriptions) | `public/tool-docs/*.txt` |
 | Text injected as messages | `src/lib/mcp/pipeline/context/ConversationEventLog.ts` (tool results, run notes), `src/lib/mcp/agentLoop/AgentLoopRunner.ts`, `src/lib/mcp/pipeline/context/ContextWindowManager.ts` (summaries), adapters under `src/lib/mcp/pipeline/adapters/` |
+| Probe / health-check prompts | `src/lib/llm/modelProbe.ts` (`MODEL_PROBE_PROMPT`) - a probe is model-facing text too |
+| Labels wrapped around injected content | `src/lib/chat/HistoryBuilder.ts` (`[Document Context]`) |
 | Retrieval / evidence | `src/lib/rag/*` |
 | Title generation | `src/lib/chat/TitleService.ts` (English prompt, the title itself follows the user's message) |
 | Skill index | `src/lib/skills/skillIndex.ts` (`buildSkillIndex`, `skillIndexBlocks`) |

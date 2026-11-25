@@ -220,4 +220,5 @@ HTTP/FS/Opener 默认范围，用户授权目录另开；Shell 以工作区 + �
 
 **兼容**：保留 Ollama、LM Studio、OpenAI-compatible、无 tools 端点；依赖升级按兼容矩阵整组
 进行，不追 latest，Next major 不与 Harness 绑定；禁止未 pin 的 git `branch = main` 依赖进入
-发布路径；不引入 Redux、RSC 全面服务端化、next-intl、Qdrant 必选后端等重型方案。
+发布路径——pin 的落点是 `src-tauri/Cargo.lock` 里的具体 commit：`rmcp` 的 manifest 写的就是
+`branch = "main"`，靠 lock 固定到 `#9349f5cb…`，所以升它是一次有意的动作，不该是 `cargo update` 的顺手结果；不引入 Redux、RSC 全面服务端化、next-intl、Qdrant 必选后端等重型方案。

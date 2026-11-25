@@ -46,8 +46,9 @@ remembering:
   `AnthropicProvider` fills its own floor (window/8, clamped to 1024-8192, otherwise the
   manual default) and does not pretend that was a user setting.
 - **`contextWindowTokens` only decides whether history gets compacted.** An unknown window
-  means no compaction and no blocked send - `ContextWindowManager` returns the history
-  as-is - and the server decides whether the request fits. The window comes from the
+  means no compaction and no blocked send - `ContextWindowManager`
+  (`src/lib/mcp/pipeline/context/ContextWindowManager.ts`) returns the history as-is - and the
+  server decides whether the request fits. The window comes from the
   provider's reported value or the user's manual entry, whichever is smaller.
 
 Compaction itself, in order: `AgentRunControlPlane.assembleRoundMessages` estimates before
@@ -58,7 +59,9 @@ and reused - within a round when the prefix fingerprint matches, across rounds f
 per-conversation in-process cache that summarizes only the new stretch. Any failure keeps the
 original history and fails the round; a lost constraint is never quietly accepted.
 `src/components/chat/ContextCompactionNotice.tsx` marks the rounds that used a summary
-(`chatUi.compaction.summary`); that notice is in-process state and is not persisted.
+(`chatUi.compaction.summary`); that notice lives in `src/store/contextCompactionStore.ts`, which
+holds at most 50 conversation ids (`MAX_NOTICES`) - older markers age out on their own, so an old
+round stops showing the notice without anything being deleted.
 
 ## Window and chrome
 
@@ -104,3 +107,10 @@ route and settings tab, and fails on Chinese interface copy left behind.
 - Agent behaviour and the PR bar: `docs/agents/maintenance.md`.
 - Product identity and what may enter the core: `docs/agents/constraints.md`.
 - Model-facing prompt language: `docs/prompt-language.md`.
+- What a tool call may do and who decides: `docs/default-permissions.md`, with
+  `docs/adr/0001-tool-policy-is-pure-pipeline-owns-side-effects.md` (the decision is a pure
+  function), `docs/adr/0002-always-keeps-two-meanings-promotion-grid-enumerated.md` (what each
+  approval answer means, per scope), `docs/adr/0003-one-tool-risk-table-two-predicates.md` (one
+  risk table behind two predicates) and `docs/adr/0004-rust-allowlist-is-the-filesystem-enforcement-point.md`
+  (where filesystem enforcement actually lives). The words themselves are normative in
+  `GLOSSARY.md`: approval, risk, permission and prompt language each have one name there.
