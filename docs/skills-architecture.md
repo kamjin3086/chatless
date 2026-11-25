@@ -1,6 +1,8 @@
 # Skills 系统架构设计文档
 
-> **状态（以 `main` 为准读这份文档）**：本文写于设计阶段，多处比代码先行。「渐进式披露机制」一节已按 2026-11 的实现重写（一条缝：`src/lib/skills/skillIndex.ts`）；「Hooks 生命周期管理」「SkillExecutor / 编排 / 沙箱」那几节描述的是**设计意图**，今天没有活路径走到它们。改这块之前先读代码，不要只读本文。
+> **状态（以 `main` 为准读这份文档）**：本文写于设计阶段，多处比代码先行。「渐进式披露机制」一节已按 2026-11 的实现重写（一条缝：`src/lib/skills/skillIndex.ts`）。
+>
+> **那套并行执行引擎已经删掉了（#237）**：`SkillExecutor`、`SkillOrchestrator`、`ActionRouter`、`skillTools` 的工具清单，以及它们的 UI（执行计划面板、动作审批面板、动作卡片、调用卡片、参数表单、执行确认对话框）和三个 store。删的理由不是"没接线所以没用"，而是它的前提——一个 skill 有自己的计划、在 Agent Loop 之外运行——正是设计决定否掉的东西：Skill 是操作知识，不是第二套 workflow 引擎。今天读 skill 用 `skill__guide`，用它说的办法做事走 Agent Loop / `ToolExecutionPipeline`（ADR-0001）。因此下面这些地方是**历史设计**，不是现状：「核心组件」里的 2. SkillExecutor 与 4. ConfirmationManager、「安全机制」四层防御图的 Layer 3 与危险命令表的「强制确认」一列、「执行流程」的完整时序图、「与 Claude Cowork 对比」里的 Human-in-the-loop 与进度追踪两行、路线图 Phase 1 的对应两项、以及「目录结构」清单。沙箱那一层只有 `ProcessSandbox` 留下（shell 执行在用），`ConfirmationManager` / `ExecutionPlanManager` 同批删除。改这块之前先读代码，不要只读本文。
 >
 > **最后更新**: 2026-11-24  
 > **版本**: 3.1（渐进式披露一节为实现现状）  
@@ -46,7 +48,7 @@ Skills 是 AI Agent 能力的**模块化封装**，每个 Skill 定义了 AI 可
 |------|------|
 | **模块化** | 每个 Skill 独立封装，可单独启用/禁用 |
 | **语义触发** | 通过用户意图自动匹配，无需显式调用 |
-| **安全优先** | 多层防护，敏感操作强制确认 |
+| **安全优先** | 多层防护；敏感操作要不要审批由管线的审批卡决定（ADR-0001），不由 skill 自己决定 |
 | **环境友好** | 自动检测依赖，提供安装引导 |
 | **可追踪** | 执行进度可视化，支持审计日志 |
 
@@ -88,7 +90,7 @@ Claude Cowork 的设计核心在于将 AI 从 **Oracle 模式（被动问答）*
 
 ### 本项目的实现
 
-我们采用 **Agentic Loop** 模式，通过 `SkillExecutor` 实现：
+我们采用 **Agentic Loop** 模式，当年通过 `SkillExecutor` 实现（已删除，#237；今天由对话侧的 Agent Loop 承担）：
 
 ```
 感知 (Observe)   ──▶  检测环境依赖、读取上下文
@@ -108,6 +110,8 @@ Claude Cowork 的设计核心在于将 AI 从 **Oracle 模式（被动问答）*
 ## 架构设计
 
 ### 整体架构图
+
+> 这张图里画着四个已经删除的组件（#237）：`SkillExecutor`、`ConfirmManager`（`ConfirmationManager`）、`ExecutionPlanManager`，以及未画出的 `SkillOrchestrator` / `ActionRouter`。活着的是 `SkillManager`、`DependencyChecker`、`CommandValidator`、`ProcessSandbox`。
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -179,7 +183,7 @@ src/lib/skills/
 ├── index.ts                 # 模块导出
 ├── types.ts                 # 类型定义
 ├── SkillManager.ts          # 技能管理器
-├── SkillExecutor.ts         # 技能执行器 (Agentic Loop)
+├── SkillExecutor.ts         # 技能执行器 (Agentic Loop) —— 已删除 #237
 ├── SkillMdParser.ts         # SKILL.md 解析器
 ├── LocalSkillLoader.ts      # 本地技能加载器
 ├── RemoteSkillLoader.ts     # 远程技能加载器
@@ -189,14 +193,14 @@ src/lib/skills/
     ├── types.ts             # 沙箱类型定义
     ├── ISandboxExecutor.ts  # 执行器接口
     ├── ProcessSandbox.ts    # 进程沙箱实现
-    ├── ConfirmationManager.ts    # 确认管理器 (HITL)
-    ├── ExecutionPlanManager.ts   # 执行计划管理器
+    ├── ConfirmationManager.ts    # 确认管理器 (HITL) —— 已删除 #237
+    ├── ExecutionPlanManager.ts   # 执行计划管理器 —— 已删除 #237
     └── validators/
         └── CommandValidator.ts   # 命令校验器
 
 src/components/skills/
 ├── DependencyInstallGuide.tsx   # 依赖安装引导组件
-└── ExecutionConfirmDialog.tsx   # 执行确认对话框
+└── ExecutionConfirmDialog.tsx   # 执行确认对话框 —— 已删除 #237（同批：SkillParameterForm、SkillApprovalPanel、SkillActionCard、SkillInvocationCard、SkillExecutionPlanPanel）
 
 src-tauri/src/sandbox/
 ├── mod.rs                   # 模块声明
@@ -273,7 +277,7 @@ const index = manager.getEnabledSkillsIndex();
 const instructions = await manager.getSkillInstructions('pr-reviewer');
 ```
 
-### 2. SkillExecutor
+### 2. SkillExecutor（已删除，#237）
 
 技能执行引擎，实现完整的 **Agentic Loop**：
 
@@ -365,9 +369,9 @@ const result = await sandbox.execute({
 });
 ```
 
-### 4. ConfirmationManager
+### 4. ConfirmationManager（已删除，#237）
 
-Human-in-the-loop 确认机制，参考 [Claude Code Hooks](https://docs.anthropic.com/zh-CN/docs/claude-code/hooks)：
+确认机制曾由它承担。今天一次 tool call 要不要问用户，由 `ToolExecutionPipeline` 的审批卡决定（ADR-0001、`docs/default-permissions.md`），沙箱自己不再问用户。下面的配置项与 API 均已删除，仅作设计留档：
 
 | 配置项 | 描述 |
 |--------|------|
@@ -435,13 +439,13 @@ const meets = meetsVersionRequirement('3.9.1', '>=3.8.0'); // true
 │  │  - critical: 不可逆操作 (rm -rf, format)                      │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────────┤
-│                    Layer 3: 用户确认 (Human-in-the-Loop)            │
+│                 Layer 3: 用户确认（现由管线审批承担）             │
 │  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  ConfirmationManager                                           │  │
-│  │  - 高风险操作强制确认                                          │  │
-│  │  - 可记忆的"始终允许"选项                                     │  │
-│  │  - 确认超时自动拒绝                                           │  │
-│  │  - 用户反馈记录                                               │  │
+│  │  ToolExecutionPipeline 的审批卡（ADR-0001）                    │  │
+│  │  - 需要时问用户，问的是这一次调用                              │  │
+│  │  - 会话级 / 目录级的信任由审批回答累积                        │  │
+│  │  - 沙箱的 ConfirmationManager 已删除（#237）                   │  │
+│  │  - 判定是纯函数：policy.ts 决定问不问，管线负责等             │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────────┤
 │                    Layer 4: 运行时隔离 (Runtime Isolation)          │
@@ -462,12 +466,14 @@ const meets = meetsVersionRequirement('3.9.1', '>=3.8.0'); // true
 |------|------|----------|----------|
 | 递归删除 | `rm -rf`, `del /s` | Critical | 完全阻止 |
 | 系统格式化 | `format`, `mkfs` | Critical | 完全阻止 |
-| 权限提升 | `sudo`, `runas` | High | 强制确认 |
+| 权限提升 | `sudo`, `runas` | High | 走 shell 审批 |
 | 系统控制 | `shutdown`, `reboot` | Critical | 完全阻止 |
-| 危险下载 | `curl \| sh` | High | 强制确认 |
+| 危险下载 | `curl \| sh` | High | 走 shell 审批 |
 | Fork Bomb | `:(){ :\|:& };:` | Critical | 完全阻止 |
 
 ### 最小权限原则
+
+下面的 `allowed_tools` / `blocked_tools` 是设计意图，从来没有执行者：今天没有任何代码读这两个字段。权限由代码与 ADR 决定——`ToolPolicy` 与 Rust 的文件系统允许名单（ADR-0004，含「skill 自己的文字不授予任何东西」那条修订）。
 
 ```typescript
 // Skill 只能访问指定的工具
@@ -486,7 +492,7 @@ if (skill.allowed_tools && !skill.allowed_tools.includes(tool)) {
 
 ## Hooks 生命周期管理
 
-> **未接线**。本节是设计意图：`pre_execute` / `post_execute` / `on_error` / `verify` 的解析在 `SkillMdParser`，唯一会跑它们的是 `SkillExecutor`，而今天没有任何活路径会走到 `SkillExecutor`——`grep -rn "SkillExecutor" src --include=*.ts --include=*.tsx | grep -v __tests__` 只印出 `src/lib/skills/SkillExecutor.ts` 自己（agent 的一次 tool call 走 `ToolExecutionPipeline`，见 ADR-0001）。也就是说：写在 SKILL.md 里的 hook 今天不会执行。要么把这套引擎删掉，要么让它真的被调用——别把本节当现状读。
+> **没有执行者**。`pre_execute` / `post_execute` / `on_error` / `verify` 的解析留在 `SkillMdParser`（skill 的格式仍然包含它们），但唯一会跑这些 hook 的是 `SkillExecutor`，而它已随 #237 删除——agent 的一次 tool call 走 `ToolExecutionPipeline`（见 ADR-0001）。也就是说：写在 SKILL.md 里的 hook 今天不会执行，别把本节当现状读；要恢复 hook，先有一个愿意跑它们的路径。
 
 参考 [Claude Code Hooks 参考](https://docs.anthropic.com/zh-CN/docs/claude-code/hooks)，实现完整的钩子系统：
 
@@ -598,7 +604,9 @@ v3.0 里那套「按 `triggers` 关键词与用户措辞做意图匹配，再预
 
 ## 执行流程
 
-### 完整时序图
+### 完整时序图（描述已删除的引擎，#237）
+
+今天的实际流程是：`AgentLoopRunner` 发请求 → 模型回一次 tool call → `ToolExecutionPipeline` 判定并执行。下面这张图画的是并行引擎的设想流程（SkillExecutor / ConfirmManager 那套），留在原处只为对照当年设计，别照它读代码。
 
 ```
 User        UI             SkillManager    SkillExecutor   ConfirmManager   Sandbox       Backend
@@ -657,10 +665,10 @@ User        UI             SkillManager    SkillExecutor   ConfirmManager   Sand
 | 特性 | Claude Cowork | 本项目 | 差距分析 |
 |------|---------------|--------|----------|
 | **隔离级别** | VM (Apple VZVirtualMachine) | 进程级别 | 计划支持 Docker/WASM |
-| **Human-in-the-loop** | ✅ 核心机制 | ✅ ConfirmationManager | 已对齐 |
+| **Human-in-the-loop** | ✅ 核心机制 | 由 `ToolExecutionPipeline` 的审批卡承担（ADR-0001）；skill 自己的 ConfirmationManager 已删除 #237 | 换实现 |
 | **渐进式披露** | ✅ 三阶段加载 | ✅ Index + Full Load | 已对齐 |
 | **环境检测** | ✅ 自动检测 | ✅ DependencyChecker | 已对齐 |
-| **进度追踪** | ✅ 实时展示 | ✅ ExecutionPlanManager | 已对齐 |
+| **进度追踪** | ✅ 实时展示 | ❌ 无 `ExecutionPlanManager`（已删除 #237）；每次 tool call 由工具卡片显示 | 未实现 |
 | **可回滚** | ✅ 快照恢复 | ❌ 无 | 计划支持 |
 | **成果物交付** | ✅ Artifacts | ⚠️ 部分 | 计划增强 |
 | **多 Agent** | ✅ Sub-agents | ❌ 无 | 未来规划 |
@@ -732,8 +740,8 @@ User        UI             SkillManager    SkillExecutor   ConfirmManager   Sand
 
 - [x] ProcessSandbox 进程级隔离
 - [x] CommandValidator 命令校验
-- [x] Human-in-the-loop 确认机制
-- [x] ExecutionPlanManager 进度追踪
+- [x] Human-in-the-loop 确认机制 —— 由管线的审批卡承担；`ConfirmationManager` 已删除（#237）
+- [x] ExecutionPlanManager 进度追踪 —— 从未接线，已删除（#237）
 - [x] DependencyInstallGuide 安装引导
 - [x] 渐进式披露机制
 - [x] Hook 生命周期支持
@@ -871,7 +879,9 @@ class WasmSandbox extends BaseSandboxExecutor {
 }
 ```
 
-### 自定义确认 UI
+### 自定义确认 UI（API 已删除，#237）
+
+下面的 `IConfirmationHandler` / `getConfirmationManager()` 已随并行引擎删除，此段仅作设计留档：
 
 ```typescript
 import type { IConfirmationHandler, ConfirmationRequest, ConfirmationResult } from '@/lib/skills/sandbox';

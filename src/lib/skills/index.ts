@@ -22,22 +22,13 @@ export type {
   SkillHooks,
   SkillExtended,
   SkillExample,
-  SkillExecutionContext,
-  SkillExecutionResult,
-  // 动作执行系统类型
+  // SKILL.md frontmatter 里动作/依赖的解析类型（SkillMdParser 在用；执行它们的那套引擎已删）
   SkillRiskLevel,
   SkillActionType,
   ScriptRuntime,
   FileOperationType,
   SkillFileOperation,
   SkillAction,
-  SkillActionStatus,
-  SkillActionResult,
-  PendingSkillAction,
-  SkillActionExecutionContext,
-  SkillExecutionPlan,
-  SkillActionProgressEvent,
-  ISkillActionListener,
 } from './types';
 
 // 解析器
@@ -85,27 +76,6 @@ export {
   type DependencyCheckResult,
 } from './dependencyChecker';
 
-// 技能工具（用于渐进式披露）
-export {
-  skillTools,
-  getSkillToolsSchema,
-  executeSkillTool,
-  isSkillTool,
-  type SkillToolDefinition,
-  type SkillToolParameter,
-} from './skillTools';
-
-// 技能执行器（Agent Loop）
-export {
-  SkillExecutor,
-  getSkillExecutor,
-  resetSkillExecutor,
-  createExecutionContext,
-  type ExecutionLogEntry,
-  type SkillExecutionStatus,
-  type SkillExecutorConfig,
-} from './SkillExecutor';
-
 // 技能验证器
 export {
   validateSkillMd,
@@ -139,21 +109,4 @@ export {
   type CommandValidatorConfig,
 } from './sandbox';
 
-// 动作路由器
-export {
-  ActionRouter,
-  getActionRouter,
-  resetActionRouter,
-  type IActionExecutor,
-} from './ActionRouter';
-
-// 技能编排器
-export {
-  SkillOrchestrator,
-  getSkillOrchestrator,
-  resetSkillOrchestrator,
-  executeSkillAction,
-  executeSkillActions,
-  type SkillOrchestratorConfig,
-} from './SkillOrchestrator';
 

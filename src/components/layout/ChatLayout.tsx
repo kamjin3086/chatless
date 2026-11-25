@@ -19,7 +19,6 @@ import { afterStartupPaint, startupMonitor } from '@/lib/utils/startupPerformanc
 import { Message, Conversation } from "@/types/chat";
 import { SidebarContext } from "@/contexts/SidebarContext";
 import { SearchInput } from '@/components/ui/search-input';
-import { FloatingSkillApprovalPanel } from '@/components/skills/SkillApprovalPanel';
 import { RouteErrorBoundary } from '@/components/errors/RouteErrorBoundary';
 
 interface ChatLayoutProps {
@@ -464,9 +463,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             </RouteErrorBoundary>
           </div>
         </main>
-
-        {/* 全局审批浮层：用于 Skills/Sandbox 高风险动作的 Human-in-the-loop 确认 */}
-        <FloatingSkillApprovalPanel />
       </div>
     </SidebarContext.Provider>
   );

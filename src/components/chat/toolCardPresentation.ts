@@ -245,8 +245,11 @@ const RETIRED_SKILL_TOOLS = new Map<string, string | null>([
   ['list_files', 'list_resources'],
   ['read_file', 'get_template'],
   ['write_file', 'edit_resource'],
-  // Older MCP-era names the adapter never answered under this server name: same card, no
-  // invented successor where there is none.
+  // Names the old MCP-era `SkillsToolAdapter` really did answer (see the deletion note in
+  // `pipeline/adapters/index.ts`), so they can appear in a stored transcript. The parallel
+  // engine's own names (`run_skill_action`, `check_skill_dependencies`, ...) are not here on
+  // purpose: that engine had no route into the pipeline, so no conversation ever recorded
+  // them - adding them would be inventing history, not translating it (#237).
   ['list_available_skills', 'list'],
   ['get_skill_instructions', 'guide'],
   ['list_skill_actions', null],

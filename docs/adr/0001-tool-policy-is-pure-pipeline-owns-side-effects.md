@@ -4,4 +4,4 @@ Approving a tool call means waiting for a human, and the trust they hand over ha
 
 The alternative would have made the rules untestable without a live store, a database and a waiting user — which is exactly what the existing pipeline approval tests pay today, with a stack of store and database mocks (nine `vi.mock` calls each). As written, the decisions and promotions themselves are covered by mock-free table tests (policy/__tests__/policy.test.ts, toolRisk.test.ts). The approval round-trip still needs the store and database mocks - depth moved the cost, it did not remove it.
 
-Status: accepted, and not yet on `main`. Every symbol named above - the four policy functions and both table-test files - lands with PR #85.
+Status: accepted, on `main` since PR #85 (merged 2026-10-12); the code and both table tests referenced above are in the tree.
