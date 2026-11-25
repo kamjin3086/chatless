@@ -4,6 +4,7 @@ import {
   previewCommand,
   previewResult,
 } from '../toolCardPresentation';
+import { translate } from '@/i18n';
 
 /**
  * The one-line tool row is the only part of a tool call most users read. The two shapes
@@ -353,5 +354,75 @@ describe('the previews the owner said were fine', () => {
     });
     expect(card.titleLine).toBe('列目录');
     expect(card.detailLineShort).toBe('Downloads');
+  });
+});
+
+/**
+ * Names the tool set no longer has (`skill__use` and its siblings, removed in PR #230)
+ * still sit in stored conversations. The call already carries its result, so nothing is
+ * lost - but a card that says "read the guide" for a call that could not be routed reads
+ * as data loss. The card says retired instead: display only, never a route.
+ */
+describe('skill tool names that no longer exist (#236)', () => {
+  const RETIRED: Array<[string, string | null]> = [
+    ['use', 'guide'],
+    ['get', 'guide'],
+    ['list_files', 'list_resources'],
+    ['read_file', 'get_template'],
+    ['write_file', 'edit_resource'],
+    ['list_available_skills', 'list'],
+    ['get_skill_instructions', 'guide'],
+    ['list_skill_actions', null],
+  ];
+
+  for (const [tool, successor] of RETIRED) {
+    it(`says the tool is gone rather than guessing what it did: skill__${tool}`, () => {
+      for (const locale of ['zh', 'en'] as const) {
+        const card = presentToolCard(locale, {
+          server: 'skill',
+          tool,
+          args: { name: 'grilling' },
+        });
+        expect(card.titleLine).toBe(
+          translate(locale, 'toolCall.retiredSkillTool'),
+        );
+        // The card names the retired tool and, where one exists, its replacement: naming
+        // the successor wrongly is its own small lie.
+        expect(card.detailLineFull).toBe(
+          successor
+            ? `skill__${tool} \u2192 skill__${successor}`
+            : `skill__${tool}`,
+        );
+      }
+    });
+  }
+
+  it('keeps the names that still exist rendering as they did', () => {
+    expect(
+      presentToolCard('zh', {
+        server: 'skill',
+        tool: 'guide',
+        args: { id: 'grilling' },
+      }).titleLine,
+    ).toBe(translate('zh', 'toolCall.getSkillGuide'));
+    expect(
+      presentToolCard('zh', {
+        server: 'skill',
+        tool: 'list_resources',
+        args: { id: 'grilling' },
+      }).titleLine,
+    ).toBe(translate('zh', 'toolCall.listSkillResources'));
+  });
+
+  it('retires nothing on the external skills server', () => {
+    // `skills` (plural) is an MCP server whose tool names are the package's own; only the
+    // built-in `skill` server lost these names.
+    expect(
+      presentToolCard('zh', {
+        server: 'skills',
+        tool: 'use',
+        args: { name: 'x' },
+      }).titleLine,
+    ).toBe(translate('zh', 'toolCall.getSkillGuide'));
   });
 });

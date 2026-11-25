@@ -194,6 +194,7 @@ const enUS: TranslationDict = {
   'toolCall.listSeparator': ', ',
   'toolCall.listSkills': 'List skills',
   'toolCall.getSkillGuide': 'Get skill guide',
+  'toolCall.retiredSkillTool': 'Removed skill tool',
   'toolCall.listSkillResources': 'List skill resources',
   'toolCall.getTemplate': 'Get template',
   'toolCall.listSkillActions': 'List skill actions',

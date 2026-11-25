@@ -231,6 +231,27 @@ function describeToolName(locale: Locale, server: string, tool: string): string 
   return verb ? translate(locale, verb) : `${server} · ${tool}`;
 }
 
+/**
+ * Names the built-in `skill` server used to answer and no longer has. PR #230 (commit
+ * 3e02d86) deleted the alias branches, and the adapter's `default` still answers them with
+ * `Unknown skill tool` - a test in `pipeline/__tests__/retiredSkillToolRouting.test.ts`
+ * pins that, so this table is display translation and nothing more. The successor is what
+ * the model should call today; a name with no successor gets no arrow rather than an
+ * invented one (#236).
+ */
+const RETIRED_SKILL_TOOLS = new Map<string, string | null>([
+  ['use', 'guide'],
+  ['get', 'guide'],
+  ['list_files', 'list_resources'],
+  ['read_file', 'get_template'],
+  ['write_file', 'edit_resource'],
+  // Older MCP-era names the adapter never answered under this server name: same card, no
+  // invented successor where there is none.
+  ['list_available_skills', 'list'],
+  ['get_skill_instructions', 'guide'],
+  ['list_skill_actions', null],
+]);
+
 export function presentToolCard(locale: Locale, params: {
   server: string;
   tool: string;
@@ -249,6 +270,25 @@ export function presentToolCard(locale: Locale, params: {
     const id = pickArg(args, 'id');
     const name = pickArg(args, 'name');
     const skillLabel = id || name || '';
+
+    // A name this server does not have any more. The result is already stored, so the
+    // honest card says the name is retired and points at what took its place; guessing the
+    // old job would read as a tool that still works. The branches below keep the same
+    // names alive for `skills` (plural), the external MCP server whose names belong to the
+    // package - only the built-in server lost them.
+    if (srv === 'skill' && RETIRED_SKILL_TOOLS.has(tl)) {
+      const successor = RETIRED_SKILL_TOOLS.get(tl);
+      const detail = successor
+        ? `skill__${tl} → skill__${successor}`
+        : `skill__${tl}`;
+      return {
+        titleLine: t('toolCall.retiredSkillTool'),
+        detailLineLabel: t('toolCall.detail.tool'),
+        detailLineFull: detail,
+        detailLineShort: truncate(detail, 30),
+        kind: 'generic',
+      };
+    }
     
     // 使用类（只读）
     if (tl === 'list_available_skills' || tl === 'list') {
