@@ -3,8 +3,10 @@
 Every markdown file under `docs/`, with what it owes you. Three states, and the state decides
 who keeps it true:
 
-- **live** - describes today's code. `pnpm check:docs-symbols` fails if it names a path or a
-  member the tree no longer has; its *claims* are kept true by whoever changes the code.
+- **live** - describes today's code. `pnpm check:docs-symbols` fails if it names a path (written
+  or linked), a member the tree no longer defines, or a name this repository deleted - unless the
+  claim itself, or the heading over it, says it is history; its *claims* are kept true by whoever
+  changes the code.
 - **frozen** - a dated snapshot (a filename ending in `-YYYY-MM-DD.md`, or anything under
   `docs/architecture/`, `docs/acceptance/`, `docs/history/`). Excluded from that gate on
   purpose: a snapshot is not corrected when the tree moves, it is superseded by a newer one.
