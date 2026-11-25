@@ -94,6 +94,12 @@ jobs:
         run: pnpm typecheck
       - name: Type check the tests
         run: pnpm typecheck:tests
+      # Text gates, in seconds each: a comment or a document that names something the tree no
+      # longer has, and a locale key nothing asks for. All three were hand-caught in review.
+      - name: Check stale references in comments and docs
+        run: pnpm check:comments && pnpm check:docs-symbols
+      - name: Check for orphaned locale keys
+        run: pnpm check:i18n-unused
       - name: Run unit tests
         run: pnpm test
 
