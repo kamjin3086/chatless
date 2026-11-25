@@ -27,8 +27,10 @@ export const SKILL_DESCRIPTION_MAX_CHARS = 320;
 /**
  * Budget for the index body, counted in UTF-16 code units (JS string length), not bytes:
  * a CJK description costs more than one byte per character, so the wire size of a
- * Chinese-heavy index is above this figure. Over budget is not a truncation - the whole
- * list falls back to the standing line, because a half list invites wrong picks.
+ * Chinese-heavy index is above this figure. Over budget is not a truncation and not a
+ * cliff: the list falls to names without descriptions, and only then to the standing line
+ * plus `skill__list(query)`. A half list is the one shape that is never sent, because it
+ * makes the missing skills look absent.
  */
 export const SKILL_INDEX_BUDGET_CHARS = 1200;
 
@@ -50,10 +52,12 @@ export interface SkillIndexView {
   entries: SkillIndexEntryView[];
   /** The standing line: only present when skills are available at all. */
   availabilityLine: string | null;
-  /** The index body; null when it is over budget, in which case only the line remains. */
+  /** The index body; null when even the names do not fit, in which case only the line remains. */
   indexText: string | null;
-  /** Why there is no index body. */
+  /** The full list (with descriptions) did not fit; see `namesOnly` for what went instead. */
   overflowed: boolean;
+  /** The body names skills without descriptions - the rung between full list and no list. */
+  namesOnly: boolean;
   /** Ids the user may name but the model must not load on its own. */
   userOnlyIds: string[];
   /**
@@ -104,6 +108,11 @@ function indexLine(entry: SkillIndexEntryView): string {
 function requestedLine(entry: SkillIndexEntryView): string {
   const name = String(entry.name || entry.id).trim();
   return `- ${name} (\`${entry.id}\`) [user requested - read this guide first]: ${descriptionOf(entry)}`;
+}
+
+function nameLine(entry: SkillIndexEntryView): string {
+  const name = String(entry.name || entry.id).trim();
+  return `- ${name} (\`${entry.id}\`)`;
 }
 
 /**
@@ -173,37 +182,63 @@ export function buildSkillIndex(
       availabilityLine: userOnlyLine,
       indexText: null,
       overflowed: false,
+      namesOnly: false,
       userOnlyIds,
       requested,
     };
   }
 
-  const body = [
+  const fullBody = [
     '[Skills installed here]',
     'Names only - the instructions are not here.',
     ...sorted.map(indexLine),
   ].join('\n');
 
-  const overflowed = body.length > SKILL_INDEX_BUDGET_CHARS;
-  if (overflowed) {
-    availabilityLines.push(
-      `The list is long (${sorted.length} skills): skill__list(query) searches it.`,
-    );
+  if (fullBody.length <= SKILL_INDEX_BUDGET_CHARS) {
     return {
       entries: sorted,
       availabilityLine: availabilityLines.join('\n'),
-      indexText: null,
-      overflowed: true,
+      indexText: fullBody,
+      overflowed: false,
+      namesOnly: false,
       userOnlyIds,
       requested,
     };
   }
 
+  // Descriptions are the expensive half of the budget, and an id carries routing weight of
+  // its own: `/pdf-forms` needs no essay. Dropping them keeps every skill present, which is
+  // what a half list never does.
+  const namesBody = [
+    '[Skills installed here]',
+    'Descriptions did not fit - names only. skill__guide(id) reads one.',
+    ...sorted.map(nameLine),
+  ].join('\n');
+
+  if (namesBody.length <= SKILL_INDEX_BUDGET_CHARS) {
+    availabilityLines.push(
+      `The list is long (${sorted.length} skills): names are listed above, skill__guide(id) explains one.`,
+    );
+    return {
+      entries: sorted,
+      availabilityLine: availabilityLines.join('\n'),
+      indexText: namesBody,
+      overflowed: true,
+      namesOnly: true,
+      userOnlyIds,
+      requested,
+    };
+  }
+
+  availabilityLines.push(
+    `The list is long (${sorted.length} skills): skill__list(query) searches it.`,
+  );
   return {
     entries: sorted,
     availabilityLine: availabilityLines.join('\n'),
-    indexText: body,
-    overflowed: false,
+    indexText: null,
+    overflowed: true,
+    namesOnly: false,
     userOnlyIds,
     requested,
   };

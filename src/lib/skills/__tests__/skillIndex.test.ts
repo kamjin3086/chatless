@@ -66,21 +66,72 @@ describe('what the model is told about skills', () => {
     expect(line).toContain('…');
   });
 
-  it('falls back to the standing line instead of half a list', () => {
+  it('drops descriptions before it drops the list', () => {
+    // A 40-skill install used to get no names at all, while a 30-skill one got the full
+    // list: the cliff was one skill wide. Names without descriptions still routes -
+    // `description` is the routing surface, but an id the model recognises routes too.
     const many = Array.from({ length: 40 }, (_, i) =>
       skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
     );
     const view = buildSkillIndex(many);
     expect(view.overflowed).toBe(true);
-    expect(view.indexText).toBeNull();
-    expect(view.availabilityLine).toContain('skill__list');
+    expect(view.namesOnly).toBe(true);
+    expect(view.indexText).not.toBeNull();
+    expect(view.indexText).toContain('skill__guide');
+    expect(view.indexText).not.toContain('Description 7');
+    // All or nothing at every rung: names-only means every skill is still named.
+    for (const entry of view.entries) {
+      expect(view.indexText!, `missing ${entry.id}`).toContain(
+        `(\`${entry.id}\`)`,
+      );
+    }
     expect(view.entries).toHaveLength(40);
     expect(skillIndexBlocks(view).map((b) => b.id)).toEqual([
       'skill-availability',
+      'skills-index',
     ]);
-    // The budget is a budget: over it means no index text, not a longer message.
+  });
+
+  it('falls back to search when even the names will not fit', () => {
+    const many = Array.from({ length: 120 }, (_, i) =>
+      skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
+    );
+    const view = buildSkillIndex(many);
+    expect(view.overflowed).toBe(true);
+    expect(view.namesOnly).toBe(false);
+    expect(view.indexText).toBeNull();
+    expect(view.availabilityLine).toContain('skill__list');
+    expect(view.entries).toHaveLength(120);
+    expect(skillIndexBlocks(view).map((b) => b.id)).toEqual([
+      'skill-availability',
+    ]);
+    // The budget is a budget: a rung that does not fit is not stretched to fit.
     const small = buildSkillIndex([skill('a', 'A', 'short')]);
     expect(small.indexText!.length).toBeLessThan(SKILL_INDEX_BUDGET_CHARS * 2);
+  });
+
+  it('holds the budget at every rung and stays byte-stable there', () => {
+    const sets = [
+      [skill('a', 'A', 'Reads notes.'), skill('b', 'B', 'Ships the app.')],
+      Array.from({ length: 40 }, (_, i) =>
+        skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
+      ),
+      Array.from({ length: 120 }, (_, i) =>
+        skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
+      ),
+    ];
+    for (const set of sets) {
+      const forward = buildSkillIndex(set);
+      const backward = buildSkillIndex([...set].reverse());
+      expect(backward.indexText).toBe(forward.indexText);
+      expect(backward.availabilityLine).toBe(forward.availabilityLine);
+      if (forward.indexText) {
+        expect(
+          forward.indexText.length,
+          `over budget at ${set.length}`,
+        ).toBeLessThanOrEqual(SKILL_INDEX_BUDGET_CHARS);
+      }
+    }
   });
 });
 
