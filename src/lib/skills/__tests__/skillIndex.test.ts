@@ -17,6 +17,21 @@ function skill(
   return { id, name, description, invocation };
 }
 
+/**
+ * An install of `count` skills. `name` controls the name length because the names rung is
+ * about names, not descriptions; `descWords` controls the full rung.
+ */
+function manySkills(
+  count: number,
+  opts: { name?: (i: number) => string; descWords?: number } = {},
+): SkillIndexEntryView[] {
+  const nameOf = opts.name ?? ((i: number) => `Skill ${i}`);
+  const words = opts.descWords ?? 20;
+  return Array.from({ length: count }, (_, i) =>
+    skill(`skill-${i}`, nameOf(i), `Description ${i} `.repeat(words)),
+  );
+}
+
 const CJK = /[\u4e00-\u9fff]/;
 
 describe('what the model is told about skills', () => {
@@ -67,20 +82,19 @@ describe('what the model is told about skills', () => {
   });
 
   it('drops descriptions before it drops the list', () => {
-    // A 40-skill install used to get no names at all, while a 30-skill one got the full
-    // list: the cliff was one skill wide. Names without descriptions still routes -
-    // `description` is the routing surface, but an id the model recognises routes too.
-    const many = Array.from({ length: 40 }, (_, i) =>
-      skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
-    );
+    // Past the budget the list used to vanish in one step: on this fixture the full form
+    // already overflows at four skills, so anything bigger than a handful got no names at
+    // all. Names without descriptions still route - `description` is the routing surface,
+    // but an id the model recognises routes too.
+    const many = manySkills(40);
     const view = buildSkillIndex(many);
-    expect(view.overflowed).toBe(true);
-    expect(view.namesOnly).toBe(true);
+    expect(view.rung).toBe('names');
     expect(view.indexText).not.toBeNull();
     expect(view.indexText).toContain('skill__guide');
     expect(view.indexText).not.toContain('Description 7');
-    // All or nothing at every rung: names-only means every skill is still named.
+    // All or nothing at every rung: the names rung keeps every skill, by name and by id.
     for (const entry of view.entries) {
+      expect(view.indexText!, `missing ${entry.id}`).toContain(entry.name);
       expect(view.indexText!, `missing ${entry.id}`).toContain(
         `(\`${entry.id}\`)`,
       );
@@ -90,18 +104,20 @@ describe('what the model is told about skills', () => {
       'skill-availability',
       'skills-index',
     ]);
+    // The standing line sits above the index block, so it must not claim the list is above.
+    expect(view.availabilityLine).toContain('below');
   });
 
   it('falls back to search when even the names will not fit', () => {
-    const many = Array.from({ length: 120 }, (_, i) =>
-      skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
-    );
+    // 40 skills whose names are long enough that the names rung also overflows.
+    const many = manySkills(40, {
+      name: (i) => `very-long-skill-name-number-${i}`,
+    });
     const view = buildSkillIndex(many);
-    expect(view.overflowed).toBe(true);
-    expect(view.namesOnly).toBe(false);
+    expect(view.rung).toBe('none');
     expect(view.indexText).toBeNull();
     expect(view.availabilityLine).toContain('skill__list');
-    expect(view.entries).toHaveLength(120);
+    expect(view.entries).toHaveLength(40);
     expect(skillIndexBlocks(view).map((b) => b.id)).toEqual([
       'skill-availability',
     ]);
@@ -113,12 +129,9 @@ describe('what the model is told about skills', () => {
   it('holds the budget at every rung and stays byte-stable there', () => {
     const sets = [
       [skill('a', 'A', 'Reads notes.'), skill('b', 'B', 'Ships the app.')],
-      Array.from({ length: 40 }, (_, i) =>
-        skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
-      ),
-      Array.from({ length: 120 }, (_, i) =>
-        skill(`skill-${i}`, `Skill ${i}`, `Description ${i} `.repeat(20)),
-      ),
+      manySkills(40),
+      manySkills(40, { name: (i) => `very-long-skill-name-number-${i}` }),
+      manySkills(120),
     ];
     for (const set of sets) {
       const forward = buildSkillIndex(set);
@@ -128,10 +141,23 @@ describe('what the model is told about skills', () => {
       if (forward.indexText) {
         expect(
           forward.indexText.length,
-          `over budget at ${set.length}`,
+          `over budget on a ${set.length}-skill set`,
         ).toBeLessThanOrEqual(SKILL_INDEX_BUDGET_CHARS);
       }
     }
+  });
+
+  it('is stable even when two skills share an id', () => {
+    // Rare on disk (the directory name is the id), but a sort that cannot decide between
+    // two entries renders different bytes for one input, which is exactly what the cached
+    // prefix cannot take.
+    const pair = [
+      skill('same', 'Alpha', 'First.'),
+      skill('same', 'Beta', 'Second.'),
+    ];
+    expect(buildSkillIndex([...pair].reverse()).indexText).toBe(
+      buildSkillIndex(pair).indexText,
+    );
   });
 });
 

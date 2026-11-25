@@ -47,17 +47,22 @@ export interface SkillIndexFacts {
   explicitIds?: string[];
 }
 
+/**
+ * Which rung the index fits on: names with descriptions, names alone, or no list at all.
+ * One value rather than flags, because "over budget" and "names only" are two rungs of one
+ * ladder and any pairing of two booleans invites a state that never exists.
+ */
+export type SkillIndexRung = 'full' | 'names' | 'none';
+
 export interface SkillIndexView {
   /** What the model may see (filtered, sorted). */
   entries: SkillIndexEntryView[];
   /** The standing line: only present when skills are available at all. */
   availabilityLine: string | null;
-  /** The index body; null when even the names do not fit, in which case only the line remains. */
+  /** The index body; null on the `none` rung, in which case only the standing line remains. */
   indexText: string | null;
-  /** The full list (with descriptions) did not fit; see `namesOnly` for what went instead. */
-  overflowed: boolean;
-  /** The body names skills without descriptions - the rung between full list and no list. */
-  namesOnly: boolean;
+  /** Which rung the list fits on. `none` means the budget could not hold even the names. */
+  rung: SkillIndexRung;
   /** Ids the user may name but the model must not load on its own. */
   userOnlyIds: string[];
   /**
@@ -69,12 +74,19 @@ export interface SkillIndexView {
 }
 
 /**
- * Sort by id: locale-independent and byte-stable, so two machines with the same skills
- * send the same bytes and the cached prompt prefix does not drift. `localeCompare` on
- * `name` does neither.
+ * Sort by id, tie-broken by name: locale-independent and total, so two machines with the
+ * same skills send the same bytes and the cached prompt prefix does not drift.
+ * `localeCompare` on `name` is neither. The tie-break matters on the rare duplicate id -
+ * without it two orders of one input can render different text.
  */
-export function compareById(a: { id: string }, b: { id: string }): number {
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+export function compareById(
+  a: { id: string; name?: string },
+  b: { id: string; name?: string },
+): number {
+  if (a.id !== b.id) return a.id < b.id ? -1 : 1;
+  const an = String(a.name ?? '');
+  const bn = String(b.name ?? '');
+  return an === bn ? 0 : an < bn ? -1 : 1;
 }
 
 /**
@@ -181,12 +193,27 @@ export function buildSkillIndex(
       entries: [],
       availabilityLine: userOnlyLine,
       indexText: null,
-      overflowed: false,
-      namesOnly: false,
+      rung: 'none',
       userOnlyIds,
       requested,
     };
   }
+
+  const asRung = (
+    indexText: string | null,
+    rung: SkillIndexRung,
+    note?: string,
+  ) => {
+    if (note) availabilityLines.push(note);
+    return {
+      entries: sorted,
+      availabilityLine: availabilityLines.join('\n'),
+      indexText,
+      rung,
+      userOnlyIds,
+      requested,
+    };
+  };
 
   const fullBody = [
     '[Skills installed here]',
@@ -195,15 +222,7 @@ export function buildSkillIndex(
   ].join('\n');
 
   if (fullBody.length <= SKILL_INDEX_BUDGET_CHARS) {
-    return {
-      entries: sorted,
-      availabilityLine: availabilityLines.join('\n'),
-      indexText: fullBody,
-      overflowed: false,
-      namesOnly: false,
-      userOnlyIds,
-      requested,
-    };
+    return asRung(fullBody, 'full');
   }
 
   // Descriptions are the expensive half of the budget, and an id carries routing weight of
@@ -216,32 +235,20 @@ export function buildSkillIndex(
   ].join('\n');
 
   if (namesBody.length <= SKILL_INDEX_BUDGET_CHARS) {
-    availabilityLines.push(
-      `The list is long (${sorted.length} skills): names are listed above, skill__guide(id) explains one.`,
+    // The standing line is emitted above the index block, so "below" is the honest word:
+    // a prompt that misdescribes its own layout is one the model cannot navigate.
+    return asRung(
+      namesBody,
+      'names',
+      `The list is long (${sorted.length} skills): the block below names them without descriptions, and skill__guide(id) reads one.`,
     );
-    return {
-      entries: sorted,
-      availabilityLine: availabilityLines.join('\n'),
-      indexText: namesBody,
-      overflowed: true,
-      namesOnly: true,
-      userOnlyIds,
-      requested,
-    };
   }
 
-  availabilityLines.push(
+  return asRung(
+    null,
+    'none',
     `The list is long (${sorted.length} skills): skill__list(query) searches it.`,
   );
-  return {
-    entries: sorted,
-    availabilityLine: availabilityLines.join('\n'),
-    indexText: null,
-    overflowed: true,
-    namesOnly: false,
-    userOnlyIds,
-    requested,
-  };
 }
 
 /**
@@ -249,8 +256,9 @@ export function buildSkillIndex(
  *
  * Two blocks rather than one is not about two pieces of important text: it lets
  * `changedBlockIds` say which part moved. Merged, any change reports the same single
- * block, while these two change at different rates (the line only flips between "skills
- * exist" and "none do"; the body follows the list). Both live in the conversation layer:
+ * block, while these two change at different rates: the line only varies with which
+ * rungs exist (skills present or not, and what the list fell back to), while the body
+ * follows the list itself. Both live in the conversation layer:
  * neither depends on this turn's wording, and putting them in the turn layer would break
  * the cached prefix on every turn for nothing.
  *

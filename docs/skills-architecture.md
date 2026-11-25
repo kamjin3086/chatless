@@ -577,7 +577,7 @@ hooks:
 只在「至少一个 skill 可用」时出现：这里有 skill、动手前先 `skill__guide`、skill 不授予任何权限。存在仅用户可触发的 skill 时，这里列出它们的名字（只列名字，不列描述——描述会诱导模型去读）。
 
 **第 2 层 — 索引 `skills-index`（conversation / order 80）**
-id + 名字 + 描述。按 `id` 排序（与 locale 无关，才不会换种界面语言就把 system prompt 的缓存前缀整段漂掉）；单条描述 ≤ 320 字符；整份预算 1200 字符——注意量的是 JS `string.length`（UTF-16 单元），不是字节：中文描述按 UTF-8 算占得更宽，线上体积因此可能高于这个数字。超预算**不是**截断，而是一档一档往下退：先退成「只给名字」（`namesOnly`，每条仍列出，指向 `skill__guide(id)`），名字也装不下才整份退回常驻行加一句「用 `skill__list(query)` 搜」。半份清单是唯一不发的形状——它会让模型以为另外那些不存在。
+id + 名字 + 描述。按 `id` 排序（与 locale 无关，才不会换种界面语言就把 system prompt 的缓存前缀整段漂掉）；单条描述 ≤ 320 字符；整份预算 1200 字符——注意量的是 JS `string.length`（UTF-16 单元），不是字节：中文描述按 UTF-8 算占得更宽，线上体积因此可能高于这个数字。超预算**不是**截断，而是一档一档往下退：先退成「只给名字」（`rung: 'names'`，每条仍列出，指向 `skill__guide(id)`）；三档在代码里就是 `rung: 'full' | 'names' | 'none'`，名字也装不下才整份退回常驻行加一句「用 `skill__list(query)` 搜」。半份清单是唯一不发的形状——它会让模型以为另外那些不存在。
 
 **第 3 层 — 正文**
 读指南正文的入口是 `skill__guide(id)`（`skill__get_template` 能读包内任意文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板而不是路由）。索引指向的四个只读工具（`list` / `guide` / `list_resources` / `get_template`）随索引一起进入工具列表：让模型去调一个不在请求里的工具，比不给索引更坑。文本工具通道（`prompt` 轨）里 `skill` 也会一起出现在可用服务器列表里；`disabled` 轨整块不出现——一句「先读 `skill__guide`」在没有工具可调时就是空指。管理工具（install / uninstall / enable / disable / update / edit_resource）仍走 `tools__load`。

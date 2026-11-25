@@ -130,7 +130,7 @@ _Avoid_: 在别处再判一次类型（边界已做过），或在写入路径�
 ### Skills
 
 **技能索引 (Skill index)**:
-模型在这一轮里能看见的那份 skill 清单（`buildSkillIndex` → `skill-availability` + `skills-index` 两个 block）。索引只给 id、名字和描述，**描述就是路由面**——模型靠"Use when …"决定要不要用它。超预算时一档一档退，从不给半份清单：先退成只给名字（每条仍在，靠 `skill__guide(id)` 读），名字也装不下才退回常驻行 + `skill__list(query)`。读指南正文的入口是 `skill__guide(id)`；`skill__get_template` 读的是包内文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板不是路由。索引里的名字不算读过，正文也不会因为被点名就自动注入。
+模型在这一轮里能看见的那份 skill 清单（`buildSkillIndex` → `skill-availability` + `skills-index` 两个 block）。索引只给 id、名字和描述，**描述就是路由面**——模型靠"Use when …"决定要不要用它。超预算时一档一档退（代码里叫 `rung`：`full` / `names` / `none`），从不给半份清单：先退成只给名字（每条仍在，靠 `skill__guide(id)` 读），名字也装不下才退回常驻行 + `skill__list(query)`。读指南正文的入口是 `skill__guide(id)`；`skill__get_template` 读的是包内文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板不是路由。索引里的名字不算读过，正文也不会因为被点名就自动注入。
 _Avoid_: skill catalogue（"目录"已被 provider 清单和 `tools__search` 的目录占用）、技能列表、按关键词预加载正文
 
 **触发方式 (skill invocation policy)**:

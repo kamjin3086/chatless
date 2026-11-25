@@ -74,13 +74,32 @@ describe('prompt language', () => {
   });
 
   it('keeps the skill index English', () => {
-    // Built at runtime from the installed skills, but it is still prompt text.
-    const view = buildSkillIndex([
+    // Built at runtime from the installed skills, but it is still prompt text - and it has
+    // three rungs, each with its own wording, so each one gets the gate.
+    const full = buildSkillIndex([
       { id: 'pdf-forms', name: 'PDF forms', description: 'Fill PDF forms. Use when a PDF needs filling.' },
       { id: 'deploy', name: 'Deploy', description: 'Deploy the app.', invocation: 'user-only' },
     ]);
-    expectAllEnglish('skill index', [view.availabilityLine, view.indexText]);
-    expect(view.availabilityLine, 'the sample should exercise both texts').toBeTruthy();
+    expectAllEnglish('skill index', [full.availabilityLine, full.indexText]);
+    expect(full.availabilityLine, 'the sample should exercise both texts').toBeTruthy();
+
+    const withLongDescriptions = Array.from({ length: 40 }, (_, i) => ({
+      id: `skill-${i}`,
+      name: `Skill ${i}`,
+      description: `Does thing ${i}. `.repeat(20),
+    }));
+    const names = buildSkillIndex(withLongDescriptions);
+    expect(names.rung, 'sample must land on the names rung').toBe('names');
+    expectAllEnglish('skill index (names rung)', [names.availabilityLine, names.indexText]);
+
+    const withLongNames = Array.from({ length: 40 }, (_, i) => ({
+      id: `skill-${i}`,
+      name: `very-long-skill-name-number-${i}`,
+      description: `Does thing ${i}. `.repeat(20),
+    }));
+    const none = buildSkillIndex(withLongNames);
+    expect(none.rung, 'sample must land on the no-list rung').toBe('none');
+    expectAllEnglish('skill index (no-list rung)', [none.availabilityLine]);
   });
 
   it('keeps every native tool description English', () => {
