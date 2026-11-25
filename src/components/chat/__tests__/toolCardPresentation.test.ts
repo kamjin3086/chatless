@@ -364,9 +364,18 @@ describe('the previews the owner said were fine', () => {
  * as data loss. The card says retired instead: display only, never a route.
  */
 describe('skill tool names that no longer exist (#236)', () => {
-  const RETIRED = ['use', 'get', 'list_files', 'read_file', 'write_file'];
+  const RETIRED: Array<[string, string | null]> = [
+    ['use', 'guide'],
+    ['get', 'guide'],
+    ['list_files', 'list_resources'],
+    ['read_file', 'get_template'],
+    ['write_file', 'edit_resource'],
+    ['list_available_skills', 'list'],
+    ['get_skill_instructions', 'guide'],
+    ['list_skill_actions', null],
+  ];
 
-  for (const tool of RETIRED) {
+  for (const [tool, successor] of RETIRED) {
     it(`says the tool is gone rather than guessing what it did: skill__${tool}`, () => {
       for (const locale of ['zh', 'en'] as const) {
         const card = presentToolCard(locale, {
@@ -377,7 +386,13 @@ describe('skill tool names that no longer exist (#236)', () => {
         expect(card.titleLine).toBe(
           translate(locale, 'toolCall.retiredSkillTool'),
         );
-        expect(card.detailLineFull).toContain(tool);
+        // The card names the retired tool and, where one exists, its replacement: naming
+        // the successor wrongly is its own small lie.
+        expect(card.detailLineFull).toBe(
+          successor
+            ? `skill__${tool} \u2192 skill__${successor}`
+            : `skill__${tool}`,
+        );
       }
     });
   }

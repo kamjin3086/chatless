@@ -4,13 +4,23 @@ import { toolRisk } from '../policy/toolRisk';
 import type { ToolInvocation } from '../ToolInvocation';
 
 /**
- * PR #230 deleted the alias names `use`, `get`, `list_files`, `read_file`, `write_file` on
- * the built-in `skill` server, and PR #236 made the card call them retired rather than
- * guess their old job. That reading is only honest while nothing routes them: a retired
+ * PR #230 (commit 3e02d86) deleted the alias names `use`, `get`, `list_files`,
+ * `read_file`, `write_file` on the built-in `skill` server, and issue #236 - PR #241 -
+ * made the card call them retired rather than guess their old job. That reading is only
+ * honest while nothing routes them: a retired
  * name that still ran would make the card wrong in the other direction, and a risk-table
  * entry would be the door some later policy walks in through.
  */
-const RETIRED = ['use', 'get', 'list_files', 'read_file', 'write_file'];
+const RETIRED = [
+  'use',
+  'get',
+  'list_files',
+  'read_file',
+  'write_file',
+  'list_available_skills',
+  'get_skill_instructions',
+  'list_skill_actions',
+];
 const adapter = new SkillUnifiedAdapter();
 const invocation = (tool: string) =>
   ({ server: 'skill', tool, args: {} }) as unknown as ToolInvocation;
