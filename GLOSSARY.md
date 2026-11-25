@@ -2,7 +2,7 @@
 
 本地优先的桌面 AI 聊天应用。核心域是"模型能自主动手做多少事"：一次工具调用要经过解析、策略判定、用户审批，然后才被执行。
 
-> 标注：括号里的代码名以 `main` 为准。只有两个名字来自尚未合并的实现——`FilesystemCallResolution` 与 `ToolRisk`（在 PR #85 的 `pipeline/policy/` 里），合并之前它们在 `main` 上搜不到。
+> 标注：括号里的代码名以 `main` 为准，都能直接搜到。曾经这里写着两个名字"来自尚未合并的实现"（PR #85）——那个 seam 在 2026-10-12 就合了，留着那句话只会让人去搜一个不存在的问题。
 
 ## Language
 
@@ -21,7 +21,10 @@ _Avoid_: 文件系统自动授权、永久授权
 _Avoid_: 永久授权
 
 **会话免问**:
-`unrestricted` 的效果——只在本会话内不再询问该作用域，进程结束即失效。文件系统和 shell 各自独立持有。
+`unrestricted` 的效果——只在本会话内免问，进程结束即失效。**免问覆盖什么按作用域不同**，别一律说成「整个作用域」：
+fs 免的是**那一个目录**（递归授予，删除操作那次只授予目录本身）；shell 免的才是整个 shell 作用域；其它 server
+免的是**那一个 server + tool**（knowledge 的三个读合并成一个桶）。真正执行免问的是会话授权存储里的那几条授予，
+不是策略算出来的字段。
 _Avoid_: 临时授权、会话信任
 
 **调用级授予 (CallScopedGrant)**:
@@ -61,8 +64,8 @@ _Avoid_: 请求、任务
 _Avoid_: ResolvedInvocation（与 ToolInvocation 太近）
 
 **工具风险 (ToolRisk)**:
-一个 server + tool 组合的读写性质：读、写、创建、删除。计划模式是否放行、以及失败后能否安全重放，都从这一张表派生——它俩今天恰好同判，但不是同一件事。
-_Avoid_: 只读工具列表、危险工具
+一个 server + tool 组合的读写性质：`read` / `write` / `create` / `delete`，外加 `unknown`——没登记进来的名字就是 `unknown`，兜底策略由调用方明说，表自己不偷偷兜。计划模式是否放行、失败后能否安全重放都从这一张表派生，但**是两个谓词，今天也不再同判**：计划模式放行任何读操作（含 `skill__*`、`system__*`、`tool_result__*`），可重放只认 `fs` / `knowledge` / `web_search` / `tools` 四个 server 上登记过的读。
+_Avoid_: 只读工具列表、危险工具、"读操作就是可重放"
 
 **可重放 (Retryable)**:
 失败后可以照原样再跑一次的调用。判据是"重跑不会多造副作用"，所以只有读操作够格；写完之后的超时不算，因为无从得知副作用是否已发生。
@@ -130,7 +133,7 @@ _Avoid_: 在别处再判一次类型（边界已做过），或在写入路径�
 ### Skills
 
 **技能索引 (Skill index)**:
-模型在这一轮里能看见的那份 skill 清单（`buildSkillIndex` → `skill-availability` + `skills-index` 两个 block）。索引只给 id、名字和描述，**描述就是路由面**——模型靠"Use when …"决定要不要用它。超预算时一档一档退（代码里叫 `rung`：`full` / `names` / `none`），从不给半份清单：先退成只给名字（每条仍在，靠 `skill__guide(id)` 读），名字也装不下才退回常驻行 + `skill__list(query)`。读指南正文的入口是 `skill__guide(id)`；索引只有一个装配点——对话侧的 prompt envelope，将来加子 agent 也必须复用它（#235）；`skill__get_template` 读的是包内文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板不是路由。索引里的名字不算读过，正文也不会因为被点名就自动注入。
+模型在这一轮里能看见的那份 skill 清单（`buildSkillIndex` → `skill-availability` + `skills-index`，用户点名过的再加一个 `skills-requested`）。索引只给 id、名字和描述，**描述就是路由面**——模型靠"Use when …"决定要不要用它。超预算时一档一档退（代码里叫 `rung`：`full` / `names` / `none`），从不给半份清单：先退成只给名字（每条仍在，靠 `skill__guide(id)` 读），名字也装不下才退回常驻行 + `skill__list(query)`。读指南正文的入口是 `skill__guide(id)`；索引只有一个装配点——对话侧的 prompt envelope，将来加子 agent 也必须复用它（#235）；`skill__get_template` 读的是包内文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板不是路由。索引里的名字不算读过，正文也不会因为被点名就自动注入。
 _Avoid_: skill catalogue（"目录"已被 provider 清单和 `tools__search` 的目录占用）、技能列表、按关键词预加载正文
 
 **触发方式 (skill invocation policy)**:

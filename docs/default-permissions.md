@@ -8,10 +8,11 @@
 | 范围 | 默认 |
 |------|------|
 | 应用自己的目录（`$APPDATA` 一类：数据库、`file-history`、白名单持久化） | 应用自身读写；三平台的确切位置见 `docs/llm-troubleshooting.md` 的表——macOS 的日志不在应用数据目录里，数据库在 config 目录而不是 data 目录 |
-| 会话工作目录 `文档/Chatless/<标题>-<会话摘要>`（目录名在 `src-tauri/src/workspace/naming.rs`；旧会话沿用 `workspaces/<会话 id>`） | 会话内读写；**按调用授权**，不写入持久白名单，且这类授权只给 read/write/create——`delete` 为 false（`src/lib/mcp/pipeline/ToolExecutionPipeline.ts`） |
+| 会话工作目录 `文档/Chatless/<标题>-<6 位稳定后缀>`（后缀是会话 id 的 sha256 前 6 位，`stable_suffix`；界面文案写作"会话摘要"；目录名在 `src-tauri/src/workspace/naming.rs`；旧会话沿用 `workspaces/<会话 id>`） | 会话内读写；**按调用授权**，不写入持久白名单，且这类授权只给 read/write/create——`delete` 为 false（`src/lib/mcp/pipeline/ToolExecutionPipeline.ts`） |
 | 侧栏工作区目录 | 已绑定会话的 `@WorkDir` 和命令默认目录；打开目录、在其中新建会话或用 `@` 插入路径都不授予 Agent 读写权限 |
-| Desktop / Downloads / 其他路径 | 不默认开放；越界访问弹出审批卡片（仅本次 / 以后都允许） |
-| 删除 | 始终需要单独审批，且默认工作目录条目不含 delete 权限 |
+| Desktop / Downloads / 其他路径 | 不默认开放；越界访问弹出审批卡片，卡片上有三档：**仅本次**、**以后都允许**（fs 记住该目录，删除操作不记）、**本会话不再询问**（fs 把该目录按会话递归授予；shell 那一档是直接持久关掉审批） |
+| 导入技能 / 选择附件所在目录 | 该目录的**父目录**会被写进持久白名单，只给 read（`src/components/skills/SkillImportDialog.tsx`，`source: 'attachment'`）——想收紧权限就在设置 → 安全里删掉它 |
+| 删除 | 默认条目与会话工作目录授权都不含 delete 权限，所以删除通常要单独审批。**"通常"不是"始终"**：免问作用域下（全局「文件访问→不再询问」，或本会话已把该目录授予）删除直接执行、不弹卡（`decideFilesystemCall` 的 unrestricted 分支排在 delete 判定之前） |
 
 实现要点：
 
