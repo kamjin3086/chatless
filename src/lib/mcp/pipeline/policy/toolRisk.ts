@@ -60,6 +60,11 @@ const FS_RISK: Record<string, ToolRisk> = {
  * `list_resources` and `get_template` were registered deliberately: they only read files
  * inside the skill package, and the index now really does send the model to call them -
  * reading a file a guide named should be allowed in plan mode.
+ *
+ * For the built-in server this row is also the approval answer: `decideServerCall` asks
+ * this table instead of carrying its own skill name list, so a registered read is
+ * plan-allowed and approval-free by one fact (#242). The external `skills` server keeps
+ * its own approval list, because its tool names belong to that package.
  */
 const READ_TOOLS: Record<string, string[]> = {
   knowledge: ['list', 'search', 'read'],

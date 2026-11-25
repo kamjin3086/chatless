@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { decideFilesystemCall, decideServerCall, planFilesystemPromotion, planShellPromotion } from '../policy';
+import { toolRisk } from '../toolRisk';
 
 const dir = (permissions: Partial<AllowlistDirectory['permissions']>): AllowlistDirectory => ({
   id: 'd', path: 'C:/work/proj', permissions: { read: false, write: false, create: false, delete: false, ...permissions },
@@ -103,8 +104,12 @@ function oldNeedsAuthorization(server: string, tool: string, autoAuth: boolean):
 }
 
 describe('decideServerCall reproduces needsAuthorization', () => {
+  // The built-in skill server is not in this list on purpose - `skill`, `SKILL` and the
+  // rest normalize to one name: its approval answer no longer comes from a name list of
+  // its own but from the risk table, which the block at the end of this file pins.
+  // The external `skills` server keeps the old rule - its tool names are the package's.
   const SERVERS = ['shell', 'shell_executor', 'SHELL', 'Shell_Executor', 'fs', 'filesystem', 'FileSystem',
-    'user_fs', 'User_FS', 'USER_FS', 'skills', 'Skills', 'SKILL', 'skill',
+    'user_fs', 'User_FS', 'USER_FS', 'skills', 'Skills',
     'skills_fs', 'Skills_FS', 'tools', 'Tools', 'TOOLS', 'system', 'System', 'SYSTEM',
     'web_search', 'web', 'some_mcp_server', ' Some_MCP ', ''];
   const TOOLS = ['run', 'logs', 'list', 'stop', 'write_user_file', 'WRITE_USER_FILE', 'Read_User_File', 'list',
@@ -124,3 +129,38 @@ describe('decideServerCall reproduces needsAuthorization', () => {
     }
   });
 });
+
+describe('the built-in skill row asks the risk table, not a second name list (#242)', () => {
+  const READS = ['list', 'guide', 'list_resources', 'get_template', 'check_deps'];
+  const MANAGEMENT = ['edit_resource', 'create', 'update', 'delete', 'import', 'export',
+    'export_all', 'set_enabled', 'set_tool_call_preference', 'reload'];
+
+  for (const tool of READS) {
+    it(`reads are approval-free: skill__${tool}`, () => {
+      expect(decideServerCall({ server: 'skill', tool, autoAuthorize: false })).toBe('allow');
+    });
+  }
+
+  for (const tool of MANAGEMENT) {
+    it(`management writes still ask: skill__${tool}`, () => {
+      expect(decideServerCall({ server: 'skill', tool, autoAuthorize: false })).toBe('ask');
+    });
+  }
+
+  for (const tool of ['use', 'get', 'read_file', 'list_files', 'list_available_skills',
+    'get_skill_instructions', 'list_skill_actions', 'anything_new']) {
+    it(`a name the server does not have is not treated as a read: skill__${tool}`, () => {
+      expect(decideServerCall({ server: 'skill', tool, autoAuthorize: false })).toBe('ask');
+      expect(toolRisk('skill', tool)).toBe('unknown');
+    });
+  }
+
+  it('leaves the external skills server on its own list', () => {
+    // `skills` (plural) is an MCP server whose names belong to the package: a retired
+    // built-in name is a live read there.
+    expect(decideServerCall({ server: 'skills', tool: 'use', autoAuthorize: false })).toBe('allow');
+    expect(decideServerCall({ server: 'skills', tool: 'list_files', autoAuthorize: false })).toBe('allow');
+    expect(decideServerCall({ server: 'skills', tool: 'install', autoAuthorize: false })).toBe('ask');
+  });
+});
+

@@ -2,6 +2,7 @@ import type { ApprovalDecision } from '@/store/authorizationStore';
 import type { AllowlistDirectory } from '@/lib/filesystemAllowlist';
 import { dirnameOf } from './resolveCall';
 import { isFilesystemServer, isShellServer, normalizeServerName } from '@/lib/mcp/toolNaming';
+import { toolRisk } from './toolRisk';
 
 /**
  * 决定一次调用能不能跑：`decideFilesystemCall` / `decideServerCall` 回答放行或要问，
@@ -128,7 +129,14 @@ export function decideServerCall(params: {
   if (srv === 'skills_fs') {
     return /^(read_skill_resource|list_skill_resources|list_files)$/.test(tl) ? 'allow' : 'ask';
   }
-  if (srv === 'skills' || srv === 'skill') {
+  // 内置 skill 的审批不再自己写一份工具名清单：#232 之后读 skill 的入口是 skill__guide /
+  // skill__list_resources / skill__get_template，清单漏登记就等于每次调用都要问一次。
+  // 登记表（toolRisk）已经回答"这是不是只读"，这里就问它，两道门共用一个事实。
+  if (srv === 'skill') {
+    return toolRisk('skill', tl) === 'read' ? 'allow' : 'ask';
+  }
+  // skills（复数）是外部 MCP server，工具名由那个包自己决定，不能套内置行的表。
+  if (srv === 'skills') {
     return /^(list|guide|read_file|list_files|check_deps|use)$/.test(tl) ? 'allow' : 'ask';
   }
 
