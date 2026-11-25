@@ -43,6 +43,13 @@ Translating a prompt never changes what the user reads.
   prompts written by the app follow this policy.
 - Chat-template control tokens (`<|im_end|>` and friends) are handled separately
   in `src/lib/llm/chatTemplateTokens.ts` - see `docs/llm-troubleshooting.md`.
+
+### What was deleted instead of translated
+
+Everything below is history, kept so nobody re-translates a prompt that no code loads. The
+names are listed as they were, and `check:docs-symbols` reads them under this heading as
+the record they are.
+
 - Known prompt assets that are **not referenced by any code** were deleted
   rather than translated: the `public/tool-docs/core/*.txt` and
   `followup_*.txt` documents, `src/lib/agent/agentWorkflowTools.ts`,

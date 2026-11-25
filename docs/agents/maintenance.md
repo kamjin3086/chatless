@@ -243,7 +243,7 @@ legacy versions.
   not exist: `node scripts/comment-symbols.mjs <that file>` exits 1.
 - **`pnpm typecheck` excludes `src-tauri/target`, and that exclude is load-bearing.** A
   `cargo build` / `tauri build` drops generated `tauri-codegen-assets/*.ts` into
-  `src-tauri/target/.../out/`, and those are binary-ish blobs: compile them and `tsc` answers
+  `src-tauri/target/debug/build/**/out/tauri-codegen-assets`, and those are binary-ish blobs: compile them and `tsc` answers
   `TS1490 File appears to be binary` for every one, in a tree that has nothing wrong with it.
   A clean CI checkout has no `target/`, so CI stays green while any machine that has built the
   Rust side goes red - including the pre-commit hook, which runs the same `tsc -p tsconfig.json`.
@@ -375,14 +375,14 @@ legacy versions.
     the export wrote half a directory over its state. Stop the dev server first; deleting `dist`
     recovers dev. Separately, `next build` on this machine takes ~18 minutes of real compile time,
     so budget for it rather than calling it hung. That number is a local measurement, not a
-    recorded artifact - an earlier version of this line cited `scripts/perf/build-frontend.log`,
-    which is not in the tree - so re-measure with `time pnpm build:frontend` (dev server stopped)
+    recorded artifact - this line formerly cited `scripts/perf/build-frontend.log`, a file that
+    never made it into the tree - so re-measure with `time pnpm build:frontend` (dev server stopped)
     before repeating it.
   - **The first page load is the slowest thing in a dev session.** `pnpm dev:warm` is `pnpm dev` plus
   a warm-up: it requests `/` then `/chat` as soon as the server answers, so turbopack compiles while
   the cargo build runs instead of while the window sits blank (cold `/` ~11 s, `/chat` longer).
   Opt-in; plain `pnpm dev` is unchanged.
-- **Frontend-only iteration does not need `cargo`.** `src-tauri/target/debug/chatless.exe`
+- **Frontend-only iteration does not need a rebuild.** The debug binary in `src-tauri/target/debug/chatless`
     loads `http://localhost:3000` directly; run it next to `pnpm dev` instead of `pnpm tauri dev`
     when only CSS or TSX changed (a Rust rebuild is minutes, a restart is seconds).
   - `pnpm test` reports six `scripts/__tests__/*.mjs` files as load failures on Windows
@@ -431,7 +431,7 @@ legacy versions.
 - Default permission scope is a product decision, not a convenience knob
   (`docs/default-permissions.md`). Widening FS/HTTP/opener defaults needs the
   owner, not a PR.
-- A triage sweep is written up as `docs/history/issue-triage-YYYY-MM-DD.md`, English, one
+- A triage sweep is written up as a dated record under `docs/history/` (one per sweep), English, one
   row per item, each row carrying evidence and a disposition - precedent:
   `docs/history/issue-triage-2026-09-30.md`.
 - GitHub numbers are shared between issues and PRs: `gh pr view <n>` first, fall
