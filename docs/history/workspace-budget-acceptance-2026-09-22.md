@@ -15,7 +15,7 @@
 
 ## 上一轮 8 个门槛的现状
 
-门槛文件仍然是 [workspace-budget.audit.test.ts](acceptance/workspace-budget.audit.test.ts)，
+门槛文件仍然是 [workspace-budget.audit.test.ts](../acceptance/workspace-budget.audit.test.ts)，
 现在随 `pnpm test` 常跑（`vitest.config.ts` 显式包含），不再需要单独一次验收命令。
 每条的行为落到修复后的实现位置：
 

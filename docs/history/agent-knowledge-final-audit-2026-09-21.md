@@ -17,7 +17,7 @@
 | `pnpm exec vitest run --config docs/acceptance/vitest.config.ts` | **6 项均失败** | 计划约定行为与实际行为不一致 |
 | 原生桌面 / 真实 Qwen / 性能效果 | 本次未重测 | 不把 9 月 18 日的启动、协议小样本及 SQL 微基准当作本次端到端完成证明 |
 
-探针源码：[final-plan.audit.test.ts](acceptance/final-plan.audit.test.ts)。原始结果：[2026-09-21-probe-results.json](acceptance/2026-09-21-probe-results.json)。探针独立于默认回归集，保留失败断言供修复后转成常规回归，未用 `skip` 或预期失败掩盖结果。
+探针源码：[final-plan.audit.test.ts](../acceptance/final-plan.audit.test.ts)。原始结果：[2026-09-21-probe-results.json](../acceptance/2026-09-21-probe-results.json)。探针独立于默认回归集，保留失败断言供修复后转成常规回归，未用 `skip` 或预期失败掩盖结果。
 
 探针使用真实业务类；知识适配器及上下文测试替换外部依赖，不能当作桌面测试。第 6 项取生产 `LexicalRetriever` 实际生成的 SQL，用 Python 标准库的真实 SQLite/FTS5 执行。
 

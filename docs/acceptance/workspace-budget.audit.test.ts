@@ -1,7 +1,7 @@
 /**
  * 工作目录语义与输出预算的验收门槛。
  *
- * 基线 e926e70 时这 8 条全部失败（见 docs/workspace-budget-acceptance-2026-09-22.md）。
+ * 基线 e926e70 时这 8 条全部失败（见 docs/history/workspace-budget-acceptance-2026-09-22.md）。
  * 现在它们不再是"一次性探针"，而是随 `pnpm test` 常跑的回归；每条仍跑在生产入口上，
  * 只是入口按修复后的架构落位：
  *

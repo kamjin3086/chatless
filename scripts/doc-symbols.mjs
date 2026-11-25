@@ -20,9 +20,11 @@
  *      `former`, `留档`, `留档` …), including a heading above it, so a document can discuss
  *      something it removed without reading as current.
  *
- * Date-stamped documents - `docs/architecture/`, anything named `*-2026-10-24.md`, the
- * acceptance fixtures under `docs/acceptance/` - are frozen at their own baseline and are not
- * scanned; that is what a date in a filename means here.
+ * Frozen documents are not scanned: anything dated in its filename, everything under
+ * `docs/architecture/` and `docs/acceptance/`, and everything under `docs/history/` - that last
+ * one is the archive, dated acceptance rounds and undated finished plans alike. Putting a
+ * document there is how it stops being held to the live bar; a frozen file keeps its own
+ * baseline and is not corrected when the tree moves.
  *
  * `<!-- doc-symbols:ignore -->` on a line skips that line.
  *
@@ -45,7 +47,7 @@ const HISTORY =
   /(已删除|删掉|删除|已移除|移除|删除|历史|留档|曾经|曾|当年|作废|随 #\d+|not.*more|no longer|deprecat|historic|former|formerly|removed|deleted|went with)/i;
 const ROOT_DOCS = /^(AGENTS|CLAUDE|CODING_STANDARDS|GLOSSARY|README)\.md$/;
 const FROZEN =
-  /(\/|^)[^/]*-20\d\d-\d\d-\d\d\.md$|^docs\/architecture\/|^docs\/acceptance\//;
+  /(\/|^)[^/]*-20\d\d-\d\d-\d\d\.md$|^docs\/architecture\/|^docs\/acceptance\/|^docs\/history\//;
 
 /** Which markdown files the check owns. */
 export function proseFiles(files) {

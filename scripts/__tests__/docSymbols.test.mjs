@@ -80,8 +80,12 @@ describe('what a document promises', () => {
         'AGENTS.md',
         'CODING_STANDARDS.md',
         'GLOSSARY.md',
+        // A dated name: no such file any more, and none is needed - the rule reads the name.
         'docs/streaming-render-acceptance-2026-09-24.md',
         'docs/architecture/codebase-map-2026-10-24.md',
+        // The archive is frozen by directory, dated records and undated plans alike.
+        'docs/history/knowledge-chat-repair.md',
+        'docs/history/agent-knowledge-acceptance-2026-09-17.md',
         'docs/acceptance/answerChecks.audit.test.ts',
         'src/lib/skills/index.ts',
       ]),

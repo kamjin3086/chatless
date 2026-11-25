@@ -8,7 +8,7 @@
 
 | 复验中的问题 | 处理方式 | 证据 |
 |---|---|---|
-| 一次授权写进全局 allowlist，可被其他会话共享 | 「允许本次」改为 Rust 内存中的调用级授权，绑定 run/call，执行结束即撤销；持久白名单只保留用户设置 | `filesystem/state.rs`、`ToolExecutionPipeline.ts`、[toolApprovalScope.test.ts](../src/lib/mcp/pipeline/__tests__/toolApprovalScope.test.ts) 断言授权不落入持久白名单 |
+| 一次授权写进全局 allowlist，可被其他会话共享 | 「允许本次」改为 Rust 内存中的调用级授权，绑定 run/call，执行结束即撤销；持久白名单只保留用户设置 | `filesystem/state.rs`、`ToolExecutionPipeline.ts`、[toolApprovalScope.test.ts](../../src/lib/mcp/pipeline/__tests__/toolApprovalScope.test.ts) 断言授权不落入持久白名单 |
 | 后端只做字符串前缀比较，未校验真实路径 | 归一化折叠 `..`，并用 `canonicalize` 解析符号链接/junction 后同时比较字面路径与真实路径；删除授权绑定到目标本身而非父目录 | `filesystem/state.rs` 单测：穿越被拒、verbatim 前缀等价、junction 逃逸被拒 |
 | 顺序阅读的游标无效时静默从头读取 | 游标严格解析，格式/文档/批次不匹配一律返回 `CURSOR_INVALID` | 探针 1（现为回归） |
 | 引用重新打开落回文档开头 | 引用登记实际交付范围 `DeliveredRange`（文档、批次、分块、起止偏移），按范围重开 | 探针 2（现为回归） |
@@ -22,7 +22,7 @@
 | 撤销挂载后知识工具仍因粘性状态出现 | `knowledge` 组不再粘性，每轮按当前挂载实时计算 | `promptBuilder.ts` |
 | 断电/重启后 `waiting_approval` 运行永久悬挂 | 启动恢复同时把 `running` 与 `waiting_approval` 标记为 `interrupted` | `AgentRunEventStore.ts` |
 | 无模型时语义任务被标记失败，配置模型后无入口 | 新增 `waiting_model` 状态、`wakeWaiting()` 与按文档的重试/取消，知识库文档行提供操作入口 | `SemanticIndexQueue.ts`、`KnowledgeDetail.tsx`、`ResourceItem.tsx` |
-| 重新生成没有血缘，也没有旧工具结果背景 | 记录 `parentRunId` 与 `run_kind = regeneration`；把上一次运行的工具结果作为事实背景注入到用户回合之前，回答本身不重放，工具保持禁用 | `AgentLoopRunner.ts`、[AgentLoopRunner.test.ts](../src/lib/mcp/agentLoop/__tests__/AgentLoopRunner.test.ts) |
+| 重新生成没有血缘，也没有旧工具结果背景 | 记录 `parentRunId` 与 `run_kind = regeneration`；把上一次运行的工具结果作为事实背景注入到用户回合之前，回答本身不重放，工具保持禁用 | `AgentLoopRunner.ts`、[AgentLoopRunner.test.ts](../../src/lib/mcp/agentLoop/__tests__/AgentLoopRunner.test.ts) |
 | 检索性能：50k 分块上词法 P95 约 1 秒 | 范围谓词移出排序查询，先让 FTS5 用 top-N 取候选再过滤；窗口内 in-scope 行数不足 `topK` 时回退到精确定义查询 | 下方性能表格 |
 
 ## 2. 本轮实际测量

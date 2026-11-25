@@ -1,5 +1,10 @@
 # Real-model knowledge completion plan
 
+> **Archived.** One round of work, kept as the record of what was decided and what was
+> measured then - not current status. For how the code works today, read
+> `docs/agents/subsystems.md`; for what is still open, the issue tracker.
+
+
 ## Contract
 
 Complete the existing optional Knowledge/RAG capability, not a replacement agent
@@ -9,7 +14,7 @@ FTS-only operation is an explicit fallback, not evidence that semantic retrieval
 passed. No mock vectors, dependency additions, default-permission expansion or
 host networking changes are part of this plan.
 
-Baseline requirements: `architecture/evidence-rag-v2.md`, the knowledge-specific
+Baseline requirements: `docs/knowledge-rag.md`, the knowledge-specific
 findings and gates in `agent-knowledge-final-audit-2026-09-21.md`, and the evidence
 limitations in `agent-knowledge-completion-2026-09-21.md` and
 `knowledge-chat-repair.md`. Existing unrelated architecture drafts are preserved.

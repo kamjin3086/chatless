@@ -1,5 +1,10 @@
 # Knowledge-to-chat repair acceptance
 
+> **Archived.** One round of work, kept as the record of what was decided and what was
+> measured then - not current status. For how the code works today, read
+> `docs/agents/subsystems.md`; for what is still open, the issue tracker.
+
+
 Verified on Fedora/Linux with the native Tauri WebKit WebDriver and a real
 `Qwen3.8-Flash-Next` model. This is runtime evidence, not a mocked model task.
 
