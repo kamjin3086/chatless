@@ -14,7 +14,8 @@ Agent。
 - 多 Provider 与 OpenAI-compatible 兼容，包括 Ollama / LM Studio
 - 轻量、启动快、依赖少、功能可关闭
 - 实用：对话、文档、知识库、MCP、Skills、轻量 Agent
-- Chat / Agent 双模式；native / prompt tool-call 双轨降级
+- 单输入口 + 按会话的「仅规划」开关（Chat / Agent 双模式已合并，见
+  `docs/history/agent-chat-path-comparison.md`）；native / prompt tool-call 双轨降级
 
 **用户**：主用户是重视隐私和模型选择的桌面用户，以及需要本地自动化的技术型用户。专职
 程序员可能使用 Chatless，但不会把它当主力 IDE Agent。专业开发者“看不上编码深度”不构成
@@ -23,9 +24,15 @@ Agent。
 **表达方式**：正确说法是“轻量、本地优先、兼容多种模型的通用 Agent，也能处理代码相关
 任务”；错误说法是“Chatless 要替代 Cursor、Claude Code 或 Codex”。
 
-**当前明确不做**：移动端、便携版；自研代码编辑器、补全、LSP、IDE 深度集成；默认依赖
+**当前明确不做**：移动端正式支持（Android 只在 `feat/android-212*` 分支族与 open PR #220
+上，未进 `main`）；自研代码编辑器、补全、LSP、IDE 深度集成；默认依赖
 Docker、Qdrant、常驻 sidecar；强制云后端或云账号；企业级多 Agent 编排 / swarm / A2A
 作为核心能力。
+
+**已退出「不做」清单**：Windows 免安装包——自 v0.7.0 起发布流水线附带
+`*_portable.zip`，数据仍写现有用户数据目录；免安装版应用内更新仍走安装程序，想继续
+免安装就得手动下载下一版 ZIP（`docs/windows-portable.md`）。加一项「不做」或收回一项，
+都改这一节，不要在功能文档里另写一份。
 
 ## 功能准入
 
@@ -58,8 +65,8 @@ Core。
   会话与消息；稳定流式渲染、thinking 分离、长会话性能；Prompt 管理、附件、基础文件能力；
   轻量 Agent 运行内核（事件、取消、审批）；权限与审批 UX（ToolCard、allowlist）
 - **官方可选包（默认零成本，关闭后接近不存在）**：Knowledge / RAG / 本地嵌入、MCP 客户端、
-  Skills、WebDAV 同步、Coding Pack（项目搜索、解释、patch 预览、受控脚本）、高级自动化
-  （后台任务等）
+  Skills、WebDAV 同步、Coding Pack（项目搜索、解释、diff 预览、受控脚本）；
+  后台任务类高级自动化仍是计划项，`main` 上目前没有对应实现
 - **扩展生态（优先 MCP / Skill，不进核心）**：浏览器自动化、Computer Use、GitHub / Notion /
   数据库等第三方服务、远程 Agent、A2A、专业办公或垂直工作流
 - **禁止进入产品身份**：代码编辑器、补全、云沙箱、自动 PR；默认扫描整机或默认开放
@@ -86,6 +93,9 @@ technical review round — a request-changes review promises a merge this policy
 already ruled out, and restarts the ping cycle at our cost.
 
 ## 路径规划：在当前场景中把任务交给 Agent
+
+> 状态：方向提案，不是约束。本节只约束「探索要按实验→毕业→退出走」，
+> 不承诺具体形态、平台或版本；它与本文件其他节的区别就在这里。
 
 这一方向源于在 Steam Deck 上安装软件时引发的思考：Agent 即使具备执行能力，把任务和
 上下文交给它仍可能很费劲。以下明确探索方向与验证路径，具体交互形态待验证。
@@ -149,16 +159,19 @@ Chatless 的机会在于把这些环节接成可用的委托闭环，让本地�
 Chatless 已有 Agent 骨架（StreamEvent、AgentLoop、Tool pipeline、MCP、Skills）。短板是未
 收口为可持久化控制平面。演进原则：渐进接线，禁止推倒重来。
 
-**必须保留**：Chat / Agent 双模式；native + prompt tool-call 双轨，兼容 Ollama / LM Studio /
+**必须保留**：单输入口 + 按会话的「仅规划」开关；native + prompt tool-call 双轨，兼容 Ollama / LM Studio /
 老旧 compatible 端点；本地优先（Tauri + SQLite + 可选本地 embedding）；ToolCard 审批、
 filesystem allowlist、停止/取消；现有 Skills（SKILL.md）资产，现代化应兼容而非替换；多
 Provider 策略委派与参数修正。
 
 **优先收口（P0/P1），不要另起炉灶**：持久化 AgentRun / 事件日志，历史从事件投影而不只靠
-`message.content`；把已有 `ConversationEventLog`、`ContextWindowManager`、
-`PromptEnvelopeBuilder` 接到主路径；统一 AgentLoop 与旧 `ToolCallOrchestrator` 的重复逻辑；
-per-run 取消与解析器状态，先队列隔离再谈并行；Provider 能力协商（tools、usage、structured
-output、continuation），缺能力则降级。
+`message.content`；per-run 取消与解析器状态，先队列隔离再谈并行；Provider 能力协商（tools、
+usage、structured output、continuation），缺能力则降级。
+
+已收口的不再列在这里（它们仍是必须保留的部分）：`ConversationEventLog`、
+`ContextWindowManager` 都已接到主路径（`src/lib/mcp/agentLoop/AgentLoopRunner.ts`、
+`src/lib/mcp/agentLoop/AgentRunControlPlane.ts`），`PromptEnvelopeBuilder` 经
+`src/lib/mcp/agentLoop/buildAgentPromptEnvelope.ts` 接入；旧 `ToolCallOrchestrator` 已删除。
 
 **禁止**：引入 LangGraph / 云端 Agent SDK / 微服务作为核心运行时；单 Agent 还不能恢复、
 审计、取消时就做 swarm / subagent 平台；用重写 UI 框架或 RSC 来“现代化 harness”；破坏
@@ -174,10 +187,11 @@ Subagent、Worktree、A2A、Computer Use 都是可选 adapter，且排在单 Age
 允许 Chatless 处理代码相关任务，证明通用 Agent 实用；不允许与 Cursor / Claude Code / Codex
 正面竞争。
 
-**允许（可选、需授权、默认可关）**：会话显式 `project__attach`，不默认扫描整机；递归 glob /
-grep、分段读取、路径别名；解释代码、日志、配置；`apply_patch` + diff 预览，写入前审批；
-只读 git status/diff/log，写操作按风险分级、禁止默认 force；受控运行 lint / test / 脚本并
-结构化结果；只读注入 `AGENTS.md` 等项目说明。
+**允许（可选、需授权、默认可关）**：会话显式绑定工作目录（`@WorkDir`，见
+`docs/default-permissions.md`），不默认扫描整机；递归 glob / grep（`fs__search`）、分段读取、
+路径别名；解释代码、日志、配置；`fs__write` / `fs__edit` 写入前审批，配合 file-history 的
+「改动的文件」与 diff 预览；只读 git status/diff/log，写操作按风险分级、禁止默认 force；
+受控运行 lint / test / 脚本（`shell__run`）并结构化结果；只读注入 `AGENTS.md` 等项目说明。
 
 **禁止**：内置编辑器、补全、LSP、云沙箱、自动 PR、多 Agent 编码编排；把搜索/修改/验证全部
 塞进不受限 `shell__run`；扩大默认 FS/HTTP/Opener 权限来“方便编码”；未授权工作区、未审批
@@ -195,9 +209,10 @@ grep、分段读取、路径别名；解释代码、日志、配置；`apply_pat
 P95 回归 < 10%，测两套（无 MCP/RAG，以及全功能）；流式首 token 不因审计/日志层明显变慢；
 可选服务（MCP、ORT、远程目录）不得阻塞首屏。
 
-**正确性**：禁止用模拟 embedding 冒充本地 RAG，模型不可用就明确禁用；Chat 模式与 prompt
-tool fallback 必须保持可用；测试必须真实收集并失败即失败，禁止 `MODULE_NOT_FOUND` 被吞掉仍
-绿；不把 CI / lint / 签名校验设为 `continue-on-error`。
+**正确性**：禁止用模拟 embedding 冒充本地 RAG，模型不可用就明确禁用；普通聊天（无工具
+调用的运行）与 prompt tool fallback 必须保持可用；测试必须真实收集并失败即失败，禁止
+`MODULE_NOT_FOUND` 被吞掉仍绿；CI 门禁项不得 `continue-on-error`（release 作业里那些只作
+提示的 lint / updater 检查除外，阻塞版 lint 在 CI 里照跑）。
 
 **安全（纵深，但不为安全牺牲兼容）**：工具副作用走运行时策略，不靠模型自律；收紧 CSP 与
 HTTP/FS/Opener 默认范围，用户授权目录另开；Shell 以工作区 + 审批 + 尽量白名单为主，不只靠

@@ -1,8 +1,8 @@
 /**
  * When formatting is enforced, and when it is not.
  *
- * `main` is largely unformatted - 759 of 856 tracked files under src fail
- * `npx biome format <file>` as of writing - so a hook that demands "your staged files must
+ * `main` is largely unformatted - 756 of 1,017 tracked files under src fail
+ * `npx biome format <file>` (re-measured 2026-11-25) - so a hook that demands "your staged files must
  * be formatted" cannot be satisfied without reflowing whole files, which buries the change
  * the commit is actually about. That mismatch is what sent people to `git commit
  * --no-verify`, and a habit of skipping the guardrail is worse than the dirt it checked.

@@ -1,8 +1,9 @@
 /**
  * Gate: a pull request title has to be Conventional Commits shaped and ASCII.
  *
- * Commits in this repository have always been English (579 commits, no Chinese
- * subject), but PR titles drifted, because nothing checked them. See
+ * Commits in this repository have always been English (766 commits as of
+ * 2026-11-25; the one subject carrying Chinese quotes a UI string), but PR titles
+ * drifted, because nothing checked them. See
  * docs/agents/language.md (tier 2): the PR is the maintainer-side record, so the
  * title carries the language rule. Anyone with write access can retitle a PR, so
  * this is a one-line correction for an honest contributor, not a rejection.

@@ -35,7 +35,8 @@ Arguing about prose is always the more expensive option.
 
 ## Tier 1 - English at the point of writing, no exceptions (and no migration needed)
 
-Already true in practice (579 commits, zero Chinese subjects):
+Already true in practice (766 commits on `main` as of 2026-11-25; the only subject
+containing Chinese quotes a UI string, which the note below allows):
 
 - Commit messages - Conventional Commits, English description
 - Code comments and identifiers, including new `///` doc comments
@@ -53,18 +54,18 @@ an English message; that is evidence, not drift.
   Chinese-titled PRs sitting on top of English commits).
 - **Triage dispositions, acceptance reports, ADRs, post-mortems** - the documents
   someone reads months later to learn *what was decided and why*. Precedent:
-  `docs/issue-triage-2026-09-30.md`, `docs/prompt-language.md`, and the English ADRs
-  waiting on PR #83.
+  `docs/history/issue-triage-2026-09-30.md`, `docs/prompt-language.md`, and the English ADRs in
+  `docs/adr/`.
 - **Agent-facing instruction files** - `AGENTS.md`, `docs/agents/*`.
-- **New issues created by the maintainer or an agent** (`/to-tickets`, wayfinder
-  tickets, triage summaries).
+- **New issues created by the maintainer or an agent** - `/to-tickets` output, spec
+  issues, triage summaries.
 
 ## Tier 3 - Chinese stays
 
 Do not force English onto these; the cost is real and the benefit is zero.
 
-- **Issue bodies written by reporters.** 27 of the 28 issues opened by
-  non-maintainers are Chinese. Making English a requirement for filing does not
+- **Issue bodies written by reporters.** 29 of the 30 issues opened by
+  non-maintainers are Chinese (counted 2026-11-25). Making English a requirement for filing does not
   make reporters bilingual, it makes them leave. See the intake recipe below.
 - **End-user surfaces**: UI strings and `src/i18n/`, `README.md` + `README_EN.md`,
   `INSTALLATION_INSTRUCTIONS*.md`, `CHANGELOG.md` and the published release
@@ -93,9 +94,9 @@ is free" logic above. Both exist because the reader of a thread is the reporter,
 **1. Answer in the thread's language.** A Chinese issue gets a Chinese reply - the triage
 comment, the fix report, and the comment that closes it. A disposition *document* (ADR,
 acceptance report, triage summary) is still Tier 2 English and quotes the thread instead of
-replacing it; the thread itself stays in the reporter's language. This was already Tier 3 below
-and got ignored in practice (a Chinese bug report answered in English), which is why it is
-stated here as a requirement rather than a habit.
+replacing it; the thread itself stays in the reporter's language. This rule sat lower down in
+this file and got ignored in practice - a Chinese bug report was answered in English - which is why
+it is stated here as a requirement rather than a habit.
 
 **2. Disclose that the text came from an agent and needs human review.** Every issue, pull
 request and comment an agent writes **opens** with this line, in the thread's language:

@@ -158,8 +158,11 @@ not mention.
 ## Verification matrix
 
 `pnpm install` wires a pre-commit hook (`core.hooksPath=.githooks`, stored in the
-clone's own `.git/config`): conflict markers, `biome format` on the staged files
-only, and `pnpm typecheck` - about 7 seconds. The format check exempts a file that was already unformatted at HEAD, so `--no-verify` is not the answer to someone else's dirt. It is a seatbelt, not the bar:
+clone's own `.git/config`). It runs six things: conflict markers, the three text gates
+(`comment-symbols`, `doc-symbols`, `i18n-unused`), `scripts/format-policy.mjs --staged`
+(not bare `biome format`), and `npx tsc -p tsconfig.json` - about 7 seconds. Test types are
+deliberately out of it (`pnpm typecheck:tests` runs them in `pnpm verify` and CI). The format
+check exempts a file that was already unformatted at HEAD, so `--no-verify` is not the answer to someone else's dirt. It is a seatbelt, not the bar:
 `pnpm verify` before pushing is still what keeps CI green, and
 `git commit --no-verify` exists for the rare commit where the hook is the wrong
 one to run.
@@ -168,10 +171,10 @@ one to run.
 |--------|-----|
 | Any TypeScript | `pnpm test` and `pnpm typecheck` |
 | TypeScript that only tests use | `pnpm typecheck:tests` - the root `typecheck` excludes every test file |
-| Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + test) - seconds to a couple of minutes |
+| Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + the three text gates + `test`) - seconds to a couple of minutes |
 | Before pushing a build-affecting change, or when CI is the only gate | `pnpm verify` (= `verify:fast` + `next build`); the build takes ~18 minutes here and refuses to start while a dev server holds `dist` |
 | PR title | `pnpm check:pr-title "<title>"` - `pnpm repo:state` now flags an open PR whose title the gate would reject, so this is caught before the push; the title workflow has no `edited` trigger, so a retitle alone does not clear the red check |
-| What a PR's CI actually runs | the five commands across the two jobs in `.github/workflows/ci.yml`: `frontend-checks` runs `lint:ci`, `typecheck`, `typecheck:tests`, `test`; `backend-check` runs `cargo check`. The `test-tauri-*` jobs are `if: false`, so **no build runs on a PR**: `next build` (below) is a local-only gate and a claim that "CI covers the build" is false |
+| What a PR's CI actually runs | seven commands in `frontend-checks` plus one in `backend-check`, in `.github/workflows/ci.yml`: `frontend-checks` runs `lint:ci`, `typecheck`, `typecheck:tests`, `check:comments`, `check:docs-symbols`, `check:i18n-unused`, `test`; `backend-check` runs `cargo check`. The `test-tauri-*` jobs are `if: false`, so **no build runs on a PR**: `next build` (below) is a local-only gate and a claim that "CI covers the build" is false |
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust unit tests | `cargo check --tests` proves they compile, never that they pass. Running them costs a full codegen + link (minutes, ~1-2 GB here); decide up front whether the evidence is worth it, or prove the arithmetic another way and say so |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
@@ -240,21 +243,24 @@ legacy versions.
   not exist: `node scripts/comment-symbols.mjs <that file>` exits 1.
 - **Formatting is judged per file, and only where HEAD already conformed.** main is largely
   unformatted: `for f in $(git ls-files 'src/**/*.ts' 'src/**/*.tsx'); do npx biome format
-  "$f" >/dev/null 2>&1 || echo "$f"; done` fails **759 of 856** tracked files under src. A
+  "$f" >/dev/null 2>&1 || echo "$f"; done` fails **756 of 1,017** tracked files under src
+  (re-measured 2026-11-25). A
   hook that demanded format anyway had exactly two outcomes - whole-file reflows that bury
   the change (one commit produced 2,191 lines of it) or `git commit --no-verify` - and both
   were happening. So `scripts/format-policy.mjs`, which is what the hook now calls, holds a
   file to biome only if the version being committed already satisfied it: today that is the
-  ~97 conforming files, and nothing else. `pnpm fmt <files>` is the daily command; it
+  ~261 conforming files, and nothing else. `pnpm fmt <files>` is the daily command; it
   refuses a directory, refuses to reflow pre-existing dirt unless `--allow-reflow`, and
   treats a biome that could not run as an error rather than as a pass. The refusal is now
   two-way: a file HEAD left unformatted that your staged version has fully formatted is a
   **reflow** (20+ differing lines) and is refused. Three PRs this week arrived that way
-  (#138, #141, #143); check one: `git show --stat 71e7f1b | grep provider-field-support` prints
-  234 changed lines for a six-line fix. Each was caused by calling `npx biome check --write`
+  (#138, #141, #143); check one: `git show --stat 8af0297 | grep provider-field-support` prints
+  234 changed lines (125 added, 109 removed) in a commit whose real content was a store-boundary
+  fix - the same file at `71e7f1b` is 18 lines, which is what the change itself cost. Each was
+  caused by calling `npx biome check --write`
   directly instead of `pnpm fmt`, which had already refused. Two consequences to
   keep in sight: the format gate stays narrow until the standing dirt is cleared, and clearing
-  it is a formatting-only commit of ~759 files - the owner's call, not something to slip into
+  it is a formatting-only commit of ~756 files - the owner's call, not something to slip into
   a change PR. Judge cleanliness on file bytes: `biome format --stdin-file-path` has reported
   unformatted files as clean, and one whole-tree reflow got justified that way.
 - **`gh`'s GraphQL path fails at random and the REST path is the way through.** `gh pr
@@ -409,7 +415,7 @@ legacy versions.
   owner, not a PR.
 - A triage sweep is written up as `docs/issue-triage-YYYY-MM-DD.md`, English, one
   row per item, each row carrying evidence and a disposition - precedent:
-  `docs/issue-triage-2026-09-30.md`.
+  `docs/history/issue-triage-2026-09-30.md`.
 - GitHub numbers are shared between issues and PRs: `gh pr view <n>` first, fall
   back to `gh issue view <n>`.
 

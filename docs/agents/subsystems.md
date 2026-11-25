@@ -14,9 +14,9 @@ The chain, in order, for a single turn:
 | Step | Where |
 |---|---|
 | Which track this run is on | `src/lib/mcp/agentLoop/resolveAgentToolCapability.ts`, over the capability table in `src/lib/llm/config/tool-call-config.ts` |
-| What the model is told | `src/lib/mcp/injection/promptBuilder.ts` - the native contract, or one tool-channel block for the prompt track (#161 / #167) |
+| What the model is told | `src/lib/mcp/injection/promptBuilder.ts` - the agent contract on both tracks, plus one tool-channel block when the run is on the prompt track |
 | What the request carries | `src/lib/mcp/agentLoop/AgentLoopRunner.ts` - `tools` for the native track, none for the prompt track |
-| Turning answer text back into calls | in flight in #161 / #167, in `src/lib/chat/stream/`, over `src/lib/llm/adapters/ToolChannelParser.ts` |
+| Turning answer text back into calls | `src/lib/chat/stream/promptTrack.ts`, over `src/lib/llm/adapters/ToolChannelParser.ts`; the text that survives reaches the UI through `src/lib/chat/stream/handlers/ContentEventHandler.ts` |
 | The formats it reads | `src/lib/mcp/toolInstruction/formats/pipeline.ts` and `handlers/` - a format is a handler, not a branch |
 | What the UI gets | `src/lib/chat/stream/handlers/ToolCallEventHandler.ts` → `src/lib/chat/segments.ts` → `src/components/chat/ToolCallCard.tsx`; the wording is `presentToolCard` in `src/components/chat/toolCardPresentation.ts` |
 
@@ -29,13 +29,42 @@ in the stream layer.
 - Send-time assembly: `src/lib/model-parameters.ts` (`shouldSet`), then
   `src/lib/chat/sendParameterMerge.ts` / `sessionParameterMerge.ts`, then the loop.
 - Which provider takes which field, and what it is called: `src/lib/llm/provider-field-support.ts`
-  is the table the dialogs read; the request path still renames per provider in
-  `src/lib/llm/providers/`. Two answers today - #142 is the ticket that merges them.
+  (`PROVIDER_CONFIGS`, `mapProviderFields`) is the one table, read by the dialogs **and** by every
+  provider under `src/lib/llm/providers/` - #142 closed that gap through #184 and #187. What must
+  never reach the wire is a narrower, separate rule: `src/lib/llm/wireOptions.ts`.
+
+## Output budget and history compaction
+
+Two parameter-looking things are not both request knobs, and that split is the part worth
+remembering:
+
+- **Output length belongs to the provider and the model.** In automatic mode `max_tokens` is
+  **not sent at all** - `ModelParametersService.applyOutputBudget` in
+  `src/lib/model-parameters.ts` is the single decision point, and a user-set value is
+  clamped to the effective window by `resolveOutputBudget` in
+  `src/lib/llm/outputBudget.ts`. The one protocol that requires the field is Anthropic:
+  `AnthropicProvider` fills its own floor (window/8, clamped to 1024-8192, otherwise the
+  manual default) and does not pretend that was a user setting.
+- **`contextWindowTokens` only decides whether history gets compacted.** An unknown window
+  means no compaction and no blocked send - `ContextWindowManager` returns the history
+  as-is - and the server decides whether the request fits. The window comes from the
+  provider's reported value or the user's manual entry, whichever is smaller.
+
+Compaction itself, in order: `AgentRunControlPlane.assembleRoundMessages` estimates before
+each model round and compacts only when the window is known, the estimate passes 80 % of the
+budget, and a `user` boundary exists. The summary is a separate low-priority LLM call, written
+to a run checkpoint (`kind: context_summary`, `src/lib/mcp/agentLoop/AgentRunEventStore.ts`)
+and reused - within a round when the prefix fingerprint matches, across rounds from a
+per-conversation in-process cache that summarizes only the new stretch. Any failure keeps the
+original history and fails the round; a lost constraint is never quietly accepted.
+`src/components/chat/ContextCompactionNotice.tsx` marks the rounds that used a summary
+(`chatUi.compaction.summary`); that notice is in-process state and is not persisted.
 
 ## Window and chrome
 
-- The preset UI is `src/components/settings/PersonalizationSettings.tsx`; the work-area clamp
-  is in flight in #171 (`src-tauri/src/`, `src/lib/window/`).
+- The preset UI is `src/components/settings/PersonalizationSettings.tsx`. The work-area clamp
+  landed in #171: `src/lib/window/windowFit.ts` on the web side, `window_fit.rs` in `src-tauri/src/`
+  on the native side, with `src/lib/window/windowState.ts` and `windowControls.ts` beside them.
 - Known traps: `docs/tauri-window-pitfalls.md`; screenshotting is `scripts/shot/`.
 
 ## Interface language (zh-CN / en-US)
@@ -47,7 +76,7 @@ the store that holds the choice, and the components that render it.
 |---|---|
 | The copy | `src/i18n/locales/zh-CN.ts` and `en-US.ts`; the shared key set is `src/i18n/types.ts` (`TranslationKey`) |
 | The contract between them | `src/i18n/__tests__/index.test.ts` - same keys both sides, same `{placeholders}` per key |
-| The choice and its persistence | `src/store/localeStore.ts` (`locale`, `translate`, `ready`); `<html lang>` is set from it via `getHtmlLang` |
+| The choice and its persistence | `src/store/localeStore.ts` (`locale`, `t`, `initialized`); `<html lang>` is set from it via `getHtmlLang` |
 | Reading it in a component | `useTranslation()` in `src/i18n/useTranslation.ts`; outside React, `useLocaleStore.getState().t` |
 | Applying it without a reload | components must read `t` at render time - a label built once at module scope keeps the language it was built in |
 
