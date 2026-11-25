@@ -1,5 +1,25 @@
 # 更新日志
 
+## [Unreleased]
+
+### zh-CN
+
+- 用 `/<id> 正文` 可以把某个 skill 点名给这一轮：模型会收到"用户本轮点名"的提示，正文里的文字原样保留；以斜杠开头的普通文本（例如 `/quiet …`）不会被当成点名。
+- Skill 卡片与详情页显示每个 skill 的触发方式：仅模型可用、仅用户可用，或两者皆可。这只是说明，能不能做某件事仍由应用自己的权限决定。
+- skill 清单超出提示词预算时不再整份消失：先退成只列名字（仍可用 `skill__guide` 读取正文），连名字也放不下才退回一行提示加 `skill__list(query)` 搜索。
+- 读取 skill 包内文件不再每次都要审批（`skill__list_resources`、`skill__get_template`）；新建、修改、删除、导入导出这类操作照旧要确认。
+- 旧会话里那些已下线的 skill 工具名现在标为"已移除的 skill 工具"并指出替代工具，不再按旧名字显示成一个仍在工作的工具。
+- 移除了一套与对话执行并行的 skill 执行机制（执行计划面板、动作审批队列、动作卡片等）。它们没有任何入口可以触发，因此日常使用没有变化；读取 skill 仍然只有 `skill__guide` 一条路。
+
+### en-US
+
+- `/<id> your message` names one skill for this turn: the model is told the user asked for it, and the text you typed stays intact; prose that merely starts with a slash (for example `/quiet …`) is not treated as a name.
+- Skill cards and the detail view show each skill's invocation policy - model-only, user-only, or both. It is a description, not a permission: what a call may do is still decided by the app's own policy.
+- A skill list that overruns the prompt budget no longer disappears whole: it falls back to names only (guides stay readable through `skill__guide`), and only if even the names will not fit does it collapse to the standing line plus `skill__list(query)`.
+- Reading files inside a skill package no longer asks for approval every time (`skill__list_resources`, `skill__get_template`); create, edit, delete, import and export still confirm.
+- Tool names retired from the skill tool set now render as a removed skill tool with its replacement in older conversations, instead of looking like a tool that still works.
+- Removed a second skill execution mechanism that ran beside the conversation loop (execution plan panel, action approval queue, action cards). Nothing could reach it, so day-to-day behaviour is unchanged; reading a skill still goes through `skill__guide` alone.
+
 ## [0.8.3] - 2026-11-22
 
 ### zh-CN
