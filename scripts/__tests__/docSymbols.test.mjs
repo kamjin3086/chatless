@@ -124,6 +124,18 @@ describe('what a document promises', () => {
   });
 });
 
+it('takes a directory named without a trailing slash as a fair reference', () => {
+  // `put it under src/app` is as true a claim as `open src/app/layout.tsx`; demanding the
+  // slash made prose say `src/app/` like a shell, and then a reviewer's own paragraph failed.
+  const claims = docClaims([
+    'Every page under `src/app` is an entry point, see `src/app/layout.tsx`.',
+  ]);
+  expect(claims.filter((c) => c.kind === 'path').map((c) => c.text)).toEqual([
+    'src/app',
+    'src/app/layout.tsx',
+  ]);
+});
+
 describe('the deleted-name set', () => {
   it('comes from what the repository deleted, not from a list someone maintains', () => {
     const names = deletedNames(process.cwd(), '2 years ago');
