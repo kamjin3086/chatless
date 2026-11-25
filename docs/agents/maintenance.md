@@ -179,6 +179,7 @@ one to run.
 | Search / knowledge / budget work | the wired audits in `pnpm test`, plus `pnpm test:acceptance` - see the note below |
 | "What is the actual state here" | `pnpm repo:state` |
 | New worktree for a task | `pnpm wt:add ../wt-<topic> -b <branch>` |
+| Before a delete PR: what can nothing reach? | `pnpm report:reachability` - a report, deliberately not a gate. It walks the literal import graph (static, re-export, dynamic `import('…')`, `require('…')`) from every file under `src/app`, `src/instrumentation-client.ts`, and a `src/scripts/*` a package script names, then separates three claims that are not the same thing: **unreachable** (nothing imports it), **test-only** (a test keeps it breathing, so deleting it takes the test), and **suspect** (a live file's string resolves to it - name-based dispatch, or a commented-out import, which is a feature switched off). The first line prints its own blind spots; read them before quoting a number |
 
 Evidence comes from the runner and the pointer, not from a summary line:
 `pnpm ci:log <pr|--job <id>>` is a *view* over `gh run view --log` with the gh prefixes

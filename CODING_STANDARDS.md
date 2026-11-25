@@ -121,6 +121,15 @@ that looks like a caller. A reference from a barrel is not evidence of use: reso
 the importer, or say what the reachability argument is. (Both independent reviewers of
 #244 wrote their own import-graph script before agreeing on that.)
 
+`pnpm report:reachability` answers that question instead of hand-building a script each
+time: it walks the literal import graph (static imports, re-exports, dynamic
+`import('…')`, `require('…')`) from `src/app`, `src/instrumentation-client.ts` and any
+`src/scripts/*` a package script runs, then prints what nothing can reach. It splits the
+answer into unreachable, test-only and suspect, because "nothing imports it" and "only a
+test imports it" are different jobs. It is a report and not a gate: reachability needs a
+model of what counts as an entry point, and a gate that guesses becomes the noise that gets
+disabled.
+
 ## Language
 
 `docs/agents/language.md` decides this. It is enforced at authoring time and

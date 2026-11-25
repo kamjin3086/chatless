@@ -290,9 +290,13 @@ export function main(
         const stat = fs.statSync(path.join(root, target), {
           throwIfNoEntry: false,
         });
+        // A trailing slash states "directory"; without one, either reading is a fair claim, and
+        // `put it in src/app` is as true a reference as `open src/app/layout.tsx`.
         const ok = claim.text.endsWith('/')
           ? stat?.isDirectory() === true
-          : tracked.has(target) || stat?.isFile() === true;
+          : stat?.isDirectory() === true ||
+            tracked.has(target) ||
+            stat?.isFile() === true;
         if (!ok)
           report(
             file,
