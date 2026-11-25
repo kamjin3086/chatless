@@ -39,6 +39,7 @@
     "check:comments": "node scripts/comment-symbols.mjs",
     "check:docs-symbols": "node scripts/doc-symbols.mjs",
     "check:i18n-unused": "node scripts/i18n-unused.mjs",
+    "report:reachability": "node scripts/reachability.mjs",
     "repo:state": "node scripts/repo-state.mjs",
     "review:snapshot": "node scripts/review-snapshot.mjs",
     "ci:log": "node scripts/ci-log.mjs",
