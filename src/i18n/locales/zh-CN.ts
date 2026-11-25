@@ -178,6 +178,7 @@ const zhCN: TranslationDict = {
   'toolCall.listSeparator': '、',
   'toolCall.listSkills': '列出技能',
   'toolCall.getSkillGuide': '获取技能指南',
+  'toolCall.retiredSkillTool': '已移除的 skill 工具',
   'toolCall.listSkillResources': '列出技能资源',
   'toolCall.getTemplate': '获取模板',
   'toolCall.listSkillActions': '列出技能动作',

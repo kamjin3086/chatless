@@ -171,6 +171,7 @@ export type TranslationKey =
   | 'toolCall.listSeparator'
   | 'toolCall.listSkills'
   | 'toolCall.getSkillGuide'
+  | 'toolCall.retiredSkillTool'
   | 'toolCall.listSkillResources'
   | 'toolCall.getTemplate'
   | 'toolCall.listSkillActions'

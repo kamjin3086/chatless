@@ -231,6 +231,21 @@ function describeToolName(locale: Locale, server: string, tool: string): string 
   return verb ? translate(locale, verb) : `${server} · ${tool}`;
 }
 
+/**
+ * Names the built-in `skill` server used to answer and no longer has: PR #230 deleted the
+ * aliases, so `skill__use` and its siblings are not routed any more. A conversation
+ * recorded while they were routable still carries them, with the result already stored -
+ * this table translates that history, it does not re-open a route. A live call to any of
+ * these names still fails, and that is the door ADR-0003 records (#236).
+ */
+const RETIRED_SKILL_TOOLS = new Map<string, string>([
+  ['use', 'guide'],
+  ['get', 'guide'],
+  ['list_files', 'list_resources'],
+  ['read_file', 'get_template'],
+  ['write_file', 'edit_resource'],
+]);
+
 export function presentToolCard(locale: Locale, params: {
   server: string;
   tool: string;
@@ -249,6 +264,20 @@ export function presentToolCard(locale: Locale, params: {
     const id = pickArg(args, 'id');
     const name = pickArg(args, 'name');
     const skillLabel = id || name || '';
+
+    // A name this server does not have any more. The result is already stored, so the
+    // honest card says the name is retired and points at what took its place; guessing the
+    // old job would read as a tool that still works.
+    if (srv === 'skill' && RETIRED_SKILL_TOOLS.has(tl)) {
+      const detail = `skill__${tl} → skill__${RETIRED_SKILL_TOOLS.get(tl)}`;
+      return {
+        titleLine: t('toolCall.retiredSkillTool'),
+        detailLineLabel: t('toolCall.detail.tool'),
+        detailLineFull: detail,
+        detailLineShort: truncate(detail, 30),
+        kind: 'generic',
+      };
+    }
     
     // 使用类（只读）
     if (tl === 'list_available_skills' || tl === 'list') {
