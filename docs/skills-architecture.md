@@ -579,6 +579,9 @@ hooks:
 
 实际实现只有一条路径，入口是一个纯 module：`src/lib/skills/skillIndex.ts`。它不读 store、不碰文件系统，输入是已经加载好的窄视图，输出是要进 system prompt 的两段文本——所以「什么时候该出现、出现什么」是可以直接测的（`__tests__/skillIndex.test.ts`）。
 
+**谁拿到这份索引（#235）**
+索引只有一个装配点：对话侧的 prompt envelope——`AgentLoopRunner` → `buildAgentPromptEnvelope` → `composeSystemPrompt`（那条对齐表就写在 `buildAgentPromptEnvelope.ts` 顶上）。所以今天"哪条对话看得到 skill"的答案是全部对话，没有第二种。今天也没有子 agent 机制（`grep -rn "subagent\|子代理" src` 是空的，`docs/agents/constraints.md` 把 swarm/subagent 平台推到以后按审计再定），因此不存在"子 agent 看不到索引"这个 bug。将来做子 agent 时的约束写在这里：**复用同一个 envelope**，不要另起一个提示词装配点；如果子 agent 拿到更窄的工具集，索引必须跟着同一份工具集裁——否则就是让模型去调一个它没有的工具，比不给索引更糟（第 3 层那句"四个只读工具随索引一起进工具列表"是同一条理由）。要偏离，先在 ADR 里写下为什么。
+
 **第 1 层 — 常驻行 `skill-availability`（conversation / order 75）**
 只在「至少一个 skill 可用」时出现：这里有 skill、动手前先 `skill__guide`、skill 不授予任何权限。存在仅用户可触发的 skill 时，这里列出它们的名字（只列名字，不列描述——描述会诱导模型去读）。
 

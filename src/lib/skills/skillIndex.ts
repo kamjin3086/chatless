@@ -15,6 +15,14 @@ import { invocableByModel, invocableByUser } from './invocation';
  * switched-off injection branch, the dead command hook, the stale adapter aliases) each
  * died of being untestable in place.
  *
+ * Who receives the index: one place only - the conversation's prompt envelope
+ * (`buildAgentPromptEnvelope` composes these blocks into the system prompt). There is no
+ * sub-agent mechanism today, so there is no second reader. When a sub-agent platform
+ * arrives, it must reuse that envelope rather than compose its own prompt, and if it is
+ * given a narrower tool set, the index has to be narrowed from the same source: telling a
+ * model to call `skill__guide` is worse than giving it no index at all when it has no such
+ * tool (#235).
+ *
  * Two orthogonal questions stay separate:
  * - who may start a skill: `invocableByModel`, derived from frontmatter (`invocation.ts`);
  * - whether this machine can run one: applicability (platform, capabilities). No need
