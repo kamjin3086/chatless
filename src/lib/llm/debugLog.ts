@@ -6,9 +6,12 @@
  * wire. The Tauri log file only carries Rust-side lines, and the app's console
  * forwarding is disabled in production, so the chat payloads were invisible.
  *
- * How to turn it on: 设置 → 高级设置 → 日志级别 → 调试 ("debug"). The Rust log
- * target is raised to `debug` at the same time, so the dumps land in
- * `~/Library/Logs/com.kamjin.chatless/logs.log` (and in the console).
+ * How to turn it on: 设置 → 高级设置 → 日志级别 → 调试 ("debug") - or
+ * `NEXT_PUBLIC_LLM_DEBUG=true` at build time, which enables it unconditionally.
+ * Where the lines actually go: the log dispatch is capped at `Info` when it is
+ * built (`src-tauri/src/lib.rs`), and raising the level afterwards cannot lift
+ * that cap - so a debug record reaches the webview console only, not the log
+ * file. An earlier version of this comment promised the file.
  * `NEXT_PUBLIC_LLM_DEBUG=true` at build time enables it unconditionally.
  *
  * Payloads contain the user's own conversation text - that is the point - so

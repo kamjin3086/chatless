@@ -3,7 +3,8 @@
  *
  * 说明：
  * - 该文件仅做兼容 re-export，避免大范围破坏现有 import 路径。
- * - skills 资源读写请使用 `skills_fs`；用户目录读写请使用 `user_fs`。
+ * - 历史注释曾推荐 `skills_fs` / `user_fs` 这两个 server 名；它们已退役（没有 adapter 认领，
+ *   调用只会拿到 NO_ADAPTER）。今天的名字是 `fs` 与内置的 `skill`。
  */
 
 export {
