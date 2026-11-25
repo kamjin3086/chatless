@@ -21,14 +21,17 @@ Skills 是用户装在本机的 `SKILL.md` 资产。运行期只有一条接线�
 |---|---|
 | 取资产 | `src/lib/skills/SkillManager.ts`：本机技能目录（`getSkillsBasePath`，`appDataDir()` 下的 `skills/`）、zip 导入（`importFromZip`）、git clone / 更新（`cloneFromGit`、`updateSkillFromGit`）、远程下载（`RemoteSkillLoader.ts`、`LocalSkillLoader.ts`） |
 | 记账，不是门禁 | `integrity.ts` 记来源种类（official / third_party / local / unknown）与内容哈希；`SkillValidator.ts` 校验 SKILL.md 格式，但**今天没有安装路径调用它**；`dependencyChecker.ts` 只在界面里给安装建议（`src/components/skills/DependencyInstallGuide.tsx`）。别把这一列当成"装之前都会过一遍"——它不是 |
-| 解析 | `SkillMdParser.ts` 读 frontmatter。它真正读的键是固定的（`READ_KEYS`：`name`、`description`、`version`、`author`、`dependencies`、`tags`、`category`、`hooks`、`triggers`、`actions` 加三个触发键），**大小写敏感**（`Allowed-Tools` 不认），写了不认识的键会给告警，而 `types.ts` 里的 `parameters` 根本不在读取名单里。`allowed-tools` 既吃空格分隔字符串也吃 YAML 列表 |
-| 用户点名某个技能 | `src/components/chat/skillsSlash.ts` 列出可被用户点名的技能并往输入框插 `/<id> `；消息带着 `explicitSkillIds` 下去，`skillIndex.ts` 把它单独收成 `skills-requested` 提示块（order 15），由 `src/lib/mcp/injection/promptBuilder.ts` 拼进 system prompt（拼装走 `src/lib/mcp/agentLoop/buildAgentPromptEnvelope.ts`） |
+| 解析 | `SkillMdParser.ts` 读 frontmatter。它真正读的键是固定的（`READ_KEYS`：`name`、`description`、`version`、`author`、`dependencies`、`tags`、`category`、`hooks`、`triggers`、`actions` 加三个触发键），**大小写敏感**（`Allowed-Tools` 不认），而 `types.ts` 里的 `parameters` 根本不在读取名单里。`triggers` / `actions` 虽在名单里被读出来，但**路由不读它们**（`skill__list` 的输出也不带），它们存在的意义是那份拼写告警名单。告警本身也只认**近似键**：与已知键编辑距离 ≤ 2 或形状匹配 invocation / allowed-tools 才报，`foo: bar` 静默忽略。`allowed-tools` 既吃空格分隔字符串也吃 YAML 列表 |
+| 用户点名某个技能 | `src/components/chat/skillsSlash.ts` 只回答「哪些技能可被点名」并取出已点名的 id，**插入动作在 `src/components/chat/ChatInput.tsx`**，候选面板是 `src/components/chat/input/SkillMentionPanel.tsx`；消息带着 `explicitSkillIds` 下去，`skillIndex.ts` 把它单独收成 `skills-requested` 提示块（order 15），由 `src/lib/mcp/injection/promptBuilder.ts` 拼进 system prompt（拼装走 `src/lib/mcp/agentLoop/buildAgentPromptEnvelope.ts`） |
 | 模型自己读技能 | 发现类：`skill__list` / `skill__guide` / `skill__list_resources` / `skill__get_template` / `skill__check_deps`；管理类：`skill__install` / `uninstall` / `enable` / `disable` / `update` / `edit_resource`。定义在 `src/lib/mcp/nativeTools/skillUnifiedTools.ts`，执行在 `src/lib/mcp/pipeline/adapters/SkillUnifiedAdapter.ts` 与 `src/lib/skills/skillFileOperations.ts` |
 | 谁能启动一个技能 | frontmatter 的 `disable-model-invocation` / `user-invocable`（`src/lib/skills/invocation.ts`）——这是权威 |
 | 权限 | `ToolPolicy` 加 Rust 的文件系统允许名单（ADR-0004）。`SKILL.md` 里的 `allowed-tools` **不授予任何东西**：`SkillMdParser` 解析它，没有任何谓词读它，界面今天也不展示它。它是作者的愿望，不是权限 |
 
 顺带一个同名陷阱：`src/lib/skills/sandbox/`（`ProcessSandbox`、`validators/CommandValidator`）还活着，
-但它服务的是 `shell__run`（`ShellExecutorAdapter.ts`），不是技能执行——技能那一半已经没了。
+但它服务的是 `shell__run`（`ShellExecutorAdapter.ts`）与**后台进程的生命周期**——切换或删除会话时停掉本会话
+的进程、输入框预热它的可用性——不是技能执行，技能那一半已经没了。策略层还有第二组同名：内置的 `skill`（查风险
+表）、外部 MCP 的 `skills`（自带审批名单）、已退役但名字仍留在 `src/lib/mcp/toolNaming.ts` 与 `policy.ts` 里的
+`skills_fs`。三者互不归一，改判定前先确认改的是哪一个。
 
 ## 那条缝：渐进式披露
 
@@ -63,8 +66,10 @@ Skills 是用户装在本机的 `SKILL.md` 资产。运行期只有一条接线�
 
 1. 想给技能单独一套审批 / 权限 / 预算，就是重开已经关掉的门。为什么关着写在
    ADR-0004 的 2026-11 修订（「技能包自己的文字不授予任何东西」）和 ADR-0003 的 skill 别名修订里。
-2. 加一个 `skill__*` 只读工具要**同时**动 `src/lib/mcp/pipeline/policy/toolRisk.ts`（它同时决定
-   planning 模式放行与免审批）和 `SkillUnifiedAdapter.ts` 的路由；`skill` 不在
+2. 加一个 `skill__*` 只读工具要动**三处**：`src/lib/mcp/pipeline/policy/toolRisk.ts`（它同时决定
+   planning 模式放行与免审批）、`SkillUnifiedAdapter.ts` 的路由，以及
+   `src/lib/mcp/nativeTools/skillUnifiedTools.ts` 的工具清单（`src/lib/mcp/injection/promptBuilder.ts`
+   按它决定这轮请求里有没有这个工具）。少了第三处，模型根本看不见它；`skill` 不在
    `REPLAYABLE_SERVERS` 里，新增读工具不改变重试语义。
 3. 想往索引里多塞正文，先量预算再动常量。调大常量不叫解决，叫把问题挪给别人。
 4. `SKILL.md` 模板在 `src/lib/skills/SKILL_TEMPLATE.md`（上一版把它链接成 docs/ 同目录下的文件，

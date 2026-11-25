@@ -8,7 +8,8 @@
 
 四个数据类型：`prompts` / `skills` / `providers` / `settings`（`SyncDataType`）。服务器上的形状是
 **每条记录一个 JSON 文档**：`<类型>/data/<item.id>.json`（`PromptAdapter` 用 `prompts/data`，
-`skills/data`、`providers/data`、`settings/data` 同理），外加一份 `<类型>/metadata.json` 存每条记录的
+`skills/data`、`providers/data`、`settings/data` 同理），外加一份放在**同一个目录**里的
+`<类型>/data/metadata.json`（`metaPath` 就是拿 `adapter.remotePath` 拼的）存每条记录的
 `updated_at` / `device_id` / `deleted_at`。只有 settings 恰好只有一条记录（`user-settings`），所以
 看起来像"一个类型一个文档"，别把它当通则。一次同步就是「读远端 metadata → 与本地比 → 该推的推、
 该拉的拉」，冲突靠确定性规则判胜负，不靠合并内容。
@@ -23,7 +24,10 @@
 | 用户配连接、点「立即同步」 | `src/components/settings/WebDavSyncSettings.tsx` → `src/store/webDavSyncStore.ts`（连接参数、`enabled`、`autoSync` 都存在这个 store） |
 | 执行一次同步 | `webDavSyncStore.performSync(direction)`。SyncManager、四个 adapter、WebDAVTransport 都是**动态 import**：没开同步就不该把这些代码载进包里，别改成静态导入 |
 | 数据变更后自动同步 | `src/lib/sync/prompts/autoSync.ts` 的 `triggerPromptSync()`：5 秒防抖，且要求 `enabled && autoSync` 与连接参数齐全才排程。**目前只有 `promptStore` 在写操作后调它**，技能 / 提供商 / 偏好的改动不会自动排程同步 |
-| 某类数据怎么进出本地 | `src/lib/sync/adapters/`，每个 adapter 继承 `BaseSyncAdapter`：抽象部分是 `dataType` / `remotePath` / `displayName` 加 `getLocalItems` / `getLocalItem` / `localItemExists` / `createLocalItem` / `updateLocalItem` / `deleteLocalItem` / `toSyncDoc` / `fromSyncDoc`，另有两件事**有默认实现、但常常需要覆写**：`extractMetadata` 和同步完的 `onSyncComplete`（各 adapter 用它刷新自己的 store） |
+| 某类数据怎么进出本地 | `src/lib/sync/adapters/`，每个 adapter 继承 `BaseSyncAdapter`：抽象部分是 `dataType` / `remotePath` / `displayName` 加 `getLocalItems` / `getLocalItem` / `localItemExists` / `createLocalItem` / `updateLocalItem` / `deleteLocalItem` / `toSyncDoc` / `fromSyncDoc`，另有两件事**有默认实现，但只有部分 adapter 真的覆写**：`extractMetadata`（`PromptAdapter` /
+`SkillAdapter` 有实现，providers / settings 用默认）与同步结束后的 `onSyncComplete`——**四个里只有
+`PromptAdapter` 靠它刷新界面**（`loadFromDatabase()`），另外三个是空实现：skills 的 store 自己
+persist、providers 靠 CacheManager 广播、settings 在 setter 里就落库 |
 | 冲突判定 | `src/lib/sync/core/ConflictResolver.ts` |
 | 与服务器对话 | `src/lib/sync/transports/WebDAVTransport.ts` → `src/lib/sync/webdav/WebDavClient.ts` |
 | 设备身份 | `src/lib/sync/deviceId.ts`（一次安装一个稳定 id，它同时是冲突 tie-break 的判据） |
@@ -31,7 +35,7 @@
 ## 四条不变量（破了就不是这套同步了）
 
 1. **metadata 写入是 ETag 上的 compare-and-swap，且强制**。拿不到 strong ETag（缺失、`*`、以
-   `W/` 开头）就直接抛 `Cannot safely write WebDAV resource without a strong ETag`，绝不盲写；
+   `W/` 开头）就抛 `Cannot safely write WebDAV resource without a strong ETag: <路径>`，绝不盲写；
    Apache 会把刚写完的文件短暂标成 weak ETag，所以 `readForConditionalWrite` 等 1.1 s 重读一次，
    永不拿 weak ETag 当 `If-Match`；`isPreconditionFailure` 认 412/precondition，整轮最多重来
    `MAX_CONFLICT_ATTEMPTS`（3）次。为什么这么讲究：2026-10 的架构审查（
@@ -45,11 +49,13 @@
    `shouldRemoteWin`），不看内容。同一对状态在哪台设备上算、按什么顺序算，结果都要一样。
 3. **删除是软删除 tombstone**（`deleted_at`），一个落后的快照不能把赢的一方删掉的东西复活——
    `SyncManager` 里那句 "A losing snapshot may carry a tombstone the winning version removed"
-   说的就是这件事，改合并顺序时先读它。落到 adapter 上分三种：prompts 写 `deleted_at`；providers
-   的删除是「隐藏」（`setVisibility(false)`），条目还在库里；settings 根本不支持删除（no-op）。
+   说的就是这件事，改合并顺序时先读它。落到 adapter 上分四种：prompts 写 `deleted_at`（并把
+   `updated_at` 抬到删除时刻）；providers 的删除是「隐藏」（`setVisibility(false)`），条目还在库里；
+   skills 的删除是把 `enabled` 置 false，**它不推进 `updated_at`**（见下条）；settings 根本不支持删除
+   （no-op）。
 4. **胜负看 `updated_at`，而各 adapter 填它的方式不一样**，这是"我改了但同步没动"的头号原因：
    providers 用 `lastChecked || Date.now()`，skills 用 `installedAt || Date.now()`，settings 每次采集
-   打一个 `Date.now()`。后果具体：改 provider 的 URL、切技能的启用状态都不会推进 `updated_at`，
+   打一个 `Date.now()`。后果具体：改 provider 的 URL、切技能的启用状态（含上面那种"删除"）都不会推进 `updated_at`，
    这一改动在冲突里赢不了；settings 是整文档 last-writer-wins，没有字段级合并，所以它几乎总是本地胜。
    （metadata 文件另有 `version: 1`，目前是 `types.ts` 里的字面量类型，读入处没有版本分支——真要改字段
    形状，得先在那儿加兼容，不是把数字加 1 就完事。）
@@ -59,8 +65,8 @@
 `SyncDataType` 联合类型 + `SYNC_DATA_TYPE_INFO` 的展示文案 → 新 adapter（继承 `BaseSyncAdapter`，
 想清楚 `extractMetadata` 和 `onSyncComplete` 要不要覆写）→ adapter 注册进 `performSync` → store 的
 `ALL_SYNC_DATA_TYPES` 与设置页勾选 → `src/i18n/` 两份词条 + `src/i18n/types.ts`。少一处表现为
-「能同步但界面勾不到」或「勾了但同步里没它」；漏掉 `onSyncComplete` 的症状最阴——同步报告成功，
-界面不刷新（`PromptAdapter` / `SkillAdapter` 都是靠它重新 `loadFromDatabase()`）。
+「能同步但界面勾不到」或「勾了但同步里没它」；需要拉完之后刷新界面的类型必须覆写 `onSyncComplete`，
+否则症状是「同步报告成功，界面不刷新」——今天只有 `PromptAdapter` 需要并做到了。
 
 ## 已知的死路径（别在错的那份上改）
 

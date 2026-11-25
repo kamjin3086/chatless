@@ -2,7 +2,7 @@
 
 > **Archived.** One round of work, kept as the record of what was decided and what was
 > measured then - not current status. For how the code works today, read
-> `docs/agents/subsystems.md`; for what is still open, the issue tracker.
+> `docs/knowledge-rag.md`; for what is still open, the issue tracker.
 
 
 ## Contract
