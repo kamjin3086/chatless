@@ -21,7 +21,9 @@ approved yet.
 pnpm test         # unit + the gates that used to be a human habit
 pnpm typecheck
 pnpm typecheck:tests   # the root typecheck excludes every test file
-pnpm verify       # lint:ci + typecheck + test types + build, run this before pushing
+pnpm verify       # lint:ci + typecheck + test types + the text gates below + build; run before pushing
+pnpm check:docs-symbols   # a document that names a path, a member or a deleted component
+pnpm check:i18n-unused    # locale keys nothing asks for (allowlist: scripts/i18n-unused.allowlist.json)
 pnpm fmt <file…>   # the only formatter entry point; `biome format --write` reflows whole files
 pnpm repo:state   # main sha, worktrees, whose branch this tree is, open PRs (and a bad title)
 pnpm ci:log 94    # what CI actually printed: test counts, checks (build output when printed)

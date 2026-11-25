@@ -98,6 +98,29 @@ These bind whoever dispatches a review as much as whoever performs it.
 - **Should:** a bug fix names the check that would have caught it; when there is
   none, that gap is the second half of the work.
 
+- **Must:** a deletion takes the thing's vocabulary with it. A module is gone when
+  the types it spoke, the locale keys only it asked for, the comments that
+  describe it and the documents that name it are gone too - not when its files are
+  deleted. Say in the body which of those four you swept and which you left, and
+  why: pre-existing dead code left alone is a stated boundary, silent leftovers are
+  a claim that nothing is left.
+  *Why:* the review round on PR #244 found nine engine types, ten `skillRisk.*`
+  keys, a sandbox header advertising deleted features and seven places in
+  `docs/skills-architecture.md` still describing the deleted subsystem in the
+  present tense - after a body that said the deletion was complete.
+- **Must:** "every X does Y" claims about several files hold per file, not on average.
+  *Why:* "the UI that was mounted but never shown" covered three different truths -
+  one panel mounted and unreachable, one never mounted, one reachable only from a
+  component the same PR deleted.
+
+### Reading a reference
+
+`src/lib/skills/index.ts`, `src/components/skills/index.ts` and `src/store/index.ts`
+re-export nearly everything they contain, so `grep -rn <symbol>` prints a barrel line
+that looks like a caller. A reference from a barrel is not evidence of use: resolve to
+the importer, or say what the reachability argument is. (Both independent reviewers of
+#244 wrote their own import-graph script before agreeing on that.)
+
 ## Language
 
 `docs/agents/language.md` decides this. It is enforced at authoring time and
@@ -111,6 +134,8 @@ Chinese content is not a finding, and no PR is opened to translate it.
 |------|----------------------|
 | PR title conventional + ASCII | `pnpm check:pr-title` - CI step + `scripts/__tests__/check-pr-title.test.mjs` |
 | Types, formatting, unit tests | `pnpm typecheck`, `pnpm lint:ci`, `pnpm test`; `.githooks/pre-commit` runs the cheap part locally |
+| A comment or document names something that is not in the tree | `pnpm check:comments`, `pnpm check:docs-symbols` - CI step + `scripts/__tests__/commentSymbols.test.mjs`, `docSymbols.test.mjs` |
+| A locale key nobody asks for | `pnpm check:i18n-unused`, allowlist at `scripts/i18n-unused.allowlist.json` + `scripts/__tests__/i18nUnused.test.mjs` |
 | Every `include` entry collects something; audit files cited in docs exist | `scripts/__tests__/vitestInventory.test.mjs` |
 | Model-facing prompts stay English | `src/lib/prompts/__tests__/prompt-language.test.ts`, see `docs/prompt-language.md` |
 | Start-up actually finishes, window stays responsive | `scripts/verify-app-startup.sh`, see `docs/tauri-window-pitfalls.md` |

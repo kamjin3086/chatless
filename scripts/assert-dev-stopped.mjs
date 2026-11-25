@@ -20,7 +20,8 @@ const done = (listening) => {
   if (!listening) process.exit(0);
   console.error(
     `refusing to build: something is listening on :${PORT} (a dev server shares distDir with the build).\n` +
-      'Stop `pnpm dev` / `pnpm tauri dev` first, then build. Deleting `dist` is what recovers a dev server that already lost this race.',
+      'Stop `pnpm dev` / `pnpm tauri dev` first, then build. Deleting `dist` is what recovers a dev server that already lost this race.\n' +
+      'Reviewing without stopping anything: `pnpm verify:fast` is every gate except this one.',
   );
   process.exit(1);
 };

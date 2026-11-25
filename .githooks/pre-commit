@@ -64,6 +64,18 @@ if [ ${#staged_files[@]} -gt 0 ]; then
   fi
 fi
 
+# 2b. a document that names a path, a member or a deleted component promises the reader can
+# find it - the same class as 2a, one level up. Skipped when no markdown is staged: on this tree
+# the full scan costs 0.1s, so scoping it to staged files is politeness, not necessity.
+if printf '%s\n' "${staged_files[@]}" | grep -qE '^(docs/|AGENTS|CODING_STANDARDS|GLOSSARY)'; then
+  node scripts/doc-symbols.mjs "${staged_files[@]}" || report "a document names something that is not in the tree - fix the prose or mark it history"
+  [ $? -ne 0 ] && fail=1
+fi
+
+# 2c. a locale key nothing asks for is a key left behind by a deletion. 0.15s over the tree.
+node scripts/i18n-unused.mjs || report "a locale key is no longer asked for - delete it, or say why it stays in scripts/i18n-unused.allowlist.json"
+[ $? -ne 0 ] && fail=1
+
 # 2. formatting, judged per file: a file already unformatted at HEAD is not this change's
 # business to reflow - that is how a change commit turns into 2,000 lines of churn, and the
 # reason `--no-verify` was getting used. See scripts/format-policy.mjs.
