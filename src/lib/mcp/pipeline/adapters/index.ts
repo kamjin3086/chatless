@@ -5,7 +5,7 @@ import { SkillUnifiedAdapter } from './SkillUnifiedAdapter';
 import { SystemToolAdapter } from './SystemToolAdapter';
 import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
 import { WebSearchAdapter } from './WebSearchAdapter';
-import { KnowledgeAdapter } from './KnowledgeAdapter';
+import { ContributionAdapter } from './ContributionAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 import { ToolResultAdapter } from './ToolResultAdapter';
 
@@ -17,6 +17,10 @@ import { ToolResultAdapter } from './ToolResultAdapter';
  * - 移除了 SkillsFsAdapter (旧的 skills_fs 操作)
  * - 移除了 UserFsAdapter (旧的 user_fs 操作，名单已无人可写)
  * - 合并到 SkillUnifiedAdapter (统一的 skill__* 工具)
+ *
+ * knowledge 不再静态注册：它经 ContributionAdapter 走贡献自己的
+ * loadAdapter 工厂（阶段 3 执行器接线，A05：禁用即 NO_ADAPTER）。
+ * 位置保持在原处——findAdapter 是首命中语义，顺序即路由。
  */
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
@@ -26,7 +30,7 @@ export function createDefaultAdapters(): ToolAdapter[] {
     new SkillUnifiedAdapter(),
     new FilesystemAdapter(),
     new ShellExecutorAdapter(),
-    new KnowledgeAdapter(),
+    new ContributionAdapter(),
     new SystemToolAdapter(),
     new McpAdapter(),
   ];

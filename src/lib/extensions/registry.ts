@@ -108,6 +108,15 @@ export interface ExtensionRegistry {
   readonly extensions: ReadonlyMap<ExtensionId, BuiltinExtension>;
   group(id: string): ToolGroupContribution | undefined;
   groups(): readonly ToolGroupContribution[];
+  /**
+   * Groups whose extension is enabled (persisted hook or static default),
+   * sync - the executor-routing view. Deliberately excludes availability
+   * predicates: whether a capability currently holds for a conversation is not
+   * whether its executor exists (an unmounted knowledge call must still reach
+   * the executor's own scope error, as before the migration). A disabled
+   * extension contributes nothing here, which is A05 at the routing seam.
+   */
+  enabledGroups(): readonly ToolGroupContribution[];
   /** Sticky session loading after a discovery hit; unknown ids stick (the
    * hand-written groups this replaced did). Normalized lookup, default true. */
   isSticky(groupId: string): boolean;
@@ -318,6 +327,13 @@ export function buildExtensionRegistry(
     isSticky: (id) =>
       groupsById.get(normalizeServerName(id))?.stickyWhenLoaded !== false,
     groups: () => groups,
+    enabledGroups: () =>
+      groups.filter((g) => {
+        const owner = ownerByGroupId.get(g.id);
+        return (
+          !!owner && (options.isEnabled?.(owner.id) ?? owner.defaultEnabled)
+        );
+      }),
     async availableGroups(ctx = {}) {
       // Evaluate predicates concurrently (each is an independent data-presence
       // check - the knowledge one hits SQLite - so a serial loop would add up

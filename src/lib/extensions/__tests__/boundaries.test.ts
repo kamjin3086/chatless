@@ -28,6 +28,12 @@ const EXT_DIR = join(ROOT, 'lib', 'extensions');
 export const ASSEMBLY_ALLOWLIST = new Set<string>([
   'lib/mcp/injection/promptBuilder.ts',
   'lib/mcp/pipeline/adapters/ToolsRegistryAdapter.ts',
+  // Phase 3 executor wiring: the bridge reads the enabled-groups view and
+  // delegates execution to the contribution's own factory - glue, no policy.
+  'lib/mcp/pipeline/adapters/ContributionAdapter.ts',
+  // A05 routing guard: contributed servers never fall through to the external
+  // MCP path; one read of the full groups view, no policy in the check.
+  'lib/mcp/pipeline/adapters/McpAdapter.ts',
 ]);
 
 /** Inside the tree, assembly.ts is the wiring point: §4.2 lets it inject the

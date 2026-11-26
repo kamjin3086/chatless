@@ -53,7 +53,7 @@ code. What they claim about today is pinned to a re-check note at the top of eac
 re-pins it before implementation, and the surviving contracts fold into a live document when the
 work lands.
 
-- [`internal-extension-plan.md`](internal-extension-plan.md) - joint plan, document A: the internal extension mechanism - requirements, contracts, migration order, acceptance items A01-A17. Landed: #258 contract + registry, #259 knowledge pilot, #260 registration-consistency patrol and §11.2 budget guards. Not landed: phase 3 executor rewiring, phase 4 runtime acceptance (startup/memory medians, canary), document B (Session App).
+- [`internal-extension-plan.md`](internal-extension-plan.md) - joint plan, document A: the internal extension mechanism - requirements, contracts, migration order, acceptance items A01-A17. Landed: #258 contract + registry, #259 knowledge pilot, #260 registration-consistency patrol and §11.2 budget guards, #261 executor wiring through contribution factories (ContributionAdapter). Not landed: phase 4 runtime acceptance (startup/memory medians, canary), document B (Session App).
 - [`session-app-plan.md`](session-app-plan.md) - joint plan, document B: the Session App - product requirements, isolated runtime, handoff seams with document A (B0-B4).
 
 ## Frozen snapshots
