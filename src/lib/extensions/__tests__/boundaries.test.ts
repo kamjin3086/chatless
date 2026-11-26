@@ -34,6 +34,9 @@ export const ASSEMBLY_ALLOWLIST = new Set<string>([
   // A05 routing guard: contributed servers never fall through to the external
   // MCP path; one read of the full groups view, no policy in the check.
   'lib/mcp/pipeline/adapters/McpAdapter.ts',
+  // Name-claim check at MCP config time (review P0-4): reject servers whose
+  // name is claimed by an extension before they could be silently shadowed.
+  'lib/mcp/ServerManager.ts',
 ]);
 
 /** Inside the tree, assembly.ts is the wiring point: §4.2 lets it inject the

@@ -104,6 +104,27 @@ export interface BuildRegistryOptions {
   isEnabled?: (extensionId: ExtensionId) => boolean | undefined;
 }
 
+/**
+ * Four states, one vocabulary (external review 2026-11-26, adopted):
+ *
+ * - **Registered** - `group()/groups()`: identity exists and the namespace is
+ *   protected (external MCP cannot take it). Carries no runtime judgment.
+ * - **Available** - `enabledGroups()` ∩ availability predicates, surfaced as
+ *   `availableGroups()/availableGroup()`: enabled AND current platform /
+ *   session / data conditions hold. This is what may be DISCLOSED: the
+ *   `tools__search` catalog and prompt injection consume it. History
+ *   (sticky loads, pending requests) may only decide disclosure of still-
+ *   available groups - it can never revive an unavailable one.
+ * - **Exposed** - the tools actually injected for this model step; derived,
+ *   not stored in the registry (promptBuilder owns it).
+ * - **Authorized** - the concrete call passed core approval and the
+ *   executor's own data-scope check. Execution routing (ContributionAdapter)
+ *   matches identity within `enabledGroups()`; availability deliberately
+ *   does not gate execution - an unmounted knowledge call must still reach
+ *   the executor's scope error, which is the pre-migration user-visible
+ *   behavior (A08), and a disabled extension routes to no adapter at all
+ *   (A05).
+ */
 export interface ExtensionRegistry {
   readonly extensions: ReadonlyMap<ExtensionId, BuiltinExtension>;
   group(id: string): ToolGroupContribution | undefined;
@@ -117,13 +138,26 @@ export interface ExtensionRegistry {
    * extension contributes nothing here, which is A05 at the routing seam.
    */
   enabledGroups(): readonly ToolGroupContribution[];
+  /** Registered-state name claim (four states): a contributed server name is
+   * owned by that group - external MCP configs may not take it, and the
+   * executor bridge routes it. Full groups view: disabled or not, the name
+   * stays claimed while registered. */
+  serverClaim(server: string): { groupId: string } | undefined;
+  /** Single-group Availability check (enabled + predicate, §5.4 isolation).
+   * For prompt blocks and any one-off "is this capability live for this
+   * conversation right now" question - the deduplicated authority behind the
+   * knowledge mount query (replaces the per-callsite store/SQL lookups). */
+  availableGroup(
+    id: string,
+    ctx?: { conversationId?: string },
+  ): Promise<ToolGroupContribution | undefined>;
   /** Sticky session loading after a discovery hit; unknown ids stick (the
    * hand-written groups this replaced did). Normalized lookup, default true. */
   isSticky(groupId: string): boolean;
   /**
-   * The single availability view: enabled extension AND group availability.
-   * Discovery, injection and execution must consume this same function so no
-   * "visible but unexecutable" ghost capability can exist (plan §10 phase 3).
+   * The Availability view (see four states above): enabled extension AND group
+   * availability predicate. Catalog and injection consume it; execution routing
+   * uses identity within `enabledGroups()` instead (A08/A05 split above).
    *
    * An availability predicate that throws hides only its own group (§5.4
    * failure isolation): predicates read persisted conversation state in PR B,
@@ -334,6 +368,25 @@ export function buildExtensionRegistry(
           !!owner && (options.isEnabled?.(owner.id) ?? owner.defaultEnabled)
         );
       }),
+    serverClaim: (server) => {
+      const n = normalizeServerName(server);
+      const g = groups.find((x) => normalizeServerName(x.server) === n);
+      return g ? { groupId: g.id } : undefined;
+    },
+    async availableGroup(id, ctx = {}) {
+      const g = groupsById.get(normalizeServerName(id));
+      if (!g) return undefined;
+      const owner = ownerByGroupId.get(g.id);
+      if (!owner) return undefined;
+      if (!(options.isEnabled?.(owner.id) ?? owner.defaultEnabled))
+        return undefined;
+      if (!g.availability) return g;
+      try {
+        return (await g.availability(ctx)) ? g : undefined;
+      } catch {
+        return undefined; // §5.4 isolation, same as availableGroups
+      }
+    },
     async availableGroups(ctx = {}) {
       // Evaluate predicates concurrently (each is an independent data-presence
       // check - the knowledge one hits SQLite - so a serial loop would add up
