@@ -177,6 +177,22 @@ describe('ContributionAdapter: contributions own their executor (phase 3)', () =
     expect(executor.calls).toBe(0);
   });
 
+  it('an undeclared tool on a contributed server: NO_ADAPTER through the pipeline, no card (A05 shape)', async () => {
+    // The routing-level test only covers the bridge; this pins "before the
+    // approval card": findAdapter runs upstream of approval, and McpAdapter
+    // refuses the claimed name, so no card and no external fallback.
+    const pipeline = new ToolExecutionPipeline({
+      adapters: createDefaultAdapters(),
+    });
+    const result = (await pipeline.run(invocation('knowledge', 'delete'))) as {
+      error?: string;
+    };
+    expect(result.error).toBe('NO_ADAPTER');
+    expect(mocks.approvals).toHaveLength(0);
+    expect(mocks.mcpCalls).toHaveLength(0);
+    expect(executor.calls).toBe(0);
+  });
+
   it('the MCP path never claims contributed servers, disabled or not (A05 guard)', () => {
     const mcp = new McpAdapter();
     // The real assembled registry contributes knowledge; the guard uses the

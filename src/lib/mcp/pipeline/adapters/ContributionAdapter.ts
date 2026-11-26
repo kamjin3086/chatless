@@ -66,10 +66,11 @@ export class ContributionAdapter implements ToolAdapter {
     }
     const loaded = await adapter;
     // Race guard (external review P0-5): the extension may have been disabled
-    // or the tool's group identity changed while the factory was loading.
-    // Re-match identity before dispatch - a late load must not execute for a
-    // capability that is no longer there.
-    if (this.owningGroup(invocation) === undefined) {
+    // mid-load, or the server+tool identity may have moved to another group.
+    // The SAME group must still own this identity before the loaded adapter
+    // may execute - a late load must not run for a capability that is gone
+    // or dispatch through a stale group's adapter.
+    if (this.owningGroup(invocation)?.id !== group.id) {
       return this.noAdapter(invocation);
     }
     return loaded.execute(invocation);

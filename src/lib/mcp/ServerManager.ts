@@ -32,9 +32,10 @@ class ServerManager {
     }
     // Contributed extension namespaces are claimed too (external review
     // P0-4): the bridge routes them before this adapter, so an external
-    // server under a contributed name could never execute - reject at config
-    // instead of shadowing it silently. Migrated namespaces (knowledge) are
-    // already covered by the reserved set above; this covers future ones.
+    // server under a contributed name could never execute - reject here
+    // instead of shadowing it silently. The reserved set above covers the
+    // permanent core namespaces; serverClaim covers everything registered
+    // as a contribution, including the migrated knowledge namespace.
     const claimedBy = getExtensionRegistry().serverClaim(name);
     if (claimedBy) {
       throw new Error(`MCP server name "${name}" is claimed by the built-in extension group "${claimedBy.groupId}". Please rename it (e.g. "${name}_external").`);

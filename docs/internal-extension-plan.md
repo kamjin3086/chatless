@@ -581,9 +581,11 @@ Watchdog（独立判断）
   server 的两个组各自分发到正确的适配器；未声明的工具直接 NO_ADAPTER（与禁用同形，A05）。
 - **加载后启用态复核**：工厂加载期间禁用扩展，迟到的加载不得执行（竞态返回 NO_ADAPTER）。
 - **knowledge 规则提示块改用可用性谓词**，删除该调用点的 store/SQL 重复实现（挂载唯一事实源）。
-- **扩展命名空间在 MCP 配置期拒绝重名**（ServerManager 报错并建议 `_external` 改名）；
-  旧配置已存在的重名运行时仍是扩展优先；`serverClaim` 成为配置期检查与 McpAdapter
-  兜底的同一事实源。迁移命名空间已另有 RESERVED 名单，Web Search 迁移时再一并处理用户配置改名。
+- **扩展命名空间在 MCP 连接/启动期拒绝重名**（ServerManager 报错并建议 `_external` 改名）；
+  旧配置已存在的重名运行时仍是扩展优先；`serverClaim` 成为该检查与 McpAdapter
+  兜底的同一事实源（core 命名空间另由 RESERVED 名单覆盖，knowledge 靠 serverClaim）。
+  UI 的配置保存/导入路径暂不拦截重名（连接时才报错），随 Web Search 迁移处理
+  用户配置改名时一并接。
 
 对评审的两处修正裁决（已记录）：① “pending 复活已撤销挂载”是迁移前的既有 sticky 行为，
 不是本次迁移引入的回归；修不修是验收选择，选了修故带行为变更标注。② 未挂载知识库时
