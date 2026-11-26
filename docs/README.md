@@ -46,6 +46,16 @@ who keeps it true:
 [`adr/README.md`](adr/README.md) indexes the five ADRs and states how amendments work. Read the
 ones that touch the area you are in; contradicting one means surfacing it, not overriding it.
 
+## Proposals
+
+Implementation specs waiting on maintainer approval - they describe target design, not today's
+code. What they claim about today is pinned to a re-check note at the top of each; the branch
+re-pins it before implementation, and the surviving contracts fold into a live document when the
+work lands.
+
+- [`chatless-internal-extension-plan.md`](chatless-internal-extension-plan.md) - joint plan, document A: the internal extension mechanism - requirements, contracts, migration order, acceptance items A01-A17.
+- [`chatless-session-app-plan.md`](chatless-session-app-plan.md) - joint plan, document B: the Session App - product requirements, isolated runtime, handoff seams with document A (B0-B4).
+
 ## Frozen snapshots
 
 - [`architecture/`](architecture/) - the 2026-10-24 map and two review passes. Start at
@@ -65,7 +75,9 @@ ones that touch the area you are in; contradicting one means surfacing it, not o
 
 ## Adding a document
 
-Pick a state first. If it describes the code, it is **live**: it must survive
+Pick a state first. If it proposes work that is not approved yet, it is a **proposal**: add it
+under Proposals with its status and baseline at the top. If it describes the code, it is
+**live**: it must survive
 `pnpm check:docs-symbols`, and the next person who edits that code owns correcting it. If it
 records one round of work, it is **history**: put it in `docs/history/` (that directory is what
 freezes it - a date in the filename also works) and say at the top what it was measuring. Then
