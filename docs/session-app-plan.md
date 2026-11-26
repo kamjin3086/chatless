@@ -2,7 +2,7 @@
 
 > 联合计划 v1.0 · 2026-11-25 · 文档 B（会话应用）  
 > 面向：维护者、产品/架构分析 Agent、实现 Agent、独立 Review 与测试 Agent  
-> 配套：[文档 A · Chatless 内置扩展机制：需求与实施规范 v2.0](chatless-internal-extension-plan.md)  
+> 配套：[文档 A · Chatless 内置扩展机制：需求与实施规范 v2.0](internal-extension-plan.md)  
 > 状态：待实现与验证的方案。文中的 API、表名、预算和平台方案是建议契约或初始目标，不是已存在的功能或测试结论。
 
 ## 0. 读者须知与总体执行顺序

@@ -53,8 +53,8 @@ code. What they claim about today is pinned to a re-check note at the top of eac
 re-pins it before implementation, and the surviving contracts fold into a live document when the
 work lands.
 
-- [`chatless-internal-extension-plan.md`](chatless-internal-extension-plan.md) - joint plan, document A: the internal extension mechanism - requirements, contracts, migration order, acceptance items A01-A17.
-- [`chatless-session-app-plan.md`](chatless-session-app-plan.md) - joint plan, document B: the Session App - product requirements, isolated runtime, handoff seams with document A (B0-B4).
+- [`internal-extension-plan.md`](internal-extension-plan.md) - joint plan, document A: the internal extension mechanism - requirements, contracts, migration order, acceptance items A01-A17.
+- [`session-app-plan.md`](session-app-plan.md) - joint plan, document B: the Session App - product requirements, isolated runtime, handoff seams with document A (B0-B4).
 
 ## Frozen snapshots
 
