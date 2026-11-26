@@ -50,10 +50,9 @@ export function createKnowledgeExtension(
         availability: (ctx) =>
           deps.hasConversationKnowledge(ctx.conversationId),
         loadAdapter: async () => {
-          // Transitional: the pipeline still builds this adapter in its static
-          // list (createDefaultAdapters); pointing here records executor
-          // ownership in the contribution. Cleanup condition: pipeline lazy
-          // wiring consumes loadAdapter (phase 4 review).
+          // The pipeline routes contributed servers through this factory
+          // (ContributionAdapter, phase 3 wiring): first execution loads it,
+          // the bridge caches the instance, discovery never calls it.
           const mod = await import(
             '@/lib/mcp/pipeline/adapters/KnowledgeAdapter'
           );
