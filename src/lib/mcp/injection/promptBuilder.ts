@@ -14,6 +14,7 @@
  */
 
 import type { InjectionContext, InjectionResult, InjectionSignals, NativeToolDefinition } from './types';
+import { getExtensionRegistry } from '@/lib/extensions/assembly';
 import { MCPPrompts } from '@/lib/prompts/SystemPrompts';
 import { WEB_SEARCH_SERVER_NAME } from '@/lib/mcp/nativeTools/webSearch';
 import { FILESYSTEM_SERVER_NAME } from '@/lib/mcp/nativeTools/filesystem';
@@ -22,7 +23,6 @@ import {
   TOOLS_DISCOVER_SERVER_NAME, 
   TOOLS_REGISTRY_TOOLS,
   getToolsForGroup,
-  type ToolGroupId,
 } from '@/lib/mcp/nativeTools/toolRegistry';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { persistentCache } from '../persistentCache';
@@ -405,7 +405,7 @@ interface NativeToolBuildOptions {
   conversationId?: string;
 }
 
-async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promise<NativeToolDefinition[]> {
+export async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promise<NativeToolDefinition[]> {
   const tools: NativeToolDefinition[] = [];
 
   const normalizeParams = (p: any): { type: 'object'; properties: Record<string, unknown>; required: string[] } => {
@@ -445,7 +445,16 @@ async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promi
     }
   };
 
-  const addToolsFromGroup = async (groupId: ToolGroupId) => {
+  const addToolsFromGroup = async (groupId: string) => {
+    const contributed = getExtensionRegistry().group(groupId);
+    if (contributed) {
+      // Contribution group (knowledge pilot): same server/tool/definition as
+      // the retired hand-written entry, so name, docs and parameters are identical.
+      await addToolEntries(
+        contributed.tools.map((t) => ({ server: contributed.server, tool: t.definition })),
+      );
+      return;
+    }
     await addToolEntries(getToolsForGroup(groupId));
   };
 
@@ -477,35 +486,26 @@ async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promi
   }
 
   // ========== 2. 显式会话范围：不根据关键词替模型预先选择能力 ==========
-  const loadedGroups: ToolGroupId[] = ['core'];
-  const detectedGroups: ToolGroupId[] = [];
+  const loadedGroups: string[] = ['core'];
 
-  try {
-    const convId = params.conversationId || '';
-    if (convId) {
-      const { useConversationAttachmentStore } = await import('@/store/conversationAttachmentStore');
-      const kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
-      const { DatabaseService } = await import('@/lib/database/services/DatabaseService');
-      const attachmentRows = await DatabaseService.getInstance().getDbManager().select<{ n: number }>(
-        'SELECT COUNT(*) AS n FROM conversation_document_mappings WHERE conversation_id = ?', [convId],
-      );
-      if ((kb?.id || Number(attachmentRows[0]?.n || 0) > 0) && !detectedGroups.includes('knowledge')) {
-        detectedGroups.push('knowledge');
-      }
-    }
-  } catch {
-    /* ignore */
-  }
+  // 数据存在性能力现经扩展注册表按会话实时判定（knowledge 贡献）；
+  // 原手写块里的 attachment store + 文档映射计数已迁入 assembly，行为不变。
+  const extensionAvailable = await getExtensionRegistry().availableGroups({
+    conversationId: params.conversationId || undefined,
+  });
+  const detectedGroups: string[] = extensionAvailable.map((g) => g.id);
 
   // ========== 3. AI 请求层：加载 AI 主动请求的工具组 ==========
   
   const store = useToolLoadRequestStore.getState();
   const conversationId = params.conversationId || undefined;
-  const session = store.sessions[String(conversationId || '__default__')] || { loadedGroups: ['core' as ToolGroupId], requestedGroups: [] };
+  const session = store.sessions[String(conversationId || '__default__')] || { loadedGroups: ['core'], requestedGroups: [] };
   // 关键：已加载的组需要在后续轮次持续注入（否则会出现“上一轮能用、下一轮工具不见了”）
   // 说明：store.loadedGroups 会随着 tools__load 或意图检测逐步累积；这里把它作为“粘性工具组”基础集合。
   // knowledge 例外：它每轮按当前挂载实时计算，粘性注入会让撤销挂载后的工具继续出现。
-  const stickyLoaded = (session.loadedGroups || []).filter((g) => g && g !== 'core' && g !== 'knowledge');
+  const stickyLoaded = (session.loadedGroups || []).filter(
+    (g) => g && g !== 'core' && getExtensionRegistry().isSticky(g),
+  );
   const pendingRequests = store.getPendingRequests(conversationId);
   
   // 合并所有需要加载的组
@@ -519,7 +519,10 @@ async function buildNativeToolDefinitions(params: NativeToolBuildOptions): Promi
   }
 
   // 更新已加载状态
-  store.markLoaded(loadedGroups.filter((g) => g !== 'knowledge'), conversationId);
+  store.markLoaded(
+    loadedGroups.filter((g) => getExtensionRegistry().isSticky(g)),
+    conversationId,
+  );
 
   // ========== 4. MCP 服务器工具（外部服务） ==========
   

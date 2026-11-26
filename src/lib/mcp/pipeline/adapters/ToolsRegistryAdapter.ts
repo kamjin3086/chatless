@@ -4,7 +4,8 @@
  */
 import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
-import { TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS, type ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
+import { TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS } from '@/lib/mcp/nativeTools/toolRegistry';
+import { getExtensionRegistry } from '@/lib/extensions/assembly';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { getEnabledConfiguredServers } from '@/lib/mcp/chatIntegration';
 import { persistentCache } from '@/lib/mcp/persistentCache';
@@ -12,7 +13,7 @@ import { RESERVED_MCP_SERVER_NAMES } from '@/lib/mcp/serverNamePolicy';
 
 interface CatalogItem {
   source: 'builtin' | 'mcp';
-  group?: ToolGroupId;
+  group?: string;
   server: string;
   name: string;
   description: string;
@@ -45,6 +46,19 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       name: tool.name,
       description: tool.description || '',
     })));
+    // Contributed groups (knowledge pilot) join the same catalog view; a hit
+    // on their group id requestLoads them exactly like a hand-written group.
+    for (const group of getExtensionRegistry().groups()) {
+      for (const t of group.tools) {
+        builtin.push({
+          source: 'builtin',
+          group: group.id,
+          server: group.server,
+          name: String(t.definition.name),
+          description: String(t.definition.description || ''),
+        });
+      }
+    }
 
     // A failing remote server only omits its own entries. Local discovery must
     // remain usable when a configured MCP endpoint is unavailable.

@@ -51,6 +51,19 @@ export interface ExtensionToolContribution {
 export interface ToolGroupContribution {
   /** Group id string, not the legacy static union - that union is what this contract retires. */
   id: string;
+  /**
+   * Declares that this group takes over an existing core group/server of the
+   * same name (the knowledge pilot: `replaces: 'knowledge'`). The only channel
+   * allowed to squat on a migrated core namespace (§5.3); without it the
+   * reserved checks reject the contribution.
+   */
+  replaces?: string;
+  /**
+   * Sticky session loading after `tools__search` picked it up (§5.3 semantics
+   * today: knowledge recomputes per step and must NOT stick, because a revoked
+   * mount must not keep its tools visible). Default true.
+   */
+  stickyWhenLoaded?: boolean;
   name: string;
   description: string;
   server: string;

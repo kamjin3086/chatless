@@ -190,6 +190,34 @@ describe('buildExtensionRegistry - validation', () => {
     ).toContain('invalid-id');
   });
 
+  it('rejects replaces pointing at nothing and only lifts the named namespace', () => {
+    const bad = buildCase({
+      id: 'lies',
+      toolGroups: [
+        {
+          ...groupWith({ id: 'g.b', server: 'ghostserver' }),
+          replaces: 'nonexistent',
+        },
+      ],
+    });
+    expect(
+      issuesOf(() => buildExtensionRegistry([bad])).map((i) => i.code),
+    ).toContain('invalid-replaces');
+
+    // replaces='knowledge' lifts the knowledge namespace but NOT another core one.
+    const partial = buildCase({
+      id: 'halflift',
+      toolGroups: [
+        { ...groupWith({ id: 'g.c', server: 'fs' }), replaces: 'knowledge' },
+      ],
+    });
+    const codes = issuesOf(() => buildExtensionRegistry([partial])).map(
+      (i) => i.code,
+    );
+    expect(codes).toContain('reserved-server');
+    expect(codes).not.toContain('invalid-replaces');
+  });
+
   it('flags risk declarations that drift from the single risk table (ADR 0003)', () => {
     const lying: BuiltinExtension = {
       ...exampleExtension,

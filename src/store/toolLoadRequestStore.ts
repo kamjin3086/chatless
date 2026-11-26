@@ -4,21 +4,23 @@
  */
 
 import { create } from 'zustand';
-import type { ToolGroupId } from '@/lib/mcp/nativeTools/toolRegistry';
+
+// 组 id 已不再限于静态 union（内置扩展贡献也往这里写），集合层面用 string。
+type LoadedGroupId = string;
 
 interface SessionLoadState {
-  requestedGroups: ToolGroupId[];
-  loadedGroups: ToolGroupId[];
+  requestedGroups: LoadedGroupId[];
+  loadedGroups: LoadedGroupId[];
   loadedMcpServers: string[];
 }
 
 interface ToolLoadRequestState {
   sessions: Record<string, SessionLoadState>;
-  requestLoad: (groupId: ToolGroupId, conversationId?: string) => void;
-  markLoaded: (groupIds: ToolGroupId[], conversationId?: string) => void;
+  requestLoad: (groupId: LoadedGroupId, conversationId?: string) => void;
+  markLoaded: (groupIds: LoadedGroupId[], conversationId?: string) => void;
   loadMcpServer: (server: string, conversationId?: string) => void;
   reset: (conversationId?: string) => void;
-  getPendingRequests: (conversationId?: string) => ToolGroupId[];
+  getPendingRequests: (conversationId?: string) => LoadedGroupId[];
   getLoadedMcpServers: (conversationId?: string) => string[];
 }
 
