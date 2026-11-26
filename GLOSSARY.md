@@ -96,6 +96,36 @@ _Avoid_: 全局思考开关（不存在一个地方存着所有答案）
 某个 provider 表达思考等级的方式：`reasoning_effort` / `thinking_level` / `thinking_budget` / `ollama_think` / `model_alias` / `unsupported`。等级是用户的话，载体是网关的话；两者分开，加一家 provider 就是往映射表里加一行数据，而不是多一个分支。
 _Avoid_: provider 特判、reasoning_effort（那只是其中一种载体）
 
+### 内置扩展
+
+**内置扩展 (BuiltinExtension)**:
+官方审核、随主程序一起构建的可选系统功能，用描述符声明自己的能力和接入点。可信代码，不是第三方插件，没有独立进程。
+_Avoid_: 插件、应用（应用是文档 B 的 Session App）
+
+**贡献描述符 (ToolGroupContribution)**:
+扩展一项能力的事实源：server、工具定义、分组、可用性谓词、执行器工厂。构造期必须轻量、无业务 I/O、无全局副作用；运行期 I/O 只发生在可用性谓词里（如 knowledge 每步查一次库）。其余位置都是从它派生的视图。
+_Avoid_: 往 TOOL_GROUPS 手写条目（那是被退役的手写旧路）
+
+**扩展注册表 (ExtensionRegistry)**:
+启动时从描述符一次性构建的只读索引，不另存一份相同事实；任一描述符校验失败整个构建被拒（带问题清单抛错），不把半坏的配置带进运行时。
+_Avoid_: 运行时可变注册表
+
+**组装入口 (assembly)**:
+把具体窄接口（如会话知识库存在性检查）注入能力文件的唯一接线处；导入边界门只豁免这一个文件。
+_Avoid_: 能力文件直接 import store 或 DatabaseService
+
+**可用性谓词 (availability)**:
+每个模型步骤实时判定能力在当前会话是否成立（如会话是否挂载知识库）。抛异常只隐藏自己那组工具，不影响其他能力。
+_Avoid_: 全局静态开关（知识能力是逐会话的）
+
+**粘性加载 (stickyWhenLoaded)**:
+组被 tools__search 拾取后是否在后续步骤继续注入。默认 true；“撤销挂载就该消失”的能力声明 false。
+_Avoid_: 在 promptBuilder 里硬编码例外组名
+
+**接管 (replaces)**:
+已迁移能力把同名核心实现交还给贡献的声明通道。只能点名已迁移命名空间清单里的那一个，且只解除该命名空间的保留。
+_Avoid_: 通用重命名、跨命名空间解锁
+
 ### Provider 与密钥
 
 **目录 (catalogue)**:

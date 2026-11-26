@@ -319,24 +319,25 @@ export function buildExtensionRegistry(
       groupsById.get(normalizeServerName(id))?.stickyWhenLoaded !== false,
     groups: () => groups,
     async availableGroups(ctx = {}) {
-      const out: ToolGroupContribution[] = [];
-      for (const g of groups) {
-        const owner = ownerByGroupId.get(g.id);
-        if (!owner) continue;
-        const enabled = options.isEnabled?.(owner.id) ?? owner.defaultEnabled;
-        if (!enabled) continue;
-        if (g.availability) {
-          let ok = false;
+      // Evaluate predicates concurrently (each is an independent data-presence
+      // check - the knowledge one hits SQLite - so a serial loop would add up
+      // per-extension latency into the prompt build). Order of `groups` is
+      // preserved by Promise.all; a failing predicate hides only its own group.
+      const flags = await Promise.all(
+        groups.map(async (g) => {
+          const owner = ownerByGroupId.get(g.id);
+          if (!owner) return false;
+          const enabled = options.isEnabled?.(owner.id) ?? owner.defaultEnabled;
+          if (!enabled) return false;
+          if (!g.availability) return true;
           try {
-            ok = await g.availability(ctx);
+            return await g.availability(ctx);
           } catch {
-            ok = false; // §5.4: a failing predicate hides its own group, nothing more
+            return false; // §5.4: a failing predicate hides its own group, nothing more
           }
-          if (!ok) continue;
-        }
-        out.push(g);
-      }
-      return out;
+        }),
+      );
+      return groups.filter((_g, i) => flags[i]);
     },
     knownTools: (server) =>
       toolsByServer.get(normalizeServerName(server)) ?? new Set(),
