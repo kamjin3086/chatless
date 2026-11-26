@@ -309,6 +309,38 @@ describe('buildExtensionRegistry - derived views', () => {
     expect(ids).not.toContain('builtin.throws');
   });
 
+  it('availableGroup / serverClaim: the single-group views match the four states', async () => {
+    const enabled = buildExtensionRegistry([exampleExtension], {
+      isEnabled: () => true,
+    });
+    const disabled = buildExtensionRegistry([exampleExtension], {
+      isEnabled: () => false,
+    });
+    // Available = enabled (+ predicate): the group appears only when enabled.
+    expect(
+      await enabled.availableGroup('builtin.example', { conversationId: 'c1' }),
+    ).toBeDefined();
+    expect(
+      await disabled.availableGroup('builtin.example', {
+        conversationId: 'c1',
+      }),
+    ).toBeUndefined();
+    // A throwing predicate hides its own group from the single view too.
+    const withThrow = buildExtensionRegistry([throwingExtension]);
+    expect(
+      await withThrow.availableGroup('builtin.throws', {
+        conversationId: 'c1',
+      }),
+    ).toBeUndefined();
+    // Registered-state claim survives disablement: the name is owned while the
+    // extension is registered at all (external MCP may not take it disabled or
+    // not), shared by ServerManager config checks and the McpAdapter guard.
+    expect(disabled.serverClaim('example')).toEqual({
+      groupId: 'builtin.example',
+    });
+    expect(disabled.serverClaim('anything_else')).toBeUndefined();
+  });
+
   it('adds a second contribution through the same contract with no core change (A02 seed)', async () => {
     const registry = buildExtensionRegistry(
       [exampleExtension, secondExtension],

@@ -283,15 +283,17 @@ Prefer fs__mkdir over a shell command when creating a directory.`,
       }
       // The current mount is the authority. Historic messages and prior
       // selections are deliberately not consulted here: unmounting a library
-      // must remove both the tools and the prompt hint immediately.
-      const kb = useConversationAttachmentStore.getState().getKnowledgeBase(convId);
-      const { DatabaseService } = await import('@/lib/database/services/DatabaseService');
-      const attachmentRows = await DatabaseService.getInstance().getDbManager().select<{ n: number }>(
-        'SELECT COUNT(*) AS n FROM conversation_document_mappings WHERE conversation_id = ?', [convId],
-      );
+      // must remove both the tools and the prompt hint immediately. The
+      // knowledge contribution's availability predicate is the single mount
+      // authority (external review dedup) - no store/SQL re-implementation
+      // at this callsite anymore.
+      const knowledgeAvailable =
+        (await getExtensionRegistry().availableGroup('knowledge', {
+          conversationId: convId || undefined,
+        })) !== undefined;
       // A run with tools switched off must not be told it can retrieve - that is what made the
       // model emit a call nobody would execute (#160).
-      if (track !== 'disabled' && (kb?.id || Number(attachmentRows[0]?.n || 0) > 0)) {
+      if (track !== 'disabled' && knowledgeAvailable) {
         blocks.push({
           id: 'knowledge-rules',
           layer: 'conversation',
@@ -507,9 +509,23 @@ export async function buildNativeToolDefinitions(params: NativeToolBuildOptions)
     (g) => g && g !== 'core' && getExtensionRegistry().isSticky(g),
   );
   const pendingRequests = store.getPendingRequests(conversationId);
-  
-  // 合并所有需要加载的组
-  const groupsToLoad = [...new Set([...stickyLoaded, ...detectedGroups, ...pendingRequests])];
+
+  // History decides DISCLOSURE of still-available capabilities only (external
+  // review P0-2): a group carrying an availability predicate must pass that
+  // predicate THIS step - a sticky record or a pending request can never
+  // revive a capability whose data is gone (revoked mount must not keep its
+  // tools). Groups without predicates keep the sticky semantics that fixed
+  // "工具上一轮能用下一轮不见了".
+  const predicatedGroups = new Set(
+    getExtensionRegistry()
+      .groups()
+      .filter((g) => !!g.availability)
+      .map((g) => g.id),
+  );
+  const availableNow = new Set(detectedGroups);
+  const groupsToLoad = [
+    ...new Set([...stickyLoaded, ...detectedGroups, ...pendingRequests]),
+  ].filter((g) => !predicatedGroups.has(g) || availableNow.has(g));
   
   // 加载各组工具
   for (const groupId of groupsToLoad) {

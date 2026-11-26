@@ -6,6 +6,7 @@ import type { ToolAdapter } from '../ToolAdapter';
 import type { ToolInvocation } from '../ToolInvocation';
 import { TOOLS_DISCOVER_SERVER_NAME, TOOL_GROUPS } from '@/lib/mcp/nativeTools/toolRegistry';
 import { getExtensionRegistry } from '@/lib/extensions/assembly';
+import type { ExtensionRegistry } from '@/lib/extensions/registry';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { getEnabledConfiguredServers } from '@/lib/mcp/chatIntegration';
 import { persistentCache } from '@/lib/mcp/persistentCache';
@@ -21,6 +22,12 @@ interface CatalogItem {
 
 export class ToolsRegistryAdapter implements ToolAdapter {
   readonly server = TOOLS_DISCOVER_SERVER_NAME;
+
+  // Injectable for tests (disabled-extension catalog case); production uses
+  // the assembled singleton.
+  constructor(
+    private readonly registry: () => ExtensionRegistry = getExtensionRegistry,
+  ) {}
 
   canHandle(invocation: ToolInvocation): boolean {
     return String(invocation.server || '').toLowerCase() === TOOLS_DISCOVER_SERVER_NAME;
@@ -46,9 +53,13 @@ export class ToolsRegistryAdapter implements ToolAdapter {
       name: tool.name,
       description: tool.description || '',
     })));
-    // Contributed groups (knowledge pilot) join the same catalog view; a hit
-    // on their group id requestLoads them exactly like a hand-written group.
-    for (const group of getExtensionRegistry().groups()) {
+    // Contributed groups join the same catalog view through the ENABLED view
+    // (Registry four states, external review P0-1): a disabled extension is
+    // not discoverable (A05 "找不到"), while an enabled-but-unavailable group
+    // stays discoverable - discovery reveals capability existence, injection
+    // remains availability-gated. A hit on their group id requestLoads them
+    // exactly like a hand-written group.
+    for (const group of this.registry().enabledGroups()) {
       for (const t of group.tools) {
         builtin.push({
           source: 'builtin',

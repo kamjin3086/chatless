@@ -177,6 +177,22 @@ describe('ContributionAdapter: contributions own their executor (phase 3)', () =
     expect(executor.calls).toBe(0);
   });
 
+  it('an undeclared tool on a contributed server: NO_ADAPTER through the pipeline, no card (A05 shape)', async () => {
+    // The routing-level test only covers the bridge; this pins "before the
+    // approval card": findAdapter runs upstream of approval, and McpAdapter
+    // refuses the claimed name, so no card and no external fallback.
+    const pipeline = new ToolExecutionPipeline({
+      adapters: createDefaultAdapters(),
+    });
+    const result = (await pipeline.run(invocation('knowledge', 'delete'))) as {
+      error?: string;
+    };
+    expect(result.error).toBe('NO_ADAPTER');
+    expect(mocks.approvals).toHaveLength(0);
+    expect(mocks.mcpCalls).toHaveLength(0);
+    expect(executor.calls).toBe(0);
+  });
+
   it('the MCP path never claims contributed servers, disabled or not (A05 guard)', () => {
     const mcp = new McpAdapter();
     // The real assembled registry contributes knowledge; the guard uses the
@@ -241,5 +257,96 @@ describe('ContributionAdapter: contributions own their executor (phase 3)', () =
     // it - via the enabled view only; no availability predicate runs at routing.
     const bridge = adapters.find((a) => a instanceof ContributionAdapter)!;
     expect(bridge.canHandle(invocation('knowledge'))).toBe(true);
+  });
+
+  it('routes by declared tool identity: an undeclared tool on a contributed server reaches no adapter (review P0-3)', async () => {
+    const bridge = new ContributionAdapter(() => registry());
+    expect(bridge.canHandle(invocation('knowledge', 'delete'))).toBe(false);
+    const result = await bridge.execute(invocation('knowledge', 'delete'));
+    expect(result).toMatchObject({ ok: false, error: 'NO_ADAPTER' });
+    expect(executor.calls).toBe(0);
+  });
+
+  it('two groups sharing one server dispatch to their own adapters (review P0-3)', async () => {
+    const hit: string[] = [];
+    const mk = (gid: string, tool: string): BuiltinExtension =>
+      ({
+        id: gid,
+        defaultEnabled: true,
+        toolGroups: [
+          {
+            id: gid,
+            name: gid,
+            description: `group ${gid} for shared-server routing tests`,
+            server: 'sharedserver',
+            tools: [
+              {
+                definition: {
+                  name: tool,
+                  description: `tool ${tool}`,
+                  input_schema: { schema: { type: 'object', properties: {} } },
+                },
+                risk: 'unknown',
+              },
+            ],
+            loadAdapter: async () =>
+              ({
+                server: 'sharedserver',
+                canHandle: (inv: { tool: unknown }) => inv.tool === tool,
+                execute: async () => {
+                  hit.push(gid);
+                  return { ok: true, group: gid };
+                },
+              }) as ToolAdapter,
+          },
+        ],
+      }) as BuiltinExtension;
+    const bridge = new ContributionAdapter(() =>
+      buildExtensionRegistry([mk('groupa', 'alpha'), mk('groupb', 'beta')]),
+    );
+    expect(await bridge.execute(invocation('sharedserver', 'alpha'))).toEqual({
+      ok: true,
+      group: 'groupa',
+    });
+    expect(await bridge.execute(invocation('sharedserver', 'beta'))).toEqual({
+      ok: true,
+      group: 'groupb',
+    });
+    expect(hit).toEqual(['groupa', 'groupb']);
+  });
+
+  it('disabling while the factory is loading blocks the late execution (review P0-5 race)', async () => {
+    let enabled = true;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const executed: string[] = [];
+    const ext = knowledgeExtension();
+    const gated: BuiltinExtension = {
+      ...ext,
+      toolGroups: [
+        {
+          ...ext.toolGroups![0],
+          loadAdapter: async () => {
+            await gate;
+            return {
+              server: 'knowledge',
+              canHandle: () => true,
+              execute: async () => {
+                executed.push('ran');
+                return { ok: true };
+              },
+            } as ToolAdapter;
+          },
+        },
+      ],
+    } as BuiltinExtension;
+    const reg = buildExtensionRegistry([gated], { isEnabled: () => enabled });
+    const bridge = new ContributionAdapter(() => reg);
+    const running = bridge.execute(invocation('knowledge'));
+    enabled = false; // disabled mid-load
+    release();
+    const result = await running;
+    expect(result).toMatchObject({ ok: false, error: 'NO_ADAPTER' });
+    expect(executed).toEqual([]);
   });
 });

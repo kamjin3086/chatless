@@ -58,10 +58,13 @@ describe('native tool assembly with the knowledge contribution (PR B)', () => {
     names = await toolNames('c1');
     expect(names.filter((n) => n === 'knowledge__search')).toHaveLength(1);
 
-    // Revoked mount: detection stops; the pending request keeps it this step
-    // (pre-existing sticky-pending behavior, unchanged by the migration).
+    // Revoked mount: history only decides disclosure of STILL-AVAILABLE
+    // capabilities (review P0-2) - the pending request from the step above
+    // must not re-inject tools whose data is gone. No store reset here:
+    // the pending record is still in the store, and it is deliberately not
+    // enough (this is the behavior change the external review asked for,
+    // overriding the pre-migration sticky-pending leak).
     mount.kb = false;
-    useToolLoadRequestStore.getState().reset('c1');
     names = await toolNames('c1');
     expect(names.filter((n) => n === 'knowledge__search')).toHaveLength(0);
   });

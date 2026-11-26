@@ -104,6 +104,29 @@ export interface BuildRegistryOptions {
   isEnabled?: (extensionId: ExtensionId) => boolean | undefined;
 }
 
+/**
+ * Four states, one vocabulary (external review 2026-11-26, adopted):
+ *
+ * - **Registered** - `group()/groups()`: identity exists and the namespace is
+ *   protected (external MCP cannot take it). Carries no runtime judgment.
+ * - **Available** - `enabledGroups()` ∩ availability predicates, surfaced as
+ *   `availableGroups()/availableGroup()`: enabled AND current platform /
+ *   session / data conditions hold. Prompt INJECTION consumes it: history
+ *   (sticky loads, pending requests) may only decide disclosure of still-
+ *   available groups - it can never revive an unavailable one. The
+ *   `tools__search` catalog deliberately consumes the ENABLED view instead:
+ *   discovery reveals that a capability exists so the model can request a
+ *   mount; gated there, an unmounted capability could never be discovered.
+ * - **Exposed** - the tools actually injected for this model step; derived,
+ *   not stored in the registry (promptBuilder owns it).
+ * - **Authorized** - the concrete call passed core approval and the
+ *   executor's own data-scope check. Execution routing (ContributionAdapter)
+ *   matches identity within `enabledGroups()`; availability deliberately
+ *   does not gate execution - an unmounted knowledge call must still reach
+ *   the executor's scope error, which is the pre-migration user-visible
+ *   behavior (A08), and a disabled extension routes to no adapter at all
+ *   (A05).
+ */
 export interface ExtensionRegistry {
   readonly extensions: ReadonlyMap<ExtensionId, BuiltinExtension>;
   group(id: string): ToolGroupContribution | undefined;
@@ -117,13 +140,28 @@ export interface ExtensionRegistry {
    * extension contributes nothing here, which is A05 at the routing seam.
    */
   enabledGroups(): readonly ToolGroupContribution[];
+  /** Registered-state name claim (four states): a contributed server name is
+   * owned by that group - external MCP configs may not take it, and the
+   * executor bridge routes it. Full groups view: disabled or not, the name
+   * stays claimed while registered. */
+  serverClaim(server: string): { groupId: string } | undefined;
+  /** Single-group Availability check (enabled + predicate, §5.4 isolation).
+   * For prompt blocks and any one-off "is this capability live for this
+   * conversation right now" question - the deduplicated authority behind the
+   * knowledge mount query (replaces the per-callsite store/SQL lookups). */
+  availableGroup(
+    id: string,
+    ctx?: { conversationId?: string },
+  ): Promise<ToolGroupContribution | undefined>;
   /** Sticky session loading after a discovery hit; unknown ids stick (the
    * hand-written groups this replaced did). Normalized lookup, default true. */
   isSticky(groupId: string): boolean;
   /**
-   * The single availability view: enabled extension AND group availability.
-   * Discovery, injection and execution must consume this same function so no
-   * "visible but unexecutable" ghost capability can exist (plan §10 phase 3).
+   * The Availability view (see four states above): enabled extension AND group
+   * availability predicate. Prompt injection consumes it; the catalog uses the
+   * enabled view (discovery vs injection split, see the four-states note).
+   * Execution routing uses identity within `enabledGroups()` instead
+   * (A08/A05 split above).
    *
    * An availability predicate that throws hides only its own group (§5.4
    * failure isolation): predicates read persisted conversation state in PR B,
@@ -321,6 +359,26 @@ export function buildExtensionRegistry(
     toolsByServer.set(key, merged);
   }
 
+  // One enabled+predicate implementation (review dedup): the Availability
+  // judgment must not drift between the set view and the single-group view.
+  // Predicates run concurrently (each is an independent data-presence check -
+  // the knowledge one hits SQLite - a serial loop would add per-extension
+  // latency to the prompt build); a failing predicate hides only its own group.
+  const groupAvailable = async (
+    g: ToolGroupContribution,
+    ctx: { conversationId?: string },
+  ): Promise<boolean> => {
+    const owner = ownerByGroupId.get(g.id);
+    if (!owner) return false;
+    if (!(options.isEnabled?.(owner.id) ?? owner.defaultEnabled)) return false;
+    if (!g.availability) return true;
+    try {
+      return await g.availability(ctx);
+    } catch {
+      return false; // §5.4: a failing predicate hides its own group, nothing more
+    }
+  };
+
   return {
     extensions: byId,
     group: (id) => groupsById.get(normalizeServerName(id)),
@@ -334,24 +392,19 @@ export function buildExtensionRegistry(
           !!owner && (options.isEnabled?.(owner.id) ?? owner.defaultEnabled)
         );
       }),
+    serverClaim: (server) => {
+      const n = normalizeServerName(server);
+      const g = groups.find((x) => normalizeServerName(x.server) === n);
+      return g ? { groupId: g.id } : undefined;
+    },
+    async availableGroup(id, ctx = {}) {
+      const g = groupsById.get(normalizeServerName(id));
+      if (!g) return undefined;
+      return (await groupAvailable(g, ctx)) ? g : undefined;
+    },
     async availableGroups(ctx = {}) {
-      // Evaluate predicates concurrently (each is an independent data-presence
-      // check - the knowledge one hits SQLite - so a serial loop would add up
-      // per-extension latency into the prompt build). Order of `groups` is
-      // preserved by Promise.all; a failing predicate hides only its own group.
       const flags = await Promise.all(
-        groups.map(async (g) => {
-          const owner = ownerByGroupId.get(g.id);
-          if (!owner) return false;
-          const enabled = options.isEnabled?.(owner.id) ?? owner.defaultEnabled;
-          if (!enabled) return false;
-          if (!g.availability) return true;
-          try {
-            return await g.availability(ctx);
-          } catch {
-            return false; // §5.4: a failing predicate hides its own group, nothing more
-          }
-        }),
+        groups.map((g) => groupAvailable(g, ctx)),
       );
       return groups.filter((_g, i) => flags[i]);
     },
