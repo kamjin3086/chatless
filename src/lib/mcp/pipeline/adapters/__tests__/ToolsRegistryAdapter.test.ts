@@ -27,4 +27,14 @@ describe('ToolsRegistryAdapter', () => {
     expect(useToolLoadRequestStore.getState().getLoadedMcpServers('conversation-a')).toEqual(['research-mcp']);
     expect(useToolLoadRequestStore.getState().getLoadedMcpServers('another-conversation')).toEqual([]);
   });
+
+  it('lists knowledge tools exactly once after the group moved to a contribution', async () => {
+    const adapter = new ToolsRegistryAdapter();
+    const result = await adapter.execute({
+      server: 'tools', tool: 'search', conversationId: 'conversation-a', args: { query: 'knowledge' },
+    } as any) as any;
+    const kn = result.results.filter((r: any) => r.server === 'knowledge');
+    expect(kn.map((r: any) => r.name).sort()).toEqual(['list', 'read', 'search']);
+    expect(result.total).toBe(kn.length); // no hand-written duplicate inflating the catalog (B1)
+  });
 });

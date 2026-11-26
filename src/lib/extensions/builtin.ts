@@ -1,14 +1,22 @@
 /**
  * The single static manifest of builtin extensions (§5.3).
  *
- * This is the ONLY place that names concrete extensions, and the only file
- * allowed to import `extensions/<feature>/contribution`. The core runtime must
- * never import this module (enforced by boundaries.test.ts); an application
- * bootstrap entry passes `builtinExtensions` into `buildExtensionRegistry`.
+ * This is the ONLY place that names concrete extensions; the core runtime must
+ * never import this module directly (enforced by boundaries.test.ts). The
+ * assembly entry (`assembly.ts`) passes these contributions - with their
+ * injected dependencies - into `buildExtensionRegistry`.
  *
- * PR A ships an empty manifest on purpose: migrating knowledge (PR B) is the
- * first real entry, so the mechanism earns a user before it earns lines.
+ * PR B: knowledge is the first entry, taking over its hand-written group
+ * (plan §10 phase 2).
  */
+import { createKnowledgeExtension } from './knowledge/contribution';
+import type { ExtensionAssemblyDeps } from './knowledge/contribution';
 import type { BuiltinExtension } from './contracts';
 
-export const builtinExtensions: readonly BuiltinExtension[] = [];
+export type { ExtensionAssemblyDeps };
+
+export function assembleBuiltinExtensions(
+  deps: ExtensionAssemblyDeps,
+): BuiltinExtension[] {
+  return [createKnowledgeExtension(deps.knowledge)];
+}

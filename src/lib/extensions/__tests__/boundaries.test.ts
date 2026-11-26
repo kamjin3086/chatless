@@ -22,8 +22,17 @@ import { describe, expect, it } from 'vitest';
 const ROOT = join(__dirname, '..', '..', '..'); // src/
 const EXT_DIR = join(ROOT, 'lib', 'extensions');
 
-/** Files allowed to import the extension tree from outside it (§4.3 assembly entry). */
-export const ASSEMBLY_ALLOWLIST = new Set<string>([]);
+/** Files allowed to import the extension tree from outside it (§4.3 assembly entry).
+ * PR B rewired the two sanctioned consumers; each import is one line of glue
+ * reading the derived view, no core logic lives in the consumers' import. */
+export const ASSEMBLY_ALLOWLIST = new Set<string>([
+  'lib/mcp/injection/promptBuilder.ts',
+  'lib/mcp/pipeline/adapters/ToolsRegistryAdapter.ts',
+]);
+
+/** Inside the tree, assembly.ts is the wiring point: §4.2 lets it inject the
+ * services concrete contributions need (store/database closures). */
+const R2_EXEMPT = new Set(['lib/extensions/assembly.ts']);
 
 const FORBIDDEN_DIRS = [
   join(ROOT, 'store'),
@@ -140,6 +149,7 @@ describe('extension import boundaries (A01)', () => {
     const offenders: string[] = [];
     for (const file of inside) {
       const rel = relative(ROOT, file).split(sep).join('/');
+      if (R2_EXEMPT.has(rel)) continue;
       for (const spec of importSpecifiers(readFileSync(file, 'utf-8'))) {
         if (hits(file, spec, FORBIDDEN_DIRS, FORBIDDEN_FILES))
           offenders.push(`${rel}: imports ${spec}`);
@@ -166,10 +176,12 @@ describe('extension import boundaries (A01)', () => {
           offenders.push(`${rel}: imports foreign feature via ${spec}`);
         }
         const relMatch = spec.match(/^\.\.\/([^/]+)/);
+        const rootModules = ['contracts', 'registry', 'builtin', 'assembly'];
         if (
           relMatch &&
           relMatch[1] !== feature &&
-          relMatch[1] !== '__tests__'
+          relMatch[1] !== '__tests__' &&
+          !rootModules.includes(relMatch[1])
         ) {
           offenders.push(`${rel}: relative sibling import ${spec}`);
         }

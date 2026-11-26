@@ -33,6 +33,7 @@ export type RegistryIssueCode =
   | 'duplicate-tool'
   | 'reserved-server'
   | 'reserved-group'
+  | 'invalid-replaces'
   | 'empty-group'
   | 'invalid-id'
   | 'missing-adapter'
@@ -60,11 +61,9 @@ export class ExtensionRegistryError extends Error {
  * never rot against the hand-written catalog; alias spellings are folded with
  * the same normalization the pipeline uses (`file-system` === `fs`).
  *
- * Inheriting an existing builtin group (the knowledge pilot takes over the
- * `knowledge` group) is deliberately NOT possible yet: it needs an explicit
- * `replaces` channel, which arrives with the consumer rewiring in PR B together
- * with the audit record of what it replaces. Until then contributions use new
- * ids/servers only.
+ * Namespaces may be taken over only through an explicit `replaces`
+ * declaration (the knowledge pilot: `replaces: 'knowledge'`), which must name
+ * a core or migrated namespace; everything else uses fresh ids/servers.
  */
 const CORE_GROUP_IDS = new Set<string>(
   TOOL_GROUPS.map((g) => normalizeServerName(g.id)),
@@ -73,6 +72,25 @@ const CORE_SERVER_NAMES = new Set<string>(
   TOOL_GROUPS.flatMap((g) => g.tools.map((t) => normalizeServerName(t.server))),
 );
 CORE_SERVER_NAMES.add(TOOLS_DISCOVER_SERVER_NAME);
+
+/**
+ * Namespaces whose hand-written group has left TOOL_GROUPS but whose server is
+ * still spoken by the pipeline adapter, the conversation grant bucket and the
+ * replay table (`knowledge`). They stay reserved and are handed over only via
+ * `replaces`. Cleanup condition: retire when those registrations sit behind
+ * the contribution (phase 4 review).
+ */
+const MIGRATED_CORE_NAMESPACES = new Set(['knowledge']);
+// The migrated namespaces stay reserved (they are still spoken by pipeline
+// registrations) and are handed over only via `replaces`. Cleanup condition
+// (phase 4 review): when conversationAccessStore's grant bucket,
+// toolRisk's replay membership and the pipeline adapter registration sit
+// behind the contribution, drop them from the reserved sets and retire the
+// MIGRATED list.
+for (const ns of MIGRATED_CORE_NAMESPACES) {
+  CORE_GROUP_IDS.add(ns);
+  CORE_SERVER_NAMES.add(ns);
+}
 
 export interface BuildRegistryOptions {
   /**
@@ -90,6 +108,9 @@ export interface ExtensionRegistry {
   readonly extensions: ReadonlyMap<ExtensionId, BuiltinExtension>;
   group(id: string): ToolGroupContribution | undefined;
   groups(): readonly ToolGroupContribution[];
+  /** Sticky session loading after a discovery hit; unknown ids stick (the
+   * hand-written groups this replaced did). Normalized lookup, default true. */
+  isSticky(groupId: string): boolean;
   /**
    * The single availability view: enabled extension AND group availability.
    * Discovery, injection and execution must consume this same function so no
@@ -152,6 +173,10 @@ export function buildExtensionRegistry(
     for (const group of ext.toolGroups) {
       const where = `extension "${ext.id}" group "${group.id}"`;
       const nServer = normalizeServerName(group.server);
+      const nGroupId = normalizeServerName(group.id);
+      const nReplaces = group.replaces
+        ? normalizeServerName(group.replaces)
+        : '';
       const nTool = normalizeToolName;
       if (!EXTENSION_SLUG_RE.test(group.id)) {
         issue(
@@ -168,9 +193,27 @@ export function buildExtensionRegistry(
         );
       }
       if (
-        RESERVED_MCP_SERVER_NAMES.has(group.server) ||
-        isBuiltinServer(nServer) ||
-        CORE_SERVER_NAMES.has(nServer)
+        group.replaces &&
+        !MIGRATED_CORE_NAMESPACES.has(nReplaces) &&
+        !CORE_GROUP_IDS.has(nReplaces)
+      ) {
+        issue(
+          issues,
+          'invalid-replaces',
+          `${where}: replaces "${group.replaces}" is not a core or migrated namespace`,
+        );
+      }
+      // A contribution may squat on a migrated namespace only by taking it over
+      // by name (knowledge pilot); everything else stays reserved (§5.3).
+      const takesOver = (name: string) =>
+        nReplaces !== '' &&
+        name === nReplaces &&
+        MIGRATED_CORE_NAMESPACES.has(nReplaces);
+      if (
+        !takesOver(nServer) &&
+        (RESERVED_MCP_SERVER_NAMES.has(group.server) ||
+          isBuiltinServer(nServer) ||
+          CORE_SERVER_NAMES.has(nServer))
       ) {
         // Core / builtin server namespace - squatting here would let an
         // optional contribution shadow a core capability (§5.3). External MCP
@@ -178,10 +221,10 @@ export function buildExtensionRegistry(
         issue(
           issues,
           'reserved-server',
-          `${where}: server "${group.server}" is a core/builtin namespace (takeover needs the PR B replaces channel)`,
+          `${where}: server "${group.server}" is a core/builtin namespace (takeover needs an explicit replaces of that namespace)`,
         );
       }
-      if (CORE_GROUP_IDS.has(normalizeServerName(group.id))) {
+      if (!takesOver(nGroupId) && CORE_GROUP_IDS.has(nGroupId)) {
         issue(
           issues,
           'reserved-group',
@@ -201,15 +244,15 @@ export function buildExtensionRegistry(
           `${where}: no loadAdapter, group could be visible but unexecutable`,
         );
       }
-      if (groupsById.has(group.id)) {
+      if (groupsById.has(nGroupId)) {
         issue(
           issues,
           'duplicate-group',
           `${where}: group id already contributed (merging is not defined)`,
         );
       } else {
-        groupsById.set(group.id, group);
-        ownerByGroupId.set(group.id, ext);
+        groupsById.set(nGroupId, group);
+        ownerByGroupId.set(nGroupId, ext);
       }
 
       const seenToolHere = new Set<string>();
@@ -271,7 +314,9 @@ export function buildExtensionRegistry(
 
   return {
     extensions: byId,
-    group: (id) => groupsById.get(id),
+    group: (id) => groupsById.get(normalizeServerName(id)),
+    isSticky: (id) =>
+      groupsById.get(normalizeServerName(id))?.stickyWhenLoaded !== false,
     groups: () => groups,
     async availableGroups(ctx = {}) {
       const out: ToolGroupContribution[] = [];
