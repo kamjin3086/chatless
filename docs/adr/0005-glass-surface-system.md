@@ -27,7 +27,7 @@ range. Animated images become their first frame, and the picker says so.
 token cleared its WCAG floor over a pure-white (dark theme) and pure-black (light theme)
 photograph — the two extremes no photo can exceed. That is why they are high: a mid-luminance
 backdrop cannot carry both dark and light text at 4.5:1, so the photograph has to be pushed to
-one end. `lib/glass/contrast.ts` does the arithmetic, and its test pins both the WCAG reference
+one end. `src/lib/glass/contrast.ts` does the arithmetic, and its test pins both the WCAG reference
 values and the theme's own numbers.
 
 | theme | veil | primary | secondary | muted |
@@ -87,7 +87,7 @@ wrong, and each was a consequence of over-applying "the sheet is the only surfac
    fills moved the check kept passing while the window drifted. The acceptance screenshots found
    it: dark theme over a near-white wallpaper put muted text at **2.75:1** in the rendered
    window (modelled 2.92:1 with the shipped 0.08 sheet fill), under the 3:1 floor. Two things
-   changed - the check now reads `globals.css` and walks every fill the theme paints text on
+   changed - the check now reads `src/styles/globals.css` and walks every fill the theme paints text on
    (base, surface, control), and the dark veil went 0.75 to 0.82 while the dark surface fill
    came down to 0.06 so a card no longer lightens the backdrop past the floor. Measured again on
    the same backdrop: muted 3.48:1, secondary 5.24:1, primary 6.32:1.
@@ -103,8 +103,8 @@ wallpaper, the veil, the overlay opacity and the overflow rules are unchanged.
 
 - The wallpaper is atmosphere, not a gallery. That is the price of the floor, and it is why
   there is no "photo fidelity" setting: the setting would exist only to break the guarantee.
-- `globals.css` owns the tokens and the backdrop; the injected sheet owns the rules. Folding the
-  sheet into the Tailwind layer is a separate change, deferred — `frostContract.test.ts` reads
+- `src/styles/globals.css` owns the tokens and the backdrop; the injected sheet owns the rules. Folding the
+  sheet into the Tailwind layer is a separate change, deferred — `src/lib/glass/__tests__/frostContract.test.ts` reads
   both files so they cannot disagree in the meantime.
 - The claim that the build stripped `.glass-ui` backdrop-filter was false (the built CSS carried
   the rail's rule). The sheet is still injected, for the folding reason above.

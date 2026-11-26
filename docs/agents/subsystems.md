@@ -23,6 +23,23 @@ The chain, in order, for a single turn:
 A card state is a value in `segments.ts`'s `ToolCallStatus`; wording lives beside the card, not
 in the stream layer.
 
+## Approval and grants
+
+One answer, three different durable effects, and the split is the thing a change has to respect.
+
+| Step | Where |
+|---|---|
+| Asking, and waiting | `src/components/chat/ToolCallCard.tsx` renders the question; `src/lib/mcp/pipeline/approvalWait.ts` holds the round-trip (registered before the pending row is written, so a Stop while waiting still settles) |
+| What an answer means | `planFilesystemPromotion` and `planShellPromotion` in `src/lib/mcp/pipeline/policy/policy.ts` - pure, six cells, no default branch (ADR-0002) |
+| Whether it may run while planning | `isPlanOnlyAllowed` and `isReplayableRead`, both derived from the one table in `src/lib/mcp/pipeline/policy/toolRisk.ts` (ADR-0003) |
+| Where `always` lands | filesystem: the allowlist the Rust side enforces, `src-tauri/src/sandbox/mod.rs` (ADR-0004); shell: `setGlobalAccess` in `src/lib/mcp/accessPolicy.ts` |
+| Where `unrestricted` lands | per-conversation grants in `src/store/conversationAccessStore.ts`, written from `ToolExecutionPipeline.serverGate` - a narrow grant per directory / scope / tool, never a mute of everything (ADR-0002 amendment) |
+| The record | `agent_approvals`, created by `src/lib/migrations/scripts/017_agent_approvals.ts` - one row per call, whose durable state is a `status`; the answer itself is not a column |
+
+`conversationUnrestricted` on the planner's result is computed and read by nobody (#251): the
+conversation answer is executed as the narrow grants above, so a change that reads that field
+would mute approvals it should not.
+
 ## Parameters and the wire
 
 - The stored bag: `src/types/model-params.ts` (`ModelParameters`, twelve `enable*` flags).

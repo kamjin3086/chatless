@@ -93,6 +93,18 @@ describe('what a document promises', () => {
     expect(written.join('\n')).not.toContain('docs/a.md:1');
   });
 
+  it('says a generic word was deleted when it names a deleted type', () => {
+    // `Provider` names an exported type this repository removed, so a document that wants the
+    // English phrase must not backtick it - the alternative is pretending a bare name is free.
+    const claims = docClaims(
+      ['A `Provider` maps the request, and so does a provider.'],
+      new Set(['Provider']),
+    );
+    expect(claims.map((c) => `${c.kind}:${c.text}`)).toEqual([
+      'symbol:Provider',
+    ]);
+  });
+
   it('reads a markdown link as the path claim it is, relative to its own document', () => {
     const claims = docClaims([
       'see [the index](src/lib/skills/skillIndex.ts), [the root readme](../README.md),',

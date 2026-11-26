@@ -184,7 +184,12 @@ export function docClaims(lines, deletedSymbols = new Set()) {
         } else if (deletedSymbols.has(token)) {
           // Only a name this tree used to define is a claim; any other backticked word in the
           // document is prose, and claiming those would silence the axis with noise. Nothing in
-          // the gone set is lowercase or short enough to collide with a sentence by accident.
+          // the gone set is lowercase or short enough to collide with a sentence by accident -
+          // but the set does hold names that are ordinary words in another sense: `Provider` was
+          // an exported type, and a document meaning "the model provider" must not put it in
+          // backticks, or mark it as history. That is the price of a bare name reading as a
+          // claim, and it is cheaper than the alternative: the file that defined the type is
+          // gone, so nothing else in the tree can tell a reader the name moved.
           // This branch runs before the file-stem one: a deleted class is a deleted symbol,
           // whether or not it also gave a file its name.
           claims.push({

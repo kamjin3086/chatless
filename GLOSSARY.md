@@ -13,17 +13,18 @@
 _Avoid_: 授权结果、批准级别
 
 **记住目录**:
-`always` 在文件系统作用域下的实际效果——把该目录连同日常权限写入允许名单，此后同目录内的操作不再询问。删除操作永远拿不到这个待遇。
+`always` 在文件系统作用域下的实际效果——把该目录连同日常权限写入允许名单，此后同目录内的操作不再询问。名单镜像进 Rust，真正拦住访问的是 `src-tauri/src/sandbox/mod.rs`（见 ADR-0004）。删除操作永远拿不到这个待遇。
 _Avoid_: 文件系统自动授权、永久授权
 
 **全局免问**:
-`always` 在 shell 作用域下的实际效果——持久化地关掉 shell 审批，影响所有会话，不只当前这个。
+`always` 在 shell 作用域下的实际效果——持久化地关掉 shell 审批，影响所有会话，不只当前这个；写这个开关的是 `src/lib/mcp/accessPolicy.ts` 的 `setGlobalAccess`。
 _Avoid_: 永久授权
 
 **会话免问**:
 `unrestricted` 的效果——只在本会话内免问，进程结束即失效。**免问覆盖什么按作用域不同**，别一律说成「整个作用域」：
 fs 免的是**那一个目录**（递归授予，删除操作那次只授予目录本身）；shell 免的才是整个 shell 作用域；其它 server
-免的是**那一个 server + tool**（knowledge 的三个读合并成一个桶）。真正执行免问的是会话授权存储里的那几条授予，
+免的是**那一个 server + tool**（knowledge 的三个读合并成一个桶）。真正执行免问的是会话授权存储里的那几条授予
+（`src/store/conversationAccessStore.ts`，写入点在 `src/lib/mcp/pipeline/ToolExecutionPipeline.ts` 的 `serverGate`），
 不是策略算出来的字段。
 _Avoid_: 临时授权、会话信任
 
@@ -64,7 +65,7 @@ _Avoid_: 请求、任务
 _Avoid_: ResolvedInvocation（与 ToolInvocation 太近）
 
 **工具风险 (ToolRisk)**:
-一个 server + tool 组合的读写性质：`read` / `write` / `create` / `delete`，外加 `unknown`——没登记进来的名字就是 `unknown`，兜底策略由调用方明说，表自己不偷偷兜。计划模式是否放行、失败后能否安全重放都从这一张表派生，但**是两个谓词，今天也不再同判**：计划模式放行任何读操作（含 `skill__*`、`system__*`、`tool_result__*`），可重放只认 `fs` / `knowledge` / `web_search` / `tools` 四个 server 上登记过的读。
+一个 server + tool 组合的读写性质：`read` / `write` / `create` / `delete`，外加 `unknown`——没登记进来的名字就是 `unknown`，兜底策略由调用方明说，表自己不偷偷兜。表在 `src/lib/mcp/pipeline/policy/toolRisk.ts`，计划模式是否放行、失败后能否安全重放都从这一张表派生，但**是两个谓词，今天也不再同判**：计划模式放行任何读操作（含 `skill__*`、`system__*`、`tool_result__*`），可重放只认 `fs` / `knowledge` / `web_search` / `tools` 四个 server 上登记过的读。
 _Avoid_: 只读工具列表、危险工具、"读操作就是可重放"
 
 **可重放 (Retryable)**:
@@ -72,7 +73,7 @@ _Avoid_: 只读工具列表、危险工具、"读操作就是可重放"
 _Avoid_: 幂等重试
 
 **工具策略 (ToolPolicy)**:
-决定一次调用能不能跑的模块。`decideFilesystemCall` / `decideServerCall` 回答放行或要问，`planFilesystemPromotion` / `planShellPromotion` 把一个审批回答翻译成状态增量；按作用域分开命名，因为同一个回答在文件系统与 shell 下含义不同。
+决定一次调用能不能跑的模块，在 `src/lib/mcp/pipeline/policy/policy.ts`。`decideFilesystemCall` / `decideServerCall` 回答放行或要问，`planFilesystemPromotion` / `planShellPromotion` 把一个审批回答翻译成状态增量；按作用域分开命名，因为同一个回答在文件系统与 shell 下含义不同。
 _Avoid_: 权限检查、鉴权层
 
 **决策 (Decision)**:
@@ -133,7 +134,7 @@ _Avoid_: 在别处再判一次类型（边界已做过），或在写入路径�
 ### Skills
 
 **技能索引 (Skill index)**:
-模型在这一轮里能看见的那份 skill 清单（`buildSkillIndex` → `skill-availability` + `skills-index`，用户点名过的再加一个 `skills-requested`）。索引只给 id、名字和描述，**描述就是路由面**——模型靠"Use when …"决定要不要用它。超预算时一档一档退（代码里叫 `rung`：`full` / `names` / `none`），从不给半份清单：先退成只给名字（每条仍在，靠 `skill__guide(id)` 读），名字也装不下才退回常驻行 + `skill__list(query)`。读指南正文的入口是 `skill__guide(id)`；索引只有一个装配点——对话侧的 prompt envelope，将来加子 agent 也必须复用它（#235）；`skill__get_template` 读的是包内文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板不是路由。索引里的名字不算读过，正文也不会因为被点名就自动注入。
+模型在这一轮里能看见的那份 skill 清单（`src/lib/skills/skillIndex.ts` 的 `buildSkillIndex` → `skill-availability` + `skills-index`，用户点名过的再加一个 `skills-requested`）。索引只给 id、名字和描述，**描述就是路由面**——模型靠"Use when …"决定要不要用它。超预算时一档一档退（代码里叫 `rung`：`full` / `names` / `none`），从不给半份清单：先退成只给名字（每条仍在，靠 `skill__guide(id)` 读），名字也装不下才退回常驻行 + `skill__list(query)`。读指南正文的入口是 `skill__guide(id)`；索引只有一个装配点——对话侧的 prompt envelope（`src/lib/mcp/injection/promptBuilder.ts` 调 `skillIndexBlocks`），将来加子 agent 也必须复用它（#235）；`skill__get_template` 读的是包内文件，作者把 `SKILL.md` 当资源指名时拿到的也是同一份正文，但它的职责是模板不是路由。索引里的名字不算读过，正文也不会因为被点名就自动注入。
 _Avoid_: skill catalogue（"目录"已被 provider 清单和 `tools__search` 的目录占用）、技能列表、按关键词预加载正文
 
 **触发方式 (skill invocation policy)**:
