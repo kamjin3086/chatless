@@ -13,6 +13,7 @@
 - 读取 skill 包内文件不再每次都要审批（`skill__list_resources`、`skill__get_template`）；新建、修改、删除、导入导出这类操作照旧要确认。
 - 旧会话里那些已下线的 skill 工具名现在标为"已移除的 skill 工具"并指出替代工具，不再按旧名字显示成一个仍在工作的工具。
 - 移除了一套与对话执行并行的 skill 执行机制（执行计划面板、动作审批队列、动作卡片等）。它们没有任何入口可以触发，因此日常使用没有变化；读取 skill 仍然只有 `skill__guide` 一条路。
+- macOS 上点 X 退出后不再弹「Chatless 意外退出」：动态载入的 ONNX Runtime 从不卸载，进程收尾时它的 C++ 静态析构撞上仍在抢锁的运行时线程，抛出的 libc++ 异常把进程 abort 掉（退出码 134）。现在退出统一走事件循环的收尾，再用 `_exit` 离开，见 `docs/macos-exit-crash.md`。
 
 ### en-US
 
@@ -22,6 +23,7 @@
 - Reading files inside a skill package no longer asks for approval every time (`skill__list_resources`, `skill__get_template`); create, edit, delete, import and export still confirm.
 - Tool names retired from the skill tool set now render as a removed skill tool with its replacement in older conversations, instead of looking like a tool that still works.
 - Removed a second skill execution mechanism that ran beside the conversation loop (execution plan panel, action approval queue, action cards). Nothing could reach it, so day-to-day behaviour is unchanged; reading a skill still goes through `skill__guide` alone.
+- Quitting with the window's X on macOS no longer raises "Chatless quit unexpectedly". The dynamically loaded ONNX Runtime is never unloaded, so process teardown ran its C++ static destructors against its own still-locking threads, and the libc++ exception that followed aborted the process (exit 134). Exit now ends in the event loop's exit event and leaves with `_exit`; see `docs/macos-exit-crash.md`.
 
 ## [0.8.3] - 2026-11-22
 
