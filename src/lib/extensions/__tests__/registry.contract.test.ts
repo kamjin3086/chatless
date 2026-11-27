@@ -218,6 +218,60 @@ describe('buildExtensionRegistry - validation', () => {
     expect(codes).not.toContain('invalid-replaces');
   });
 
+  it('handover slots cannot be borrowed across handovers', () => {
+    // replaces names ONE handover; each migrated name is liftable only
+    // through that handover's own slot (review round 2 pair-mixing).
+    // Borrowing the OTHER handover's server name under replaces 'prompt':
+    const crossServer = buildCase({
+      id: 'crossserver',
+      toolGroups: [
+        {
+          ...groupWith({ id: 'prompt', server: 'knowledge' }),
+          replaces: 'prompt',
+        },
+      ],
+    });
+    expect(
+      issuesOf(() => buildExtensionRegistry([crossServer])).map((i) => i.code),
+    ).toContain('reserved-server');
+    // Borrowing the OTHER handover's group id under replaces 'prompt':
+    const crossGroup = buildCase({
+      id: 'crossgroup',
+      toolGroups: [
+        {
+          ...groupWith({ id: 'knowledge', server: 'system' }),
+          replaces: 'prompt',
+        },
+      ],
+    });
+    expect(
+      issuesOf(() => buildExtensionRegistry([crossGroup])).map((i) => i.code),
+    ).toContain('reserved-group');
+
+    // The pilot shapes pass: exact pair, and own-group-id on the inherited
+    // server (the knowledge pilot fixture's legitimate pattern).
+    const exact = buildCase({
+      id: 'exactpair',
+      toolGroups: [
+        {
+          ...groupWith({ id: 'prompt', server: 'system' }),
+          replaces: 'prompt',
+        },
+      ],
+    });
+    expect(() => buildExtensionRegistry([exact])).not.toThrow();
+    const ownId = buildCase({
+      id: 'ownid',
+      toolGroups: [
+        {
+          ...groupWith({ id: 'own.id', server: 'system' }),
+          replaces: 'prompt',
+        },
+      ],
+    });
+    expect(() => buildExtensionRegistry([ownId])).not.toThrow();
+  });
+
   it('flags risk declarations that drift from the single risk table (ADR 0003)', () => {
     const lying: BuiltinExtension = {
       ...exampleExtension,

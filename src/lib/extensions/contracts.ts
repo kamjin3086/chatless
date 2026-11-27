@@ -72,6 +72,12 @@ export interface ToolGroupContribution {
    * Computed per model step at runtime; absence means the group is available
    * whenever its extension is enabled. May read persisted conversation state
    * but must not mutate anything (ADR 0001).
+   *
+   * A predicate is also what makes a group DETECTABLE: injection treats
+   * "available right now" as a data-presence signal only when a predicate
+   * exists. A predicate-less group is never auto-detected - its tools reach
+   * the model through load records (a tools__search hit, then sticky), the
+   * discover-then-load semantics of the retired hand-written groups.
    */
   availability?: (ctx: AvailabilityContext) => boolean | Promise<boolean>;
   /** Required (§5.2): a group without an executor is a visible-but-unexecutable ghost.

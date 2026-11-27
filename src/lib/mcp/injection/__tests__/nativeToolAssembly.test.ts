@@ -74,4 +74,20 @@ describe('native tool assembly with the knowledge contribution (PR B)', () => {
     const names = await toolNames('c1');
     expect(names.filter((n) => n === 'knowledge__read')).toHaveLength(1);
   });
+
+  it('prompt tools are discover-then-load: absent until hit, then sticky (no predicate)', async () => {
+    // A predicate-less contribution group is never auto-detected - a fresh
+    // conversation must NOT get the six system__ tools just because the
+    // group is constantly available (regression pinned by review round 2:
+    // treating "available" as "detected" injected them into every request).
+    const fresh = await toolNames('c1');
+    expect(fresh.filter((n) => n.startsWith('system__'))).toHaveLength(0);
+
+    useToolLoadRequestStore.getState().requestLoad('prompt', 'c1');
+    const names = await toolNames('c1');
+    expect(names.filter((n) => n.startsWith('system__'))).toHaveLength(6);
+    // Second step: pending is consumed as sticky-loaded, injection survives.
+    const again = await toolNames('c1');
+    expect(again.filter((n) => n.startsWith('system__'))).toHaveLength(6);
+  });
 });

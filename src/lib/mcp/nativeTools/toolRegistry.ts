@@ -13,7 +13,6 @@ import type { McpTool } from '@/lib/mcp/McpClient';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from './filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecutor';
 import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
-import { SYSTEM_SERVER_NAME, SYSTEM_PROMPT_TOOLS } from './systemPrompts';
 import { SKILL_SERVER_NAME, SKILL_UNIFIED_TOOLS } from './skillUnifiedTools';
 import { TOOL_RESULT_SERVER_NAME, TOOL_RESULT_TOOLS } from './toolResult';
 
@@ -22,7 +21,6 @@ import { TOOL_RESULT_SERVER_NAME, TOOL_RESULT_TOOLS } from './toolResult';
 export type ToolGroupId = 
   | 'core'      // 核心：始终加载（fs + shell + web）
   | 'skill'     // 技能系统
-  | 'prompt'    // 提示词管理
   | 'knowledge'; // 知识库（会话挂载 KB + Agent 模式）
 
 export interface ToolGroup {
@@ -66,12 +64,6 @@ export const TOOL_GROUPS: ToolGroup[] = [
     name: 'Skills',
     description: 'Querying skills and working with skill resources',
     tools: SKILL_UNIFIED_TOOLS.map(t => ({ server: SKILL_SERVER_NAME, tool: t })),
-  },
-  {
-    id: 'prompt',
-    name: 'Prompt management',
-    description: 'Manage prompts (list, create, edit, delete, optimise)',
-    tools: SYSTEM_PROMPT_TOOLS.map(t => ({ server: SYSTEM_SERVER_NAME, tool: t })),
   },
 ];
 
