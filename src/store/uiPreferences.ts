@@ -5,6 +5,9 @@ import StorageUtil from "@/lib/storage";
 import type { ConversationGrouping } from '@/lib/chat/conversationGroups';
 import type { SectionIconPreset } from "@/components/settings/SectionIcon";
 import { applyNightBrightnessCss, clampNightBrightness } from "@/lib/utils/nightBrightness";
+// The window sizes, their default, and the label the settings row builds for them all come from
+// one place: src/lib/window/windowFit.ts.
+import { DEFAULT_WINDOW_SIZE_PRESET, type WindowSizePreset } from "@/lib/window/windowFit";
 import {
   GLASS_THEME_KEY,
   GLASS_WALLPAPER_KEY,
@@ -26,7 +29,6 @@ type SidebarWidth = 'narrow' | 'medium' | 'wide' | 'xwide';
 type IconSize = 'small' | 'medium' | 'large';
 
 type CharFadeIntensity = 'off' | 'light' | 'normal' | 'strong';
-type WindowSizePreset = '900x700' | '1024x768' | '1280x800' | '1366x768' | '1440x900' | '1600x900';
 
 interface UiPreferencesState {
   // 基础
@@ -112,7 +114,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
   showCloseConfirmation: true,
   closeToTray: false,
   charFadeIntensity: 'normal',
-  windowSizePreset: '1024x768',
+  windowSizePreset: DEFAULT_WINDOW_SIZE_PRESET,
   glassTheme: false,
   glassWallpaperFile: null,
   nightBrightness: 100,
@@ -227,7 +229,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     StorageUtil.getItem<boolean>(SHOW_CLOSE_CONFIRMATION_KEY, true, 'user-preferences.json'),
     StorageUtil.getItem<CharFadeIntensity>('ui_char_fade_intensity', 'normal', 'user-preferences.json'),
     StorageUtil.getItem<SectionIconPreset>('ui_settings_icon_preset', 'brand', 'user-preferences.json'),
-    StorageUtil.getItem<WindowSizePreset>('ui_window_size_preset', '1024x768', 'user-preferences.json'),
+    StorageUtil.getItem<WindowSizePreset>('ui_window_size_preset', DEFAULT_WINDOW_SIZE_PRESET, 'user-preferences.json'),
     StorageUtil.getItem<boolean>(GLASS_THEME_KEY, false, 'user-preferences.json'),
     StorageUtil.getItem<string | null>(GLASS_WALLPAPER_KEY, null, 'user-preferences.json'),
     StorageUtil.getItem<number>(NIGHT_BRIGHTNESS_KEY, 100, 'user-preferences.json'),
@@ -252,7 +254,7 @@ export const useUiPreferences = create<UiPreferencesState>((set) => ({
     closeToTray: closeToTray ?? false,
     charFadeIntensity: (charFadeIntensity as CharFadeIntensity) ?? 'normal',
     settingsIconPreset: (iconPreset as SectionIconPreset) ?? 'brand',
-    windowSizePreset: (windowSizePreset as WindowSizePreset) ?? '1024x768',
+    windowSizePreset: (windowSizePreset as WindowSizePreset) ?? DEFAULT_WINDOW_SIZE_PRESET,
     glassTheme: glassTheme ?? false,
     glassWallpaperFile: glassWallpaperFile || null,
     nightBrightness: clampNightBrightness(typeof nightBrightness === 'number' ? nightBrightness : 100),

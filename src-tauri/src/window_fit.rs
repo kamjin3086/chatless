@@ -5,7 +5,7 @@
 //! Neither compares the rectangle to the work area (the desktop minus taskbar and
 //! dock), so a window can open larger than the screen it lands on: at 125 %
 //! scaling a 1536x864 display leaves 1228x691 logical, while the shipped default
-//! preset is 1024x768. The right and bottom edges then sit off-screen, which
+//! preset is 1280x760. The right and bottom edges then sit off-screen, which
 //! looks like a layout bug and puts the window buttons out of reach.
 //!
 //! Everything here is in physical pixels, and the outer rectangle is the one
@@ -194,17 +194,17 @@ mod tests {
   }
 
   // A 1536x864 display at 125 % has a 1536x824 physical work area once the
-  // taskbar is subtracted. The shipped 1024x768 preset is 1280x960 physical
+  // taskbar is subtracted. The shipped 1280x760 default is 1600x950 physical
   // there, so the bottom of the window lands below the taskbar (#169).
   #[test]
   fn shrinks_the_default_preset_to_the_reported_work_area() {
     let fitted = fit_rect(
-      PhysicalSize::new(1280, 960),
+      PhysicalSize::new(1600, 950),
       frame(),
       PhysicalPosition::new(0, 0),
       area(0, 0, 1536, 824),
     );
-    assert_eq!(fitted.size, PhysicalSize::new(1280, 814));
+    assert_eq!(fitted.size, PhysicalSize::new(1518, 814));
     assert_eq!(fitted.position, PhysicalPosition::new(0, 0));
   }
 

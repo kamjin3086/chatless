@@ -26,8 +26,8 @@ shows whatever was on top of it, which is how one session spent two rounds analy
 ## Sizing
 
 `-Width`/`-Height` are physical pixels and default to 1470x820, which fits a 1536x864 display at
-125%. Do not ask for a window bigger than the work area: the app's own presets can exceed it
-(1024x768 logical is 1280x960 physical, against a 1228x691 logical work area here), and the
+125%. Do not ask for a window bigger than the work area: the app's own presets can exceed it (the
+shipped 1280x760 default is 1600x950 physical, against a 1228x691 logical work area here), and the
 resulting off-screen edge reads as a layout bug that is not one. `-NoResize` leaves the window as
 it is.
 

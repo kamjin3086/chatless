@@ -20,7 +20,7 @@ const settings = vi.hoisted(() => ({
   locale: 'zh' as Locale,
   glassTheme: true,
   glassWallpaperFile: 'wallpaper.jpg',
-  windowSizePreset: '1024x768',
+  windowSizePreset: '1280x760',
   setWindowSizePreset: vi.fn(),
   sidebarWidth: 'xwide',
   sidebarIconSize: 'large',
@@ -107,7 +107,15 @@ describe('PersonalizationSettings', () => {
           ),
       );
       expect(values).toEqual([
-        ['900x700', '1024x768', '1280x800', '1366x768', '1440x900', '1600x900'],
+        [
+          '900x700',
+          '1024x768',
+          '1280x760',
+          '1280x800',
+          '1366x768',
+          '1440x900',
+          '1600x900',
+        ],
         ['narrow', 'medium', 'wide', 'xwide'],
         ['small', 'medium', 'large'],
         [
@@ -122,12 +130,12 @@ describe('PersonalizationSettings', () => {
       const labels =
         locale === 'en'
           ? [
-              '1024 × 768 (default)',
+              '1280 × 760 (default)',
               'Extra wide',
               'Large',
               'New York (UTC-4/5)',
             ]
-          : ['1024 × 768（默认）', '超宽', '大', '纽约 (UTC-4/5)'];
+          : ['1280 × 760（默认）', '超宽', '大', '纽约 (UTC-4/5)'];
       expect(
         [...html.matchAll(/<option [^>]* selected="">([^<]+)<\/option>/g)].map(
           ([, label]) => label,

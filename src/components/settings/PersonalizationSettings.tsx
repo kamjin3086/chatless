@@ -16,7 +16,10 @@ import {
 } from "@/lib/glass/wallpaper";
 import {
   applyWindowSizePreset,
+  DEFAULT_WINDOW_SIZE_PRESET,
+  formatWindowSizePreset,
   readWindowWorkArea,
+  WINDOW_SIZE_PRESETS,
   type WindowSize,
 } from "@/lib/window/windowFit";
 
@@ -191,17 +194,16 @@ export function PersonalizationSettings() {
         <div>
           <SelectField
             label={t('settings.personalization.windowSize')}
-            options={[
-              { value: '900x700', label: '900 × 700' },
-              {
-                value: '1024x768',
-                label: t('settings.personalization.windowSize.default').replace('{0}', '1024 × 768'),
-              },
-              { value: '1280x800', label: '1280 × 800' },
-              { value: '1366x768', label: '1366 × 768' },
-              { value: '1440x900', label: '1440 × 900' },
-              { value: '1600x900', label: '1600 × 900' },
-            ]}
+            options={WINDOW_SIZE_PRESETS.map((preset) => ({
+              value: preset,
+              label:
+                preset === DEFAULT_WINDOW_SIZE_PRESET
+                  ? t('settings.personalization.windowSize.default').replace(
+                      '{0}',
+                      formatWindowSizePreset(preset),
+                    )
+                  : formatWindowSizePreset(preset),
+            }))}
             value={ui.windowSizePreset as any}
             onChange={async (v) => {
               ui.setWindowSizePreset(v as any);
