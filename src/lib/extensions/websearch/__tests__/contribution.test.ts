@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { buildExtensionRegistry } from '@/lib/extensions/registry';
 import { createWebSearchExtension } from '../contribution';
 import { ContributionAdapter } from '@/lib/mcp/pipeline/adapters/ContributionAdapter';
+import type { ToolAdapter } from '@/lib/mcp/pipeline/ToolAdapter';
 import { toolRisk } from '@/lib/mcp/pipeline/policy/toolRisk';
 
 function registryWith(enabled: boolean) {
@@ -52,6 +53,30 @@ describe('web search contribution', () => {
     // setting. Routing must NOT return NO_ADAPTER here.
     const bridge = new ContributionAdapter(() => off);
     expect(bridge.canHandle(invocation('search'))).toBe(true);
+    // Execute-level pin (review round): if someone ever puts an availability
+    // check inside execute, this must go red - the call reaches the executor
+    // itself, with the real adapter swapped for a marker.
+    const ext = createWebSearchExtension({ isWebSearchEnabled: () => false });
+    const instrumented = buildExtensionRegistry([
+      {
+        ...ext,
+        toolGroups: [
+          {
+            ...ext.toolGroups[0],
+            loadAdapter: async () =>
+              ({
+                server: 'web',
+                canHandle: () => true,
+                execute: async () => ({ reached: 'executor' }),
+              }) as ToolAdapter,
+          },
+        ],
+      },
+    ]);
+    const live = new ContributionAdapter(() => instrumented);
+    expect(await live.execute(invocation('search'))).toEqual({
+      reached: 'executor',
+    });
   });
 
   it('is detectable but never sticky: predicate groups inject from availability alone', async () => {

@@ -169,7 +169,7 @@ export function McpServersSettings() {
       
       // 默认启用 + 保留名冲突自动改名（例如 filesystem → filesystem_external）
       const withEnabled = Array.isArray(list) ? list.map((s) => ({ ...s, enabled: s.enabled !== false })) : [];
-      const { list: normalized, renames } = normalizeSavedServers(withEnabled);
+      const { list: normalized, renames } = normalizeSavedServers(withEnabled, claimedExternalServerNames());
       setServers(normalized);
 
       if (renames.length) {
@@ -260,7 +260,7 @@ export function McpServersSettings() {
       }
     }
     // 统一做一次保留名/重名修正
-    const { list: normalized } = normalizeSavedServers(imported);
+    const { list: normalized } = normalizeSavedServers(imported, claimedExternalServerNames());
     return normalized;
   }, []);
 
@@ -274,7 +274,7 @@ export function McpServersSettings() {
       const byName = new Map(servers.map(s => [s.name, s] as const));
       for (const s of imported) byName.set(s.name, { ...s, enabled: true });
       const merged = Array.from(byName.values());
-      const { list: next, renames } = normalizeSavedServers(merged);
+      const { list: next, renames } = normalizeSavedServers(merged, claimedExternalServerNames());
       await saveServers(next);
       // 再次读取存储，确保不同运行环境（Tauri/浏览器）下列表立即刷新
       await loadServers();

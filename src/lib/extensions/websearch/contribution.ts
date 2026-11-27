@@ -61,8 +61,9 @@ export function createWebSearchExtension(
         })),
         availability: () => deps.isWebSearchEnabled(),
         loadAdapter: async () => {
-          // Executor stays a core pipeline adapter; the bridge loads it on
-          // first execution, never during discovery (A04).
+          // Executor stays a core pipeline adapter; the bridge INSTANTIATES
+          // it on first execution (the module sits in the barrel already),
+          // never during discovery (A04).
           const mod = await import(
             '@/lib/mcp/pipeline/adapters/WebSearchAdapter'
           );
