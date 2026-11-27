@@ -162,7 +162,7 @@ clone's own `.git/config`). It runs six things: conflict markers, the three text
 (`comment-symbols`, `doc-symbols`, `i18n-unused`), `scripts/format-policy.mjs --staged`
 (not bare `biome format`), and `npx tsc -p tsconfig.json` - about 7 seconds. Test types are
 deliberately out of it (`pnpm typecheck:tests` runs them in `pnpm verify` and CI). The format
-check exempts a file that was already unformatted at HEAD, so `--no-verify` is not the answer to someone else's dirt. It is a seatbelt, not the bar:
+check exempts a file that was already unformatted at HEAD, so `--no-verify` is not the answer to someone else's dirt. `check:exit-path` is a fourth text gate and is deliberately out of the hook: it reads the whole Rust tree, not the staged files, so it runs in `pnpm verify:fast` and CI. It is a seatbelt, not the bar:
 `pnpm verify` before pushing is still what keeps CI green, and
 `git commit --no-verify` exists for the rare commit where the hook is the wrong
 one to run.
@@ -171,11 +171,12 @@ one to run.
 |--------|-----|
 | Any TypeScript | `pnpm test` and `pnpm typecheck` |
 | TypeScript that only tests use | `pnpm typecheck:tests` - the root `typecheck` excludes every test file |
-| Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + the three text gates + `test`) - seconds to a couple of minutes |
+| Before pushing any code | `pnpm verify:fast` (lint:ci + typecheck + typecheck:tests + the four text gates + `test`) - seconds to a couple of minutes |
 | Before pushing a build-affecting change, or when CI is the only gate | `pnpm verify` (= `verify:fast` + `next build`); the build takes ~18 minutes here and refuses to start while a dev server holds `dist` |
 | PR title | `pnpm check:pr-title "<title>"` - `pnpm repo:state` now flags an open PR whose title the gate would reject, so this is caught before the push; the title workflow has no `edited` trigger, so a retitle alone does not clear the red check |
-| What a PR's CI actually runs | seven commands in `frontend-checks` plus one in `backend-check`, in `.github/workflows/ci.yml`: `frontend-checks` runs `lint:ci`, `typecheck`, `typecheck:tests`, `check:comments`, `check:docs-symbols`, `check:i18n-unused`, `test`; `backend-check` runs `cargo check`. The `test-tauri-*` jobs are `if: false`, so **no build runs on a PR**: `next build` (below) is a local-only gate and a claim that "CI covers the build" is false |
+| What a PR's CI actually runs | eight commands in `frontend-checks` plus one in `backend-check`, in `.github/workflows/ci.yml`: `frontend-checks` runs `lint:ci`, `typecheck`, `typecheck:tests`, `check:comments`, `check:docs-symbols`, `check:i18n-unused`, `check:exit-path`, `test`; `backend-check` runs `cargo check`. The `test-tauri-*` jobs are `if: false`, so **no build runs on a PR**: `next build` (below) is a local-only gate and a claim that "CI covers the build" is false |
 | Rust / Tauri | `cargo check --manifest-path src-tauri/Cargo.toml` |
+| Rust behind `cfg(target_os = "macos")` | **nothing on CI compiles it**: `backend-check` runs on ubuntu and the `test-tauri-*` jobs are off to save Actions quota. `cd src-tauri && cargo check` on a Mac is the only compile of that path, so a PR that touches it says so in the body - `docs/macos-exit-crash.md` is what one release of an uncompiled macOS exit path cost |
 | Rust unit tests | `cargo check --tests` proves they compile, never that they pass. Running them costs a full codegen + link (minutes, ~1-2 GB here); decide up front whether the evidence is worth it, or prove the arithmetic another way and say so |
 | Model-facing prompt text | `pnpm test src/lib/prompts/__tests__/prompt-language.test.ts` (see `docs/prompt-language.md`) |
 | Start-up, window, tray, macOS visuals | `scripts/verify-app-startup.sh src-tauri/target/release/chatless` - macOS only (hard-coded log path), needs a release build |
@@ -273,7 +274,12 @@ legacy versions.
   keep in sight: the format gate stays narrow until the standing dirt is cleared, and clearing
   it is a formatting-only commit of ~756 files - the owner's call, not something to slip into
   a change PR. Judge cleanliness on file bytes: `biome format --stdin-file-path` has reported
-  unformatted files as clean, and one whole-tree reflow got justified that way.
+  unformatted files as clean, and one whole-tree reflow got justified that way. The Rust tree is
+  in the same state for the same reason, and this cargo has no per-file mode (`cargo fmt --files`
+  is rejected): `cd src-tauri && cargo fmt --check` prints **371** diffs (re-measured 2026-11-27),
+  so a bare `cargo fmt` reflows files your change never touched - `lib.rs` alone already carries
+  one at `persisted_window_state_flags`. Judge a Rust file the same way: nothing from
+  `cargo fmt --check 2>&1 | grep '^Diff in.*<your file>'` means your file is clean.
 - **`gh`'s GraphQL path fails at random and the REST path is the way through.** `gh pr
   create` / `gh issue create` ride GraphQL and die with
   `Post "https://api.github.com/graphql": EOF` on a flaky link, while `api.github.com` over

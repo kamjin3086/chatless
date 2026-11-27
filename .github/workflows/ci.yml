@@ -103,6 +103,12 @@ jobs:
         run: pnpm check:comments && pnpm check:docs-symbols
       - name: Check for orphaned locale keys
         run: pnpm check:i18n-unused
+      # The Rust side's one exit-path gate. Both halves of it - a `std::process::exit` creeping
+      # back, or the sanctioned shutdown losing its `_exit` - compile fine on every platform and
+      # only misbehave in a macOS build, which no CI job runs (the tauri-* jobs are off to save
+      # Actions quota). This is the only thing that checks them. `docs/macos-exit-crash.md`.
+      - name: Check the Rust exit path
+        run: pnpm check:exit-path
       - name: Run unit tests
         run: pnpm test
 
