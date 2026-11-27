@@ -88,6 +88,9 @@ tauri-plugin-os = "2"
 readability = "0.3.0"
 kuchiki = "0.8"
 tauri-plugin-shell = "2"
+# `_exit` at shutdown: the process must leave without running the C++ static destructors of
+# the dynamically loaded ONNX Runtime. See docs/macos-exit-crash.md.
+libc = "0.2"
 
 # 仅在Windows平台添加windows依赖
 # The window is transparent so the macOS corners can be rounded in CSS (a

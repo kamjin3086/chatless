@@ -24,6 +24,7 @@ use objc::runtime::Object;
 use objc::{class, msg_send, sel, sel_impl};
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use tauri::{Runtime, Window};
 
@@ -34,7 +35,14 @@ use tauri::{Runtime, Window};
 /// runs *from* that loop, where the reply can never arrive - an endless
 /// user-message loop that pins a core and starves the window (and the frontend's
 /// IPC) until nothing responds. Holding the pointer keeps that path call-free.
+///
+/// The price of not asking: the pointer is only valid while the window lives, so
+/// `forget_window` has to clear it once the window is destroyed.
 static NS_WINDOW: AtomicUsize = AtomicUsize::new(0);
+
+/// Which window `NS_WINDOW` belongs to, so a `Destroyed` event for some other window cannot
+/// clear a handle that is still in use. `None` while nothing is cached.
+static NS_WINDOW_LABEL: Mutex<Option<String>> = Mutex::new(None);
 
 /// Corner radius in points, matching `--window-radius` in
 /// `src/styles/globals.css` (keep the two in sync). Close to a native macOS
@@ -122,11 +130,30 @@ unsafe fn round_content_view(ns_window: *mut Object, radius: f64) -> (f64, bool)
 }
 
 /// Make the window see-through and round its corners. Called once, after the
-/// window exists (see `setup` in lib.rs).
-pub fn apply<W: NativeWindow>(window: &W) {
+/// window exists (see `setup` in lib.rs), with the label the handle is cached under.
+pub fn apply<W: NativeWindow>(window: &W, label: &str) {
   let handle = to_ptr(window.ns_handle());
-  NS_WINDOW.store(handle.unwrap_or(std::ptr::null_mut()) as usize, Ordering::Release);
+  let pointer = handle.unwrap_or(std::ptr::null_mut());
+  NS_WINDOW.store(pointer as usize, Ordering::Release);
+  if let Ok(mut cached) = NS_WINDOW_LABEL.lock() {
+    *cached = (!pointer.is_null()).then(|| label.to_string());
+  }
   apply_raw(handle);
+}
+
+/// Drop the cached handle when its window is destroyed.
+///
+/// `sync_corner_radius` runs from inside a window event callback and stays call-free on
+/// purpose (see `NS_WINDOW`), so it cannot ask Tauri whether the window still exists. A
+/// resize delivered after the `NSWindow` is released would otherwise message a freed
+/// object: a use-after-free instead of a no-op.
+pub fn forget_window(label: &str) {
+  if let Ok(mut cached) = NS_WINDOW_LABEL.lock() {
+    if cached.as_deref() == Some(label) {
+      NS_WINDOW.store(0, Ordering::Release);
+      *cached = None;
+    }
+  }
 }
 
 fn apply_raw(ns_window: Option<*mut Object>) {

@@ -815,6 +815,7 @@ dependencies = [
  "jieba-rs",
  "kuchiki",
  "lazy_static",
+ "libc",
  "log",
  "ndarray 0.15.6",
  "ndarray-stats",

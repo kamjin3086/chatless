@@ -17,6 +17,11 @@ On macOS ask AppKit directly instead (`isZoomed`, `NSWindowStyleMaskFullScreen`)
 and hold the `NSWindow` pointer captured once in `setup` (see
 `src-tauri/src/macos_window.rs`, `NS_WINDOW`).
 
+A held pointer is only valid while the window lives, and this path is exactly the one that
+cannot ask whether it still does. So the `Destroyed` handler in `src-tauri/src/lib.rs` clears
+the cache (`forget_window`); without that, a resize delivered after the window is gone sends
+messages to a released `NSWindow` - the same class of bug that passes every build.
+
 ## 2. Never query the window from inside a resize handler
 
 `window.onResized(() => window.isMaximized())` looks harmless but was a feedback

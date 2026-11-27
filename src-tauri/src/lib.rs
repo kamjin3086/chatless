@@ -6,6 +6,8 @@ mod window_fit;
 
 use anyhow::Result;
 use log::LevelFilter;
+use std::io::Write;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::path::BaseDirectory;
 use tauri::Manager;
@@ -37,7 +39,10 @@ fn exit(app: tauri::AppHandle, code: i32) {
     use tauri_plugin_window_state::AppHandleExt;
     let _ = app.save_window_state(persisted_window_state_flags());
   }
-  std::process::exit(code);
+  // Not `std::process::exit`, which kills the process from this command's own thread: no
+  // `RunEvent::Exit`, no plugin cleanup, and ONNX Runtime left standing next to its own
+  // destructors. Ask the loop to end and let it finish on the main thread.
+  app.exit(code);
 }
 
 /// Keep size/position, never restore the OS title bar (custom title bar owns chrome).
@@ -119,8 +124,16 @@ fn cleanup_on_exit(state: tauri::State<onnx_logic::OnnxState>) -> Result<(), Str
   onnx_logic::clear_onnx_sessions(state)
 }
 
+/// The code the process leaves with, taken from `RunEvent::ExitRequested` so a caller that
+/// asked for a specific one still gets it.
+static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
+
+/// Set when the exit was a restart (the updater's relaunch). Tauri re-executes the process
+/// itself in that case, so the fast exit path below must not take it.
+static RESTARTING: AtomicBool = AtomicBool::new(false);
+
 pub fn run() {
-  let _builder = tauri::Builder::default()
+  let app = tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_process::init())
@@ -154,7 +167,7 @@ pub fn run() {
           // src/macos_window.rs.
           #[cfg(target_os = "macos")]
           {
-            macos_window::apply(&win);
+            macos_window::apply(&win, win.label());
             // The restored window state may already be maximized.
             macos_window::sync_corner_radius();
           }
@@ -216,6 +229,11 @@ pub fn run() {
             log::warn!("ONNX window cleanup failed: {error}");
           }
         }
+        // The native handle dies with its window, and `sync_corner_radius` cannot ask Tauri
+        // whether it is still there (see `macos_window`): forget it here, or a resize that
+        // lands afterwards messages a released `NSWindow`.
+        #[cfg(target_os = "macos")]
+        macos_window::forget_window(window.label());
       }
       #[cfg(target_os = "macos")]
       {
@@ -375,8 +393,40 @@ pub fn run() {
       workspace::commands::workspace_read_manifest,
       workspace::commands::workspace_write_manifest
     ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application");
+
+  app.run(|app_handle, event| match event {
+    tauri::RunEvent::ExitRequested { code, .. } => {
+      if code == Some(tauri::RESTART_EXIT_CODE) {
+        RESTARTING.store(true, Ordering::SeqCst);
+      } else if let Some(code) = code {
+        EXIT_CODE.store(code, Ordering::Relaxed);
+      }
+    }
+    tauri::RunEvent::Exit => {
+      // Restarting re-executes the process from here, which is tauri's job, not ours.
+      if RESTARTING.load(Ordering::SeqCst) {
+        return;
+      }
+      log::info!("[app] exiting");
+      let _ = std::io::stdout().flush();
+      let _ = std::io::stderr().flush();
+      // Plugin and window resources go first: this is what flushes the settings stores and
+      // drops the tray icon, and it has to happen on this thread (the event loop's own).
+      app_handle.cleanup_before_exit();
+      // Then leave through the syscall. ONNX Runtime is loaded dynamically and never
+      // unloaded - `ort` parks the `libloading::Library` handle in a `OnceLock` - so
+      // returning from `main` would run the runtime's C++ static destructors while its own
+      // threads are still locking them. The first lock on a destroyed `std::mutex` throws a
+      // libc++ `system_error` across Rust frames, `std::terminate` follows, and macOS
+      // reported "Chatless quit unexpectedly" after every quit: see docs/macos-exit-crash.md.
+      // Anything that must reach disk has to be written by then - `_exit` runs no `atexit`
+      // handler and flushes no buffer.
+      unsafe { libc::_exit(EXIT_CODE.load(Ordering::Relaxed)) };
+    }
+    _ => {}
+  });
 }
 
 /// 动态设置日志级别（支持在运行时从前端调整）

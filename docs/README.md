@@ -31,6 +31,7 @@ who keeps it true:
 | [`sync-architecture.md`](sync-architecture.md) | WebDAV sync invariants: forced ETag compare-and-swap, deterministic conflicts, tombstones, and which prompt-sync file is dead. |
 | [`llm-troubleshooting.md`](llm-troubleshooting.md) | When a reply answers the wrong question: what the database and log levels show, on all three platforms. |
 | [`tauri-window-pitfalls.md`](tauri-window-pitfalls.md) | Window/chrome bugs that pass every build: event-loop re-entry, resize feedback, restored-hidden state - and the script that catches them. |
+| [`macos-exit-crash.md`](macos-exit-crash.md) | Why the process leaves through `RunEvent::Exit` and `_exit`: ONNX Runtime's C++ teardown aborted every macOS quit, dialog included. |
 
 ## Live - platform and packaging
 
