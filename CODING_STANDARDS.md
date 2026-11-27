@@ -38,6 +38,13 @@ machine produced.
   states printing "open PRs: none" after an open PR aged out of it; the finding is in
   that PR's body, reachable with `gh pr view 93 --json body | grep -- '-L 50'`.
 
+- **Must:** code behind `cfg(target_os = …)` says what compiled it. One platform compiles such a
+  path, and CI compiles none of the macOS half (`backend-check` is ubuntu; the `test-tauri-*`
+  build jobs are off to save Actions quota), so "`cargo check` passed" says nothing about it.
+  Name the job or the machine that did compile it, or state that it went uncompiled and give the
+  command that would have - `cd src-tauri && cargo check` on a Mac. The mechanical half of the
+  macOS exit rule is a gate: `pnpm check:exit-path`.
+
 ## Running a review
 
 These bind whoever dispatches a review as much as whoever performs it.

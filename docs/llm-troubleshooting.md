@@ -20,6 +20,25 @@
 文件叫 `logs.log`。上限 2 MB、轮转策略 `KeepOne`：判定只在启动打开日志文件时发生一次，不在写入时
 轮转——所以一轮长会话可以超过 2 MB，但上一轮会被删掉，复现完了尽早导出。
 
+崩溃报告是**另一个目录**，而且文件名来自可执行文件、不是产品名：产品叫 Chatless，二进制叫
+`chatless`，所以报告叫 `chatless-2026-11-27-141525.ips`。zsh 的 glob 大小写敏感，按产品名找会拿到
+`no matches found`，看着像「根本没崩」：
+
+```bash
+ls -t ~/Library/Logs/DiagnosticReports | grep -i chatless   # 不要写 Chatless-*.ips
+```
+
+`.ips` 是 JSON（前几行元信息，后面是报告体），能直接看到终止方式。比读它更快的是终端直接起二进制：
+
+```bash
+/Applications/Chatless.app/Contents/MacOS/chatless; echo "exit=$?"
+```
+
+134 = SIGABRT（C++ 未捕获异常、Rust abort），139 = SIGSEGV，101 = panic 自己退的；0 才是干净退出。
+`log stream --predicate 'process == "chatless"'` 太宽：macOS 的 WebKit 日志都挂在宿主进程名下，
+一屏 `ProcessSuspension` 抓不到信号，要用的话加 `eventMessage contains` 收窄。
+关窗口时弹「意外退出」那一类见 `docs/macos-exit-crash.md`。
+
 ## 回复答非所问 / “你的消息好像没发完”
 
 先确认模型到底收到了什么，不要猜。
