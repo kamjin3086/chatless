@@ -60,6 +60,7 @@ describe('extension performance budgets (PR C / plan §11.2)', () => {
       buildExtensionRegistry(
         assembleBuiltinExtensions({
           knowledge: { hasConversationKnowledge: async () => false },
+          web: { isWebSearchEnabled: () => false },
         }),
       );
     build(); // warm up module init
@@ -97,6 +98,7 @@ describe('extension performance budgets (PR C / plan §11.2)', () => {
             return true;
           },
         },
+        web: { isWebSearchEnabled: () => true },
       }),
     );
     const t0 = performance.now();

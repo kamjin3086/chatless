@@ -11,11 +11,15 @@
  * `prompt` group on the `system` server - the read/write/approval-path pilot.
  */
 import { createKnowledgeExtension } from './knowledge/contribution';
-import type { ExtensionAssemblyDeps } from './knowledge/contribution';
+import type { ExtensionAssemblyDeps as KnowledgeAssemblyDeps } from './knowledge/contribution';
 import { createPromptManagementExtension } from './prompts/contribution';
+import { createWebSearchExtension } from './websearch/contribution';
+import type { WebSearchDeps } from './websearch/contribution';
 import type { BuiltinExtension } from './contracts';
 
-export type { ExtensionAssemblyDeps };
+export interface ExtensionAssemblyDeps extends KnowledgeAssemblyDeps {
+  web: WebSearchDeps;
+}
 
 export function assembleBuiltinExtensions(
   deps: ExtensionAssemblyDeps,
@@ -23,8 +27,10 @@ export function assembleBuiltinExtensions(
   return [
     // Manifest order is catalog order: the retired TOOL_GROUPS placed the
     // prompt entry before knowledge, so the manifest keeps that sequence and
-    // search pagination looks like it always did.
+    // search pagination looks like it always did. Web search joins last; its
+    // tools sat inside the core group, so there is no prior group position.
     createPromptManagementExtension(),
     createKnowledgeExtension(deps.knowledge),
+    createWebSearchExtension(deps.web),
   ];
 }

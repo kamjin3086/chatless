@@ -11,6 +11,8 @@
  */
 import { buildExtensionRegistry } from './registry';
 import { assembleBuiltinExtensions } from './builtin';
+import { normalizeServerName } from '@/lib/mcp/toolNaming';
+import { useWebSearchStore } from '@/store/webSearchStore';
 import type { ExtensionRegistry } from './registry';
 
 let registry: ExtensionRegistry | null = null;
@@ -24,7 +26,10 @@ let registry: ExtensionRegistry | null = null;
 export function getExtensionRegistry(): ExtensionRegistry {
   if (!registry) {
     registry = buildExtensionRegistry(
-      assembleBuiltinExtensions({ knowledge: { hasConversationKnowledge } }),
+      assembleBuiltinExtensions({
+        knowledge: { hasConversationKnowledge },
+        web: { isWebSearchEnabled },
+      }),
     );
   }
   return registry;
@@ -59,4 +64,33 @@ async function hasConversationKnowledge(
   } catch {
     return false;
   }
+}
+
+/**
+ * The persisted user toggle, read synchronously from the settings store.
+ * Same read intentDetector feeds into `shouldExposeWebSearch` - one setting,
+ * one reader path; the store import lives here because capability files may
+ * not touch stores themselves (§4.2).
+ */
+function isWebSearchEnabled(): boolean {
+  return !!useWebSearchStore.getState().isWebSearchEnabled;
+}
+
+/**
+ * Server-name spellings owned by registered contributions (raw + canonical,
+ * e.g. `web` and `web_search`). Config-time checks (load normalization, the
+ * settings UI) treat them like reserved names: the bridge routes these
+ * servers first, so an external server under a claimed name could never
+ * execute - renaming at config time beats a silently uncallable server.
+ */
+export function claimedExternalServerNames(): string[] {
+  const names: string[] = [];
+  for (const g of getExtensionRegistry().groups()) {
+    const raw = String(g.server).trim().toLowerCase();
+    if (!raw) continue;
+    names.push(raw);
+    const canon = normalizeServerName(g.server);
+    if (canon !== raw) names.push(canon);
+  }
+  return names;
 }

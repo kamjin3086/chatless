@@ -5,6 +5,7 @@ import { serverManager } from "@/lib/mcp/ServerManager";
 import { useMcpServerStatuses, useMcpStore } from "@/store/mcpStore";
 import { useLocaleStore } from "@/store/localeStore";
 import { normalizeSavedServers, resolveNonConflictingServerName } from "@/lib/mcp/serverNamePolicy";
+import { claimedExternalServerNames } from "@/lib/extensions/assembly";
 import { toast, trimToastDescription } from "@/components/ui/sonner";
 import { downloadService } from "@/lib/utils/downloadService";
 import { detectTauriEnvironment } from "@/lib/utils/environment";
@@ -168,7 +169,7 @@ export function McpServersSettings() {
       
       // 默认启用 + 保留名冲突自动改名（例如 filesystem → filesystem_external）
       const withEnabled = Array.isArray(list) ? list.map((s) => ({ ...s, enabled: s.enabled !== false })) : [];
-      const { list: normalized, renames } = normalizeSavedServers(withEnabled);
+      const { list: normalized, renames } = normalizeSavedServers(withEnabled, claimedExternalServerNames());
       setServers(normalized);
 
       if (renames.length) {
@@ -259,7 +260,7 @@ export function McpServersSettings() {
       }
     }
     // 统一做一次保留名/重名修正
-    const { list: normalized } = normalizeSavedServers(imported);
+    const { list: normalized } = normalizeSavedServers(imported, claimedExternalServerNames());
     return normalized;
   }, []);
 
@@ -273,7 +274,7 @@ export function McpServersSettings() {
       const byName = new Map(servers.map(s => [s.name, s] as const));
       for (const s of imported) byName.set(s.name, { ...s, enabled: true });
       const merged = Array.from(byName.values());
-      const { list: next, renames } = normalizeSavedServers(merged);
+      const { list: next, renames } = normalizeSavedServers(merged, claimedExternalServerNames());
       await saveServers(next);
       // 再次读取存储，确保不同运行环境（Tauri/浏览器）下列表立即刷新
       await loadServers();
@@ -442,7 +443,14 @@ export function McpServersSettings() {
     const existingNames = servers
       .map((s) => s.name)
       .filter((n) => n && n !== desiredName);
-    const { name } = resolveNonConflictingServerName({ desiredName, existingNames });
+    const { name } = resolveNonConflictingServerName({
+      desiredName,
+      existingNames,
+      // Claimed extension spellings rename like reserved ones: the bridge
+      // routes those servers first, so keeping the name means an
+      // unreachable external server.
+      claimedNames: claimedExternalServerNames(),
+    });
     if (name !== desiredName) {
       setEditing({ ...editing, name });
       toast.info(t('mcpSettings.serverRenamed'), { description: `${desiredName} → ${name}` });
@@ -825,7 +833,14 @@ export function McpServersSettings() {
                           toast.success(t('mcpSettings.singleServerParsed'), { description: s.name });
                         } else {
                           const byName = new Map(servers.map(s => [s.name, s] as const));
-                          for (const s of imported) byName.set(s.name, { ...s, enabled: true });
+                          // Same rename discipline as single save (reserved + claimed
+                          // spellings), so a JSON import cannot persist a name the
+                          // bridge owns and only fail at connect time.
+                          const normalizedImport = normalizeSavedServers(
+                            imported.map((s) => ({ ...s, enabled: true })),
+                            claimedExternalServerNames(),
+                          ).list;
+                          for (const s of normalizedImport) byName.set(s.name, s);
                           const next = Array.from(byName.values());
                           await saveServers(next);
                           setEditing(null);

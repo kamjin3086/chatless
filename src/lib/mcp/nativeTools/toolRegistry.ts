@@ -12,7 +12,6 @@
 import type { McpTool } from '@/lib/mcp/McpClient';
 import { FILESYSTEM_SERVER_NAME, FILESYSTEM_TOOLS } from './filesystem';
 import { SHELL_EXECUTOR_SERVER_NAME, SHELL_EXECUTOR_TOOLS } from './shellExecutor';
-import { WEB_SEARCH_SERVER_NAME, WEB_SEARCH_TOOLS } from './webSearch';
 import { SKILL_SERVER_NAME, SKILL_UNIFIED_TOOLS } from './skillUnifiedTools';
 import { TOOL_RESULT_SERVER_NAME, TOOL_RESULT_TOOLS } from './toolResult';
 
@@ -42,8 +41,8 @@ const CORE_FS_TOOLS = FILESYSTEM_TOOLS;
 // Shell 工具：高频使用，纳入 core（避免每次都要 load shell 组）
 const CORE_SHELL_TOOLS = SHELL_EXECUTOR_TOOLS;
 
-// Web 工具：常见需求，且只有 3 个工具，约 200 tokens，纳入 core
-const CORE_WEB_TOOLS = WEB_SEARCH_TOOLS;
+// Web 工具已迁出 core：经 web_search 贡献接入（用户设置作为可用谓词，
+// 开关关=下一步消失；执行路由不查可用性，迟到调用仍到适配器自己的错误）。
 
 // ============ 工具组注册表 ============
 
@@ -51,11 +50,10 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     id: 'core',
     name: 'Core tools',
-    description: 'File operations + command execution + web search',
+    description: 'File operations + command execution',
     tools: [
       ...CORE_FS_TOOLS.map(t => ({ server: FILESYSTEM_SERVER_NAME, tool: t })),
       ...CORE_SHELL_TOOLS.map(t => ({ server: SHELL_EXECUTOR_SERVER_NAME, tool: t })),
-      ...CORE_WEB_TOOLS.map(t => ({ server: WEB_SEARCH_SERVER_NAME, tool: t })),
       ...TOOL_RESULT_TOOLS.map(t => ({ server: TOOL_RESULT_SERVER_NAME, tool: t })),
     ],
   },

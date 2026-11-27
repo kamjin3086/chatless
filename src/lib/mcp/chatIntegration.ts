@@ -1,4 +1,5 @@
 import StorageUtil from '@/lib/storage';
+import { claimedExternalServerNames } from '@/lib/extensions/assembly';
 import { McpServerConfig } from './McpClient'; // Added for getAllConfiguredServersWithStatus
 import { normalizeSavedServers } from './serverNamePolicy';
 
@@ -21,7 +22,7 @@ export async function getAllConfiguredServers(onlyEnabled: boolean = false): Pro
     const store = await Store.load(SERVERS_CONFIG_FILE);
     type Saved = { name: string; enabled?: boolean; config?: unknown };
     const raw = (await store.get<Saved[]>('servers')) || [];
-    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : []);
+    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : [], claimedExternalServerNames());
     if (renames.length) {
       try {
         await store.set('servers', list);
@@ -45,7 +46,7 @@ export async function getAllConfiguredServersWithStatus(): Promise<Array<{ name:
     const store = await Store.load(SERVERS_CONFIG_FILE);
     type Saved = { name: string; config: McpServerConfig; enabled?: boolean };
     const raw = (await store.get<Saved[]>('servers')) || [];
-    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : []);
+    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : [], claimedExternalServerNames());
     if (renames.length) {
       try {
         await store.set('servers', list);
@@ -123,7 +124,7 @@ export async function getEnabledConfiguredServers(): Promise<string[]> {
     const store = await Store.load('mcp_servers.json');
     type Saved = { name: string; enabled?: boolean; config?: unknown };
     const raw = (await store.get<Saved[]>('servers')) || [];
-    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : []);
+    const { list, renames } = normalizeSavedServers<Saved>(Array.isArray(raw) ? raw : [], claimedExternalServerNames());
     if (renames.length) {
       try {
         await store.set('servers', list);

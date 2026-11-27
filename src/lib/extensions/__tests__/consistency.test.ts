@@ -30,6 +30,7 @@ import enUS from '@/i18n/locales/en-US';
 const registry = buildExtensionRegistry(
   assembleBuiltinExtensions({
     knowledge: { hasConversationKnowledge: async () => true },
+    web: { isWebSearchEnabled: () => true },
   }),
 );
 
@@ -50,6 +51,7 @@ describe('registration consistency patrol (PR C)', () => {
       buildExtensionRegistry(
         assembleBuiltinExtensions({
           knowledge: { hasConversationKnowledge: async () => true },
+          web: { isWebSearchEnabled: () => true },
         }),
       ),
     ).not.toThrow();
@@ -83,6 +85,11 @@ describe('registration consistency patrol (PR C)', () => {
       'knowledge__search',
       'knowledge__read',
       'tools__search',
+      // web_search joined with the third pilot: search/fetch were already
+      // replayable reads in the table; pinning them here keeps the opt-in
+      // honest (download is not a read and must stay out).
+      'web__search',
+      'web__fetch',
     ]);
     for (const c of contributed) {
       const key = `${c.server}__${c.tool}`;
