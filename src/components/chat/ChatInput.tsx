@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useMemo, useCallback } from "react";
+import React, { useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import {
   commitHistory,
   composerHistory,
@@ -8,7 +8,7 @@ import {
   redoHistory,
   undoHistory,
 } from "./composerHistory";
-import { composerFloor, nextInputHeight } from "./inputHeight";
+import { composerFloor, composerMaxHeight, composerNeedsScrollbar, nextInputHeight } from "./inputHeight";
 import { Bookmark, FolderOpen, ListChecks, Paperclip, Send, StopCircle } from "lucide-react";
 import { KnowledgeService, KnowledgeBase } from '@/lib/knowledgeService';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,15 @@ import {
 import { isImeComposition, useImeCompositionTarget } from "@/lib/ime";
 
 const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024; // Matches the native parser limit.
+
+/**
+ * The composer's height has to be right before the browser paints. A passive effect runs
+ * after paint, so every keystroke that changes the box showed one frame at the old height
+ * (with its own scrollbar state) before the corrected one - which reads as the composer
+ * twitching while typing. `useLayoutEffect` measures and writes before paint; the alias keeps
+ * the server render off the `useLayoutEffect does nothing on the server` path.
+ */
+const useLayoutEffectOnClient = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface EditingMessageData {
   content: string;
@@ -214,7 +223,9 @@ export function ChatInput({
   const historyRef = useRef(composerHistory(""));
   const historyScopeRef = useRef<string | null>(conversationId ?? null);
   const historyScope = conversationId ?? null;
-  const [maxInputHeight, setMaxInputHeight] = useState<number>(Math.floor(window.innerHeight * 0.4));
+  const [maxInputHeight, setMaxInputHeight] = useState<number>(() =>
+    composerMaxHeight(window.innerHeight),
+  );
   const sessionManualHeight = useUiSession((s: any)=> s.chatInputHeight);
   const setSessionManualHeight = useUiSession((s: any)=> s.setChatInputHeight);
   const planOnly = useUiSession((s: any) => s.getPlanOnly(currentConvId));
@@ -304,37 +315,12 @@ export function ChatInput({
       setAttachedDocument(null);
       setAttachedImages([]);
       try { clearInputDraft(convId); } catch { /* noop */ }
-      // 开始流时不强制重置为最小值，保持用户手动高度或自动自适应
-      if (textareaRef.current) {
-        // 若用户手动设置过高度，则保持；否则自适应到内容高度
-        const mh = (sessionManualHeight ?? manualHeight);
-        if (mh !== null) {
-          const styles = window.getComputedStyle(textareaRef.current);
-          textareaRef.current.style.height = `${nextInputHeight({
-            contentHeight: mh,
-            floor: composerFloor({
-              lineHeight: styles.lineHeight,
-              fontSize: styles.fontSize,
-              paddingTop: styles.paddingTop,
-              paddingBottom: styles.paddingBottom,
-            }),
-            limit: Math.max(
-              composerFloor({
-                lineHeight: styles.lineHeight,
-                fontSize: styles.fontSize,
-                paddingTop: styles.paddingTop,
-                paddingBottom: styles.paddingBottom,
-              }),
-              maxInputHeight,
-            ),
-            manual: mh,
-          })}px`;
-        } else {
-          textareaRef.current.style.height = 'auto';
-        }
-      }
+      // A stream start clears the box; the height follows the same auto-growth path as typing
+      // (a manual drag still wins), rather than collapsing to one row and bouncing back on the
+      // next keystroke.
+      adjustTextareaHeight();
     }
-  }, [streamStartCounter, lastStreamConvId, conversationId, manualHeight, sessionManualHeight, clearInputDraft]);
+  }, [streamStartCounter, lastStreamConvId, conversationId, manualHeight, clearInputDraft]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -368,23 +354,38 @@ export function ChatInput({
       }),
     );
     const limit = Math.max(floor, maxInputHeight);
-    const contentHeight = (() => {
-      const previous = textarea.style.height;
-      textarea.style.height = 'auto';
-      const height = textarea.scrollHeight;
-      textarea.style.height = previous;
-      return height;
-    })();
-    textarea.style.height = `${nextInputHeight({
+    // Measured with the scrollbar off. A scrollbar that appears while the box is still growing
+    // takes width away from the text, so the same line wraps a word earlier, asks for one more
+    // line, and pushes the box past the point where the scrollbar was needed - which removes it
+    // again. The composer then flips height on every keystroke with nothing new on screen.
+    textarea.style.overflowY = 'hidden';
+    const previous = textarea.style.height;
+    textarea.style.height = 'auto';
+    const contentHeight = textarea.scrollHeight;
+    textarea.style.height = previous;
+    const nextHeight = nextInputHeight({
       contentHeight,
       floor,
       limit,
       manual: manualHeight,
-    })}px`;
+    });
+    // Write only what actually changed. A keystroke that does not change the box must not touch
+    // layout at all - and resizing the host of an open IME composition mid-typing is exactly
+    // what makes the preedit text jump.
+    const nextStyleHeight = `${nextHeight}px`;
+    if (previous !== nextStyleHeight) {
+      textarea.style.height = nextStyleHeight;
+    }
     textarea.style.maxHeight = `${limit}px`;
+    textarea.style.overflowY = composerNeedsScrollbar({
+      contentHeight,
+      height: nextHeight,
+    })
+      ? 'auto'
+      : 'hidden';
   };
 
-  useEffect(() => {
+  useLayoutEffectOnClient(() => {
     adjustTextareaHeight();
   }, [inputValue, manualHeight, maxInputHeight]);
 
@@ -412,9 +413,10 @@ export function ChatInput({
     }
   }, []);
 
-  // 动态更新 60% 视口高度限制
+  // Keep the viewport share in one place: the initial state and this handler used to disagree
+  // (40% vs 60%), so the first window resize silently changed the ceiling.
   useEffect(() => {
-    const onResize = () => setMaxInputHeight(Math.floor(window.innerHeight * 0.6));
+    const onResize = () => setMaxInputHeight(composerMaxHeight(window.innerHeight));
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -1136,10 +1138,9 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={t(disabled ? 'chatComposer.chooseModelFirst' : 'chatComposer.sendMessage')}
           className={cn(
-            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-all text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
+            "relative z-[1] w-full pl-8 sm:pl-10 pr-20 sm:pr-24 pt-2.5 pb-9 resize-none rounded-lg border-0 bg-transparent focus:outline-none transition-colors text-sm sm:text-base min-h-[58px] placeholder:text-[13px] placeholder:text-slate-400 dark:placeholder:text-slate-500",
             (parsedPrompt || hasMentionOverlay || hasSkillMentionOverlay) ? "text-transparent caret-slate-900 dark:caret-slate-100 tabular-nums [&::selection]:bg-blue-200/30 dark:[&::selection]:bg-blue-800/30 [&::selection]:text-transparent" : "text-slate-900 dark:text-slate-100 tabular-nums"
           )}
-          style={{ maxHeight: `${Math.max(MIN_INPUT_HEIGHT, maxInputHeight)}px` }} // adjustTextareaHeight owns the real limit
           rows={1}
           disabled={disabled || isParsingDocument}
         />
