@@ -492,10 +492,16 @@ export async function buildNativeToolDefinitions(params: NativeToolBuildOptions)
 
   // 数据存在性能力现经扩展注册表按会话实时判定（knowledge 贡献）；
   // 原手写块里的 attachment store + 文档映射计数已迁入 assembly，行为不变。
-  const extensionAvailable = await getExtensionRegistry().availableGroups({
-    conversationId: params.conversationId || undefined,
-  });
-  const detectedGroups: string[] = extensionAvailable.map((g) => g.id);
+  // 检测＝“数据存在性有信号”：只有带谓词的组算检测命中。无谓词组的可用恒真，
+  // 当成检测命中会把本应“发现后才加载”的能力每轮硬塞进每次请求（提示词管理
+  // 迁移的零可见变化就破在这）；它们的注入只由加载记录（sticky/pending）驱动。
+  const extensionAvailable =
+    await getExtensionRegistry().availableGroups({
+      conversationId: params.conversationId || undefined,
+    });
+  const detectedGroups: string[] = extensionAvailable
+    .filter((g) => !!g.availability)
+    .map((g) => g.id);
 
   // ========== 3. AI 请求层：加载 AI 主动请求的工具组 ==========
   

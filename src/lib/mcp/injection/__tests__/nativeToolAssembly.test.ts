@@ -75,10 +75,14 @@ describe('native tool assembly with the knowledge contribution (PR B)', () => {
     expect(names.filter((n) => n === 'knowledge__read')).toHaveLength(1);
   });
 
-  it('a discovery hit on the prompt group injects its six tools and sticks (no predicate)', async () => {
-    // The prompt pilot has no availability predicate: once tools__search
-    // pointed the model at the group, the tools stay in every later step -
-    // the sticky behavior the hand-written group had.
+  it('prompt tools are discover-then-load: absent until hit, then sticky (no predicate)', async () => {
+    // A predicate-less contribution group is never auto-detected - a fresh
+    // conversation must NOT get the six system__ tools just because the
+    // group is constantly available (regression pinned by review round 2:
+    // treating "available" as "detected" injected them into every request).
+    const fresh = await toolNames('c1');
+    expect(fresh.filter((n) => n.startsWith('system__'))).toHaveLength(0);
+
     useToolLoadRequestStore.getState().requestLoad('prompt', 'c1');
     const names = await toolNames('c1');
     expect(names.filter((n) => n.startsWith('system__'))).toHaveLength(6);

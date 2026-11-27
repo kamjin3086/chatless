@@ -21,7 +21,10 @@ export function assembleBuiltinExtensions(
   deps: ExtensionAssemblyDeps,
 ): BuiltinExtension[] {
   return [
-    createKnowledgeExtension(deps.knowledge),
+    // Manifest order is catalog order: the retired TOOL_GROUPS placed the
+    // prompt entry before knowledge, so the manifest keeps that sequence and
+    // search pagination looks like it always did.
     createPromptManagementExtension(),
+    createKnowledgeExtension(deps.knowledge),
   ];
 }

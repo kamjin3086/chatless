@@ -82,10 +82,11 @@ CORE_SERVER_NAMES.add(TOOLS_DISCOVER_SERVER_NAME);
  * Cleanup condition: retire when those registrations sit behind the
  * contribution (phase 4 review).
  *
- * A handover names the retired core GROUP and carries its full namespace pair
- * (group id + server): the prompt pilot's group was `prompt` on the `system`
- * server, and `replaces: 'prompt'` must take over exactly that pair - a
- * contribution cannot mix one handover's group id with another's server.
+ * A handover names the retired core GROUP and owns two slots: its group id
+ * and its server name (`prompt`/`system`, `knowledge`/`knowledge`). Each
+ * migrated name is liftable only through its own slot under `replaces` - a
+ * contribution may keep its own group id while taking over the handover's
+ * server, but it cannot borrow one handover's slot for the other's name.
  */
 const MIGRATED_CORE_HANDOVERS: Record<
   string,
@@ -132,7 +133,10 @@ export interface BuildRegistryOptions {
  *   discovery reveals that a capability exists so the model can request a
  *   mount; gated there, an unmounted capability could never be discovered.
  * - **Exposed** - the tools actually injected for this model step; derived,
- *   not stored in the registry (promptBuilder owns it).
+ *   not stored in the registry (promptBuilder owns it). Detection is a
+ *   predicate-only signal: a contribution group without a predicate is
+ *   injected from load records (discovery hit, then sticky), never merely
+ *   because it is constantly available.
  * - **Authorized** - the concrete call passed core approval and the
  *   executor's own data-scope check. Execution routing (ContributionAdapter)
  *   matches identity within `enabledGroups()`; availability deliberately
@@ -266,14 +270,17 @@ export function buildExtensionRegistry(
       }
       // A contribution may squat on a migrated namespace only by taking it over
       // by name (knowledge pilot); everything else stays reserved (§5.3).
-      // The handover pair (group id + server) travels together.
+      // Each migrated name is liftable only through its OWN slot of the named
+      // handover: the server slot lifts the server name, the group-id slot
+      // lifts the group id. A contribution may bring its own group id while
+      // taking over the handover's server (the pilot fixtures do this), but
+      // it can never borrow one handover's slot for the other name - that is
+      // what the review round 2 pair-mixing finding boils down to.
       const handover = MIGRATED_CORE_HANDOVERS[nReplaces];
-      const takesOver = (name: string) =>
-        nReplaces !== '' &&
-        !!handover &&
-        (name === handover.groupId || name === handover.server);
+      const takesServer = (name: string) => name === handover?.server;
+      const takesGroup = (name: string) => name === handover?.groupId;
       if (
-        !takesOver(nServer) &&
+        !takesServer(nServer) &&
         (RESERVED_MCP_SERVER_NAMES.has(group.server) ||
           isBuiltinServer(nServer) ||
           CORE_SERVER_NAMES.has(nServer))
@@ -287,7 +294,7 @@ export function buildExtensionRegistry(
           `${where}: server "${group.server}" is a core/builtin namespace (takeover needs an explicit replaces of that namespace)`,
         );
       }
-      if (!takesOver(nGroupId) && CORE_GROUP_IDS.has(nGroupId)) {
+      if (!takesGroup(nGroupId) && CORE_GROUP_IDS.has(nGroupId)) {
         issue(
           issues,
           'reserved-group',

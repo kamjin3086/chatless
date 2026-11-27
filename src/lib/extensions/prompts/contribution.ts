@@ -7,10 +7,15 @@
  * `system` row and the approval branch in `policy.ts` stay where they are;
  * this contribution declares them and the registry cross-checks intent).
  *
- * Unlike knowledge this group has NO availability predicate: the prompt store
- * always exists, so availability is just enablement, and `stickyWhenLoaded`
- * keeps the default (a discovery hit keeps working in later steps - the
- * revoked-mount problem is knowledge's data-presence story, not this one).
+ * Unlike knowledge this group has NO availability predicate, and that is
+ * precisely why its tools are DISCOVER-THEN-LOADED, never auto-detected: a
+ * predicate-less group's availability is constantly true, so the injector
+ * treats "detected" as a predicate-only signal and drives this group from
+ * load records only (a tools__search hit, then sticky). That is the retired
+ * hand-written group's semantics - no data-presence story, the prompt store
+ * always exists, and the six tools join a conversation only after the model
+ * was shown they exist. `stickyWhenLoaded` keeps the default: once
+ * discovered, the tools stay.
  * The pilot's purpose is to validate the read/write/approval path through the
  * contract: writes stay approval-gated in core, plan mode still answers the
  * reads through the one risk table.
