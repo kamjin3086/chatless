@@ -22,17 +22,11 @@ export interface WindowSize {
  * and `src-tauri/tauri.conf.json` all read one definition - the config is what actually sizes a
  * fresh install, because a preset is only applied when the row changes and window-state restores
  * the last size after that.
+ *
+ * The type is read off the array rather than written beside it: a list duplicated as a union is
+ * one forgotten member away from a preset the row offers and the store cannot name.
  */
-export type WindowSizePreset =
-  | '900x700'
-  | '1024x768'
-  | '1280x760'
-  | '1280x800'
-  | '1366x768'
-  | '1440x900'
-  | '1600x900';
-
-export const WINDOW_SIZE_PRESETS: WindowSizePreset[] = [
+export const WINDOW_SIZE_PRESETS = [
   '900x700',
   '1024x768',
   '1280x760',
@@ -40,25 +34,40 @@ export const WINDOW_SIZE_PRESETS: WindowSizePreset[] = [
   '1366x768',
   '1440x900',
   '1600x900',
-];
+] as const;
+
+export type WindowSizePreset = (typeof WINDOW_SIZE_PRESETS)[number];
 
 /**
  * What a first launch opens at, and the size the settings row labels "default". Must agree with
- * `app.windows[0]` in `src-tauri/tauri.conf.json`. 1280x760 is the size the message column
- * wants - below the 1200px breakpoint that column caps at 768 and a 280 sidebar leaves it
- * squeezed - and it is short enough that a 1366x768 desktop or a 1080p one at 150 % only loses
- * what the work-area clamp in `src-tauri/src/window_fit.rs` takes back.
+ * `app.windows[0]` in `src-tauri/tauri.conf.json` - `windowFit.test.ts` reads that file and says
+ * so when they drift.
+ *
+ * 1280 is the width the message column wants: below the 1200px layout breakpoint that column caps
+ * at 768, and a 280 sidebar on top of that squeezes it. 760 was chosen over 800 because the
+ * height is what runs into a work area, and #169 established that a preset bigger than the
+ * desktop is a bug report rather than a preference. It does not fit every display: on the
+ * acceptance machine in docs/agents/maintenance.md (1536x864 at 125 %, so a 1228x691 logical work
+ * area) the work-area clamp in `src-tauri/src/window_fit.rs` takes 69 of the 760 back, which is
+ * that clamp working as designed.
  */
 export const DEFAULT_WINDOW_SIZE_PRESET: WindowSizePreset = '1280x760';
 
 /**
- * The smallest the window may get, and the floor is the layout's rather than a round number: the
- * conversation sidebar stops at 240 (`ChatLayout.MIN_SIDEBAR_WIDTH`) and the message column stops
- * at 400 (the sidebar drag clamps to `innerWidth - 400`), so the 280 default sidebar plus the 400
- * column already needs 680. Vertically the chrome above the messages is the 32px custom title bar
- * (`--titlebar-height`), the 36px chat header and the composer's own two-line floor plus its
- * margin - about 176px - so 520 still leaves a readable strip of messages. Below this the app
- * does not resize, it clips, and "显示不全" is reported as a bug in the window size.
+ * The smallest the window may get, and the floor is the layout's rather than a round number.
+ *
+ * Width: the conversation sidebar stops at 240 (`ChatLayout.MIN_SIDEBAR_WIDTH`) and the message
+ * column stops at 400 (the sidebar drag clamps to `innerWidth - 400`), so the 280 default sidebar
+ * over the 400 column already needs 680; 720 leaves a little.
+ *
+ * Height, from the chrome that sits above the message list at the floor width: 32 for the custom
+ * title bar (`--titlebar-height`, src/styles/globals.css) + 36 for the chat header (`.h-9` in
+ * `ChatHeader`) + the composer's own two-line floor, which `composerFloor` measures as two lines
+ * of 20-24 over the textarea's `pt-2.5 pb-9` padding (46) = 86-94 + the 20 the composer's margin
+ * reserves for the drag handle = 174-182. So 520 leaves roughly 340 of messages at any theme font.
+ *
+ * Below this the app does not resize, it clips, and "显示不全" comes back as a bug report about
+ * the window size.
  */
 export const MIN_WINDOW_SIZE: WindowSize = { width: 720, height: 520 };
 

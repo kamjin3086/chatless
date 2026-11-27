@@ -75,6 +75,15 @@ export function markCompositionStart(target?: unknown): void {
   attributedKey = null;
 }
 
+/**
+ * Renew the fuse for a composition that is still running (`compositionupdate`). A long preedit is
+ * not a stuck one, and the only thing the fuse can release is protection - so an engine that
+ * never reports `isComposing` must not lose the guard after thirty seconds of thinking.
+ */
+export function renewComposition(): void {
+  if (composingTarget !== null) compositionStartedAt = clock();
+}
+
 export function markCompositionEnd(): void {
   if (composingTarget === null) return;
   endedTarget = composingTarget;
@@ -129,11 +138,14 @@ export function isImeComposition(event?: MaybeWrapped): boolean {
     clock() - compositionEndedAt < COMPOSITION_END_GRACE_MS
   ) {
     // Only the key that closed the composition. A second deliberate key inside the window is
-    // the user's - commit a candidate with space, then send fast, and that send must go through.
-    // The answer is recorded against the event, because the composer and an open mention panel
-    // both inspect one keydown and have to agree about whose it was.
-    if (attributedKey === null || attributedKey === event) {
-      attributedKey = event ?? UNKNOWN_TARGET;
+    // the user's - commit a candidate with space, then send fast, and that send must go
+    // through. The answer is recorded against the event, because the composer and an open
+    // mention panel both inspect one keydown and have to agree about whose it was - and they
+    // hold different objects for it: the composer sees the React synthetic event, the panels
+    // the native one, so the identity recorded has to be the native event underneath both.
+    const identity = flagsOf(event ?? null) ?? event;
+    if (attributedKey === null || attributedKey === identity) {
+      attributedKey = identity ?? UNKNOWN_TARGET;
       return true;
     }
     return false;
@@ -142,42 +154,84 @@ export function isImeComposition(event?: MaybeWrapped): boolean {
 }
 
 /**
+ * The listeners `useImeCompositionTarget` installs, as plain handlers so a test can call them
+ * with a fake event. The owning element is read from the ref at event time, never bound when the
+ * effect runs: a textarea that is not mounted yet at that moment, or is replaced later, used to
+ * leave the whole guard silently off.
+ */
+export function imeTargetHandlers(ref: RefObject<HTMLElement | null>) {
+  const owned = (target: EventTarget | null | undefined): boolean => {
+    const el = ref.current;
+    return !!el && target === el;
+  };
+  return {
+    compositionStart: (event: { target?: EventTarget | null }) => {
+      if (owned(event.target)) markCompositionStart(event.target);
+    },
+    compositionUpdate: (event: { target?: EventTarget | null }) => {
+      if (owned(event.target)) renewComposition();
+    },
+    compositionEnd: (event: { target?: EventTarget | null }) => {
+      if (owned(event.target)) markCompositionEnd();
+    },
+    // Focus leaving a half-composed word is the common way an end event goes missing. `focusout`
+    // fires on the element that loses focus, so the filter is on the target, not on what gained it.
+    focusLost: (event: { target?: EventTarget | null }) => {
+      if (!owned(event.target)) return;
+      abandonComposition(ref.current);
+    },
+    // On a desktop, switching to another app loses focus without hiding the tab, and the window
+    // blur event is not addressed to our element.
+    windowBlur: () => {
+      if (ref.current) abandonComposition(ref.current);
+    },
+    pageHidden: () => {
+      if (ref.current) abandonComposition(ref.current);
+    },
+  };
+}
+
+/**
  * Track the composition of the element that receives input-method text (the composer's
  * textarea). The state is module-level so every handler that needs it - the composer's own
  * Enter, the panels' Enter and arrows - asks the same question instead of each re-deriving it
- * from the one signal that is not enough, but it belongs to the element passed here.
+ * from the one signal that is not enough, but it belongs to the element the ref points at.
+ *
+ * Listening on `document` in the capture phase is what makes the ref safe to read late, and it
+ * means a component that stops propagation cannot hide a composition from the guard that has to
+ * know about it.
  */
 export function useImeCompositionTarget(
   ref: RefObject<HTMLElement | null>,
 ): void {
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const start = () => markCompositionStart(el);
-    const end = () => markCompositionEnd();
-    const abandon = () => abandonComposition(el);
+    if (typeof document === 'undefined') return;
+    const h = imeTargetHandlers(ref);
     const onVisibility = () => {
-      if (
-        typeof document !== 'undefined' &&
-        document.visibilityState === 'hidden'
-      )
-        abandon();
+      if (document.visibilityState === 'hidden') h.pageHidden();
     };
-    el.addEventListener('compositionstart', start);
-    el.addEventListener('compositionend', end);
-    // Focus leaving a half-composed word is the common way an end event goes missing.
-    el.addEventListener('blur', abandon);
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', onVisibility);
-    }
+    document.addEventListener('compositionstart', h.compositionStart, true);
+    document.addEventListener('compositionupdate', h.compositionUpdate, true);
+    document.addEventListener('compositionend', h.compositionEnd, true);
+    document.addEventListener('focusout', h.focusLost, true);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', h.windowBlur);
     return () => {
-      el.removeEventListener('compositionstart', start);
-      el.removeEventListener('compositionend', end);
-      el.removeEventListener('blur', abandon);
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('visibilitychange', onVisibility);
-      }
-      abandon();
+      document.removeEventListener(
+        'compositionstart',
+        h.compositionStart,
+        true,
+      );
+      document.removeEventListener(
+        'compositionupdate',
+        h.compositionUpdate,
+        true,
+      );
+      document.removeEventListener('compositionend', h.compositionEnd, true);
+      document.removeEventListener('focusout', h.focusLost, true);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', h.windowBlur);
+      h.pageHidden();
     };
   }, [ref]);
 }
