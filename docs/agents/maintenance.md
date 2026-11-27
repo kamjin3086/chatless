@@ -301,6 +301,12 @@ legacy versions.
   (`致命错误：'main' 已经被工作区 … 使用`) *after* the merge succeeded on the server. Ask the
   server (`gh api repos/<owner>/<repo>/pulls/<n> -q .state`) before concluding anything, and
   prefer the REST merge form above when several worktrees are alive.
+- **A `git commit` can hang for minutes while several worktrees are alive.** The commit spawns
+  `git maintenance run --auto` on the shared `.git` (a repack of the whole object store), and
+  the pre-commit hook runs its own typecheck while a concurrently running test suite holds the
+  CPU. A ~15-second commit turned into repeated 10-minute timeouts; the hook alone finished in
+  13 seconds the moment the machine was idle. Suspect load and gc before suspecting the hook or
+  the staged content: wait for the suite to finish, then retry - the retry commits.
 - **`git push` can be dead while the API is fine.** TLS to `github.com:443` failed for every
   push across a whole session while `gh api` answered normally. A commit can be moved without
   git's transport: create a blob per file, `POST /git/trees` with `base_tree`,

@@ -108,6 +108,13 @@ These bind whoever dispatches a review as much as whoever performs it.
   keys, a sandbox header advertising deleted features and seven places in
   `docs/skills-architecture.md` still describing the deleted subsystem in the
   present tense - after a body that said the deletion was complete.
+- **Must:** a claim that a migration or injection change is user-invisible is
+  evidenced by a fresh-conversation baseline - tool names (or the changed surface)
+  compared before and after on a conversation with no pending/sticky history -
+  either as a pinned test or as output in the PR body.
+  *Why:* PR #264 claimed zero user-visible change with 1842 green tests, and was
+  wrong: the migrated group was injected into every step for every conversation,
+  which only a scratch test on a never-discovered conversation could see.
 - **Must:** "every X does Y" claims about several files hold per file, not on average.
   *Why:* "the UI that was mounted but never shown" covered three different truths -
   one panel mounted and unreachable, one never mounted, one reachable only from a
