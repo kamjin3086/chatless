@@ -32,6 +32,15 @@ machine produced.
   *possible*; reading readiness as the event is how a branch that never merged
   gets reported as merged.
 
+- **Must:** a claim that a change is "user-invisible" is evidenced by a fresh
+  baseline of the claimed surface - for tool-injection changes, the tool names
+  before and after on a conversation with no pending/sticky history - pinned as
+  a test or printed in the body with the command that produced it. A green
+  suite is not the baseline; suite runs keep history state that hides exactly
+  this failure.
+  *Why:* PR #264 claimed zero user-visible change with 1842 green tests and was
+  wrong: the migrated group was injected into every step of every conversation,
+  visible only on a never-discovered conversation (a reviewer's scratch test).
 - **Must:** a bounded query proves nothing about what lies outside its bound. A list
   fetched with `-L N`, `limit` or `slice` may not be used to print an absence - it
   prints `>=N` or `unknown`. PR #93's review caught a newest-N window over all PR
@@ -154,6 +163,7 @@ Chinese content is not a finding, and no PR is opened to translate it.
 | A locale key nobody asks for | `pnpm check:i18n-unused`, allowlist at `scripts/i18n-unused.allowlist.json` + `scripts/__tests__/i18nUnused.test.mjs` |
 | Every `include` entry collects something; audit files cited in docs exist | `scripts/__tests__/vitestInventory.test.mjs` |
 | Model-facing prompts stay English | `src/lib/prompts/__tests__/prompt-language.test.ts`, see `docs/prompt-language.md` |
+| Every server-name-normalizing call site passes claimed extension names | `src/lib/mcp/__tests__/serverNamePolicy.test.ts` (call-site patrol) |
 | Start-up actually finishes, window stays responsive | `scripts/verify-app-startup.sh`, see `docs/tauri-window-pitfalls.md` |
 | Product scope, capability layers, quality budgets | `docs/agents/constraints.md` - judgement, no check |
 | Reviewer can execute; unexecuted checks labelled and run first | no check - whoever dispatches the review chooses the agent |
