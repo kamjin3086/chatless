@@ -70,18 +70,34 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** The text of the call's argument list, from its `(` to its matching `)`.
- * Naive on strings-with-parens, which no current call site has. */
+/** The call's argument list, from its `(` to its matching `)`.
+ * Quoted strings (', ", `) are skipped when counting depth, so parens inside
+ * literals do not shift the boundary; a depth that never returns to zero
+ * throws instead of silently swallowing the rest of the file (a silently
+ * huge segment would let any later "claimed" text mask a missing argument).
+ * Regex literals are unquoted parens in principle; no current call site
+ * passes one, and a new one hits the throw, not a silent pass. */
 function argSegment(src: string, openIdx: number): string {
   let depth = 0;
+  let quote: string | null = null;
   for (let i = openIdx; i < src.length; i++) {
-    if (src[i] === '(') depth += 1;
-    else if (src[i] === ')') {
+    const c = src[i];
+    if (quote) {
+      if (c === '\\') i += 1;
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      quote = c;
+      continue;
+    }
+    if (c === '(') depth += 1;
+    else if (c === ')') {
       depth -= 1;
       if (depth === 0) return src.slice(openIdx, i + 1);
     }
   }
-  return src.slice(openIdx);
+  throw new Error(`unbalanced parens in call segment at offset ${openIdx}`);
 }
 
 describe('name-claim call-site patrol', () => {
@@ -89,19 +105,39 @@ describe('name-claim call-site patrol', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(SRC)) {
       const rel = relative(SRC, file).split('\\').join('/');
-      // The policy module forwards its own parameter; it must not import the
-      // extension tree (boundary), so it is exempt from passing claims itself.
+      // The policy module is exempt wholesale: it defines the two functions
+      // (the generic definition matches the call regex too, so exemption is
+      // by file, not by pattern) and forwards its own claimedNames parameter
+      // without importing the extension tree (boundary rule). Test fixtures
+      // elsewhere under __tests__ are deliberately in scope - a fixture that
+      // normalized a server name without claims is a real finding.
       if (rel === 'lib/mcp/serverNamePolicy.ts') continue;
       const src = readFileSync(file, 'utf-8');
-      for (const fn of [
+      // Imported aliases (normalizeSavedServers as normSaved) must not
+      // bypass the patrol.
+      const fns = [
         'normalizeSavedServers',
         'resolveNonConflictingServerName',
-      ]) {
-        const re = new RegExp(`${fn}\\s*\\(`, 'g');
+        ...[
+          ...src.matchAll(
+            /\b(?:normalizeSavedServers|resolveNonConflictingServerName)\s+as\s+(\w+)/g,
+          ),
+        ].map((m) => m[1]),
+      ];
+      for (const fn of fns) {
+        // One level of nesting tolerated in the generic argument: the load
+        // path calls normalizeSavedServers<Saved>(...) and a plain `fn\s*(`
+        // regex would make all three load callsites invisible.
+        const re = new RegExp(
+          `${fn}\\s*(?:<[^<>]*(?:<[^<>]*>[^<>]*)*>)?\\s*\\(`,
+          'g',
+        );
         let m: RegExpExecArray | null;
         while ((m = re.exec(src)) !== null) {
           const args = argSegment(src, m.index + m[0].length - 1);
-          if (!/claimed(Names|ExternalServerNames)/.test(args)) {
+          // The actual supplier, not any "claimed" token: `claimedNames: []`
+          // or a comment alone must not satisfy the patrol.
+          if (!/claimedExternalServerNames\s*\(\s*\)/.test(args)) {
             const line = src.slice(0, m.index).split('\n').length;
             offenders.push(`${rel}:${line} ${fn}`);
           }
