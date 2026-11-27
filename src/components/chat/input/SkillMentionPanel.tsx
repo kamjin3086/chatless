@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from 'react';
+import { isImeComposition } from '@/lib/ime';
 import { createPortal } from 'react-dom';
 import { getSkillManager } from '@/lib/skills';
 import { userInvocableSkills } from '../skillsSlash';
@@ -87,7 +88,7 @@ export function SkillMentionPanel({
     setPos(calcPanelPosition(el, panelWidth.md));
     
     const onKey = (e: KeyboardEvent) => {
-      if (!open || e.isComposing || e.target !== anchorRef.current) return;
+      if (!open || isImeComposition(e) || e.target !== anchorRef.current) return;
       if (e.key === 'Escape') { onClose(); return; }
       if (filteredSkills.length === 0) return;
       

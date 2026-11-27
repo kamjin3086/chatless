@@ -50,6 +50,7 @@ import {
 } from './input/inlineReferenceHighlight';
 import {
 } from "@/lib/mcp/chatIntegration";
+import { isImeComposition, useImeCompositionTarget } from "@/lib/ime";
 
 const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024; // Matches the native parser limit.
 
@@ -387,6 +388,10 @@ export function ChatInput({
     adjustTextareaHeight();
   }, [inputValue, manualHeight, maxInputHeight]);
 
+  // The composer is what an input method types into, so it is what owns the composition state
+  // that Enter and the undo shortcuts are checked against.
+  useImeCompositionTarget(textareaRef);
+
   // MCP预热：当用户输入@mention时自动预热相关服务器
   useEffect(() => {
     if (inputValue && inputValue.includes('@')) {
@@ -716,9 +721,12 @@ export function ChatInput({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Ctrl+Z / Cmd+Z undo, Ctrl+Shift+Z (and Ctrl+Y on Windows) redo - while the composer is
     // the thing being typed in. Prevented here so the browser does not also undo underneath.
-    const isComposing =
-      (e.nativeEvent as { isComposing?: boolean })?.isComposing === true;
-    const shortcut = isComposing ? null : historyShortcut(e);
+    //
+    // Every one of these keys belongs to the user, not to the input method: an Enter that only
+    // accepted a candidate must not send, and a Ctrl+Z the IME swallowed must not step the
+    // composer's own history. See @/lib/ime for why `isComposing` alone misses it.
+    const composing = isImeComposition(e);
+    const shortcut = composing ? null : historyShortcut(e);
     if (shortcut) {
       // Whatever is on screen right now is part of the user's text, so commit it before
       // stepping - otherwise a Ctrl+Z within the debounce window throws away what was just
@@ -743,7 +751,7 @@ export function ChatInput({
       });
       return;
     }
-    if (!isComposing && e.key === "Enter" && !e.shiftKey) {
+    if (!composing && e.key === "Enter" && !e.shiftKey) {
       if (composerQuery) { e.preventDefault(); return; }
       e.preventDefault();
       handleSend();

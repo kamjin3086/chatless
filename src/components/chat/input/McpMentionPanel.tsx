@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
+import { isImeComposition } from '@/lib/ime';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, FileText, Folder, Settings } from 'lucide-react';
 import { getConnectedServers, getEnabledConfiguredServers, getGlobalEnabledServers } from '@/lib/mcp/chatIntegration';
@@ -108,7 +109,8 @@ export function McpMentionPanel({ anchorRef, workspaceDirectory, onSelect, onSel
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.target !== anchorRef.current || e.isComposing) return;
+      // Composing text is the user's, not a command: Enter belongs to the input method.
+      if (e.target !== anchorRef.current || isImeComposition(e)) return;
       if (e.key === 'Escape') { onClose(); return; }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { isImeComposition } from '@/lib/ime';
 import { cn } from '@/lib/utils';
 import { translate } from '@/i18n';
 import type { TranslationKey } from '@/i18n/types';
@@ -120,7 +121,7 @@ export function SlashPromptPanel({ open, onOpenChange, onSelect, anchorRef, quer
   // 键盘导航
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!open || e.isComposing || e.target !== anchorRef?.current) return;
+      if (!open || isImeComposition(e) || e.target !== anchorRef?.current) return;
       if (e.key === 'Escape') { onOpenChange(false); return; }
       const list = filtered;
       
