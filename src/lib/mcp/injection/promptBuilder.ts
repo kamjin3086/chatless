@@ -466,6 +466,11 @@ export async function buildNativeToolDefinitions(params: NativeToolBuildOptions)
   const coreToolStart = tools.length;
   await addToolsFromGroup('core');
   if (!params.includeWebSearch) {
+    // Legacy guard: web tools used to sit inside the core group. They now
+    // arrive through the web_search contribution's availability predicate
+    // (same store toggle this flag was derived from in production), so this
+    // splice normally matches nothing; direct callers passing the flag keep
+    // their old core-slice semantics untouched.
     tools.splice(coreToolStart, tools.length - coreToolStart,
       ...tools.slice(coreToolStart).filter((tool) => !tool.name.startsWith(`${WEB_SEARCH_SERVER_NAME}__`)));
   }

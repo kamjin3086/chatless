@@ -3,7 +3,6 @@ import { McpAdapter } from './McpAdapter';
 import { ShellExecutorAdapter } from './ShellExecutorAdapter';
 import { SkillUnifiedAdapter } from './SkillUnifiedAdapter';
 import { ToolsRegistryAdapter } from './ToolsRegistryAdapter';
-import { WebSearchAdapter } from './WebSearchAdapter';
 import { ContributionAdapter } from './ContributionAdapter';
 import type { ToolAdapter } from '../ToolAdapter';
 import { ToolResultAdapter } from './ToolResultAdapter';
@@ -19,14 +18,14 @@ import { ToolResultAdapter } from './ToolResultAdapter';
  *
  * knowledge 不再静态注册：它经 ContributionAdapter 走贡献自己的
  * loadAdapter 工厂（阶段 3 执行器接线，A05：禁用即 NO_ADAPTER）。
- * system（提示词管理）同理，随第二个试点退出静态列表。
+ * system（提示词管理）同理，随第二个试点退出静态列表；web（网络搜索）
+ * 随第三个试点退出（用户设置作为可用谓词，不再静态注册）。
  * 位置保持在原处——findAdapter 是首命中语义，顺序即路由。
  */
 export function createDefaultAdapters(): ToolAdapter[] {
   return [
     new ToolsRegistryAdapter(),
     new ToolResultAdapter(),
-    new WebSearchAdapter(),
     new SkillUnifiedAdapter(),
     new FilesystemAdapter(),
     new ShellExecutorAdapter(),

@@ -5,6 +5,7 @@ import { serverManager } from "@/lib/mcp/ServerManager";
 import { useMcpServerStatuses, useMcpStore } from "@/store/mcpStore";
 import { useLocaleStore } from "@/store/localeStore";
 import { normalizeSavedServers, resolveNonConflictingServerName } from "@/lib/mcp/serverNamePolicy";
+import { claimedExternalServerNames } from "@/lib/extensions/assembly";
 import { toast, trimToastDescription } from "@/components/ui/sonner";
 import { downloadService } from "@/lib/utils/downloadService";
 import { detectTauriEnvironment } from "@/lib/utils/environment";
@@ -442,7 +443,14 @@ export function McpServersSettings() {
     const existingNames = servers
       .map((s) => s.name)
       .filter((n) => n && n !== desiredName);
-    const { name } = resolveNonConflictingServerName({ desiredName, existingNames });
+    const { name } = resolveNonConflictingServerName({
+      desiredName,
+      existingNames,
+      // Claimed extension spellings rename like reserved ones: the bridge
+      // routes those servers first, so keeping the name means an
+      // unreachable external server.
+      claimedNames: claimedExternalServerNames(),
+    });
     if (name !== desiredName) {
       setEditing({ ...editing, name });
       toast.info(t('mcpSettings.serverRenamed'), { description: `${desiredName} → ${name}` });
@@ -825,7 +833,14 @@ export function McpServersSettings() {
                           toast.success(t('mcpSettings.singleServerParsed'), { description: s.name });
                         } else {
                           const byName = new Map(servers.map(s => [s.name, s] as const));
-                          for (const s of imported) byName.set(s.name, { ...s, enabled: true });
+                          // Same rename discipline as single save (reserved + claimed
+                          // spellings), so a JSON import cannot persist a name the
+                          // bridge owns and only fail at connect time.
+                          const normalizedImport = normalizeSavedServers(
+                            imported.map((s) => ({ ...s, enabled: true })),
+                            claimedExternalServerNames(),
+                          ).list;
+                          for (const s of normalizedImport) byName.set(s.name, s);
                           const next = Array.from(byName.values());
                           await saveServers(next);
                           setEditing(null);

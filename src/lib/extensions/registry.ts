@@ -94,6 +94,10 @@ const MIGRATED_CORE_HANDOVERS: Record<
 > = {
   knowledge: { groupId: 'knowledge', server: 'knowledge' },
   prompt: { groupId: 'prompt', server: 'system' },
+  // The web tools sat inside the core group; only their SERVER name is
+  // retired here (core itself stays). The slot pair is the normalized name;
+  // the contribution matches it with id and server both spelling web_search.
+  web_search: { groupId: 'web_search', server: 'web_search' },
 };
 const MIGRATED_CORE_NAMESPACES = new Set(Object.keys(MIGRATED_CORE_HANDOVERS));
 // The migrated namespaces stay reserved (they are still spoken by core

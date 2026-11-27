@@ -37,6 +37,11 @@ export const ASSEMBLY_ALLOWLIST = new Set<string>([
   // Name-claim check at MCP config time (review P0-4): reject servers whose
   // name is claimed by an extension before they could be silently shadowed.
   'lib/mcp/ServerManager.ts',
+  // Load-time normalization renames claimed names exactly like reserved ones
+  // (the promised user-config migration for migrated namespaces).
+  'lib/mcp/chatIntegration.ts',
+  // Settings UI: save and JSON-import rename guidance uses the claimed view.
+  'components/settings/McpServersSettings.tsx',
 ]);
 
 /** Inside the tree, assembly.ts is the wiring point: §4.2 lets it inject the

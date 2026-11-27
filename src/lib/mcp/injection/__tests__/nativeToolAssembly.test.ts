@@ -8,13 +8,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useToolLoadRequestStore } from '@/store/toolLoadRequestStore';
 import { resetExtensionRegistry } from '@/lib/extensions/assembly';
 
-const mount = vi.hoisted(() => ({ kb: false, rows: '0' }));
+const mount = vi.hoisted(() => ({ kb: false, rows: '0', web: false }));
 
 vi.mock('@/store/conversationAttachmentStore', () => ({
   useConversationAttachmentStore: {
     getState: () => ({
       getKnowledgeBase: () => (mount.kb ? { id: 'kb1' } : undefined),
     }),
+  },
+}));
+vi.mock('@/store/webSearchStore', () => ({
+  useWebSearchStore: {
+    getState: () => ({ isWebSearchEnabled: mount.web }),
   },
 }));
 vi.mock('@/lib/database/services/DatabaseService', () => ({
@@ -40,6 +45,7 @@ describe('native tool assembly with the knowledge contribution (PR B)', () => {
   beforeEach(() => {
     mount.kb = false;
     mount.rows = '0';
+    mount.web = false;
     useToolLoadRequestStore.getState().reset('c1');
     resetExtensionRegistry();
   });
@@ -89,5 +95,22 @@ describe('native tool assembly with the knowledge contribution (PR B)', () => {
     // Second step: pending is consumed as sticky-loaded, injection survives.
     const again = await toolNames('c1');
     expect(again.filter((n) => n.startsWith('system__'))).toHaveLength(6);
+  });
+
+  it('web tools follow the user toggle exactly: on injects, off removes next step', async () => {
+    // The toggle is the availability predicate: predicated groups are
+    // detected each step (the old core-group semantics), and OFF removes
+    // immediately - no sticky residue (stickyWhenLoaded: false).
+    expect(
+      (await toolNames('c1')).filter((n) => n.startsWith('web__')),
+    ).toHaveLength(0);
+    mount.web = true;
+    expect(
+      (await toolNames('c1')).filter((n) => n.startsWith('web__')),
+    ).toHaveLength(3);
+    mount.web = false;
+    expect(
+      (await toolNames('c1')).filter((n) => n.startsWith('web__')),
+    ).toHaveLength(0);
   });
 });
