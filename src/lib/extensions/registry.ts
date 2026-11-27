@@ -75,21 +75,35 @@ CORE_SERVER_NAMES.add(TOOLS_DISCOVER_SERVER_NAME);
 
 /**
  * Namespaces whose hand-written group has left TOOL_GROUPS but whose server is
- * still spoken by the pipeline adapter, the conversation grant bucket and the
- * replay table (`knowledge`). They stay reserved and are handed over only via
- * `replaces`. Cleanup condition: retire when those registrations sit behind
- * the contribution (phase 4 review).
+ * still spoken by core registrations: `knowledge` (pipeline adapter,
+ * conversation grant bucket, replay table) and `prompt` (approval branch in
+ * policy.ts on the `system` server, risk-table row, tool-card presentation
+ * branch). They stay reserved and are handed over only via `replaces`.
+ * Cleanup condition: retire when those registrations sit behind the
+ * contribution (phase 4 review).
+ *
+ * A handover names the retired core GROUP and carries its full namespace pair
+ * (group id + server): the prompt pilot's group was `prompt` on the `system`
+ * server, and `replaces: 'prompt'` must take over exactly that pair - a
+ * contribution cannot mix one handover's group id with another's server.
  */
-const MIGRATED_CORE_NAMESPACES = new Set(['knowledge']);
-// The migrated namespaces stay reserved (they are still spoken by pipeline
+const MIGRATED_CORE_HANDOVERS: Record<
+  string,
+  { groupId: string; server: string }
+> = {
+  knowledge: { groupId: 'knowledge', server: 'knowledge' },
+  prompt: { groupId: 'prompt', server: 'system' },
+};
+const MIGRATED_CORE_NAMESPACES = new Set(Object.keys(MIGRATED_CORE_HANDOVERS));
+// The migrated namespaces stay reserved (they are still spoken by core
 // registrations) and are handed over only via `replaces`. Cleanup condition
 // (phase 4 review): when conversationAccessStore's grant bucket,
-// toolRisk's replay membership and the pipeline adapter registration sit
+// toolRisk's replay membership and the pipeline adapter registrations sit
 // behind the contribution, drop them from the reserved sets and retire the
 // MIGRATED list.
-for (const ns of MIGRATED_CORE_NAMESPACES) {
-  CORE_GROUP_IDS.add(ns);
-  CORE_SERVER_NAMES.add(ns);
+for (const handover of Object.values(MIGRATED_CORE_HANDOVERS)) {
+  CORE_GROUP_IDS.add(handover.groupId);
+  CORE_SERVER_NAMES.add(handover.server);
 }
 
 export interface BuildRegistryOptions {
@@ -252,10 +266,12 @@ export function buildExtensionRegistry(
       }
       // A contribution may squat on a migrated namespace only by taking it over
       // by name (knowledge pilot); everything else stays reserved (§5.3).
+      // The handover pair (group id + server) travels together.
+      const handover = MIGRATED_CORE_HANDOVERS[nReplaces];
       const takesOver = (name: string) =>
         nReplaces !== '' &&
-        name === nReplaces &&
-        MIGRATED_CORE_NAMESPACES.has(nReplaces);
+        !!handover &&
+        (name === handover.groupId || name === handover.server);
       if (
         !takesOver(nServer) &&
         (RESERVED_MCP_SERVER_NAMES.has(group.server) ||

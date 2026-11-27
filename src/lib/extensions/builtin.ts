@@ -7,10 +7,12 @@
  * injected dependencies - into `buildExtensionRegistry`.
  *
  * PR B: knowledge is the first entry, taking over its hand-written group
- * (plan §10 phase 2).
+ * (plan §10 phase 2). PR F: prompt management is the second, taking over the
+ * `prompt` group on the `system` server - the read/write/approval-path pilot.
  */
 import { createKnowledgeExtension } from './knowledge/contribution';
 import type { ExtensionAssemblyDeps } from './knowledge/contribution';
+import { createPromptManagementExtension } from './prompts/contribution';
 import type { BuiltinExtension } from './contracts';
 
 export type { ExtensionAssemblyDeps };
@@ -18,5 +20,8 @@ export type { ExtensionAssemblyDeps };
 export function assembleBuiltinExtensions(
   deps: ExtensionAssemblyDeps,
 ): BuiltinExtension[] {
-  return [createKnowledgeExtension(deps.knowledge)];
+  return [
+    createKnowledgeExtension(deps.knowledge),
+    createPromptManagementExtension(),
+  ];
 }

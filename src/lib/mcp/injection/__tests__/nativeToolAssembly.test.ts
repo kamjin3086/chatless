@@ -74,4 +74,16 @@ describe('native tool assembly with the knowledge contribution (PR B)', () => {
     const names = await toolNames('c1');
     expect(names.filter((n) => n === 'knowledge__read')).toHaveLength(1);
   });
+
+  it('a discovery hit on the prompt group injects its six tools and sticks (no predicate)', async () => {
+    // The prompt pilot has no availability predicate: once tools__search
+    // pointed the model at the group, the tools stay in every later step -
+    // the sticky behavior the hand-written group had.
+    useToolLoadRequestStore.getState().requestLoad('prompt', 'c1');
+    const names = await toolNames('c1');
+    expect(names.filter((n) => n.startsWith('system__'))).toHaveLength(6);
+    // Second step: pending is consumed as sticky-loaded, injection survives.
+    const again = await toolNames('c1');
+    expect(again.filter((n) => n.startsWith('system__'))).toHaveLength(6);
+  });
 });

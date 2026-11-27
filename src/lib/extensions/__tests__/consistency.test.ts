@@ -57,25 +57,38 @@ describe('registration consistency patrol (PR C)', () => {
   });
 
   it('every contributed tool agrees with the single risk table', () => {
+    // The registry build already rejects declared-vs-table drift (it throws
+    // before this loop could run), so this line is a documentation-level
+    // double-check, not an independent derivation. The independently
+    // re-derived seam is the replay/plan membership below.
     for (const c of contributed) {
-      // The registry build already rejects declared-vs-table drift (it throws
-      // before this loop could run), so this line is a documentation-level
-      // double-check, not an independent derivation. The independently
-      // re-derived seam is the replay/plan membership below.
       expect(c.declared, `${c.server}__${c.tool}`).toBe(
         toolRisk(c.server, c.tool),
       );
-      // Everything contributed so far is read-only; when the first write
-      // contribution lands it must not trip this patrol - only reads are
-      // expected to be replayable / plan-allowed.
       if (c.declared !== 'read') continue;
-      expect(isReplayableRead(c.server, c.tool), `${c.server}__${c.tool}`).toBe(
-        true,
-      );
+      // Plan mode follows the one risk table: a contributed read is
+      // plan-allowed (the prompt pilot proved the assertion worth having -
+      // system reads are reads even though they are not replayable).
       expect(
         isPlanOnlyAllowed(c.server, c.tool),
         `${c.server}__${c.tool}`,
       ).toBe(true);
+    }
+    // Replayability is a NARROWER, explicit per-server opt-in
+    // (REPLAYABLE_SERVERS), not an attribute of read: pinning the contributed
+    // membership here means a migration can never silently widen it - adding
+    // a server to the replay set must come with a conscious edit here.
+    const REPLAYABLE_CONTRIBUTED = new Set([
+      'knowledge__list',
+      'knowledge__search',
+      'knowledge__read',
+      'tools__search',
+    ]);
+    for (const c of contributed) {
+      const key = `${c.server}__${c.tool}`;
+      expect(isReplayableRead(c.server, c.tool), key).toBe(
+        REPLAYABLE_CONTRIBUTED.has(key),
+      );
     }
   });
 
